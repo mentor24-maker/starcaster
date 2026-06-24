@@ -789,6 +789,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: {}
+  },
+  {
+    id: "admin-login-form",
+    type: "admin-login",
+    group: "admin",
+    label: "Admin Login",
+    icon: "🔐",
+    description: "Login form for project admin team members. Validates credentials and redirects to /admin on success.",
+    name: "",
+    text: "",
+    settings: {}
   }
 ];
 

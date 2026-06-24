@@ -1221,6 +1221,10 @@ function BuilderModulePreview({
     return <AdminModulesPreview settings={module.settings} />;
   }
 
+  if (module.type === "admin-login") {
+    return <AdminLoginPreview settings={module.settings} />;
+  }
+
   return null;
 }
 
@@ -2561,7 +2565,14 @@ function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> 
     try {
       const r = await fetch("/api/admin/users", { credentials: "include", headers });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setLoadError(d.error || "Failed to load team members"); return; }
+      if (!r.ok) {
+        if (r.status === 401 && !window.location.pathname.includes("builder-preview")) {
+          window.location.href = "/";
+          return;
+        }
+        setLoadError(d.error || "Failed to load team members");
+        return;
+      }
       const list = Array.isArray(d.adminUsers) ? d.adminUsers : Array.isArray(d.data) ? d.data : [];
       setUsers(list as AdminTeamUser[]);
     } catch {
@@ -2722,6 +2733,107 @@ function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> 
   );
 }
 
+// ── Admin Login ───────────────────────────────────────────────────────────────
+
+function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
+  const formTitle          = settings.formTitle || "Admin Sign In";
+  const buttonText         = settings.buttonText || "Sign In";
+  const showForgotPassword = settings.showForgotPassword !== "false";
+
+  const [email, setEmail]             = useState("");
+  const [password, setPassword]       = useState("");
+  const [error, setError]             = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [showForgot, setShowForgot]   = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent]   = useState(false);
+
+  const projectId = getCrmProjectHeaders()["X-Project-ID"] || "";
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const r = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, email: email.trim().toLowerCase(), password }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(d.error || "Invalid email or password"); return; }
+      window.location.href = "/admin";
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const cardStyle: React.CSSProperties = {
+    maxWidth: 420, margin: "0 auto", background: "#fff",
+    border: "1px solid #dde8f0", borderRadius: 12, padding: "36px 32px",
+  };
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "9px 12px", fontSize: 14, border: "1px solid #c9dcea",
+    borderRadius: 7, boxSizing: "border-box", marginTop: 4,
+  };
+  const btnStyle: React.CSSProperties = {
+    width: "100%", padding: "10px 0", background: "#0f4f8f", color: "#fff",
+    border: "none", borderRadius: 7, fontWeight: 700, fontSize: 14,
+    cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1,
+    marginTop: 16,
+  };
+  const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "#18324a", display: "block", marginTop: 14 };
+
+  if (showForgot) {
+    return (
+      <div style={cardStyle}>
+        <div style={{ fontWeight: 700, fontSize: 18, color: "#18324a", marginBottom: 4 }}>Reset Password</div>
+        <div style={{ fontSize: 13, color: "#587592", marginBottom: 18 }}>Enter your email and your administrator will be notified.</div>
+        {forgotSent ? (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7, padding: "12px 14px", fontSize: 13, color: "#15803d" }}>
+            Request sent. Your administrator will follow up with reset instructions.
+          </div>
+        ) : (
+          <form onSubmit={(e) => { e.preventDefault(); setForgotSent(true); }}>
+            <label style={labelStyle}>Email address</label>
+            <input type="email" required style={inputStyle} value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" />
+            <button type="submit" style={btnStyle}>Send Request</button>
+          </form>
+        )}
+        <div style={{ marginTop: 16, textAlign: "center" }}>
+          <button onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(""); }} style={{ background: "none", border: "none", color: "#0f4f8f", fontSize: 13, cursor: "pointer" }}>
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={cardStyle}>
+      <div style={{ fontWeight: 700, fontSize: 20, color: "#18324a", marginBottom: 20 }}>{formTitle}</div>
+      <form onSubmit={handleLogin}>
+        <label style={labelStyle}>Email address</label>
+        <input type="email" required style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+        <label style={labelStyle}>Password</label>
+        <input type="password" required style={inputStyle} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+        {error && <div style={{ marginTop: 10, fontSize: 13, color: "#c0392b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px" }}>{error}</div>}
+        <button type="submit" disabled={loading} style={btnStyle}>{loading ? "Signing in…" : buttonText}</button>
+      </form>
+      {showForgotPassword && (
+        <div style={{ marginTop: 14, textAlign: "center" }}>
+          <button onClick={() => setShowForgot(true)} style={{ background: "none", border: "none", color: "#587592", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
+            Forgot your password?
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: string }> = [
   { key: "crm",  label: "CRM",  description: "Lead capture forms and contact table" },
   { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
@@ -2743,7 +2855,13 @@ function AdminModulesPreview({ settings }: { settings: Record<string, string> })
     const projectId = headers["X-Project-ID"] || "";
     const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
     fetch(`/api/admin/enabled-modules${qs}`, { credentials: "include", headers })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r.status === 401 && !window.location.pathname.includes("builder-preview")) {
+          window.location.href = "/";
+          return null;
+        }
+        return r.ok ? r.json() : null;
+      })
       .then((d) => {
         if (!d) return;
         const mods = d.enabledModules ?? d.data ?? d;
