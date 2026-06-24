@@ -142,8 +142,6 @@ function logRegistry() {
 // ---------------------------------------------------------------------------
 
 async function handleRequest(req, res) {
-  // TEMP DIAG: always log the raw req.url as the very first thing
-  console.log('[TOP] method:', req.method, 'req.url:', req.url);
   setCors(res, req);
 
   if (req.method === 'OPTIONS') {
@@ -155,16 +153,11 @@ async function handleRequest(req, res) {
   const pathnameEarly = normalizeApiPathname(urlObjEarly.pathname);
   const methodEarly = String(req.method || '').toUpperCase();
 
-  // TEMP: log all non-API, non-ping paths to diagnose catch-all routing
-  if (!pathnameEarly.startsWith('/api/') || (req.url && !String(req.url).startsWith('/api/'))) {
-    console.log('[DIAG] req.url=', req.url, 'pathnameEarly=', pathnameEarly);
-  }
-
   if (pathnameEarly === '/api/ping' && methodEarly === 'GET') {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'page-routing-diagnostic-v1',
+      routesVersion: 'project-delete-v2',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
@@ -503,21 +496,6 @@ function serveStaticPage(res, pathname) {
 async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
-
-  // Temporary diagnostic — dump all page requests as JSON.
-  console.log('[PAGE-DIAG] handlePageRequest called:', pathname, host, req.url);
-  res.setHeader('Content-Type', 'application/json');
-  res.statusCode = 200;
-  return res.end(JSON.stringify({
-    pathname,
-    host,
-    rawHost,
-    reqHost: req.headers.host,
-    xForwardedHost: req.headers['x-forwarded-host'],
-    reqUrl: req.url,
-    isSystem: isSystemHost(host),
-    diagActive: true,
-  }));
 
   // System hosts (localhost, *.vercel.app) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.

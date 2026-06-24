@@ -1,42 +1,19 @@
 {
   "version": 2,
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/[...slug]"
+      "src": "/(.*\\.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|webp|ttf|eot|map)$)",
+      "dest": "/$1"
     },
     {
-      "source": "/(.*\\.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|webp|map|ttf|eot)$)",
-      "destination": "/public/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/api/[...slug]"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0"
-        }
-      ]
-    },
-    {
-      "source": "/images/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400, stale-while-revalidate=604800"
-        }
-      ]
+      "src": "/(.*)",
+      "dest": "/api/[...slug]"
     }
   ],
   "functions": {
     "api/[...slug].js": {
-      "maxDuration": 300
+      "maxDuration": 300,
+      "includeFiles": "public/*.html"
     }
   },
   "crons": [
