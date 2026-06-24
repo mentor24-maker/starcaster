@@ -169,23 +169,19 @@ async function handleRequest(req, res) {
     const rawHostD = String(req.headers['x-forwarded-host'] || req.headers.host || '');
     const hostD = rawHostD.split(':')[0].toLowerCase().replace(/^www\./, '');
     const { findProjectByDomain, normalizeDomain: nd } = require('../lib/projectsStore');
-    const { isConfigured: isSbConfigured, sbQuery: sbQ, tableConfig: tbl } = require('../lib/supabase');
+    const { sbQuery: sbQ } = require('../lib/supabase');
+    const PTBL = String(process.env.SUPABASE_PROJECTS_TABLE || 'app_projects');
     const qDomain = nd(hostD);
     const resultD = await findProjectByDomain(hostD);
-    // Also test a direct sbQuery to compare
-    const sbResult = await sbQ({ table: String(process.env.SUPABASE_PROJECTS_TABLE || 'app_projects'), query: `select=id,name,domain&domain=eq.${encodeURIComponent(qDomain)}&limit=1` });
+    // Look up project by known ID and check current domain value
+    const projectId = 'proj_1780601274760_97i84r';
+    const sbById = await sbQ({ table: PTBL, query: `select=id,name,domain&id=eq.${encodeURIComponent(projectId)}&limit=1` });
     return sendJson(res, 200, {
       host: hostD,
       normalizedDomain: qDomain,
-      isSystem: isSystemHost(hostD),
-      supabaseConfigured: isSbConfigured(),
-      projectsTable: String(process.env.SUPABASE_PROJECTS_TABLE || 'app_projects'),
       lookupOk: resultD.ok,
-      lookupStatus: resultD.status,
       lookupError: resultD.error,
-      sbOk: sbResult.ok,
-      sbData: sbResult.data,
-      sbError: sbResult.error,
+      projectById: Array.isArray(sbById.data) ? sbById.data[0] : null,
     });
   }
 
