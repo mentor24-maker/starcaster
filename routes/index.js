@@ -54,6 +54,7 @@ const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const blog        = require('./blog');
 const admin       = require('./admin');
+const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -82,6 +83,7 @@ const ROUTE_MODULES = [
   polls,
   crm,
   blog,
+  publicSite,
 ];
 
 function maskSecret(value) {
@@ -195,6 +197,11 @@ async function handleRequest(req, res) {
     });
   }
 
+  // ── Non-API page requests (custom domain routing) ───────────────────────
+  if (!pathnameEarly.startsWith('/api/')) {
+    return handlePageRequest(req, res, pathnameEarly);
+  }
+
   // ── Global rate limit ceiling ────────────────────────────────────────────
   // Applied to every API request before any routing logic runs.
   // Expensive endpoints additionally check their own per-endpoint limit
@@ -212,6 +219,7 @@ async function handleRequest(req, res) {
   const isPublicContactSubmit = pathname === '/api/contact' && method === 'POST';
   const isPublicCrmRoute = (pathname === '/api/crm/contact-submit' && method === 'POST')
     || (/^\/api\/crm\/forms\/[^/]+$/.test(pathname) && method === 'GET');
+  const isPublicSiteRoute = pathname.startsWith('/api/public/');
   const isFacebookOAuthCallback =
     pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
   const isImportDriveFolderHealth =
@@ -260,7 +268,7 @@ async function handleRequest(req, res) {
     if (handled) return;
   }
 
-  if (!isAuthRoute && !isAdminAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !isPublicCrmRoute && !authUser) {
+  if (!isAuthRoute && !isAdminAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !isPublicCrmRoute && !isPublicSiteRoute && !authUser) {
 
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }
@@ -426,6 +434,102 @@ async function handleRequest(req, res) {
     console.error(`[routes] Unhandled error for ${method} ${pathname}:`, err);
     sendErr(res, 500, err.message || 'Internal server error', { code: 'INTERNAL_ERROR' });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Non-API page request handler (static files + custom domain routing)
+// ---------------------------------------------------------------------------
+
+const _fs   = require('fs');
+const _path = require('path');
+
+const MIME_MAP = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'application/javascript',
+  '.css':  'text/css',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg':  'image/svg+xml',
+  '.ico':  'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.webp': 'image/webp',
+  '.json': 'application/json',
+};
+
+function isPrimaryAppDomain(host) {
+  if (!host) return true;
+  if (/^localhost$|^127\./.test(host)) return true;
+  if (host.endsWith('.vercel.app')) return true;
+  const configured = String(
+    process.env.PUBLIC_APP_ORIGIN
+    || process.env.APP_PUBLIC_ORIGIN
+    || ''
+  ).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^www\./i, '').toLowerCase();
+  return configured ? host === configured : true;
+}
+
+async function handlePageRequest(req, res, pathname) {
+  const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+  const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
+
+  if (isPrimaryAppDomain(host)) {
+    // Serve static files from public/
+    const safePath = pathname.replace(/\.\./g, '').replace(/\/+/g, '/') || '/';
+    let filePath;
+    if (safePath === '/') {
+      filePath = _path.join(__dirname, '../public/index.html');
+    } else {
+      filePath = _path.join(__dirname, '../public', safePath);
+      if (!_path.extname(safePath) && !_fs.existsSync(filePath)) {
+        filePath += '.html';
+      }
+    }
+    if (!_fs.existsSync(filePath)) {
+      filePath = _path.join(__dirname, '../public/index.html');
+    }
+    const ext = _path.extname(filePath).toLowerCase();
+    const mime = MIME_MAP[ext] || 'application/octet-stream';
+    try {
+      const content = _fs.readFileSync(filePath);
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.statusCode = 200;
+      return res.end(content);
+    } catch {
+      res.statusCode = 404;
+      return res.end('Not found');
+    }
+  }
+
+  // Custom domain — look up project and serve site shell
+  const { findProjectByDomain } = require('../lib/projectsStore');
+  const result = await findProjectByDomain(host);
+  if (!result.ok) {
+    res.statusCode = 404;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.end('<!DOCTYPE html><html><body><h1>Site not found</h1><p>No project is mapped to this domain.</p></body></html>');
+  }
+
+  const { id: projectId, name: projectName } = result.data;
+
+  let siteHtml;
+  try {
+    siteHtml = _fs.readFileSync(_path.join(__dirname, '../public/site.html'), 'utf8');
+  } catch {
+    res.statusCode = 500;
+    return res.end('Site template unavailable');
+  }
+
+  const config = JSON.stringify({ projectId, projectName });
+  // Inject project config before </head> so the bundle can read it synchronously
+  siteHtml = siteHtml.replace('</head>', `  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`);
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.statusCode = 200;
+  return res.end(siteHtml);
 }
 
 module.exports = { handleRequest, logRegistry, ROUTE_MODULES };
