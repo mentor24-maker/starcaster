@@ -139,7 +139,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'projectId, email, and password are required', { code: 'ADMIN_USER_INVALID' }), true;
     }
 
-    const ownerProjectId = String(req.projectContext?.project?.id || '').trim();
+    const ownerProjectId = String(req.projectContext?.project?.id || req.headers['x-project-id'] || '').trim();
     if (projectId !== ownerProjectId) {
       return sendErr(res, 403, 'You can only create admin users for your active project', { code: 'ADMIN_USER_FORBIDDEN' }), true;
     }
