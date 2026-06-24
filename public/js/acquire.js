@@ -5782,7 +5782,7 @@ App.acquire = (function () {
     const inspectBtn = document.getElementById('directAcquireInspectPatternsBtn');
     if (inspectBtn && !inspectBtn.dataset.bound) {
       inspectBtn.dataset.bound = '1';
-      inspectBtn.addEventListener('click', () => openPatternInspectorModal());
+      inspectBtn.addEventListener('click', (e) => { e.stopPropagation(); openPatternInspectorModal(); });
     }
   }
 
@@ -5948,10 +5948,12 @@ App.acquire = (function () {
         '  <div class="source-inspector-tabs" id="piTabs">',
         '    <button type="button" class="source-inspector-tab active" data-tab="handlers">Active Handlers</button>',
         '    <button type="button" class="source-inspector-tab" data-tab="unmatched">Unhandled Patterns</button>',
+        '    <button type="button" class="source-inspector-tab" data-tab="custom">AI Handler Builder</button>',
         '  </div>',
         '  <div class="builder-content-modal-body pi-body">',
         '    <div id="piHandlersPanel"></div>',
         '    <div id="piUnmatchedPanel" style="display:none;"></div>',
+        '    <div id="piCustomPanel" style="display:none;"></div>',
         '  </div>',
         '</div>',
       ].join('');
@@ -5966,6 +5968,8 @@ App.acquire = (function () {
         modal.querySelectorAll('#piTabs .source-inspector-tab').forEach((t) => t.classList.toggle('active', t === btn));
         document.getElementById('piHandlersPanel').style.display  = btn.dataset.tab === 'handlers'  ? '' : 'none';
         document.getElementById('piUnmatchedPanel').style.display = btn.dataset.tab === 'unmatched' ? '' : 'none';
+        document.getElementById('piCustomPanel').style.display    = btn.dataset.tab === 'custom'    ? '' : 'none';
+        if (btn.dataset.tab === 'custom') renderAiHandlerPanel(document.getElementById('piCustomPanel'));
       });
     }
 
@@ -5977,6 +5981,7 @@ App.acquire = (function () {
     modal.querySelectorAll('#piTabs .source-inspector-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === 'handlers'));
     handlersEl.style.display  = '';
     unmatchedEl.style.display = 'none';
+    document.getElementById('piCustomPanel').style.display = 'none';
     metaEl.textContent = 'Loading…';
     handlersEl.innerHTML  = '<p class="source-inspector-status">Analyzing pages…</p>';
     unmatchedEl.innerHTML = '';
@@ -6137,6 +6142,148 @@ App.acquire = (function () {
       } catch (err) {
         statusEl.textContent = 'Error: ' + (err.message || 'Failed to save');
         statusEl.className = 'pi-save-status pi-save-error';
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  function renderAiHandlerPanel(el) {
+    if (el.dataset.built) return;
+    el.dataset.built = '1';
+
+    const typeOptions = [
+      ['promote-h2', 'Promote to H2 heading'],
+      ['promote-h3', 'Promote to H3 heading'],
+      ['delete', 'Delete (remove from content)'],
+      ['strip-tag', 'Strip tag (keep text, remove wrapper)'],
+      ['bold', 'Bold (wrap in <strong>)'],
+      ['find-replace', 'Find & Replace'],
+    ].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+
+    el.innerHTML = [
+      '<div class="pi-ai-section">',
+      '  <p class="pi-ai-intro">Describe the HTML pattern you want to handle in plain language. Optionally paste a sample HTML snippet for more precise output. Claude will generate the handler configuration.</p>',
+      '  <form class="pi-editor-form" id="piAiForm" autocomplete="off">',
+      '    <div class="pi-editor-row">',
+      '      <label>Describe the pattern<textarea class="pi-field pi-ai-desc" name="description" rows="3" placeholder="e.g. Bold labels in numbered list items (e.g. \'Expert Attorneys:\') should stay bold, but the description text that follows on the same line should not be bold." required></textarea></label>',
+      '    </div>',
+      '    <div class="pi-editor-row">',
+      '      <label>Sample HTML <small>(optional — paste a snippet to improve accuracy)</small><textarea class="pi-field pi-ai-html" name="sampleHtml" rows="4" placeholder="<li><b>Expert Naturalization Attorneys:</b> Our team has years of experience..."></textarea></label>',
+      '    </div>',
+      '    <div class="pi-editor-actions">',
+      '      <button type="submit" class="btn btn-primary" id="piAiGenerateBtn">Generate Handler</button>',
+      '      <span class="pi-save-status" id="piAiStatus"></span>',
+      '    </div>',
+      '  </form>',
+      '  <div id="piAiResult" style="display:none;">',
+      '    <div class="pi-ai-divider">Generated Handler — review and save</div>',
+      '    <form class="pi-editor-form" id="piAiSaveForm" autocomplete="off">',
+      '      <div class="pi-editor-row">',
+      '        <label>Handler name<input class="pi-field" name="name" type="text" required /></label>',
+      '      </div>',
+      '      <div class="pi-editor-row pi-editor-row-2col">',
+      '        <label>Type<select class="pi-field" name="type">' + typeOptions + '</select></label>',
+      '        <label>Source tag <small>(promote/strip)</small><input class="pi-field" name="tag" type="text" placeholder="e.g. u, em" /></label>',
+      '      </div>',
+      '      <div class="pi-editor-row">',
+      '        <label>Pattern <small>(regex)</small><input class="pi-field" name="pattern" type="text" /></label>',
+      '      </div>',
+      '      <div class="pi-editor-row" id="piAiReplacementRow">',
+      '        <label>Replacement<input class="pi-field" name="replacement" type="text" placeholder="use $1 for capture groups" /></label>',
+      '      </div>',
+      '      <div class="pi-editor-row">',
+      '        <label>Description<input class="pi-field" name="description" type="text" /></label>',
+      '      </div>',
+      '      <div class="pi-editor-actions">',
+      '        <button type="submit" class="btn btn-primary pi-save-btn">Save Handler</button>',
+      '        <button type="button" class="btn" id="piAiDiscardBtn">Discard</button>',
+      '        <span class="pi-save-status" id="piAiSaveStatus"></span>',
+      '      </div>',
+      '    </form>',
+      '  </div>',
+      '</div>',
+    ].join('');
+
+    const generateForm = el.querySelector('#piAiForm');
+    const resultEl     = el.querySelector('#piAiResult');
+    const statusEl     = el.querySelector('#piAiStatus');
+    const generateBtn  = el.querySelector('#piAiGenerateBtn');
+    const saveForm     = el.querySelector('#piAiSaveForm');
+    const replacementRow = el.querySelector('#piAiReplacementRow');
+    const typeSelect   = saveForm.querySelector('[name="type"]');
+
+    function populateSaveForm(handler) {
+      saveForm.querySelector('[name="name"]').value = String(handler.name || '');
+      typeSelect.value = String(handler.type || 'find-replace');
+      saveForm.querySelector('[name="tag"]').value = String(handler.tag || '');
+      saveForm.querySelector('[name="pattern"]').value = String(handler.pattern || '');
+      saveForm.querySelector('[name="replacement"]').value = String(handler.replacement || '');
+      saveForm.querySelector('[name="description"]').value = String(handler.description || '');
+      replacementRow.style.display = typeSelect.value === 'find-replace' ? '' : 'none';
+    }
+
+    typeSelect.addEventListener('change', () => {
+      replacementRow.style.display = typeSelect.value === 'find-replace' ? '' : 'none';
+    });
+
+    generateForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      generateBtn.disabled = true;
+      statusEl.textContent = 'Generating…';
+      statusEl.className = 'pi-save-status';
+      resultEl.style.display = 'none';
+
+      try {
+        const payload = {
+          description: generateForm.querySelector('[name="description"]').value.trim(),
+          sampleHtml: generateForm.querySelector('[name="sampleHtml"]').value.trim(),
+        };
+        const data = await api('/api/acquire/content-handlers/generate', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        populateSaveForm(data.handler || {});
+        statusEl.textContent = '';
+        resultEl.style.display = '';
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + (err.message || 'Generation failed');
+        statusEl.className = 'pi-save-status pi-save-error';
+      } finally {
+        generateBtn.disabled = false;
+      }
+    });
+
+    el.querySelector('#piAiDiscardBtn').addEventListener('click', () => {
+      resultEl.style.display = 'none';
+    });
+
+    saveForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const saveBtn  = saveForm.querySelector('.pi-save-btn');
+      const saveStat = el.querySelector('#piAiSaveStatus');
+      saveBtn.disabled = true;
+      saveStat.textContent = 'Saving…';
+      saveStat.className = 'pi-save-status';
+      const payload = {
+        name: saveForm.querySelector('[name="name"]').value.trim(),
+        type: typeSelect.value,
+        tag: saveForm.querySelector('[name="tag"]').value.trim(),
+        pattern: saveForm.querySelector('[name="pattern"]').value.trim(),
+        replacement: saveForm.querySelector('[name="replacement"]').value.trim(),
+        description: saveForm.querySelector('[name="description"]').value.trim(),
+      };
+      try {
+        await api('/api/acquire/content-handlers', { method: 'POST', body: JSON.stringify(payload) });
+        saveStat.textContent = '✓ Handler saved';
+        saveStat.className = 'pi-save-status pi-save-ok';
+        setTimeout(() => {
+          resultEl.style.display = 'none';
+          generateForm.reset();
+          saveStat.textContent = '';
+        }, 1800);
+      } catch (err) {
+        saveStat.textContent = 'Error: ' + (err.message || 'Save failed');
+        saveStat.className = 'pi-save-status pi-save-error';
         saveBtn.disabled = false;
       }
     });
