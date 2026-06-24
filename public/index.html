@@ -663,7 +663,12 @@
         </details>
 
         <details class="card acquire-web-expandable-card acquire-web-result-section" style="margin-top: 1rem;">
-          <summary class="acquire-web-expandable-summary">Website Pages</summary>
+          <summary class="acquire-web-expandable-summary">
+            <span>Website Pages</span>
+            <span class="page-heading-actions" style="padding: 0;">
+              <button id="directAcquireInspectPatternsBtn" type="button" class="btn" title="Analyze content patterns across all pages in this crawl run">Inspect Patterns</button>
+            </span>
+          </summary>
           <div class="acquire-web-expandable-body">
             <div class="table-wrap">
               <table>
@@ -676,7 +681,6 @@
                     <th></th>
                     <th class="actions-col contacts-go-cell">
                       <button id="directAcquirePagesGoBtn" type="button" class="btn">Filter</button>
-                      <button id="directAcquireInspectPatternsBtn" type="button" class="btn" title="Analyze content patterns across all pages">Inspect Patterns</button>
                     </th>
                   </tr>
                   <tr>
@@ -9796,25 +9800,37 @@
             <!-- Modules -->
             <div class="card">
               <h3 class="project-details-section-heading">Modules</h3>
-              <div class="module-toggle-row">
-                <div class="module-toggle-info">
-                  <span class="module-toggle-label">CRM</span>
-                  <span class="module-toggle-desc">Contacts, forms, and lead management</span>
+              <div class="modules-clusters-layout">
+                <div class="modules-list-col">
+                  <div class="module-toggle-row">
+                    <div class="module-toggle-info">
+                      <span class="module-toggle-label">CRM</span>
+                      <span class="module-toggle-desc">Contacts, forms, and lead management</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="settingsModuleCrmToggle" />
+                      <span class="toggle-track"></span>
+                    </label>
+                  </div>
+                  <div class="module-toggle-row">
+                    <div class="module-toggle-info">
+                      <span class="module-toggle-label">Blog</span>
+                      <span class="module-toggle-desc">Blog post feeds, editors, and author bios</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="settingsModuleBlogToggle" />
+                      <span class="toggle-track"></span>
+                    </label>
+                  </div>
                 </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="settingsModuleCrmToggle" />
-                  <span class="toggle-track"></span>
-                </label>
-              </div>
-              <div class="module-toggle-row">
-                <div class="module-toggle-info">
-                  <span class="module-toggle-label">Blog</span>
-                  <span class="module-toggle-desc">Blog post feeds, editors, and author bios</span>
+                <div class="clusters-col">
+                  <p class="project-details-section-heading">Clusters</p>
+                  <form id="settingsClusterAddForm" class="cluster-add-form">
+                    <input id="settingsClusterNameInput" type="text" placeholder="Cluster name" autocomplete="off" />
+                    <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                  </form>
+                  <div id="settingsClustersList" class="clusters-list"></div>
                 </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="settingsModuleBlogToggle" />
-                  <span class="toggle-track"></span>
-                </label>
               </div>
             </div>
           </div>
