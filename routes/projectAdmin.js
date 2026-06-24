@@ -5,6 +5,7 @@ const {
   sendOk,
   sendErr,
   parseCookies,
+  getUrlObj,
 } = require('./http');
 
 const {
@@ -14,8 +15,11 @@ const {
   deleteAdminSession,
   getAdminSession,
   listAdminUsers,
+  updateAdminUser,
   deleteAdminUser,
 } = require('../lib/projectAdminStore');
+const { sbQuery, isConfigured: isSupabaseConfigured } = require('../lib/supabase');
+const PROJECTS_TABLE = 'app_projects';
 
 const ADMIN_SESSION_COOKIE_NAME = 'app_admin_session';
 const ADMIN_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
@@ -153,7 +157,7 @@ async function handle(req, res, pathname, method) {
     if (!req.authUser) {
       return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
     }
-    const projectId = String(req.projectContext?.project?.id || '').trim();
+    const projectId = String(req.projectContext?.project?.id || req.headers['x-project-id'] || '').trim();
     if (!projectId) {
       return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
     }
@@ -164,6 +168,71 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { adminUsers: result.data }), true;
   }
 
+  // PUT /api/admin/users/:id — update role for a project admin user
+  const userIdMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/?$/);
+
+  if (userIdMatch && method === 'PUT') {
+    if (!req.authUser) {
+      return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    }
+    const adminUserId = decodeURIComponent(userIdMatch[1] || '').trim();
+    const projectId = String(req.projectContext?.project?.id || req.headers['x-project-id'] || '').trim();
+    if (!projectId) {
+      return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    }
+    const body = await parseJsonBody(req);
+    const result = await updateAdminUser(adminUserId, projectId, { role: body.role });
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Unable to update admin user', { code: 'ADMIN_USER_UPDATE_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, { adminUser: result.data }), true;
+  }
+
+  // GET /api/admin/enabled-modules — return project's enabled_modules JSON
+  if (pathname === '/api/admin/enabled-modules' && method === 'GET') {
+    const projectId = String(
+      req.projectContext?.project?.id ||
+      req.headers['x-project-id'] ||
+      getUrlObj(req).searchParams?.get('projectId') || ''
+    ).trim();
+    if (!projectId) return sendErr(res, 400, 'Project ID is required', { code: 'PROJECT_REQUIRED' }), true;
+    if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
+    const query = `select=id,enabled_modules&id=eq.${encodeURIComponent(projectId)}&limit=1`;
+    const result = await sbQuery({ method: 'GET', table: PROJECTS_TABLE, query });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Failed to fetch project'), true;
+    const row = Array.isArray(result.data) ? (result.data[0] || null) : null;
+    if (!row) return sendErr(res, 404, 'Project not found', { code: 'NOT_FOUND' }), true;
+    const enabledModules = (row.enabled_modules && typeof row.enabled_modules === 'object') ? row.enabled_modules : {};
+    return sendOk(res, 200, enabledModules, { enabledModules }), true;
+  }
+
+  // PATCH /api/admin/enabled-modules — toggle premium module groups on/off
+  if (pathname === '/api/admin/enabled-modules' && method === 'PATCH') {
+    const projectId = String(
+      req.projectContext?.project?.id ||
+      req.headers['x-project-id'] || ''
+    ).trim();
+    if (!projectId) return sendErr(res, 400, 'Project ID is required', { code: 'PROJECT_REQUIRED' }), true;
+    if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
+    const body = await parseJsonBody(req);
+    const modulePatch = (body.modules && typeof body.modules === 'object' && !Array.isArray(body.modules))
+      ? body.modules : {};
+    const fetchResult = await sbQuery({ method: 'GET', table: PROJECTS_TABLE, query: `select=enabled_modules&id=eq.${encodeURIComponent(projectId)}&limit=1` });
+    if (!fetchResult.ok) return sendErr(res, fetchResult.status || 500, 'Failed to fetch project'), true;
+    const row = Array.isArray(fetchResult.data) ? (fetchResult.data[0] || null) : null;
+    const current = (row?.enabled_modules && typeof row.enabled_modules === 'object') ? row.enabled_modules : {};
+    const updated = { ...current, ...modulePatch };
+    const patchResult = await sbQuery({
+      method: 'PATCH',
+      table: PROJECTS_TABLE,
+      query: `id=eq.${encodeURIComponent(projectId)}`,
+      body: { enabled_modules: updated },
+      headers: { Prefer: 'return=representation' },
+    });
+    if (!patchResult.ok) return sendErr(res, patchResult.status || 500, 'Failed to update enabled modules'), true;
+    return sendOk(res, 200, updated, { enabledModules: updated }), true;
+  }
+
   // DELETE /api/admin/users/:id — platform owner removes an admin user
   const deleteUserMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/?$/);
   if (deleteUserMatch && method === 'DELETE') {
@@ -171,7 +240,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
     }
     const adminUserId = decodeURIComponent(deleteUserMatch[1] || '').trim();
-    const projectId = String(req.projectContext?.project?.id || '').trim();
+    const projectId = String(req.projectContext?.project?.id || req.headers['x-project-id'] || '').trim();
     if (!projectId) {
       return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
     }
