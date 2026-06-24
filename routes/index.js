@@ -153,6 +153,11 @@ async function handleRequest(req, res) {
   const pathnameEarly = normalizeApiPathname(urlObjEarly.pathname);
   const methodEarly = String(req.method || '').toUpperCase();
 
+  // TEMP: log all non-API, non-ping paths to diagnose catch-all routing
+  if (!pathnameEarly.startsWith('/api/') || (req.url && !String(req.url).startsWith('/api/'))) {
+    console.log('[DIAG] req.url=', req.url, 'pathnameEarly=', pathnameEarly);
+  }
+
   if (pathnameEarly === '/api/ping' && methodEarly === 'GET') {
     return sendJson(res, 200, {
       ok: true,
