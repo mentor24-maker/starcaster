@@ -74,6 +74,7 @@ import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manage
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
 import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-module-settings";
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
+import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -1688,7 +1689,6 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const modules   = [
       { label: "CRM", enabled: true },
       { label: "Blog", enabled: false },
-      { label: "Player Portal", enabled: false },
     ];
     return (
       <div className="builder-module-preview-copy">
@@ -1703,6 +1703,25 @@ function renderModulePreview(module: BuilderTemplateModule) {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (module.type === "admin-login") {
+    const title      = module.settings.formTitle || "Admin Sign In";
+    const btnText    = module.settings.buttonText || "Sign In";
+    const showForgot = module.settings.showForgotPassword !== "false";
+    const inputStyle: React.CSSProperties = { width: "100%", padding: "7px 10px", fontSize: 12, border: "1px solid #c9dcea", borderRadius: 6, boxSizing: "border-box", marginTop: 3, background: "#fafcff" };
+    const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: "#18324a", display: "block", marginTop: 10 };
+    return (
+      <div className="builder-module-preview-copy" style={{ maxWidth: 340, border: "1px solid #dde8f0", borderRadius: 10, padding: "22px 20px", background: "#fff" }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#18324a", marginBottom: 14 }}>{title}</div>
+        <label style={labelStyle}>Email address</label>
+        <input type="email" disabled placeholder="you@example.com" style={inputStyle} />
+        <label style={labelStyle}>Password</label>
+        <input type="password" disabled placeholder="••••••••" style={inputStyle} />
+        <div style={{ marginTop: 14, padding: "8px 0", background: "#0f4f8f", color: "#fff", borderRadius: 6, textAlign: "center", fontSize: 12, fontWeight: 700, cursor: "default" }}>{btnText}</div>
+        {showForgot && <div style={{ marginTop: 12, textAlign: "center", fontSize: 11, color: "#587592", textDecoration: "underline", cursor: "default" }}>Forgot your password?</div>}
       </div>
     );
   }
@@ -3250,6 +3269,7 @@ export function BuilderModuleCard({
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
     const isAdminTeamUsersModule = module.type === "admin-team-users";
     const isAdminModulesModule = module.type === "admin-modules";
+    const isAdminLoginModule = module.type === "admin-login";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3471,6 +3491,8 @@ export function BuilderModuleCard({
               <BuilderAdminTeamUsersModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminModulesModule ? (
               <BuilderAdminModulesModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminLoginModule ? (
+              <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
