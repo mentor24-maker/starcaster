@@ -637,6 +637,28 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "messaging-topic-list-standard",
+    type: "messaging-topic-list",
+    group: "blog",
+    label: "Topic List",
+    icon: "◉",
+    description: "Displays messaging topics as clickable pills, list, or dropdown that filter the blog post feed.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "messaging-tag-list-standard",
+    type: "messaging-tag-list",
+    group: "blog",
+    label: "Tag List",
+    icon: "#",
+    description: "Displays messaging tags as a cloud, pills, or list that filter the blog post feed.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "blog-category-manager-standard",
     type: "blog-category-manager",
     group: "blog",
