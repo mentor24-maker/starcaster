@@ -168,20 +168,24 @@ async function handleRequest(req, res) {
   if (pathnameEarly === '/api/domain-debug' && methodEarly === 'GET') {
     const rawHostD = String(req.headers['x-forwarded-host'] || req.headers.host || '');
     const hostD = rawHostD.split(':')[0].toLowerCase().replace(/^www\./, '');
-    const { findProjectByDomain } = require('../lib/projectsStore');
-    const { isConfigured: isSbConfigured } = require('../lib/supabase');
+    const { findProjectByDomain, normalizeDomain: nd } = require('../lib/projectsStore');
+    const { isConfigured: isSbConfigured, sbQuery: sbQ, tableConfig: tbl } = require('../lib/supabase');
+    const qDomain = nd(hostD);
     const resultD = await findProjectByDomain(hostD);
+    // Also test a direct sbQuery to compare
+    const sbResult = await sbQ({ table: String(process.env.SUPABASE_PROJECTS_TABLE || 'app_projects'), query: `select=id,name,domain&domain=eq.${encodeURIComponent(qDomain)}&limit=1` });
     return sendJson(res, 200, {
-      rawHost: rawHostD,
       host: hostD,
+      normalizedDomain: qDomain,
       isSystem: isSystemHost(hostD),
       supabaseConfigured: isSbConfigured(),
+      projectsTable: String(process.env.SUPABASE_PROJECTS_TABLE || 'app_projects'),
       lookupOk: resultD.ok,
       lookupStatus: resultD.status,
       lookupError: resultD.error,
-      projectName: resultD.ok ? resultD.data?.name : null,
-      url: req.url,
-      pathname: pathnameEarly,
+      sbOk: sbResult.ok,
+      sbData: sbResult.data,
+      sbError: sbResult.error,
     });
   }
 
