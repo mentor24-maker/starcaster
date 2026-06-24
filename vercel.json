@@ -2,10 +2,6 @@
   "version": 2,
   "routes": [
     {
-      "src": "/(.*\\.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|webp|ttf|eot|map)$)",
-      "dest": "/$1"
-    },
-    {
       "src": "/(.*)",
       "dest": "/api/[...slug]"
     }

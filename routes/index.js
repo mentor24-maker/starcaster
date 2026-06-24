@@ -157,7 +157,7 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'diag-fc23ffc-v2',
+      routesVersion: 'simple-catch-all-v3',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
