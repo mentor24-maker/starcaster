@@ -498,6 +498,7 @@ async function handlePageRequest(req, res, pathname) {
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
 
   // Temporary diagnostic — dump all page requests as JSON.
+  console.log('[PAGE-DIAG] handlePageRequest called:', pathname, host, req.url);
   res.setHeader('Content-Type', 'application/json');
   res.statusCode = 200;
   return res.end(JSON.stringify({
@@ -508,6 +509,7 @@ async function handlePageRequest(req, res, pathname) {
     xForwardedHost: req.headers['x-forwarded-host'],
     reqUrl: req.url,
     isSystem: isSystemHost(host),
+    diagActive: true,
   }));
 
   // System hosts (localhost, *.vercel.app) always serve the primary app.
