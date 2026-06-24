@@ -497,6 +497,15 @@ async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
 
+  // Temp: one-shot diagnostic for the domain routing path
+  if (pathname === '/diag') {
+    const { findProjectByDomain: fpbd } = require('../lib/projectsStore');
+    const r = await fpbd(host);
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 200;
+    return res.end(JSON.stringify({ host, rawHost, isSystem: isSystemHost(host), lookupOk: r.ok, lookupStatus: r.status, lookupError: r.error }));
+  }
+
   // System hosts (localhost, *.vercel.app) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.
   if (!isSystemHost(host)) {
