@@ -157,9 +157,17 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'project-delete-v2',
+      routesVersion: 'diag-27e4b1b',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
+  }
+
+  if (pathnameEarly === '/api/diag-host' && methodEarly === 'GET') {
+    const rawHost2 = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+    const host2 = rawHost2.split(':')[0].toLowerCase().replace(/^www\./, '');
+    const { findProjectByDomain: fpbd2 } = require('../lib/projectsStore');
+    const r2 = await fpbd2(host2);
+    return sendJson(res, 200, { rawHost: rawHost2, host: host2, isSystem: isSystemHost(host2), lookupOk: r2.ok, lookupStatus: r2.status, lookupError: r2.error });
   }
 
   if (pathnameEarly === '/api/assets/import-drive-folder' && methodEarly === 'GET') {
