@@ -500,6 +500,7 @@ function serveStaticPage(res, pathname) {
 async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
+  console.log('[handlePageRequest] pathname:', pathname, 'host:', host, 'url:', req.url, 'sys:', isSystemHost(host));
 
   // System hosts (localhost, *.vercel.app) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.
