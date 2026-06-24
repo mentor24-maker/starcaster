@@ -157,7 +157,11 @@ async function handle(req, res, pathname, method) {
     if (!req.authUser) {
       return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
     }
-    const projectId = String(req.projectContext?.project?.id || req.headers['x-project-id'] || '').trim();
+    const projectId = String(
+      req.projectContext?.project?.id ||
+      req.headers['x-project-id'] ||
+      getUrlObj(req).searchParams?.get('projectId') || ''
+    ).trim();
     if (!projectId) {
       return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
     }
@@ -233,6 +237,48 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, updated, { enabledModules: updated }), true;
   }
 
+  // GET /api/admin/clusters — list all platform-level clusters
+  if (pathname === '/api/admin/clusters' && method === 'GET') {
+    if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
+    const result = await sbQuery({ method: 'GET', table: 'builder_clusters', query: 'select=id,name,created_at&order=created_at.asc' });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Failed to fetch clusters'), true;
+    const clusters = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, clusters, { clusters }), true;
+  }
+
+  // POST /api/admin/clusters — create a cluster
+  if (pathname === '/api/admin/clusters' && method === 'POST') {
+    if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
+    const body = await parseJsonBody(req);
+    const name = String(body?.name || '').trim();
+    if (!name) return sendErr(res, 400, 'Cluster name is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await sbQuery({
+      method: 'POST',
+      table: 'builder_clusters',
+      body: { name },
+      headers: { Prefer: 'return=representation' },
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Failed to create cluster'), true;
+    const created = Array.isArray(result.data) ? (result.data[0] || null) : null;
+    return sendOk(res, 201, created, { cluster: created }), true;
+  }
+
+  // DELETE /api/admin/clusters/:id — remove a cluster
+  const clusterDeleteMatch = pathname.match(/^\/api\/admin\/clusters\/([^/]+)\/?$/);
+  if (clusterDeleteMatch && method === 'DELETE') {
+    if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
+    const clusterId = decodeURIComponent(clusterDeleteMatch[1] || '').trim();
+    if (!clusterId) return sendErr(res, 400, 'Cluster ID is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await sbQuery({
+      method: 'DELETE',
+      table: 'builder_clusters',
+      query: `id=eq.${encodeURIComponent(clusterId)}`,
+      headers: { Prefer: 'return=minimal' },
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Failed to delete cluster'), true;
+    return sendOk(res, 200, { deleted: true }, { deleted: true }), true;
+  }
+
   // DELETE /api/admin/users/:id — platform owner removes an admin user
   const deleteUserMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/?$/);
   if (deleteUserMatch && method === 'DELETE') {
@@ -240,7 +286,11 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
     }
     const adminUserId = decodeURIComponent(deleteUserMatch[1] || '').trim();
-    const projectId = String(req.projectContext?.project?.id || req.headers['x-project-id'] || '').trim();
+    const projectId = String(
+      req.projectContext?.project?.id ||
+      req.headers['x-project-id'] ||
+      getUrlObj(req).searchParams?.get('projectId') || ''
+    ).trim();
     if (!projectId) {
       return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
     }
