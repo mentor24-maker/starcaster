@@ -241,25 +241,37 @@
             <!-- Modules -->
             <div class="card">
               <h3 class="project-details-section-heading">Modules</h3>
-              <div class="module-toggle-row">
-                <div class="module-toggle-info">
-                  <span class="module-toggle-label">CRM</span>
-                  <span class="module-toggle-desc">Contacts, forms, and lead management</span>
+              <div class="modules-clusters-layout">
+                <div class="modules-list-col">
+                  <div class="module-toggle-row">
+                    <div class="module-toggle-info">
+                      <span class="module-toggle-label">CRM</span>
+                      <span class="module-toggle-desc">Contacts, forms, and lead management</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="settingsModuleCrmToggle" />
+                      <span class="toggle-track"></span>
+                    </label>
+                  </div>
+                  <div class="module-toggle-row">
+                    <div class="module-toggle-info">
+                      <span class="module-toggle-label">Blog</span>
+                      <span class="module-toggle-desc">Blog post feeds, editors, and author bios</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="settingsModuleBlogToggle" />
+                      <span class="toggle-track"></span>
+                    </label>
+                  </div>
                 </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="settingsModuleCrmToggle" />
-                  <span class="toggle-track"></span>
-                </label>
-              </div>
-              <div class="module-toggle-row">
-                <div class="module-toggle-info">
-                  <span class="module-toggle-label">Blog</span>
-                  <span class="module-toggle-desc">Blog post feeds, editors, and author bios</span>
+                <div class="clusters-col">
+                  <p class="project-details-section-heading">Clusters</p>
+                  <form id="settingsClusterAddForm" class="cluster-add-form">
+                    <input id="settingsClusterNameInput" type="text" placeholder="Cluster name" autocomplete="off" />
+                    <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                  </form>
+                  <div id="settingsClustersList" class="clusters-list"></div>
                 </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="settingsModuleBlogToggle" />
-                  <span class="toggle-track"></span>
-                </label>
               </div>
             </div>
           </div>
