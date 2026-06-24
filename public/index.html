@@ -676,6 +676,7 @@
                     <th></th>
                     <th class="actions-col contacts-go-cell">
                       <button id="directAcquirePagesGoBtn" type="button" class="btn">Filter</button>
+                      <button id="directAcquireInspectPatternsBtn" type="button" class="btn" title="Analyze content patterns across all pages">Inspect Patterns</button>
                     </th>
                   </tr>
                   <tr>
@@ -9716,54 +9717,94 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="settings.openProjectsPage">Settings: Projects</a>: Edit</h2>
         </div>
-        <div class="card">
-          <div id="settingsProjectDetailsEmpty" class="meta hidden">Project not found.</div>
-          <div id="settingsProjectDetailsPanel" class="stack-form labeled-form">
-            <div class="project-details-layout">
-              <div class="project-details-form">
-                <div class="form-row">
-                  <label for="settingsProjectDetailsName">Project Name</label>
-                  <input id="settingsProjectDetailsName" required />
-                </div>
-                <div class="form-row">
-                  <label for="settingsProjectDetailsSlug">Slug</label>
-                  <input id="settingsProjectDetailsSlug" required />
-                </div>
-                <div class="form-row">
-                  <label for="settingsProjectDefaultUrlInput">Default URL</label>
-                  <input id="settingsProjectDefaultUrlInput" required placeholder="https://example.com" />
-                </div>
-                <p class="meta project-details-field-hint">Required for this project. Used as the default link for Campaign and Promote: Social posts when no campaign-specific URL is selected.</p>
-                <div class="form-row">
-                  <label for="settingsProjectDetailsDescription">Description</label>
-                  <textarea id="settingsProjectDetailsDescription" rows="4"></textarea>
-                </div>
-                <div class="form-row">
-                  <label for="settingsProjectTimezoneSelect">Schedule Timezone</label>
-                  <select id="settingsProjectTimezoneSelect"></select>
-                </div>
-                <p class="meta project-details-field-hint">Used when scheduling Promote: Social posts. Pick the IANA region for this workspace.</p>
-                <div class="form-row project-details-save-row">
-                  <div></div>
-                  <button id="settingsProjectDetailsSaveBtn" type="button" class="btn btn-primary">Save Project</button>
+        <div id="settingsProjectDetailsEmpty" class="meta hidden">Project not found.</div>
+        <div id="settingsProjectDetailsPanel" class="project-details-two-col">
+          <!-- LEFT: Project settings form -->
+          <div class="project-details-left">
+            <div class="card stack-form labeled-form">
+              <div class="form-row">
+                <label for="settingsProjectDetailsName">Project Name</label>
+                <input id="settingsProjectDetailsName" required />
+              </div>
+              <div class="form-row">
+                <label for="settingsProjectDetailsSlug">Slug</label>
+                <input id="settingsProjectDetailsSlug" required />
+              </div>
+              <div class="form-row">
+                <label for="settingsProjectDefaultUrlInput">Default URL</label>
+                <input id="settingsProjectDefaultUrlInput" required placeholder="https://example.com" />
+              </div>
+              <p class="meta project-details-field-hint">Required for this project. Used as the default link for Campaign and Promote: Social posts when no campaign-specific URL is selected.</p>
+              <div class="form-row">
+                <label for="settingsProjectDetailsDescription">Description</label>
+                <textarea id="settingsProjectDetailsDescription" rows="4"></textarea>
+              </div>
+              <div class="form-row">
+                <label for="settingsProjectTimezoneSelect">Schedule Timezone</label>
+                <select id="settingsProjectTimezoneSelect"></select>
+              </div>
+              <p class="meta project-details-field-hint">Used when scheduling Promote: Social posts. Pick the IANA region for this workspace.</p>
+              <div class="form-row">
+                <label>Project Logo</label>
+                <div class="settings-media-actions">
+                  <button id="settingsProjectLogoChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
+                  <label class="btn btn-ghost settings-upload-button">
+                    <span>Upload To Gallery</span>
+                    <input id="settingsProjectLogoUploadFile" type="file" accept="image/*" class="settings-upload-input" />
+                  </label>
+                  <button id="settingsProjectLogoClearBtn" type="button" class="btn btn-ghost">Clear</button>
                 </div>
               </div>
-              <div class="project-details-media">
+              <div class="project-logo-preview-wrap">
+                <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
+                <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
+              </div>
+              <div class="form-row project-details-save-row">
+                <div></div>
+                <button id="settingsProjectDetailsSaveBtn" type="button" class="btn btn-primary">Save Project</button>
+              </div>
+            </div>
+          </div>
+          <!-- RIGHT: Admin team + Modules -->
+          <div class="project-details-right">
+            <!-- Admin Team -->
+            <div class="card">
+              <h3 class="project-details-section-heading">Admin Team</h3>
+              <div id="settingsAdminUsersList" class="admin-users-list"></div>
+              <form id="settingsAdminUserForm" class="admin-user-add-form stack-form labeled-form">
                 <div class="form-row">
-                  <label>Project Logo</label>
-                  <div class="settings-media-actions">
-                    <button id="settingsProjectLogoChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
-                    <label class="btn btn-ghost settings-upload-button">
-                      <span>Upload To Gallery</span>
-                      <input id="settingsProjectLogoUploadFile" type="file" accept="image/*" class="settings-upload-input" />
-                    </label>
-                    <button id="settingsProjectLogoClearBtn" type="button" class="btn btn-ghost">Clear</button>
-                  </div>
+                  <label for="settingsAdminUserEmail">Email</label>
+                  <input id="settingsAdminUserEmail" type="email" placeholder="team@example.com" autocomplete="off" />
                 </div>
-                <div class="project-logo-preview-wrap">
-                  <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
-                  <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
+                <div class="form-row">
+                  <label for="settingsAdminUserPassword">Password</label>
+                  <input id="settingsAdminUserPassword" type="password" placeholder="Min 8 characters" autocomplete="new-password" />
                 </div>
+                <div class="form-row">
+                  <label for="settingsAdminUserRole">Role</label>
+                  <select id="settingsAdminUserRole">
+                    <option value="editor">Editor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div></div>
+                  <button type="submit" class="btn btn-primary">Add Admin User</button>
+                </div>
+              </form>
+            </div>
+            <!-- Modules -->
+            <div class="card">
+              <h3 class="project-details-section-heading">Modules</h3>
+              <div class="module-toggle-row">
+                <div class="module-toggle-info">
+                  <span class="module-toggle-label">CRM</span>
+                  <span class="module-toggle-desc">Contacts, forms, and lead management</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="settingsModuleCrmToggle" />
+                  <span class="toggle-track"></span>
+                </label>
               </div>
             </div>
           </div>
