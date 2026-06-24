@@ -157,7 +157,7 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'project-delete-v2',
+      routesVersion: 'page-routing-diagnostic-v1',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
