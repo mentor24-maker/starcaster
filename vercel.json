@@ -6,28 +6,12 @@
       "destination": "/api/[...slug]"
     },
     {
-      "source": "/privacy-policy",
-      "destination": "/public/privacy-policy.html"
-    },
-    {
-      "source": "/terms-of-service",
-      "destination": "/public/terms-of-service.html"
-    },
-    {
-      "source": "/data-deletion",
-      "destination": "/public/data-deletion.html"
-    },
-    {
-      "source": "/about",
-      "destination": "/public/about.html"
-    },
-    {
-      "source": "/",
-      "destination": "/public/index.html"
-    },
-    {
-      "source": "/((?!api/).*)",
+      "source": "/(.*\\.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|webp|map|ttf|eot)$)",
       "destination": "/public/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api/[...slug]"
     }
   ],
   "headers": [
