@@ -637,6 +637,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "blog-category-manager-standard",
+    type: "blog-category-manager",
+    group: "blog",
+    label: "Category Manager (Admin)",
+    icon: "☰",
+    description: "Admin CRUD panel for creating, editing, and deleting blog categories. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "blog-tag-cloud-standard",
     type: "blog-tag-cloud",
     group: "blog",
