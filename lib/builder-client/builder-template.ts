@@ -72,6 +72,7 @@ export type BuilderTemplateModuleType =
   | "blog-post-tags"
   | "blog-post-create"
   | "blog-post-manager"
+  | "blog-category-manager"
   | "admin-team-users"
   | "admin-modules"
   | "admin-login";
@@ -1034,6 +1035,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-post-tags" ||
     type === "blog-post-create" ||
     type === "blog-post-manager" ||
+    type === "blog-category-manager" ||
     type === "admin-team-users" ||
     type === "admin-modules" ||
     type === "admin-login"
@@ -1974,6 +1976,14 @@ export function createEmptyModule(
                             editPageUrl: "",
                             showStatus: "true",
                             showDate: "true",
+                            showDelete: "true",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "blog-category-manager"
+                        ? {
+                            showDescription: "true",
+                            showColor: "true",
+                            showSortOrder: "false",
                             showDelete: "true",
                             accentColor: "#0f4f8f"
                           }

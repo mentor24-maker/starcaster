@@ -71,6 +71,7 @@ import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blo
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
+import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
 import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-module-settings";
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
@@ -1641,6 +1642,37 @@ function renderModulePreview(module: BuilderTemplateModule) {
             </span>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (module.type === "blog-category-manager") {
+    const accent = module.settings.accentColor ?? "#0f4f8f";
+    const rows = [
+      { name: "Technology", slug: "technology", color: "#3b82f6", description: "Tech news and tutorials" },
+      { name: "Sports",     slug: "sports",     color: "#16a34a", description: "Game recaps and analysis" },
+      { name: "Finance",    slug: "finance",    color: "#d97706", description: "Markets and investing" },
+    ];
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "16px 1fr auto auto auto", gap: "0 10px", padding: "7px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2", fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase", alignItems: "center" }}>
+          <span></span><span>Name</span><span>Slug</span><span>Description</span><span>Actions</span>
+        </div>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "16px 1fr auto auto auto", gap: "0 10px", padding: "7px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined, alignItems: "center" }}>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: row.color, display: "inline-block" }} />
+            <span style={{ fontSize: 12, color: "#18324a", fontWeight: 600 }}>{row.name}</span>
+            <span style={{ fontSize: 10, color: "#8ba9be" }}>{row.slug}</span>
+            <span style={{ fontSize: 10, color: "#8ba9be" }}>{row.description}</span>
+            <span style={{ display: "flex", gap: 5 }}>
+              <span style={{ fontSize: 12, color: accent, cursor: "default" }}>✎</span>
+              <span style={{ fontSize: 12, color: "#c0392b", cursor: "default" }}>✕</span>
+            </span>
+          </div>
+        ))}
+        <div style={{ padding: "8px 12px", borderTop: "1px solid #e4ecf2" }}>
+          <span style={{ fontSize: 11, color: accent, fontWeight: 600, cursor: "default" }}>+ Add Category</span>
+        </div>
       </div>
     );
   }
@@ -3266,6 +3298,7 @@ export function BuilderModuleCard({
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
+    const isBlogCategoryManagerModule = module.type === "blog-category-manager";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
     const isAdminTeamUsersModule = module.type === "admin-team-users";
     const isAdminModulesModule = module.type === "admin-modules";
@@ -3485,6 +3518,8 @@ export function BuilderModuleCard({
               <BuilderBlogPostCreateModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostManagerModule ? (
               <BuilderBlogPostManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogCategoryManagerModule ? (
+              <BuilderBlogCategoryManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isCrmContactsTableModule ? (
               <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminTeamUsersModule ? (
