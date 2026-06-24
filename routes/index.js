@@ -458,78 +458,70 @@ const MIME_MAP = {
   '.json': 'application/json',
 };
 
-function isPrimaryAppDomain(host) {
+function isSystemHost(host) {
   if (!host) return true;
-  if (/^localhost$|^127\./.test(host)) return true;
+  if (/^localhost$|^127\.|^0\.0\.0\.0$/.test(host)) return true;
   if (host.endsWith('.vercel.app')) return true;
-  const configured = String(
-    process.env.PUBLIC_APP_ORIGIN
-    || process.env.APP_PUBLIC_ORIGIN
-    || ''
-  ).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^www\./i, '').toLowerCase();
-  return configured ? host === configured : true;
+  return false;
+}
+
+function serveStaticPage(res, pathname) {
+  const safePath = pathname.replace(/\.\./g, '').replace(/\/+/g, '/') || '/';
+  let filePath;
+  if (safePath === '/') {
+    filePath = _path.join(__dirname, '../public/index.html');
+  } else {
+    filePath = _path.join(__dirname, '../public', safePath);
+    if (!_path.extname(safePath) && !_fs.existsSync(filePath)) {
+      filePath += '.html';
+    }
+  }
+  if (!_fs.existsSync(filePath)) {
+    filePath = _path.join(__dirname, '../public/index.html');
+  }
+  const ext = _path.extname(filePath).toLowerCase();
+  const mime = MIME_MAP[ext] || 'application/octet-stream';
+  try {
+    const content = _fs.readFileSync(filePath);
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.statusCode = 200;
+    return res.end(content);
+  } catch {
+    res.statusCode = 404;
+    return res.end('Not found');
+  }
 }
 
 async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
 
-  if (isPrimaryAppDomain(host)) {
-    // Serve static files from public/
-    const safePath = pathname.replace(/\.\./g, '').replace(/\/+/g, '/') || '/';
-    let filePath;
-    if (safePath === '/') {
-      filePath = _path.join(__dirname, '../public/index.html');
-    } else {
-      filePath = _path.join(__dirname, '../public', safePath);
-      if (!_path.extname(safePath) && !_fs.existsSync(filePath)) {
-        filePath += '.html';
+  // System hosts (localhost, *.vercel.app) always serve the primary app.
+  // For all other hosts, attempt a project domain lookup first.
+  if (!isSystemHost(host)) {
+    const { findProjectByDomain } = require('../lib/projectsStore');
+    const result = await findProjectByDomain(host);
+    if (result.ok) {
+      const { id: projectId, name: projectName } = result.data;
+      let siteHtml;
+      try {
+        siteHtml = _fs.readFileSync(_path.join(__dirname, '../public/site.html'), 'utf8');
+      } catch {
+        res.statusCode = 500;
+        return res.end('Site template unavailable');
       }
-    }
-    if (!_fs.existsSync(filePath)) {
-      filePath = _path.join(__dirname, '../public/index.html');
-    }
-    const ext = _path.extname(filePath).toLowerCase();
-    const mime = MIME_MAP[ext] || 'application/octet-stream';
-    try {
-      const content = _fs.readFileSync(filePath);
-      res.setHeader('Content-Type', mime);
+      const config = JSON.stringify({ projectId, projectName });
+      siteHtml = siteHtml.replace('</head>', `  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.statusCode = 200;
-      return res.end(content);
-    } catch {
-      res.statusCode = 404;
-      return res.end('Not found');
+      return res.end(siteHtml);
     }
   }
 
-  // Custom domain — look up project and serve site shell
-  const { findProjectByDomain } = require('../lib/projectsStore');
-  const result = await findProjectByDomain(host);
-  if (!result.ok) {
-    res.statusCode = 404;
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.end('<!DOCTYPE html><html><body><h1>Site not found</h1><p>No project is mapped to this domain.</p></body></html>');
-  }
-
-  const { id: projectId, name: projectName } = result.data;
-
-  let siteHtml;
-  try {
-    siteHtml = _fs.readFileSync(_path.join(__dirname, '../public/site.html'), 'utf8');
-  } catch {
-    res.statusCode = 500;
-    return res.end('Site template unavailable');
-  }
-
-  const config = JSON.stringify({ projectId, projectName });
-  // Inject project config before </head> so the bundle can read it synchronously
-  siteHtml = siteHtml.replace('</head>', `  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`);
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.statusCode = 200;
-  return res.end(siteHtml);
+  // No project matched — serve the primary app static files.
+  return serveStaticPage(res, pathname);
 }
 
 module.exports = { handleRequest, logRegistry, ROUTE_MODULES };
