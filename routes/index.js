@@ -157,7 +157,7 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'simple-catch-all-v3',
+      routesVersion: 'hpr-logs-v4',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
@@ -516,9 +516,11 @@ async function handlePageRequest(req, res, pathname) {
 
   // System hosts (localhost, *.vercel.app) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.
+  console.log(`[HPR] host=${host} isSystem=${isSystemHost(host)} pathname=${pathname}`);
   if (!isSystemHost(host)) {
     const { findProjectByDomain } = require('../lib/projectsStore');
     const result = await findProjectByDomain(host);
+    console.log(`[HPR] lookup result: ok=${result.ok} status=${result.status} error=${result.error}`);
     if (result.ok) {
       const { id: projectId, name: projectName } = result.data;
       let siteHtml;
