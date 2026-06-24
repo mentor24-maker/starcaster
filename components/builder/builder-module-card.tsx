@@ -72,6 +72,8 @@ import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-modu
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
+import { BuilderMessagingTopicListModuleSettings } from "./builder-messaging-topic-list-module-settings";
+import { BuilderMessagingTagListModuleSettings } from "./builder-messaging-tag-list-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
 import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-module-settings";
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
@@ -1673,6 +1675,80 @@ function renderModulePreview(module: BuilderTemplateModule) {
         <div style={{ padding: "8px 12px", borderTop: "1px solid #e4ecf2" }}>
           <span style={{ fontSize: 11, color: accent, fontWeight: 600, cursor: "default" }}>+ Add Category</span>
         </div>
+      </div>
+    );
+  }
+
+  if (module.type === "messaging-topic-list") {
+    const s = module.settings;
+    const layout = s.layout ?? "pills";
+    const activeColor = s.activeColor ?? "#0f4f8f";
+    const activeBg = s.activeBg ?? activeColor;
+    const inactiveColor = s.inactiveColor ?? "#587592";
+    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+    const borderRadius = parseInt(s.borderRadius ?? "20", 10) || 20;
+    const fontSize = parseInt(s.fontSize ?? "13", 10) || 13;
+    const gap = parseInt(s.gap ?? "8", 10) || 8;
+    const allLabel = s.allLabel || "All Topics";
+    const showAll = s.showAll !== "false";
+    const sampleTopics = ["Technology", "Finance", "Health", "Sports"];
+    const pills = showAll ? [allLabel, ...sampleTopics] : sampleTopics;
+    if (layout === "dropdown") {
+      return (
+        <div className="builder-module-preview-copy">
+          <select disabled style={{ fontSize, padding: "6px 12px", borderRadius: borderRadius / 2, border: "1px solid #c9d8e6", color: inactiveColor, background: inactiveBg, minWidth: 160 }}>
+            {pills.map((p) => <option key={p}>{p}</option>)}
+          </select>
+        </div>
+      );
+    }
+    if (layout === "list") {
+      return (
+        <div className="builder-module-preview-copy" style={{ display: "flex", flexDirection: "column", gap: gap / 2 }}>
+          {pills.map((p, i) => (
+            <span key={p} style={{ fontSize, color: i === 0 ? activeBg : inactiveColor, fontWeight: i === 0 ? 600 : 400, cursor: "default" }}>{p}</span>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="builder-module-preview-copy" style={{ display: "flex", flexWrap: "wrap", gap }}>
+        {pills.map((p, i) => (
+          <span key={p} style={{ fontSize, padding: "3px 10px", borderRadius, background: i === 0 ? activeBg : inactiveBg, color: i === 0 ? "#fff" : inactiveColor, fontWeight: i === 0 ? 600 : 400, cursor: "default" }}>{p}</span>
+        ))}
+      </div>
+    );
+  }
+
+  if (module.type === "messaging-tag-list") {
+    const s = module.settings;
+    const layout = s.layout ?? "cloud";
+    const inactiveColor = s.inactiveColor ?? "#587592";
+    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+    const gap = parseInt(s.gap ?? "8", 10) || 8;
+    const minFs = parseInt(s.minFontSize ?? "12", 10) || 12;
+    const maxFs = parseInt(s.maxFontSize ?? "22", 10) || 22;
+    const sampleTags = [
+      { t: "AI", w: 1 }, { t: "Marketing", w: 0.7 }, { t: "Strategy", w: 0.9 },
+      { t: "Growth", w: 0.6 }, { t: "Content", w: 0.8 }, { t: "SEO", w: 0.5 },
+    ];
+    if (layout === "list") {
+      return (
+        <div className="builder-module-preview-copy" style={{ display: "flex", flexDirection: "column", gap: gap / 2 }}>
+          {sampleTags.map(({ t }) => (
+            <span key={t} style={{ fontSize: minFs, color: inactiveColor, cursor: "default" }}># {t}</span>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="builder-module-preview-copy" style={{ display: "flex", flexWrap: "wrap", gap }}>
+        {sampleTags.map(({ t, w }) => {
+          const fs = Math.round(minFs + (maxFs - minFs) * w);
+          return (
+            <span key={t} style={{ fontSize: fs, padding: layout === "pills" ? "2px 8px" : undefined, borderRadius: layout === "pills" ? 12 : undefined, background: layout === "pills" ? inactiveBg : undefined, color: inactiveColor, cursor: "default" }}>{t}</span>
+          );
+        })}
       </div>
     );
   }
@@ -3299,6 +3375,8 @@ export function BuilderModuleCard({
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
+    const isMessagingTopicListModule = module.type === "messaging-topic-list";
+    const isMessagingTagListModule = module.type === "messaging-tag-list";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
     const isAdminTeamUsersModule = module.type === "admin-team-users";
     const isAdminModulesModule = module.type === "admin-modules";
@@ -3520,6 +3598,10 @@ export function BuilderModuleCard({
               <BuilderBlogPostManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (
               <BuilderBlogCategoryManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isMessagingTopicListModule ? (
+              <BuilderMessagingTopicListModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isMessagingTagListModule ? (
+              <BuilderMessagingTagListModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isCrmContactsTableModule ? (
               <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminTeamUsersModule ? (
