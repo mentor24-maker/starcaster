@@ -2723,9 +2723,8 @@ function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> 
 }
 
 const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: string }> = [
-  { key: "crm",           label: "CRM",           description: "Lead capture forms and contact table" },
-  { key: "blog",          label: "Blog",           description: "Blog post feeds, editors, and author bios" },
-  { key: "player-portal", label: "Player Portal",  description: "Player login and registration on any page" },
+  { key: "crm",  label: "CRM",  description: "Lead capture forms and contact table" },
+  { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
 ];
 
 function AdminModulesPreview({ settings }: { settings: Record<string, string> }) {
