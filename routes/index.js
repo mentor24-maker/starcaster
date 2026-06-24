@@ -497,19 +497,18 @@ async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
 
-  // Temporary diagnostic — remove after confirming domain routing works.
-  if (pathname === '/debug-host') {
-    res.setHeader('Content-Type', 'application/json');
-    res.statusCode = 200;
-    return res.end(JSON.stringify({
-      host,
-      rawHost,
-      reqHost: req.headers.host,
-      xForwardedHost: req.headers['x-forwarded-host'],
-      reqUrl: req.url,
-      isSystem: isSystemHost(host),
-    }));
-  }
+  // Temporary diagnostic — dump all page requests as JSON.
+  res.setHeader('Content-Type', 'application/json');
+  res.statusCode = 200;
+  return res.end(JSON.stringify({
+    pathname,
+    host,
+    rawHost,
+    reqHost: req.headers.host,
+    xForwardedHost: req.headers['x-forwarded-host'],
+    reqUrl: req.url,
+    isSystem: isSystemHost(host),
+  }));
 
   // System hosts (localhost, *.vercel.app) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.
