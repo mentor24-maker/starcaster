@@ -411,3 +411,166 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* ─── Pattern Inspector modal ───────────────────────────────────────────────── */
+
+.pi-modal {
+  max-width: 760px;
+}
+
+.pi-body {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.pi-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+}
+
+.pi-card-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.pi-card-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pi-card-count {
+  background: #edf2ff;
+  border-radius: 10px;
+  color: #3730a3;
+  font-size: 12px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.pi-card-desc {
+  color: #718096;
+  font-size: 12px;
+  margin: 0 0 6px;
+}
+
+.pi-examples summary {
+  color: #4a5568;
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+}
+
+.pi-example-row {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.pi-ex-before,
+.pi-ex-after {
+  background: #f7f9fb;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-ex-arrow {
+  color: #a0aec0;
+  font-size: 11px;
+}
+
+.pi-edit-btn {
+  background: none;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  color: #4a6cf7;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.pi-edit-btn:hover { background: #edf2ff; }
+
+.pi-pattern-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.pi-pattern-handled {
+  opacity: 0.6;
+}
+.pi-pattern-handled .pi-edit-btn {
+  color: #1a7d4a;
+  border-color: #a0e0c0;
+  cursor: default;
+}
+
+/* Handler editor form */
+.pi-editor-slot {
+  border-top: 1px dashed #e2e8f0;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.pi-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pi-editor-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pi-editor-row label {
+  color: #4a5568;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 3px;
+}
+.pi-editor-row-2col {
+  flex-direction: row;
+  gap: 12px;
+}
+.pi-editor-row-2col label {
+  flex: 1;
+}
+.pi-field {
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 13px;
+  padding: 5px 8px;
+}
+.pi-field:focus {
+  border-color: #4a6cf7;
+  outline: none;
+}
+
+.pi-editor-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pi-save-status {
+  font-size: 12px;
+}
+.pi-save-ok    { color: #1a7d4a; }
+.pi-save-error { color: #c0392b; }

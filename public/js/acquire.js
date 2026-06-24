@@ -5778,6 +5778,12 @@ App.acquire = (function () {
         }
       });
     }
+
+    const inspectBtn = document.getElementById('directAcquireInspectPatternsBtn');
+    if (inspectBtn && !inspectBtn.dataset.bound) {
+      inspectBtn.dataset.bound = '1';
+      inspectBtn.addEventListener('click', () => openPatternInspectorModal());
+    }
   }
 
   // ── Source Inspector modal ───────────────────────────────────────────────
@@ -5914,6 +5920,233 @@ App.acquire = (function () {
 
     showTab('raw');
     modal.classList.add('is-open');
+  }
+
+  // ── Pattern Inspector modal ──────────────────────────────────────────────
+  // Analyzes all pages in the current crawl run to identify which built-in
+  // handlers fired and which HTML patterns remain unhandled.  Accessible via
+  // the "Inspect Patterns" button in the Website Pages table header.
+
+  function openPatternInspectorModal() {
+    const runId = String(state.directAcquireCurrentRun?.run_id || '');
+    if (!runId) { notify('No crawl run loaded — run a web crawl first', true); return; }
+
+    let modal = document.getElementById('patternInspectorModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'patternInspectorModal';
+      modal.className = 'builder-content-modal-backdrop';
+      modal.innerHTML = [
+        '<div class="builder-content-modal pi-modal">',
+        '  <div class="builder-content-modal-header">',
+        '    <div>',
+        '      <strong>Pattern Inspector</strong>',
+        '      <span id="piMeta" class="builder-content-modal-url"></span>',
+        '    </div>',
+        '    <button type="button" id="piClose" class="btn" aria-label="Close">&times;</button>',
+        '  </div>',
+        '  <div class="source-inspector-tabs" id="piTabs">',
+        '    <button type="button" class="source-inspector-tab active" data-tab="handlers">Active Handlers</button>',
+        '    <button type="button" class="source-inspector-tab" data-tab="unmatched">Unhandled Patterns</button>',
+        '  </div>',
+        '  <div class="builder-content-modal-body pi-body">',
+        '    <div id="piHandlersPanel"></div>',
+        '    <div id="piUnmatchedPanel" style="display:none;"></div>',
+        '  </div>',
+        '</div>',
+      ].join('');
+      document.body.appendChild(modal);
+
+      document.getElementById('piClose').addEventListener('click', () => modal.classList.remove('is-open'));
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('is-open'); });
+
+      document.getElementById('piTabs').addEventListener('click', (e) => {
+        const btn = e.target.closest('.source-inspector-tab[data-tab]');
+        if (!btn) return;
+        modal.querySelectorAll('#piTabs .source-inspector-tab').forEach((t) => t.classList.toggle('active', t === btn));
+        document.getElementById('piHandlersPanel').style.display  = btn.dataset.tab === 'handlers'  ? '' : 'none';
+        document.getElementById('piUnmatchedPanel').style.display = btn.dataset.tab === 'unmatched' ? '' : 'none';
+      });
+    }
+
+    const metaEl      = document.getElementById('piMeta');
+    const handlersEl  = document.getElementById('piHandlersPanel');
+    const unmatchedEl = document.getElementById('piUnmatchedPanel');
+
+    // Reset to handlers tab and show loading state.
+    modal.querySelectorAll('#piTabs .source-inspector-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === 'handlers'));
+    handlersEl.style.display  = '';
+    unmatchedEl.style.display = 'none';
+    metaEl.textContent = 'Loading…';
+    handlersEl.innerHTML  = '<p class="source-inspector-status">Analyzing pages…</p>';
+    unmatchedEl.innerHTML = '';
+
+    modal.classList.add('is-open');
+
+    // Fetch analysis from server.
+    api(`/api/acquire/direct-runs/${encodeURIComponent(runId)}/pattern-analysis`)
+      .then((data) => {
+        metaEl.textContent = `${data.pagesAnalyzed || 0} pages analyzed`;
+        renderHandlersList(handlersEl, data.matchedHandlers || []);
+        renderUnmatchedList(unmatchedEl, data.unmatchedPatterns || [], runId);
+      })
+      .catch((err) => {
+        handlersEl.innerHTML = `<p class="source-inspector-status">Error: ${err.message || 'Analysis failed'}</p>`;
+      });
+  }
+
+  function renderHandlersList(el, handlers) {
+    if (!handlers.length) {
+      el.innerHTML = '<p class="source-inspector-status">No handler matches found in this crawl run.</p>';
+      return;
+    }
+    el.innerHTML = handlers.map((h) => {
+      const examples = Array.isArray(h.examples) ? h.examples : [];
+      const exHtml = examples.length ? examples.map((ex) => {
+        if (ex && typeof ex === 'object') {
+          return `<div class="pi-example-row"><code class="pi-ex-before">${escHtml(String(ex.before||''))}</code>`
+            + (ex.after ? ` <span class="pi-ex-arrow">→</span> <code class="pi-ex-after">${escHtml(String(ex.after||''))}</code>` : '')
+            + '</div>';
+        }
+        return `<div class="pi-example-row"><code class="pi-ex-before">${escHtml(String(ex))}</code></div>`;
+      }).join('') : '';
+      return [
+        `<div class="pi-handler pi-card">`,
+        `  <div class="pi-card-header">`,
+        `    <span class="pi-card-name">${escHtml(h.name)}</span>`,
+        `    <span class="pi-card-count">${h.totalCount} match${h.totalCount !== 1 ? 'es' : ''}</span>`,
+        `  </div>`,
+        `  <p class="pi-card-desc">${escHtml(h.description || '')}</p>`,
+        exHtml ? `<details class="pi-examples"><summary>Examples</summary>${exHtml}</details>` : '',
+        `</div>`,
+      ].join('');
+    }).join('');
+  }
+
+  function renderUnmatchedList(el, patterns, runId) {
+    if (!patterns.length) {
+      el.innerHTML = '<p class="source-inspector-status">No unhandled patterns detected — all recognized structures are covered by existing handlers.</p>';
+      return;
+    }
+    el.innerHTML = patterns.map((p) => {
+      const exHtml = (p.examples || []).map((ex) =>
+        `<code class="pi-ex-before">${escHtml(String(ex))}</code>`
+      ).join('');
+      return [
+        `<div class="pi-pattern pi-card" id="piPattern_${p.id}">`,
+        `  <div class="pi-card-header">`,
+        `    <span class="pi-card-name">${escHtml(p.suggestedName)}</span>`,
+        `    <span class="pi-card-count">${p.totalCount} match${p.totalCount !== 1 ? 'es' : ''}</span>`,
+        `    <button class="pi-edit-btn" data-pattern-id="${p.id}" title="Create handler for this pattern">✎ Create Handler</button>`,
+        `  </div>`,
+        `  <p class="pi-card-desc">${escHtml(p.description || '')}</p>`,
+        exHtml ? `<div class="pi-pattern-examples">${exHtml}</div>` : '',
+        `  <div class="pi-editor-slot" id="piEditor_${p.id}" style="display:none;"></div>`,
+        `</div>`,
+      ].join('');
+    }).join('');
+
+    el.querySelectorAll('.pi-edit-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pid = btn.dataset.patternId;
+        const pattern = patterns.find((p) => p.id === pid);
+        if (pattern) openHandlerEditor(pid, pattern, runId);
+      });
+    });
+  }
+
+  function openHandlerEditor(patternId, pattern, runId) {
+    const slot = document.getElementById(`piEditor_${patternId}`);
+    if (!slot) return;
+
+    // Toggle — clicking again closes the editor.
+    if (slot.style.display !== 'none') { slot.style.display = 'none'; return; }
+
+    const typeOptions = [
+      ['promote-h2', 'Promote to H2 heading'],
+      ['promote-h3', 'Promote to H3 heading'],
+      ['delete', 'Delete (remove from content)'],
+      ['strip-tag', 'Strip tag (keep text, remove wrapper)'],
+      ['bold', 'Bold (wrap in <strong>)'],
+      ['find-replace', 'Find & Replace'],
+    ].map(([v, l]) => `<option value="${v}"${v === (pattern.suggestedType || 'delete') ? ' selected' : ''}>${l}</option>`).join('');
+
+    slot.innerHTML = [
+      '<form class="pi-editor-form" autocomplete="off">',
+      '  <div class="pi-editor-row">',
+      '    <label>Handler name<input class="pi-field" name="name" type="text" value="' + escAttr(pattern.suggestedName || '') + '" required /></label>',
+      '  </div>',
+      '  <div class="pi-editor-row pi-editor-row-2col">',
+      '    <label>Type<select class="pi-field" name="type">' + typeOptions + '</select></label>',
+      '    <label>Source tag <small>(for promote/strip)</small><input class="pi-field" name="tag" type="text" placeholder="e.g. u, em" value="' + escAttr(pattern.suggestedTag || '') + '" /></label>',
+      '  </div>',
+      '  <div class="pi-editor-row">',
+      '    <label>Pattern <small>(regex, for delete/find-replace)</small><input class="pi-field" name="pattern" type="text" placeholder="e.g. \\(\\d{3}\\)\\s*\\d{3}-\\d{4}" /></label>',
+      '  </div>',
+      '  <div class="pi-editor-row pi-editor-replacement-row" style="display:none;">',
+      '    <label>Replacement<input class="pi-field" name="replacement" type="text" placeholder="Replacement string (use $1 for capture groups)" /></label>',
+      '  </div>',
+      '  <div class="pi-editor-row">',
+      '    <label>Description<input class="pi-field" name="description" type="text" value="' + escAttr(pattern.description || '') + '" /></label>',
+      '  </div>',
+      '  <div class="pi-editor-actions">',
+      '    <button type="submit" class="btn btn-primary pi-save-btn">Save Handler</button>',
+      '    <button type="button" class="btn pi-cancel-btn">Cancel</button>',
+      '    <span class="pi-save-status"></span>',
+      '  </div>',
+      '</form>',
+    ].join('');
+
+    slot.style.display = '';
+
+    const form = slot.querySelector('form');
+    const typeSelect = form.querySelector('[name="type"]');
+    const replacementRow = form.querySelector('.pi-editor-replacement-row');
+
+    typeSelect.addEventListener('change', () => {
+      replacementRow.style.display = typeSelect.value === 'find-replace' ? '' : 'none';
+    });
+
+    form.querySelector('.pi-cancel-btn').addEventListener('click', () => { slot.style.display = 'none'; });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const saveBtn = form.querySelector('.pi-save-btn');
+      const statusEl = form.querySelector('.pi-save-status');
+      saveBtn.disabled = true;
+      statusEl.textContent = 'Saving…';
+      const payload = {
+        name: form.name.value.trim(),
+        type: typeSelect.value,
+        tag: form.tag.value.trim(),
+        pattern: form.pattern.value.trim(),
+        replacement: form.replacement.value.trim(),
+        description: form.description.value.trim(),
+      };
+      try {
+        await api('/api/acquire/content-handlers', { method: 'POST', body: JSON.stringify(payload) });
+        statusEl.textContent = '✓ Saved';
+        statusEl.className = 'pi-save-status pi-save-ok';
+        const card = document.getElementById(`piPattern_${patternId}`);
+        if (card) {
+          card.classList.add('pi-pattern-handled');
+          const editBtn = card.querySelector('.pi-edit-btn');
+          if (editBtn) editBtn.textContent = '✓ Handler created';
+        }
+        setTimeout(() => { slot.style.display = 'none'; }, 1200);
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + (err.message || 'Failed to save');
+        statusEl.className = 'pi-save-status pi-save-error';
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function escAttr(str) {
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   // ── Create-page-from-crawled-page modal ──────────────────────────────────

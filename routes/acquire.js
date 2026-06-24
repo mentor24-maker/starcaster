@@ -17,6 +17,8 @@ const { listAcquireJobs }    = require('../lib/acquireJobs');
 const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
 const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun, patchDirectAcquireRunPages } = require('../lib/directAcquire');
 const { sanitizeImportHtml, identifyHeaderLines, detectModel: detectContentModel, getModel: getContentModel } = require('../lib/contentDisplayModels');
+const { analyzeRunPages } = require('../lib/patternAnalysis');
+const { listHandlers: listContentHandlers, createHandler: createContentHandler, deleteHandler: deleteContentHandler, toggleHandler: toggleContentHandler } = require('../lib/contentHandlersStore');
 const { runPeerDiscovery } = require('../lib/peerDiscovery');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const {
@@ -1256,6 +1258,46 @@ async function handle(req, res, pathname, method) {
       detectedModel: detectedModel ? { id: detectedModel.id, name: detectedModel.name } : null,
       extractedBlocks,
     }), true;
+  }
+
+  // GET /api/acquire/direct-runs/:id/pattern-analysis — analyze handler matches + unhandled patterns
+  const patternAnalysisMatch = pathname.match(/^\/api\/acquire\/direct-runs\/([^/]+)\/pattern-analysis$/);
+  if (patternAnalysisMatch && method === 'GET') {
+    const scope = requestProjectScope(req);
+    const run = await getDirectAcquireRun(decodeURIComponent(patternAnalysisMatch[1]), scope);
+    if (!run) return sendErr(res, 404, 'Run not found'), true;
+    const pages = Array.isArray(run.pages) ? run.pages : [];
+    const analysis = analyzeRunPages(pages);
+    return sendOk(res, 200, analysis, analysis), true;
+  }
+
+  // GET  /api/acquire/content-handlers — list global content transform handlers
+  if (pathname === '/api/acquire/content-handlers' && method === 'GET') {
+    const handlers = await listContentHandlers().catch(() => []);
+    return sendOk(res, 200, handlers, { handlers }), true;
+  }
+
+  // POST /api/acquire/content-handlers — create new handler
+  if (pathname === '/api/acquire/content-handlers' && method === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    if (!String(body.name || '').trim()) return sendErr(res, 400, 'name is required'), true;
+    if (!String(body.type || '').trim()) return sendErr(res, 400, 'type is required'), true;
+    const handler = await createContentHandler(body).catch((e) => { throw e; });
+    return sendOk(res, 201, handler, { handler }), true;
+  }
+
+  // DELETE /api/acquire/content-handlers/:id
+  const handlerIdMatch = pathname.match(/^\/api\/acquire\/content-handlers\/([^/]+)$/);
+  if (handlerIdMatch && method === 'DELETE') {
+    await deleteContentHandler(decodeURIComponent(handlerIdMatch[1])).catch(() => {});
+    return sendOk(res, 200, { ok: true }), true;
+  }
+
+  // PATCH /api/acquire/content-handlers/:id — toggle enabled
+  if (handlerIdMatch && method === 'PATCH') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    await toggleContentHandler(decodeURIComponent(handlerIdMatch[1]), body.enabled !== false).catch(() => {});
+    return sendOk(res, 200, { ok: true }), true;
   }
 
   // GET /api/acquire/direct-runs/:id — read-only

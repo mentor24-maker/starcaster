@@ -16,7 +16,8 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
 }
 const { exec } = require('child_process');
 const { listDirectAcquireRuns, getDirectAcquireRun, deleteDirectAcquireRun, purgeOldAcquireRuns } = require('../lib/directAcquire');
-const { getModel: getContentDisplayModel, listModels: listContentDisplayModels } = require('../lib/contentDisplayModels');
+const { getModel: getContentDisplayModel, listModels: listContentDisplayModels, applyBlocksToSectionsWithHandlers } = require('../lib/contentDisplayModels');
+const { listHandlers: listContentHandlers } = require('../lib/contentHandlersStore');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { listForms, createForm, updateForm, deleteForm } = require('../lib/builderFormsStore');
 const {
@@ -1334,6 +1335,9 @@ async function handle(req, res, pathname, method) {
     // Grab the content model (may be null — pages will be created without extraction)
     const model = contentModelId ? getContentDisplayModel(contentModelId) : null;
 
+    // Load user-defined content transform handlers (global pool)
+    const userHandlers = model ? await listContentHandlers().catch(() => []) : [];
+
     // Helper: find best-matching crawled page for a builder page name
     const findCrawledPage = (name) => {
       if (!crawlPages.length) return null;
@@ -1379,7 +1383,7 @@ async function handle(req, res, pathname, method) {
               if (!blocks.length) {
                 contentNote = 'Content model detected but extracted 0 blocks';
               } else {
-                layoutSections = model.applyToSections(layoutSections, blocks);
+                layoutSections = applyBlocksToSectionsWithHandlers(layoutSections, blocks, userHandlers);
                 contentExtracted = true;
                 contentNote = `Extracted ${blocks.length} block(s)`;
               }
