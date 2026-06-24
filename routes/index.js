@@ -142,6 +142,8 @@ function logRegistry() {
 // ---------------------------------------------------------------------------
 
 async function handleRequest(req, res) {
+  // TEMP DIAG: always log the raw req.url as the very first thing
+  console.log('[TOP] method:', req.method, 'req.url:', req.url);
   setCors(res, req);
 
   if (req.method === 'OPTIONS') {
