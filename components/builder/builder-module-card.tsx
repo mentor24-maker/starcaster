@@ -72,6 +72,8 @@ import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-modu
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
+import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-module-settings";
+import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -1642,6 +1644,69 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "admin-team-users") {
+    const showTitle  = module.settings.showTitle !== "false";
+    const title      = module.settings.tableTitle || "Team Members";
+    const showAdd    = module.settings.showAddButton !== "false";
+    const previewRows = [
+      { email: "alice@example.com", role: "admin" },
+      { email: "bob@example.com",   role: "editor" },
+    ];
+    const thStyle: React.CSSProperties = { background: "#e8f2fb", color: "#18324a", fontWeight: 700, fontSize: 11, padding: "5px 10px", textAlign: "left", borderBottom: "1px solid #c9dcea" };
+    const tdStyle: React.CSSProperties = { padding: "5px 10px", fontSize: 11, color: "#18324a", borderBottom: "1px solid #edf2f7" };
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ border: "1px solid #c9dcea", borderRadius: 8, overflow: "hidden", marginBottom: showAdd ? 8 : 0 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Email</th>
+                <th style={thStyle}>Role</th>
+                <th style={{ ...thStyle, width: 90 }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {previewRows.map((row) => (
+                <tr key={row.email}>
+                  <td style={tdStyle}>{row.email}</td>
+                  <td style={tdStyle}><span style={{ fontSize: 10, background: "#f0f4f8", padding: "1px 6px", borderRadius: 3, textTransform: "capitalize" }}>{row.role}</span></td>
+                  <td style={tdStyle}><span style={{ fontSize: 10, color: "#587592", cursor: "default" }}>Edit · Remove</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {showAdd && <div style={{ fontSize: 11, color: "#0b4f8f", fontWeight: 600, cursor: "default" }}>+ Add Team Member</div>}
+      </div>
+    );
+  }
+
+  if (module.type === "admin-modules") {
+    const showTitle = module.settings.showTitle !== "false";
+    const title     = module.settings.tableTitle || "Premium Modules";
+    const modules   = [
+      { label: "CRM", enabled: true },
+      { label: "Blog", enabled: false },
+      { label: "Player Portal", enabled: false },
+    ];
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ display: "grid", gap: 6 }}>
+          {modules.map((m) => (
+            <div key={m.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", border: "1px solid #c9dcea", borderRadius: 7, background: m.enabled ? "rgba(15,79,143,0.04)" : "#fff" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#18324a" }}>{m.label}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 10px", borderRadius: 4, background: m.enabled ? "#0f4f8f" : "#f0f4f8", color: m.enabled ? "#fff" : "#8ba9be", cursor: "default" }}>
+                {m.enabled ? "Enabled" : "Enable"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
@@ -3183,6 +3248,8 @@ export function BuilderModuleCard({
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
+    const isAdminTeamUsersModule = module.type === "admin-team-users";
+    const isAdminModulesModule = module.type === "admin-modules";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3400,6 +3467,10 @@ export function BuilderModuleCard({
               <BuilderBlogPostManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isCrmContactsTableModule ? (
               <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminTeamUsersModule ? (
+              <BuilderAdminTeamUsersModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminModulesModule ? (
+              <BuilderAdminModulesModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}

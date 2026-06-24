@@ -71,7 +71,9 @@ export type BuilderTemplateModuleType =
   | "blog-tag-cloud"
   | "blog-post-tags"
   | "blog-post-create"
-  | "blog-post-manager";
+  | "blog-post-manager"
+  | "admin-team-users"
+  | "admin-modules";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -1025,7 +1027,9 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-tag-cloud" ||
     type === "blog-post-tags" ||
     type === "blog-post-create" ||
-    type === "blog-post-manager"
+    type === "blog-post-manager" ||
+    type === "admin-team-users" ||
+    type === "admin-modules"
   ) {
     return type;
   }
@@ -1967,6 +1971,20 @@ export function createEmptyModule(
                             showViewButton: "true",
                             showEditButton: "true",
                             showDeleteButton: "true"
+                          }
+                      : type === "admin-team-users"
+                        ? {
+                            tableTitle: "Team Members",
+                            showTitle: "true",
+                            showAddButton: "true",
+                            showEditButton: "true",
+                            showDeleteButton: "true"
+                          }
+                      : type === "admin-modules"
+                        ? {
+                            tableTitle: "Premium Modules",
+                            showTitle: "true",
+                            showToggle: "true"
                           }
           : {};
 

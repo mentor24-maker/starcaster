@@ -10,19 +10,19 @@ function requireAdminRole(req) {
 }
 
 async function handle(req, res, pathname, method) {
-  if (!pathname.startsWith('/api/admin/users')) return false;
+  if (!pathname.startsWith('/api/admin/platform-users')) return false;
 
   if (!requireAdminRole(req)) {
     return sendErr(res, 403, 'Forbidden: owner or admin role required', { code: 'FORBIDDEN' }), true;
   }
 
-  if (pathname === '/api/admin/users' && method === 'GET') {
+  if (pathname === '/api/admin/platform-users' && method === 'GET') {
     const result = await listUsers();
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { users: result.data }, { total: result.data.length }), true;
   }
 
-  if (pathname === '/api/admin/users' && method === 'POST') {
+  if (pathname === '/api/admin/platform-users' && method === 'POST') {
     const body = await parseJsonBody(req);
     const result = await createUser({
       email: String(body.email || '').trim(),
@@ -72,7 +72,7 @@ async function handle(req, res, pathname, method) {
 const manifest = {
   id: 'admin',
   label: 'Admin',
-  prefixes: ['/api/admin/users'],
+  prefixes: ['/api/admin/platform-users'],
 };
 
 module.exports = { handle, manifest };
