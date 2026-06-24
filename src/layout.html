@@ -270,6 +270,13 @@
           </div>
         </li>
         <li class="menu-item menu-item-right has-submenu">
+          <a href="#" class="menu-link" data-page="adminPage">Admin</a>
+          <div class="submenu">
+            <a href="#" class="menu-link submenu-link" onclick="App.admin.openPage(); return false;" data-page="adminPage">Users</a>
+            <a href="#" class="menu-link submenu-link" onclick="App.admin.openAddUserPage(); return false;" data-page="adminAddUserPage">Add User</a>
+          </div>
+        </li>
+        <li class="menu-item menu-item-right has-submenu">
           <a href="#" class="menu-link" data-page="devDashboardPage">Dev</a>
           <div class="submenu">
             <a href="#" class="menu-link submenu-link" data-page="devDashboardPage">Dashboard</a>
@@ -421,6 +428,7 @@
   <script src="/js/envConfig.js"></script>
   <script src="/js/training.js"></script>
   <script src="/js/crm.js"></script>
+  <script src="/js/admin.js"></script>
   <script src="/js/projectAdmin.js"></script>
   <script src="/app.js"></script>
   <script src="/bundle.js"></script>
