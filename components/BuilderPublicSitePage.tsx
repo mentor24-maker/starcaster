@@ -41,6 +41,25 @@ async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
   });
 }
 
+// Module types that are admin-only and must never render on the public site.
+const ADMIN_ONLY_MODULE_TYPES = new Set([
+  "blog-post-create",
+  "blog-post-manager",
+  "blog-category-manager",
+]);
+
+function filterPublicSections(
+  sections: SitePage["layoutSections"]
+): SitePage["layoutSections"] {
+  return sections.map((section) => ({
+    ...section,
+    columns: section.columns.map((col) => ({
+      ...col,
+      modules: col.modules.filter((m) => !ADMIN_ONLY_MODULE_TYPES.has(m.type)),
+    })),
+  }));
+}
+
 function findPageForPath(pages: SitePage[], pathname: string): SitePage | null {
   if (!pages.length) return null;
   const slug = slugFromPathname(pathname);
@@ -78,7 +97,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
 
   return (
     <BuilderTemplatePreview
-      layoutSections={page.layoutSections}
+      layoutSections={filterPublicSections(page.layoutSections)}
       pageBackground={page.pageBackground}
       theme={page.theme}
       projectId={projectId}
