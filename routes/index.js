@@ -157,7 +157,7 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'hpr-logs-v4',
+      routesVersion: 'hpr-header-v5',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
@@ -504,6 +504,9 @@ function serveStaticPage(res, pathname) {
 async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
+
+  // Temp: ALWAYS log entry to handlePageRequest (v5)
+  res.setHeader('x-hpr-v5', `host=${host} path=${pathname}`);
 
   // Temp: one-shot diagnostic for the domain routing path
   if (pathname === '/diag') {
