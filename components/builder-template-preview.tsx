@@ -2806,7 +2806,7 @@ function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
   };
   const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "#18324a", display: "block", marginTop: 14 };
 
-  if (authState === "loading" || authState === "authed") {
+  if (!isPreview && (authState === "loading" || authState === "authed")) {
     return null;
   }
 
