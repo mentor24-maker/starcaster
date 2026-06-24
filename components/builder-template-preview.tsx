@@ -1238,78 +1238,261 @@ type BlogPostRecord = {
   author?: string;
   featured_image_url?: string;
   published_at?: string;
+  categoryIds?: string[];
+  tags?: string[];
 };
 
+type BlogCategory = { id: string; name: string; slug: string };
+
 function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
-  const [posts, setPosts] = useState<BlogPostRecord[]>([]);
+  const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
+  const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // User filter state
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const [authorFilter, setAuthorFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  // Module settings
+  const accent = settings.accentColor || "#0f4f8f";
+  const layout = settings.layout || "grid";
+  const cols = Math.max(1, parseInt(settings.columns || "3", 10) || 3);
+  const postsPerPage = Math.max(1, parseInt(settings.postsPerPage || "9", 10) || 9);
+  const postPageUrl = (settings.postPageUrl || "").trim();
+  const readMoreLabel = settings.readMoreLabel || "Read More";
+  const showReadMore = (settings.showReadMore ?? "true") !== "false";
+  const showFeaturedImage = (settings.showFeaturedImage ?? "true") !== "false";
+  const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+  const showAuthor = (settings.showAuthor ?? "true") !== "false";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showCategories = (settings.showCategories ?? "true") !== "false";
+  const cardGap = parseInt(settings.cardGap || "24", 10) || 24;
+  const cardRadius = parseInt(settings.cardBorderRadius || "12", 10);
+  const cardStyle = settings.cardStyle || "default";
+
+  // Filter bar visibility
+  const showSearchBar = (settings.showSearch ?? "true") !== "false";
+  const showCategoryFilter = (settings.showCategoryFilter ?? "true") !== "false";
+  const showTagFilter = (settings.showTagFilter ?? "true") !== "false";
+  const showAuthorFilter = (settings.showAuthorFilter ?? "true") !== "false";
+  const showDateFilter = settings.showDateFilter === "true";
+  const hasFilterBar = showSearchBar || showCategoryFilter || showTagFilter || showAuthorFilter || showDateFilter;
+
   useEffect(() => {
-    fetch("/api/blog/posts?status=published&limit=6", {
-      credentials: "include",
-      headers: getCrmProjectHeaders()
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setPosts(Array.isArray(d?.posts) ? (d.posts as BlogPostRecord[]) : []))
+    const headers = getCrmProjectHeaders();
+    Promise.all([
+      fetch(`/api/blog/posts?status=published&limit=100`, { credentials: "include", headers })
+        .then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/blog/categories", { credentials: "include", headers })
+        .then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([pd, cd]) => {
+        setAllPosts(Array.isArray(pd?.posts) ? (pd.posts as BlogPostRecord[]) : []);
+        setCategories(Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : []);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const accent = settings.accentColor || "#0f4f8f";
-  const layout = settings.layout || "grid";
-  const postPageUrl = (settings.postPageUrl || "").trim();
-  const readMoreLabel = settings.readMoreLabel || "Read more";
-  const showReadMore = (settings.showReadMore ?? "true") !== "false";
+  const allTags = useMemo(
+    () => [...new Set(allPosts.flatMap((p) => p.tags || []))].filter(Boolean).sort(),
+    [allPosts]
+  );
+  const allAuthors = useMemo(
+    () => [...new Set(allPosts.map((p) => p.author).filter((a): a is string => Boolean(a)))].sort(),
+    [allPosts]
+  );
+
+  const filteredPosts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allPosts.filter((post) => {
+      if (q && !`${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)) return false;
+      if (catFilter && !post.categoryIds?.includes(catFilter)) return false;
+      if (tagFilter && !post.tags?.includes(tagFilter)) return false;
+      if (authorFilter && post.author !== authorFilter) return false;
+      if (dateFrom && (!post.published_at || new Date(post.published_at) < new Date(dateFrom))) return false;
+      if (dateTo && (!post.published_at || new Date(post.published_at) > new Date(dateTo + "T23:59:59"))) return false;
+      return true;
+    });
+  }, [allPosts, search, catFilter, tagFilter, authorFilter, dateFrom, dateTo]);
+
+  const visiblePosts = filteredPosts.slice(0, postsPerPage);
+  const hasActiveFilter = search || catFilter || tagFilter || authorFilter || dateFrom || dateTo;
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
   }
 
-  if (!posts.length) {
-    return (
-      <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-        No published posts yet. Use the Create Post module to add your first post.
-      </div>
-    );
-  }
+  const cardBorder: CSSProperties =
+    cardStyle === "bordered"
+      ? { border: `1px solid ${accent}40`, boxShadow: "none" }
+      : cardStyle === "shadow"
+      ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
+      : { border: "1px solid #e2e8f0", boxShadow: "none" };
 
   const gridStyle: CSSProperties =
     layout === "list"
-      ? { display: "flex", flexDirection: "column", gap: "1.5rem" }
-      : { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.5rem" };
+      ? { display: "flex", flexDirection: "column", gap: `${cardGap}px` }
+      : { display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: `${cardGap}px` };
+
+  const ratioMap: Record<string, string> = {
+    "16:9": "56.25%", "4:3": "75%", "3:2": "66.67%", "1:1": "100%",
+  };
+  const paddingTop = ratioMap[settings.imageAspectRatio || "16:9"] || "56.25%";
+
+  const inputStyle: CSSProperties = {
+    padding: "0.5rem 0.75rem",
+    border: "1px solid #cbd5e0",
+    borderRadius: 6,
+    fontSize: "0.875rem",
+    background: "#fff",
+    outline: "none",
+  };
 
   return (
-    <div style={gridStyle}>
-      {posts.map((post) => {
-        // Use ?post= so it doesn't collide with builder-preview.html's own ?slug= page param
-        const sep = postPageUrl.includes("?") ? "&" : "?";
-        const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
-        return (
-        <article
-          key={post.id}
-          style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", background: "#fff" }}
-        >
-          {post.featured_image_url ? (
-            <img
-              alt={post.title}
-              src={post.featured_image_url}
-              style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }}
+    <div>
+      {hasFilterBar ? (
+        <div style={{
+          display: "flex", flexWrap: "wrap", gap: "0.625rem",
+          marginBottom: "1.75rem", alignItems: "center",
+          padding: "0.875rem 1rem",
+          background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0",
+        }}>
+          {showSearchBar ? (
+            <input
+              type="search"
+              placeholder="Search posts…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ ...inputStyle, flex: "1 1 180px", minWidth: 140 }}
             />
           ) : null}
-          <div style={{ padding: "1rem" }}>
-            <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.1rem", color: "#1a202c" }}>{post.title}</h3>
-            {post.excerpt ? (
-              <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#4a5568" }}>{post.excerpt}</p>
-            ) : null}
-            {showReadMore ? (
-              <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600 }}>
-                {readMoreLabel} →
-              </a>
-            ) : null}
-          </div>
-        </article>
-        );
-      })}
+          {showCategoryFilter && categories.length > 0 ? (
+            <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+              <option value="">All Categories</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          ) : null}
+          {showTagFilter && allTags.length > 0 ? (
+            <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+              <option value="">All Tags</option>
+              {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          ) : null}
+          {showAuthorFilter && allAuthors.length > 0 ? (
+            <select value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+              <option value="">All Authors</option>
+              {allAuthors.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          ) : null}
+          {showDateFilter ? (
+            <>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="From" style={inputStyle} />
+              <span style={{ fontSize: "0.75rem", color: "#718096" }}>–</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="To" style={inputStyle} />
+            </>
+          ) : null}
+          {hasActiveFilter ? (
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setCatFilter(""); setTagFilter(""); setAuthorFilter(""); setDateFrom(""); setDateTo(""); }}
+              style={{ ...inputStyle, color: "#718096", cursor: "pointer", background: "#fff" }}
+            >
+              Clear
+            </button>
+          ) : null}
+          {hasActiveFilter && filteredPosts.length !== allPosts.length ? (
+            <span style={{ fontSize: "0.8125rem", color: "#718096", marginLeft: "auto" }}>
+              {filteredPosts.length} result{filteredPosts.length !== 1 ? "s" : ""}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {visiblePosts.length === 0 ? (
+        <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+          {allPosts.length === 0
+            ? "No published posts yet. Use the Create Post module to add your first post."
+            : "No posts match your filters."}
+        </div>
+      ) : (
+        <div style={gridStyle}>
+          {visiblePosts.map((post) => {
+            const sep = postPageUrl.includes("?") ? "&" : "?";
+            const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
+            const postCats = showCategories ? categories.filter((c) => post.categoryIds?.includes(c.id)) : [];
+            const dateStr = post.published_at
+              ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+              : "";
+            return (
+              <article
+                key={post.id}
+                style={{
+                  ...cardBorder,
+                  borderRadius: cardRadius,
+                  overflow: "hidden",
+                  background: "#fff",
+                  display: "flex",
+                  flexDirection: layout === "list" ? "row" : "column",
+                }}
+              >
+                {showFeaturedImage && post.featured_image_url ? (
+                  layout === "list" ? (
+                    <div style={{ flexShrink: 0, width: 220 }}>
+                      <img alt={post.title} src={post.featured_image_url}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </div>
+                  ) : (
+                    <div style={{ position: "relative", paddingTop, width: "100%" }}>
+                      <img alt={post.title} src={post.featured_image_url}
+                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                  )
+                ) : null}
+                <div style={{ padding: "1.125rem 1.25rem", flex: 1, display: "flex", flexDirection: "column" }}>
+                  {postCats.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: "0.5rem" }}>
+                      {postCats.map((c) => (
+                        <span key={c.id} style={{
+                          fontSize: "0.6875rem", fontWeight: 700,
+                          letterSpacing: "0.05em", textTransform: "uppercase", color: accent,
+                        }}>
+                          {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700 }}>
+                    {post.title}
+                  </h3>
+                  {showExcerpt && post.excerpt ? (
+                    <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5, flex: 1 }}>
+                      {post.excerpt}
+                    </p>
+                  ) : null}
+                  <div style={{ marginTop: "auto", paddingTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                    {showAuthor && post.author ? (
+                      <span style={{ fontSize: "0.8125rem", color: "#718096" }}>{post.author}</span>
+                    ) : null}
+                    {showDate && dateStr ? (
+                      <span style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{dateStr}</span>
+                    ) : null}
+                    {showReadMore ? (
+                      <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600, marginLeft: "auto", textDecoration: "none" }}>
+                        {readMoreLabel} →
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

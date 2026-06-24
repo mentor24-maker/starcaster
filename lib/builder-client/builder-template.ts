@@ -1799,7 +1799,12 @@ export function createEmptyModule(
                             cardStyle: "default",
                             cardBorderRadius: "12",
                             cardGap: "24",
-                            filterCategory: ""
+                            filterCategory: "",
+                            showSearch: "true",
+                            showCategoryFilter: "true",
+                            showTagFilter: "true",
+                            showAuthorFilter: "true",
+                            showDateFilter: "false"
                           }
                       : type === "blog-post-card"
                         ? {
