@@ -167,6 +167,43 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
           placeholder="Leave blank to show all posts"
         />
       </BuilderSettingRow>
+
+      <hr style={{ margin: "0.75rem 0", borderColor: "#e2e8f0" }} />
+
+      <BuilderSettingRow label="Search bar" fullWidth>
+        <select value={s.showSearch ?? "true"} onChange={(e) => set("showSearch", e.target.value)}>
+          <option value="true">Show</option>
+          <option value="false">Hide</option>
+        </select>
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Category filter" fullWidth>
+        <select value={s.showCategoryFilter ?? "true"} onChange={(e) => set("showCategoryFilter", e.target.value)}>
+          <option value="true">Show</option>
+          <option value="false">Hide</option>
+        </select>
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Tag filter" fullWidth>
+        <select value={s.showTagFilter ?? "true"} onChange={(e) => set("showTagFilter", e.target.value)}>
+          <option value="true">Show</option>
+          <option value="false">Hide</option>
+        </select>
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Author filter" fullWidth>
+        <select value={s.showAuthorFilter ?? "true"} onChange={(e) => set("showAuthorFilter", e.target.value)}>
+          <option value="true">Show</option>
+          <option value="false">Hide</option>
+        </select>
+      </BuilderSettingRow>
+
+      <BuilderSettingRow label="Date range filter" fullWidth>
+        <select value={s.showDateFilter ?? "false"} onChange={(e) => set("showDateFilter", e.target.value)}>
+          <option value="false">Hide</option>
+          <option value="true">Show</option>
+        </select>
+      </BuilderSettingRow>
     </div>
   );
 }
