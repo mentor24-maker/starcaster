@@ -781,6 +781,8 @@ App.settings = (function () {
     const enabledModules = (active?.enabledModules && typeof active.enabledModules === 'object') ? active.enabledModules : { crm: true };
     const crmToggle = byId('settingsModuleCrmToggle');
     if (crmToggle) crmToggle.checked = Boolean(enabledModules.crm !== false);
+    const blogToggle = byId('settingsModuleBlogToggle');
+    if (blogToggle) blogToggle.checked = Boolean(enabledModules.blog === true);
 
     if (active?.id) renderAdminUsers(active.id).catch(() => {});
   }
@@ -2310,6 +2312,29 @@ App.settings = (function () {
           notify(`CRM module ${settingsModuleCrmToggle.checked ? 'enabled' : 'disabled'}`);
         } catch (err) {
           settingsModuleCrmToggle.checked = !settingsModuleCrmToggle.checked;
+          notify(err.message || 'Unable to save module settings', true);
+        }
+      });
+    }
+
+    const settingsModuleBlogToggle = byId('settingsModuleBlogToggle');
+    if (settingsModuleBlogToggle) {
+      settingsModuleBlogToggle.addEventListener('change', async () => {
+        const activeId = getSettingsDetailProjectId();
+        if (!activeId) return;
+        const projects = Array.isArray(state.projects) ? state.projects : [];
+        const active = projects.find((p) => String(p?.id || '') === activeId);
+        const current = (active?.enabledModules && typeof active.enabledModules === 'object') ? active.enabledModules : {};
+        const enabledModules = { ...current, blog: settingsModuleBlogToggle.checked };
+        try {
+          await api(`/api/projects/${encodeURIComponent(activeId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ enabledModules }),
+          });
+          await refreshProjectContext();
+          notify(`Blog module ${settingsModuleBlogToggle.checked ? 'enabled' : 'disabled'}`);
+        } catch (err) {
+          settingsModuleBlogToggle.checked = !settingsModuleBlogToggle.checked;
           notify(err.message || 'Unable to save module settings', true);
         }
       });
