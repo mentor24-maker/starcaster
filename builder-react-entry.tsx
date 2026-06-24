@@ -1,6 +1,7 @@
 import { createRoot, type Root } from 'react-dom/client';
 import BuilderWorkspace from './components/builder/BuilderWorkspace';
 import { BuilderPreviewPage } from './components/builder-preview-page';
+import { BuilderPublicSitePage } from './components/BuilderPublicSitePage';
 import { BuilderThemesPage } from './components/builder/builder-themes-page';
 import { BuilderFormsPage } from './components/builder/builder-forms-page';
 import { BuilderModuleClassesPanel } from './components/builder/builder-module-classes-panel';
@@ -56,6 +57,17 @@ export function mountBuilderPreview(host: HTMLElement | null) {
     <div className="builder-react-root">
       <BuilderPreviewPage />
     </div>
+  );
+  return true;
+}
+
+export function mountPublicSite(host: HTMLElement | null, config?: { projectId?: string }) {
+  if (!host) return false;
+  const projectId = config?.projectId
+    || (typeof window !== 'undefined' && (window as Record<string, unknown>).__SITE_CONFIG__ as { projectId?: string } | undefined)?.projectId
+    || '';
+  createRoot(host).render(
+    <BuilderPublicSitePage projectId={projectId} />
   );
   return true;
 }
@@ -220,7 +232,9 @@ declare global {
       mount: typeof mountBuilderReact;
       unmount: typeof unmountBuilderReact;
       mountPreview: typeof mountBuilderPreview;
+      mountPublicSite: typeof mountPublicSite;
     };
+    __SITE_CONFIG__?: { projectId?: string; projectName?: string };
     ThemesReact: {
       mount: typeof mountThemesReact;
       unmount: typeof unmountThemesReact;
@@ -253,6 +267,7 @@ window.BuilderReact = {
   mount: mountBuilderReact,
   unmount: unmountBuilderReact,
   mountPreview: mountBuilderPreview,
+  mountPublicSite,
 };
 
 window.ThemesReact = {

@@ -753,6 +753,9 @@ App.settings = (function () {
     if (els.settingsProjectDetailsSlug) {
       els.settingsProjectDetailsSlug.value = String(active?.slug || '');
     }
+    if (els.settingsProjectDetailsDomain) {
+      els.settingsProjectDetailsDomain.value = String(active?.domain || '');
+    }
     if (els.settingsProjectDetailsDescription) {
       els.settingsProjectDetailsDescription.value = String(active?.description || '');
     }
@@ -2234,12 +2237,16 @@ App.settings = (function () {
         if (!activeId) return notify('Select a project first', true);
         const name = String(els.settingsProjectDetailsName?.value || '').trim();
         const slug = String(els.settingsProjectDetailsSlug?.value || '').trim();
+        const domain = String(els.settingsProjectDetailsDomain?.value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '');
         const description = String(els.settingsProjectDetailsDescription?.value || '').trim();
         const projectUrl = normalizeProjectDefaultUrl(els.settingsProjectDefaultUrlInput?.value);
         const timezone = String(els.settingsProjectTimezoneSelect?.value || '').trim() || 'UTC';
         if (!name) return notify('Project name is required', true);
         if (!slug) return notify('Project slug is required', true);
         if (!projectUrl) return notify('Default URL is required', true);
+        if (domain && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
+          return notify('Custom domain must be a valid hostname (e.g. benvin.org)', true);
+        }
         try {
           const parsed = new URL(projectUrl);
           if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -2251,7 +2258,7 @@ App.settings = (function () {
         try {
           await api(`/api/projects/${encodeURIComponent(activeId)}`, {
             method: 'PATCH',
-            body: JSON.stringify({ name, slug, description, projectUrl, timezone }),
+            body: JSON.stringify({ name, slug, domain, description, projectUrl, timezone }),
           });
           await refreshProjectContext();
           renderProjectDetails();
