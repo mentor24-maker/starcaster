@@ -1,0 +1,79 @@
+      <section id="adminPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Admin Users</h2>
+          <div class="page-heading-actions">
+            <button type="button" id="adminAddUserBtn" class="btn btn-primary" onclick="App.admin.openAddUserPage()">+ Add User</button>
+          </div>
+        </div>
+        <div id="adminUsersTableWrap" class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Created</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersTableBody">
+              <tr><td colspan="5" class="meta">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="adminAddUserPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Add Admin User</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.admin.openPage()">Cancel</button>
+          </div>
+        </div>
+        <form id="adminAddUserForm" class="standard-form-grid" style="max-width:420px;">
+          <label>Name</label>
+          <input id="adminAddName" type="text" autocomplete="off" required />
+          <label>Email</label>
+          <input id="adminAddEmail" type="email" autocomplete="off" required />
+          <label>Password</label>
+          <input id="adminAddPassword" type="password" autocomplete="new-password" minlength="8" required />
+          <label>Role</label>
+          <select id="adminAddRole">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
+          <div></div>
+          <div class="page-heading-actions" style="justify-content:flex-start; gap:0.5rem;">
+            <button type="submit" class="btn btn-primary">Create User</button>
+          </div>
+          <p id="adminAddMsg" class="meta hidden" style="grid-column:1/-1;"></p>
+        </form>
+      </section>
+
+      <section id="adminEditUserPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Edit Admin User</h2>
+          <div class="page-heading-actions">
+            <button type="button" class="btn" onclick="App.admin.openPage()">Cancel</button>
+          </div>
+        </div>
+        <form id="adminEditUserForm" class="standard-form-grid" style="max-width:420px;">
+          <input type="hidden" id="adminEditUserId" />
+          <label>Name</label>
+          <input id="adminEditName" type="text" autocomplete="off" required />
+          <label>Email</label>
+          <input id="adminEditEmail" type="text" disabled style="opacity:0.6;" />
+          <label>Role</label>
+          <select id="adminEditRole">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
+          <div></div>
+          <div class="page-heading-actions" style="justify-content:flex-start; gap:0.5rem;">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+          <p id="adminEditMsg" class="meta hidden" style="grid-column:1/-1;"></p>
+        </form>
+      </section>
