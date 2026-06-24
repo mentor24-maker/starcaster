@@ -46,11 +46,11 @@ type BuilderModuleRepositoryListProps = {
   onSaveCreatedModule: (source: CreatedModuleSource, module: BuilderTemplateModule) => void;
   onCloneCreatedModule: (module: BuilderTemplateModule, moduleLabel: string) => void;
   onDeleteCreatedModule: (source: CreatedModuleSource, moduleName: string) => void;
-  onSaveSavedModule: (cellModuleId: string, name: string, moduleClass: string, modules: BuilderTemplateModule[]) => void;
+  onSaveSavedModule: (cellModuleId: string, name: string, moduleClass: string, modules: BuilderTemplateModule[], isPrivate: boolean) => void;
   onCreateSavedModule: (name: string, moduleClass: string, modules: BuilderTemplateModule[]) => void;
   onCloneSavedModule: (cellModuleId: string) => void;
   onDeleteSavedModule: (cellModuleId: string, currentName: string) => void;
-  onSaveSavedSection: (sectionId: string, name: string, section: BuilderTemplateSection) => void;
+  onSaveSavedSection: (sectionId: string, name: string, section: BuilderTemplateSection, isPrivate: boolean) => void;
   onDeleteSavedSection: (sectionId: string, currentName: string) => void;
   onModuleEditorFocusChange: (focus: BuilderModuleEditorFocus | null, syncOnly?: boolean) => void;
   onRepositoryEditingActiveChange: (active: boolean) => void;
@@ -75,12 +75,14 @@ export type BuilderModuleEditorFocus =
       name: string;
       moduleClass: string;
       modules: BuilderTemplateModule[];
+      isPrivate?: boolean;
     }
   | {
       kind: "section";
       sectionId: string;
       name: string;
       section: BuilderTemplateSection;
+      isPrivate?: boolean;
     };
 
 type CreatedModuleRecord = CreatedModuleSource & {
@@ -907,6 +909,7 @@ function RepositoryTable({
   editingId,
   editingName,
   editingModuleClass,
+  editingIsPrivate,
   editingExpandedModuleIds,
   editingModules,
   onToggle,
@@ -915,6 +918,7 @@ function RepositoryTable({
   onCancelEditing,
   onSetEditingName,
   onSetEditingModuleClass,
+  onSetEditingIsPrivate,
   onUpdateEditingModule,
   onUpdateEditingModuleBackground,
   onOpenEditingModuleGallery,
@@ -933,6 +937,7 @@ function RepositoryTable({
   editingId: string;
   editingName: string;
   editingModuleClass: string;
+  editingIsPrivate: boolean;
   editingExpandedModuleIds: string[];
   editingModules: BuilderTemplateModule[];
   onToggle: () => void;
@@ -941,6 +946,7 @@ function RepositoryTable({
   onCancelEditing: () => void;
   onSetEditingName: (name: string) => void;
   onSetEditingModuleClass: (moduleClass: string) => void;
+  onSetEditingIsPrivate: (val: boolean) => void;
   onUpdateEditingModule: (moduleId: string, updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   onUpdateEditingModuleBackground: (moduleId: string, updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onOpenEditingModuleGallery: (moduleId: string) => void;
@@ -1186,6 +1192,31 @@ function RepositoryTable({
                                 ))}
                               </select>
                             </label>
+                            <div className="field">
+                              <span>Visibility</span>
+                              <div className="builder-radio-group">
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name={`module-visibility-${editingId}`}
+                                    value="public"
+                                    checked={!editingIsPrivate}
+                                    onChange={() => onSetEditingIsPrivate(false)}
+                                  />
+                                  {" "}Public
+                                </label>
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name={`module-visibility-${editingId}`}
+                                    value="private"
+                                    checked={editingIsPrivate}
+                                    onChange={() => onSetEditingIsPrivate(true)}
+                                  />
+                                  {" "}Private
+                                </label>
+                              </div>
+                            </div>
                             <div className="builder-meta-actions">
                               <button
                                 className="submit-button admin-blog-add-button"
@@ -1195,7 +1226,8 @@ function RepositoryTable({
                                     editingId,
                                     editingName,
                                     editingModuleClass,
-                                    editingModules
+                                    editingModules,
+                                    editingIsPrivate
                                   );
                                 }}
                                 type="button"
@@ -1261,6 +1293,7 @@ function SavedSectionsTable({
   isCollapsed,
   editingSectionId,
   editingSectionName,
+  editingSectionIsPrivate,
   editingSection,
   editingSectionCollapsed,
   editingSectionExpandedModuleIds,
@@ -1268,6 +1301,7 @@ function SavedSectionsTable({
   onStartEditingSection,
   onDeleteSavedSection,
   onSetEditingSectionName,
+  onSetEditingSectionIsPrivate,
   onSaveSavedSection,
   onCancelEditingSection,
   onCloneEditingSectionModule,
@@ -1297,6 +1331,7 @@ function SavedSectionsTable({
   isCollapsed: boolean;
   editingSectionId: string;
   editingSectionName: string;
+  editingSectionIsPrivate: boolean;
   editingSection: BuilderTemplateSection | null;
   editingSectionCollapsed: boolean;
   editingSectionExpandedModuleIds: string[];
@@ -1304,7 +1339,8 @@ function SavedSectionsTable({
   onStartEditingSection: (section: BuilderSavedSectionRecord) => void;
   onDeleteSavedSection: (sectionId: string, currentName: string) => void;
   onSetEditingSectionName: (name: string) => void;
-  onSaveSavedSection: (sectionId: string, name: string, section: BuilderTemplateSection) => void;
+  onSetEditingSectionIsPrivate: (val: boolean) => void;
+  onSaveSavedSection: (sectionId: string, name: string, section: BuilderTemplateSection, isPrivate: boolean) => void;
   onCancelEditingSection: () => void;
   onCloneEditingSectionModule: (moduleId: string) => void;
   onDropEditingSectionModule: (
@@ -1451,8 +1487,33 @@ function SavedSectionsTable({
                               <span>Saved section name</span>
                               <input type="text" value={editingSectionName} onChange={(event) => onSetEditingSectionName(event.target.value)} />
                             </label>
+                            <div className="field">
+                              <span>Visibility</span>
+                              <div className="builder-radio-group">
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name={`saved-section-visibility-${editingSectionId}`}
+                                    value="public"
+                                    checked={!editingSectionIsPrivate}
+                                    onChange={() => onSetEditingSectionIsPrivate(false)}
+                                  />
+                                  {" "}Public
+                                </label>
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name={`saved-section-visibility-${editingSectionId}`}
+                                    value="private"
+                                    checked={editingSectionIsPrivate}
+                                    onChange={() => onSetEditingSectionIsPrivate(true)}
+                                  />
+                                  {" "}Private
+                                </label>
+                              </div>
+                            </div>
                             <div className="builder-meta-actions">
-                              <button className="submit-button admin-blog-add-button" disabled={isSaving || !editingSection} onClick={() => void onSaveSavedSection(editingSectionId, editingSectionName, editingSection)} type="button">
+                              <button className="submit-button admin-blog-add-button" disabled={isSaving || !editingSection} onClick={() => void onSaveSavedSection(editingSectionId, editingSectionName, editingSection, editingSectionIsPrivate)} type="button">
                                 {isSaving ? "Saving..." : "Save Section"}
                               </button>
                               <button className="secondary-button" onClick={onCancelEditingSection} type="button">Cancel</button>
@@ -1486,7 +1547,7 @@ function SavedSectionsTable({
                             onRemove={() => undefined}
                             onRemoveModule={onRemoveEditingSectionModule}
                             onSaveCellModules={onSaveEditingSectionCellModules}
-                            onSaveSection={() => onSaveSavedSection(section.id, editingSectionName, editingSection)}
+                            onSaveSection={() => onSaveSavedSection(section.id, editingSectionName, editingSection, editingSectionIsPrivate)}
                             onToggleCollapsed={onToggleEditingSectionCollapsed}
                             onToggleModuleExpanded={onToggleEditingSectionModuleExpanded}
                             onUpdateCellBackground={onUpdateEditingSectionCellBackground}
@@ -1556,10 +1617,12 @@ export function BuilderModuleRepositoryList({
   const [editingId, setEditingId] = useState("");
   const [editingName, setEditingName] = useState("");
   const [editingModuleClass, setEditingModuleClass] = useState("");
+  const [editingIsPrivate, setEditingIsPrivate] = useState(false);
   const [editingModules, setEditingModules] = useState<BuilderTemplateModule[]>([]);
   const [editingExpandedModuleIds, setEditingExpandedModuleIds] = useState<string[]>([]);
   const [editingSectionId, setEditingSectionId] = useState("");
   const [editingSectionName, setEditingSectionName] = useState("");
+  const [editingSectionIsPrivate, setEditingSectionIsPrivate] = useState(false);
   const [editingSection, setEditingSection] = useState<BuilderTemplateSection | null>(null);
   const [editingSectionCollapsed, setEditingSectionCollapsed] = useState(false);
   const [editingSectionExpandedModuleIds, setEditingSectionExpandedModuleIds] = useState<string[]>([]);
@@ -1620,6 +1683,7 @@ export function BuilderModuleRepositoryList({
       cellModuleId: editingId,
       name: editingName,
       moduleClass: editingModuleClass,
+      isPrivate: editingIsPrivate,
       modules: editingModules
     };
   }
@@ -1633,6 +1697,7 @@ export function BuilderModuleRepositoryList({
       kind: "section",
       sectionId: editingSectionId,
       name: editingSectionName,
+      isPrivate: editingSectionIsPrivate,
       section: editingSection
     };
   }
@@ -1668,11 +1733,13 @@ export function BuilderModuleRepositoryList({
     editingCreatedId,
     editingCreatedModule,
     editingId,
+    editingIsPrivate,
     editingModuleClass,
     editingModules,
     editingName,
     editingSection,
     editingSectionId,
+    editingSectionIsPrivate,
     editingSectionName
   ]);
 
@@ -1709,11 +1776,13 @@ export function BuilderModuleRepositoryList({
     editingCreatedId,
     editingCreatedModule,
     editingId,
+    editingIsPrivate,
     editingModuleClass,
     editingModules,
     editingName,
     editingSection,
     editingSectionId,
+    editingSectionIsPrivate,
     editingSectionName,
     editingSessionKey,
     onModuleEditorFocusChange
@@ -1723,6 +1792,7 @@ export function BuilderModuleRepositoryList({
     setEditingId("");
     setEditingName("");
     setEditingModuleClass("");
+    setEditingIsPrivate(false);
     setEditingModules([]);
     setEditingExpandedModuleIds([]);
   }
@@ -1736,6 +1806,7 @@ export function BuilderModuleRepositoryList({
   function resetSectionEditing() {
     setEditingSectionId("");
     setEditingSectionName("");
+    setEditingSectionIsPrivate(false);
     setEditingSection(null);
     setEditingSectionCollapsed(false);
     setEditingSectionExpandedModuleIds([]);
@@ -1787,6 +1858,7 @@ export function BuilderModuleRepositoryList({
     setEditingId(item.id);
     setEditingName(item.name);
     setEditingModuleClass(getDisplayModuleClass(item));
+    setEditingIsPrivate(item.isPrivate ?? false);
     setEditingModules(modules);
     setEditingExpandedModuleIds(expandedIds);
     publishRepositorySaveFocus({
@@ -1794,6 +1866,7 @@ export function BuilderModuleRepositoryList({
       cellModuleId: item.id,
       name: item.name,
       moduleClass: getDisplayModuleClass(item),
+      isPrivate: item.isPrivate ?? false,
       modules
     });
   }
@@ -1835,6 +1908,7 @@ export function BuilderModuleRepositoryList({
 
     setEditingSectionId(sectionRecord.id);
     setEditingSectionName(sectionRecord.name);
+    setEditingSectionIsPrivate(sectionRecord.isPrivate ?? false);
     setEditingSection(section);
     setEditingSectionCollapsed(false);
     setEditingSectionExpandedModuleIds([]);
@@ -1842,6 +1916,7 @@ export function BuilderModuleRepositoryList({
       kind: "section",
       sectionId: sectionRecord.id,
       name: sectionRecord.name,
+      isPrivate: sectionRecord.isPrivate ?? false,
       section
     });
   }
@@ -2330,6 +2405,7 @@ export function BuilderModuleRepositoryList({
         editingId={editingId}
         editingName={editingName}
         editingModuleClass={editingModuleClass}
+        editingIsPrivate={editingIsPrivate}
         editingExpandedModuleIds={editingExpandedModuleIds}
         editingModules={editingModules}
         onDeleteSavedModule={onDeleteSavedModule}
@@ -2338,6 +2414,7 @@ export function BuilderModuleRepositoryList({
         onSaveSavedModule={onSaveSavedModule}
         onSetEditingName={setEditingName}
         onSetEditingModuleClass={setEditingModuleClass}
+        onSetEditingIsPrivate={setEditingIsPrivate}
         onStartEditing={startEditing}
         onToggle={() => togglePanel("modules")}
         onToggleEditingModuleExpanded={toggleEditingModuleExpanded}
@@ -2362,6 +2439,7 @@ export function BuilderModuleRepositoryList({
         editingId={editingId}
         editingName={editingName}
         editingModuleClass={editingModuleClass}
+        editingIsPrivate={editingIsPrivate}
         editingExpandedModuleIds={editingExpandedModuleIds}
         editingModules={editingModules}
         onDeleteSavedModule={onDeleteSavedModule}
@@ -2370,6 +2448,7 @@ export function BuilderModuleRepositoryList({
         onSaveSavedModule={onSaveSavedModule}
         onSetEditingName={setEditingName}
         onSetEditingModuleClass={setEditingModuleClass}
+        onSetEditingIsPrivate={setEditingIsPrivate}
         onStartEditing={startEditing}
         onToggle={() => togglePanel("cells")}
         onToggleEditingModuleExpanded={toggleEditingModuleExpanded}
@@ -2392,6 +2471,7 @@ export function BuilderModuleRepositoryList({
         editingSectionExpandedModuleIds={editingSectionExpandedModuleIds}
         editingSectionId={editingSectionId}
         editingSectionName={editingSectionName}
+        editingSectionIsPrivate={editingSectionIsPrivate}
         isCollapsed={collapsedPanels.sections}
         isSaving={isSaving}
         products={products}
@@ -2420,6 +2500,7 @@ export function BuilderModuleRepositoryList({
         onSaveEditingSectionModule={saveEditingSectionModule}
         onSaveSavedSection={onSaveSavedSection}
         onSetEditingSectionName={setEditingSectionName}
+        onSetEditingSectionIsPrivate={setEditingSectionIsPrivate}
         onStartEditingSection={startEditingSection}
         onToggle={() => togglePanel("sections")}
         onToggleEditingSectionCollapsed={() => setEditingSectionCollapsed((current) => !current)}

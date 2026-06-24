@@ -183,6 +183,34 @@ export function BuilderCellStyleSettings({
           </select>
         </BuilderSettingRow>
       </div>
+
+      <div className="builder-cell-style-group">
+        <div className="builder-cell-style-group-label">Visibility</div>
+        <BuilderSettingRow label="Access" fullWidth>
+          <div className="builder-radio-group">
+            <label>
+              <input
+                type="radio"
+                name={`cell-visibility-${column}`}
+                value="public"
+                checked={getCellExtra(column, "cellIsPrivate", "false") !== "true"}
+                onChange={() => onSetCellExtra(column, "cellIsPrivate", "false")}
+              />
+              {" "}Public
+            </label>
+            <label>
+              <input
+                type="radio"
+                name={`cell-visibility-${column}`}
+                value="private"
+                checked={getCellExtra(column, "cellIsPrivate", "false") === "true"}
+                onChange={() => onSetCellExtra(column, "cellIsPrivate", "true")}
+              />
+              {" "}Private
+            </label>
+          </div>
+        </BuilderSettingRow>
+      </div>
     </div>
   );
 }

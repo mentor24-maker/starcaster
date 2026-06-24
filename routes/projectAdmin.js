@@ -240,7 +240,7 @@ async function handle(req, res, pathname, method) {
   // GET /api/admin/clusters — list all platform-level clusters
   if (pathname === '/api/admin/clusters' && method === 'GET') {
     if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
-    const result = await sbQuery({ method: 'GET', table: 'builder_clusters', query: 'select=id,name,created_at&order=created_at.asc' });
+    const result = await sbQuery({ method: 'GET', table: 'builder_clusters', query: 'select=id,name,is_private,created_at&order=created_at.asc' });
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Failed to fetch clusters'), true;
     const clusters = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, clusters, { clusters }), true;
@@ -252,10 +252,11 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const name = String(body?.name || '').trim();
     if (!name) return sendErr(res, 400, 'Cluster name is required', { code: 'VALIDATION_ERROR' }), true;
+    const isPrivate = body?.isPrivate === true || body?.is_private === true;
     const result = await sbQuery({
       method: 'POST',
       table: 'builder_clusters',
-      body: { name },
+      body: { name, is_private: isPrivate },
       headers: { Prefer: 'return=representation' },
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Failed to create cluster'), true;
@@ -263,11 +264,34 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, created, { cluster: created }), true;
   }
 
-  // DELETE /api/admin/clusters/:id — remove a cluster
-  const clusterDeleteMatch = pathname.match(/^\/api\/admin\/clusters\/([^/]+)\/?$/);
-  if (clusterDeleteMatch && method === 'DELETE') {
+  // PATCH /api/admin/clusters/:id — update cluster name or privacy
+  const clusterIdMatch = pathname.match(/^\/api\/admin\/clusters\/([^/]+)\/?$/);
+  if (clusterIdMatch && method === 'PATCH') {
     if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
-    const clusterId = decodeURIComponent(clusterDeleteMatch[1] || '').trim();
+    const clusterId = decodeURIComponent(clusterIdMatch[1] || '').trim();
+    if (!clusterId) return sendErr(res, 400, 'Cluster ID is required', { code: 'VALIDATION_ERROR' }), true;
+    const body = await parseJsonBody(req);
+    const patch = {};
+    if (body?.name !== undefined) patch.name = String(body.name || '').trim();
+    if (body?.isPrivate !== undefined || body?.is_private !== undefined) {
+      patch.is_private = (body?.isPrivate ?? body?.is_private) === true;
+    }
+    const result = await sbQuery({
+      method: 'PATCH',
+      table: 'builder_clusters',
+      query: `id=eq.${encodeURIComponent(clusterId)}`,
+      body: patch,
+      headers: { Prefer: 'return=representation' },
+    });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Failed to update cluster'), true;
+    const updated = Array.isArray(result.data) ? (result.data[0] || null) : null;
+    return sendOk(res, 200, updated, { cluster: updated }), true;
+  }
+
+  // DELETE /api/admin/clusters/:id — remove a cluster
+  if (clusterIdMatch && method === 'DELETE') {
+    if (!isSupabaseConfigured()) return sendErr(res, 503, 'Supabase required', { code: 'SUPABASE_REQUIRED' }), true;
+    const clusterId = decodeURIComponent(clusterIdMatch[1] || '').trim();
     if (!clusterId) return sendErr(res, 400, 'Cluster ID is required', { code: 'VALIDATION_ERROR' }), true;
     const result = await sbQuery({
       method: 'DELETE',

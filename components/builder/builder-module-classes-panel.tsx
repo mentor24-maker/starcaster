@@ -4,6 +4,7 @@ import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 interface ModuleClass {
   id: number;
   name: string;
+  isPrivate: boolean;
   createdAt: string;
 }
 
@@ -21,6 +22,7 @@ export function BuilderModuleClassesPanel() {
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -60,28 +62,30 @@ export function BuilderModuleClassesPanel() {
   function startEdit(cls: ModuleClass) {
     setEditingId(cls.id);
     setEditName(cls.name);
+    setEditIsPrivate(cls.isPrivate ?? false);
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditName("");
+    setEditIsPrivate(false);
   }
 
-  async function handleRename(id: number) {
+  async function handleUpdate(id: number) {
     const name = editName.trim();
     if (!name) return;
     try {
       await appApi(`/api/builder/module-classes/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, isPrivate: editIsPrivate }),
       });
       cancelEdit();
-      setStatus("Class renamed");
+      setStatus("Class updated");
       await load();
       await syncLegacy();
     } catch (err: unknown) {
-      setStatus((err as Error).message || "Error renaming class");
+      setStatus((err as Error).message || "Error updating class");
     }
   }
 
@@ -123,6 +127,7 @@ export function BuilderModuleClassesPanel() {
             <thead>
               <tr>
                 <th>Class Name</th>
+                <th>Visibility</th>
                 <th>Created</th>
                 <th style={{ width: 140 }}>Actions</th>
               </tr>
@@ -139,12 +144,40 @@ export function BuilderModuleClassesPanel() {
                         className="builder-mc-inline-input"
                         autoFocus
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") handleRename(cls.id);
+                          if (e.key === "Enter") handleUpdate(cls.id);
                           if (e.key === "Escape") cancelEdit();
                         }}
                       />
                     ) : (
                       cls.name
+                    )}
+                  </td>
+                  <td>
+                    {editingId === cls.id ? (
+                      <div className="builder-radio-group">
+                        <label>
+                          <input
+                            type="radio"
+                            name={`mc-visibility-${cls.id}`}
+                            value="public"
+                            checked={!editIsPrivate}
+                            onChange={() => setEditIsPrivate(false)}
+                          />
+                          {" "}Public
+                        </label>
+                        <label>
+                          <input
+                            type="radio"
+                            name={`mc-visibility-${cls.id}`}
+                            value="private"
+                            checked={editIsPrivate}
+                            onChange={() => setEditIsPrivate(true)}
+                          />
+                          {" "}Private
+                        </label>
+                      </div>
+                    ) : (
+                      <span className="meta">{cls.isPrivate ? "Private" : "Public"}</span>
                     )}
                   </td>
                   <td className="meta">{formatDate(cls.createdAt)}</td>
@@ -154,7 +187,7 @@ export function BuilderModuleClassesPanel() {
                         <button
                           type="button"
                           className="btn btn-primary btn-sm"
-                          onClick={() => handleRename(cls.id)}
+                          onClick={() => handleUpdate(cls.id)}
                         >
                           Save
                         </button>
@@ -165,7 +198,7 @@ export function BuilderModuleClassesPanel() {
                     ) : (
                       <>
                         <button type="button" className="btn btn-sm" onClick={() => startEdit(cls)}>
-                          Rename
+                          Edit
                         </button>
                         <button
                           type="button"
