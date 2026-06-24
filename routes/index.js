@@ -157,7 +157,7 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'diag-27e4b1b',
+      routesVersion: 'diag-fc23ffc-v2',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
@@ -167,7 +167,7 @@ async function handleRequest(req, res) {
     const host2 = rawHost2.split(':')[0].toLowerCase().replace(/^www\./, '');
     const { findProjectByDomain: fpbd2 } = require('../lib/projectsStore');
     const r2 = await fpbd2(host2);
-    return sendJson(res, 200, { rawHost: rawHost2, host: host2, isSystem: isSystemHost(host2), lookupOk: r2.ok, lookupStatus: r2.status, lookupError: r2.error });
+    return sendJson(res, 200, { reqUrl: req.url, pathnameEarly, rawHost: rawHost2, host: host2, isSystem: isSystemHost(host2), lookupOk: r2.ok, lookupStatus: r2.status, lookupError: r2.error });
   }
 
   if (pathnameEarly === '/api/assets/import-drive-folder' && methodEarly === 'GET') {
@@ -495,9 +495,9 @@ function serveStaticPage(res, pathname) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.statusCode = 200;
     return res.end(content);
-  } catch {
+  } catch (e) {
     res.statusCode = 404;
-    return res.end('Not found');
+    return res.end(`Not found [${safePath}] [${filePath}] [${e.message}]`);
   }
 }
 
