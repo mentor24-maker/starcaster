@@ -1286,6 +1286,84 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, handler, { handler }), true;
   }
 
+  // POST /api/acquire/content-handlers/generate — AI-assisted handler creation
+  if (pathname === '/api/acquire/content-handlers/generate' && method === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const description = String(body.description || '').trim();
+    const sampleHtml = String(body.sampleHtml || '').trim().slice(0, 3000);
+    if (!description) return sendErr(res, 400, 'description required'), true;
+
+    const apiKey = String(getProviderValues('anthropic')?.api_key || process.env.ANTHROPIC_API_KEY || '').trim();
+    if (!apiKey) return sendErr(res, 502, 'Anthropic API key not configured'), true;
+
+    const systemPrompt = [
+      'You generate HTML transformation handler configurations for a content extraction pipeline.',
+      'Given a plain-language description of an HTML pattern to handle, output ONLY a single JSON object.',
+      '',
+      'Handler schema:',
+      '{',
+      '  "name": "short display name (5 words max)",',
+      '  "type": "promote-h2" | "promote-h3" | "delete" | "strip-tag" | "find-replace" | "bold",',
+      '  "tag": "source HTML tag for promote-*/strip-tag (e.g. u, em, b, strong) — empty string if not applicable",',
+      '  "pattern": "regex string for delete/find-replace/bold (no surrounding slashes) — empty string if not applicable",',
+      '  "replacement": "replacement string for find-replace (capture groups as $1 $2) — empty string if not applicable",',
+      '  "flags": "gi",',
+      '  "description": "one sentence describing what this handler does"',
+      '}',
+      '',
+      'Handler type guide:',
+      '- promote-h2: <tag> → <h2> (set "tag", leave pattern empty)',
+      '- promote-h3: <tag> → <h3> (set "tag", leave pattern empty)',
+      '- strip-tag: removes wrapper tag, keeps inner text (set "tag", leave pattern empty)',
+      '- delete: removes all regex matches (set "pattern", leave replacement empty)',
+      '- bold: wraps matching text in <strong> (set "pattern")',
+      '- find-replace: regex substitution (set both "pattern" and "replacement")',
+      '',
+      'Output ONLY valid JSON. No markdown fences, no explanation, no trailing text.',
+    ].join('\n');
+
+    const userPrompt = [
+      `Description: ${description}`,
+      sampleHtml ? `\nSample HTML:\n${sampleHtml}` : '',
+    ].join('');
+
+    let aiRes;
+    try {
+      aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 512,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (err) {
+      return sendErr(res, 502, `Anthropic request failed: ${err.message}`), true;
+    }
+
+    const aiBody = await aiRes.json().catch(() => ({}));
+    if (!aiRes.ok) {
+      return sendErr(res, 502, String(aiBody?.error?.message || 'Anthropic request failed')), true;
+    }
+
+    const rawText = String(aiBody?.content?.[0]?.text || '').trim();
+    let handler;
+    try {
+      handler = JSON.parse(rawText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim());
+    } catch {
+      return sendErr(res, 502, 'AI returned invalid JSON'), true;
+    }
+
+    return sendOk(res, 200, { handler }, { handler }), true;
+  }
+
   // DELETE /api/acquire/content-handlers/:id
   const handlerIdMatch = pathname.match(/^\/api\/acquire\/content-handlers\/([^/]+)$/);
   if (handlerIdMatch && method === 'DELETE') {
