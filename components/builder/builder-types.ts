@@ -11,7 +11,7 @@ import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BUILDER_CAPABILITIES } from "@/lib/capabilities";
 
-export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog";
+export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog" | "admin";
 
 export type GalleryTarget =
   | { kind: "module"; sectionId: string; moduleId: string }
@@ -110,6 +110,12 @@ export const modulePaletteGroups: Array<{
     label: "Special Effects",
     icon: "🪄",
     description: "Saved celebration and game-layer effects from your module repository."
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    icon: "⚙",
+    description: "Project admin tools — team users, premium modules, and management panels."
   }
 ];
 
@@ -761,6 +767,28 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: { layout: "list", columns: "1" }
+  },
+  {
+    id: "admin-team-users-table",
+    type: "admin-team-users",
+    group: "admin",
+    label: "Team Users",
+    icon: "👥",
+    description: "CRUD table of project admin team members — add, edit, and remove editors and admins.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "admin-modules-list",
+    type: "admin-modules",
+    group: "admin",
+    label: "Premium Modules",
+    icon: "⊞",
+    description: "Lists the premium module groups enabled for this project and allows toggling them on or off.",
+    name: "",
+    text: "",
+    settings: {}
   }
 ];
 

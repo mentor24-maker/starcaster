@@ -39,7 +39,7 @@ App.admin = (function () {
 
   async function loadUsers() {
     try {
-      const res = await api('/api/admin/users');
+      const res = await api('/api/admin/platform-users');
       users = App.normalizeApiArray(res, 'users');
       renderTable();
     } catch (err) {
@@ -103,7 +103,7 @@ App.admin = (function () {
         return;
       }
       try {
-        const res = await api('/api/admin/users', {
+        const res = await api('/api/admin/platform-users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, email, password, role }),
@@ -134,7 +134,7 @@ App.admin = (function () {
         return;
       }
       try {
-        const res = await api(`/api/admin/users/${encodeURIComponent(id)}`, {
+        const res = await api(`/api/admin/platform-users/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, role }),
@@ -155,7 +155,7 @@ App.admin = (function () {
   async function deleteUser(userId, email) {
     if (!confirm(`Delete user "${email}"? This cannot be undone.`)) return;
     try {
-      await api(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+      await api(`/api/admin/platform-users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
       users = users.filter((u) => u.id !== userId);
       renderTable();
       notify(`User "${email}" deleted.`);
