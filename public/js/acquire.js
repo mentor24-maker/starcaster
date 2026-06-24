@@ -5948,7 +5948,7 @@ App.acquire = (function () {
         '  <div class="source-inspector-tabs" id="piTabs">',
         '    <button type="button" class="source-inspector-tab active" data-tab="handlers">Active Handlers</button>',
         '    <button type="button" class="source-inspector-tab" data-tab="unmatched">Unhandled Patterns</button>',
-        '    <button type="button" class="source-inspector-tab" data-tab="custom">AI Handler Builder</button>',
+        '    <button type="button" class="source-inspector-tab" data-tab="custom">Custom Handlers</button>',
         '  </div>',
         '  <div class="builder-content-modal-body pi-body">',
         '    <div id="piHandlersPanel"></div>',
@@ -5969,7 +5969,7 @@ App.acquire = (function () {
         document.getElementById('piHandlersPanel').style.display  = btn.dataset.tab === 'handlers'  ? '' : 'none';
         document.getElementById('piUnmatchedPanel').style.display = btn.dataset.tab === 'unmatched' ? '' : 'none';
         document.getElementById('piCustomPanel').style.display    = btn.dataset.tab === 'custom'    ? '' : 'none';
-        if (btn.dataset.tab === 'custom') renderAiHandlerPanel(document.getElementById('piCustomPanel'));
+        if (btn.dataset.tab === 'custom') openCustomHandlersPanel(document.getElementById('piCustomPanel'));
       });
     }
 
@@ -6147,7 +6147,13 @@ App.acquire = (function () {
     });
   }
 
-  function renderAiHandlerPanel(el) {
+  function openCustomHandlersPanel(el) {
+    // Always refresh the handler list on every tab open.
+    buildCustomHandlersPanelShell(el);
+    loadCustomHandlersList(el);
+  }
+
+  function buildCustomHandlersPanelShell(el) {
     if (el.dataset.built) return;
     el.dataset.built = '1';
 
@@ -6162,13 +6168,17 @@ App.acquire = (function () {
 
     el.innerHTML = [
       '<div class="pi-ai-section">',
-      '  <p class="pi-ai-intro">Describe the HTML pattern you want to handle in plain language. Optionally paste a sample HTML snippet for more precise output. Claude will generate the handler configuration.</p>',
+      // Saved handlers list
+      '  <div class="pi-handlers-list-header">Saved Handlers</div>',
+      '  <div id="piHandlersList" class="pi-handlers-list"><p class="source-inspector-status">Loading…</p></div>',
+      // Divider
+      '  <div class="pi-ai-divider">AI Handler Builder — describe a pattern, Claude generates the config</div>',
       '  <form class="pi-editor-form" id="piAiForm" autocomplete="off">',
       '    <div class="pi-editor-row">',
-      '      <label>Describe the pattern<textarea class="pi-field pi-ai-desc" name="description" rows="3" placeholder="e.g. Bold labels in numbered list items (e.g. \'Expert Attorneys:\') should stay bold, but the description text that follows on the same line should not be bold." required></textarea></label>',
+      '      <label>Describe the pattern<textarea class="pi-field pi-ai-desc" name="description" rows="3" placeholder="e.g. Bold labels in numbered list items should stay bold, but the description text after the colon should not be bold." required></textarea></label>',
       '    </div>',
       '    <div class="pi-editor-row">',
-      '      <label>Sample HTML <small>(optional — paste a snippet to improve accuracy)</small><textarea class="pi-field pi-ai-html" name="sampleHtml" rows="4" placeholder="<li><b>Expert Naturalization Attorneys:</b> Our team has years of experience..."></textarea></label>',
+      '      <label>Sample HTML <small>(optional — paste a snippet to improve accuracy)</small><textarea class="pi-field pi-ai-html" name="sampleHtml" rows="4" placeholder="<li><strong>Expert Naturalization Attorneys: Our team has years of experience...</strong></li>"></textarea></label>',
       '    </div>',
       '    <div class="pi-editor-actions">',
       '      <button type="submit" class="btn btn-primary" id="piAiGenerateBtn">Generate Handler</button>',
@@ -6176,7 +6186,7 @@ App.acquire = (function () {
       '    </div>',
       '  </form>',
       '  <div id="piAiResult" style="display:none;">',
-      '    <div class="pi-ai-divider">Generated Handler — review and save</div>',
+      '    <div class="pi-ai-divider" style="margin-top:12px;">Generated Handler — review and save</div>',
       '    <form class="pi-editor-form" id="piAiSaveForm" autocomplete="off">',
       '      <div class="pi-editor-row">',
       '        <label>Handler name<input class="pi-field" name="name" type="text" required /></label>',
@@ -6204,13 +6214,13 @@ App.acquire = (function () {
       '</div>',
     ].join('');
 
-    const generateForm = el.querySelector('#piAiForm');
-    const resultEl     = el.querySelector('#piAiResult');
-    const statusEl     = el.querySelector('#piAiStatus');
-    const generateBtn  = el.querySelector('#piAiGenerateBtn');
-    const saveForm     = el.querySelector('#piAiSaveForm');
+    const generateForm  = el.querySelector('#piAiForm');
+    const resultEl      = el.querySelector('#piAiResult');
+    const statusEl      = el.querySelector('#piAiStatus');
+    const generateBtn   = el.querySelector('#piAiGenerateBtn');
+    const saveForm      = el.querySelector('#piAiSaveForm');
     const replacementRow = el.querySelector('#piAiReplacementRow');
-    const typeSelect   = saveForm.querySelector('[name="type"]');
+    const typeSelect    = saveForm.querySelector('[name="type"]');
 
     function populateSaveForm(handler) {
       saveForm.querySelector('[name="name"]').value = String(handler.name || '');
@@ -6232,15 +6242,13 @@ App.acquire = (function () {
       statusEl.textContent = 'Generating…';
       statusEl.className = 'pi-save-status';
       resultEl.style.display = 'none';
-
       try {
         const payload = {
           description: generateForm.querySelector('[name="description"]').value.trim(),
           sampleHtml: generateForm.querySelector('[name="sampleHtml"]').value.trim(),
         };
         const data = await api('/api/acquire/content-handlers/generate', {
-          method: 'POST',
-          body: JSON.stringify(payload),
+          method: 'POST', body: JSON.stringify(payload),
         });
         populateSaveForm(data.handler || {});
         statusEl.textContent = '';
@@ -6253,9 +6261,7 @@ App.acquire = (function () {
       }
     });
 
-    el.querySelector('#piAiDiscardBtn').addEventListener('click', () => {
-      resultEl.style.display = 'none';
-    });
+    el.querySelector('#piAiDiscardBtn').addEventListener('click', () => { resultEl.style.display = 'none'; });
 
     saveForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -6280,13 +6286,89 @@ App.acquire = (function () {
           resultEl.style.display = 'none';
           generateForm.reset();
           saveStat.textContent = '';
-        }, 1800);
+          loadCustomHandlersList(el);
+        }, 1200);
       } catch (err) {
         saveStat.textContent = 'Error: ' + (err.message || 'Save failed');
         saveStat.className = 'pi-save-status pi-save-error';
         saveBtn.disabled = false;
       }
     });
+  }
+
+  function loadCustomHandlersList(el) {
+    const listEl = el.querySelector('#piHandlersList');
+    if (!listEl) return;
+    listEl.innerHTML = '<p class="source-inspector-status">Loading…</p>';
+    api('/api/acquire/content-handlers')
+      .then((data) => {
+        const handlers = Array.isArray(data) ? data : (Array.isArray(data.handlers) ? data.handlers : []);
+        if (!handlers.length) {
+          listEl.innerHTML = '<p class="source-inspector-status">No custom handlers saved yet.</p>';
+          return;
+        }
+        listEl.innerHTML = handlers.map((h) => {
+          const detail = h.type === 'promote-h2' || h.type === 'promote-h3' || h.type === 'strip-tag'
+            ? `tag: <code>${escHtml(h.tag || '—')}</code>`
+            : h.pattern ? `pattern: <code>${escHtml(h.pattern)}</code>` : '';
+          return [
+            `<div class="pi-handler-row" data-id="${escAttr(h.id)}">`,
+            `  <div class="pi-handler-row-info">`,
+            `    <span class="pi-handler-row-name">${escHtml(h.name)}</span>`,
+            `    <span class="pi-handler-row-type">${escHtml(h.type)}</span>`,
+            detail ? `    <span class="pi-handler-row-detail">${detail}</span>` : '',
+            h.description ? `    <span class="pi-handler-row-desc">${escHtml(h.description)}</span>` : '',
+            `  </div>`,
+            `  <div class="pi-handler-row-actions">`,
+            `    <label class="pi-handler-toggle" title="${h.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}">`,
+            `      <input type="checkbox" class="pi-handler-enabled-cb" ${h.enabled ? 'checked' : ''} />`,
+            `      <span>${h.enabled ? 'On' : 'Off'}</span>`,
+            `    </label>`,
+            `    <button class="pi-delete-btn" title="Delete handler">✕</button>`,
+            `  </div>`,
+            `</div>`,
+          ].join('');
+        }).join('');
+
+        listEl.querySelectorAll('.pi-handler-enabled-cb').forEach((cb) => {
+          cb.addEventListener('change', async () => {
+            const row = cb.closest('[data-id]');
+            const id = row.dataset.id;
+            const label = cb.closest('label');
+            try {
+              await api(`/api/acquire/content-handlers/${encodeURIComponent(id)}`, {
+                method: 'PATCH', body: JSON.stringify({ enabled: cb.checked }),
+              });
+              label.querySelector('span').textContent = cb.checked ? 'On' : 'Off';
+              label.title = cb.checked ? 'Enabled — click to disable' : 'Disabled — click to enable';
+            } catch (err) {
+              cb.checked = !cb.checked; // revert on error
+              notify('Failed to update handler: ' + (err.message || 'error'), true);
+            }
+          });
+        });
+
+        listEl.querySelectorAll('.pi-delete-btn').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const row = btn.closest('[data-id]');
+            const id = row.dataset.id;
+            const name = row.querySelector('.pi-handler-row-name')?.textContent || 'this handler';
+            if (!confirm(`Delete handler "${name}"?`)) return;
+            try {
+              await api(`/api/acquire/content-handlers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+              row.remove();
+              if (!listEl.querySelector('.pi-handler-row')) {
+                listEl.innerHTML = '<p class="source-inspector-status">No custom handlers saved yet.</p>';
+              }
+            } catch (err) {
+              notify('Failed to delete handler: ' + (err.message || 'error'), true);
+            }
+          });
+        });
+      })
+      .catch((err) => {
+        listEl.innerHTML = `<p class="source-inspector-status">Error loading handlers: ${escHtml(err.message || 'unknown')}</p>`;
+      });
   }
 
   function escHtml(str) {

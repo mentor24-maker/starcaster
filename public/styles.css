@@ -2117,6 +2117,82 @@ body.asset-associations-modal-open {
 .pi-save-error {
   color: #c0392b;
 }
+.pi-handlers-list-header {
+  color: #2d3748;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.pi-handlers-list {
+  margin-bottom: 14px;
+}
+.pi-handler-row {
+  align-items: flex-start;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+}
+.pi-handler-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pi-handler-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-handler-row-type {
+  background: #edf2ff;
+  border-radius: 3px;
+  color: #3730a3;
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 5px;
+  width: fit-content;
+}
+.pi-handler-row-detail {
+  color: #4a5568;
+  font-size: 11px;
+  word-break: break-all;
+}
+.pi-handler-row-desc {
+  color: #718096;
+  font-size: 11px;
+}
+.pi-handler-row-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+.pi-handler-toggle {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  gap: 4px;
+  user-select: none;
+}
+.pi-delete-btn {
+  background: none;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  color: #c0392b;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+.pi-delete-btn:hover {
+  background: #fff5f5;
+}
 .pi-ai-section {
   display: flex;
   flex-direction: column;
