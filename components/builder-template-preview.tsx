@@ -1191,6 +1191,9 @@ function BuilderModulePreview({
   if (module.type === "blog-post-manager") {
     return <BlogPostManagerPreview settings={module.settings} />;
   }
+  if (module.type === "blog-category-manager") {
+    return <BlogCategoryManagerPreview settings={module.settings} />;
+  }
   if (module.type === "blog-category-filter") {
     return <BlogCategoryFilterPreview settings={module.settings} />;
   }
@@ -1291,8 +1294,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         .then((r) => (r.ok ? r.json() : null)),
     ])
       .then(([pd, cd]) => {
-        setAllPosts(Array.isArray(pd?.posts) ? (pd.posts as BlogPostRecord[]) : []);
-        setCategories(Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : []);
+        const fetchedPosts = Array.isArray(pd?.posts) ? (pd.posts as BlogPostRecord[]) : [];
+        const fetchedCats = Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : [];
+        setAllPosts(fetchedPosts);
+        setCategories(fetchedCats);
+        // Pre-seed category filter from URL ?category=slug
+        const urlCatSlug = new URLSearchParams(window.location.search).get("category") ?? "";
+        if (urlCatSlug) {
+          const match = fetchedCats.find((c) => c.slug === urlCatSlug);
+          if (match) setCatFilter(match.id);
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -1935,49 +1946,296 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   );
 }
 
+type CategoryFormValues = { name: string; slug: string; description: string; color: string; sortOrder: string };
+
+function slugify(str: string) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function BlogCategoryManagerPreview({ settings }: { settings: Record<string, string> }) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const showDescription = settings.showDescription !== "false";
+  const showColor = settings.showColor !== "false";
+  const showSortOrder = settings.showSortOrder === "true";
+  const showDelete = settings.showDelete !== "false";
+
+  const [cats, setCats] = useState<(BlogCategory & { description?: string; color?: string; sortOrder?: number })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<CategoryFormValues>({ name: "", slug: "", description: "", color: "#3b82f6", sortOrder: "0" });
+  const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const headers = { ...getCrmProjectHeaders(), "Content-Type": "application/json" };
+
+  function loadCats() {
+    fetch("/api/blog/categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.categories)) setCats(d.categories); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadCats(); }, []);
+
+  function resetForm() {
+    setEditId(null);
+    setForm({ name: "", slug: "", description: "", color: "#3b82f6", sortOrder: "0" });
+    setStatusMsg("");
+    setErrorMsg("");
+  }
+
+  function startEdit(cat: typeof cats[number]) {
+    setEditId(cat.id);
+    setForm({
+      name: cat.name,
+      slug: cat.slug,
+      description: cat.description || "",
+      color: cat.color || "#3b82f6",
+      sortOrder: String(cat.sortOrder ?? 0),
+    });
+    setStatusMsg("");
+    setErrorMsg("");
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!window.confirm(`Delete category "${name}"? This will not delete posts in this category.`)) return;
+    const r = await fetch(`/api/blog/categories/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include", headers: getCrmProjectHeaders() });
+    if (r.ok) { loadCats(); if (editId === id) resetForm(); }
+    else setErrorMsg("Failed to delete category.");
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) { setErrorMsg("Name is required."); return; }
+    setSaving(true);
+    setErrorMsg("");
+    setStatusMsg("");
+    const body = {
+      name: form.name.trim(),
+      slug: form.slug.trim() || slugify(form.name.trim()),
+      description: form.description.trim(),
+      color: form.color,
+      sortOrder: parseInt(form.sortOrder || "0", 10) || 0,
+    };
+    const url = editId ? `/api/blog/categories/${encodeURIComponent(editId)}` : "/api/blog/categories";
+    const method = editId ? "PUT" : "POST";
+    try {
+      const r = await fetch(url, { method, credentials: "include", headers, body: JSON.stringify(body) });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) { setErrorMsg(data?.error?.message || "Save failed."); return; }
+      setStatusMsg(editId ? "Category updated." : "Category created.");
+      loadCats();
+      resetForm();
+    } catch {
+      setErrorMsg("Network error.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fieldStyle: CSSProperties = { marginBottom: "0.75rem" };
+  const labelStyle: CSSProperties = { display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "#374151", marginBottom: "0.25rem" };
+  const inputStyle: CSSProperties = { width: "100%", padding: "0.5rem 0.625rem", border: "1px solid #d1d5db", borderRadius: 6, fontSize: "0.875rem", boxSizing: "border-box" };
+
+  return (
+    <div style={{ fontFamily: "sans-serif" }}>
+      {/* Category table */}
+      {loading ? (
+        <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
+      ) : cats.length === 0 ? (
+        <div style={{ padding: "1rem", color: "#888", textAlign: "center", border: "1px dashed #ccc", borderRadius: 8, marginBottom: "1.5rem" }}>
+          No categories yet. Use the form below to add your first one.
+        </div>
+      ) : (
+        <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", marginBottom: "1.5rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: `${showColor ? "28px " : ""}1fr auto${showDescription ? " 1fr" : ""}${showSortOrder ? " 48px" : ""} auto`, gap: "0 12px", padding: "7px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2", fontSize: "0.6875rem", fontWeight: 700, color: "#587592", textTransform: "uppercase", alignItems: "center" }}>
+            {showColor ? <span></span> : null}
+            <span>Name</span>
+            <span>Slug</span>
+            {showDescription ? <span>Description</span> : null}
+            {showSortOrder ? <span>Sort</span> : null}
+            <span>Actions</span>
+          </div>
+          {cats.map((cat, i) => (
+            <div key={cat.id} style={{ display: "grid", gridTemplateColumns: `${showColor ? "28px " : ""}1fr auto${showDescription ? " 1fr" : ""}${showSortOrder ? " 48px" : ""} auto`, gap: "0 12px", padding: "8px 12px", borderBottom: i < cats.length - 1 ? "1px solid #f0f4f8" : undefined, alignItems: "center" }}>
+              {showColor ? (
+                <span style={{ width: 14, height: 14, borderRadius: "50%", background: cat.color || "#94a3b8", display: "inline-block", flexShrink: 0 }} />
+              ) : null}
+              <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c" }}>{cat.name}</span>
+              <span style={{ fontSize: "0.8125rem", color: "#94a3b8" }}>{cat.slug}</span>
+              {showDescription ? <span style={{ fontSize: "0.8125rem", color: "#718096" }}>{cat.description || ""}</span> : null}
+              {showSortOrder ? <span style={{ fontSize: "0.8125rem", color: "#94a3b8", textAlign: "center" }}>{cat.sortOrder ?? 0}</span> : null}
+              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button type="button" onClick={() => startEdit(cat)} style={{ background: "none", border: "none", cursor: "pointer", color: accent, fontSize: "1rem", padding: 0 }} title="Edit">✎</button>
+                {showDelete ? <button type="button" onClick={() => handleDelete(cat.id, cat.name)} style={{ background: "none", border: "none", cursor: "pointer", color: "#e53e3e", fontSize: "0.9rem", padding: 0 }} title="Delete">✕</button> : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create / Edit form */}
+      <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "1.25rem", background: "#fafbfc" }}>
+        <h3 style={{ margin: "0 0 1rem", fontSize: "1rem", fontWeight: 700, color: "#1a202c" }}>
+          {editId ? "Edit Category" : "New Category"}
+        </h3>
+        {errorMsg ? <div style={{ padding: "0.625rem", background: "#fff5f5", color: "#c53030", borderRadius: 6, marginBottom: "0.75rem", fontSize: "0.875rem" }}>{errorMsg}</div> : null}
+        {statusMsg ? <div style={{ padding: "0.625rem", background: "#f0fff4", color: "#276749", borderRadius: 6, marginBottom: "0.75rem", fontSize: "0.875rem" }}>{statusMsg}</div> : null}
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 1rem" }}>
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Name *</label>
+              <input
+                style={inputStyle}
+                value={form.name}
+                onChange={(e) => {
+                  const n = e.target.value;
+                  setForm((f) => ({ ...f, name: n, slug: f.slug || slugify(n) }));
+                }}
+                placeholder="Technology"
+              />
+            </div>
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Slug</label>
+              <input
+                style={inputStyle}
+                value={form.slug}
+                onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+                placeholder="technology"
+              />
+            </div>
+          </div>
+          {showDescription ? (
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Description</label>
+              <input
+                style={inputStyle}
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Optional description"
+              />
+            </div>
+          ) : null}
+          <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+            {showColor ? (
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Color</label>
+                <input type="color" value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))} style={{ height: 36, width: 60, padding: 2, border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" }} />
+              </div>
+            ) : null}
+            {showSortOrder ? (
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Sort order</label>
+                <input type="number" style={{ ...inputStyle, width: 80 }} value={form.sortOrder} onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))} />
+              </div>
+            ) : null}
+            <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.75rem", marginLeft: "auto" }}>
+              {editId ? (
+                <button type="button" onClick={resetForm} style={{ padding: "0.5rem 1rem", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", color: "#718096", cursor: "pointer", fontSize: "0.875rem" }}>
+                  Cancel
+                </button>
+              ) : null}
+              <button
+                type="submit"
+                disabled={saving}
+                style={{ padding: "0.5rem 1.25rem", border: "none", borderRadius: 6, background: accent, color: "#fff", fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", fontSize: "0.875rem", opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? "Saving…" : editId ? "Update Category" : "Create Category"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function BlogCategoryFilterPreview({ settings }: { settings: Record<string, string> }) {
-  let cats: Array<{ id: string; label: string; slug: string }> = [];
-  try {
-    cats = JSON.parse(settings.categories || "[]") as typeof cats;
-  } catch {}
-  const accent = settings.activeColor || "#0f4f8f";
-  const activeBg = settings.activeBg || accent;
+  const [apiCats, setApiCats] = useState<BlogCategory[]>([]);
+
+  useEffect(() => {
+    fetch("/api/blog/categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.categories)) setApiCats(d.categories as BlogCategory[]); })
+      .catch(() => {});
+  }, []);
+
   const layout = settings.layout || "pills";
+  const showAll = settings.showAll !== "false";
   const allLabel = settings.allLabel || "All";
-  const items = [{ id: "_all", label: allLabel, slug: "" }, ...cats];
+  const activeColor = settings.activeColor || "#0f4f8f";
+  const activeBg = settings.activeBg || activeColor;
+  const inactiveColor = settings.inactiveColor || "#587592";
+  const inactiveBg = settings.inactiveBg || "#f0f4f8";
+  const borderRadius = parseInt(settings.borderRadius || "20", 10) || 20;
+  const fontSize = parseInt(settings.fontSize || "13", 10) || 13;
+  const gap = parseInt(settings.gap || "8", 10) || 8;
+  const alignment = settings.alignment || "left";
+  const targetPageUrl = (settings.targetPageUrl || "").trim();
+  const filterParam = (settings.filterParam || "category").trim();
+  const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+
+  // Use real API categories; fall back to manually entered ones in settings
+  let cats: Array<{ id: string; label: string; slug: string }> = [];
+  if (apiCats.length > 0) {
+    cats = apiCats.map((c) => ({ id: c.id, label: c.name, slug: c.slug }));
+  } else {
+    try {
+      const parsed = JSON.parse(settings.categories || "[]");
+      if (Array.isArray(parsed)) cats = parsed as typeof cats;
+    } catch {}
+  }
+
+  const allItem = { id: "_all", label: allLabel, slug: "" };
+  const items = showAll ? [allItem, ...cats] : cats;
+
+  function makeHref(slug: string) {
+    if (!targetPageUrl) return "#";
+    const sep = targetPageUrl.includes("?") ? "&" : "?";
+    return slug ? `${targetPageUrl}${sep}${filterParam}=${encodeURIComponent(slug)}` : targetPageUrl;
+  }
 
   if (layout === "dropdown") {
     return (
-      <select
-        style={{ padding: "0.5rem 0.75rem", borderRadius: 6, border: "1px solid #d1d5db", fontSize: "0.875rem" }}
-      >
-        {items.map((c) => (
-          <option key={c.id} value={c.slug}>
-            {c.label}
-          </option>
-        ))}
-      </select>
+      <div style={{ textAlign: alignment as "left" | "center" | "right" }}>
+        <select
+          style={{ padding: "0.5rem 0.75rem", borderRadius: borderRadius / 2, border: "1px solid #d1d5db", fontSize, color: inactiveColor, background: inactiveBg, cursor: "pointer" }}
+          onChange={(e) => { if (e.target.value !== "_all") window.location.href = makeHref(e.target.value); else window.location.href = makeHref(""); }}
+        >
+          {items.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+        </select>
+      </div>
     );
   }
 
+  const currentCatSlug = new URLSearchParams(window.location.search).get(filterParam) ?? "";
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: settings.gap || "0.5rem" }}>
-      {items.map((c, i) => (
-        <span
-          key={c.id}
-          style={{
-            padding: "0.3rem 0.85rem",
-            borderRadius: settings.borderRadius || "999px",
-            background: i === 0 ? activeBg : (settings.inactiveBg || "#f3f4f6"),
-            color: i === 0 ? "#fff" : (settings.inactiveColor || "#374151"),
-            fontSize: settings.fontSize || "0.8rem",
-            fontWeight: i === 0 ? 600 : 400,
-            cursor: "pointer"
-          }}
-        >
-          {c.label}
-        </span>
-      ))}
+    <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[alignment] || "flex-start" }}>
+      {items.map((c) => {
+        const isActive = c.slug === "" ? !currentCatSlug : currentCatSlug === c.slug;
+        return (
+          <a
+            key={c.id}
+            href={makeHref(c.slug)}
+            style={{
+              padding: `0.3rem ${borderRadius > 12 ? "0.85rem" : "0.65rem"}`,
+              borderRadius,
+              background: isActive ? activeBg : inactiveBg,
+              color: isActive ? "#fff" : inactiveColor,
+              fontSize,
+              fontWeight: isActive ? 600 : 400,
+              cursor: "pointer",
+              textDecoration: "none",
+              display: "inline-block",
+            }}
+          >
+            {c.label}
+          </a>
+        );
+      })}
     </div>
   );
 }
