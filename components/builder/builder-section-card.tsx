@@ -161,6 +161,7 @@ export function BuilderSectionCard({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
+  const firstColumnRef = useRef<HTMLDivElement | null>(null);
   const sectionMountedRef = useRef(false);
 
   useEffect(() => {
@@ -169,7 +170,8 @@ export function BuilderSectionCard({
     const el = sectionHeaderRef.current;
     document.querySelectorAll("[data-builder-focus]").forEach((n) => n.removeAttribute("data-builder-focus"));
     el.setAttribute("data-builder-focus", "true");
-    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const scrollTarget = firstColumnRef.current ?? el;
+    scrollTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
     return () => { el.removeAttribute("data-builder-focus"); };
   }, [isCollapsed]);
 
@@ -406,13 +408,14 @@ export function BuilderSectionCard({
             className={`builder-columns builder-columns-${columns.length} ${getAlignmentClass(section.alignment)}`}
             style={{ gridTemplateColumns: getLayoutGridTemplate(section.layout) }}
           >
-            {columns.map((column) => {
+            {columns.map((column, colIndex) => {
               const columnModules = columnModuleMap[column] ?? [];
               const cellPanels = getCellPanelState(column);
               return (
                 <div
                   className="builder-column-card"
                   key={column}
+                  ref={colIndex === 0 ? firstColumnRef : undefined}
                   style={getCellStyle(column)}
                   onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
                   onDrop={(event) => handleModuleDrop(event, column)}

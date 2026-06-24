@@ -31,6 +31,8 @@
     "sync:wyr-tweets-ocr:apply": "node scripts/sync_wyr_tweets_from_image_ocr.js --apply",
     "screenshots:platform": "node scripts/capture_platform_screenshots.js",
     "check:vercel-cutover": "node scripts/vercel_cutover_check.js",
+    "sync:env-to-vercel:dry-run": "node scripts/sync_env_to_vercel.js --dry-run",
+    "sync:env-to-vercel": "node scripts/sync_env_to_vercel.js",
     "import:training-context:apply": "node scripts/acquire_knowledge.mjs",
     "sync:dev-logs": "node scripts/sync_dev_logs.mjs",
     "migrate:builder-documents:dry-run": "node scripts/migrate_builder_documents.mjs",
