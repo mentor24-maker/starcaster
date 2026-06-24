@@ -203,6 +203,30 @@ export function BuilderSectionControls({
             }
           />
         </BuilderSettingRow>
+        <BuilderSettingRow label="Visibility">
+          <div className="builder-radio-group">
+            <label>
+              <input
+                type="radio"
+                name={`section-visibility-${section.id}`}
+                value="public"
+                checked={!section.isPrivate}
+                onChange={() => onUpdateSection((current) => ({ ...current, isPrivate: false }))}
+              />
+              {" "}Public
+            </label>
+            <label>
+              <input
+                type="radio"
+                name={`section-visibility-${section.id}`}
+                value="private"
+                checked={section.isPrivate === true}
+                onChange={() => onUpdateSection((current) => ({ ...current, isPrivate: true }))}
+              />
+              {" "}Private
+            </label>
+          </div>
+        </BuilderSettingRow>
       </div>
       <BuilderBackgroundControls
         hideModeRow

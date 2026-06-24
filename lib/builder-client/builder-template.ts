@@ -198,6 +198,7 @@ export type BuilderTemplateSection = {
   id: string;
   title: string;
   locked: boolean;
+  isPrivate: boolean;
   /** ID of the saved section this was instantiated from, if any. */
   savedSectionId?: string;
   /** When true, this instance stays in sync with the master saved section. */
@@ -220,6 +221,7 @@ export type BuilderTemplateSection = {
   cellVerticalMargin: Record<string, string>;
   cellMobileHidden: Record<string, string>;
   cellDesktopHidden: Record<string, string>;
+  cellIsPrivate: Record<string, string>;
   cellBorderWidth: Record<string, string>;
   cellBorderColor: Record<string, string>;
   cellBorderRadius: Record<string, string>;
@@ -257,12 +259,14 @@ export type BuilderPageRecord = {
   createdAt: string;
   updatedAt: string;
   isPublished: boolean;
+  isPrivate: boolean;
 };
 
 export type BuilderCellModuleRecord = {
   id: string;
   name: string;
   moduleClass: string;
+  isPrivate: boolean;
   modules: BuilderTemplateModule[];
   createdAt: string;
   updatedAt: string;
@@ -272,6 +276,7 @@ export type BuilderSavedSectionRecord = {
   id: string;
   name: string;
   section: BuilderTemplateSection;
+  isPrivate: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -1372,6 +1377,7 @@ export function rowToBuilderCellModule(row: Record<string, unknown>): BuilderCel
     id: safeText(row.id, 120),
     name: safeText(row.name, 255),
     moduleClass: safeText(row.module_class ?? row.moduleClass, 255),
+    isPrivate: Boolean(row.is_private ?? row.isPrivate ?? false),
     modules: normalizeBuilderModules(row.modules),
     createdAt: safeText(row.created_at ?? row.createdAt, 120),
     updatedAt: safeText(row.updated_at ?? row.updatedAt, 120)
@@ -1393,6 +1399,7 @@ export function rowToBuilderSavedSection(row: Record<string, unknown>): BuilderS
     id: safeText(row.id, 120),
     name: safeText(row.name, 255),
     section,
+    isPrivate: Boolean(row.is_private ?? row.isPrivate ?? false),
     createdAt: safeText(row.created_at ?? row.createdAt, 120),
     updatedAt: safeText(row.updated_at ?? row.updatedAt, 120)
   };
@@ -1473,6 +1480,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         title: safeText(normalizedSection.title, 255),
         layout,
         locked: normalizedSection.locked === true,
+        isPrivate: normalizedSection.isPrivate === true,
         alignment: normalizeAlignment(normalizedSection.alignment),
         marginTop: normalizeSpacingValue(
           normalizedSection.marginTop ?? normalizedSection.verticalMargin,
@@ -1504,6 +1512,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         cellVerticalMargin: normalizeCellMetric(normalizedSection.cellVerticalMargin, layout, "0", 0, 160),
         cellMobileHidden: normalizeCellColor(normalizedSection.cellMobileHidden, layout, "false"),
         cellDesktopHidden: normalizeCellColor(normalizedSection.cellDesktopHidden, layout, "false"),
+        cellIsPrivate: normalizeCellColor(normalizedSection.cellIsPrivate, layout, "false"),
         cellBorderWidth: normalizeCellMetric(normalizedSection.cellBorderWidth, layout, "0", 0, 20),
         cellBorderColor: normalizeCellColor(normalizedSection.cellBorderColor, layout, "transparent"),
         cellBorderRadius: normalizeCellMetric(normalizedSection.cellBorderRadius, layout, "24", 0, 60),
@@ -1523,6 +1532,7 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     id: createLocalId("section"),
     title: "",
     locked: false,
+    isPrivate: false,
     layout,
     alignment: "left",
     marginTop: "0",
@@ -1543,6 +1553,7 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     cellVerticalMargin: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellMobileHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellDesktopHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
+    cellIsPrivate: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellBorderWidth: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellBorderColor: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "transparent"])),
     cellBorderRadius: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "24"])),
@@ -2046,7 +2057,8 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
     layoutSections: document.layoutSections,
     createdAt: safeText(row.created_at ?? row.createdAt, 120),
     updatedAt: safeText(row.updated_at ?? row.updatedAt, 120),
-    isPublished: Boolean(row.is_published ?? row.isPublished ?? true)
+    isPublished: Boolean(row.is_published ?? row.isPublished ?? true),
+    isPrivate: Boolean(row.is_private ?? row.isPrivate ?? false)
   };
 }
 

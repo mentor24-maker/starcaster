@@ -44,6 +44,8 @@ type BuilderPageListProps = {
   onMakeTemplate: () => void;
   onPageEditorFocus: (focused: boolean) => void;
   onSavePage: () => void;
+  pageIsPrivate: boolean;
+  onSetPageIsPrivate: (val: boolean) => void;
   autoNewPage?: boolean;
   snapshots: BuilderPageSnapshotSummary[];
   isSnapshoting: boolean;
@@ -82,6 +84,8 @@ export function BuilderPageList({
   onMakeTemplate,
   onPageEditorFocus,
   onSavePage,
+  pageIsPrivate,
+  onSetPageIsPrivate,
   autoNewPage,
   snapshots,
   isSnapshoting,
@@ -735,6 +739,31 @@ export function BuilderPageList({
                 ))}
               </select>
             </label>
+            <div className="field">
+              <span>Visibility</span>
+              <div className="builder-radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    name="page-visibility"
+                    value="public"
+                    checked={!pageIsPrivate}
+                    onChange={() => onSetPageIsPrivate(false)}
+                  />
+                  {" "}Public
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="page-visibility"
+                    value="private"
+                    checked={pageIsPrivate}
+                    onChange={() => onSetPageIsPrivate(true)}
+                  />
+                  {" "}Private
+                </label>
+              </div>
+            </div>
             <div className="builder-meta-grid-pages-background">
               <BuilderBackgroundControls
                 label="Background"

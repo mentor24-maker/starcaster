@@ -806,6 +806,7 @@ App.settings = (function () {
     listEl.innerHTML = clusters.map((c) => `
       <div class="cluster-row" data-cluster-id="${c.id}">
         <span class="cluster-name">${c.name.replace(/</g, '&lt;')}</span>
+        <button class="btn btn-ghost btn-xs cluster-visibility-btn" data-cluster-id="${c.id}" data-is-private="${c.is_private ? '1' : '0'}" aria-label="Toggle cluster visibility">${c.is_private ? 'Private' : 'Public'}</button>
         <button class="btn btn-ghost btn-xs cluster-delete-btn" data-cluster-id="${c.id}" aria-label="Delete cluster">&#x2715;</button>
       </div>`).join('');
   }
@@ -2386,6 +2387,22 @@ App.settings = (function () {
     const clustersListEl = byId('settingsClustersList');
     if (clustersListEl) {
       clustersListEl.addEventListener('click', async (e) => {
+        const visBtn = e.target.closest('.cluster-visibility-btn');
+        if (visBtn) {
+          const clusterId = String(visBtn.dataset.clusterId || '').trim();
+          if (!clusterId) return;
+          const isPrivate = visBtn.dataset.isPrivate === '1';
+          try {
+            await api(`/api/admin/clusters/${encodeURIComponent(clusterId)}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ is_private: !isPrivate }),
+            });
+            await renderClusters();
+          } catch (err) {
+            notify(err.message || 'Unable to update cluster visibility', true);
+          }
+          return;
+        }
         const btn = e.target.closest('.cluster-delete-btn');
         if (!btn) return;
         const clusterId = String(btn.dataset.clusterId || '').trim();

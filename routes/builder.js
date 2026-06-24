@@ -399,6 +399,7 @@ async function handle(req, res, pathname, method) {
       templateId,
       slug: body.slug,
       isPublished: body.isPublished ?? body.is_published,
+      isPrivate: body.isPrivate ?? body.is_private,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
       accentColor: String(body.accentColor || '').trim(),
@@ -556,6 +557,7 @@ async function handle(req, res, pathname, method) {
       modules: Array.isArray(body.modules) ? body.modules : [],
       classId: body.classId || body.class_id,
       settings: body && typeof body.settings === 'object' ? body.settings : {},
+      isPrivate: body.isPrivate ?? body.is_private,
     }, scope);
     if (!module) return sendErr(res, 500, 'Could not create module'), true;
     return sendOk(res, 201, module, { module }), true;
@@ -572,7 +574,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createBuilderModuleClass({ name }, scope);
+    const result = await createBuilderModuleClass({ name, isPrivate: body.isPrivate ?? body.is_private }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create module class'), true;
     return sendOk(res, 201, result.data, { class: result.data }), true;
   }
@@ -644,6 +646,9 @@ async function handle(req, res, pathname, method) {
       input.classId = body.classId !== undefined ? body.classId : body.class_id;
     }
     if (body.settings && typeof body.settings === 'object') input.settings = body.settings;
+    if (body.isPrivate !== undefined || body.is_private !== undefined) {
+      input.isPrivate = body.isPrivate !== undefined ? body.isPrivate : body.is_private;
+    }
     const module = await updateModule(moduleMatch[1], input, scope);
     if (!module) return sendErr(res, 500, 'Could not update module'), true;
     const canonicalModules = Array.isArray(module.modules) ? module.modules : [];
@@ -662,7 +667,10 @@ async function handle(req, res, pathname, method) {
   const classMatch = pathname.match(/^\/api\/builder\/module-classes\/([^/]+)$/);
   if (classMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
-    const result = await updateBuilderModuleClass(classMatch[1], { name: String(body.name || '').trim() }, scope);
+    const result = await updateBuilderModuleClass(classMatch[1], {
+      name: String(body.name || '').trim(),
+      isPrivate: body.isPrivate ?? body.is_private,
+    }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update module class'), true;
     return sendOk(res, 200, result.data, { class: result.data }), true;
   }
@@ -1501,6 +1509,7 @@ async function handle(req, res, pathname, method) {
       templateId,
       slug: body.slug,
       isPublished: body.isPublished ?? body.is_published,
+      isPrivate: body.isPrivate ?? body.is_private,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
       accentColor: String(body.accentColor || '').trim(),
@@ -1785,7 +1794,7 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    const result = await createSavedSection({ name, section: body.section }, scope);
+    const result = await createSavedSection({ name, section: body.section, isPrivate: body.isPrivate ?? body.is_private }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create saved section'), true;
     return sendOk(res, 201, result.data, { savedSection: result.data }), true;
   }
@@ -1796,6 +1805,7 @@ async function handle(req, res, pathname, method) {
     const result = await updateSavedSection(savedSectionMatch[1], {
       name: body.name,
       section: body.section,
+      isPrivate: body.isPrivate ?? body.is_private,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update saved section'), true;
     // Propagate updated content to all canonical page instances (fire-and-forget).
