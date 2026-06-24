@@ -785,6 +785,29 @@ App.settings = (function () {
     if (blogToggle) blogToggle.checked = Boolean(enabledModules.blog === true);
 
     if (active?.id) renderAdminUsers(active.id).catch(() => {});
+    renderClusters().catch(() => {});
+  }
+
+  async function renderClusters() {
+    const listEl = byId('settingsClustersList');
+    if (!listEl) return;
+    let clusters = [];
+    try {
+      const res = await api('/api/admin/clusters');
+      clusters = Array.isArray(res?.clusters) ? res.clusters : (Array.isArray(res) ? res : []);
+    } catch {
+      listEl.innerHTML = '<p class="cluster-empty">Unable to load clusters.</p>';
+      return;
+    }
+    if (clusters.length === 0) {
+      listEl.innerHTML = '<p class="cluster-empty">No clusters yet.</p>';
+      return;
+    }
+    listEl.innerHTML = clusters.map((c) => `
+      <div class="cluster-row" data-cluster-id="${c.id}">
+        <span class="cluster-name">${c.name.replace(/</g, '&lt;')}</span>
+        <button class="btn btn-ghost btn-xs cluster-delete-btn" data-cluster-id="${c.id}" aria-label="Delete cluster">&#x2715;</button>
+      </div>`).join('');
   }
 
   async function renderAdminUsers(projectId) {
@@ -793,7 +816,8 @@ App.settings = (function () {
 
     let users = [];
     try {
-      const res = await api('/api/admin/users');
+      const pid = String(projectId || '').trim();
+      const res = await api(`/api/admin/users${pid ? '?projectId=' + encodeURIComponent(pid) : ''}`);
       users = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.adminUsers) ? res.adminUsers : []);
     } catch {
       listEl.innerHTML = '<p class="meta admin-users-empty">Unable to load admin users.</p>';
@@ -821,9 +845,10 @@ App.settings = (function () {
         if (!uid) return;
         if (!confirm('Remove this admin user? They will immediately lose access.')) return;
         try {
-          await api(`/api/admin/users/${encodeURIComponent(uid)}`, { method: 'DELETE' });
-          notify('Admin user removed');
           const pid = getSettingsDetailProjectId();
+          const deleteUrl = `/api/admin/users/${encodeURIComponent(uid)}${pid ? '?projectId=' + encodeURIComponent(pid) : ''}`;
+          await api(deleteUrl, { method: 'DELETE' });
+          notify('Admin user removed');
           if (pid) renderAdminUsers(pid).catch(() => {});
         } catch (err) {
           notify(err.message || 'Unable to remove admin user', true);
@@ -2308,7 +2333,7 @@ App.settings = (function () {
             method: 'PATCH',
             body: JSON.stringify({ enabledModules }),
           });
-          await refreshProjectContext();
+          if (active) active.enabledModules = enabledModules;
           notify(`CRM module ${settingsModuleCrmToggle.checked ? 'enabled' : 'disabled'}`);
         } catch (err) {
           settingsModuleCrmToggle.checked = !settingsModuleCrmToggle.checked;
@@ -2331,11 +2356,48 @@ App.settings = (function () {
             method: 'PATCH',
             body: JSON.stringify({ enabledModules }),
           });
-          await refreshProjectContext();
+          if (active) active.enabledModules = enabledModules;
           notify(`Blog module ${settingsModuleBlogToggle.checked ? 'enabled' : 'disabled'}`);
         } catch (err) {
           settingsModuleBlogToggle.checked = !settingsModuleBlogToggle.checked;
           notify(err.message || 'Unable to save module settings', true);
+        }
+      });
+    }
+
+    const clusterAddForm = byId('settingsClusterAddForm');
+    if (clusterAddForm) {
+      clusterAddForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = byId('settingsClusterNameInput');
+        const name = String(input?.value || '').trim();
+        if (!name) return;
+        try {
+          await api('/api/admin/clusters', { method: 'POST', body: JSON.stringify({ name }) });
+          if (input) input.value = '';
+          await renderClusters();
+          notify(`Cluster "${name}" added`);
+        } catch (err) {
+          notify(err.message || 'Unable to add cluster', true);
+        }
+      });
+    }
+
+    const clustersListEl = byId('settingsClustersList');
+    if (clustersListEl) {
+      clustersListEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.cluster-delete-btn');
+        if (!btn) return;
+        const clusterId = String(btn.dataset.clusterId || '').trim();
+        if (!clusterId) return;
+        const row = btn.closest('.cluster-row');
+        const name = row?.querySelector('.cluster-name')?.textContent || 'cluster';
+        try {
+          await api(`/api/admin/clusters/${encodeURIComponent(clusterId)}`, { method: 'DELETE' });
+          await renderClusters();
+          notify(`Cluster "${name}" deleted`);
+        } catch (err) {
+          notify(err.message || 'Unable to delete cluster', true);
         }
       });
     }
