@@ -159,6 +159,7 @@ async function handleRequest(req, res) {
       app: 'starcaster',
       routesVersion: 'custom-domain-client-v1',
       message: 'API is up. Log in via the app, then use Import From Folder.',
+      _host: req.headers['x-forwarded-host'] || req.headers.host || '',
     });
   }
 
