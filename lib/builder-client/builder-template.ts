@@ -73,7 +73,8 @@ export type BuilderTemplateModuleType =
   | "blog-post-create"
   | "blog-post-manager"
   | "admin-team-users"
-  | "admin-modules";
+  | "admin-modules"
+  | "admin-login";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -1029,7 +1030,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-post-create" ||
     type === "blog-post-manager" ||
     type === "admin-team-users" ||
-    type === "admin-modules"
+    type === "admin-modules" ||
+    type === "admin-login"
   ) {
     return type;
   }
@@ -1985,6 +1987,12 @@ export function createEmptyModule(
                             tableTitle: "Premium Modules",
                             showTitle: "true",
                             showToggle: "true"
+                          }
+                      : type === "admin-login"
+                        ? {
+                            formTitle: "Admin Sign In",
+                            buttonText: "Sign In",
+                            showForgotPassword: "true"
                           }
           : {};
 
