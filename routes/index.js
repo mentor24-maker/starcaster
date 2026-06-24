@@ -142,7 +142,6 @@ function logRegistry() {
 // ---------------------------------------------------------------------------
 
 async function handleRequest(req, res) {
-  res.setHeader('x-fn-entry', req.url || '/');
   setCors(res, req);
 
   if (req.method === 'OPTIONS') {
@@ -158,18 +157,11 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'fn-entry-v6',
+      routesVersion: 'custom-domain-client-v1',
       message: 'API is up. Log in via the app, then use Import From Folder.',
     });
   }
 
-  if (pathnameEarly === '/api/diag-host' && methodEarly === 'GET') {
-    const rawHost2 = String(req.headers['x-forwarded-host'] || req.headers.host || '');
-    const host2 = rawHost2.split(':')[0].toLowerCase().replace(/^www\./, '');
-    const { findProjectByDomain: fpbd2 } = require('../lib/projectsStore');
-    const r2 = await fpbd2(host2);
-    return sendJson(res, 200, { reqUrl: req.url, pathnameEarly, rawHost: rawHost2, host: host2, isSystem: isSystemHost(host2), lookupOk: r2.ok, lookupStatus: r2.status, lookupError: r2.error });
-  }
 
   if (pathnameEarly === '/api/assets/import-drive-folder' && methodEarly === 'GET') {
     let importModuleOk = false;
@@ -496,9 +488,9 @@ function serveStaticPage(res, pathname) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.statusCode = 200;
     return res.end(content);
-  } catch (e) {
+  } catch {
     res.statusCode = 404;
-    return res.end(`Not found [${safePath}] [${filePath}] [${e.message}]`);
+    return res.end('Not found');
   }
 }
 
@@ -506,25 +498,11 @@ async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
 
-  // Temp: ALWAYS log entry to handlePageRequest (v5)
-  res.setHeader('x-hpr-v5', `host=${host} path=${pathname}`);
-
-  // Temp: one-shot diagnostic for the domain routing path
-  if (pathname === '/diag') {
-    const { findProjectByDomain: fpbd } = require('../lib/projectsStore');
-    const r = await fpbd(host);
-    res.setHeader('Content-Type', 'application/json');
-    res.statusCode = 200;
-    return res.end(JSON.stringify({ host, rawHost, isSystem: isSystemHost(host), lookupOk: r.ok, lookupStatus: r.status, lookupError: r.error }));
-  }
-
   // System hosts (localhost, *.vercel.app) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.
-  console.log(`[HPR] host=${host} isSystem=${isSystemHost(host)} pathname=${pathname}`);
   if (!isSystemHost(host)) {
     const { findProjectByDomain } = require('../lib/projectsStore');
     const result = await findProjectByDomain(host);
-    console.log(`[HPR] lookup result: ok=${result.ok} status=${result.status} error=${result.error}`);
     if (result.ok) {
       const { id: projectId, name: projectName } = result.data;
       let siteHtml;
