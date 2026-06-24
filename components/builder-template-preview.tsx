@@ -1213,6 +1213,14 @@ function BuilderModulePreview({
     return <BlogModulePlaceholder type={module.type} />;
   }
 
+  if (module.type === "admin-team-users") {
+    return <AdminTeamUsersPreview settings={module.settings} />;
+  }
+
+  if (module.type === "admin-modules") {
+    return <AdminModulesPreview settings={module.settings} />;
+  }
+
   return null;
 }
 
@@ -2516,6 +2524,294 @@ function SocialModulePreview({ module }: { module: import("@/lib/builder-templat
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Admin module renderers ────────────────────────────────────────────────────
+
+type AdminTeamUser = { id: string; email: string; role: string; createdAt: string };
+
+function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> }) {
+  const tableTitle    = settings.tableTitle || "Team Members";
+  const showTitle     = settings.showTitle !== "false";
+  const showAddButton = settings.showAddButton !== "false";
+  const showEditBtn   = settings.showEditButton !== "false";
+  const showDeleteBtn = settings.showDeleteButton !== "false";
+
+  const [users, setUsers]           = useState<AdminTeamUser[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addEmail, setAddEmail]     = useState("");
+  const [addPassword, setAddPassword] = useState("");
+  const [addRole, setAddRole]       = useState("editor");
+  const [addError, setAddError]     = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [editUserId, setEditUserId] = useState<string | null>(null);
+  const [editRole, setEditRole]     = useState("editor");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError]   = useState("");
+
+  const headers = getCrmProjectHeaders();
+
+  async function loadUsers() {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const r = await fetch("/api/admin/users", { credentials: "include", headers });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setLoadError(d.error || "Failed to load team members"); return; }
+      const list = Array.isArray(d.adminUsers) ? d.adminUsers : Array.isArray(d.data) ? d.data : [];
+      setUsers(list as AdminTeamUser[]);
+    } catch {
+      setLoadError("Failed to load team members");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadUsers(); }, []);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    setAddLoading(true);
+    setAddError("");
+    const projectId = headers["X-Project-ID"] || "";
+    try {
+      const r = await fetch("/api/admin/users", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ email: addEmail, password: addPassword, role: addRole, projectId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setAddError(d.error || "Failed to add team member"); return; }
+      const created = (d.adminUser || d.data || d) as AdminTeamUser;
+      setUsers((prev) => [...prev, created]);
+      setShowAddForm(false);
+      setAddEmail(""); setAddPassword(""); setAddRole("editor");
+    } catch {
+      setAddError("Failed to add team member");
+    } finally {
+      setAddLoading(false);
+    }
+  }
+
+  async function handleEditSave(userId: string) {
+    setEditLoading(true);
+    setEditError("");
+    try {
+      const r = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ role: editRole }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setEditError(d.error || "Failed to update role"); return; }
+      const updated = (d.adminUser || d.data || d) as AdminTeamUser;
+      setUsers((prev) => prev.map((u) => u.id === userId ? updated : u));
+      setEditUserId(null);
+    } catch {
+      setEditError("Failed to update role");
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  async function handleDelete(userId: string, email: string) {
+    if (!confirm(`Remove "${email}" from the team? This cannot be undone.`)) return;
+    try {
+      const r = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers,
+      });
+      if (!r.ok) { alert("Failed to remove team member"); return; }
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+    } catch {
+      alert("Failed to remove team member");
+    }
+  }
+
+  const thStyle: React.CSSProperties = { textAlign: "left", padding: "6px 10px", fontWeight: 600, fontSize: 12, borderBottom: "2px solid var(--border, #e5e7eb)", color: "var(--muted, #6b7280)" };
+  const tdStyle: React.CSSProperties = { padding: "8px 10px", fontSize: 13, borderBottom: "1px solid var(--border, #f0f4f8)", verticalAlign: "middle" };
+
+  return (
+    <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
+      {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{tableTitle}</h3>}
+      {loading ? (
+        <p className="builder-module-runtime-note">Loading team members…</p>
+      ) : loadError ? (
+        <p className="builder-module-runtime-note" style={{ color: "var(--danger, #c00)" }}>{loadError}</p>
+      ) : (
+        <>
+          <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid var(--border, #e5e7eb)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Email</th>
+                  <th style={thStyle}>Role</th>
+                  <th style={thStyle}>Added</th>
+                  {(showEditBtn || showDeleteBtn) && <th style={{ ...thStyle, width: 140 }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 ? (
+                  <tr><td colSpan={4} style={{ ...tdStyle, color: "var(--muted, #888)" }}>No team members yet.</td></tr>
+                ) : users.map((u) => (
+                  <tr key={u.id}>
+                    <td style={tdStyle}>{u.email}</td>
+                    <td style={tdStyle}>
+                      {editUserId === u.id ? (
+                        <select value={editRole} onChange={(e) => setEditRole(e.target.value)} style={{ fontSize: 12 }}>
+                          <option value="editor">Editor</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      ) : (
+                        <span style={{ textTransform: "capitalize", fontSize: 12, background: "var(--surface, #f3f4f6)", padding: "2px 8px", borderRadius: 4 }}>{u.role}</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, color: "var(--muted, #888)", fontSize: 11 }}>
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
+                    </td>
+                    {(showEditBtn || showDeleteBtn) && (
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                        {editUserId === u.id ? (
+                          <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <button type="button" disabled={editLoading} onClick={() => handleEditSave(u.id)} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer" }}>{editLoading ? "Saving…" : "Save"}</button>
+                            <button type="button" onClick={() => { setEditUserId(null); setEditError(""); }} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer" }}>Cancel</button>
+                            {editError && <span style={{ color: "var(--danger, #c00)", fontSize: 11 }}>{editError}</span>}
+                          </span>
+                        ) : (
+                          <span style={{ display: "flex", gap: 6 }}>
+                            {showEditBtn && <button type="button" onClick={() => { setEditUserId(u.id); setEditRole(u.role); setEditError(""); }} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer" }}>Edit</button>}
+                            {showDeleteBtn && <button type="button" onClick={() => handleDelete(u.id, u.email)} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer", color: "var(--danger, #c00)" }}>Remove</button>}
+                          </span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {showAddButton && !showAddForm && (
+            <button type="button" onClick={() => setShowAddForm(true)} style={{ marginTop: 12, fontSize: 13, padding: "6px 14px", cursor: "pointer" }}>+ Add Team Member</button>
+          )}
+          {showAddButton && showAddForm && (
+            <form onSubmit={handleAdd} style={{ marginTop: 14, display: "grid", gap: 8, maxWidth: 380 }}>
+              <strong style={{ fontSize: 13 }}>Add Team Member</strong>
+              <input type="email" required placeholder="Email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} style={{ fontSize: 13, padding: "6px 8px" }} />
+              <input type="password" required minLength={8} placeholder="Password (min 8 chars)" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} style={{ fontSize: 13, padding: "6px 8px" }} />
+              <select value={addRole} onChange={(e) => setAddRole(e.target.value)} style={{ fontSize: 13, padding: "6px 8px" }}>
+                <option value="editor">Editor</option>
+                <option value="admin">Admin</option>
+              </select>
+              {addError && <p style={{ color: "var(--danger, #c00)", fontSize: 12, margin: 0 }}>{addError}</p>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" disabled={addLoading} style={{ fontSize: 13, padding: "6px 14px", cursor: "pointer" }}>{addLoading ? "Adding…" : "Add"}</button>
+                <button type="button" onClick={() => { setShowAddForm(false); setAddError(""); }} style={{ fontSize: 13, padding: "6px 14px", cursor: "pointer" }}>Cancel</button>
+              </div>
+            </form>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: string }> = [
+  { key: "crm",           label: "CRM",           description: "Lead capture forms and contact table" },
+  { key: "blog",          label: "Blog",           description: "Blog post feeds, editors, and author bios" },
+  { key: "player-portal", label: "Player Portal",  description: "Player login and registration on any page" },
+];
+
+function AdminModulesPreview({ settings }: { settings: Record<string, string> }) {
+  const tableTitle  = settings.tableTitle || "Premium Modules";
+  const showTitle   = settings.showTitle !== "false";
+  const showToggle  = settings.showToggle !== "false";
+
+  const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>({});
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState<string | null>(null);
+  const [loadError, setLoadError] = useState("");
+
+  const headers = getCrmProjectHeaders();
+
+  useEffect(() => {
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/admin/enabled-modules${qs}`, { credentials: "include", headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const mods = d.enabledModules ?? d.data ?? d;
+        if (mods && typeof mods === "object" && !Array.isArray(mods)) {
+          setEnabledModules(mods as Record<string, boolean>);
+        }
+      })
+      .catch(() => setLoadError("Failed to load module settings"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function toggleModule(key: string, enabled: boolean) {
+    setSaving(key);
+    const projectId = headers["X-Project-ID"] || "";
+    try {
+      const r = await fetch("/api/admin/enabled-modules", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ projectId, modules: { [key]: enabled } }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(d.error || "Failed to update module"); return; }
+      const updated = d.enabledModules ?? d.data ?? d;
+      if (updated && typeof updated === "object") setEnabledModules(updated as Record<string, boolean>);
+    } catch {
+      alert("Failed to update module");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
+      {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{tableTitle}</h3>}
+      {loading ? (
+        <p className="builder-module-runtime-note">Loading module settings…</p>
+      ) : loadError ? (
+        <p className="builder-module-runtime-note" style={{ color: "var(--danger, #c00)" }}>{loadError}</p>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {PREMIUM_MODULE_GROUPS.map(({ key, label, description }) => {
+            const isEnabled = enabledModules[key] === true;
+            const isSaving  = saving === key;
+            return (
+              <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", border: "1px solid var(--border, #e5e7eb)", borderRadius: 8, background: isEnabled ? "rgba(15,79,143,0.04)" : undefined }}>
+                <div>
+                  <strong style={{ fontSize: 14 }}>{label}</strong>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted, #888)" }}>{description}</p>
+                </div>
+                {showToggle ? (
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => toggleModule(key, !isEnabled)}
+                    style={{ padding: "6px 16px", fontSize: 13, cursor: isSaving ? "default" : "pointer", background: isEnabled ? "#0f4f8f" : undefined, color: isEnabled ? "#fff" : undefined, borderRadius: 6, border: `1px solid ${isEnabled ? "#0f4f8f" : "#ccc"}`, minWidth: 80 }}
+                  >
+                    {isSaving ? "…" : isEnabled ? "Enabled" : "Enable"}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isEnabled ? "#0f4f8f" : "var(--muted, #888)" }}>{isEnabled ? "Enabled" : "Disabled"}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
