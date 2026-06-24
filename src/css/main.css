@@ -124,6 +124,152 @@
   }
 }
 
+/* ── Project Detail — two-column layout ────────────────────────────────── */
+.project-details-two-col {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 1.5rem;
+  align-items: start;
+}
+.project-details-left .card,
+.project-details-right .card {
+  margin-bottom: 1rem;
+}
+.project-details-right .card:last-child {
+  margin-bottom: 0;
+}
+.project-details-section-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted, #64748b);
+  margin: 0 0 1rem;
+}
+@media (max-width: 900px) {
+  .project-details-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Admin users list */
+.admin-users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.admin-users-empty {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+}
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.admin-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.admin-user-email {
+  font-size: 0.875rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-user-role {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #1e40af;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.admin-user-add-form {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+/* Module toggles */
+.module-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+.module-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.module-toggle-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.module-toggle-desc {
+  font-size: 0.8rem;
+  color: var(--ink-muted, #64748b);
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.toggle-switch input[type="checkbox"] {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.toggle-track {
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  background: #cbd5e1;
+  border-radius: 11px;
+  transition: background 0.18s;
+  position: relative;
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.18s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch input:checked + .toggle-track {
+  background: #2563eb;
+}
+.toggle-switch input:checked + .toggle-track::after {
+  transform: translateX(18px);
+}
+.toggle-switch input:focus-visible + .toggle-track {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 /* ── Project Admin view ─────────────────────────────────────────────────── */
 /* Hide the standard platform chrome when on the Project Admin page.        */
 body.project-admin-view #topNav,

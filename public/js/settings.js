@@ -776,6 +776,58 @@ App.settings = (function () {
     projectCtx()?.applyDetailContextNotice?.();
     const isOwner = String(active?.membership?.role || '').toLowerCase() === 'owner';
     renderProjectMembers(String(active?.id || ''), isOwner).catch(() => {});
+
+    // Right column: admin users + module toggles
+    const enabledModules = (active?.enabledModules && typeof active.enabledModules === 'object') ? active.enabledModules : { crm: true };
+    const crmToggle = byId('settingsModuleCrmToggle');
+    if (crmToggle) crmToggle.checked = Boolean(enabledModules.crm !== false);
+
+    if (active?.id) renderAdminUsers(active.id).catch(() => {});
+  }
+
+  async function renderAdminUsers(projectId) {
+    const listEl = byId('settingsAdminUsersList');
+    if (!listEl) return;
+
+    let users = [];
+    try {
+      const res = await api('/api/admin/users');
+      users = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.adminUsers) ? res.adminUsers : []);
+    } catch {
+      listEl.innerHTML = '<p class="meta admin-users-empty">Unable to load admin users.</p>';
+      return;
+    }
+
+    if (!users.length) {
+      listEl.innerHTML = '<p class="meta admin-users-empty">No admin users yet.</p>';
+      return;
+    }
+
+    listEl.innerHTML = users.map((u) => `
+      <div class="admin-user-row" data-id="${String(u.id || '').replace(/"/g, '')}">
+        <div class="admin-user-info">
+          <span class="admin-user-email">${String(u.email || '').replace(/</g, '&lt;')}</span>
+          <span class="admin-user-role">${String(u.role || 'editor')}</span>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm admin-user-delete-btn" data-id="${String(u.id || '').replace(/"/g, '')}" aria-label="Remove ${String(u.email || '').replace(/"/g, '')}">Remove</button>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.admin-user-delete-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const uid = String(btn.dataset.id || '').trim();
+        if (!uid) return;
+        if (!confirm('Remove this admin user? They will immediately lose access.')) return;
+        try {
+          await api(`/api/admin/users/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+          notify('Admin user removed');
+          const pid = getSettingsDetailProjectId();
+          if (pid) renderAdminUsers(pid).catch(() => {});
+        } catch (err) {
+          notify(err.message || 'Unable to remove admin user', true);
+        }
+      });
+    });
   }
 
   function getAccountIdentity(profile) {
@@ -2208,6 +2260,58 @@ App.settings = (function () {
         clearProjectLogo().catch((err) => {
           notify(err?.message || 'Could not clear project logo', true);
         });
+      });
+    }
+
+    const settingsAdminUserForm = byId('settingsAdminUserForm');
+    if (settingsAdminUserForm) {
+      settingsAdminUserForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const activeId = getSettingsDetailProjectId();
+        if (!activeId) return notify('Select a project first', true);
+        const emailInput = byId('settingsAdminUserEmail');
+        const passwordInput = byId('settingsAdminUserPassword');
+        const roleSelect = byId('settingsAdminUserRole');
+        const email = String(emailInput?.value || '').trim().toLowerCase();
+        const password = String(passwordInput?.value || '');
+        const role = String(roleSelect?.value || 'editor').trim();
+        if (!email) return notify('Email is required', true);
+        if (!password || password.length < 8) return notify('Password must be at least 8 characters', true);
+        try {
+          await api('/api/admin/users', {
+            method: 'POST',
+            body: JSON.stringify({ projectId: activeId, email, password, role }),
+          });
+          if (emailInput) emailInput.value = '';
+          if (passwordInput) passwordInput.value = '';
+          notify('Admin user added');
+          renderAdminUsers(activeId).catch(() => {});
+        } catch (err) {
+          notify(err.message || 'Unable to add admin user', true);
+        }
+      });
+    }
+
+    const settingsModuleCrmToggle = byId('settingsModuleCrmToggle');
+    if (settingsModuleCrmToggle) {
+      settingsModuleCrmToggle.addEventListener('change', async () => {
+        const activeId = getSettingsDetailProjectId();
+        if (!activeId) return;
+        const projects = Array.isArray(state.projects) ? state.projects : [];
+        const active = projects.find((p) => String(p?.id || '') === activeId);
+        const current = (active?.enabledModules && typeof active.enabledModules === 'object') ? active.enabledModules : { crm: true };
+        const enabledModules = { ...current, crm: settingsModuleCrmToggle.checked };
+        try {
+          await api(`/api/projects/${encodeURIComponent(activeId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ enabledModules }),
+          });
+          await refreshProjectContext();
+          notify(`CRM module ${settingsModuleCrmToggle.checked ? 'enabled' : 'disabled'}`);
+        } catch (err) {
+          settingsModuleCrmToggle.checked = !settingsModuleCrmToggle.checked;
+          notify(err.message || 'Unable to save module settings', true);
+        }
       });
     }
 
