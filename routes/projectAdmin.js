@@ -13,6 +13,8 @@ const {
   createAdminSession,
   deleteAdminSession,
   getAdminSession,
+  listAdminUsers,
+  deleteAdminUser,
 } = require('../lib/projectAdminStore');
 
 const ADMIN_SESSION_COOKIE_NAME = 'app_admin_session';
@@ -144,6 +146,40 @@ async function handle(req, res, pathname, method) {
     }
 
     return sendOk(res, 201, created.data, { adminUser: created.data }), true;
+  }
+
+  // GET /api/admin/users — list admin users for the active project
+  if (pathname === '/api/admin/users' && method === 'GET') {
+    if (!req.authUser) {
+      return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    }
+    const projectId = String(req.projectContext?.project?.id || '').trim();
+    if (!projectId) {
+      return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    }
+    const result = await listAdminUsers(projectId);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Unable to list admin users', { code: 'ADMIN_USER_LIST_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, { adminUsers: result.data }), true;
+  }
+
+  // DELETE /api/admin/users/:id — platform owner removes an admin user
+  const deleteUserMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/?$/);
+  if (deleteUserMatch && method === 'DELETE') {
+    if (!req.authUser) {
+      return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    }
+    const adminUserId = decodeURIComponent(deleteUserMatch[1] || '').trim();
+    const projectId = String(req.projectContext?.project?.id || '').trim();
+    if (!projectId) {
+      return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    }
+    const result = await deleteAdminUser(adminUserId, projectId);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Unable to delete admin user', { code: 'ADMIN_USER_DELETE_FAILED' }), true;
+    }
+    return sendOk(res, 200, { deleted: true }, { deleted: true }), true;
   }
 
   return false;
