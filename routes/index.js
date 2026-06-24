@@ -169,12 +169,16 @@ async function handleRequest(req, res) {
     const rawHostD = String(req.headers['x-forwarded-host'] || req.headers.host || '');
     const hostD = rawHostD.split(':')[0].toLowerCase().replace(/^www\./, '');
     const { findProjectByDomain } = require('../lib/projectsStore');
+    const { isConfigured: isSbConfigured } = require('../lib/supabase');
     const resultD = await findProjectByDomain(hostD);
     return sendJson(res, 200, {
       rawHost: rawHostD,
       host: hostD,
       isSystem: isSystemHost(hostD),
+      supabaseConfigured: isSbConfigured(),
       lookupOk: resultD.ok,
+      lookupStatus: resultD.status,
+      lookupError: resultD.error,
       projectName: resultD.ok ? resultD.data?.name : null,
       url: req.url,
       pathname: pathnameEarly,
