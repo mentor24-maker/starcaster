@@ -44,6 +44,15 @@ export function BuilderAdminLoginModuleSettings({ module, onUpdateModule }: Prop
           <option value="false">Hide</option>
         </select>
       </BuilderSettingRow>
+
+      <BuilderSettingRow label="Redirect on success" fullWidth>
+        <input
+          type="text"
+          value={s.successRedirect ?? "/admin-dashboard"}
+          onChange={(e) => set("successRedirect", e.target.value)}
+          placeholder="/admin-dashboard"
+        />
+      </BuilderSettingRow>
     </div>
   );
 }

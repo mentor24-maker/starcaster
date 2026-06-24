@@ -1992,7 +1992,8 @@ export function createEmptyModule(
                         ? {
                             formTitle: "Admin Sign In",
                             buttonText: "Sign In",
-                            showForgotPassword: "true"
+                            showForgotPassword: "true",
+                            successRedirect: "/admin-dashboard"
                           }
           : {};
 

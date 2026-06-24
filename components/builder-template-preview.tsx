@@ -2566,6 +2566,10 @@ function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> 
       const r = await fetch("/api/admin/users", { credentials: "include", headers });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
+        if (r.status === 401 && !window.location.pathname.includes("builder-preview")) {
+          window.location.href = "/admin-login";
+          return;
+        }
         setLoadError(d.error || "Failed to load team members");
         return;
       }
@@ -2746,7 +2750,9 @@ function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent]   = useState(false);
 
+  const successRedirect = settings.successRedirect || "/admin-dashboard";
   const projectId = getCrmProjectHeaders()["X-Project-ID"] || "";
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
 
   useEffect(() => {
     fetch("/api/admin/auth/me", { credentials: "include" })
@@ -2755,6 +2761,7 @@ function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
         if (d?.adminUser) {
           setAdminEmail(d.adminUser.email || "");
           setAuthState("authed");
+          if (!isPreview) window.location.href = successRedirect;
         } else {
           setAuthState("unauthed");
         }
@@ -2775,17 +2782,12 @@ function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setError(d.error || "Invalid email or password"); return; }
-      window.location.reload();
+      window.location.href = successRedirect;
     } catch {
       setError("Connection error. Please try again.");
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleLogout() {
-    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
-    window.location.reload();
   }
 
   const cardStyle: React.CSSProperties = {
@@ -2804,19 +2806,8 @@ function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
   };
   const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "#18324a", display: "block", marginTop: 14 };
 
-  if (authState === "loading") {
+  if (authState === "loading" || authState === "authed") {
     return null;
-  }
-
-  if (authState === "authed") {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, padding: "8px 0", fontSize: 13, color: "#587592" }}>
-        <span>Signed in{adminEmail ? ` as ${adminEmail}` : ""}</span>
-        <button onClick={handleLogout} style={{ background: "none", border: "1px solid #c9dcea", borderRadius: 6, padding: "4px 12px", fontSize: 12, color: "#18324a", cursor: "pointer" }}>
-          Sign out
-        </button>
-      </div>
-    );
   }
 
   if (showForgot) {
@@ -2887,7 +2878,13 @@ function AdminModulesPreview({ settings }: { settings: Record<string, string> })
     const projectId = headers["X-Project-ID"] || "";
     const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
     fetch(`/api/admin/enabled-modules${qs}`, { credentials: "include", headers })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r.status === 401 && !window.location.pathname.includes("builder-preview")) {
+          window.location.href = "/admin-login";
+          return null;
+        }
+        return r.ok ? r.json() : null;
+      })
       .then((d) => {
         if (!d) return;
         const mods = d.enabledModules ?? d.data ?? d;
