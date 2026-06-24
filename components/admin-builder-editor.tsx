@@ -112,6 +112,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [selectedPageId, setSelectedPageId] = useState("");
   const [pageSlug, setPageSlug] = useState("");
   const [pageTemplateId, setPageTemplateId] = useState("");
+  const [pageIsPrivate, setPageIsPrivate] = useState(false);
   const [draft, setDraft] = useState(createDraftFromTemplate(null));
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
   const [expandedModuleIds, setExpandedModuleIds] = useState<string[]>([]);
@@ -419,6 +420,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setPageSlug(page?.slug ?? "");
     setPageTemplateId(page?.templateId ?? "");
     setPageThemeId(page?.themeId ?? "");
+    setPageIsPrivate(page?.isPrivate ?? false);
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
 
@@ -1023,7 +1025,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     updateSection(sectionId, (s) => ({ ...s, modules: s.modules.filter((m) => m.id !== moduleId) }));
   }
 
-  async function saveSavedModule(cellModuleId: string, name: string, moduleClass: string, modules: BuilderTemplateModule[]) {
+  async function saveSavedModule(cellModuleId: string, name: string, moduleClass: string, modules: BuilderTemplateModule[], isPrivate: boolean) {
     setIsSaving(true);
     setError(null);
     setMessage(null);
@@ -1032,7 +1034,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const response = await builderAdminFetch(`/api/admin/cell-modules/${cellModuleId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, moduleClass, modules })
+        body: JSON.stringify({ name, moduleClass, modules, isPrivate })
       });
       const data = await readAdminJson<{ cellModule?: BuilderCellModuleRecord; error?: string }>(response, "Failed to save saved module.");
 
@@ -1132,7 +1134,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  async function saveSavedSection(sectionId: string, name: string, section: BuilderTemplateSection) {
+  async function saveSavedSection(sectionId: string, name: string, section: BuilderTemplateSection, isPrivate: boolean) {
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Saved section name is required.");
@@ -1147,7 +1149,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const response = await builderAdminFetch(`/api/admin/saved-sections/${sectionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmedName, section })
+        body: JSON.stringify({ name: trimmedName, section, isPrivate })
       });
       const data = await readAdminJson<{ savedSection?: BuilderSavedSectionRecord; error?: string }>(response, "Failed to save saved section.");
 
@@ -1729,7 +1731,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, themeId: pageThemeId || undefined, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
+        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, themeId: pageThemeId || undefined, isPrivate: pageIsPrivate, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
       });
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       setMessage(selectedPageId ? "Page updated." : "Page created.");
@@ -2025,7 +2027,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                 return;
               }
 
-              void saveSavedSection(focus.sectionId, focus.name, focus.section);
+              void saveSavedSection(focus.sectionId, focus.name, focus.section, focus.isPrivate ?? false);
             }
           }
         ];
@@ -2048,7 +2050,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             }
 
             if (focus.kind === "saved") {
-              void saveSavedModule(focus.cellModuleId, focus.name, focus.moduleClass, focus.modules);
+              void saveSavedModule(focus.cellModuleId, focus.name, focus.moduleClass, focus.modules, focus.isPrivate ?? false);
             }
           }
         }
@@ -2153,8 +2155,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onCloneSavedModule={(id) => void cloneSavedModule(id)}
           onCreateSavedModule={(name, moduleClass, modules) => void createSavedModule(name, moduleClass, modules)}
           onSaveCreatedModule={(source, module) => void saveCreatedModule(source, module)}
-          onSaveSavedModule={(id, name, moduleClass, modules) => void saveSavedModule(id, name, moduleClass, modules)}
-          onSaveSavedSection={(id, name, section) => void saveSavedSection(id, name, section)}
+          onSaveSavedModule={(id, name, moduleClass, modules, isPrivate) => void saveSavedModule(id, name, moduleClass, modules, isPrivate)}
+          onSaveSavedSection={(id, name, section, isPrivate) => void saveSavedSection(id, name, section, isPrivate)}
           onModuleEditorFocusChange={handleModuleEditorFocusChange}
           onRepositoryEditingActiveChange={handleRepositoryEditingActiveChange}
         />
@@ -2202,6 +2204,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}
           onSavePage={() => void savePage()}
+          pageIsPrivate={pageIsPrivate}
+          onSetPageIsPrivate={setPageIsPrivate}
           autoNewPage={autoNewPage}
           snapshots={snapshots}
           activeArchive={activeArchive}
