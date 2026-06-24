@@ -226,10 +226,14 @@ async function handleRequest(req, res) {
   req.projectContext = null;
   req.cronPublish = isCronAuthorized;
 
-  // For builder API calls from the Project Admin interface, accept an admin
+  // For builder API calls and project-admin API calls, accept an admin
   // session in place of a platform session. Synthesize req.authUser and
-  // req.projectContext so builder route handlers work without modification.
-  if (!authUser && pathname.startsWith('/api/builder')) {
+  // req.projectContext so route handlers work without modification.
+  // /api/admin/platform-users is excluded — that endpoint manages platform
+  // auth users and must remain restricted to platform owners only.
+  const isProjectAdminApiRoute = pathname.startsWith('/api/admin')
+    && !pathname.startsWith('/api/admin/platform-users');
+  if (!authUser && (pathname.startsWith('/api/builder') || isProjectAdminApiRoute)) {
     const adminToken = projectAdmin.readAdminSessionToken(req);
     if (adminToken) {
       const adminSession = await getAdminSession(adminToken);
