@@ -165,6 +165,22 @@ async function handleRequest(req, res) {
     });
   }
 
+  if (pathnameEarly === '/api/domain-debug' && methodEarly === 'GET') {
+    const rawHostD = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+    const hostD = rawHostD.split(':')[0].toLowerCase().replace(/^www\./, '');
+    const { findProjectByDomain } = require('../lib/projectsStore');
+    const resultD = await findProjectByDomain(hostD);
+    return sendJson(res, 200, {
+      rawHost: rawHostD,
+      host: hostD,
+      isSystem: isSystemHost(hostD),
+      lookupOk: resultD.ok,
+      projectName: resultD.ok ? resultD.data?.name : null,
+      url: req.url,
+      pathname: pathnameEarly,
+    });
+  }
+
 
   if (pathnameEarly === '/api/assets/import-drive-folder' && methodEarly === 'GET') {
     let importModuleOk = false;
