@@ -13,6 +13,18 @@ const manifest = {
 async function handle(req, res, pathname, method) {
   if (!pathname.startsWith('/api/public/')) return false;
 
+  // GET /api/public/debug-req — temporary host diagnostic
+  if (pathname === '/api/public/debug-req' && method === 'GET') {
+    return sendJson(res, 200, {
+      host: req.headers.host,
+      xForwardedHost: req.headers['x-forwarded-host'],
+      url: req.url,
+      allHeaders: Object.fromEntries(
+        Object.entries(req.headers).filter(([k]) => k.startsWith('x-') || k === 'host')
+      ),
+    }), true;
+  }
+
   // GET /api/public/site?domain=benvin.org
   if (pathname === '/api/public/site' && method === 'GET') {
     const { searchParams } = getUrlObj(req);
