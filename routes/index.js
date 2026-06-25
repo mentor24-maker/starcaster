@@ -21,7 +21,7 @@
  *   for expensive operations (acquire, openclaw, import).
  */
 
-const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname, getClientHost, getPublicSiteDomainParam, getPublicSiteDomainFromPath } = require('./http');
+const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname } = require('./http');
 const { handleProjectDelete } = require('../lib/projectDeleteHandler');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
@@ -437,26 +437,9 @@ async function handleRequest(req, res) {
 }
 
 // ---------------------------------------------------------------------------
-// Non-API page request handler (static files + custom domain routing)
+// Non-API page requests (custom domain public sites + StarCaster admin shell)
+// See docs/CUSTOM_DOMAIN_PUBLIC_SITES.md
 // ---------------------------------------------------------------------------
-
-const _fs   = require('fs');
-const _path = require('path');
-
-const MIME_MAP = {
-  '.html': 'text/html; charset=utf-8',
-  '.js':   'application/javascript',
-  '.css':  'text/css',
-  '.png':  'image/png',
-  '.jpg':  'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg':  'image/svg+xml',
-  '.ico':  'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.webp': 'image/webp',
-  '.json': 'application/json',
-};
 
 function isRegisteredApiPath(pathname) {
   const p = normalizeApiPathname(pathname);
@@ -479,166 +462,10 @@ function isRegisteredApiPath(pathname) {
   return false;
 }
 
-function isPageRequestPath(pathname, req) {
-  const p = normalizeApiPathname(pathname);
-  if (p === '/api') return true;
-  if (p === '/api/app-shell.html') return true;
-  if (p === '/api/_site' || p.startsWith('/api/_site/')) return true;
-  if (!p.startsWith('/api/')) return true;
-  if (!isRegisteredApiPath(p)) {
-    const host = getClientHost(req);
-    if (host && !isSystemHost(host)) return true;
-  }
-  return false;
-}
-
-function pagePathnameForRequest(pathname) {
-  const p = normalizeApiPathname(pathname);
-  if (p === '/api' || p === '/api/index') return '/';
-  if (p === '/api/app-shell.html') return '/app-shell.html';
-  if (p === '/api/_site') return '/_site';
-  if (p.startsWith('/api/_site/')) return p.slice(4);
-  if (p.startsWith('/api/') && !isRegisteredApiPath(p)) {
-    return p.slice(4) || '/';
-  }
-  return p;
-}
-
-function isSystemHost(host) {
-  if (!host) return true;
-  if (/^localhost$|^127\.|^0\.0\.0\.0$/.test(host)) return true;
-  if (host.endsWith('.vercel.app')) return true;
-  if (host === 'starcaster.pro' || host.endsWith('.starcaster.pro')) return true;
-  return false;
-}
-
-async function resolvePublicSiteProject(req, pathname) {
-  const { findProjectByDomain } = require('../lib/projectsStore');
-  const pathDomain = getPublicSiteDomainFromPath(pathname || '');
-  const domainParam = getPublicSiteDomainParam(req);
-  const host = getClientHost(req);
-  const candidates = [];
-  if (pathDomain) candidates.push(pathDomain);
-  if (domainParam) candidates.push(domainParam);
-  if (host && !isSystemHost(host)) candidates.push(host);
-  const seen = new Set();
-  for (const domain of candidates) {
-    const key = String(domain || '').trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    const result = await findProjectByDomain(key);
-    if (result.ok) return result;
-  }
-  return { ok: false };
-}
-
-function servePublicSiteHtml(res, projectId, projectName) {
-  let siteHtml;
-  try {
-    siteHtml = _fs.readFileSync(_path.join(__dirname, '../public/site.html'), 'utf8');
-  } catch {
-    res.statusCode = 500;
-    res.end('Site template unavailable');
-    return true;
-  }
-  const config = JSON.stringify({ projectId, projectName });
-  siteHtml = siteHtml.replace('</head>', `  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`);
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.statusCode = 200;
-  res.end(siteHtml);
-  return true;
-}
-
-function serveStaticPage(res, pathname) {
-  const safePath = pathname.replace(/\.\./g, '').replace(/\/+/g, '/') || '/';
-  if (isBootstrapPath(safePath)) {
-    res.statusCode = 404;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end('Public site bootstrap path unavailable');
-    return;
-  }
-  if (safePath === '/app-shell.html') {
-    const filePath = _path.join(__dirname, '../public/app-shell.html');
-    try {
-      const content = _fs.readFileSync(filePath);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.statusCode = 200;
-      return res.end(content);
-    } catch {
-      res.statusCode = 404;
-      return res.end('Not found');
-    }
-  }
-  let filePath;
-  if (safePath === '/') {
-    filePath = _path.join(__dirname, '../public/app-shell.html');
-  } else {
-    const rel = safePath.replace(/^\//, '');
-    filePath = _path.join(__dirname, '../public', rel);
-    if (!_path.extname(safePath) && !_fs.existsSync(filePath)) {
-      filePath += '.html';
-    }
-  }
-  if (!_fs.existsSync(filePath)) {
-    filePath = _path.join(__dirname, '../public/app-shell.html');
-  }
-  const ext = _path.extname(filePath).toLowerCase();
-  const mime = MIME_MAP[ext] || 'application/octet-stream';
-  try {
-    const content = _fs.readFileSync(filePath);
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.statusCode = 200;
-    return res.end(content);
-  } catch {
-    res.statusCode = 404;
-    return res.end('Not found');
-  }
-}
-
-function isBootstrapPath(pathname) {
-  const p = normalizeApiPathname(pathname || '');
-  return p === '/_site' || p === '/api/_site'
-    || p.startsWith('/_site/') || p.startsWith('/api/_site/');
-}
-
-async function handlePageRequest(req, res, pathname) {
-  if (isBootstrapPath(pathname)) {
-    const result = await resolvePublicSiteProject(req, pathname);
-    if (result.ok) {
-      const { id: projectId, name: projectName } = result.data;
-      res.setHeader('X-Site-Handler', 'bootstrap-resolved');
-      servePublicSiteHtml(res, projectId, projectName);
-      return;
-    }
-    res.setHeader('X-Site-Handler', 'bootstrap-miss');
-    res.statusCode = 404;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end('Public site not found for this domain');
-    return;
-  }
-
-  const result = await resolvePublicSiteProject(req, pathname);
-  if (result.ok) {
-    const { id: projectId, name: projectName } = result.data;
-    res.setHeader('X-Site-Handler', 'resolved');
-    servePublicSiteHtml(res, projectId, projectName);
-    return;
-  }
-
-  const host = getClientHost(req);
-  if (host && !isSystemHost(host)) {
-    res.setHeader('X-Site-Handler', 'domain-miss');
-    res.statusCode = 404;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end('No published site for this domain');
-    return;
-  }
-
-  res.setHeader('X-Site-Handler', 'app-shell');
-  serveStaticPage(res, pathname);
-}
+const {
+  handlePageRequest,
+  isPageRequestPath,
+  pagePathnameForRequest,
+} = require('./publicSitePages').createPublicSitePageHandlers({ isRegisteredApiPath });
 
 module.exports = { handleRequest, logRegistry, ROUTE_MODULES };

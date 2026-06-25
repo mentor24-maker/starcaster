@@ -130,7 +130,6 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       pageBackground={page.pageBackground}
       theme={page.theme}
       projectId={projectId}
-      showShell={false}
     />
   );
 }

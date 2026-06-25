@@ -135,6 +135,9 @@ function isDeploymentHostname(host) {
  * Resolve the visitor-facing hostname on Vercel.
  * Internal rewrites to /api/[...slug] can leave Host as *.vercel.app while
  * x-forwarded-host still carries the custom domain.
+ *
+ * Used by routes/publicSitePages.js for tenant public sites.
+ * See docs/CUSTOM_DOMAIN_PUBLIC_SITES.md
  */
 function getClientHost(req) {
   const headers = req.headers || {};
