@@ -521,6 +521,12 @@ function servePublicSiteHtml(res, projectId, projectName) {
 
 function serveStaticPage(res, pathname) {
   const safePath = pathname.replace(/\.\./g, '').replace(/\/+/g, '/') || '/';
+  if (isBootstrapPath(safePath)) {
+    res.statusCode = 404;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('Public site bootstrap path unavailable');
+    return;
+  }
   let filePath;
   if (safePath === '/') {
     filePath = _path.join(__dirname, '../public/index.html');
@@ -548,6 +554,20 @@ function serveStaticPage(res, pathname) {
   }
 }
 
+function isBootstrapPath(pathname) {
+  const p = normalizeApiPathname(pathname || '');
+  return p === '/_site' || p === '/api/_site'
+    || p.startsWith('/_site/') || p.startsWith('/api/_site/');
+}
+
+function redirectToPublicSiteBootstrap(res, domain, currentPath) {
+  const path = String(currentPath || '/').trim() || '/';
+  res.statusCode = 302;
+  res.setHeader('Location', `/api/_site/${encodeURIComponent(domain)}?path=${encodeURIComponent(path)}`);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.end();
+}
+
 async function handlePageRequest(req, res, pathname) {
   const result = await resolvePublicSiteProject(req, pathname);
   if (result.ok) {
@@ -556,7 +576,24 @@ async function handlePageRequest(req, res, pathname) {
     return;
   }
 
-  // No project matched — serve the primary app static files.
+  const urlObj = getUrlObj(req);
+  const host = getClientHost(req);
+  const pathDomain = getPublicSiteDomainFromPath(pathname || '');
+  const customDomain = pathDomain || (!isSystemHost(host) ? host : '');
+
+  if (customDomain && isBootstrapPath(pathname)) {
+    res.statusCode = 404;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('Public site not found for this domain');
+    return;
+  }
+
+  if (customDomain) {
+    const currentPath = (pathname || '/') + (urlObj.search || '');
+    redirectToPublicSiteBootstrap(res, customDomain, currentPath);
+    return;
+  }
+
   serveStaticPage(res, pathname);
 }
 
