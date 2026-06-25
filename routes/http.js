@@ -137,11 +137,23 @@ function isDeploymentHostname(host) {
  * x-forwarded-host still carries the custom domain.
  */
 function getClientHost(req) {
-  const forwarded = normalizeHostname(req.headers['x-forwarded-host']);
-  const host = normalizeHostname(req.headers.host);
+  const headers = req.headers || {};
+  const forwarded = normalizeHostname(headers['x-forwarded-host']);
+  const host = normalizeHostname(headers.host);
   if (forwarded && !isDeploymentHostname(forwarded)) return forwarded;
   if (host && !isDeploymentHostname(host)) return host;
   return forwarded || host;
+}
+
+function getPublicSiteDomainParam(req) {
+  const urlObj = getUrlObj(req);
+  const raw = String(
+    urlObj.searchParams.get('domain')
+    || urlObj.searchParams.get('d')
+    || ''
+  ).trim();
+  if (!raw) return '';
+  return normalizeHostname(raw);
 }
 
 function normalizeEmail(email) {
@@ -230,6 +242,7 @@ module.exports = {
   getUrlObj,
   normalizeApiPathname,
   getClientHost,
+  getPublicSiteDomainParam,
   normalizeEmail,
   nextId,
   parseCookies,
