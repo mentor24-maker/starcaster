@@ -13,4 +13,6 @@ create unique index if not exists idx_app_projects_domain_unique
 comment on column public.app_projects.domain is
   'Public site hostname (e.g. benvin.org). Empty = no custom domain. Unique when set.';
 
+notify pgrst, 'reload schema';
+
 commit;
