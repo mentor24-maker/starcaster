@@ -28,6 +28,10 @@
     }
   ],
   "functions": {
+    "api/index.js": {
+      "maxDuration": 300,
+      "includeFiles": "public/*.html"
+    },
     "api/[...slug].js": {
       "maxDuration": 300,
       "includeFiles": "public/*.html"
