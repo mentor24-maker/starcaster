@@ -11,6 +11,7 @@
     // explicit domain in the path so the function can load the public Builder site shell.
     // Note: bare /_site 404s on Vercel; /api/_site/... is routed through the catch-all.
     (function () {
+      if (document.getElementById('siteRoot')) return;
       var h = window.location.hostname;
       var sys = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h)
         || h.endsWith('.vercel.app')

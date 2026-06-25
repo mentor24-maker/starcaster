@@ -18,8 +18,10 @@ type SitePage = {
 };
 
 function slugFromPathname(pathname: string): string {
-  const withoutExt = pathname.replace(/\.html$/, "");
-  return withoutExt.replace(/^\//, "").replace(/\/$/, "");
+  let p = pathname.replace(/\.html$/, "");
+  p = p.replace(/^\/api\/_site\/[^/]+/, "").replace(/^\/_site\/[^/]+/, "");
+  if (p === "/_site" || p === "/api/_site") p = "/";
+  return p.replace(/^\//, "").replace(/\/$/, "");
 }
 
 async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
@@ -85,7 +87,13 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       .finally(() => setLoaded(true));
   }, [projectId]);
 
-  if (!loaded) return null;
+  if (!loaded) {
+    return (
+      <div style={{ fontFamily: "sans-serif", padding: "4rem", textAlign: "center", color: "#333" }}>
+        <p>Loading…</p>
+      </div>
+    );
+  }
 
   if (!page || !page.layoutSections.length) {
     return (
