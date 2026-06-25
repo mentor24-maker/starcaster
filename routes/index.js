@@ -574,6 +574,7 @@ async function handlePageRequest(req, res, pathname) {
   const result = await resolvePublicSiteProject(req, pathname);
   if (result.ok) {
     const { id: projectId, name: projectName } = result.data;
+    res.setHeader('X-Site-Handler', 'resolved');
     servePublicSiteHtml(res, projectId, projectName);
     return;
   }
@@ -584,6 +585,7 @@ async function handlePageRequest(req, res, pathname) {
   const customDomain = pathDomain || (!isSystemHost(host) ? host : '');
 
   if (customDomain && isBootstrapPath(pathname)) {
+    res.setHeader('X-Site-Handler', 'bootstrap-miss');
     res.statusCode = 404;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.end('Public site not found for this domain');
@@ -592,10 +594,12 @@ async function handlePageRequest(req, res, pathname) {
 
   if (customDomain) {
     const currentPath = (pathname || '/') + (urlObj.search || '');
+    res.setHeader('X-Site-Handler', 'redirect');
     redirectToPublicSiteBootstrap(res, customDomain, currentPath);
     return;
   }
 
+  res.setHeader('X-Site-Handler', 'app-shell');
   serveStaticPage(res, pathname);
 }
 
