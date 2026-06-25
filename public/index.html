@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loading…</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #fff; color: #333; }
+    .boot { padding: 2rem; text-align: center; }
+  </style>
+  <script>
+    (function () {
+      var h = window.location.hostname;
+      var sys = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h)
+        || h.endsWith('.vercel.app')
+        || h === 'starcaster.pro'
+        || h.endsWith('.starcaster.pro');
+      if (sys) {
+        window.location.replace('/app-shell.html');
+        return;
+      }
+      if (window.location.pathname.indexOf('/api/_site/') === 0) return;
+      var path = (window.location.pathname || '/') + (window.location.search || '');
+      window.location.replace('/api/_site/' + encodeURIComponent(h) + '?path=' + encodeURIComponent(path));
+    })();
+  </script>
+</head>
+<body>
+  <div class="boot">Loading…</div>
+</body>
+</html>
