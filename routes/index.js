@@ -157,34 +157,9 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, {
       ok: true,
       app: 'starcaster',
-      routesVersion: 'custom-domain-client-v1',
       message: 'API is up. Log in via the app, then use Import From Folder.',
-      _host: req.headers['x-forwarded-host'] || req.headers.host || '',
-      _url: req.url,
-      _pathname: pathnameEarly,
     });
   }
-
-  if (pathnameEarly === '/api/domain-debug' && methodEarly === 'GET') {
-    const rawHostD = String(req.headers['x-forwarded-host'] || req.headers.host || '');
-    const hostD = rawHostD.split(':')[0].toLowerCase().replace(/^www\./, '');
-    const { findProjectByDomain, normalizeDomain: nd } = require('../lib/projectsStore');
-    const { sbQuery: sbQ } = require('../lib/supabase');
-    const PTBL = String(process.env.SUPABASE_PROJECTS_TABLE || 'app_projects');
-    const qDomain = nd(hostD);
-    const resultD = await findProjectByDomain(hostD);
-    // Look up project by known ID and check current domain value
-    const projectId = 'proj_1780601274760_97i84r';
-    const sbById = await sbQ({ table: PTBL, query: `select=id,name,domain&id=eq.${encodeURIComponent(projectId)}&limit=1` });
-    return sendJson(res, 200, {
-      host: hostD,
-      normalizedDomain: qDomain,
-      lookupOk: resultD.ok,
-      lookupError: resultD.error,
-      projectById: Array.isArray(sbById.data) ? sbById.data[0] : null,
-    });
-  }
-
 
   if (pathnameEarly === '/api/assets/import-drive-folder' && methodEarly === 'GET') {
     let importModuleOk = false;
@@ -486,6 +461,7 @@ function isSystemHost(host) {
   if (!host) return true;
   if (/^localhost$|^127\.|^0\.0\.0\.0$/.test(host)) return true;
   if (host.endsWith('.vercel.app')) return true;
+  if (host === 'starcaster.pro' || host.endsWith('.starcaster.pro')) return true;
   return false;
 }
 
@@ -520,9 +496,8 @@ function serveStaticPage(res, pathname) {
 async function handlePageRequest(req, res, pathname) {
   const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
   const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
-  console.log('[handlePageRequest] pathname:', pathname, 'host:', host, 'url:', req.url, 'sys:', isSystemHost(host));
 
-  // System hosts (localhost, *.vercel.app) always serve the primary app.
+  // System hosts (localhost, *.vercel.app, starcaster.pro) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.
   if (!isSystemHost(host)) {
     const { findProjectByDomain } = require('../lib/projectsStore');
