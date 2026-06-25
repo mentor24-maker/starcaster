@@ -67,7 +67,9 @@ export function mountPublicSite(host: HTMLElement | null, config?: { projectId?:
     || (typeof window !== 'undefined' && (window as Record<string, unknown>).__SITE_CONFIG__ as { projectId?: string } | undefined)?.projectId
     || '';
   createRoot(host).render(
-    <BuilderPublicSitePage projectId={projectId} />
+    <div className="builder-react-root builder-public-site">
+      <BuilderPublicSitePage projectId={projectId} />
+    </div>
   );
   return true;
 }
