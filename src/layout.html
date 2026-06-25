@@ -5,22 +5,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StarCaster</title>
-  <script>
-    // Custom-domain intercept: navigate to /_site so the function can serve
-    // the Builder public-site shell. This is a hard redirect (window.location.replace)
-    // that stops the HTML parser immediately, preventing any Starcaster content
-    // from loading on custom domains. The /_site path has no static file, so
-    // Vercel's rewrite routes it to the function which serves site.html with
-    // the project config injected. history.replaceState in site.html restores
-    // the URL back to / after mount.
-    (function(){
-      var h=window.location.hostname;
-      var sys=/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h)||h.endsWith('.vercel.app')||h==='starcaster.pro'||h.endsWith('.starcaster.pro');
-      if(sys)return;
-      if(window.location.pathname==='/_site')return; // prevent redirect loop
-      window.location.replace('/_site');
-    })();
-  </script>
   <link rel="icon" type="image/png" sizes="512x512" href="/images/favicon_alphire_512x512.png" />
   <link rel="apple-touch-icon" sizes="512x512" href="/images/favicon_alphire_512x512.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
