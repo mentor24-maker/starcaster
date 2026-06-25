@@ -383,7 +383,13 @@ function getContactFields(config: CrmConfigData | null): CrmContactsField[] {
   return [{ key: "email", label: "Email", type: "email" }, ...stdFields, ...customFields];
 }
 
-function CrmContactsTablePreview({ settings }: { settings: Record<string, string> }) {
+function CrmContactsTablePreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
   const crmConfigId    = settings.crmConfigId ?? "";
   const tableTitle     = settings.tableTitle || "Contacts";
   const showTitle      = settings.showTitle !== "false";
@@ -411,26 +417,37 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
   useEffect(() => {
     setLoading(true);
     setLoadError("");
-    const headers = getCrmProjectHeaders();
+    const headers = {
+      ...getCrmProjectHeaders(),
+      ...getAdminAuthHeaders(),
+      ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
+    };
     const configUrl = crmConfigId ? `/api/crm/configs/${encodeURIComponent(crmConfigId)}` : "/api/crm/configs";
-    fetch(configUrl, { headers })
-      .then((r) => r.json())
-      .then((d) => {
+    fetch(configUrl, { credentials: "include", headers })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(readApiErrorMessage(d, `Failed to load CRM (${r.status})`));
+        }
         const cfg: CrmConfigData | null = crmConfigId
           ? (d?.config ?? d?.data ?? (d?.id ? d : null))
           : (d?.configs?.[0] ?? d?.data?.[0] ?? null);
         setConfig(cfg);
         if (!cfg) return;
-        return fetch(`/api/crm/contacts?configId=${encodeURIComponent(cfg.id)}`, { headers })
-          .then((r) => r.json())
-          .then((d2) => {
-            const list = d2?.contacts ?? d2?.data ?? [];
-            setContacts(Array.isArray(list) ? list : []);
-          });
+        const contactsRes = await fetch(`/api/crm/contacts?configId=${encodeURIComponent(cfg.id)}`, {
+          credentials: "include",
+          headers,
+        });
+        const d2 = await contactsRes.json().catch(() => ({}));
+        if (!contactsRes.ok) {
+          throw new Error(readApiErrorMessage(d2, `Failed to load contacts (${contactsRes.status})`));
+        }
+        const list = d2?.contacts ?? d2?.data ?? [];
+        setContacts(Array.isArray(list) ? list : []);
       })
       .catch((e: Error) => setLoadError(e.message || "Failed to load contacts."))
       .finally(() => setLoading(false));
-  }, [crmConfigId]);
+  }, [crmConfigId, projectIdProp]);
 
   const fields = getContactFields(config);
 
@@ -449,9 +466,19 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
   const tableCols    = fields.slice(0, 5);
   const hasActions   = showViewBtn || showEditBtn || showDeleteBtn;
 
+  const scopedHeaders = () => ({
+    ...getCrmProjectHeaders(),
+    ...getAdminAuthHeaders(),
+    ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
+  });
+
   async function deleteContact(id: string) {
     if (!confirm("Delete this contact? This cannot be undone.")) return;
-    const res = await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, { method: "DELETE", headers: getCrmProjectHeaders() });
+    const res = await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: scopedHeaders(),
+    });
     if (!res.ok) {
       alert("Failed to delete contact. Please try again.");
       return;
@@ -476,7 +503,8 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
       fields.forEach((f) => { if (f.key !== "email") data[f.key] = editValues[f.key] ?? ""; });
       const res  = await fetch(`/api/crm/contacts/${encodeURIComponent(editContact.id)}`, {
         method:  "PUT",
-        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...scopedHeaders() },
         body:    JSON.stringify({ email, data }),
       });
       const d       = await res.json();
@@ -497,7 +525,8 @@ function CrmContactsTablePreview({ settings }: { settings: Record<string, string
       fields.forEach((f) => { if (f.key !== "email") data[f.key] = addValues[f.key] ?? ""; });
       const res  = await fetch("/api/crm/contacts", {
         method:  "POST",
-        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...scopedHeaders() },
         body:    JSON.stringify({ crmConfigId: config.id, email, data, source: "manual" }),
       });
       const d          = await res.json();
@@ -1076,7 +1105,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "crm-contacts-table") {
-    return <CrmContactsTablePreview settings={module.settings} />;
+    return <CrmContactsTablePreview settings={module.settings} projectId={projectId} />;
   }
 
   if (module.type === "player-portal") {
