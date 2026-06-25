@@ -1,6 +1,10 @@
 /**
- * Vercel Edge Middleware — custom-domain public sites at clean URLs.
- * Internally rewrites / and /slug to serverless handlers; browser URL stays clean.
+ * Vercel Edge Middleware — custom-domain public Builder sites at clean URLs.
+ *
+ * Rewrites browser paths internally to serverless handlers; the address bar
+ * stays at / or /{slug}. Must use .mjs (ESM) — see docs/CUSTOM_DOMAIN_PUBLIC_SITES.md.
+ *
+ * SYSTEM_HOST_RE must stay in sync with lib/publicSiteHosts.js
  */
 
 import { rewrite } from '@vercel/functions';

@@ -47,8 +47,9 @@ npm start              # one-shot build + server
 
 ### Production (Vercel)
 
-- **API:** `api/[...slug].js` → same `routes/index.js` dispatcher
-- **Static:** `vercel.json` rewrites to `public/`; **never remove** the `/api/(.*)` → `api/[...slug]` rewrite (past incidents caused site-wide API 404s)
+- **API:** `api/[...slug].js` and `api/index.js` → same `routes/index.js` dispatcher
+- **Custom domains:** `middleware.mjs` rewrites tenant hostnames to serverless handlers; see **`docs/CUSTOM_DOMAIN_PUBLIC_SITES.md`**
+- **Static:** `vercel.json` rewrites; **never remove** the `/api/(.*)` → `api/[...slug]` rewrite (past incidents caused site-wide API 404s)
 - **Deploy SOP:** `docs/DEPLOYMENT.md` — `git push` (preview) then `vercel --prod` (production promotion)
 - **Cutover checklist:** `docs/VERCEL_CUTOVER.md` (Blob assets, env vars)
 
@@ -56,11 +57,12 @@ npm start              # one-shot build + server
 
 | Script | Purpose |
 |--------|---------|
-| `npm run build:html` | Compiles `src/layout.html` + `src/pages/*.html` → `public/index.html` |
-| `npm run build` | `build:html` + esbuild `react-entry.js` → `public/bundle.js` + CSS bundle → `public/styles.css` |
+| `npm run build:html` | Compiles `src/layout.html` + `src/pages/*.html` → `public/app-shell.html` (+ legal pages) |
+| `npm run build:builder` | esbuild `builder-react-entry.tsx` → `public/builder-bundle.js` (public Builder sites + admin Builder) |
+| `npm run build` | `build:html` + `build:builder` + campaigns React bundle + CSS |
 | `npm run dev` | Watch mode for JS/CSS + server |
 
-**HTML rule:** Edit page structure under `src/pages/` (and `src/layout.html`), then run `npm run build:html`. Avoid hand-editing the generated bulk of `public/index.html` except for urgent hotfixes.
+**HTML rule:** Edit page structure under `src/pages/` (and `src/layout.html`), then run `npm run build:html`. Avoid hand-editing generated `public/app-shell.html` except for urgent hotfixes.
 
 ---
 
@@ -68,14 +70,20 @@ npm start              # one-shot build + server
 
 ```
 Browser SPA (public/)
-  ├── index.html          ← built from src/
+  ├── app-shell.html      ← StarCaster admin (built from src/layout.html)
+  ├── site.html           ← Custom-domain public Builder shell
+  ├── index.html          ← Fallback redirect stub for /
   ├── js/*.js             ← window.App modules (primary UI)
   ├── bundle.js           ← React island (Campaigns list only)
+  ├── builder-bundle.js   ← Builder workspace + public site React
   └── styles.css          ← built from src/css/main.css
 
+middleware.mjs (Vercel Edge) ─→ rewrite custom domains to /api/*
+
 server.js (local)  ─┐
+api/index.js       ─┤
 api/[...slug].js   ─┼→ routes/index.js → routes/*.js → lib/*Store.js
-                    │
+                    │                      └→ routes/publicSitePages.js (HTML)
                     ├→ Supabase (primary business data)
                     └→ data/*.json (legacy / ops / local fallback)
 ```
@@ -224,6 +232,14 @@ Other file-only / fallback stores:
 - Uniqueness is **per-project** (e.g. contact email), not global
 
 **When data appears in the wrong project:** check DB `project_id` backfill, `STRICT_PROJECT_SCOPE`, store scoping, unique indexes, and client cache after project switch.
+
+### Custom domain public sites
+
+Projects can map a hostname (`app_projects.domain`) to published Builder pages served at clean URLs (e.g. `benvin.org`). This is **separate** from the StarCaster admin app on `starcaster.pro`.
+
+**Canonical doc:** `docs/CUSTOM_DOMAIN_PUBLIC_SITES.md` (architecture diagram, fallbacks, debugging, scale notes).
+
+**Do not** break: `middleware.mjs` (must stay `.mjs`), `routes/publicSitePages.js`, or `@vercel/functions` rewrite path.
 
 ---
 
@@ -429,13 +445,14 @@ Ordered by “blocks safe, predictable work” first. **Item 1 is done.** Contin
 ## 13. Recommended Read Order
 
 1. This file (especially §12 Top Ten)
-2. `docs/FILE_PERSISTENCE_INVENTORY.md` (Vercel / `data/*.json` stores)
-3. `docs/MIGRATIONS_APPLIED.md` (SQL apply order + environment log)
-4. `.cursorrules`
-5. `routes/index.js`
-6. `public/app.js` + `public/js/core.js`
-7. `lib/supabase.js` + `lib/projectScope.js` + `lib/projectScopeFile.js` + `lib/localDataFs.js`
-8. The domain you are modifying (`routes/<domain>.js` + `public/js/<domain>.js` + relevant `docs/*_setup.sql`)
+2. `docs/CUSTOM_DOMAIN_PUBLIC_SITES.md` (if working on custom domains / public Builder sites)
+3. `docs/FILE_PERSISTENCE_INVENTORY.md` (Vercel / `data/*.json` stores)
+4. `docs/MIGRATIONS_APPLIED.md` (SQL apply order + environment log)
+5. `.cursorrules`
+6. `routes/index.js` + `routes/publicSitePages.js`
+7. `public/app.js` + `public/js/core.js`
+8. `lib/supabase.js` + `lib/projectScope.js` + `lib/projectScopeFile.js` + `lib/localDataFs.js`
+9. The domain you are modifying (`routes/<domain>.js` + `public/js/<domain>.js` + relevant `docs/*_setup.sql`)
 
 ---
 

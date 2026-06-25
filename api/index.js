@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * api/index.js — Vercel entry for the site root (/).
- * vercel.json routes "/" here so custom domains can resolve to site.html.
+ * Vercel serverless entry for `/` after middleware or vercel.json rewrite.
+ * Delegates to routes/publicSitePages.js via routes/index.js.
+ * See docs/CUSTOM_DOMAIN_PUBLIC_SITES.md
  */
 
 const { handleRequest } = require('../routes/index');
