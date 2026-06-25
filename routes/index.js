@@ -21,7 +21,7 @@
  *   for expensive operations (acquire, openclaw, import).
  */
 
-const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname } = require('./http');
+const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname, getClientHost } = require('./http');
 const { handleProjectDelete } = require('../lib/projectDeleteHandler');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
@@ -494,8 +494,7 @@ function serveStaticPage(res, pathname) {
 }
 
 async function handlePageRequest(req, res, pathname) {
-  const rawHost = String(req.headers['x-forwarded-host'] || req.headers.host || '');
-  const host = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '');
+  const host = getClientHost(req);
 
   // System hosts (localhost, *.vercel.app, starcaster.pro) always serve the primary app.
   // For all other hosts, attempt a project domain lookup first.
