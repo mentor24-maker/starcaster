@@ -18,8 +18,15 @@ type SitePage = {
 };
 
 function slugFromPathname(pathname: string): string {
-  const p = pathname.replace(/\.html$/, "").replace(/^\//, "").replace(/\/$/, "");
-  return p;
+  let p = pathname.replace(/\.html$/, "");
+  p = p.replace(/^\/api\/_site\/[^/]+/, "").replace(/^\/_site\/[^/]+/, "");
+  if (p === "/_site" || p === "/api/_site") p = "/";
+  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const pathParam = params?.get("path");
+  if (pathParam && (pathname.includes("/_site/") || pathname.includes("/api/_site/"))) {
+    p = pathParam.replace(/\.html$/, "");
+  }
+  return p.replace(/^\//, "").replace(/\/$/, "");
 }
 
 function isHomeSlug(slug: string): boolean {

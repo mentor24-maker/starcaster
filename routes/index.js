@@ -604,17 +604,7 @@ function isBootstrapPath(pathname) {
     || p.startsWith('/_site/') || p.startsWith('/api/_site/');
 }
 
-function redirectToCleanPublicPath(res, targetPath) {
-  const path = String(targetPath || '/').trim() || '/';
-  res.statusCode = 301;
-  res.setHeader('Location', path.startsWith('/') ? path : `/${path}`);
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.end();
-}
-
 async function handlePageRequest(req, res, pathname) {
-  const urlObj = getUrlObj(req);
-
   if (isBootstrapPath(pathname)) {
     const result = await resolvePublicSiteProject(req, pathname);
     if (result.ok) {
