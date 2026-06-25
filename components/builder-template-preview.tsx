@@ -322,6 +322,14 @@ function getCrmProjectHeaders(): Record<string, string> {
       ?.App?.projectContext?.getSessionProjectId?.() ?? "";
   if (fromApp) return { "X-Project-ID": fromApp };
 
+  // Public tenant sites inject projectId via site.html → window.__SITE_CONFIG__.
+  try {
+    const fromSiteConfig =
+      (window as unknown as { __SITE_CONFIG__?: { projectId?: string } })
+        ?.__SITE_CONFIG__?.projectId ?? "";
+    if (fromSiteConfig) return { "X-Project-ID": String(fromSiteConfig).trim() };
+  } catch {}
+
   // Fall back to localStorage — projectContext.js stores the active project ID there
   // under 'alphire.currentProjectId'. builder-preview.html doesn't load projectContext.js
   // but the key is already written by the main builder session.
@@ -1233,15 +1241,15 @@ function BuilderModulePreview({
   }
 
   if (module.type === "admin-team-users") {
-    return <AdminTeamUsersPreview settings={module.settings} />;
+    return <AdminTeamUsersPreview settings={module.settings} projectId={projectId} />;
   }
 
   if (module.type === "admin-modules") {
-    return <AdminModulesPreview settings={module.settings} />;
+    return <AdminModulesPreview settings={module.settings} projectId={projectId} />;
   }
 
   if (module.type === "admin-login") {
-    return <AdminLoginPreview settings={module.settings} />;
+    return <AdminLoginPreview settings={module.settings} projectId={projectId} />;
   }
 
   return null;
@@ -3183,7 +3191,13 @@ function SocialModulePreview({ module }: { module: import("@/lib/builder-templat
 
 type AdminTeamUser = { id: string; email: string; role: string; createdAt: string };
 
-function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> }) {
+function AdminTeamUsersPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
   const tableTitle    = settings.tableTitle || "Team Members";
   const showTitle     = settings.showTitle !== "false";
   const showAddButton = settings.showAddButton !== "false";
@@ -3204,7 +3218,10 @@ function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> 
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError]   = useState("");
 
-  const headers = getCrmProjectHeaders();
+  const headers = {
+    ...getCrmProjectHeaders(),
+    ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
+  };
 
   async function loadUsers() {
     setLoading(true);
@@ -3382,7 +3399,13 @@ function AdminTeamUsersPreview({ settings }: { settings: Record<string, string> 
 
 // ── Admin Login ───────────────────────────────────────────────────────────────
 
-function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
+function AdminLoginPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
   const formTitle          = settings.formTitle || "Admin Sign In";
   const buttonText         = settings.buttonText || "Sign In";
   const showForgotPassword = settings.showForgotPassword !== "false";
@@ -3398,7 +3421,7 @@ function AdminLoginPreview({ settings }: { settings: Record<string, string> }) {
   const [forgotSent, setForgotSent]   = useState(false);
 
   const successRedirect = settings.successRedirect || "/admin-dashboard";
-  const projectId = getCrmProjectHeaders()["X-Project-ID"] || "";
+  const projectId = projectIdProp || getCrmProjectHeaders()["X-Project-ID"] || "";
   const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
 
   useEffect(() => {
@@ -3509,7 +3532,13 @@ const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: st
   { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
 ];
 
-function AdminModulesPreview({ settings }: { settings: Record<string, string> }) {
+function AdminModulesPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
   const tableTitle  = settings.tableTitle || "Premium Modules";
   const showTitle   = settings.showTitle !== "false";
   const showToggle  = settings.showToggle !== "false";
@@ -3519,7 +3548,10 @@ function AdminModulesPreview({ settings }: { settings: Record<string, string> })
   const [saving, setSaving]     = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
 
-  const headers = getCrmProjectHeaders();
+  const headers = {
+    ...getCrmProjectHeaders(),
+    ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
+  };
 
   useEffect(() => {
     const projectId = headers["X-Project-ID"] || "";
