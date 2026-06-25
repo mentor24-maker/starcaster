@@ -10,6 +10,7 @@ window.App = window.App || {};
 
 App.projectContext = (function projectContextModule() {
   const PROJECT_LOGO_STORAGE_KEY = 'alphire.projectLogoMap';
+  const DEFAULT_FAVICON_URL = '/images/favicon_alphire_512x512.png';
   let viewProjectId = '';
   let syncSeq = 0;
   let switching = false;
@@ -105,6 +106,43 @@ App.projectContext = (function projectContextModule() {
     return '';
   }
 
+  function getProjectFaviconDataUrl(project) {
+    return String(project?.faviconDataUrl || project?.favicon_data_url || '').trim();
+  }
+
+  function syncProjectFaviconInState(projectIdInput, dataUrlInput) {
+    const projectId = String(projectIdInput || '').trim();
+    const dataUrl = String(dataUrlInput || '').trim();
+    if (!projectId) return;
+    const project = findProject(projectId);
+    if (project) {
+      project.faviconDataUrl = dataUrl;
+      project.favicon_data_url = dataUrl;
+    }
+    if (String(state().currentProjectId || '') === projectId && state().currentProject) {
+      state().currentProject.faviconDataUrl = dataUrl;
+      state().currentProject.favicon_data_url = dataUrl;
+    }
+  }
+
+  function setProjectFaviconDataUrl(projectIdInput, dataUrlInput) {
+    const projectId = String(projectIdInput || '').trim();
+    const dataUrl = String(dataUrlInput || '').trim();
+    if (!projectId) return;
+    syncProjectFaviconInState(projectId, dataUrl);
+    applyFavicon();
+  }
+
+  function applyFavicon() {
+    const sessionProject = getSessionProject();
+    const faviconUrl = getProjectFaviconDataUrl(sessionProject);
+    const href = faviconUrl || DEFAULT_FAVICON_URL;
+    const iconLink = document.querySelector('link[rel="icon"]');
+    const appleLink = document.querySelector('link[rel="apple-touch-icon"]');
+    if (iconLink) iconLink.href = href;
+    if (appleLink) appleLink.href = href;
+  }
+
   function syncProjectLogoInState(projectIdInput, dataUrlInput) {
     const projectId = String(projectIdInput || '').trim();
     const dataUrl = String(dataUrlInput || '').trim();
@@ -136,6 +174,7 @@ App.projectContext = (function projectContextModule() {
     syncProjectLogoInState(projectId, dataUrl);
     clearLegacyProjectLogoFromStorage(projectId);
     applyBanner();
+    applyFavicon();
   }
 
   async function migrateLegacyLocalLogosToServer() {
@@ -192,6 +231,7 @@ App.projectContext = (function projectContextModule() {
       if (hasLogo) els.brandProfileLogo.src = projectLogo;
       else els.brandProfileLogo.removeAttribute('src');
     }
+    applyFavicon();
   }
 
   function applyDetailContextNotice() {
@@ -356,6 +396,7 @@ App.projectContext = (function projectContextModule() {
 
       await migrateLegacyLocalLogosToServer();
       applyBanner();
+      applyFavicon();
       applyDetailContextNotice();
       return { stale: false, projects: state().projects };
     } catch (err) {
@@ -366,6 +407,7 @@ App.projectContext = (function projectContextModule() {
 
   function init() {
     applyBanner();
+    applyFavicon();
     applyDetailContextNotice();
   }
 
@@ -383,10 +425,14 @@ App.projectContext = (function projectContextModule() {
     clearViewContext,
     refreshFromServer,
     applyBanner,
+    applyFavicon,
     applyDetailContextNotice,
     getProjectLogoDataUrl,
+    getProjectFaviconDataUrl,
     setProjectLogoDataUrl,
+    setProjectFaviconDataUrl,
     syncProjectLogoInState,
+    syncProjectFaviconInState,
     clearLegacyProjectLogoFromStorage,
     migrateLegacyLocalLogosToServer,
     readProjectLogoMap,

@@ -9780,20 +9780,40 @@
                 <select id="settingsProjectTimezoneSelect"></select>
               </div>
               <p class="meta project-details-field-hint">Used when scheduling Promote: Social posts. Pick the IANA region for this workspace.</p>
-              <div class="form-row">
-                <label>Project Logo</label>
-                <div class="settings-media-actions">
-                  <button id="settingsProjectLogoChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
-                  <label class="btn btn-ghost settings-upload-button">
-                    <span>Upload To Gallery</span>
-                    <input id="settingsProjectLogoUploadFile" type="file" accept="image/*" class="settings-upload-input" />
-                  </label>
-                  <button id="settingsProjectLogoClearBtn" type="button" class="btn btn-ghost">Clear</button>
+              <div class="form-row project-branding-media-row">
+                <label>Branding</label>
+                <div class="project-branding-media-grid">
+                  <div class="project-branding-media-col">
+                    <span class="project-branding-media-title">Project Logo</span>
+                    <div class="settings-media-actions">
+                      <button id="settingsProjectLogoChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
+                      <label class="btn btn-ghost settings-upload-button">
+                        <span>Upload To Gallery</span>
+                        <input id="settingsProjectLogoUploadFile" type="file" accept="image/*" class="settings-upload-input" />
+                      </label>
+                      <button id="settingsProjectLogoClearBtn" type="button" class="btn btn-ghost">Clear</button>
+                    </div>
+                    <div class="project-logo-preview-wrap">
+                      <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
+                      <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
+                    </div>
+                  </div>
+                  <div class="project-branding-media-col">
+                    <span class="project-branding-media-title">Favicon</span>
+                    <div class="settings-media-actions">
+                      <button id="settingsProjectFaviconChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
+                      <label class="btn btn-ghost settings-upload-button">
+                        <span>Upload To Gallery</span>
+                        <input id="settingsProjectFaviconUploadFile" type="file" accept="image/*" class="settings-upload-input" />
+                      </label>
+                      <button id="settingsProjectFaviconClearBtn" type="button" class="btn btn-ghost">Clear</button>
+                    </div>
+                    <div class="project-favicon-preview-wrap">
+                      <img id="settingsProjectFaviconPreview" alt="Project favicon preview" class="hidden" />
+                      <div id="settingsProjectFaviconPlaceholder" class="meta">No favicon set for this project.</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div class="project-logo-preview-wrap">
-                <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
-                <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
               </div>
               <div class="form-row project-details-save-row">
                 <div></div>
