@@ -118,7 +118,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     );
   }
 
-  if (!page || !page.layoutSections.length) {
+  if (!page) {
     return (
       <div style={{ fontFamily: "sans-serif", padding: "4rem", textAlign: "center" }}>
         <p>Coming soon.</p>

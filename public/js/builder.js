@@ -2307,6 +2307,21 @@ App.builder = (function () {
     return [...saved, ...starters, ...base];
   }
 
+  function getPagesTableTemplateFilterOptions() {
+    const options = getPageTemplateSelectOptions();
+    const seen = new Set(options.map((option) => safeText(option.value)));
+    (Array.isArray(savedPages) ? savedPages : []).forEach((page) => {
+      const id = safeText(page.templateId);
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      options.push({
+        value: id,
+        label: getLandingPageTemplateName(id),
+      });
+    });
+    return options.sort((a, b) => safeText(a.label).localeCompare(safeText(b.label)));
+  }
+
   function getFormTemplateById(templateId) {
     const id = safeText(templateId);
     return FORM_TEMPLATES.find((item) => item.id === id) || FORM_TEMPLATES[0];
@@ -8091,6 +8106,8 @@ App.builder = (function () {
     if (bulkArchiveBtn2) bulkArchiveBtn2.disabled = !selectedPageIds.size;
     const bulkPublishBtn = byId('builderPagesBulkPublishBtn');
     if (bulkPublishBtn) bulkPublishBtn.disabled = !selectedPageIds.size;
+    const bulkRestoreShellBtn = byId('builderPagesBulkRestoreShellBtn');
+    if (bulkRestoreShellBtn) bulkRestoreShellBtn.disabled = !selectedPageIds.size;
   }
 
   function pageIsPublished(item) {
@@ -8126,7 +8143,7 @@ App.builder = (function () {
       const current = safeText(landingPageTableState.filters.templateId);
       setSelectOptions(
         templateFilter,
-        LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+        getPagesTableTemplateFilterOptions(),
         'All Templates',
         current
       );
@@ -8187,9 +8204,9 @@ App.builder = (function () {
       publishCheckbox.addEventListener('change', async () => {
         const nextPublished = publishCheckbox.checked;
         try {
-          await api(`/api/builder/landing-pages/${encodeURIComponent(id)}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ isPublished: nextPublished }),
+          await api('/api/builder/landing-pages/bulk-publish', {
+            method: 'POST',
+            body: JSON.stringify({ pageIds: [id], isPublished: nextPublished }),
           });
           item.isPublished = nextPublished;
           notify(nextPublished ? 'Page published' : 'Page unpublished');
@@ -13209,6 +13226,7 @@ App.builder = (function () {
 
     const landingPageBulkArchiveBtn = byId('builderPagesBulkArchiveBtn');
     const landingPageBulkPublishBtn = byId('builderPagesBulkPublishBtn');
+    const landingPageBulkRestoreShellBtn = byId('builderPagesBulkRestoreShellBtn');
     if (landingPageBulkPublishBtn) {
       landingPageBulkPublishBtn.addEventListener('click', async () => {
         const ids = Array.from(selectedPageIds);
@@ -13223,15 +13241,48 @@ App.builder = (function () {
             method: 'POST',
             body: JSON.stringify({ pageIds: ids, isPublished: true }),
           });
-          savedPages.forEach((page) => {
-            if (ids.includes(safeText(page.id))) page.isPublished = true;
-          });
+          await loadSavedPages();
           renderPagesTable();
           notify(`${ids.length} page${ids.length === 1 ? '' : 's'} published`);
         } catch (err) {
           notify(err.message || 'Could not publish selected pages', true);
         } finally {
           landingPageBulkPublishBtn.textContent = 'Publish';
+          syncLandingPageTableControls();
+        }
+      });
+    }
+    if (landingPageBulkRestoreShellBtn) {
+      landingPageBulkRestoreShellBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedPageIds);
+        if (!ids.length) {
+          notify('Select at least one page first', true);
+          return;
+        }
+        const sourceSlug = window.prompt(
+          'Copy layout shell from which page slug? (blank = about)',
+          'about',
+        );
+        if (sourceSlug === null) return;
+        landingPageBulkRestoreShellBtn.disabled = true;
+        landingPageBulkRestoreShellBtn.textContent = 'Restoring…';
+        try {
+          const result = await api('/api/builder/landing-pages/restore-layout-shell', {
+            method: 'POST',
+            body: JSON.stringify({
+              pageIds: ids,
+              sourceSlug: safeText(sourceSlug) || 'about',
+            }),
+          });
+          const restored = Number(result.restored) || 0;
+          const skipped = Number(result.skipped) || 0;
+          await loadSavedPages();
+          renderPagesTable();
+          notify(`Restored shell on ${restored} page${restored === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped)` : ''}`);
+        } catch (err) {
+          notify(err.message || 'Could not restore layout shell', true);
+        } finally {
+          landingPageBulkRestoreShellBtn.textContent = 'Restore Shell';
           syncLandingPageTableControls();
         }
       });
@@ -13321,7 +13372,7 @@ App.builder = (function () {
         }
         setSelectOptions(
           byId('builderPagesBulkTemplateSelect'),
-          LANDING_TEMPLATES.map((template) => ({ value: template.id, label: template.name })),
+          getPagesTableTemplateFilterOptions(),
           'Leave Unchanged'
         );
         const applyPrimary = byId('builderPagesBulkApplyPrimaryColor');

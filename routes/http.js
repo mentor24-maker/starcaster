@@ -16,6 +16,19 @@ function sendJson(res, status, payload) {
   return true;
 }
 
+function isHeadRequest(req) {
+  return String(req?.method || '').toUpperCase() === 'HEAD';
+}
+
+/** Same headers as sendJson; empty body (for HEAD mirroring GET status). */
+function sendStatus(res, status) {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.end();
+  return true;
+}
+
 /**
  * Cross-origin requests are only honored for explicitly allowed origins.
  * The app is same-origin (UI and API share a domain), so most requests
@@ -262,6 +275,8 @@ function sendErr(res, status, message, { code = null, details = [] } = {}) {
 }
 module.exports = {
   sendJson,
+  sendStatus,
+  isHeadRequest,
   sendOk,
   sendErr,
   parseJsonBody,
