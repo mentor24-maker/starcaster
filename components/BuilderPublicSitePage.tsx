@@ -8,6 +8,7 @@ import {
   normalizeBuilderDocument,
 } from "@/lib/builder-template";
 import { getAdminAuthHeaders } from "@/lib/public-admin-session";
+import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 
 type SitePage = {
   name: string;
@@ -36,14 +37,6 @@ function isHomeSlug(slug: string): boolean {
   return slug === "";
 }
 
-function isRestrictedAdminSlug(slug: string): boolean {
-  const normalized = String(slug || "").trim().toLowerCase();
-  if (!normalized) return false;
-  if (normalized === "admin-login") return false;
-  if (normalized === "admin" || normalized.startsWith("admin-")) return true;
-  return false;
-}
-
 async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
   const res = await fetch(`/api/public/pages?projectId=${encodeURIComponent(projectId)}`);
   if (!res.ok) return [];
@@ -63,7 +56,7 @@ async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
   });
 }
 
-async function fetchRestrictedAdminPages(projectId: string): Promise<SitePage[] | "unauthorized"> {
+async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unauthorized"> {
   const res = await fetch(
     `/api/public/admin-pages?projectId=${encodeURIComponent(projectId)}`,
     { credentials: "include", headers: getAdminAuthHeaders() }
@@ -86,8 +79,8 @@ async function fetchRestrictedAdminPages(projectId: string): Promise<SitePage[] 
   });
 }
 
-// Module types that are admin-only and must never render on the public site.
-const ADMIN_ONLY_MODULE_TYPES = new Set([
+// Strip admin-only modules from public pages (defense in depth).
+const PRIVATE_ONLY_MODULE_TYPES = new Set([
   "blog-post-create",
   "blog-post-manager",
   "blog-category-manager",
@@ -99,7 +92,7 @@ function filterPublicSections(
   return sections.map((section) => ({
     ...section,
     modules: (section.modules || []).filter(
-      (m) => !ADMIN_ONLY_MODULE_TYPES.has(m.type)
+      (m) => !PRIVATE_ONLY_MODULE_TYPES.has(m.type)
     ),
   }));
 }
@@ -138,22 +131,21 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     if (!projectId) { setLoaded(true); return; }
     const routingPath = window.location.pathname || "/";
     const slug = normalizePublicSlug(routingPath);
-    const needsAdminAuth = isRestrictedAdminSlug(slug);
+    const isPrivate = isPrivateSiteSlug(slug);
 
-    fetchPublicPages(projectId)
-      .then(async (pages) => {
-        let found = findPageForPath(pages, routingPath);
-        if (!found && needsAdminAuth) {
-          const adminPages = await fetchRestrictedAdminPages(projectId);
-          if (adminPages === "unauthorized") {
+    const load = isPrivate
+      ? fetchPrivatePages(projectId).then((privatePages) => {
+          if (privatePages === "unauthorized") {
             setRedirecting(true);
             window.location.href = "/admin-login";
-            return;
+            return null;
           }
-          found = findPageForPath(adminPages, routingPath);
-        }
-        setPage(found);
-      })
+          return findPageForPath(privatePages, routingPath);
+        })
+      : fetchPublicPages(projectId).then((pages) => findPageForPath(pages, routingPath));
+
+    load
+      .then((found) => setPage(found))
       .catch(() => setPage(null))
       .finally(() => setLoaded(true));
   }, [projectId]);
@@ -182,9 +174,14 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     );
   }
 
+  const slug = normalizePublicSlug(window.location.pathname || "/");
+  const sections = isPrivateSiteSlug(slug)
+    ? page.layoutSections
+    : filterPublicSections(page.layoutSections);
+
   return (
     <BuilderTemplatePreview
-      layoutSections={filterPublicSections(page.layoutSections)}
+      layoutSections={sections}
       pageBackground={page.pageBackground}
       theme={page.theme}
       projectId={projectId}
