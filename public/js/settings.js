@@ -79,6 +79,21 @@ App.settings = (function () {
     return document.getElementById(id);
   }
 
+  function getProjectDetailsDomainInput() {
+    return els.settingsProjectDetailsDomain || byId('settingsProjectDetailsDomain');
+  }
+
+  function mergeSavedProjectIntoState(savedProject) {
+    const saved = savedProject && typeof savedProject === 'object' ? savedProject : null;
+    const savedId = String(saved?.id || '').trim();
+    if (!savedId) return;
+    const projects = Array.isArray(state.projects) ? [...state.projects] : [];
+    const idx = projects.findIndex((project) => String(project?.id || '') === savedId);
+    if (idx < 0) return;
+    projects[idx] = { ...projects[idx], ...saved };
+    state.projects = projects;
+  }
+
   function setProjectsCreateVisible(visible) {
     const panel = byId('settingsProjectsCreatePanel');
     if (panel) panel.classList.toggle('hidden', !visible);
@@ -755,6 +770,10 @@ App.settings = (function () {
     }
     if (els.settingsProjectDetailsDomain) {
       els.settingsProjectDetailsDomain.value = String(active?.domain || '');
+    }
+    const domainInput = getProjectDetailsDomainInput();
+    if (domainInput && domainInput !== els.settingsProjectDetailsDomain) {
+      domainInput.value = String(active?.domain || '');
     }
     if (els.settingsProjectDetailsDescription) {
       els.settingsProjectDetailsDescription.value = String(active?.description || '');
@@ -2237,7 +2256,7 @@ App.settings = (function () {
         if (!activeId) return notify('Select a project first', true);
         const name = String(els.settingsProjectDetailsName?.value || '').trim();
         const slug = String(els.settingsProjectDetailsSlug?.value || '').trim();
-        const domain = String(els.settingsProjectDetailsDomain?.value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '');
+        const domain = String(getProjectDetailsDomainInput()?.value || '').trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '');
         const description = String(els.settingsProjectDetailsDescription?.value || '').trim();
         const projectUrl = normalizeProjectDefaultUrl(els.settingsProjectDefaultUrlInput?.value);
         const timezone = String(els.settingsProjectTimezoneSelect?.value || '').trim() || 'UTC';
@@ -2256,10 +2275,11 @@ App.settings = (function () {
           return notify('Default URL must be a valid URL', true);
         }
         try {
-          await api(`/api/projects/${encodeURIComponent(activeId)}`, {
+          const res = await api(`/api/projects/${encodeURIComponent(activeId)}`, {
             method: 'PATCH',
             body: JSON.stringify({ name, slug, domain, description, projectUrl, timezone }),
           });
+          mergeSavedProjectIntoState(res.project || res.data);
           await refreshProjectContext();
           renderProjectDetails();
           applyProjectToHeader();
