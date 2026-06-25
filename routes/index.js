@@ -483,7 +483,6 @@ function isPageRequestPath(pathname, req) {
   const p = normalizeApiPathname(pathname);
   if (p === '/api') return true;
   if (p === '/api/app-shell.html') return true;
-  if (p === '/api/index.html') return true;
   if (p === '/api/_site' || p.startsWith('/api/_site/')) return true;
   if (!p.startsWith('/api/')) return true;
   if (!isRegisteredApiPath(p)) {
@@ -497,7 +496,6 @@ function pagePathnameForRequest(pathname) {
   const p = normalizeApiPathname(pathname);
   if (p === '/api') return '/';
   if (p === '/api/app-shell.html') return '/app-shell.html';
-  if (p === '/api/index.html') return '/index.html';
   if (p === '/api/_site') return '/_site';
   if (p.startsWith('/api/_site/')) return p.slice(4);
   if (p.startsWith('/api/') && !isRegisteredApiPath(p)) {
@@ -576,8 +574,6 @@ function serveStaticPage(res, pathname) {
   let filePath;
   if (safePath === '/') {
     filePath = _path.join(__dirname, '../public/app-shell.html');
-  } else if (safePath === '/index.html') {
-    filePath = _path.join(__dirname, '../public/index.html');
   } else {
     const rel = safePath.replace(/^\//, '');
     filePath = _path.join(__dirname, '../public', rel);
