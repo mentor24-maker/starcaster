@@ -11,9 +11,17 @@
 </head>
 <body>
   <div id="siteRoot"></div>
-  <script src="/builder-bundle.js?v=6"></script>
+  <script src="/builder-bundle.js?v=7"></script>
   <script>
-    window.BuilderReact.mountPublicSite(document.getElementById('siteRoot'));
+    try {
+      window.BuilderReact.mountPublicSite(document.getElementById('siteRoot'));
+    } catch (err) {
+      var root = document.getElementById('siteRoot');
+      if (root) {
+        root.innerHTML = '<p style="padding:2rem;font-family:sans-serif;color:#333">Unable to load this page. Please refresh.</p>';
+      }
+      console.error('Public site mount failed:', err);
+    }
   </script>
 </body>
 </html>
