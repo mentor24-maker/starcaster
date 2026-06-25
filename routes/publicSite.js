@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendJson, sendErr, sendStatus, isHeadRequest, getUrlObj, getPublicSiteDomainParam } = require('./http');
-const { findProjectByDomain } = require('../lib/projectsStore');
+const { findProjectByDomain, getPublicProjectById } = require('../lib/projectsStore');
 const { listPublishedPagesForProject, listRestrictedAdminSitePagesForProject } = require('../lib/builderPagesStore');
 const { getAdminSession } = require('../lib/projectAdminStore');
 const projectAdmin = require('./projectAdmin');
@@ -10,6 +10,7 @@ const {
   assertDomainQueryAllowedOnHost,
   resolveTenantProjectFromHost,
 } = require('../lib/publicSiteHostBinding');
+const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 
 const manifest = {
   id: 'public-site',
@@ -47,16 +48,43 @@ async function handle(req, res, pathname, method) {
     if (!tenant.systemHost) {
       const domainCheck = await assertDomainQueryAllowedOnHost(req, domainParam);
       if (!domainCheck.ok) return respondErr(res, req, domainCheck.status || 403, domainCheck.error, { code: domainCheck.code }), true;
-      const { id, name, domain: d, logoDataUrl } = tenant.project;
-      return respondJson(res, req, 200, { ok: true, project: { id, name, domain: d, logoDataUrl } }), true;
+      const { id, name, domain: d, logoDataUrl, faviconDataUrl } = tenant.project;
+      return respondJson(res, req, 200, { ok: true, project: { id, name, domain: d, logoDataUrl, faviconDataUrl } }), true;
     }
 
     if (!domainParam) return respondErr(res, req, 400, 'domain is required'), true;
     const result = await findProjectByDomain(domainParam);
     if (!result.ok) return respondErr(res, req, result.status || 404, result.error || 'Not found'), true;
 
-    const { id, name, domain: d, logoDataUrl } = result.data;
-    return respondJson(res, req, 200, { ok: true, project: { id, name, domain: d, logoDataUrl } }), true;
+    const { id, name, domain: d, logoDataUrl, faviconDataUrl } = result.data;
+    return respondJson(res, req, 200, { ok: true, project: { id, name, domain: d, logoDataUrl, faviconDataUrl } }), true;
+  }
+
+  // GET /api/public/favicon?projectId=... — published site favicon (no auth)
+  if (pathname === '/api/public/favicon' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    const { searchParams } = getUrlObj(req);
+    const tenant = await resolveTenantProjectFromHost(req);
+    let project = null;
+
+    if (tenant.ok && !tenant.systemHost && tenant.project) {
+      project = tenant.project;
+    } else {
+      const projectId = String(searchParams.get('projectId') || '').trim();
+      if (!projectId) {
+        return respondErr(res, req, 400, 'projectId is required'), true;
+      }
+      const bind = await assertProjectIdAllowedOnHost(req, projectId);
+      if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+      const loaded = await getPublicProjectById(bind.projectId || projectId);
+      if (!loaded.ok) return respondErr(res, req, loaded.status || 404, loaded.error || 'Project not found'), true;
+      project = loaded.data;
+    }
+
+    await writeProjectFaviconResponse(res, project, {
+      headOnly: readMethod === 'HEAD',
+      cacheControl: 'public, max-age=3600, stale-while-revalidate=86400',
+    });
+    return true;
   }
 
   // GET /api/public/pages?projectId=...
