@@ -13,31 +13,10 @@ const {
 } = require('../lib/projectsStore');
 const { setSessionActiveProject, findUserByEmail } = require('../lib/authStore');
 const { handleProjectDelete } = require('../lib/projectDeleteHandler');
-const { fetchFromSourceUrl } = require('../lib/assetImageBytes');
-
-const DEFAULT_FAVICON_PATH = '/images/favicon_alphire_512x512.png';
+const { DEFAULT_FAVICON_PATH, writeProjectFaviconResponse } = require('../lib/projectFavicon');
 
 function safeText(value) {
   return String(value || '').trim();
-}
-
-function isPublicHttpUrl(value) {
-  const text = safeText(value);
-  if (!text) return false;
-  try {
-    const parsed = new URL(text);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-function redirectFavicon(res, location) {
-  res.writeHead(302, {
-    Location: location,
-    'Cache-Control': 'private, no-cache, must-revalidate',
-  });
-  res.end();
 }
 
 async function serveActiveProjectFavicon(req, res, userId) {
@@ -52,31 +31,14 @@ async function serveActiveProjectFavicon(req, res, userId) {
     autoCreateDefault: false,
   });
   if (!result.ok || !result.data?.project) {
-    redirectFavicon(res, DEFAULT_FAVICON_PATH);
+    res.writeHead(302, { Location: DEFAULT_FAVICON_PATH, 'Cache-Control': 'private, no-cache, must-revalidate' });
+    res.end();
     return true;
   }
 
-  const faviconUrl = safeText(result.data.project.faviconDataUrl || result.data.project.favicon_data_url);
-  if (!faviconUrl) {
-    redirectFavicon(res, DEFAULT_FAVICON_PATH);
-    return true;
-  }
-
-  if (isPublicHttpUrl(faviconUrl) && !/\/api\/assets\/drive-file\//i.test(faviconUrl)) {
-    redirectFavicon(res, faviconUrl);
-    return true;
-  }
-
-  const image = await fetchFromSourceUrl(faviconUrl);
-  if (!image.ok || !image.data?.buffer) {
-    redirectFavicon(res, DEFAULT_FAVICON_PATH);
-    return true;
-  }
-
-  res.statusCode = 200;
-  res.setHeader('Content-Type', image.data.contentType || 'image/png');
-  res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
-  res.end(image.data.buffer);
+  await writeProjectFaviconResponse(res, result.data.project, {
+    cacheControl: 'private, no-cache, must-revalidate',
+  });
   return true;
 }
 

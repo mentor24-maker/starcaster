@@ -18,6 +18,7 @@ const {
   getPublicSiteDomainFromPath,
 } = require('./http');
 const { isSystemHost } = require('../lib/publicSiteHosts');
+const { buildFaviconHeadTags, faviconVersionKey, writeProjectFaviconResponse } = require('../lib/projectFavicon');
 
 const MIME_MAP = {
   '.html': 'text/html; charset=utf-8',
@@ -86,7 +87,7 @@ function createPublicSitePageHandlers({ isRegisteredApiPath }) {
     return { ok: false };
   }
 
-  function servePublicSiteHtml(res, projectId, projectName) {
+  function servePublicSiteHtml(res, project) {
     let siteHtml;
     try {
       siteHtml = fs.readFileSync(path.join(__dirname, '../public/site.html'), 'utf8');
@@ -95,8 +96,18 @@ function createPublicSitePageHandlers({ isRegisteredApiPath }) {
       res.end('Site template unavailable');
       return true;
     }
-    const config = JSON.stringify({ projectId, projectName });
-    siteHtml = siteHtml.replace('</head>', `  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`);
+    const projectId = String(project?.id || '').trim();
+    const projectName = String(project?.name || '').trim();
+    const config = JSON.stringify({
+      projectId,
+      projectName,
+      faviconVersion: faviconVersionKey(project),
+    });
+    const faviconTags = buildFaviconHeadTags(project);
+    siteHtml = siteHtml.replace(
+      '</head>',
+      `  ${faviconTags}\n  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`
+    );
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.statusCode = 200;
@@ -153,12 +164,20 @@ function createPublicSitePageHandlers({ isRegisteredApiPath }) {
   }
 
   async function handlePageRequest(req, res, pathname) {
+    const safePath = String(pathname || '/').replace(/\.\./g, '').replace(/\/+/g, '/') || '/';
+    const isFaviconRequest = safePath === '/favicon.ico';
+
     if (isBootstrapPath(pathname)) {
       const result = await resolvePublicSiteProject(req, pathname);
       if (result.ok) {
-        const { id: projectId, name: projectName } = result.data;
         res.setHeader('X-Site-Handler', 'bootstrap-resolved');
-        servePublicSiteHtml(res, projectId, projectName);
+        if (isFaviconRequest) {
+          await writeProjectFaviconResponse(res, result.data, {
+            cacheControl: 'public, max-age=3600, stale-while-revalidate=86400',
+          });
+          return;
+        }
+        servePublicSiteHtml(res, result.data);
         return;
       }
       res.setHeader('X-Site-Handler', 'bootstrap-miss');
@@ -170,9 +189,14 @@ function createPublicSitePageHandlers({ isRegisteredApiPath }) {
 
     const result = await resolvePublicSiteProject(req, pathname);
     if (result.ok) {
-      const { id: projectId, name: projectName } = result.data;
-      res.setHeader('X-Site-Handler', 'resolved');
-      servePublicSiteHtml(res, projectId, projectName);
+      res.setHeader('X-Site-Handler', isFaviconRequest ? 'favicon-resolved' : 'resolved');
+      if (isFaviconRequest) {
+        await writeProjectFaviconResponse(res, result.data, {
+          cacheControl: 'public, max-age=3600, stale-while-revalidate=86400',
+        });
+        return;
+      }
+      servePublicSiteHtml(res, result.data);
       return;
     }
 
