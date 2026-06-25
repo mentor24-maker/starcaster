@@ -306,17 +306,16 @@ App.builderNavMenu = (function () {
         grid.className = 'builder-nav-menu-item-grid standard-form-grid';
 
         const makeField = (labelText, control) => {
-          const label = document.createElement('label');
-          label.className = 'stack-form builder-nav-menu-field';
-          const span = document.createElement('span');
-          span.textContent = labelText;
-          label.appendChild(span);
-          label.appendChild(control);
-          grid.appendChild(label);
+          const labelEl = document.createElement('label');
+          labelEl.textContent = labelText;
+          if (control.id) labelEl.htmlFor = control.id;
+          grid.appendChild(labelEl);
+          grid.appendChild(control);
         };
 
         const labelInput = document.createElement('input');
         labelInput.type = 'text';
+        labelInput.id = `nav-label-${item.id}`;
         labelInput.value = item.label;
         labelInput.placeholder = 'Navigation Label';
         labelInput.addEventListener('input', () => {
@@ -328,6 +327,7 @@ App.builderNavMenu = (function () {
 
         const urlInput = document.createElement('input');
         urlInput.type = 'text';
+        urlInput.id = `nav-url-${item.id}`;
         urlInput.value = item.url;
         urlInput.placeholder = '/path-or-url';
         urlInput.addEventListener('input', () => {
@@ -337,6 +337,7 @@ App.builderNavMenu = (function () {
         makeField('URL', urlInput);
 
         const parentSelect = document.createElement('select');
+        parentSelect.id = `nav-parent-${item.id}`;
         parentOptionsFor(item.id).forEach((optionData) => {
           const option = document.createElement('option');
           option.value = optionData.value;
@@ -350,20 +351,16 @@ App.builderNavMenu = (function () {
         });
         makeField('Parent Item', parentSelect);
 
-        const targetLabel = document.createElement('label');
-        targetLabel.className = 'checkbox-row builder-nav-menu-target-row';
         const targetInput = document.createElement('input');
         targetInput.type = 'checkbox';
+        targetInput.id = `nav-target-${item.id}`;
+        targetInput.className = 'standard-form-checkbox';
         targetInput.checked = item.target === '_blank';
         targetInput.addEventListener('change', () => {
           item.target = targetInput.checked ? '_blank' : '_self';
           persist(items);
         });
-        const targetText = document.createElement('span');
-        targetText.textContent = 'Open In New Tab';
-        targetLabel.appendChild(targetInput);
-        targetLabel.appendChild(targetText);
-        grid.appendChild(targetLabel);
+        makeField('Open In New Tab', targetInput);
 
         card.appendChild(grid);
         list.appendChild(card);

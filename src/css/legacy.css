@@ -6700,6 +6700,38 @@ button.builder-inline-asset-status-btn:focus-visible {
 
 .builder-pages-actions-heading {
   text-align: center;
+  min-width: 280px;
+  white-space: nowrap;
+}
+
+.builder-pages-bulk-actions-row {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.builder-pages-bulk-actions-row .btn {
+  white-space: nowrap;
+  width: fit-content;
+}
+
+th.builder-pages-actions-heading .btn {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+th.builder-pages-actions-heading .btn.btn-danger {
+  background: #9f1239;
+  color: #ffffff;
+  border-color: #9f1239;
+}
+
+th.builder-pages-actions-heading .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .builder-pages-actions-cell {
@@ -12342,16 +12374,8 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
 }
 
 .builder-nav-menu-item-grid {
-  display: grid;
-  gap: 0.65rem;
-}
-
-.builder-nav-menu-field {
-  margin: 0;
-}
-
-.builder-nav-menu-target-row {
-  margin: 0;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .builder-nav-menu-editor-actions {

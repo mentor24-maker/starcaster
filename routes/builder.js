@@ -27,6 +27,7 @@ const {
   updatePage,
   deletePage,
   propagateCanonicalSection,
+  bulkSetPublished,
 } = require('../lib/builderPagesStore');
 const {
   listPageSnapshots,
@@ -384,6 +385,16 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load pages'), true;
     const pages = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, pages, { pages }, { total: pages.length }), true;
+  }
+
+  if (pathname === '/api/builder/landing-pages/bulk-publish' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const pageIds = Array.isArray(body.pageIds) ? body.pageIds : [];
+    const isPublished = body.isPublished ?? body.is_published;
+    if (!pageIds.length) return sendErr(res, 400, 'pageIds is required'), true;
+    const result = await bulkSetPublished(pageIds, isPublished !== false, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update pages'), true;
+    return sendOk(res, 200, result.data, { results: result.data }), true;
   }
 
   if (pathname === '/api/builder/landing-pages' && requestMethod === 'POST') {
@@ -1407,7 +1418,7 @@ async function handle(req, res, pathname, method) {
           templateId: derivedTemplateId,
           themeId,
           templateKind: 'modular',
-          isPublished: false,
+          isPublished: body.isPublished ?? body.is_published ?? true,
           pageBackground: templateBackground,
           theme: effectiveTheme,
           layoutSections,
