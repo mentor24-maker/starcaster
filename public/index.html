@@ -23,7 +23,9 @@
       if (p.indexOf('/_site/') === 0 || p.indexOf('/api/_site/') === 0) return;
       var q = window.location.search || '';
       var path = p + q;
-      window.location.replace('/api/_site/' + encodeURIComponent(h) + '?path=' + encodeURIComponent(path || '/'));
+      var dest = '/api/_site/' + encodeURIComponent(h) + '?path=' + encodeURIComponent(path || '/');
+      window.location.replace(dest);
+      document.write('<meta http-equiv="refresh" content="0;url=' + dest.replace(/"/g, '&quot;') + '">');
     })();
   </script>
   <link rel="icon" type="image/png" sizes="512x512" href="/images/favicon_alphire_512x512.png" />

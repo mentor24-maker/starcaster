@@ -461,6 +461,7 @@ const MIME_MAP = {
 function isPageRequestPath(pathname) {
   const p = normalizeApiPathname(pathname);
   if (p === '/api') return true;
+  if (p === '/api/index.html') return true;
   if (p === '/api/_site' || p.startsWith('/api/_site/')) return true;
   return !p.startsWith('/api/');
 }
@@ -468,6 +469,7 @@ function isPageRequestPath(pathname) {
 function pagePathnameForRequest(pathname) {
   const p = normalizeApiPathname(pathname);
   if (p === '/api') return '/';
+  if (p === '/api/index.html') return '/';
   if (p === '/api/_site') return '/_site';
   if (p.startsWith('/api/_site/')) return p.slice(4);
   return p;
