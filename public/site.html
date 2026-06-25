@@ -13,10 +13,6 @@
   <div id="siteRoot"></div>
   <script src="/builder-bundle.js?v=5"></script>
   <script>
-    // Restore URL to / when navigated here from the /_site redirect
-    if (window.location.pathname === '/_site' && window.history && window.history.replaceState) {
-      window.history.replaceState({}, '', '/');
-    }
     window.BuilderReact.mountPublicSite(document.getElementById('siteRoot'));
   </script>
 </body>

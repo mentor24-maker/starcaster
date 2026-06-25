@@ -359,6 +359,7 @@ App.els = {
   settingsProjectDetailsPanel: document.getElementById('settingsProjectDetailsPanel'),
   settingsProjectDetailsName: document.getElementById('settingsProjectDetailsName'),
   settingsProjectDetailsSlug: document.getElementById('settingsProjectDetailsSlug'),
+  settingsProjectDetailsDomain: document.getElementById('settingsProjectDetailsDomain'),
   settingsProjectDetailsDescription: document.getElementById('settingsProjectDetailsDescription'),
   settingsProjectDefaultUrlInput: document.getElementById('settingsProjectDefaultUrlInput'),
   settingsProjectTimezoneSelect: document.getElementById('settingsProjectTimezoneSelect'),
