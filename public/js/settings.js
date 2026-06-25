@@ -398,6 +398,89 @@ App.settings = (function () {
     notify('Project logo cleared');
   }
 
+  async function persistProjectFavicon(projectId, faviconUrl) {
+    const id = String(projectId || '').trim();
+    const url = String(faviconUrl || '').trim();
+    if (!id) throw new Error('Select a project first');
+    await api(`/api/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ faviconDataUrl: url }),
+    });
+    setProjectFaviconDataUrl(id, url);
+  }
+
+  async function applyProjectFaviconSelection(faviconUrl) {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) throw new Error('Select a project first');
+    await persistProjectFavicon(activeId, faviconUrl);
+    renderProjectDetails();
+    applyProjectToHeader();
+    notify('Project favicon updated');
+  }
+
+  async function openProjectFaviconGalleryPicker() {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) return notify('Select a project first', true);
+    if (!App.assetPicker || typeof App.assetPicker.openImageGalleryPicker !== 'function') {
+      return notify('Image gallery is unavailable', true);
+    }
+    try {
+      await ensureProjectAssetsLoaded();
+    } catch (err) {
+      return notify(err?.message || 'Could not load project assets', true);
+    }
+    const active = (Array.isArray(state.projects) ? state.projects : []).find(
+      (project) => String(project?.id || '') === activeId
+    );
+    App.assetPicker.openImageGalleryPicker({
+      title: 'Project Favicon',
+      currentUrl: getProjectFaviconDataUrl(active),
+      getAssets: () => state.assets,
+      allAssets: state.assets,
+      onSelect: (faviconUrl) => {
+        applyProjectFaviconSelection(faviconUrl).catch((err) => {
+          notify(err?.message || 'Could not update project favicon', true);
+        });
+      },
+      onClear: () => {
+        clearProjectFavicon().catch((err) => {
+          notify(err?.message || 'Could not clear project favicon', true);
+        });
+      },
+    });
+  }
+
+  async function uploadProjectFaviconToGallery(file) {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) throw new Error('Select a project first');
+    if (!App.assetPicker || typeof App.assetPicker.uploadImageToGallery !== 'function') {
+      throw new Error('Image upload is unavailable');
+    }
+    await ensureProjectAssetsLoaded();
+    notify('Uploading image...', false);
+    const asset = await App.assetPicker.uploadImageToGallery(file, {
+      api,
+      state,
+      category: 'Logo',
+      tags: ['project-favicon', 'gallery'],
+    });
+    const faviconUrl = App.assetPicker.logoUrlFromAsset(asset);
+    if (!faviconUrl) throw new Error('Uploaded image did not return a usable URL');
+    await persistProjectFavicon(activeId, faviconUrl);
+    renderProjectDetails();
+    applyProjectToHeader();
+    notify('Project favicon updated');
+  }
+
+  async function clearProjectFavicon() {
+    const activeId = getSettingsDetailProjectId();
+    if (!activeId) throw new Error('Select a project first');
+    await persistProjectFavicon(activeId, '');
+    renderProjectDetails();
+    applyProjectToHeader();
+    notify('Project favicon cleared');
+  }
+
   async function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -450,6 +533,13 @@ App.settings = (function () {
     return String(map[id] || '').trim();
   }
 
+  function getProjectFaviconDataUrl(project) {
+    if (projectCtx()?.getProjectFaviconDataUrl) {
+      return projectCtx().getProjectFaviconDataUrl(project);
+    }
+    return String(project?.faviconDataUrl || project?.favicon_data_url || '').trim();
+  }
+
   function setProjectLogoDataUrl(projectIdInput, dataUrlInput) {
     if (projectCtx()?.setProjectLogoDataUrl) {
       projectCtx().setProjectLogoDataUrl(projectIdInput, dataUrlInput);
@@ -465,6 +555,22 @@ App.settings = (function () {
       map[projectId] = dataUrl;
     }
     writeProjectLogoMap(map);
+  }
+
+  function setProjectFaviconDataUrl(projectIdInput, dataUrlInput) {
+    if (projectCtx()?.setProjectFaviconDataUrl) {
+      projectCtx().setProjectFaviconDataUrl(projectIdInput, dataUrlInput);
+      return;
+    }
+    const projectId = String(projectIdInput || '').trim();
+    const dataUrl = String(dataUrlInput || '').trim();
+    if (!projectId) return;
+    const projects = Array.isArray(state.projects) ? state.projects : [];
+    const project = projects.find((row) => String(row?.id || '') === projectId);
+    if (project) {
+      project.faviconDataUrl = dataUrl;
+      project.favicon_data_url = dataUrl;
+    }
   }
 
   function formatDateLabel(value) {
@@ -794,6 +900,19 @@ App.settings = (function () {
     }
     if (els.settingsProjectLogoPlaceholder) {
       els.settingsProjectLogoPlaceholder.classList.toggle('hidden', Boolean(logoDataUrl));
+    }
+    const faviconDataUrl = getProjectFaviconDataUrl(active);
+    if (els.settingsProjectFaviconPreview) {
+      const hasFavicon = Boolean(faviconDataUrl);
+      els.settingsProjectFaviconPreview.classList.toggle('hidden', !hasFavicon);
+      if (hasFavicon) {
+        els.settingsProjectFaviconPreview.src = faviconDataUrl;
+      } else {
+        els.settingsProjectFaviconPreview.removeAttribute('src');
+      }
+    }
+    if (els.settingsProjectFaviconPlaceholder) {
+      els.settingsProjectFaviconPlaceholder.classList.toggle('hidden', Boolean(faviconDataUrl));
     }
     projectCtx()?.applyDetailContextNotice?.();
     const isOwner = String(active?.membership?.role || '').toLowerCase() === 'owner';
@@ -2314,6 +2433,34 @@ App.settings = (function () {
       els.settingsProjectLogoClearBtn.addEventListener('click', () => {
         clearProjectLogo().catch((err) => {
           notify(err?.message || 'Could not clear project logo', true);
+        });
+      });
+    }
+
+    if (els.settingsProjectFaviconChooseBtn) {
+      els.settingsProjectFaviconChooseBtn.addEventListener('click', () => {
+        openProjectFaviconGalleryPicker();
+      });
+    }
+
+    if (els.settingsProjectFaviconUploadFile) {
+      els.settingsProjectFaviconUploadFile.addEventListener('change', async () => {
+        const file = els.settingsProjectFaviconUploadFile.files?.[0];
+        if (!file) return;
+        try {
+          await uploadProjectFaviconToGallery(file);
+        } catch (err) {
+          notify(err?.message || 'Could not upload project favicon', true);
+        } finally {
+          els.settingsProjectFaviconUploadFile.value = '';
+        }
+      });
+    }
+
+    if (els.settingsProjectFaviconClearBtn) {
+      els.settingsProjectFaviconClearBtn.addEventListener('click', () => {
+        clearProjectFavicon().catch((err) => {
+          notify(err?.message || 'Could not clear project favicon', true);
         });
       });
     }
