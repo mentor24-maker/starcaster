@@ -3318,7 +3318,18 @@
         </div>
         <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
         <div class="table-wrap">
-          <table>
+          <table class="builder-pages-crud-table">
+            <colgroup>
+              <col class="builder-pages-col-check">
+              <col class="builder-pages-col-name">
+              <col class="builder-pages-col-template">
+              <col class="builder-pages-col-theme">
+              <col class="builder-pages-col-slug">
+              <col class="builder-pages-col-visibility">
+              <col class="builder-pages-col-published">
+              <col class="builder-pages-col-updated">
+              <col class="builder-pages-col-actions">
+            </colgroup>
             <thead>
               <tr class="table-filter-row">
                 <th><input id="builderPagesSelectAllVisible" type="checkbox" aria-label="Select all visible pages" /></th>
@@ -3335,6 +3346,7 @@
                     <option value="">All Visibility</option>
                     <option value="public">Public</option>
                     <option value="private">Private</option>
+                    <option value="unset">Unset</option>
                   </select>
                 </th>
                 <th></th>
@@ -10592,7 +10604,7 @@
   <script src="/js/richtext.js"></script>
   <script src="/builder-bundle.js?v=2"></script>
   <script src="/js/builderNavMenu.js?v=2"></script>
-  <script src="/js/builder.js?v=pages-publish-4"></script>
+  <script src="/js/builder.js?v=pages-visibility-2"></script>
   <script src="/js/polls.js"></script>
   <script src="/js/activityLog.js"></script>
   <script src="/js/observe.js"></script>

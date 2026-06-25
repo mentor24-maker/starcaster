@@ -6755,6 +6755,58 @@ button.builder-inline-asset-status-btn:focus-visible {
   color: #ffffff;
 }
 
+#builderManagePagesPage .builder-pages-crud-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+#builderManagePagesPage .builder-pages-crud-table th,
+#builderManagePagesPage .builder-pages-crud-table td {
+  white-space: nowrap;
+}
+
+#builderManagePagesPage .builder-pages-col-check {
+  width: 2.75rem;
+}
+
+#builderManagePagesPage .builder-pages-col-name {
+  min-width: 9rem;
+}
+
+#builderManagePagesPage .builder-pages-col-template {
+  min-width: 8rem;
+}
+
+#builderManagePagesPage .builder-pages-col-theme {
+  min-width: 6.5rem;
+}
+
+#builderManagePagesPage .builder-pages-col-slug {
+  min-width: 7rem;
+}
+
+#builderManagePagesPage .builder-pages-col-visibility {
+  min-width: 5.25rem;
+}
+
+#builderManagePagesPage .builder-pages-col-published {
+  min-width: 4.75rem;
+  text-align: center;
+}
+
+#builderManagePagesPage .builder-pages-col-updated {
+  min-width: 12.5rem;
+}
+
+#builderManagePagesPage .builder-pages-col-actions {
+  min-width: 7.5rem;
+}
+
+#builderManagePagesPage .builder-pages-col-published .standard-form-checkbox {
+  margin: 0 auto;
+}
+
 .builder-pages-actions-heading {
   text-align: center;
   min-width: 120px;
