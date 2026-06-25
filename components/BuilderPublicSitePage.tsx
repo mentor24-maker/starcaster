@@ -17,20 +17,22 @@ type SitePage = {
   projectId?: string;
 };
 
-function slugFromPathname(pathname: string): string {
-  let p = pathname.replace(/\.html$/, "");
-  p = p.replace(/^\/api\/_site\/[^/]+/, "").replace(/^\/_site\/[^/]+/, "");
-  if (p === "/_site" || p === "/api/_site") p = "/";
+function normalizePublicSlug(value: string): string {
+  let path = String(value || "").trim().split("?")[0]?.split("#")[0] || "";
+  path = path.replace(/\.html$/i, "");
+  path = path.replace(/^\/api\/_site\/[^/]+/, "").replace(/^\/_site\/[^/]+/, "");
+  if (path === "/_site" || path === "/api/_site") path = "/";
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const pathParam = params?.get("path");
-  if (pathParam && (pathname.includes("/_site/") || pathname.includes("/api/_site/"))) {
-    p = pathParam.replace(/\.html$/, "");
+  if (pathParam && (value.includes("/_site/") || value.includes("/api/_site/"))) {
+    path = pathParam.replace(/\.html$/i, "");
   }
-  return p.replace(/^\//, "").replace(/\/$/, "");
+  const slug = path.replace(/^\//, "").replace(/\/$/, "").toLowerCase();
+  return slug === "home" ? "" : slug;
 }
 
 function isHomeSlug(slug: string): boolean {
-  return slug === "" || slug === "home";
+  return slug === "";
 }
 
 async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
@@ -80,14 +82,14 @@ function findHomePage(pages: SitePage[]): SitePage | null {
 
 function findPageForPath(pages: SitePage[], pathname: string): SitePage | null {
   if (!pages.length) return null;
-  const slug = slugFromPathname(pathname);
+  const slug = normalizePublicSlug(pathname);
 
   if (isHomeSlug(slug)) {
     return findHomePage(pages);
   }
 
   if (slug) {
-    return pages.find((p) => p.slug === slug) ?? null;
+    return pages.find((p) => normalizePublicSlug(p.slug) === slug) ?? null;
   }
 
   return null;
@@ -101,7 +103,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
 
   useEffect(() => {
     if (!projectId) { setLoaded(true); return; }
-    const routingPath = window.location.pathname + window.location.search;
+    const routingPath = window.location.pathname || "/";
     fetchPublicPages(projectId)
       .then((pages) => setPage(findPageForPath(pages, routingPath)))
       .catch(() => setPage(null))

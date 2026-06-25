@@ -92,9 +92,19 @@ type ContactFormField = {
 
 function normalizeNavPath(value: string) {
   const path = value.split("?")[0]?.split("#")[0] || "/";
-  const normalized = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
-
+  let normalized = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
+  if (normalized && !normalized.startsWith("/") && !/^https?:/i.test(normalized) && !normalized.startsWith("mailto:")) {
+    normalized = `/${normalized}`;
+  }
   return normalized === "/home" ? "/" : normalized;
+}
+
+function toPublicHref(href: string): string {
+  const clean = href.trim();
+  if (!clean || clean === "#" || /^https?:/i.test(clean) || clean.startsWith("mailto:")) return clean || "#";
+  if (clean.startsWith("/")) return clean === "/home" ? "/" : clean;
+  if (clean === "home") return "/";
+  return `/${clean.replace(/^\/+/, "")}`;
 }
 
 function getContactFormMode(settings: Record<string, string>): "squeeze" | "standard" | "custom" {
@@ -2875,7 +2885,7 @@ function NavigationModulePreview({
       }
     >
       {topLevelItems.map((item) => {
-        const href = previewMode ? toPreviewHref(item.href || "#") : (item.href || "#");
+        const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
         const isActive = normalizeNavPath(item.href || "#") === activePath;
         const itemId = item.id ?? `${href}-${item.label}`;
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
@@ -2905,7 +2915,7 @@ function NavigationModulePreview({
             </Link>
             <div className="site-nav-dropdown-menu">
               {children.map((child) => {
-                const childHref = previewMode ? toPreviewHref(child.href || "#") : (child.href || "#");
+                const childHref = previewMode ? toPreviewHref(child.href || "#") : toPublicHref(child.href || "#");
                 const childActive = normalizeNavPath(child.href || "#") === activePath;
                 return (
                   <Link

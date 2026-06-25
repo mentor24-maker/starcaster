@@ -179,8 +179,16 @@ Client-side checks in `src/layout.html` and `public/index.html` mirror this list
 # Project lookup API
 curl -s "https://benvin.org/api/public/site?domain=benvin.org"
 
-# Published pages
+# Published pages (GET — use -s or -w for status; avoid curl -I which sends HEAD)
 curl -s "https://benvin.org/api/public/pages?projectId=proj_..."
+
+# Host binding: wrong projectId should return 403 JSON on GET
+curl -s -o /dev/null -w "%{http_code}\n" \
+  "https://benvin.org/api/public/pages?projectId=proj_other"
+# 403
+
+# Public site shell at /
+curl -s "https://benvin.org/" | grep -E "siteRoot|__SITE_CONFIG__|mountPublicSite"
 
 # Direct serverless (bypasses middleware URL, tests handler)
 curl -sI "https://benvin.org/api/index" | grep -i x-site
@@ -188,6 +196,8 @@ curl -sI "https://benvin.org/api/index" | grep -i x-site
 # Legacy bootstrap (still supported)
 curl -sI "https://benvin.org/api/_site/benvin.org?path=%2F"
 ```
+
+**Note:** `curl -I` / `curl -sI` sends a **HEAD** request. Vercel serverless may respond **404** to HEAD even when GET returns **403** with a JSON body. Use GET when checking status codes.
 
 ### Local development
 
