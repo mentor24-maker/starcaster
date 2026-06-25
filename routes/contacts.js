@@ -12,6 +12,7 @@
  */
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
+const { assertProjectIdAllowedOnHost } = require('../lib/publicSiteHostBinding');
 const {
   listContacts, getContact, createContact,
   updateContact, deleteContact, importContacts,
@@ -467,7 +468,9 @@ async function handleContacts(req, res, pathname, method) {
     const phone     = String(body.phone     || '').trim().slice(0, 50);
     const formMode  = String(body.formMode  || '').trim().slice(0, 50);
     const projectId = String(body.projectId || '').trim();
-    const scope = { projectId, userId: '' };
+    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
+    const scope = { projectId: bind.projectId || projectId, userId: '' };
 
     const result = await createContact({
       id: nextId('contact'),

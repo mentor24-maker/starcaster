@@ -1,6 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj, nextId } = require('./http');
+const { assertProjectIdAllowedOnHost } = require('../lib/publicSiteHostBinding');
 const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = require('../lib/crmConfigStore');
 const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
 const { listForms, getForm, createForm, updateForm, deleteForm } = require('../lib/crmFormsStore');
@@ -78,6 +79,9 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const crmConfigId = String(body.crmConfigId || '').trim();
     if (!crmConfigId) return sendErr(res, 400, 'crmConfigId is required'), true;
+    const projectId = String(body.projectId || '').trim();
+    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
     // Honeypot
     if (String(body._trap || '').trim()) {
       return sendOk(res, 200, {}, { message: 'Thank you!' }), true;
@@ -89,7 +93,7 @@ async function handle(req, res, pathname, method) {
         data: (body.data && typeof body.data === 'object') ? body.data : {},
         source: String(body.source || 'form').trim(),
         tags: [],
-      }, { projectId: String(body.projectId || '').trim(), userId: '' });
+      }, { projectId: bind.projectId || projectId, userId: '' });
     } catch (err) {
       if (err.code !== 'DUPLICATE_EMAIL') throw err;
     }
