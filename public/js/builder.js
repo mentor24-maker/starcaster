@@ -8106,8 +8106,6 @@ App.builder = (function () {
     if (bulkArchiveBtn2) bulkArchiveBtn2.disabled = !selectedPageIds.size;
     const bulkPublishBtn = byId('builderPagesBulkPublishBtn');
     if (bulkPublishBtn) bulkPublishBtn.disabled = !selectedPageIds.size;
-    const bulkRestoreShellBtn = byId('builderPagesBulkRestoreShellBtn');
-    if (bulkRestoreShellBtn) bulkRestoreShellBtn.disabled = !selectedPageIds.size;
   }
 
   function pageIsPublished(item) {
@@ -13226,7 +13224,6 @@ App.builder = (function () {
 
     const landingPageBulkArchiveBtn = byId('builderPagesBulkArchiveBtn');
     const landingPageBulkPublishBtn = byId('builderPagesBulkPublishBtn');
-    const landingPageBulkRestoreShellBtn = byId('builderPagesBulkRestoreShellBtn');
     if (landingPageBulkPublishBtn) {
       landingPageBulkPublishBtn.addEventListener('click', async () => {
         const ids = Array.from(selectedPageIds);
@@ -13248,41 +13245,6 @@ App.builder = (function () {
           notify(err.message || 'Could not publish selected pages', true);
         } finally {
           landingPageBulkPublishBtn.textContent = 'Publish';
-          syncLandingPageTableControls();
-        }
-      });
-    }
-    if (landingPageBulkRestoreShellBtn) {
-      landingPageBulkRestoreShellBtn.addEventListener('click', async () => {
-        const ids = Array.from(selectedPageIds);
-        if (!ids.length) {
-          notify('Select at least one page first', true);
-          return;
-        }
-        const sourceSlug = window.prompt(
-          'Copy layout shell from which page slug? (blank = about)',
-          'about',
-        );
-        if (sourceSlug === null) return;
-        landingPageBulkRestoreShellBtn.disabled = true;
-        landingPageBulkRestoreShellBtn.textContent = 'Restoring…';
-        try {
-          const result = await api('/api/builder/landing-pages/restore-layout-shell', {
-            method: 'POST',
-            body: JSON.stringify({
-              pageIds: ids,
-              sourceSlug: safeText(sourceSlug) || 'about',
-            }),
-          });
-          const restored = Number(result.restored) || 0;
-          const skipped = Number(result.skipped) || 0;
-          await loadSavedPages();
-          renderPagesTable();
-          notify(`Restored shell on ${restored} page${restored === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped)` : ''}`);
-        } catch (err) {
-          notify(err.message || 'Could not restore layout shell', true);
-        } finally {
-          landingPageBulkRestoreShellBtn.textContent = 'Restore Shell';
           syncLandingPageTableControls();
         }
       });

@@ -2,7 +2,9 @@
 
 const { sendJson, sendErr, sendStatus, isHeadRequest, getUrlObj, getPublicSiteDomainParam } = require('./http');
 const { findProjectByDomain } = require('../lib/projectsStore');
-const { listPublishedPagesForProject } = require('../lib/builderPagesStore');
+const { listPublishedPagesForProject, listRestrictedAdminSitePagesForProject } = require('../lib/builderPagesStore');
+const { getAdminSession } = require('../lib/projectAdminStore');
+const projectAdmin = require('./projectAdmin');
 const {
   assertProjectIdAllowedOnHost,
   assertDomainQueryAllowedOnHost,
@@ -68,6 +70,32 @@ async function handle(req, res, pathname, method) {
 
     const scopedProjectId = bind.projectId || projectId;
     const result = await listPublishedPagesForProject(scopedProjectId);
+    if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to load pages'), true;
+
+    return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
+  }
+
+  // GET /api/public/admin-pages?projectId=... — restricted admin site pages (admin session required)
+  if (pathname === '/api/public/admin-pages' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    const token = projectAdmin.readAdminSessionToken(req);
+    const session = await getAdminSession(token);
+    if (!session) {
+      return respondErr(res, req, 401, 'Admin authentication required', { code: 'ADMIN_AUTH_REQUIRED' }), true;
+    }
+
+    const { searchParams } = getUrlObj(req);
+    const projectId = String(searchParams.get('projectId') || '').trim();
+    if (!projectId) return respondErr(res, req, 400, 'projectId is required'), true;
+
+    if (String(session.projectId) !== String(projectId)) {
+      return respondErr(res, req, 403, 'Project mismatch', { code: 'ADMIN_PROJECT_MISMATCH' }), true;
+    }
+
+    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+
+    const scopedProjectId = bind.projectId || projectId;
+    const result = await listRestrictedAdminSitePagesForProject(scopedProjectId);
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to load pages'), true;
 
     return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
