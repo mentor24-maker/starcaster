@@ -119,6 +119,31 @@ function normalizeApiPathname(pathname) {
   return raw || '/';
 }
 
+function normalizeHostname(value) {
+  const text = String(value || '').split(',')[0].trim();
+  if (!text) return '';
+  return text.split(':')[0].toLowerCase().replace(/^www\./, '');
+}
+
+function isDeploymentHostname(host) {
+  if (!host) return true;
+  if (/^localhost$|^127\.|^0\.0\.0\.0$/.test(host)) return true;
+  return host.endsWith('.vercel.app');
+}
+
+/**
+ * Resolve the visitor-facing hostname on Vercel.
+ * Internal rewrites to /api/[...slug] can leave Host as *.vercel.app while
+ * x-forwarded-host still carries the custom domain.
+ */
+function getClientHost(req) {
+  const forwarded = normalizeHostname(req.headers['x-forwarded-host']);
+  const host = normalizeHostname(req.headers.host);
+  if (forwarded && !isDeploymentHostname(forwarded)) return forwarded;
+  if (host && !isDeploymentHostname(host)) return host;
+  return forwarded || host;
+}
+
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -204,6 +229,7 @@ module.exports = {
   setCors,
   getUrlObj,
   normalizeApiPathname,
+  getClientHost,
   normalizeEmail,
   nextId,
   parseCookies,
