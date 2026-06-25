@@ -8056,8 +8056,10 @@ App.builder = (function () {
       const templateId = safeText(item.templateId);
       if (nameFilter && !name.includes(nameFilter)) return false;
       if (templateFilter && templateId !== templateFilter) return false;
-      if (visibilityFilter === 'public' && pageIsPrivate(item)) return false;
-      if (visibilityFilter === 'private' && !pageIsPrivate(item)) return false;
+      const visibilityState = pageVisibilityState(item);
+      if (visibilityFilter === 'public' && visibilityState !== 'public') return false;
+      if (visibilityFilter === 'private' && visibilityState !== 'private') return false;
+      if (visibilityFilter === 'unset' && visibilityState !== null) return false;
       return true;
     });
 
@@ -8082,8 +8084,8 @@ App.builder = (function () {
         left = pageIsPublished(a) ? '1' : '0';
         right = pageIsPublished(b) ? '1' : '0';
       } else if (key === 'isPrivate') {
-        left = pageIsPrivate(a) ? '1' : '0';
-        right = pageIsPrivate(b) ? '1' : '0';
+        left = pageVisibilitySortKey(a);
+        right = pageVisibilitySortKey(b);
       } else {
         left = safeText(a.updatedAt);
         right = safeText(b.updatedAt);
@@ -8121,13 +8123,25 @@ App.builder = (function () {
     return true;
   }
 
-  function pageIsPrivate(item) {
-    if (!item || typeof item !== 'object') return false;
-    return item.isPrivate === true || item.is_private === true;
+  function pageVisibilityState(item) {
+    if (!item || typeof item !== 'object') return null;
+    if (item.isPrivate === true || item.is_private === true) return 'private';
+    if (item.isPrivate === false || item.is_private === false) return 'public';
+    return null;
   }
 
   function pageVisibilityLabel(item) {
-    return pageIsPrivate(item) ? 'Private' : 'Public';
+    const state = pageVisibilityState(item);
+    if (state === 'private') return 'Private';
+    if (state === 'public') return 'Public';
+    return '';
+  }
+
+  function pageVisibilitySortKey(item) {
+    const state = pageVisibilityState(item);
+    if (state === 'public') return '1';
+    if (state === 'private') return '2';
+    return '0';
   }
 
   function renderPagesTable() {
@@ -8195,29 +8209,36 @@ App.builder = (function () {
         else selectedPageIds.delete(id);
         syncLandingPageTableControls();
       });
+      selectTd.className = 'builder-pages-col-check';
       selectTd.appendChild(checkbox);
       row.appendChild(selectTd);
 
-      const append = (text) => {
+      const append = (text, className = '') => {
         const td = document.createElement('td');
+        if (className) td.className = className;
         td.textContent = text || '-';
         row.appendChild(td);
       };
 
-      append(safeText(item.name) || '-');
-      append(getLandingPageTemplateName(item.templateId) || '-');
-      append(getSavedThemeName(item.themeId) || '-');
+      append(safeText(item.name) || '-', 'builder-pages-col-name');
+      append(getLandingPageTemplateName(item.templateId) || '-', 'builder-pages-col-template');
+      append(getSavedThemeName(item.themeId) || '-', 'builder-pages-col-theme');
 
       const slugTd = document.createElement('td');
+      slugTd.className = 'builder-pages-col-slug';
       const slugCode = document.createElement('code');
       const slugText = safeText(item.slug);
       slugCode.textContent = slugText ? `/${slugText}` : '/';
       slugTd.appendChild(slugCode);
       row.appendChild(slugTd);
 
-      append(pageVisibilityLabel(item));
+      const visibilityTd = document.createElement('td');
+      visibilityTd.className = 'builder-pages-col-visibility';
+      visibilityTd.textContent = pageVisibilityLabel(item);
+      row.appendChild(visibilityTd);
 
       const publishTd = document.createElement('td');
+      publishTd.className = 'builder-pages-col-published';
       const publishCheckbox = document.createElement('input');
       publishCheckbox.type = 'checkbox';
       publishCheckbox.className = 'standard-form-checkbox';
@@ -8240,10 +8261,10 @@ App.builder = (function () {
       publishTd.appendChild(publishCheckbox);
       row.appendChild(publishTd);
 
-      append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-');
+      append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-', 'builder-pages-col-updated');
 
       const actionsTd = document.createElement('td');
-      actionsTd.className = 'builder-pages-actions-cell';
+      actionsTd.className = 'builder-pages-actions-cell builder-pages-col-actions';
       const viewBtn = App.makeIconButton('view', 'View Page', () => {
         openLandingPagePreview(item);
       });
