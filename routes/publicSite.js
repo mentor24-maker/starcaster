@@ -30,28 +30,6 @@ async function handle(req, res, pathname, method) {
     return sendJson(res, 200, { ok: true, project: { id, name, domain: d, logoDataUrl } }), true;
   }
 
-  // GET /api/public/routing — temporary host/path diagnostics for custom domains
-  if (pathname === '/api/public/routing' && method === 'GET') {
-    const { getClientHost, getPublicSiteDomainParam, getPublicSiteDomainFromPath } = require('./http');
-    const urlObj = getUrlObj(req);
-    const domainParam = getPublicSiteDomainParam(req);
-    const pathDomain = getPublicSiteDomainFromPath(urlObj.pathname);
-    const host = getClientHost(req);
-    const lookupDomain = pathDomain || domainParam || host;
-    const lookup = lookupDomain ? await findProjectByDomain(lookupDomain) : { ok: false, error: 'no domain candidate' };
-    return sendJson(res, 200, {
-      ok: true,
-      url: String(req.url || ''),
-      pathname: urlObj.pathname,
-      pathDomain,
-      domainParam,
-      clientHost: host,
-      lookupOk: lookup.ok,
-      lookupError: lookup.error || null,
-      projectId: lookup.ok ? lookup.data?.id : null,
-    }), true;
-  }
-
   // GET /api/public/pages?projectId=...
   if (pathname === '/api/public/pages' && method === 'GET') {
     const { searchParams } = getUrlObj(req);

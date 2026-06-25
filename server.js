@@ -488,15 +488,11 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const { getClientHost, normalizeApiPathname } = require('./routes/http');
+    const { isSystemHost } = require('./lib/publicSiteHosts');
     const pageUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pagePath = normalizeApiPathname(pageUrl.pathname);
     const host = getClientHost(req);
-    const systemHost = !host
-      || /^localhost$|^127\.|^0\.0\.0\.0$/.test(host)
-      || host.endsWith('.vercel.app')
-      || host === 'starcaster.pro'
-      || host.endsWith('.starcaster.pro');
-    if (!systemHost && !/\.[a-z0-9]+$/i.test(pagePath)) {
+    if (!isSystemHost(host) && !/\.[a-z0-9]+$/i.test(pagePath)) {
       await handleRequest(req, res);
       return;
     }

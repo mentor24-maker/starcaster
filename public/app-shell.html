@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StarCaster</title>
   <script>
-    // Fallback when edge middleware is unavailable: send the browser to the
-    // bootstrap route that reliably returns site.html (middleware keeps / clean).
+    // Fallback when edge middleware is unavailable (see docs/CUSTOM_DOMAIN_PUBLIC_SITES.md).
+    // Skipped when site.html is already served (#siteRoot present).
     (function () {
       if (document.getElementById('siteRoot')) return;
       var h = window.location.hostname;
