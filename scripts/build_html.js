@@ -3,9 +3,9 @@ const path = require('path');
 
 const layoutPath = path.join(__dirname, '../src/layout.html');
 const pagesDir = path.join(__dirname, '../src/pages');
-const outputPath = path.join(__dirname, '../public/index.html');
+const outputPath = path.join(__dirname, '../public/app-shell.html');
 
-console.log('Building index.html from partials...');
+console.log('Building app-shell.html from partials...');
 
 function processIncludes(content, baseDir) {
   const includeRegex = /<include\s+src=["']([^"']+)["']\s*\/?>(?:<\/include>)?/gi;
@@ -38,7 +38,7 @@ for (const file of files) {
 const finalHtml = layout.replace('      <!-- INJECT_PAGES -->', pagesContent);
 
 fs.writeFileSync(outputPath, finalHtml, 'utf8');
-console.log(`Successfully built public/index.html from ${files.length} top-level partials with recursive includes.`);
+console.log(`Successfully built public/app-shell.html from ${files.length} top-level partials with recursive includes.`);
 
 const { buildLegalPages } = require('./build_legal');
 buildLegalPages();

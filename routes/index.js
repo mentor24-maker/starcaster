@@ -531,7 +531,7 @@ function serveStaticPage(res, pathname) {
   }
   let filePath;
   if (safePath === '/') {
-    filePath = _path.join(__dirname, '../public/index.html');
+    filePath = _path.join(__dirname, '../public/app-shell.html');
   } else {
     const rel = safePath.replace(/^\//, '');
     filePath = _path.join(__dirname, '../public', rel);
@@ -540,7 +540,7 @@ function serveStaticPage(res, pathname) {
     }
   }
   if (!_fs.existsSync(filePath)) {
-    filePath = _path.join(__dirname, '../public/index.html');
+    filePath = _path.join(__dirname, '../public/app-shell.html');
   }
   const ext = _path.extname(filePath).toLowerCase();
   const mime = MIME_MAP[ext] || 'application/octet-stream';
