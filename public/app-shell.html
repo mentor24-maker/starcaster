@@ -6,10 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StarCaster</title>
   <script>
-    // Custom-domain bootstrap: Vercel rewrites can hide the visitor hostname from the
-    // serverless function (Host stays *.vercel.app). Redirect to /_site with an
-    // explicit domain in the path so the function can load the public Builder site shell.
-    // Note: bare /_site 404s on Vercel; /api/_site/... is routed through the catch-all.
+    // Fallback when edge middleware is unavailable: send the browser to the
+    // bootstrap route that reliably returns site.html (middleware keeps / clean).
     (function () {
       if (document.getElementById('siteRoot')) return;
       var h = window.location.hostname;
@@ -19,10 +17,8 @@
         || h.endsWith('.starcaster.pro');
       if (sys) return;
       var p = window.location.pathname || '/';
-      if (p === '/_site' || p === '/api/_site') return;
-      if (p.indexOf('/_site/') === 0 || p.indexOf('/api/_site/') === 0) return;
-      var q = window.location.search || '';
-      var path = p + q;
+      if (p.indexOf('/api/_site/') === 0) return;
+      var path = p + (window.location.search || '');
       window.location.replace('/api/_site/' + encodeURIComponent(h) + '?path=' + encodeURIComponent(path || '/'));
     })();
   </script>

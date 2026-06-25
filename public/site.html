@@ -13,15 +13,6 @@
   <div id="siteRoot"></div>
   <script src="/builder-bundle.js?v=6"></script>
   <script>
-    (function () {
-      var p = window.location.pathname || '/';
-      if (p.indexOf('/api/_site/') !== 0 && p.indexOf('/_site/') !== 0) return;
-      var params = new URLSearchParams(window.location.search || '');
-      var clean = params.get('path') || '/';
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState({}, '', clean);
-      }
-    })();
     window.BuilderReact.mountPublicSite(document.getElementById('siteRoot'));
   </script>
 </body>

@@ -1,8 +1,8 @@
 /**
- * Vercel Edge Middleware — custom-domain public sites with clean URLs.
+ * Vercel Edge Middleware — custom-domain public sites at clean URLs.
  *
- * Rewrites pretty paths (/, /tractornav, …) to the serverless /api handler
- * while keeping the browser URL unchanged.
+ * Browser URL stays / or /tractornav; internally we fetch the bootstrap
+ * route that returns site.html (the bare / path still serves app-shell on Vercel).
  */
 
 const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.vercel\.app|starcaster\.pro|.*\.starcaster\.pro)$/;
@@ -30,7 +30,8 @@ export default async function middleware(request) {
   if (!host || SYSTEM_HOST_RE.test(host)) return;
 
   const invokeUrl = new URL(request.url);
-  invokeUrl.pathname = pathname === '/' ? '/api' : `/api${pathname}`;
+  invokeUrl.pathname = `/api/_site/${encodeURIComponent(host)}`;
+  invokeUrl.search = `?path=${encodeURIComponent(pathname + url.search)}`;
 
   return fetch(invokeUrl.toString(), {
     method: request.method,
@@ -41,6 +42,7 @@ export default async function middleware(request) {
 
 export const config = {
   matcher: [
-    '/((?!api/|images/|favicon.ico|.*\\..*).*)',
+    '/',
+    '/((?!api/|images/|favicon.ico|.*\\..*).+)',
   ],
 };
