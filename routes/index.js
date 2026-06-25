@@ -21,7 +21,7 @@
  *   for expensive operations (acquire, openclaw, import).
  */
 
-const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname, getClientHost } = require('./http');
+const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname, getClientHost, getPublicSiteDomainParam } = require('./http');
 const { handleProjectDelete } = require('../lib/projectDeleteHandler');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
@@ -198,7 +198,8 @@ async function handleRequest(req, res) {
 
   // ── Non-API page requests (custom domain routing) ───────────────────────
   if (!pathnameEarly.startsWith('/api/')) {
-    return handlePageRequest(req, res, pathnameEarly);
+    await handlePageRequest(req, res, pathnameEarly);
+    return;
   }
 
   // ── Global rate limit ceiling ────────────────────────────────────────────
@@ -465,6 +466,42 @@ function isSystemHost(host) {
   return false;
 }
 
+async function resolvePublicSiteProject(req) {
+  const { findProjectByDomain } = require('../lib/projectsStore');
+  const domainParam = getPublicSiteDomainParam(req);
+  const host = getClientHost(req);
+  const candidates = [];
+  if (domainParam) candidates.push(domainParam);
+  if (host && !isSystemHost(host)) candidates.push(host);
+  const seen = new Set();
+  for (const domain of candidates) {
+    const key = String(domain || '').trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const result = await findProjectByDomain(key);
+    if (result.ok) return result;
+  }
+  return { ok: false };
+}
+
+function servePublicSiteHtml(res, projectId, projectName) {
+  let siteHtml;
+  try {
+    siteHtml = _fs.readFileSync(_path.join(__dirname, '../public/site.html'), 'utf8');
+  } catch {
+    res.statusCode = 500;
+    res.end('Site template unavailable');
+    return true;
+  }
+  const config = JSON.stringify({ projectId, projectName });
+  siteHtml = siteHtml.replace('</head>', `  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.statusCode = 200;
+  res.end(siteHtml);
+  return true;
+}
+
 function serveStaticPage(res, pathname) {
   const safePath = pathname.replace(/\.\./g, '').replace(/\/+/g, '/') || '/';
   let filePath;
@@ -494,33 +531,15 @@ function serveStaticPage(res, pathname) {
 }
 
 async function handlePageRequest(req, res, pathname) {
-  const host = getClientHost(req);
-
-  // System hosts (localhost, *.vercel.app, starcaster.pro) always serve the primary app.
-  // For all other hosts, attempt a project domain lookup first.
-  if (!isSystemHost(host)) {
-    const { findProjectByDomain } = require('../lib/projectsStore');
-    const result = await findProjectByDomain(host);
-    if (result.ok) {
-      const { id: projectId, name: projectName } = result.data;
-      let siteHtml;
-      try {
-        siteHtml = _fs.readFileSync(_path.join(__dirname, '../public/site.html'), 'utf8');
-      } catch {
-        res.statusCode = 500;
-        return res.end('Site template unavailable');
-      }
-      const config = JSON.stringify({ projectId, projectName });
-      siteHtml = siteHtml.replace('</head>', `  <script>window.__SITE_CONFIG__ = ${config};</script>\n</head>`);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.statusCode = 200;
-      return res.end(siteHtml);
-    }
+  const result = await resolvePublicSiteProject(req);
+  if (result.ok) {
+    const { id: projectId, name: projectName } = result.data;
+    servePublicSiteHtml(res, projectId, projectName);
+    return;
   }
 
   // No project matched — serve the primary app static files.
-  return serveStaticPage(res, pathname);
+  serveStaticPage(res, pathname);
 }
 
 module.exports = { handleRequest, logRegistry, ROUTE_MODULES };
