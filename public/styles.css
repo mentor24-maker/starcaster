@@ -1572,6 +1572,9 @@ body.asset-associations-modal-open {
 .builder-react-root {
   margin-top: 1rem;
 }
+.builder-react-root.builder-public-site {
+  margin-top: 0;
+}
 .builder-react-root.hidden {
   display: none !important;
 }
@@ -24348,14 +24351,8 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   gap: 0.35rem;
 }
 .builder-nav-menu-item-grid {
-  display: grid;
-  gap: 0.65rem;
-}
-.builder-nav-menu-field {
-  margin: 0;
-}
-.builder-nav-menu-target-row {
-  margin: 0;
+  gap: 0.5rem;
+  align-items: center;
 }
 .builder-nav-menu-editor-actions {
   margin-top: 0.85rem;
