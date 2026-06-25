@@ -389,6 +389,32 @@ App.settings = (function () {
     notify('Project logo updated');
   }
 
+  async function handleProjectBrandingFileInputChange(input) {
+    if (!input || input.type !== 'file') return false;
+    const file = input.files?.[0];
+    if (!file) return false;
+    if (input.id === 'settingsProjectLogoUploadFile') {
+      await uploadProjectLogoToGallery(file);
+    } else if (input.id === 'settingsProjectFaviconUploadFile') {
+      await uploadProjectFaviconToGallery(file);
+    } else {
+      return false;
+    }
+    input.value = '';
+    return true;
+  }
+
+  async function flushPendingProjectBrandingUploads() {
+    const logoInput = byId('settingsProjectLogoUploadFile');
+    const faviconInput = byId('settingsProjectFaviconUploadFile');
+    if (logoInput?.files?.[0]) {
+      await handleProjectBrandingFileInputChange(logoInput);
+    }
+    if (faviconInput?.files?.[0]) {
+      await handleProjectBrandingFileInputChange(faviconInput);
+    }
+  }
+
   async function clearProjectLogo() {
     const activeId = getSettingsDetailProjectId();
     if (!activeId) throw new Error('Select a project first');
@@ -2394,6 +2420,12 @@ App.settings = (function () {
           return notify('Default URL must be a valid URL', true);
         }
         try {
+          try {
+            await flushPendingProjectBrandingUploads();
+          } catch (err) {
+            notify(err?.message || 'Could not upload branding image', true);
+            return;
+          }
           const res = await api(`/api/projects/${encodeURIComponent(activeId)}`, {
             method: 'PATCH',
             body: JSON.stringify({ name, slug, domain, description, projectUrl, timezone }),
@@ -2415,17 +2447,17 @@ App.settings = (function () {
       });
     }
 
-    if (els.settingsProjectLogoUploadFile) {
-      els.settingsProjectLogoUploadFile.addEventListener('change', async () => {
-        const file = els.settingsProjectLogoUploadFile.files?.[0];
-        if (!file) return;
-        try {
-          await uploadProjectLogoToGallery(file);
-        } catch (err) {
-          notify(err?.message || 'Could not upload project logo', true);
-        } finally {
-          els.settingsProjectLogoUploadFile.value = '';
-        }
+    const projectDetailsPanel = els.settingsProjectDetailsPanel || byId('settingsProjectDetailsPanel');
+    if (projectDetailsPanel) {
+      projectDetailsPanel.addEventListener('change', (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
+        if (input.id !== 'settingsProjectLogoUploadFile' && input.id !== 'settingsProjectFaviconUploadFile') return;
+        handleProjectBrandingFileInputChange(input).catch((err) => {
+          const label = input.id === 'settingsProjectFaviconUploadFile' ? 'project favicon' : 'project logo';
+          notify(err?.message || `Could not upload ${label}`, true);
+          input.value = '';
+        });
       });
     }
 
@@ -2440,20 +2472,6 @@ App.settings = (function () {
     if (els.settingsProjectFaviconChooseBtn) {
       els.settingsProjectFaviconChooseBtn.addEventListener('click', () => {
         openProjectFaviconGalleryPicker();
-      });
-    }
-
-    if (els.settingsProjectFaviconUploadFile) {
-      els.settingsProjectFaviconUploadFile.addEventListener('change', async () => {
-        const file = els.settingsProjectFaviconUploadFile.files?.[0];
-        if (!file) return;
-        try {
-          await uploadProjectFaviconToGallery(file);
-        } catch (err) {
-          notify(err?.message || 'Could not upload project favicon', true);
-        } finally {
-          els.settingsProjectFaviconUploadFile.value = '';
-        }
       });
     }
 
