@@ -171,6 +171,21 @@
   display: grid;
   gap: 0.5rem;
   min-width: 0;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.project-branding-media-col .settings-media-actions {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 100%;
+}
+
+.project-branding-media-col .settings-media-actions .btn,
+.project-branding-media-col .settings-media-actions .settings-upload-button {
+  width: 100%;
+  justify-content: center;
 }
 
 .project-branding-media-title {
