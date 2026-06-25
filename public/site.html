@@ -16,7 +16,10 @@
     (function () {
       var params = new URLSearchParams(window.location.search);
       var restorePath = params.get('path') || '/';
-      if (window.location.pathname === '/_site' && window.history && window.history.replaceState) {
+      var p = window.location.pathname || '/';
+      var isBootstrap = p === '/_site' || p === '/api/_site'
+        || p.indexOf('/_site/') === 0 || p.indexOf('/api/_site/') === 0;
+      if (isBootstrap && window.history && window.history.replaceState) {
         window.history.replaceState({}, '', restorePath);
       }
     })();
