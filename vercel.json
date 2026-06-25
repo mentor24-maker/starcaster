@@ -12,6 +12,16 @@
       "headers": { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
     },
     {
+      "src": "/",
+      "dest": "/api",
+      "headers": { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0" }
+    },
+    {
+      "src": "/index.html",
+      "dest": "/api/index.html",
+      "headers": { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0" }
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/[...slug]",
       "headers": { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0" }
