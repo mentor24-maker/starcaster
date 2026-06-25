@@ -145,13 +145,37 @@ function getClientHost(req) {
   return forwarded || host;
 }
 
+function getPublicSiteDomainFromPath(pathname) {
+  const p = normalizeApiPathname(pathname);
+  const match = p.match(/^\/(?:api\/)?_site\/([^/]+)/);
+  if (!match) return '';
+  try {
+    return normalizeHostname(decodeURIComponent(match[1]));
+  } catch {
+    return normalizeHostname(match[1]);
+  }
+}
+
 function getPublicSiteDomainParam(req) {
   const urlObj = getUrlObj(req);
-  const raw = String(
+  let raw = String(
     urlObj.searchParams.get('domain')
     || urlObj.searchParams.get('d')
     || ''
   ).trim();
+  if (!raw && req && req.query && typeof req.query === 'object') {
+    raw = String(req.query.domain || req.query.d || '').trim();
+  }
+  if (!raw) {
+    const match = String(req?.url || '').match(/[?&](?:domain|d)=([^&]+)/i);
+    if (match) {
+      try {
+        raw = decodeURIComponent(match[1].replace(/\+/g, ' '));
+      } catch {
+        raw = match[1];
+      }
+    }
+  }
   if (!raw) return '';
   return normalizeHostname(raw);
 }
@@ -243,6 +267,7 @@ module.exports = {
   normalizeApiPathname,
   getClientHost,
   getPublicSiteDomainParam,
+  getPublicSiteDomainFromPath,
   normalizeEmail,
   nextId,
   parseCookies,

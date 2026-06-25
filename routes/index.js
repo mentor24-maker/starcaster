@@ -21,7 +21,7 @@
  *   for expensive operations (acquire, openclaw, import).
  */
 
-const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname, getClientHost, getPublicSiteDomainParam } = require('./http');
+const { sendJson, sendErr, setCors, getUrlObj, normalizeApiPathname, getClientHost, getPublicSiteDomainParam, getPublicSiteDomainFromPath } = require('./http');
 const { handleProjectDelete } = require('../lib/projectDeleteHandler');
 const { checkLimit } = require('../lib/rateLimiter');
 const { getProviderValues } = require('../lib/apiSettings');
@@ -481,11 +481,13 @@ function isSystemHost(host) {
   return false;
 }
 
-async function resolvePublicSiteProject(req) {
+async function resolvePublicSiteProject(req, pathname) {
   const { findProjectByDomain } = require('../lib/projectsStore');
+  const pathDomain = getPublicSiteDomainFromPath(pathname || '');
   const domainParam = getPublicSiteDomainParam(req);
   const host = getClientHost(req);
   const candidates = [];
+  if (pathDomain) candidates.push(pathDomain);
   if (domainParam) candidates.push(domainParam);
   if (host && !isSystemHost(host)) candidates.push(host);
   const seen = new Set();
@@ -523,7 +525,8 @@ function serveStaticPage(res, pathname) {
   if (safePath === '/') {
     filePath = _path.join(__dirname, '../public/index.html');
   } else {
-    filePath = _path.join(__dirname, '../public', safePath);
+    const rel = safePath.replace(/^\//, '');
+    filePath = _path.join(__dirname, '../public', rel);
     if (!_path.extname(safePath) && !_fs.existsSync(filePath)) {
       filePath += '.html';
     }
@@ -546,7 +549,7 @@ function serveStaticPage(res, pathname) {
 }
 
 async function handlePageRequest(req, res, pathname) {
-  const result = await resolvePublicSiteProject(req);
+  const result = await resolvePublicSiteProject(req, pathname);
   if (result.ok) {
     const { id: projectId, name: projectName } = result.data;
     servePublicSiteHtml(res, projectId, projectName);
