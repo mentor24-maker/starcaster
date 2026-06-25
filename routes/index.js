@@ -617,10 +617,10 @@ async function handlePageRequest(req, res, pathname) {
 
   if (isBootstrapPath(pathname)) {
     const result = await resolvePublicSiteProject(req, pathname);
-    const restorePath = String(urlObj.searchParams.get('path') || '/').trim() || '/';
     if (result.ok) {
-      res.setHeader('X-Site-Handler', 'bootstrap-redirect');
-      redirectToCleanPublicPath(res, restorePath);
+      const { id: projectId, name: projectName } = result.data;
+      res.setHeader('X-Site-Handler', 'bootstrap-resolved');
+      servePublicSiteHtml(res, projectId, projectName);
       return;
     }
     res.setHeader('X-Site-Handler', 'bootstrap-miss');
