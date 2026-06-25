@@ -182,10 +182,13 @@ curl -s "https://benvin.org/api/public/site?domain=benvin.org"
 # Published pages (GET — use -s or -w for status; avoid curl -I which sends HEAD)
 curl -s "https://benvin.org/api/public/pages?projectId=proj_..."
 
-# Host binding: wrong projectId should return 403 JSON on GET
+# Host binding: wrong projectId should return 403 JSON on GET (HEAD mirrors status, no body)
 curl -s -o /dev/null -w "%{http_code}\n" \
   "https://benvin.org/api/public/pages?projectId=proj_other"
 # 403
+
+curl -sI "https://benvin.org/api/public/pages?projectId=proj_other" | head -1
+# HTTP/2 403
 
 # Public site shell at /
 curl -s "https://benvin.org/" | grep -E "siteRoot|__SITE_CONFIG__|mountPublicSite"
@@ -197,7 +200,7 @@ curl -sI "https://benvin.org/api/index" | grep -i x-site
 curl -sI "https://benvin.org/api/_site/benvin.org?path=%2F"
 ```
 
-**Note:** `curl -I` / `curl -sI` sends a **HEAD** request. Vercel serverless may respond **404** to HEAD even when GET returns **403** with a JSON body. Use GET when checking status codes.
+`GET /api/public/*` and `HEAD /api/public/*` share the same handler logic; HEAD returns the same status code with an empty body.
 
 ### Local development
 

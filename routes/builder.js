@@ -14,6 +14,66 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
   const base = source.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'builder';
   return unique ? `${base}-${Date.now().toString(36)}` : base;
 }
+
+function hasBodyField(body, ...keys) {
+  if (!body || typeof body !== 'object') return false;
+  return keys.some((key) => Object.prototype.hasOwnProperty.call(body, key));
+}
+
+/** Build a partial landing-page patch from the request body (omit unset fields). */
+function buildLandingPagePatch(body) {
+  const patch = {};
+  if (!body || typeof body !== 'object') return patch;
+
+  if (hasBodyField(body, 'name')) {
+    const name = String(body.name || '').trim();
+    if (!name) return { error: 'name is required' };
+    patch.name = name;
+    if (!hasBodyField(body, 'templateId', 'template_id')) {
+      patch.templateId = deriveTemplateId(body, name);
+    }
+  }
+
+  if (hasBodyField(body, 'templateKind', 'template_kind')) {
+    patch.templateKind = body.templateKind || body.template_kind;
+  }
+  if (hasBodyField(body, 'templateId', 'template_id')) {
+    patch.templateId = body.templateId ?? body.template_id;
+  }
+  if (hasBodyField(body, 'slug')) patch.slug = body.slug;
+  if (hasBodyField(body, 'isPublished', 'is_published')) {
+    patch.isPublished = body.isPublished ?? body.is_published;
+  }
+  if (hasBodyField(body, 'isPrivate', 'is_private')) {
+    patch.isPrivate = body.isPrivate ?? body.is_private;
+  }
+  if (hasBodyField(body, 'themeId', 'theme_id')) {
+    patch.themeId = body.themeId ?? body.theme_id;
+  }
+  if (hasBodyField(body, 'layoutSections', 'layout_sections')) {
+    patch.layoutSections = body.layoutSections ?? body.layout_sections;
+  }
+  if (hasBodyField(body, 'pageBackground', 'page_background')) {
+    patch.pageBackground = body.pageBackground ?? body.page_background;
+  }
+  if (hasBodyField(body, 'theme')) patch.theme = body.theme;
+  if (hasBodyField(body, 'contentOverrides')) patch.contentOverrides = body.contentOverrides;
+
+  const trimFields = [
+    'primaryColor', 'backgroundColor', 'accentColor', 'formId', 'leadMagnetId',
+    'headlineId', 'pitchId', 'ctaId', 'websiteBannerImageId', 'backgroundImageId',
+    'featureImageId', 'highlightImageId', 'featureHeadlineId', 'featureSubheadingId',
+    'featureTitle', 'featureCopy', 'highlightHeadlineId', 'highlightPitchId',
+    'highlightTitle', 'highlightCopy', 'bodyHeadlineId', 'bodySubheadingId',
+    'bodyPitchId', 'logoWideId', 'logoSquareId',
+  ];
+  trimFields.forEach((key) => {
+    if (hasBodyField(body, key)) patch[key] = String(body[key] || '').trim();
+  });
+
+  return { patch };
+}
+
 const { exec } = require('child_process');
 const { listDirectAcquireRuns, getDirectAcquireRun, deleteDirectAcquireRun, purgeOldAcquireRuns } = require('../lib/directAcquire');
 const { getModel: getContentDisplayModel, listModels: listContentDisplayModels, applyBlocksToSectionsWithHandlers } = require('../lib/contentDisplayModels');
@@ -28,6 +88,7 @@ const {
   deletePage,
   propagateCanonicalSection,
   bulkSetPublished,
+  restoreLayoutShellFromPage,
 } = require('../lib/builderPagesStore');
 const {
   listPageSnapshots,
@@ -395,6 +456,20 @@ async function handle(req, res, pathname, method) {
     const result = await bulkSetPublished(pageIds, isPublished !== false, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update pages'), true;
     return sendOk(res, 200, result.data, { results: result.data }), true;
+  }
+
+  if (pathname === '/api/builder/landing-pages/restore-layout-shell' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const pageIds = Array.isArray(body.pageIds) ? body.pageIds : [];
+    if (!pageIds.length) return sendErr(res, 400, 'pageIds is required'), true;
+    const result = await restoreLayoutShellFromPage({
+      sourcePageId: body.sourcePageId || body.source_page_id,
+      sourceSlug: body.sourceSlug ?? body.source_slug ?? 'about',
+      targetPageIds: pageIds,
+      overwrite: body.overwrite === true,
+    }, scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not restore layout'), true;
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   if (pathname === '/api/builder/landing-pages' && requestMethod === 'POST') {
@@ -1509,50 +1584,13 @@ async function handle(req, res, pathname, method) {
     if (!landingPageId) return sendErr(res, 400, 'landing page id is required', { code: 'VALIDATION_ERROR' }), true;
 
     const body = await parseJsonBody(req);
-    const name = String(body.name || '').trim();
+    const built = buildLandingPagePatch(body);
+    if (built.error) return sendErr(res, 400, built.error, { code: 'VALIDATION_ERROR' }), true;
+    if (!Object.keys(built.patch).length) {
+      return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
+    }
 
-    if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    const templateId = deriveTemplateId(body, name);
-
-    const result = await updatePage(landingPageId, {
-      name,
-      templateKind: body.templateKind || body.template_kind,
-      templateId,
-      slug: body.slug,
-      isPublished: body.isPublished ?? body.is_published,
-      isPrivate: body.isPrivate ?? body.is_private,
-      primaryColor: String(body.primaryColor || '').trim(),
-      backgroundColor: String(body.backgroundColor || '').trim(),
-      accentColor: String(body.accentColor || '').trim(),
-      formId: String(body.formId || '').trim(),
-      leadMagnetId: String(body.leadMagnetId || '').trim(),
-      headlineId: String(body.headlineId || '').trim(),
-      pitchId: String(body.pitchId || '').trim(),
-      ctaId: String(body.ctaId || '').trim(),
-      websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
-      backgroundImageId: String(body.backgroundImageId || '').trim(),
-      featureImageId: String(body.featureImageId || '').trim(),
-      highlightImageId: String(body.highlightImageId || '').trim(),
-      featureHeadlineId: String(body.featureHeadlineId || '').trim(),
-      featureSubheadingId: String(body.featureSubheadingId || '').trim(),
-      featureTitle: String(body.featureTitle || '').trim(),
-      featureCopy: String(body.featureCopy || '').trim(),
-      highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
-      highlightPitchId: String(body.highlightPitchId || '').trim(),
-      highlightTitle: String(body.highlightTitle || '').trim(),
-      highlightCopy: String(body.highlightCopy || '').trim(),
-      bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
-      bodySubheadingId: String(body.bodySubheadingId || '').trim(),
-      bodyPitchId: String(body.bodyPitchId || '').trim(),
-      logoWideId: String(body.logoWideId || '').trim(),
-      logoSquareId: String(body.logoSquareId || '').trim(),
-      themeId: String(body.themeId || '').trim(),
-      theme: body.theme,
-      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
-        ? (body.layoutSections || body.layout_sections)
-        : [],
-      contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
-    }, scope);
+    const result = await updatePage(landingPageId, built.patch, scope);
     if (!result.ok) {
       return sendErr(
         res,
