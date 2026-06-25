@@ -1,7 +1,9 @@
 /**
  * Vercel Edge Middleware — custom-domain public sites at clean URLs.
- * Rewrites / and /slug to serverless handlers that return site.html.
+ * Internally rewrites / and /slug to serverless handlers; browser URL stays clean.
  */
+
+import { rewrite } from '@vercel/functions';
 
 const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.vercel\.app|starcaster\.pro|.*\.starcaster\.pro)$/;
 
@@ -27,14 +29,10 @@ export default async function middleware(request) {
   );
   if (!host || SYSTEM_HOST_RE.test(host)) return;
 
-  const invokeUrl = new URL(request.url);
-  invokeUrl.pathname = pathname === '/' ? '/api/index' : `/api${pathname}`;
+  const target = new URL(request.url);
+  target.pathname = pathname === '/' ? '/api/index' : `/api${pathname}`;
 
-  return fetch(invokeUrl.toString(), {
-    method: request.method,
-    headers: request.headers,
-    redirect: 'manual',
-  });
+  return rewrite(target);
 }
 
 export const config = {
