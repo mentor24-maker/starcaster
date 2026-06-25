@@ -70,21 +70,27 @@ function filterPublicSections(
   }));
 }
 
+function findHomePage(pages: SitePage[]): SitePage | null {
+  const emptySlug = pages.find((p) => p.slug === "");
+  if (emptySlug) return emptySlug;
+  const homeSlug = pages.find((p) => p.slug === "home");
+  if (homeSlug) return homeSlug;
+  return null;
+}
+
 function findPageForPath(pages: SitePage[], pathname: string): SitePage | null {
   if (!pages.length) return null;
   const slug = slugFromPathname(pathname);
 
-  if (slug) {
-    const exact = pages.find((p) => p.slug === slug);
-    if (exact) return exact;
-  }
-
   if (isHomeSlug(slug)) {
-    const home = pages.find((p) => isHomeSlug(p.slug));
-    if (home) return home;
+    return findHomePage(pages);
   }
 
-  return pages[0] ?? null;
+  if (slug) {
+    return pages.find((p) => p.slug === slug) ?? null;
+  }
+
+  return null;
 }
 
 type Props = { projectId: string };
@@ -95,8 +101,9 @@ export function BuilderPublicSitePage({ projectId }: Props) {
 
   useEffect(() => {
     if (!projectId) { setLoaded(true); return; }
+    const routingPath = window.location.pathname + window.location.search;
     fetchPublicPages(projectId)
-      .then((pages) => setPage(findPageForPath(pages, window.location.pathname)))
+      .then((pages) => setPage(findPageForPath(pages, routingPath)))
       .catch(() => setPage(null))
       .finally(() => setLoaded(true));
   }, [projectId]);
