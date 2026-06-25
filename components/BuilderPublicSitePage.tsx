@@ -18,15 +18,12 @@ type SitePage = {
 };
 
 function slugFromPathname(pathname: string): string {
-  let p = pathname.replace(/\.html$/, "");
-  p = p.replace(/^\/api\/_site\/[^/]+/, "").replace(/^\/_site\/[^/]+/, "");
-  if (p === "/_site" || p === "/api/_site") p = "/";
-  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const restorePath = params?.get("path");
-  if (restorePath) {
-    p = restorePath.replace(/\.html$/, "");
-  }
-  return p.replace(/^\//, "").replace(/\/$/, "");
+  const p = pathname.replace(/\.html$/, "").replace(/^\//, "").replace(/\/$/, "");
+  return p;
+}
+
+function isHomeSlug(slug: string): boolean {
+  return slug === "" || slug === "home";
 }
 
 async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
@@ -70,12 +67,18 @@ function filterPublicSections(
 function findPageForPath(pages: SitePage[], pathname: string): SitePage | null {
   if (!pages.length) return null;
   const slug = slugFromPathname(pathname);
-  // Try exact slug match first, then fall back to root/home page
-  const exact = pages.find((p) => p.slug === slug);
-  if (exact) return exact;
-  // Root path or no match — use first page (or one with empty slug)
-  const home = pages.find((p) => p.slug === "") ?? pages[0];
-  return home ?? null;
+
+  if (slug) {
+    const exact = pages.find((p) => p.slug === slug);
+    if (exact) return exact;
+  }
+
+  if (isHomeSlug(slug)) {
+    const home = pages.find((p) => isHomeSlug(p.slug));
+    if (home) return home;
+  }
+
+  return pages[0] ?? null;
 }
 
 type Props = { projectId: string };

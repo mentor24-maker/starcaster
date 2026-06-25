@@ -15,14 +15,17 @@
         || h.endsWith('.vercel.app')
         || h === 'starcaster.pro'
         || h.endsWith('.starcaster.pro');
+      var p = window.location.pathname || '/';
+      if (p.indexOf('/api/_site/') === 0) {
+        var params = new URLSearchParams(window.location.search || '');
+        window.location.replace(params.get('path') || '/');
+        return;
+      }
       if (sys) {
         window.location.replace('/app-shell.html');
         return;
       }
-      var p = window.location.pathname || '/';
-      if (p.indexOf('/api/_site/') === 0) return;
-      var path = p + (window.location.search || '');
-      window.location.replace('/api/_site/' + encodeURIComponent(h) + '?path=' + encodeURIComponent(path || '/'));
+      window.location.replace('/');
     })();
   </script>
 </head>
