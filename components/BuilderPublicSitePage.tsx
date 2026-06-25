@@ -64,10 +64,9 @@ function filterPublicSections(
 ): SitePage["layoutSections"] {
   return sections.map((section) => ({
     ...section,
-    columns: section.columns.map((col) => ({
-      ...col,
-      modules: col.modules.filter((m) => !ADMIN_ONLY_MODULE_TYPES.has(m.type)),
-    })),
+    modules: (section.modules || []).filter(
+      (m) => !ADMIN_ONLY_MODULE_TYPES.has(m.type)
+    ),
   }));
 }
 
