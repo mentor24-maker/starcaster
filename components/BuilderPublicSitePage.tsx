@@ -7,6 +7,7 @@ import {
   createDefaultTheme,
   normalizeBuilderDocument,
 } from "@/lib/builder-template";
+import { getAdminAuthHeaders } from "@/lib/public-admin-session";
 
 type SitePage = {
   name: string;
@@ -65,7 +66,7 @@ async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
 async function fetchRestrictedAdminPages(projectId: string): Promise<SitePage[] | "unauthorized"> {
   const res = await fetch(
     `/api/public/admin-pages?projectId=${encodeURIComponent(projectId)}`,
-    { credentials: "include" }
+    { credentials: "include", headers: getAdminAuthHeaders() }
   );
   if (res.status === 401) return "unauthorized";
   if (!res.ok) return [];

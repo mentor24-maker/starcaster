@@ -2,6 +2,11 @@
   "version": 2,
   "routes": [
     {
+      "src": "/builder-bundle.js",
+      "dest": "/builder-bundle.js",
+      "headers": { "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0" }
+    },
+    {
       "src": "/(.*\\.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|webp|map|ttf|eot|woff2)$)",
       "dest": "/$1",
       "headers": { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }

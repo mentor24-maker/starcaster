@@ -13,6 +13,11 @@ import {
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
+import {
+  getAdminAuthHeaders,
+  readApiErrorMessage,
+  setAdminSessionToken,
+} from "@/lib/public-admin-session";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { TractorNavRuntime } from "@/components/builder-tractor-nav-module";
@@ -3220,6 +3225,7 @@ function AdminTeamUsersPreview({
 
   const headers = {
     ...getCrmProjectHeaders(),
+    ...getAdminAuthHeaders(),
     ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
   };
 
@@ -3425,11 +3431,12 @@ function AdminLoginPreview({
   const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
 
   useEffect(() => {
-    fetch("/api/admin/auth/me", { credentials: "include" })
+    fetch("/api/admin/auth/me", { credentials: "include", headers: getAdminAuthHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.adminUser) {
-          setAdminEmail(d.adminUser.email || "");
+        const adminUser = d?.adminUser ?? d?.data?.adminUser;
+        if (adminUser) {
+          setAdminEmail(adminUser.email || "");
           setAuthState("authed");
           if (!isPreview) window.location.href = successRedirect;
         } else {
@@ -3451,7 +3458,13 @@ function AdminLoginPreview({
         body: JSON.stringify({ projectId, email: email.trim().toLowerCase(), password }),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setError(d.error || "Invalid email or password"); return; }
+      if (!r.ok) {
+        setError(readApiErrorMessage(d, "Invalid email or password"));
+        return;
+      }
+      const payload = (d && typeof d === "object" ? d.data ?? d : {}) as Record<string, unknown>;
+      const token = String(payload.sessionToken || "").trim();
+      if (token) setAdminSessionToken(token);
       window.location.href = successRedirect;
     } catch {
       setError("Connection error. Please try again.");
@@ -3550,6 +3563,7 @@ function AdminModulesPreview({
 
   const headers = {
     ...getCrmProjectHeaders(),
+    ...getAdminAuthHeaders(),
     ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
   };
 
