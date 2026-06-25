@@ -197,7 +197,7 @@ async function handleRequest(req, res) {
   }
 
   // ── Non-API page requests (custom domain routing) ───────────────────────
-  if (isPageRequestPath(pathnameEarly)) {
+  if (isPageRequestPath(pathnameEarly, req)) {
     await handlePageRequest(req, res, pagePathnameForRequest(pathnameEarly));
     return;
   }
@@ -458,13 +458,39 @@ const MIME_MAP = {
   '.json': 'application/json',
 };
 
-function isPageRequestPath(pathname) {
+function isRegisteredApiPath(pathname) {
+  const p = normalizeApiPathname(pathname);
+  if (p === '/api') return true;
+  if (CRON_PATHS.has(p)) return true;
+  if (p === '/api/ping') return true;
+  if (p === '/api/debug-routes') return true;
+  if (p === '/api/contact') return true;
+  if (p === '/api/assets/import-drive-folder') return true;
+  if (p === '/api/assets/import-from-fields/status') return true;
+  if (p === '/api/assets/import-from-fields') return true;
+  if (p === '/api/builder/devAgent/worker') return true;
+  for (const mod of ROUTE_MODULES) {
+    const prefixes = Array.isArray(mod?.manifest?.prefixes) ? mod.manifest.prefixes : [];
+    for (const prefix of prefixes) {
+      const norm = normalizeApiPathname(prefix);
+      if (p === norm || p.startsWith(`${norm}/`)) return true;
+    }
+  }
+  return false;
+}
+
+function isPageRequestPath(pathname, req) {
   const p = normalizeApiPathname(pathname);
   if (p === '/api') return true;
   if (p === '/api/app-shell.html') return true;
   if (p === '/api/index.html') return true;
   if (p === '/api/_site' || p.startsWith('/api/_site/')) return true;
-  return !p.startsWith('/api/');
+  if (!p.startsWith('/api/')) return true;
+  if (!isRegisteredApiPath(p)) {
+    const host = getClientHost(req);
+    if (host && !isSystemHost(host)) return true;
+  }
+  return false;
 }
 
 function pagePathnameForRequest(pathname) {
@@ -474,6 +500,9 @@ function pagePathnameForRequest(pathname) {
   if (p === '/api/index.html') return '/index.html';
   if (p === '/api/_site') return '/_site';
   if (p.startsWith('/api/_site/')) return p.slice(4);
+  if (p.startsWith('/api/') && !isRegisteredApiPath(p)) {
+    return p.slice(4) || '/';
+  }
   return p;
 }
 
@@ -579,15 +608,32 @@ function isBootstrapPath(pathname) {
     || p.startsWith('/_site/') || p.startsWith('/api/_site/');
 }
 
-function redirectToPublicSiteBootstrap(res, domain, currentPath) {
-  const path = String(currentPath || '/').trim() || '/';
-  res.statusCode = 302;
-  res.setHeader('Location', `/api/_site/${encodeURIComponent(domain)}?path=${encodeURIComponent(path)}`);
+function redirectToCleanPublicPath(res, targetPath) {
+  const path = String(targetPath || '/').trim() || '/';
+  res.statusCode = 301;
+  res.setHeader('Location', path.startsWith('/') ? path : `/${path}`);
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.end();
 }
 
 async function handlePageRequest(req, res, pathname) {
+  const urlObj = getUrlObj(req);
+
+  if (isBootstrapPath(pathname)) {
+    const result = await resolvePublicSiteProject(req, pathname);
+    const restorePath = String(urlObj.searchParams.get('path') || '/').trim() || '/';
+    if (result.ok) {
+      res.setHeader('X-Site-Handler', 'bootstrap-redirect');
+      redirectToCleanPublicPath(res, restorePath);
+      return;
+    }
+    res.setHeader('X-Site-Handler', 'bootstrap-miss');
+    res.statusCode = 404;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('Public site not found for this domain');
+    return;
+  }
+
   const result = await resolvePublicSiteProject(req, pathname);
   if (result.ok) {
     const { id: projectId, name: projectName } = result.data;
@@ -596,23 +642,12 @@ async function handlePageRequest(req, res, pathname) {
     return;
   }
 
-  const urlObj = getUrlObj(req);
   const host = getClientHost(req);
-  const pathDomain = getPublicSiteDomainFromPath(pathname || '');
-  const customDomain = pathDomain || (!isSystemHost(host) ? host : '');
-
-  if (customDomain && isBootstrapPath(pathname)) {
-    res.setHeader('X-Site-Handler', 'bootstrap-miss');
+  if (host && !isSystemHost(host)) {
+    res.setHeader('X-Site-Handler', 'domain-miss');
     res.statusCode = 404;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end('Public site not found for this domain');
-    return;
-  }
-
-  if (customDomain) {
-    const currentPath = (pathname || '/') + (urlObj.search || '');
-    res.setHeader('X-Site-Handler', 'redirect');
-    redirectToPublicSiteBootstrap(res, customDomain, currentPath);
+    res.end('No published site for this domain');
     return;
   }
 
