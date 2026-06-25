@@ -497,6 +497,7 @@ App.builder = (function () {
     filters: {
       name: '',
       templateId: '',
+      visibility: '',
     },
     sort: {
       key: 'updatedAt',
@@ -8048,12 +8049,15 @@ App.builder = (function () {
   function getFilteredSortedPages() {
     const nameFilter = safeText(landingPageTableState.filters.name).toLowerCase();
     const templateFilter = safeText(landingPageTableState.filters.templateId);
+    const visibilityFilter = safeText(landingPageTableState.filters.visibility).toLowerCase();
 
     const rows = savedPages.filter((item) => {
       const name = safeText(item.name).toLowerCase();
       const templateId = safeText(item.templateId);
       if (nameFilter && !name.includes(nameFilter)) return false;
       if (templateFilter && templateId !== templateFilter) return false;
+      if (visibilityFilter === 'public' && pageIsPrivate(item)) return false;
+      if (visibilityFilter === 'private' && !pageIsPrivate(item)) return false;
       return true;
     });
 
@@ -8077,6 +8081,9 @@ App.builder = (function () {
       } else if (key === 'isPublished') {
         left = pageIsPublished(a) ? '1' : '0';
         right = pageIsPublished(b) ? '1' : '0';
+      } else if (key === 'isPrivate') {
+        left = pageIsPrivate(a) ? '1' : '0';
+        right = pageIsPrivate(b) ? '1' : '0';
       } else {
         left = safeText(a.updatedAt);
         right = safeText(b.updatedAt);
@@ -8114,6 +8121,15 @@ App.builder = (function () {
     return true;
   }
 
+  function pageIsPrivate(item) {
+    if (!item || typeof item !== 'object') return false;
+    return item.isPrivate === true || item.is_private === true;
+  }
+
+  function pageVisibilityLabel(item) {
+    return pageIsPrivate(item) ? 'Private' : 'Public';
+  }
+
   function renderPagesTable() {
     const tbody = byId('builderPagesTableBody');
     if (!tbody) return;
@@ -8124,6 +8140,7 @@ App.builder = (function () {
       ['builderPagesSortTemplateBtn', 'templateId', 'Template'],
       ['builderPagesSortThemeBtn', 'themeId', 'Theme'],
       ['builderPagesSortSlugBtn', 'slug', 'Slug'],
+      ['builderPagesSortVisibilityBtn', 'isPrivate', 'Visibility'],
       ['builderPagesSortPublishedBtn', 'isPublished', 'Published'],
       ['builderPagesSortUpdatedBtn', 'updatedAt', 'Updated'],
     ];
@@ -8147,11 +8164,16 @@ App.builder = (function () {
       );
     }
 
+    const visibilityFilter = byId('builderPagesVisibilityFilter');
+    if (visibilityFilter) {
+      visibilityFilter.value = safeText(landingPageTableState.filters.visibility);
+    }
+
     const rows = getFilteredSortedPages();
     if (!rows.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.colSpan = 8;
+      cell.colSpan = 9;
       cell.textContent = 'No pages yet.';
       row.appendChild(cell);
       tbody.appendChild(row);
@@ -8192,6 +8214,8 @@ App.builder = (function () {
       slugCode.textContent = slugText ? `/${slugText}` : '/';
       slugTd.appendChild(slugCode);
       row.appendChild(slugTd);
+
+      append(pageVisibilityLabel(item));
 
       const publishTd = document.createElement('td');
       const publishCheckbox = document.createElement('input');
@@ -13140,6 +13164,7 @@ App.builder = (function () {
 
     const landingPageNameFilter = byId('builderPagesNameFilter');
     const landingPageTemplateFilter = byId('builderPagesTemplateFilter');
+    const landingPageVisibilityFilter = byId('builderPagesVisibilityFilter');
     const landingPageSelectAll = byId('builderPagesSelectAllVisible');
     const landingPageBulkDeleteBtn = byId('builderPagesBulkDeleteBtn');
     const landingPageBulkEditBtn = byId('builderPagesBulkEditBtn');
@@ -13161,11 +13186,19 @@ App.builder = (function () {
       });
     }
 
+    if (landingPageVisibilityFilter) {
+      landingPageVisibilityFilter.addEventListener('change', () => {
+        landingPageTableState.filters.visibility = safeText(landingPageVisibilityFilter.value);
+        renderPagesTable();
+      });
+    }
+
     [
       ['builderPagesSortNameBtn', 'name', 'asc'],
       ['builderPagesSortTemplateBtn', 'templateId', 'asc'],
       ['builderPagesSortThemeBtn', 'themeId', 'asc'],
       ['builderPagesSortSlugBtn', 'slug', 'asc'],
+      ['builderPagesSortVisibilityBtn', 'isPrivate', 'asc'],
       ['builderPagesSortPublishedBtn', 'isPublished', 'desc'],
       ['builderPagesSortUpdatedBtn', 'updatedAt', 'desc'],
     ].forEach(([id, key, defaultDir]) => {
