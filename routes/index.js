@@ -494,7 +494,7 @@ function isPageRequestPath(pathname, req) {
 
 function pagePathnameForRequest(pathname) {
   const p = normalizeApiPathname(pathname);
-  if (p === '/api') return '/';
+  if (p === '/api' || p === '/api/index') return '/';
   if (p === '/api/app-shell.html') return '/app-shell.html';
   if (p === '/api/_site') return '/_site';
   if (p.startsWith('/api/_site/')) return p.slice(4);
