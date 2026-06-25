@@ -87,6 +87,8 @@ flowchart TB
 | `api/index.js` | Serverless entry for `/` |
 | `api/[...slug].js` | Serverless catch-all |
 | `routes/index.js` | Dispatcher; wires `publicSitePages` early for page paths |
+| `lib/publicSiteHostBinding.js` | Host ↔ project binding for public APIs |
+| `lib/publicSitePageFilter.js` | Excluded admin/editor slugs for public pages API |
 | `routes/publicSitePages.js` | HTML routing: public site vs admin shell |
 | `routes/publicSite.js` | JSON API: `/api/public/site`, `/api/public/pages` |
 | `routes/http.js` | `getClientHost()`, domain path/param helpers |
@@ -234,7 +236,65 @@ curl -sI "https://benvin.org/api/_site/benvin.org?path=%2F"
 
 ---
 
-## 10. Related docs
+## 10. Security & tenant isolation
+
+### What is already enforced
+
+| Safeguard | Effect |
+|-----------|--------|
+| **Unique `app_projects.domain`** | DB unique index + 409 on save — two projects cannot claim the same hostname |
+| **Server-side HTML routing** | `resolvePublicSiteProject()` maps Host → project before injecting `__SITE_CONFIG__`; visitors cannot pick another tenant’s shell by URL alone |
+| **System host list** | `starcaster.pro`, `*.vercel.app`, localhost → admin SPA, never tenant site |
+| **Edge middleware scope** | Rewrites apply only to non-system hosts |
+| **Published-only pages API** | `listPublishedPagesForProject()` filters `is_published` + `is_private = false` |
+| **Cookie host isolation** | `app_session` on `starcaster.pro` is not sent to `benvin.org` (browser same-origin policy) |
+| **Platform API auth** | Almost all `/api/*` routes require login; public allowlist is small (see below) |
+
+### Public API allowlist (no platform login today)
+
+- `GET /api/public/site`, `GET /api/public/pages`
+- `POST /api/contact`, `POST /api/crm/contact-submit`
+- `GET /api/crm/forms/:id` (form config for embedded CRM forms)
+
+Everything else returns **401** without a session — but a session obtained **on the custom domain** (e.g. via a published admin-login page) would still work against authenticated routes. Treat unpublished admin slugs as a publishing discipline issue until server-side slug filtering lands.
+
+### Known gaps (ranked)
+
+| Priority | Gap | Risk | Status |
+|----------|-----|------|--------|
+| **High** | `GET /api/public/pages?projectId=` accepts any project ID | Cross-tenant **read** of published page JSON | **Fixed** — `lib/publicSiteHostBinding.js` |
+| **High** | `POST /api/contact` and `/api/crm/contact-submit` trust client `projectId` | Cross-tenant **write** | **Fixed** — same host binding |
+| **Medium** | Authenticated `/api/*` reachable from tenant hostname | Admin login on public site + session | Deferred — custom-domain API allowlist (#2) |
+| **Medium** | Admin slugs (`admin-login`, etc.) can be published | Public exposure of admin UI | **Fixed** — `lib/publicSitePageFilter.js` |
+| **Low** | Legacy `/api/_site/{domain}?path=` bootstrap | Domain probing | Keep for ops |
+| **Low** | No CSP on `site.html` | XSS on tenant site | Future |
+
+### Hardening modules
+
+| Module | Role |
+|--------|------|
+| `lib/publicSiteHostBinding.js` | On custom domains, `projectId` / `domain` query must match `findProjectByDomain(host)` |
+| `lib/publicSitePageFilter.js` | Drops `admin-*`, editor, and CRM admin slugs from `/api/public/pages` |
+
+System hosts (`starcaster.pro`, localhost, …) skip host binding so Builder preview and local dev keep working.
+
+### Recommended hardening roadmap
+
+1. ~~**Host-bind public reads/writes**~~ — done (see modules above).
+2. **Custom-domain API fence** — early in `routes/index.js`: if `!isSystemHost(host)` and path is not in the public allowlist → **403** (even with valid session). Planned after more public-module audit.
+3. ~~**Filter admin pages server-side**~~ — done via `publicSitePageFilter`.
+4. **Rate limits** — per-IP limits on `/api/public/*` and form POST endpoints (reuse `lib/rateLimiter.js`).
+5. **Operational** — one Vercel project per environment; domain aliases only for verified tenants.
+
+### What “no bleed” means in practice
+
+- **Wrong site HTML on wrong domain** — already prevented by host → project lookup for page routing.
+- **StarCaster admin on client domain** — prevented by middleware + system host list + fallbacks that check `#siteRoot`.
+- **Client A data on Client B domain** — host-binding on public APIs and form POSTs is enforced; API allowlist (#2) still deferred.
+
+---
+
+## 11. Related docs
 
 - `docs/Markdown Files/AI_AGENT_HANDOFF.md` — project overview
 - `docs/builder-port.md` — Builder React / CSS scoping (`.builder-react-root`)
