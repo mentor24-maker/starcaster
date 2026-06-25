@@ -133,14 +133,44 @@ App.projectContext = (function projectContextModule() {
     applyFavicon();
   }
 
+  function faviconVersionKey(project, faviconUrl) {
+    const id = String(project?.id || '').trim();
+    const url = String(faviconUrl || '').trim();
+    if (!id || !url) return '';
+    return `${id}_${url.length}_${url.slice(-32)}`;
+  }
+
+  function replaceDocumentFaviconLinks(href) {
+    const nextHref = String(href || '').trim() || DEFAULT_FAVICON_URL;
+    document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]').forEach((node) => {
+      node.remove();
+    });
+    const icon = document.createElement('link');
+    icon.rel = 'icon';
+    icon.href = nextHref;
+    const shortcut = document.createElement('link');
+    shortcut.rel = 'shortcut icon';
+    shortcut.href = nextHref;
+    const apple = document.createElement('link');
+    apple.rel = 'apple-touch-icon';
+    apple.href = nextHref;
+    document.head.appendChild(icon);
+    document.head.appendChild(shortcut);
+    document.head.appendChild(apple);
+  }
+
   function applyFavicon() {
     const sessionProject = getSessionProject();
     const faviconUrl = getProjectFaviconDataUrl(sessionProject);
-    const href = faviconUrl || DEFAULT_FAVICON_URL;
-    const iconLink = document.querySelector('link[rel="icon"]');
-    const appleLink = document.querySelector('link[rel="apple-touch-icon"]');
-    if (iconLink) iconLink.href = href;
-    if (appleLink) appleLink.href = href;
+    const projectId = String(sessionProject?.id || '').trim();
+    if (faviconUrl && projectId) {
+      const version = encodeURIComponent(faviconVersionKey(sessionProject, faviconUrl));
+      replaceDocumentFaviconLinks(
+        `/api/projects/active/favicon?project=${encodeURIComponent(projectId)}&v=${version}`
+      );
+      return;
+    }
+    replaceDocumentFaviconLinks(DEFAULT_FAVICON_URL);
   }
 
   function syncProjectLogoInState(projectIdInput, dataUrlInput) {
