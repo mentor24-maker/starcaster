@@ -17,9 +17,10 @@
         || h.endsWith('.starcaster.pro');
       if (sys) return;
       var p = window.location.pathname || '/';
-      if (p.indexOf('/api/_site/') === 0) return;
-      var path = p + (window.location.search || '');
-      window.location.replace('/api/_site/' + encodeURIComponent(h) + '?path=' + encodeURIComponent(path || '/'));
+      if (p.indexOf('/api/') === 0) return;
+      var q = window.location.search || '';
+      var dest = p === '/' ? '/api/index' : '/api' + p;
+      window.location.replace(dest + q + (window.location.hash || ''));
     })();
   </script>
   <link rel="icon" type="image/png" sizes="512x512" href="/images/favicon_alphire_512x512.png" />
