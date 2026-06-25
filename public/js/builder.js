@@ -2450,8 +2450,9 @@ App.builder = (function () {
     const help = options.helpNode || null;
     const prefix = safeText(options.prefix) || 'builderModuleField';
     const definition = getDevelopModuleTypeDefinition(type) || MODULE_TYPE_DEFINITIONS[0];
+    const useGridLayout = options.gridMode === true;
     host.textContent = '';
-    host.className = 'grid-form';
+    host.className = useGridLayout ? 'standard-form-grid' : 'grid-form';
     if (help) {
       help.textContent = safeText(definition.description, 500);
     }
@@ -2465,7 +2466,9 @@ App.builder = (function () {
           settings?.backgroundImageId
         );
         const wrap = document.createElement('div');
-        wrap.className = 'stack-form builder-module-background-field-wrap';
+        wrap.className = useGridLayout
+          ? 'builder-module-background-field-wrap standard-form-grid-full'
+          : 'stack-form builder-module-background-field-wrap';
         wrap.setAttribute('data-module-bg-field-key', field.key);
         const controlsParser = new DOMParser();
         const controlsDoc = controlsParser.parseFromString(
@@ -2494,13 +2497,15 @@ App.builder = (function () {
       }
 
       const wrap = document.createElement('label');
-      wrap.className = field.control === 'textarea' ? 'stack-form' : 'stack-form';
-      if (prefix === 'builderModuleField') {
+      wrap.className = useGridLayout ? 'standard-form-grid-full' : 'stack-form';
+      if (!useGridLayout && prefix === 'builderModuleField') {
         wrap.classList.add('builder-modules-studio-row');
       }
       const label = document.createElement('span');
       label.textContent = field.label;
-      wrap.appendChild(label);
+      if (!useGridLayout) {
+        wrap.appendChild(label);
+      }
 
       const value = Object.prototype.hasOwnProperty.call(settings || {}, field.key)
         ? settings[field.key]
@@ -2510,8 +2515,8 @@ App.builder = (function () {
       const contentSettingKey = safeText(field.contentSettingKey) || `${field.key}SourceId`;
       if (field.contentSource) {
         const pickerWrap = document.createElement('label');
-        pickerWrap.className = 'stack-form';
-        if (prefix === 'builderModuleField') {
+        pickerWrap.className = useGridLayout ? 'standard-form-grid-full stack-form' : 'stack-form';
+        if (!useGridLayout && prefix === 'builderModuleField') {
           pickerWrap.classList.add('builder-modules-studio-row');
         }
         const pickerLabel = document.createElement('span');
@@ -2554,7 +2559,9 @@ App.builder = (function () {
           ? toDirectAssetUrl(currentAsset.location)
           : '';
 
-        wrap.className = 'stack-form builder-module-image-field';
+        wrap.className = useGridLayout
+          ? 'builder-module-image-field standard-form-grid-full'
+          : 'stack-form builder-module-image-field';
 
         control = document.createElement('input');
         control.type = 'hidden';
@@ -2676,7 +2683,9 @@ App.builder = (function () {
         const pickerId = `${prefix}_${field.key}`;
         const currentAssetId = safeText(value);
         const currentAsset = getAssetById(currentAssetId);
-        wrap.className = 'stack-form builder-module-image-field';
+        wrap.className = useGridLayout
+          ? 'builder-module-image-field standard-form-grid-full'
+          : 'stack-form builder-module-image-field';
 
         control = document.createElement('input');
         control.type = 'hidden';
@@ -2755,7 +2764,9 @@ App.builder = (function () {
       if (field.control === 'saved-form-picker') {
         const pickerId = `${prefix}_${field.key}`;
         const currentFormId = safeText(value);
-        wrap.className = 'stack-form builder-module-image-field';
+        wrap.className = useGridLayout
+          ? 'builder-module-image-field standard-form-grid-full'
+          : 'stack-form builder-module-image-field';
 
         control = document.createElement('input');
         control.type = 'hidden';
@@ -2828,7 +2839,9 @@ App.builder = (function () {
 
       if (field.control === 'table-contents-editor') {
         const editorId = `${prefix}_${field.key}`;
-        wrap.className = 'stack-form builder-module-image-field';
+        wrap.className = useGridLayout
+          ? 'builder-module-image-field standard-form-grid-full'
+          : 'stack-form builder-module-image-field';
 
         control = document.createElement('input');
         control.type = 'hidden';
@@ -2909,7 +2922,9 @@ App.builder = (function () {
 
       if (field.control === 'nav-menu-editor') {
         const editorId = `${prefix}_${field.key}`;
-        wrap.className = 'stack-form builder-module-nav-menu-field';
+        wrap.className = useGridLayout
+          ? 'builder-module-nav-menu-field standard-form-grid-full'
+          : 'stack-form builder-module-nav-menu-field';
 
         control = document.createElement('input');
         control.type = 'hidden';
@@ -2995,7 +3010,7 @@ App.builder = (function () {
         control.rows = Number(field.rows) || 3;
         control.value = safeText(value, 10000);
       } else if (field.control === 'richtext') {
-        wrap.className = 'stack-form';
+        wrap.className = useGridLayout ? 'standard-form-grid-full' : 'stack-form';
         const toolbar = document.createElement('div');
         toolbar.className = 'builder-richtext-toolbar';
         const editor = document.createElement('div');
@@ -3254,13 +3269,15 @@ App.builder = (function () {
         if (field.max !== undefined) control.max = String(field.max);
         if (field.step !== undefined) control.step = String(field.step);
       } else if (field.control === 'checkbox') {
-        wrap.className = 'checkbox-row';
         control = document.createElement('input');
         control.type = 'checkbox';
         control.checked = Boolean(value);
-        wrap.textContent = '';
-        wrap.appendChild(control);
-        wrap.appendChild(label);
+        if (!useGridLayout) {
+          wrap.className = 'checkbox-row';
+          wrap.textContent = '';
+          wrap.appendChild(control);
+          wrap.appendChild(label);
+        }
       } else {
         control = document.createElement('input');
         control.type = 'text';
@@ -3273,10 +3290,35 @@ App.builder = (function () {
       if (field.placeholder && 'placeholder' in control) {
         control.placeholder = field.placeholder;
       }
-      if (field.control !== 'checkbox') {
-        wrap.appendChild(control);
+      if (useGridLayout) {
+        const isComplexLayout = field.control === 'textarea' ||
+          field.control === 'poll-options' ||
+          field.control === 'poll-csv-upload' ||
+          (field.control === 'color' && field.allowTransparent);
+        if (isComplexLayout) {
+          wrap.insertBefore(label, wrap.firstChild);
+          wrap.appendChild(control);
+          host.appendChild(wrap);
+        } else if (field.control === 'checkbox') {
+          const gridLabel = document.createElement('label');
+          gridLabel.textContent = field.label;
+          gridLabel.htmlFor = `${prefix}_${field.key}`;
+          control.className = (control.className ? control.className + ' ' : '') + 'standard-form-checkbox';
+          host.appendChild(gridLabel);
+          host.appendChild(control);
+        } else {
+          const gridLabel = document.createElement('label');
+          gridLabel.textContent = field.label;
+          gridLabel.htmlFor = `${prefix}_${field.key}`;
+          host.appendChild(gridLabel);
+          host.appendChild(control);
+        }
+      } else {
+        if (field.control !== 'checkbox') {
+          wrap.appendChild(control);
+        }
+        host.appendChild(wrap);
       }
-      host.appendChild(wrap);
     });
   }
 
@@ -8011,12 +8053,15 @@ App.builder = (function () {
       } else if (key === 'templateId') {
         left = getLandingPageTemplateName(a.templateId).toLowerCase();
         right = getLandingPageTemplateName(b.templateId).toLowerCase();
-      } else if (key === 'headlineId') {
-        left = getLandingPageHeadlineLabel(a.headlineId).toLowerCase();
-        right = getLandingPageHeadlineLabel(b.headlineId).toLowerCase();
-      } else if (key === 'formId') {
-        left = getSavedFormName(a.formId).toLowerCase();
-        right = getSavedFormName(b.formId).toLowerCase();
+      } else if (key === 'themeId') {
+        left = getSavedThemeName(a.themeId).toLowerCase();
+        right = getSavedThemeName(b.themeId).toLowerCase();
+      } else if (key === 'slug') {
+        left = safeText(a.slug).toLowerCase();
+        right = safeText(b.slug).toLowerCase();
+      } else if (key === 'isPublished') {
+        left = pageIsPublished(a) ? '1' : '0';
+        right = pageIsPublished(b) ? '1' : '0';
       } else {
         left = safeText(a.updatedAt);
         right = safeText(b.updatedAt);
@@ -8044,6 +8089,14 @@ App.builder = (function () {
     if (bulkDeleteBtn) bulkDeleteBtn.disabled = !selectedPageIds.size;
     const bulkArchiveBtn2 = byId('builderPagesBulkArchiveBtn');
     if (bulkArchiveBtn2) bulkArchiveBtn2.disabled = !selectedPageIds.size;
+    const bulkPublishBtn = byId('builderPagesBulkPublishBtn');
+    if (bulkPublishBtn) bulkPublishBtn.disabled = !selectedPageIds.size;
+  }
+
+  function pageIsPublished(item) {
+    if (!item || typeof item !== 'object') return true;
+    if (item.isPublished === false || item.is_published === false) return false;
+    return true;
   }
 
   function renderPagesTable() {
@@ -8055,8 +8108,8 @@ App.builder = (function () {
       ['builderPagesSortNameBtn', 'name', 'Name'],
       ['builderPagesSortTemplateBtn', 'templateId', 'Template'],
       ['builderPagesSortThemeBtn', 'themeId', 'Theme'],
-      ['builderPagesSortHeadlineBtn', 'headlineId', 'Headline'],
-      ['builderPagesSortFormBtn', 'formId', 'Form'],
+      ['builderPagesSortSlugBtn', 'slug', 'Slug'],
+      ['builderPagesSortPublishedBtn', 'isPublished', 'Published'],
       ['builderPagesSortUpdatedBtn', 'updatedAt', 'Updated'],
     ];
     sortButtons.forEach(([id, key, label]) => {
@@ -8117,8 +8170,37 @@ App.builder = (function () {
       append(safeText(item.name) || '-');
       append(getLandingPageTemplateName(item.templateId) || '-');
       append(getSavedThemeName(item.themeId) || '-');
-      append(getLandingPageHeadlineLabel(item.headlineId) || '-');
-      append(getSavedFormName(item.formId) || '-');
+
+      const slugTd = document.createElement('td');
+      const slugCode = document.createElement('code');
+      const slugText = safeText(item.slug);
+      slugCode.textContent = slugText ? `/${slugText}` : '/';
+      slugTd.appendChild(slugCode);
+      row.appendChild(slugTd);
+
+      const publishTd = document.createElement('td');
+      const publishCheckbox = document.createElement('input');
+      publishCheckbox.type = 'checkbox';
+      publishCheckbox.className = 'standard-form-checkbox';
+      publishCheckbox.checked = pageIsPublished(item);
+      publishCheckbox.setAttribute('aria-label', `Publish ${safeText(item.name) || id}`);
+      publishCheckbox.addEventListener('change', async () => {
+        const nextPublished = publishCheckbox.checked;
+        try {
+          await api(`/api/builder/landing-pages/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ isPublished: nextPublished }),
+          });
+          item.isPublished = nextPublished;
+          notify(nextPublished ? 'Page published' : 'Page unpublished');
+        } catch (err) {
+          publishCheckbox.checked = !nextPublished;
+          notify(err.message || 'Could not update publish status', true);
+        }
+      });
+      publishTd.appendChild(publishCheckbox);
+      row.appendChild(publishTd);
+
       append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-');
 
       const actionsTd = document.createElement('td');
@@ -9268,6 +9350,18 @@ App.builder = (function () {
     if (pageHeaderPreviewBtn) pageHeaderPreviewBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
     if (pageHeaderSaveBtn) pageHeaderSaveBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
     if (pageHeaderBackBtn) pageHeaderBackBtn.classList.toggle('hidden', modularPageEditorMode !== 'page');
+    const slugInput = byId('builderLandingPageSlugInput');
+    const publishedWrap = byId('builderLandingPagePublishedWrap');
+    const publishedInput = byId('builderLandingPagePublishedInput');
+    const showPagePublishFields = modularPageEditorMode === 'page';
+    if (slugInput) {
+      slugInput.classList.toggle('hidden', !showPagePublishFields);
+      if (showPagePublishFields) slugInput.value = safeText(modularPageTemplateDraft?.slug, 160);
+    }
+    if (publishedWrap) publishedWrap.classList.toggle('hidden', !showPagePublishFields);
+    if (publishedInput && showPagePublishFields) {
+      publishedInput.checked = pageIsPublished(modularPageTemplateDraft);
+    }
   }
 
   function closeModularPageTemplateEditor() {
@@ -9314,6 +9408,8 @@ App.builder = (function () {
       bodyPitchId: safeText(source.bodyPitchId),
       logoWideId: safeText(source.logoWideId),
       logoSquareId: safeText(source.logoSquareId),
+      slug: safeText(source.slug, 160),
+      isPublished: pageIsPublished(source),
       contentOverrides: normalizeLandingPageContentOverrides(source.contentOverrides),
       layoutSections: resolveModularLayoutSectionsForEditor(source),
     });
@@ -9850,15 +9946,15 @@ App.builder = (function () {
           <button type="button" class="builder-module-editor-modal__close btn btn-ghost">Close</button>
         </div>
         <div class="builder-module-editor-modal__body">
-          <label class="stack-form">
-            <span>Module Name</span>
+          <div class="standard-form-grid">
+            <label for="builderPageModuleEditorNameInput">Module Name</label>
             <input type="text" id="builderPageModuleEditorNameInput" value="${escapeHtml(safeText(module.name, 255))}" />
-          </label>
+          </div>
           <div id="builderPageModuleEditorFields"></div>
-          <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <button type="button" id="builderPageModuleEditorRemoveBtn" class="btn" style="color: var(--danger);">Remove</button>
-            <div style="display: flex; gap: 0.75rem;">
-              <button type="button" id="builderPageModuleEditorCancelBtn" class="btn">Cancel</button>
+          <div class="builder-module-editor-modal__footer">
+            <button type="button" id="builderPageModuleEditorRemoveBtn" class="btn btn-danger">Remove Module</button>
+            <div class="builder-module-editor-modal__footer-actions">
+              <button type="button" id="builderPageModuleEditorCancelBtn" class="btn btn-ghost">Cancel</button>
               <button type="button" id="builderPageModuleEditorSaveBtn" class="btn btn-primary">Save Module</button>
             </div>
           </div>
@@ -9872,7 +9968,7 @@ App.builder = (function () {
       panel.querySelector('#builderPageModuleEditorFields'),
       module.type,
       module.settings || {},
-      { prefix: 'builderPageModuleEditorField' }
+      { prefix: 'builderPageModuleEditorField', gridMode: true }
     );
     const close = () => closeModularPageModuleEditor();
     panel.querySelector('.builder-module-editor-modal__backdrop')?.addEventListener('click', close);
@@ -11056,6 +11152,12 @@ App.builder = (function () {
       bodyPitchId: '',
       logoWideId: '',
       logoSquareId: '',
+      slug: modularPageEditorMode === 'page'
+        ? (safeText(byId('builderLandingPageSlugInput')?.value, 160) || safeText(modularPageTemplateDraft?.slug, 160))
+        : undefined,
+      isPublished: modularPageEditorMode === 'page'
+        ? (byId('builderLandingPagePublishedInput')?.checked ?? pageIsPublished(modularPageTemplateDraft))
+        : undefined,
     };
   }
 
@@ -13047,8 +13149,9 @@ App.builder = (function () {
     [
       ['builderPagesSortNameBtn', 'name', 'asc'],
       ['builderPagesSortTemplateBtn', 'templateId', 'asc'],
-      ['builderPagesSortHeadlineBtn', 'headlineId', 'asc'],
-      ['builderPagesSortFormBtn', 'formId', 'asc'],
+      ['builderPagesSortThemeBtn', 'themeId', 'asc'],
+      ['builderPagesSortSlugBtn', 'slug', 'asc'],
+      ['builderPagesSortPublishedBtn', 'isPublished', 'desc'],
       ['builderPagesSortUpdatedBtn', 'updatedAt', 'desc'],
     ].forEach(([id, key, defaultDir]) => {
       const button = byId(id);
@@ -13100,11 +13203,39 @@ App.builder = (function () {
         } else {
           notify(`${n} page${n === 1 ? '' : 's'} deleted`);
         }
-        landingPageBulkDeleteBtn.textContent = 'Delete Selected';
+        landingPageBulkDeleteBtn.textContent = 'Delete';
       });
     }
 
     const landingPageBulkArchiveBtn = byId('builderPagesBulkArchiveBtn');
+    const landingPageBulkPublishBtn = byId('builderPagesBulkPublishBtn');
+    if (landingPageBulkPublishBtn) {
+      landingPageBulkPublishBtn.addEventListener('click', async () => {
+        const ids = Array.from(selectedPageIds);
+        if (!ids.length) {
+          notify('Select at least one page first', true);
+          return;
+        }
+        landingPageBulkPublishBtn.disabled = true;
+        landingPageBulkPublishBtn.textContent = 'Publishing…';
+        try {
+          await api('/api/builder/landing-pages/bulk-publish', {
+            method: 'POST',
+            body: JSON.stringify({ pageIds: ids, isPublished: true }),
+          });
+          savedPages.forEach((page) => {
+            if (ids.includes(safeText(page.id))) page.isPublished = true;
+          });
+          renderPagesTable();
+          notify(`${ids.length} page${ids.length === 1 ? '' : 's'} published`);
+        } catch (err) {
+          notify(err.message || 'Could not publish selected pages', true);
+        } finally {
+          landingPageBulkPublishBtn.textContent = 'Publish';
+          syncLandingPageTableControls();
+        }
+      });
+    }
     if (landingPageBulkArchiveBtn) {
       landingPageBulkArchiveBtn.addEventListener('click', async () => {
         const ids = Array.from(selectedPageIds);
