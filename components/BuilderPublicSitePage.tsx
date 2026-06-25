@@ -21,6 +21,11 @@ function slugFromPathname(pathname: string): string {
   let p = pathname.replace(/\.html$/, "");
   p = p.replace(/^\/api\/_site\/[^/]+/, "").replace(/^\/_site\/[^/]+/, "");
   if (p === "/_site" || p === "/api/_site") p = "/";
+  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const restorePath = params?.get("path");
+  if (restorePath) {
+    p = restorePath.replace(/\.html$/, "");
+  }
   return p.replace(/^\//, "").replace(/\/$/, "");
 }
 

@@ -461,6 +461,7 @@ const MIME_MAP = {
 function isPageRequestPath(pathname) {
   const p = normalizeApiPathname(pathname);
   if (p === '/api') return true;
+  if (p === '/api/app-shell.html') return true;
   if (p === '/api/index.html') return true;
   if (p === '/api/_site' || p.startsWith('/api/_site/')) return true;
   return !p.startsWith('/api/');
@@ -469,7 +470,8 @@ function isPageRequestPath(pathname) {
 function pagePathnameForRequest(pathname) {
   const p = normalizeApiPathname(pathname);
   if (p === '/api') return '/';
-  if (p === '/api/index.html') return '/';
+  if (p === '/api/app-shell.html') return '/app-shell.html';
+  if (p === '/api/index.html') return '/index.html';
   if (p === '/api/_site') return '/_site';
   if (p.startsWith('/api/_site/')) return p.slice(4);
   return p;
@@ -529,9 +531,24 @@ function serveStaticPage(res, pathname) {
     res.end('Public site bootstrap path unavailable');
     return;
   }
+  if (safePath === '/app-shell.html') {
+    const filePath = _path.join(__dirname, '../public/app-shell.html');
+    try {
+      const content = _fs.readFileSync(filePath);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.statusCode = 200;
+      return res.end(content);
+    } catch {
+      res.statusCode = 404;
+      return res.end('Not found');
+    }
+  }
   let filePath;
   if (safePath === '/') {
     filePath = _path.join(__dirname, '../public/app-shell.html');
+  } else if (safePath === '/index.html') {
+    filePath = _path.join(__dirname, '../public/index.html');
   } else {
     const rel = safePath.replace(/^\//, '');
     filePath = _path.join(__dirname, '../public', rel);
