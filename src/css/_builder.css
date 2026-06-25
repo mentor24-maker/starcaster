@@ -2,6 +2,10 @@
   margin-top: 1rem;
 }
 
+.builder-react-root.builder-public-site {
+  margin-top: 0;
+}
+
 .builder-react-root.hidden {
   display: none !important;
 }
