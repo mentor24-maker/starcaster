@@ -2448,8 +2448,10 @@ App.settings = (function () {
     }
 
     const projectDetailsPanel = els.settingsProjectDetailsPanel || byId('settingsProjectDetailsPanel');
-    if (projectDetailsPanel) {
-      projectDetailsPanel.addEventListener('change', (event) => {
+    const brandingPairShell = byId('settingsProjectDetailsPanel')?.querySelector('.project-branding-pair-shell');
+    const brandingUploadRoot = brandingPairShell || projectDetailsPanel;
+    if (brandingUploadRoot) {
+      brandingUploadRoot.addEventListener('change', (event) => {
         const input = event.target;
         if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
         if (input.id !== 'settingsProjectLogoUploadFile' && input.id !== 'settingsProjectFaviconUploadFile') return;

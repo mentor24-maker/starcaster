@@ -88,7 +88,6 @@ const {
   deletePage,
   propagateCanonicalSection,
   bulkSetPublished,
-  restoreLayoutShellFromPage,
 } = require('../lib/builderPagesStore');
 const {
   listPageSnapshots,
@@ -456,20 +455,6 @@ async function handle(req, res, pathname, method) {
     const result = await bulkSetPublished(pageIds, isPublished !== false, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update pages'), true;
     return sendOk(res, 200, result.data, { results: result.data }), true;
-  }
-
-  if (pathname === '/api/builder/landing-pages/restore-layout-shell' && requestMethod === 'POST') {
-    const body = await parseJsonBody(req).catch(() => ({}));
-    const pageIds = Array.isArray(body.pageIds) ? body.pageIds : [];
-    if (!pageIds.length) return sendErr(res, 400, 'pageIds is required'), true;
-    const result = await restoreLayoutShellFromPage({
-      sourcePageId: body.sourcePageId || body.source_page_id,
-      sourceSlug: body.sourceSlug ?? body.source_slug ?? 'about',
-      targetPageIds: pageIds,
-      overwrite: body.overwrite === true,
-    }, scope);
-    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not restore layout'), true;
-    return sendOk(res, 200, result.data, result.data), true;
   }
 
   if (pathname === '/api/builder/landing-pages' && requestMethod === 'POST') {

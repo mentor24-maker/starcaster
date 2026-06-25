@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Builder heading fonts (keep in sync with BUILDER_GOOGLE_FONTS_HREF in components/builder/builder-utils.ts) -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@400;700;900&family=Lora:wght@400;500;600;700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=9" />
+  <link rel="stylesheet" href="/styles.css?v=10" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -3335,7 +3335,6 @@
                 <th class="builder-pages-bulk-actions-cell">
                   <div class="table-actions-row builder-pages-bulk-actions-row">
                     <button id="builderPagesBulkPublishBtn" class="btn" type="button" disabled>Publish</button>
-                    <button id="builderPagesBulkRestoreShellBtn" class="btn" type="button" disabled>Restore Shell</button>
                     <button id="builderPagesBulkArchiveBtn" class="btn" type="button" disabled>Archive</button>
                     <button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete</button>
                   </div>
@@ -9780,40 +9779,37 @@
                 <select id="settingsProjectTimezoneSelect"></select>
               </div>
               <p class="meta project-details-field-hint">Used when scheduling Promote: Social posts. Pick the IANA region for this workspace.</p>
-              <div class="form-row project-branding-media-row">
-                <label>Branding</label>
-                <div class="project-branding-media-grid">
-                  <div class="project-branding-media-col">
-                    <span class="project-branding-media-title">Project Logo</span>
-                    <div class="settings-media-actions">
-                      <button id="settingsProjectLogoChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
-                      <label class="btn btn-ghost settings-upload-button">
-                        <span>Upload To Gallery</span>
-                        <input id="settingsProjectLogoUploadFile" type="file" accept="image/*" class="settings-upload-input" />
-                      </label>
-                      <button id="settingsProjectLogoClearBtn" type="button" class="btn btn-ghost">Clear</button>
-                    </div>
-                    <div class="project-logo-preview-wrap">
-                      <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
-                      <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
-                    </div>
+              <div class="project-branding-pair-shell">
+                <section class="project-branding-block" aria-labelledby="settingsProjectLogoHeading">
+                  <h4 id="settingsProjectLogoHeading" class="project-branding-block-title">Project Logo</h4>
+                  <div class="settings-media-actions">
+                    <button id="settingsProjectLogoChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
+                    <label class="btn btn-ghost settings-upload-button">
+                      <span>Upload To Gallery</span>
+                      <input id="settingsProjectLogoUploadFile" type="file" accept="image/*" class="settings-upload-input" />
+                    </label>
+                    <button id="settingsProjectLogoClearBtn" type="button" class="btn btn-ghost">Clear</button>
                   </div>
-                  <div class="project-branding-media-col">
-                    <span class="project-branding-media-title">Favicon</span>
-                    <div class="settings-media-actions">
-                      <button id="settingsProjectFaviconChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
-                      <label class="btn btn-ghost settings-upload-button">
-                        <span>Upload To Gallery</span>
-                        <input id="settingsProjectFaviconUploadFile" type="file" accept="image/*" class="settings-upload-input" />
-                      </label>
-                      <button id="settingsProjectFaviconClearBtn" type="button" class="btn btn-ghost">Clear</button>
-                    </div>
-                    <div class="project-favicon-preview-wrap">
-                      <img id="settingsProjectFaviconPreview" alt="Project favicon preview" class="hidden" />
-                      <div id="settingsProjectFaviconPlaceholder" class="meta">No favicon set for this project.</div>
-                    </div>
+                  <div class="project-logo-preview-wrap">
+                    <img id="settingsProjectLogoPreview" alt="Project logo preview" class="hidden" />
+                    <div id="settingsProjectLogoPlaceholder" class="meta">No logo set for this project.</div>
                   </div>
-                </div>
+                </section>
+                <section class="project-branding-block" aria-labelledby="settingsProjectFaviconHeading">
+                  <h4 id="settingsProjectFaviconHeading" class="project-branding-block-title">Favicon</h4>
+                  <div class="settings-media-actions">
+                    <button id="settingsProjectFaviconChooseBtn" type="button" class="btn btn-ghost">Choose From Gallery</button>
+                    <label class="btn btn-ghost settings-upload-button">
+                      <span>Upload To Gallery</span>
+                      <input id="settingsProjectFaviconUploadFile" type="file" accept="image/*" class="settings-upload-input" />
+                    </label>
+                    <button id="settingsProjectFaviconClearBtn" type="button" class="btn btn-ghost">Clear</button>
+                  </div>
+                  <div class="project-favicon-preview-wrap">
+                    <img id="settingsProjectFaviconPreview" alt="Project favicon preview" class="hidden" />
+                    <div id="settingsProjectFaviconPlaceholder" class="meta">No favicon set for this project.</div>
+                  </div>
+                </section>
               </div>
               <div class="form-row project-details-save-row">
                 <div></div>
@@ -10561,7 +10557,7 @@
 
   <!-- Module order matters: core first, then features, then app (orchestrator) last -->
 
-  <script src="/js/core.js?v=project-favicon-1"></script>
+  <script src="/js/core.js?v=project-favicon-2"></script>
   <script src="/js/estimatedProgress.js"></script>
   <script src="/js/projectContext.js"></script>
   <script src="/js/auth.js"></script>
@@ -10573,7 +10569,7 @@
   <script src="/js/segments.js"></script>
   <script src="/js/campaigns.js"></script>
   <script src="/js/promoLeads.js"></script>
-  <script src="/js/settings.js?v=project-favicon-1"></script>
+  <script src="/js/settings.js?v=project-favicon-2"></script>
   <script src="/js/acquire.js"></script>
   <script src="/js/youtube.js?v=1.6"></script>
   <script src="/js/youtubeComments.js"></script>

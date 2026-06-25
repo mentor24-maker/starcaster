@@ -13617,39 +13617,33 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   background: #f7fbff;
   padding: 0.8rem;
 }
-.project-branding-media-row {
-  align-items: start;
-}
-.project-branding-media-row > label {
-  padding-top: 0.15rem;
-}
-.project-branding-media-grid {
+.project-branding-pair-shell {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  width: 100%;
+  margin-top: 0.25rem;
+}
+.project-branding-block {
+  display: grid;
+  gap: 0.65rem;
   min-width: 0;
 }
-.project-branding-media-col {
-  display: grid;
-  gap: 0.5rem;
-  min-width: 0;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
+.project-branding-block-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink-primary, #16324c);
 }
-.project-branding-media-col .settings-media-actions {
+.project-branding-block .settings-media-actions {
   flex-direction: column;
   align-items: stretch;
   max-width: 100%;
 }
-.project-branding-media-col .settings-media-actions .btn,
-.project-branding-media-col .settings-media-actions .settings-upload-button {
+.project-branding-block .settings-media-actions .btn,
+.project-branding-block .settings-media-actions .settings-upload-button {
   width: 100%;
   justify-content: center;
-}
-.project-branding-media-title {
-  font-weight: 600;
-  font-size: 0.9rem;
 }
 .project-favicon-preview-wrap {
   min-height: 120px;
@@ -13667,8 +13661,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   height: auto;
   object-fit: contain;
 }
-@media (max-width: 720px) {
-  .project-branding-media-grid {
+@media (max-width: 900px) {
+  .project-branding-pair-shell {
     grid-template-columns: 1fr;
   }
 }
