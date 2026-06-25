@@ -68,7 +68,7 @@ function sendStaticFile(res, fullPath) {
 
 function serveStatic(req, res) {
   const urlPath = req.url.split('?')[0];
-  const filePath = urlPath === '/' ? '/index.html' : urlPath;
+  const filePath = urlPath === '/' ? '/app-shell.html' : urlPath;
   const fullPath = path.join(__dirname, 'public', filePath);
 
   if (!path.extname(filePath)) {
@@ -82,7 +82,7 @@ function serveStatic(req, res) {
 
   // When a /{slug}.html is requested and no static file exists, serve the builder
   // preview page so nav links (which add .html) resolve to a live page preview.
-  if (filePath.endsWith('.html') && !filePath.startsWith('/builder-') && !filePath.startsWith('/index')) {
+  if (filePath.endsWith('.html') && !filePath.startsWith('/builder-') && !filePath.startsWith('/app-shell')) {
     fs.stat(fullPath, (statErr) => {
       if (!statErr) return sendStaticFile(res, fullPath);
       sendStaticFile(res, path.join(__dirname, 'public', 'builder-preview.html'));
