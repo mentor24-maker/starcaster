@@ -485,6 +485,29 @@ const server = http.createServer(async (req, res) => {
     }
     return;
   }
+
+  try {
+    const { getClientHost, normalizeApiPathname } = require('./routes/http');
+    const pageUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const pagePath = normalizeApiPathname(pageUrl.pathname);
+    const host = getClientHost(req);
+    const systemHost = !host
+      || /^localhost$|^127\.|^0\.0\.0\.0$/.test(host)
+      || host.endsWith('.vercel.app')
+      || host === 'starcaster.pro'
+      || host.endsWith('.starcaster.pro');
+    if (!systemHost && !/\.[a-z0-9]+$/i.test(pagePath)) {
+      await handleRequest(req, res);
+      return;
+    }
+  } catch (err) {
+    console.error('[server] Public site page request failed:', err);
+    if (!res.headersSent) {
+      sendErr(res, 500, err?.message || 'Internal server error', { code: 'INTERNAL_ERROR' });
+      return;
+    }
+  }
+
   serveStatic(req, res);
 });
 
