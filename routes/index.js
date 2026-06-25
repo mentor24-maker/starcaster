@@ -197,8 +197,8 @@ async function handleRequest(req, res) {
   }
 
   // ── Non-API page requests (custom domain routing) ───────────────────────
-  if (!pathnameEarly.startsWith('/api/')) {
-    await handlePageRequest(req, res, pathnameEarly);
+  if (isPageRequestPath(pathnameEarly)) {
+    await handlePageRequest(req, res, pagePathnameForRequest(pathnameEarly));
     return;
   }
 
@@ -457,6 +457,21 @@ const MIME_MAP = {
   '.webp': 'image/webp',
   '.json': 'application/json',
 };
+
+function isPageRequestPath(pathname) {
+  const p = normalizeApiPathname(pathname);
+  if (p === '/api') return true;
+  if (p === '/api/_site' || p.startsWith('/api/_site/')) return true;
+  return !p.startsWith('/api/');
+}
+
+function pagePathnameForRequest(pathname) {
+  const p = normalizeApiPathname(pathname);
+  if (p === '/api') return '/';
+  if (p === '/api/_site') return '/_site';
+  if (p.startsWith('/api/_site/')) return p.slice(4);
+  return p;
+}
 
 function isSystemHost(host) {
   if (!host) return true;
