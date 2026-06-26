@@ -190,10 +190,12 @@ async function handle(req, res, pathname, method) {
       successMessage: String(body.successMessage || 'Thank you! Your information has been saved.').trim(),
       errorMessage: String(body.errorMessage || 'Something went wrong. Please try again.').trim(),
       accentColor: String(body.accentColor || '').trim(),
-      styles: body.styles && typeof body.styles === 'object' ? body.styles : undefined,
+      styles: body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles) ? body.styles : {},
       fields: Array.isArray(body.fields) ? body.fields : [],
     }, requestScope(req));
-    if (!created) return sendErr(res, 500, 'Failed to create CRM form'), true;
+    if (!created) {
+      return sendErr(res, 500, 'Failed to create CRM form. If styles were recently added, reload the Supabase API schema cache.', { code: 'CRM_FORM_SAVE_FAILED' }), true;
+    }
     logActivity({ action: 'crm_form.created', entityType: 'crm_form', entityId: created.id, summary: `CRM form created: "${name}"` });
     return sendOk(res, 201, created, { form: created }), true;
   }
@@ -211,6 +213,9 @@ async function handle(req, res, pathname, method) {
   if (formMatch && method === 'PUT') {
     const body = await parseJsonBody(req);
     const id = decodeURIComponent(formMatch[1]);
+    const scope = requestScope(req);
+    const existing = await getForm(id, scope);
+    if (!existing) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
     const patch = {};
     if (body.name !== undefined) patch.name = String(body.name || '').trim();
     if (body.heading !== undefined) patch.heading = String(body.heading || '').trim();
@@ -218,10 +223,14 @@ async function handle(req, res, pathname, method) {
     if (body.successMessage !== undefined) patch.successMessage = String(body.successMessage || '').trim();
     if (body.errorMessage !== undefined) patch.errorMessage = String(body.errorMessage || '').trim();
     if (body.accentColor !== undefined) patch.accentColor = String(body.accentColor || '').trim();
-    if (body.styles !== undefined && body.styles && typeof body.styles === 'object') patch.styles = body.styles;
+    if (body.styles !== undefined && body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles)) {
+      patch.styles = body.styles;
+    }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
-    const updated = await updateForm(id, patch, requestScope(req));
-    if (!updated) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
+    const updated = await updateForm(id, patch, scope);
+    if (!updated) {
+      return sendErr(res, 500, 'Failed to update CRM form. If styles were recently added, reload the Supabase API schema cache.', { code: 'CRM_FORM_SAVE_FAILED' }), true;
+    }
     logActivity({ action: 'crm_form.updated', entityType: 'crm_form', entityId: id, summary: `CRM form updated: "${updated.name}"` });
     return sendOk(res, 200, updated, { form: updated }), true;
   }
