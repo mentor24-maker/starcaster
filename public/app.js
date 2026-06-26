@@ -37,6 +37,7 @@ App.manifests = [
   App.docsApiSetup,
   App.builder,
   App.activityLog,
+  App.crm,
   App.observe,          // Integrates observe.js page views and API quotas
   App.envConfig,        // #7 — Env Configuration
   App.projectAdmin,     // Project Admin — project-scoped CMS for team members

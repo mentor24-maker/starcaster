@@ -10,12 +10,53 @@ import {
   normalizeBuilderDocument
 } from "@/lib/builder-template";
 
+import type { CrmThemePalette } from "@/components/builder/builder-utils";
+import {
+  builderThemeToCrmPalette,
+  mergeCrmThemePalette,
+} from "@/components/builder/builder-utils";
+
 type PreviewDraft = {
   name: string;
   pageBackground: ReturnType<typeof createDefaultBackgroundSettings>;
   theme: ReturnType<typeof normalizeBuilderDocument>["theme"];
   layoutSections: ReturnType<typeof normalizeBuilderDocument>["layoutSections"];
+  themePalette?: CrmThemePalette;
+  themeId?: string;
 };
+
+type BuilderThemeRecord = {
+  id?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  accentColor?: string;
+};
+
+function hasCrmPaletteColors(palette: CrmThemePalette | undefined): boolean {
+  if (!palette) return false;
+  return Boolean(
+    palette.primaryColor ||
+    palette.secondaryColor ||
+    palette.backgroundColor ||
+    palette.accentColor
+  );
+}
+
+async function fetchBuilderThemePalette(themeId?: string): Promise<CrmThemePalette | undefined> {
+  try {
+    const res = await fetch("/api/builder/themes", { credentials: "include" });
+    if (!res.ok) return undefined;
+    const data = await res.json() as { themes?: BuilderThemeRecord[] };
+    const themes = Array.isArray(data.themes) ? data.themes : [];
+    const theme = themeId
+      ? themes.find((entry) => String(entry.id || "") === themeId) || themes[0]
+      : themes[0];
+    return builderThemeToCrmPalette(theme);
+  } catch {
+    return undefined;
+  }
+}
 
 function slugFromPathname(pathname: string): string {
   // /about.html → "about", /blog/posts.html → "blog/posts", / → ""
@@ -35,11 +76,23 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
     }) as Record<string, unknown> | undefined;
     if (!match) return null;
     const doc = normalizeBuilderDocument(match);
+    const themePalette = {
+      primaryColor: String(match.primaryColor ?? match.primary_color ?? "").trim(),
+      secondaryColor: String(match.secondaryColor ?? match.secondary_color ?? "").trim(),
+      backgroundColor: String(match.backgroundColor ?? match.background_color ?? "").trim(),
+      accentColor: String(match.accentColor ?? match.accent_color ?? "").trim()
+    };
+    const themeId = String(match.themeId ?? match.theme_id ?? "").trim();
+    const resolvedPalette = hasCrmPaletteColors(themePalette)
+      ? themePalette
+      : mergeCrmThemePalette(themePalette, await fetchBuilderThemePalette(themeId));
     return {
       name: String(match.name ?? "").trim(),
       pageBackground: doc.pageBackground,
       theme: doc.theme,
-      layoutSections: doc.layoutSections
+      layoutSections: doc.layoutSections,
+      themePalette: resolvedPalette,
+      themeId
     };
   } catch {
     return null;
@@ -48,6 +101,7 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
 
 export function BuilderPreviewPage() {
   const [draft, setDraft] = useState<PreviewDraft | null>(null);
+  const [themePalette, setThemePalette] = useState<CrmThemePalette | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile" | "email">("desktop");
   const isEmailPreview = previewDevice === "email";
@@ -68,6 +122,7 @@ export function BuilderPreviewPage() {
         .then((page) => {
           if (page) {
             setDraft(page);
+            setThemePalette(page.themePalette);
           } else {
             loadFromLocalStorage();
           }
@@ -83,18 +138,37 @@ export function BuilderPreviewPage() {
     function loadFromLocalStorage() {
       try {
         const rawValue = window.localStorage.getItem(BUILDER_PREVIEW_STORAGE_KEY);
-        if (!rawValue) return;
+        if (!rawValue) {
+          fetchBuilderThemePalette().then((palette) => {
+            setThemePalette(palette);
+          });
+          return;
+        }
         const parsed = JSON.parse(rawValue) as {
           name?: unknown;
           pageBackground?: unknown;
           layoutSections?: unknown;
+          theme?: unknown;
+          themePalette?: CrmThemePalette;
+          themeId?: string;
         };
         const document = normalizeBuilderDocument(parsed);
+        const storedPalette = parsed.themePalette;
+        const themeId = String(parsed.themeId || "").trim();
         setDraft({
           name: String(parsed.name ?? "").trim(),
           pageBackground: document.pageBackground,
           theme: document.theme,
-          layoutSections: document.layoutSections
+          layoutSections: document.layoutSections,
+          themePalette: storedPalette,
+          themeId
+        });
+        if (hasCrmPaletteColors(storedPalette)) {
+          setThemePalette(storedPalette);
+          return;
+        }
+        fetchBuilderThemePalette(themeId).then((palette) => {
+          setThemePalette(mergeCrmThemePalette(storedPalette, palette));
         });
       } catch {
         setDraft({
@@ -102,6 +176,9 @@ export function BuilderPreviewPage() {
           pageBackground: createDefaultBackgroundSettings(),
           theme: createDefaultTheme(),
           layoutSections: []
+        });
+        fetchBuilderThemePalette().then((palette) => {
+          setThemePalette(palette);
         });
       }
     }
@@ -169,6 +246,7 @@ export function BuilderPreviewPage() {
                 layoutSections={draft.layoutSections}
                 pageBackground={draft.pageBackground}
                 theme={draft.theme}
+                themePalette={themePalette}
                 previewMode
                 showShell={false}
               />

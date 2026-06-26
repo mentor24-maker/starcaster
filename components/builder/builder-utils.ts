@@ -834,6 +834,68 @@ export function getThemeRootVars(theme: BuilderTheme | undefined): CSSProperties
   return vars as CSSProperties;
 }
 
+export type CrmThemePalette = {
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  accentColor?: string;
+};
+
+/** Palette vars consumed by CRM form theme tokens on builder/public pages. */
+export function getCrmThemePaletteVars(palette: CrmThemePalette | undefined): CSSProperties {
+  const vars: Record<string, string> = {};
+  if (!palette) return vars as CSSProperties;
+  if (palette.primaryColor) vars["--crm-theme-primary"] = palette.primaryColor;
+  if (palette.secondaryColor) vars["--crm-theme-secondary"] = palette.secondaryColor;
+  if (palette.accentColor) vars["--crm-theme-accent"] = palette.accentColor;
+  if (palette.backgroundColor) vars["--crm-theme-background"] = palette.backgroundColor;
+  return vars as CSSProperties;
+}
+
+export function builderThemeToCrmPalette(theme: {
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  accentColor?: string;
+} | null | undefined): CrmThemePalette {
+  if (!theme) return {};
+  return {
+    primaryColor: String(theme.primaryColor || "").trim(),
+    secondaryColor: String(theme.secondaryColor || "").trim(),
+    backgroundColor: String(theme.backgroundColor || "").trim(),
+    accentColor: String(theme.accentColor || "").trim(),
+  };
+}
+
+export function mergeCrmThemePalette(
+  primary: CrmThemePalette | undefined,
+  fallback: CrmThemePalette | undefined
+): CrmThemePalette {
+  const a = primary || {};
+  const b = fallback || {};
+  return {
+    primaryColor: a.primaryColor || b.primaryColor,
+    secondaryColor: a.secondaryColor || b.secondaryColor,
+    backgroundColor: a.backgroundColor || b.backgroundColor,
+    accentColor: a.accentColor || b.accentColor,
+  };
+}
+
+/** Theme palette + typography vars for CRM form color tokens on builder/public pages. */
+export function getCrmFormThemeContextStyle(
+  themePalette: CrmThemePalette | undefined,
+  theme: import("@/lib/builder-template").BuilderTheme | undefined
+): CSSProperties {
+  const vars: Record<string, string> = {
+    ...(getCrmThemePaletteVars(themePalette) as Record<string, string>),
+  };
+  const colors = theme?.typography?.colors;
+  if (colors?.text) vars["--bx-text"] = colors.text;
+  if (colors?.heading) vars["--bx-heading"] = colors.heading;
+  if (colors?.link) vars["--bx-link"] = colors.link;
+  return vars as CSSProperties;
+}
+
 const HEADING_TEXT_TRANSFORMS = new Set(["none", "uppercase", "lowercase", "capitalize"]);
 const HEADING_TEXT_ALIGNS = new Set(["left", "center", "right"]);
 

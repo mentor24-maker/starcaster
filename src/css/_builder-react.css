@@ -6514,6 +6514,85 @@
   background: transparent;
 }
 
+/* CRM form modules must span the full builder cell so fieldWidth % resolves against the column. */
+.builder-react-root .builder-preview-module:has(> .builder-crm-form-shell) {
+  width: 100%;
+  max-width: 100%;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.builder-react-root .builder-crm-form-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: left;
+  margin: var(--crm-form-margin, 0);
+}
+
+.builder-react-root .builder-contact-form.builder-crm-form {
+  width: var(--crm-form-width, 75%);
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
+  background: var(--crm-form-background, transparent);
+  border: var(--crm-form-border-size, 0) solid var(--crm-form-border-color, rgba(9, 16, 24, 0.12));
+  border-radius: var(--crm-form-border-radius, 10px);
+  padding: var(--crm-form-padding, 18px);
+  box-sizing: border-box;
+}
+
+.builder-react-root .builder-crm-form-shell .builder-contact-form-heading {
+  width: var(--crm-form-width, 75%);
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  font-weight: 800;
+  color: var(--crm-form-heading-color, #18324a);
+  line-height: 1.25;
+  text-align: var(--crm-form-label-align, left);
+}
+
+/* CRM forms keep left-aligned shell even when the module is center/right aligned. */
+.builder-react-root .builder-preview-module.is-align-center:has(> .builder-crm-form-shell),
+.builder-react-root .builder-preview-module.is-align-right:has(> .builder-crm-form-shell),
+.builder-react-root .builder-preview-module-shell.is-align-center .builder-crm-form-shell,
+.builder-react-root .builder-preview-module-shell.is-align-right .builder-crm-form-shell {
+  text-align: left;
+}
+
+.builder-react-root .builder-crm-form .builder-contact-form-field>span:first-child {
+  grid-column: 1;
+  justify-self: var(--crm-form-label-justify, start);
+  align-self: start;
+  text-align: var(--crm-form-label-align, left);
+}
+
+.builder-react-root .builder-crm-form .builder-contact-form-field input,
+.builder-react-root .builder-crm-form .builder-contact-form-field textarea,
+.builder-react-root .builder-crm-form .builder-contact-form-field select {
+  justify-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.builder-react-root .builder-crm-form .builder-contact-form-submit {
+  justify-self: var(--crm-form-button-justify, start);
+  width: var(--crm-form-button-width, 100%);
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  background: var(--crm-form-button-bg, #1DC3FF);
+  border-color: var(--crm-form-button-bg, #0b6d90);
+  color: var(--crm-form-button-color, #ffffff);
+  font-size: var(--crm-form-button-size, 1.35rem);
+  font-weight: var(--crm-form-button-weight, 800);
+}
+
 .builder-react-root .builder-contact-honeypot {
   position: absolute;
   left: -10000px;
@@ -6540,6 +6619,8 @@
 }
 
 .builder-react-root .builder-contact-form-field input,
+.builder-react-root .builder-contact-form-field textarea,
+.builder-react-root .builder-contact-form-field select,
 .builder-react-root .builder-contact-form-input-preview {
   grid-column: 2;
   width: 100%;
@@ -6551,6 +6632,19 @@
   color: #18324a;
   font: inherit;
   font-weight: 500;
+  box-sizing: border-box;
+}
+
+.builder-react-root .builder-contact-form-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.builder-react-root .builder-contact-form-field input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+  justify-self: start;
+  margin: 0;
 }
 
 .builder-react-root .builder-contact-form-input-preview {
@@ -6617,9 +6711,11 @@
   .builder-react-root .builder-contact-form {
     grid-template-columns: 1fr;
   }
-  .builder-react-root .builder-contact-form-field>span:first-child,
-.builder-react-root .builder-contact-form-field input,
-.builder-react-root .builder-contact-form-input-preview,
+  .builder-react-root .builder-contact-form-field > span:first-child,
+  .builder-react-root .builder-contact-form-field input,
+  .builder-react-root .builder-contact-form-field textarea,
+  .builder-react-root .builder-contact-form-field select,
+  .builder-react-root .builder-contact-form-input-preview,
 .builder-react-root .builder-contact-form-submit,
 .builder-react-root .builder-contact-form-stub,
 .builder-react-root .builder-contact-form-message,

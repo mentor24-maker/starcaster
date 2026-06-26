@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS crm_forms (
   success_message   TEXT        DEFAULT 'Thank you! Your information has been saved.',
   error_message     TEXT        DEFAULT 'Something went wrong. Please try again.',
   accent_color      TEXT        DEFAULT '',
+  styles            JSONB       NOT NULL DEFAULT '{}'::jsonb,
   fields            JSONB       NOT NULL DEFAULT '[]'::jsonb,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
