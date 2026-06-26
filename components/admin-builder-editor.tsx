@@ -37,6 +37,7 @@ import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./bui
 import { layoutOptions } from "./builder/builder-types";
 import {
   buildClonedPageCreatePayload,
+  builderThemeToCrmPalette,
   createDraftFromTemplate,
   createDraftFromPage,
   getModuleBackgroundSettings,
@@ -1914,8 +1915,32 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
 
   // --- Preview ---
 
+  function buildPreviewStoragePayload(
+    payload: {
+      name: string;
+      pageBackground: typeof draft.pageBackground;
+      theme: typeof draft.theme;
+      layoutSections: typeof draft.layoutSections;
+    },
+    options: { themeId?: string; themePaletteSource?: { primaryColor?: string; secondaryColor?: string; backgroundColor?: string; accentColor?: string } | null } = {}
+  ) {
+    const themeId = options.themeId || pageThemeId || undefined;
+    const paletteSource = options.themePaletteSource ?? activeTheme;
+    return {
+      name: payload.name,
+      pageBackground: payload.pageBackground,
+      theme: payload.theme,
+      layoutSections: payload.layoutSections,
+      themeId,
+      themePalette: builderThemeToCrmPalette(paletteSource),
+    };
+  }
+
   function openPreviewPage() {
-    window.localStorage.setItem(BUILDER_PREVIEW_STORAGE_KEY, JSON.stringify({ name: draft.name, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections }));
+    window.localStorage.setItem(
+      BUILDER_PREVIEW_STORAGE_KEY,
+      JSON.stringify(buildPreviewStoragePayload(draft))
+    );
     window.localStorage.setItem(
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
       isEmailTemplateDraft ? "email" : previewDevice
@@ -1924,7 +1949,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }
 
   function openTemplatePreview(template: BuilderTemplateRecord) {
-    window.localStorage.setItem(BUILDER_PREVIEW_STORAGE_KEY, JSON.stringify({ name: template.name, pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
+    window.localStorage.setItem(
+      BUILDER_PREVIEW_STORAGE_KEY,
+      JSON.stringify(buildPreviewStoragePayload(template))
+    );
     window.localStorage.setItem(
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
       template.templateKind === "email" ? "email" : previewDevice
@@ -1936,9 +1964,17 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // StarCaster has no public page-render route yet; show the stored preview.
     const page = pages.find((entry) => entry.slug === slug) ?? pages.find((entry) => String(entry.id) === slug);
     if (!page) return;
+    const pageTheme = page.themeId
+      ? builderThemes.find((theme) => theme.id === page.themeId) ?? activeTheme
+      : activeTheme;
     window.localStorage.setItem(
       BUILDER_PREVIEW_STORAGE_KEY,
-      JSON.stringify({ name: page.name, pageBackground: page.pageBackground, theme: page.theme, layoutSections: page.layoutSections })
+      JSON.stringify(
+        buildPreviewStoragePayload(page, {
+          themeId: page.themeId,
+          themePaletteSource: pageTheme,
+        })
+      )
     );
     window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, previewDevice);
     window.open(`${window.location.origin}/builder-preview.html`, "_blank");
