@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
+  builderThemeToCrmPalette,
+  mergeCrmThemePalette,
+  type CrmThemePalette,
+} from "@/components/builder/builder-utils";
+import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
   normalizeBuilderDocument,
@@ -17,7 +22,21 @@ type SitePage = {
   theme: ReturnType<typeof normalizeBuilderDocument>["theme"];
   layoutSections: ReturnType<typeof normalizeBuilderDocument>["layoutSections"];
   projectId?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  accentColor?: string;
+  themeId?: string;
 };
+
+function pageThemePalette(page: SitePage) {
+  return {
+    primaryColor: String(page.primaryColor || "").trim(),
+    secondaryColor: String(page.secondaryColor || "").trim(),
+    backgroundColor: String(page.backgroundColor || "").trim(),
+    accentColor: String(page.accentColor || "").trim(),
+  };
+}
 
 function normalizePublicSlug(value: string): string {
   let path = String(value || "").trim().split("?")[0]?.split("#")[0] || "";
@@ -52,6 +71,11 @@ async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
       theme: doc.theme,
       layoutSections: doc.layoutSections,
       projectId: String(page.projectId ?? page.project_id ?? ""),
+      primaryColor: String(page.primaryColor ?? page.primary_color ?? ""),
+      secondaryColor: String(page.secondaryColor ?? page.secondary_color ?? ""),
+      backgroundColor: String(page.backgroundColor ?? page.background_color ?? ""),
+      accentColor: String(page.accentColor ?? page.accent_color ?? ""),
+      themeId: String(page.themeId ?? page.theme_id ?? ""),
     };
   });
 }
@@ -75,6 +99,11 @@ async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unaut
       theme: doc.theme,
       layoutSections: doc.layoutSections,
       projectId: String(page.projectId ?? page.project_id ?? ""),
+      primaryColor: String(page.primaryColor ?? page.primary_color ?? ""),
+      secondaryColor: String(page.secondaryColor ?? page.secondary_color ?? ""),
+      backgroundColor: String(page.backgroundColor ?? page.background_color ?? ""),
+      accentColor: String(page.accentColor ?? page.accent_color ?? ""),
+      themeId: String(page.themeId ?? page.theme_id ?? ""),
     };
   });
 }
@@ -124,6 +153,7 @@ type Props = { projectId: string };
 
 export function BuilderPublicSitePage({ projectId }: Props) {
   const [page, setPage] = useState<SitePage | null>(null);
+  const [themePalette, setThemePalette] = useState<CrmThemePalette | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -149,6 +179,37 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       .catch(() => setPage(null))
       .finally(() => setLoaded(true));
   }, [projectId]);
+
+  useEffect(() => {
+    if (!page) {
+      setThemePalette(undefined);
+      return;
+    }
+    const fromPage = pageThemePalette(page);
+    const hasColors = Boolean(
+      fromPage.primaryColor ||
+      fromPage.secondaryColor ||
+      fromPage.backgroundColor ||
+      fromPage.accentColor
+    );
+    if (hasColors) {
+      setThemePalette(fromPage);
+      return;
+    }
+    const themeId = String(page.themeId || "").trim();
+    fetch("/api/builder/themes", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { themes?: Array<{ id?: string; primaryColor?: string; secondaryColor?: string; backgroundColor?: string; accentColor?: string }> } | null) => {
+        const themes = Array.isArray(data?.themes) ? data.themes : [];
+        const match = themeId
+          ? themes.find((theme) => String(theme.id || "") === themeId) || themes[0]
+          : themes[0];
+        setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(match)));
+      })
+      .catch(() => {
+        setThemePalette(fromPage);
+      });
+  }, [page]);
 
   if (redirecting) {
     return (
@@ -184,6 +245,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       layoutSections={sections}
       pageBackground={page.pageBackground}
       theme={page.theme}
+      themePalette={themePalette ?? pageThemePalette(page)}
       projectId={projectId}
     />
   );

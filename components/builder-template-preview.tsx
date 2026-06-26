@@ -14,6 +14,11 @@ import {
 } from "@/lib/builder-template";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
+  buildCrmFormRenderContext,
+  crmFormStylesToCssProperties,
+  normalizeCrmFormStyles
+} from "../lib/crmFormStyles.js";
+import {
   getAdminAuthHeaders,
   readApiErrorMessage,
   setAdminSessionToken,
@@ -49,6 +54,8 @@ import {
   sectionHasOnlyPageOverlayImageModules,
   sectionHasOnlySectionScopedOverlayModules,
   getCellContentAlignmentStyle,
+  getCrmFormThemeContextStyle,
+  getCrmThemePaletteVars,
   getModuleAlignment,
   getModuleBackgroundSettings,
   getSectionMarginStyle,
@@ -81,6 +88,8 @@ type BuilderTemplatePreviewProps = {
   pageBackground: import("@/lib/builder-template").BackgroundSettings;
   /** Document-level theme; when omitted, content renders with the pre-theme baseline. */
   theme?: import("@/lib/builder-template").BuilderTheme;
+  /** Builder theme palette for CRM form color tokens. */
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   showShell?: boolean;
   emailPreview?: boolean;
   /** When true (Builder /preview), speech bubbles with game/on-load triggers do not auto-fire. */
@@ -218,17 +227,97 @@ function ContactFormPreview({ settings, projectId = "" }: { settings: Record<str
   );
 }
 
-type CrmFormField = { key: string; label: string; type: string; required: boolean };
+type CrmFormField = { key: string; label: string; type: string; required: boolean; options?: string[] };
+type CrmFormStyles = Record<string, string | undefined>;
 type CrmFormData = {
+  id?: string;
   heading: string;
   submitLabel: string;
   successMessage: string;
   errorMessage: string;
+  accentColor?: string;
+  styles?: CrmFormStyles;
   fields: CrmFormField[];
   crmConfigId: string;
 };
 
-function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
+function crmPreviewInputType(fieldType: string) {
+  if (fieldType === "boolean") return "checkbox";
+  if (fieldType === "textarea" || fieldType === "select") return fieldType;
+  return fieldType || "text";
+}
+
+function CrmFormFieldControl({
+  field,
+  value,
+  onChange
+}: {
+  field: CrmFormField;
+  value: string;
+  onChange: (key: string, nextValue: string) => void;
+}) {
+  const inputType = crmPreviewInputType(field.type);
+
+  if (field.type === "textarea") {
+    return (
+      <textarea
+        name={field.key}
+        required={field.required}
+        rows={4}
+        value={value}
+        onChange={(event) => onChange(field.key, event.target.value)}
+      />
+    );
+  }
+
+  if (field.type === "select") {
+    const options = Array.isArray(field.options) && field.options.length ? field.options : ["Option one", "Option two"];
+    return (
+      <select
+        name={field.key}
+        required={field.required}
+        value={value}
+        onChange={(event) => onChange(field.key, event.target.value)}
+      >
+        <option value="">Select…</option>
+        {options.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field.type === "boolean") {
+    return (
+      <input
+        type="checkbox"
+        name={field.key}
+        checked={value === "true"}
+        onChange={(event) => onChange(field.key, event.target.checked ? "true" : "")}
+      />
+    );
+  }
+
+  return (
+    <input
+      type={inputType}
+      name={field.key}
+      required={field.required}
+      value={value}
+      onChange={(event) => onChange(field.key, event.target.value)}
+    />
+  );
+}
+
+function CrmFormPreview({
+  settings,
+  theme,
+  themePalette
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+}) {
   const crmFormId = settings.crmFormId ?? "";
   const [form, setForm] = useState<CrmFormData | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -239,11 +328,10 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
 
   useEffect(() => {
     if (!crmFormId) return;
-    fetch(`/api/crm/forms/${crmFormId}`)
+    fetch(`/api/crm/forms/${encodeURIComponent(crmFormId)}`, { credentials: "include" })
       .then((r) => r.json())
       .then((d) => {
-        const formData = d?.data ?? d ?? null;
-        // Guard: only set state if the response looks like a form (has an id)
+        const formData = d?.data ?? d?.form ?? null;
         setForm(formData && typeof formData === "object" && formData.id ? formData : null);
       })
       .catch(() => {});
@@ -291,30 +379,49 @@ function CrmFormPreview({ settings }: { settings: Record<string, string> }) {
     return <div className="builder-contact-form-stub">Loading form…</div>;
   }
 
+  const formStyles = normalizeCrmFormStyles(form.styles, form.accentColor);
+  const renderContext = buildCrmFormRenderContext(themePalette, theme?.typography);
+  const themeContextStyle = getCrmFormThemeContextStyle(themePalette, theme);
+  const formCssVars = crmFormStylesToCssProperties(form.styles, form.accentColor, renderContext) as CSSProperties;
+  const shellStyle = {
+    ...themeContextStyle,
+    ...formCssVars
+  } as CSSProperties;
+  const blockStyle = {
+    ...themeContextStyle,
+    ...formCssVars,
+    width: formStyles.fieldWidth,
+    maxWidth: "100%"
+  } as CSSProperties;
+
   return (
-    <form className="builder-contact-form" onSubmit={submitCrmForm}>
-      <input type="text" name="_trap" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
-      {form.heading ? <div className="builder-contact-form-heading">{form.heading}</div> : null}
-      {message ? <div className="builder-contact-form-message">{message}</div> : null}
-      {error ? <div className="builder-contact-form-error">{error}</div> : null}
-      <div className="builder-contact-form-fields">
-        {(form.fields ?? []).map((field) => (
-          <label className="builder-contact-form-field" key={field.key}>
-            <input
-              type={field.type || "text"}
-              name={field.key}
-              placeholder={field.label}
-              required={field.required}
-              value={values[field.key] ?? ""}
-              onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
-            />
-          </label>
-        ))}
-      </div>
-      <button className="builder-contact-form-submit" disabled={isSubmitting} type="submit">
-        {isSubmitting ? "Submitting…" : form.submitLabel || "Submit"}
-      </button>
-    </form>
+    <div className="builder-crm-form-shell" style={shellStyle}>
+      {form.heading ? (
+        <div className="builder-contact-form-heading" style={blockStyle}>
+          {form.heading}
+        </div>
+      ) : null}
+      <form className="builder-contact-form builder-crm-form" onSubmit={submitCrmForm} style={blockStyle}>
+        <input type="text" name="_trap" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
+        {message ? <div className="builder-contact-form-message">{message}</div> : null}
+        {error ? <div className="builder-contact-form-error">{error}</div> : null}
+        <div className="builder-contact-form-fields">
+          {(form.fields ?? []).map((field) => (
+            <label className="builder-contact-form-field" key={field.key}>
+              <span>{field.label}</span>
+              <CrmFormFieldControl
+                field={field}
+                value={values[field.key] ?? ""}
+                onChange={(key, nextValue) => setValues((prev) => ({ ...prev, [key]: nextValue }))}
+              />
+            </label>
+          ))}
+        </div>
+        <button className="builder-contact-form-submit" disabled={isSubmitting} type="submit">
+          {isSubmitting ? "Submitting…" : form.submitLabel || "Submit"}
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -769,6 +876,7 @@ export function BuilderTemplatePreview({
   layoutSections,
   pageBackground,
   theme,
+  themePalette,
   showShell = true,
   emailPreview = false,
   previewMode = false,
@@ -777,7 +885,11 @@ export function BuilderTemplatePreview({
   const pageStyle = getBuilderBackgroundStyle(pageBackground);
   // Theme tokens go first so the page background (and any per-module inline
   // styles further down) still win where they overlap.
-  const rootStyle = { ...getThemeRootVars(theme), ...pageStyle };
+  const rootStyle = {
+    ...getThemeRootVars(theme),
+    ...getCrmThemePaletteVars(themePalette),
+    ...pageStyle
+  };
   const sitePlayerRegistered = useSitePlayerRegistration();
 
   /** Live and builder previews need the shell so overlay-flow rows stack above the game wash. */
@@ -805,6 +917,8 @@ export function BuilderTemplatePreview({
               projectId={projectId}
               section={section}
               sitePlayerRegistered={sitePlayerRegistered}
+              theme={theme}
+              themePalette={themePalette}
             />
           ))}
         </div>
@@ -818,6 +932,8 @@ export function BuilderTemplatePreview({
             previewMode={previewMode}
             section={section}
             sitePlayerRegistered={sitePlayerRegistered}
+            theme={theme}
+            themePalette={themePalette}
           />
         ))}
       {shellClassName ? <GameModuleOverlayHosts /> : null}
@@ -831,13 +947,17 @@ function BuilderSectionPreview({
   emailPreview = false,
   previewMode = false,
   projectId = "",
-  sitePlayerRegistered = false
+  sitePlayerRegistered = false,
+  theme,
+  themePalette
 }: {
   section: BuilderTemplateSection;
   emailPreview?: boolean;
   previewMode?: boolean;
   projectId?: string;
   sitePlayerRegistered?: boolean;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
 }) {
   const sectionStyle = getBuilderBackgroundStyle(section.background);
   const columnKeys = getLayoutColumns(section.layout);
@@ -978,6 +1098,8 @@ function BuilderSectionPreview({
                     previewMode={previewMode}
                     projectId={projectId}
                     sitePlayerRegistered={sitePlayerRegistered}
+                    theme={theme}
+                    themePalette={themePalette}
                   />
                 </div>
               );
@@ -995,7 +1117,9 @@ function BuilderModulePreview({
   overlayFlowDecor = false,
   previewMode = false,
   projectId = "",
-  sitePlayerRegistered = false
+  sitePlayerRegistered = false,
+  theme,
+  themePalette
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
   emailPreview?: boolean;
@@ -1004,6 +1128,8 @@ function BuilderModulePreview({
   previewMode?: boolean;
   projectId?: string;
   sitePlayerRegistered?: boolean;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
 }) {
   const variant = module.settings.variant ?? "";
 
@@ -1101,7 +1227,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "crm-form") {
-    return <CrmFormPreview settings={module.settings} />;
+    return <CrmFormPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
 
   if (module.type === "crm-contacts-table") {

@@ -90,6 +90,11 @@ Sourced from `docs/UI_STANDARDS.md`, `docs/STYLE_GUIDE.md`, and prior agent/huma
 - **Checkboxes in grid:** `.standard-form-checkbox` on the input; group related checkboxes in a flex/grid in column 2 under one label.
 - **Submit row:** empty `<div></div>` first cell, button in second column — or `.standard-form-grid-full` for full-width actions.
 - **Validation glow:** persisted populated fields get green completeness outline; empty required fields red (existing pattern in app).
+- **Builder CRM public forms** (embedded `crm-form` module + `CrmFormPreview` in `components/builder-template-preview.tsx`; styles in `src/css/_builder-react.css` — **not** `_crm.css` / `public/js/crm.js` admin preview alone):
+  - Persist layout/style settings on the form record in `styles` JSON (`lib/crmFormStyles.js`): heading color, button background/text/size/weight (1–10), label align, field alignment, field width.
+  - Form block width defaults to **75% of builder cell** via `styles.fieldWidth`; heading above form; two-column label/control rows; no placeholders.
+  - Module center/right alignment must **not** override CRM form internal alignment (override in `_builder-react.css`).
+  - After CSS/TSX/store changes: rebuild `public/styles.css` **and** `public/builder-bundle.js` (`npm run build:builder`); apply `docs/SQL/crm_forms_styles.sql` on Supabase when adding the `styles` column.
 
 ### Hero & collapsible inputs
 - Primary focal inputs (e.g. Acquire URL bar): `.hero-action-input` — blue focus ring/glow without layout shift (`box-shadow` inset trick).

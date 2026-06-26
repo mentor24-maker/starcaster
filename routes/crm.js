@@ -190,6 +190,7 @@ async function handle(req, res, pathname, method) {
       successMessage: String(body.successMessage || 'Thank you! Your information has been saved.').trim(),
       errorMessage: String(body.errorMessage || 'Something went wrong. Please try again.').trim(),
       accentColor: String(body.accentColor || '').trim(),
+      styles: body.styles && typeof body.styles === 'object' ? body.styles : undefined,
       fields: Array.isArray(body.fields) ? body.fields : [],
     }, requestScope(req));
     if (!created) return sendErr(res, 500, 'Failed to create CRM form'), true;
@@ -217,6 +218,7 @@ async function handle(req, res, pathname, method) {
     if (body.successMessage !== undefined) patch.successMessage = String(body.successMessage || '').trim();
     if (body.errorMessage !== undefined) patch.errorMessage = String(body.errorMessage || '').trim();
     if (body.accentColor !== undefined) patch.accentColor = String(body.accentColor || '').trim();
+    if (body.styles !== undefined && body.styles && typeof body.styles === 'object') patch.styles = body.styles;
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
     const updated = await updateForm(id, patch, requestScope(req));
     if (!updated) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
