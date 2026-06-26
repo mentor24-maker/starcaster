@@ -1547,6 +1547,20 @@ ${fieldHtml}
   async function openFormEditor(form) {
     editingFormId = form ? form.id : null;
     savedEditorForm = form ? { ...form } : null;
+
+    if (editingFormId) {
+      try {
+        const res = await api(`/api/crm/forms/${encodeURIComponent(editingFormId)}`);
+        const fresh = res.form || res.data || null;
+        if (fresh?.id) {
+          form = fresh;
+          savedEditorForm = fresh;
+        }
+      } catch {
+        // Fall back to the list copy when a direct fetch is unavailable.
+      }
+    }
+
     const titleEl = el('crmFormEditorTitle');
     if (titleEl) {
       titleEl.innerHTML = `<a href="#" class="page-heading-back-link" onclick="App.crm.openPage(); return false;">CRM</a>: ${form ? 'Edit' : 'Create'} Form`;
@@ -1646,6 +1660,24 @@ ${fieldHtml}
         const idx = currentForms.findIndex((f) => f.id === saved.id);
         if (idx >= 0) currentForms[idx] = saved;
         else currentForms.unshift(saved);
+
+        if (editingFormId) {
+          try {
+            const verify = await api(`/api/crm/forms/${encodeURIComponent(editingFormId)}`);
+            const verified = verify.form || verify.data || null;
+            if (verified?.styles && typeof verified.styles === 'object') {
+              savedEditorForm = verified;
+              if (idx >= 0) currentForms[idx] = verified;
+              populateFormStylesEditor(verified);
+              renderFormEditorPreview();
+            }
+          } catch {
+            // Keep save response when verification fetch fails.
+          }
+        } else if (saved?.styles && typeof saved.styles === 'object') {
+          populateFormStylesEditor(saved);
+          renderFormEditorPreview();
+        }
       }
     } catch (err) {
       notify(err.message || 'Failed to save form.', true);

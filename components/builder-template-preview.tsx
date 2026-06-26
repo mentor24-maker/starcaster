@@ -15,8 +15,7 @@ import {
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
   buildCrmFormRenderContext,
-  crmFormStylesToCssProperties,
-  normalizeCrmFormStyles
+  crmFormStylesToRenderStyles
 } from "../lib/crmFormStyles.js";
 import {
   getAdminAuthHeaders,
@@ -379,36 +378,45 @@ function CrmFormPreview({
     return <div className="builder-contact-form-stub">Loading form…</div>;
   }
 
-  const formStyles = normalizeCrmFormStyles(form.styles, form.accentColor);
   const renderContext = buildCrmFormRenderContext(themePalette, theme?.typography);
   const themeContextStyle = getCrmFormThemeContextStyle(themePalette, theme);
-  const formCssVars = crmFormStylesToCssProperties(form.styles, form.accentColor, renderContext) as CSSProperties;
+  const renderStyles = crmFormStylesToRenderStyles(form.styles, form.accentColor, renderContext);
+  const labelStyle = {
+    justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
+    textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
+    alignSelf: 'start'
+  } as CSSProperties;
   const shellStyle = {
     ...themeContextStyle,
-    ...formCssVars
+    ...renderStyles.shell
   } as CSSProperties;
-  const blockStyle = {
+  const headingStyle = {
     ...themeContextStyle,
-    ...formCssVars,
-    width: formStyles.fieldWidth,
-    maxWidth: "100%"
+    ...renderStyles.heading
+  } as CSSProperties;
+  const formStyle = {
+    ...themeContextStyle,
+    ...renderStyles.form
+  } as CSSProperties;
+  const buttonStyle = {
+    ...renderStyles.button
   } as CSSProperties;
 
   return (
     <div className="builder-crm-form-shell" style={shellStyle}>
       {form.heading ? (
-        <div className="builder-contact-form-heading" style={blockStyle}>
+        <div className="builder-contact-form-heading" style={headingStyle}>
           {form.heading}
         </div>
       ) : null}
-      <form className="builder-contact-form builder-crm-form" onSubmit={submitCrmForm} style={blockStyle}>
+      <form className="builder-contact-form builder-crm-form" onSubmit={submitCrmForm} style={formStyle}>
         <input type="text" name="_trap" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
         {message ? <div className="builder-contact-form-message">{message}</div> : null}
         {error ? <div className="builder-contact-form-error">{error}</div> : null}
         <div className="builder-contact-form-fields">
           {(form.fields ?? []).map((field) => (
             <label className="builder-contact-form-field" key={field.key}>
-              <span>{field.label}</span>
+              <span style={labelStyle}>{field.label}</span>
               <CrmFormFieldControl
                 field={field}
                 value={values[field.key] ?? ""}
@@ -417,7 +425,7 @@ function CrmFormPreview({
             </label>
           ))}
         </div>
-        <button className="builder-contact-form-submit" disabled={isSubmitting} type="submit">
+        <button className="builder-contact-form-submit" disabled={isSubmitting} style={buttonStyle} type="submit">
           {isSubmitting ? "Submitting…" : form.submitLabel || "Submit"}
         </button>
       </form>
