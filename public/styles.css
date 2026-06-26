@@ -8474,11 +8474,11 @@ body.asset-associations-modal-open {
   max-width: 100%;
   min-width: 0;
   grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
-  background: var(--crm-form-background, transparent);
-  border: var(--crm-form-border-size, 0) solid var(--crm-form-border-color, rgba(9, 16, 24, 0.12));
-  border-radius: var(--crm-form-border-radius, 10px);
-  padding: var(--crm-form-padding, 18px);
   box-sizing: border-box;
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
 }
 .builder-react-root .builder-crm-form-shell .builder-contact-form-heading {
   width: var(--crm-form-width, 75%);
@@ -8507,22 +8507,13 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-crm-form .builder-contact-form-field input,
 .builder-react-root .builder-crm-form .builder-contact-form-field textarea,
 .builder-react-root .builder-crm-form .builder-contact-form-field select {
-  justify-self: stretch;
+  justify-self: var(--crm-form-field-justify, start);
   width: 100%;
   max-width: 100%;
   min-width: 0;
 }
 .builder-react-root .builder-crm-form .builder-contact-form-submit {
-  justify-self: var(--crm-form-button-justify, start);
-  width: var(--crm-form-button-width, 100%);
-  max-width: 100%;
-  min-width: 0;
   white-space: nowrap;
-  background: var(--crm-form-button-bg, #1DC3FF);
-  border-color: var(--crm-form-button-bg, #0b6d90);
-  color: var(--crm-form-button-color, #ffffff);
-  font-size: var(--crm-form-button-size, 1.35rem);
-  font-weight: var(--crm-form-button-weight, 800);
 }
 .builder-react-root .builder-contact-honeypot {
   position: absolute;
