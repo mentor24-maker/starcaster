@@ -243,7 +243,18 @@ async function handleRequest(req, res) {
   const isProjectAdminApiRoute = pathname.startsWith('/api/admin')
     && !pathname.startsWith('/api/admin/platform-users');
   const isProjectAdminCrmRoute = pathname.startsWith('/api/crm') && !isPublicCrmRoute;
-  if (!authUser && (pathname.startsWith('/api/builder') || isProjectAdminApiRoute || isProjectAdminCrmRoute)) {
+  const isProjectAdminAssetsRoute = pathname === '/api/assets'
+    || pathname.startsWith('/api/assets/')
+    || pathname.startsWith('/api/asset-categories');
+  if (
+    !authUser
+    && (
+      pathname.startsWith('/api/builder')
+      || isProjectAdminApiRoute
+      || isProjectAdminCrmRoute
+      || isProjectAdminAssetsRoute
+    )
+  ) {
     const adminToken = projectAdmin.readAdminSessionToken(req);
     if (adminToken) {
       const adminSession = await getAdminSession(adminToken);
