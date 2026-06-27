@@ -625,6 +625,7 @@ function CrmContactsTablePreview({
   const [contacts, setContacts]     = useState<CrmContact[]>([]);
   const [loading, setLoading]       = useState(true);
   const [loadError, setLoadError]   = useState("");
+  const [filterEmail, setFilterEmail]         = useState("");
   const [filterFirstName, setFilterFirstName] = useState("");
   const [filterLastName, setFilterLastName]   = useState("");
   const [filterPhone, setFilterPhone]         = useState("");
@@ -674,9 +675,13 @@ function CrmContactsTablePreview({
   const fields = getContactFields(config);
   const tableCols = CONTACTS_TABLE_COLUMNS;
   const hasActions = showViewBtn || showEditBtn || showDeleteBtn;
-  const hasActiveFilters = Boolean(filterFirstName || filterLastName || filterPhone);
+  const hasActiveFilters = Boolean(filterEmail || filterFirstName || filterLastName || filterPhone);
 
   const filtered = contacts.filter((c) => {
+    if (filterEmail) {
+      const q = filterEmail.toLowerCase();
+      if (!(c.email ?? "").toLowerCase().includes(q)) return false;
+    }
     if (filterFirstName) {
       const q = filterFirstName.toLowerCase();
       if (!String(c.data?.first_name ?? "").toLowerCase().includes(q)) return false;
@@ -808,50 +813,66 @@ function CrmContactsTablePreview({
       {showTitle && <h2 className="builder-admin-data-table-title">{tableTitle}</h2>}
 
       <div className="builder-admin-data-table-wrap">
-        {showFilterBar && (
-          <div className="builder-admin-data-table-filter-bar">
-            <div className="builder-admin-data-table-filter-fields">
-              {showSearch && (
-                <div className="builder-admin-data-table-filter-inputs">
-                  <input
-                    className="builder-admin-data-table-filter-input"
-                    type="search"
-                    placeholder="First Name"
-                    value={filterFirstName}
-                    onChange={(e) => { setFilterFirstName(e.target.value); setPage(1); }}
-                  />
-                  <input
-                    className="builder-admin-data-table-filter-input"
-                    type="search"
-                    placeholder="Last Name"
-                    value={filterLastName}
-                    onChange={(e) => { setFilterLastName(e.target.value); setPage(1); }}
-                  />
-                  <input
-                    className="builder-admin-data-table-filter-input"
-                    type="search"
-                    placeholder="Phone"
-                    value={filterPhone}
-                    onChange={(e) => { setFilterPhone(e.target.value); setPage(1); }}
-                  />
-                </div>
-              )}
-            </div>
-            {hasActions && showAddButton && (
-              <div className="builder-admin-data-table-filter-actions">
-                <button
-                  className="builder-admin-data-table-add-btn"
-                  type="button"
-                  onClick={() => { setAddValues({}); setAddMode(true); }}
-                >
-                  {addButtonLabel}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
         <table className="builder-admin-data-table">
           <thead>
+            {showFilterBar && (
+              <tr className="builder-admin-data-table-filter-row table-filter-row">
+                {tableCols.map((f) => (
+                  <th key={f.key}>
+                    {showSearch && f.key === "email" && (
+                      <input
+                        className="builder-admin-data-table-filter-input"
+                        type="search"
+                        placeholder="Email"
+                        value={filterEmail}
+                        onChange={(e) => { setFilterEmail(e.target.value); setPage(1); }}
+                      />
+                    )}
+                    {showSearch && f.key === "first_name" && (
+                      <input
+                        className="builder-admin-data-table-filter-input"
+                        type="search"
+                        placeholder="First Name"
+                        value={filterFirstName}
+                        onChange={(e) => { setFilterFirstName(e.target.value); setPage(1); }}
+                      />
+                    )}
+                    {showSearch && f.key === "last_name" && (
+                      <input
+                        className="builder-admin-data-table-filter-input"
+                        type="search"
+                        placeholder="Last Name"
+                        value={filterLastName}
+                        onChange={(e) => { setFilterLastName(e.target.value); setPage(1); }}
+                      />
+                    )}
+                    {showSearch && f.key === "phone" && (
+                      <input
+                        className="builder-admin-data-table-filter-input"
+                        type="search"
+                        placeholder="Phone"
+                        value={filterPhone}
+                        onChange={(e) => { setFilterPhone(e.target.value); setPage(1); }}
+                      />
+                    )}
+                  </th>
+                ))}
+                <th />
+                {hasActions && (
+                  <th className="builder-admin-data-table-actions-col actions-col">
+                    {showAddButton && (
+                      <button
+                        type="button"
+                        className="builder-admin-data-table-add-btn"
+                        onClick={() => { setAddValues({}); setAddMode(true); }}
+                      >
+                        {addButtonLabel}
+                      </button>
+                    )}
+                  </th>
+                )}
+              </tr>
+            )}
             <tr className="builder-admin-data-table-header-row">
               {tableCols.map((f) => (
                 <th
@@ -2362,109 +2383,112 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   const statusColor = (s?: string) => s === "published" ? "#16a34a" : s === "archived" ? "#9ca3af" : "#d97706";
   const statusBg   = (s?: string) => s === "published" ? "#f0fdf4" : s === "archived" ? "#f9fafb" : "#fffbeb";
 
+  const listHeading = (
+    <h3 className="builder-admin-data-table-title">Published Blog Posts</h3>
+  );
+
   if (loading) {
-    return <div className="builder-blog-post-manager-stub">Loading posts…</div>;
+    return (
+      <div className="builder-blog-post-manager-module builder-admin-data-table-module">
+        {listHeading}
+        <div className="builder-blog-post-manager-stub">Loading posts…</div>
+      </div>
+    );
   }
 
   if (!posts.length) {
     return (
-      <div className="builder-blog-post-manager-stub">
-        No posts yet. Use the Create Post module to add your first post.
+      <div className="builder-blog-post-manager-module builder-admin-data-table-module">
+        {listHeading}
+        <div className="builder-blog-post-manager-stub">
+          No posts yet. Use the Create Post module to add your first post.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="builder-blog-post-manager-module">
-      <div className="builder-admin-data-table-wrap">
-        <table className="builder-admin-data-table">
-          <thead>
-            <tr className="builder-admin-data-table-header-row">
-              <th className="builder-blog-post-manager-thumb-col">Image</th>
-              <th>Title</th>
-              {showStatus ? <th style={{ width: 100 }}>Status</th> : null}
-              {showDate ? <th style={{ width: 120 }}>Date</th> : null}
-              <th className="builder-admin-data-table-actions-col builder-blog-post-manager-actions-col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {posts.map((post) => {
-              const editHref = editPageUrl
-                ? `${editPageUrl}${editPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`
-                : undefined;
-              const viewSep = viewPageUrl.includes("?") ? "&" : "?";
-              const viewHref = viewPageUrl
-                ? `${viewPageUrl}${viewSep}post=${encodeURIComponent(post.slug)}`
-                : undefined;
-              const dateStr = post.published_at ?? post.created_at ?? post.createdAt ?? "";
-              const displayDate = dateStr
-                ? new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                : "—";
-              const imageUrl = blogPostFeaturedImageUrl(post);
-              return (
-                <tr key={post.id}>
-                  <td className="builder-admin-data-table-cell builder-blog-post-manager-thumb-col">
-                    {imageUrl ? (
-                      <img
-                        alt=""
-                        className="builder-blog-post-manager-thumb"
-                        src={imageUrl}
-                      />
-                    ) : (
-                      <span aria-hidden="true" className="builder-blog-post-manager-thumb-placeholder" />
-                    )}
-                  </td>
-                  <td className="builder-admin-data-table-cell">
-                    <span style={{ fontWeight: 500 }}>{post.title}</span>
-                  </td>
+    <div className="builder-blog-post-manager-module builder-admin-data-table-module">
+      {listHeading}
+      <div className="builder-blog-post-manager-list">
+        {posts.map((post) => {
+          const editHref = editPageUrl
+            ? `${editPageUrl}${editPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`
+            : undefined;
+          const viewSep = viewPageUrl.includes("?") ? "&" : "?";
+          const viewHref = viewPageUrl
+            ? `${viewPageUrl}${viewSep}post=${encodeURIComponent(post.slug)}`
+            : undefined;
+          const dateStr = post.published_at ?? post.created_at ?? post.createdAt ?? "";
+          const displayDate = dateStr
+            ? new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+            : "—";
+          const imageUrl = blogPostFeaturedImageUrl(post);
+          return (
+            <div key={post.id} className="builder-blog-post-manager-item">
+              <div className="builder-blog-post-manager-item-thumb">
+                {imageUrl ? (
+                  <img
+                    alt=""
+                    className="builder-blog-post-manager-thumb"
+                    src={imageUrl}
+                  />
+                ) : (
+                  <span aria-hidden="true" className="builder-blog-post-manager-thumb-placeholder" />
+                )}
+              </div>
+              <div className="builder-blog-post-manager-item-body">
+                <div className="builder-blog-post-manager-item-title">{post.title}</div>
+                <div className="builder-blog-post-manager-item-meta">
                   {showStatus ? (
-                    <td className="builder-admin-data-table-cell">
-                      <span style={{ fontSize: "0.75rem", fontWeight: 600, color: statusColor(post.status), background: statusBg(post.status), borderRadius: 4, padding: "2px 8px" }}>
-                        {post.status ?? "draft"}
-                      </span>
-                    </td>
+                    <span
+                      className="builder-blog-post-manager-status"
+                      style={{ color: statusColor(post.status), background: statusBg(post.status) }}
+                    >
+                      {post.status ?? "draft"}
+                    </span>
                   ) : null}
                   {showDate ? (
-                    <td className="builder-admin-data-table-cell builder-admin-data-table-date">{displayDate}</td>
+                    <span className="builder-blog-post-manager-date">{displayDate}</span>
                   ) : null}
-                  <td className="builder-admin-data-table-actions">
-                    <div className="table-actions-row" role="group">
-                      <AdminTableIconButton
-                        icon="view"
-                        label="View"
-                        href={viewHref}
-                        disabled={!viewHref}
-                        onClick={!viewHref ? () => {} : undefined}
-                      />
-                      <AdminTableIconButton
-                        icon="edit"
-                        label="Edit"
-                        href={editHref}
-                        disabled={!editHref}
-                        onClick={!editHref ? () => {} : undefined}
-                      />
-                      <AdminTableIconButton
-                        icon="clone"
-                        label="Clone"
-                        disabled={cloningId === post.id}
-                        onClick={() => clonePost(post)}
-                      />
-                      {showDelete ? (
-                        <AdminTableIconButton
-                          icon="delete"
-                          label="Delete"
-                          danger
-                          disabled={deletingId === post.id}
-                          onClick={() => deletePost(post.id)}
-                        />
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                </div>
+              </div>
+              <div className="builder-blog-post-manager-item-actions">
+                <div className="table-actions-row" role="group">
+                  <AdminTableIconButton
+                    icon="view"
+                    label="View"
+                    href={viewHref}
+                    disabled={!viewHref}
+                    onClick={!viewHref ? () => {} : undefined}
+                  />
+                  <AdminTableIconButton
+                    icon="edit"
+                    label="Edit"
+                    href={editHref}
+                    disabled={!editHref}
+                    onClick={!editHref ? () => {} : undefined}
+                  />
+                  <AdminTableIconButton
+                    icon="clone"
+                    label="Clone"
+                    disabled={cloningId === post.id}
+                    onClick={() => clonePost(post)}
+                  />
+                  {showDelete ? (
+                    <AdminTableIconButton
+                      icon="delete"
+                      label="Delete"
+                      danger
+                      disabled={deletingId === post.id}
+                      onClick={() => deletePost(post.id)}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -3848,27 +3872,26 @@ function AdminTeamUsersPreview({
       ) : (
         <>
           <div className="builder-admin-data-table-wrap">
-            <div className="builder-admin-data-table-filter-bar">
-              <div
-                className="builder-admin-data-table-filter-fields builder-admin-data-table-filter-fields--spacer"
-                aria-hidden="true"
-              />
-              {hasActions && (
-                <div className="builder-admin-data-table-filter-actions">
-                  {showAddButton && (
-                    <button
-                      type="button"
-                      className="builder-admin-data-table-add-btn"
-                      onClick={() => setShowAddForm(true)}
-                    >
-                      {addButtonLabel}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
             <table className="builder-admin-data-table">
               <thead>
+                <tr className="builder-admin-data-table-filter-row table-filter-row">
+                  <th />
+                  <th />
+                  <th />
+                  {hasActions && (
+                    <th className="builder-admin-data-table-actions-col actions-col">
+                      {showAddButton && (
+                        <button
+                          type="button"
+                          className="builder-admin-data-table-add-btn"
+                          onClick={() => setShowAddForm(true)}
+                        >
+                          {addButtonLabel}
+                        </button>
+                      )}
+                    </th>
+                  )}
+                </tr>
                 <tr className="builder-admin-data-table-header-row">
                   <th
                     className="builder-admin-data-table-sortable"

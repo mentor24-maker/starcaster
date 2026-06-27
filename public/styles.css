@@ -13392,51 +13392,37 @@ body.asset-associations-modal-open {
   border: 1px solid var(--admin-table-border);
   border-radius: 10px;
 }
-.builder-react-root .builder-admin-data-table-filter-bar {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
+.builder-react-root .builder-admin-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  color: var(--admin-table-ink);
+  table-layout: fixed;
+}
+.builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-filter-row th {
   background: var(--admin-table-filter-bg);
   border-bottom: 1px solid var(--admin-table-border);
-  border-radius: 10px 10px 0 0;
-  min-height: 52px;
+  padding: 8px 10px;
+  font-weight: 400;
+  cursor: default;
+  vertical-align: middle;
 }
-.builder-react-root .builder-admin-data-table-filter-fields {
-  flex: 1;
+.builder-react-root .builder-admin-data-table-filter-row .builder-admin-data-table-filter-input {
+  width: 100%;
   min-width: 0;
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-}
-.builder-react-root .builder-admin-data-table-filter-fields--spacer {
-  min-height: 36px;
-}
-.builder-react-root .builder-admin-data-table-filter-inputs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
-}
-.builder-react-root .builder-admin-data-table-filter-input {
-  width: 100%;
-  padding: 7px 12px;
+  padding: 7px 10px;
   border: 1px solid var(--admin-table-border);
   border-radius: 8px;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   background: #fff;
   color: var(--admin-table-ink);
   box-sizing: border-box;
 }
-.builder-react-root .builder-admin-data-table-filter-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 8.5rem;
+.builder-react-root .builder-admin-data-table-filter-row th.builder-admin-data-table-actions-col {
+  text-align: center;
   width: 8.5rem;
   min-width: 8.5rem;
-  padding: 8px 10px;
-  border-left: 1px solid color-mix(in srgb, var(--admin-table-border) 70%, transparent);
 }
 .builder-react-root .builder-admin-data-table-add-btn {
   padding: 7px 14px;
@@ -13445,20 +13431,13 @@ body.asset-associations-modal-open {
   background: var(--admin-table-btn-bg);
   color: var(--admin-table-accent);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
 .builder-react-root .builder-admin-data-table-add-btn:hover {
   background: color-mix(in srgb, var(--admin-table-filter-bg) 70%, #fff);
-}
-.builder-react-root .builder-admin-data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-  color: var(--admin-table-ink);
-  table-layout: fixed;
 }
 .builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-header-row th,
 .builder-react-root .builder-admin-data-table thead tr:not(.builder-admin-data-table-filter-row) th {
@@ -13583,6 +13562,65 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-blog-post-manager-module {
   width: 100%;
 }
+.builder-react-root .builder-blog-post-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.builder-react-root .builder-blog-post-manager-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf2f7;
+}
+.builder-react-root .builder-blog-post-manager-item:last-child {
+  border-bottom: none;
+}
+.builder-react-root .builder-blog-post-manager-item:nth-child(even) {
+  background: var(--admin-table-row-alt, #f7fbff);
+}
+.builder-react-root .builder-blog-post-manager-item:hover {
+  background: var(--admin-table-row-hover, #eef6fc);
+}
+.builder-react-root .builder-blog-post-manager-item-thumb {
+  flex: 0 0 auto;
+}
+.builder-react-root .builder-blog-post-manager-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.builder-react-root .builder-blog-post-manager-item-title {
+  font-weight: 600;
+  color: var(--admin-table-ink, #18324a);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.builder-react-root .builder-blog-post-manager-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--admin-table-muted, #587592);
+}
+.builder-react-root .builder-blog-post-manager-status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 2px 8px;
+  text-transform: lowercase;
+}
+.builder-react-root .builder-blog-post-manager-item-actions {
+  flex: 0 0 auto;
+}
 .builder-react-root .builder-blog-post-manager-stub {
   padding: 2rem;
   text-align: center;
@@ -13591,26 +13629,18 @@ body.asset-associations-modal-open {
   border-radius: 8px;
   font-size: 0.9rem;
 }
-.builder-react-root .builder-blog-post-manager-thumb-col {
-  width: 4.5rem;
-  min-width: 4.5rem;
-}
-.builder-react-root .builder-blog-post-manager-actions-col {
-  width: 10.5rem;
-  min-width: 10.5rem;
-}
 .builder-react-root .builder-blog-post-manager-thumb {
   display: block;
-  width: 56px;
-  height: 42px;
+  width: 72px;
+  height: 54px;
   object-fit: cover;
   border-radius: 4px;
   background: #f3f4f6;
 }
 .builder-react-root .builder-blog-post-manager-thumb-placeholder {
   display: block;
-  width: 56px;
-  height: 42px;
+  width: 72px;
+  height: 54px;
   border-radius: 4px;
   background: #f3f4f6;
   border: 1px dashed #d1d5db;
