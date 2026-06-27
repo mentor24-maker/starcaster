@@ -4,9 +4,31 @@ import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { formatTemplateTimestamp } from "./builder-utils";
 
-type SortField = "name" | "slug" | "template" | "updatedAt";
+type SortField = "name" | "slug" | "template" | "visibility" | "updatedAt";
 type SortDir = "asc" | "desc";
 type ArchiveView = "pages" | "archive-list" | "archive-detail";
+type VisibilityFilter = "" | "public" | "private" | "unset";
+
+function pageVisibilityState(page: BuilderPageRecord): "public" | "private" | "unset" {
+  const raw = page as BuilderPageRecord & { is_private?: boolean | null };
+  if (page.isPrivate === true || raw.is_private === true) return "private";
+  if (page.isPrivate === false || raw.is_private === false) return "public";
+  return "unset";
+}
+
+function pageVisibilityLabel(page: BuilderPageRecord): string {
+  const state = pageVisibilityState(page);
+  if (state === "private") return "Private";
+  if (state === "public") return "Public";
+  return "";
+}
+
+function pageVisibilitySortKey(page: BuilderPageRecord): string {
+  const state = pageVisibilityState(page);
+  if (state === "public") return "1";
+  if (state === "private") return "2";
+  return "0";
+}
 
 type ActiveArchive = {
   id: string;
@@ -101,6 +123,7 @@ export function BuilderPageList({
     details: true
   });
   const [filterText, setFilterText] = useState("");
+  const [filterVisibility, setFilterVisibility] = useState<VisibilityFilter>("");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>("updatedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -147,11 +170,14 @@ export function BuilderPageList({
 
   const filteredPages = useMemo(() => {
     const q = filterText.trim().toLowerCase();
-    const result = q
+    let result = q
       ? pages.filter(
           (p) => p.name.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q)
         )
-      : pages;
+      : pages.slice();
+    if (filterVisibility) {
+      result = result.filter((page) => pageVisibilityState(page) === filterVisibility);
+    }
     return result.slice().sort((a, b) => {
       let av = "";
       let bv = "";
@@ -164,6 +190,9 @@ export function BuilderPageList({
       } else if (sortField === "template") {
         av = (templates.find((t) => t.id === a.templateId)?.name ?? "").toLowerCase();
         bv = (templates.find((t) => t.id === b.templateId)?.name ?? "").toLowerCase();
+      } else if (sortField === "visibility") {
+        av = pageVisibilitySortKey(a);
+        bv = pageVisibilitySortKey(b);
       } else {
         av = a.updatedAt;
         bv = b.updatedAt;
@@ -171,7 +200,7 @@ export function BuilderPageList({
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [pages, filterText, sortField, sortDir, templates]);
+  }, [pages, filterText, filterVisibility, sortField, sortDir, templates]);
 
   const allVisibleChecked =
     filteredPages.length > 0 && filteredPages.every((p) => checkedIds.has(p.id));
@@ -513,11 +542,37 @@ export function BuilderPageList({
               <col className="builder-pages-col-title" />
               <col className="builder-pages-col-slug" />
               <col className="builder-pages-col-template" />
+              <col className="builder-pages-col-visibility" />
               <col className="builder-pages-col-updated" />
               <col className="builder-pages-col-actions" />
             </colgroup>
             <thead>
               {!collapsedPanels.pages ? (
+                <>
+                <tr className="builder-crud-filter-row">
+                  <th scope="col" />
+                  <th scope="col" />
+                  <th scope="col" />
+                  <th scope="col" />
+                  <th scope="col">
+                    <label className="builder-crud-filter-field">
+                      <span className="builder-crud-filter-label">Filter Visibility</span>
+                      <select
+                        aria-label="Filter Visibility"
+                        className="builder-crud-filter-select"
+                        onChange={(event) => setFilterVisibility(event.target.value as VisibilityFilter)}
+                        value={filterVisibility}
+                      >
+                        <option value="">All Visibility</option>
+                        <option value="public">Public</option>
+                        <option value="private">Private</option>
+                        <option value="unset">Unset</option>
+                      </select>
+                    </label>
+                  </th>
+                  <th scope="col" />
+                  <th scope="col" />
+                </tr>
                 <tr className="builder-pages-list-columns-row">
                   <th className="builder-pages-check-cell">
                     <input
@@ -558,6 +613,15 @@ export function BuilderPageList({
                   </th>
                   <th>
                     <button
+                      className={`admin-table-sort-button${sortField === "visibility" ? " is-active" : ""}`}
+                      onClick={() => handleSort("visibility")}
+                      type="button"
+                    >
+                      Visibility {sortIndicator("visibility")}
+                    </button>
+                  </th>
+                  <th>
+                    <button
                       className={`admin-table-sort-button${sortField === "updatedAt" ? " is-active" : ""}`}
                       onClick={() => handleSort("updatedAt")}
                       type="button"
@@ -567,6 +631,7 @@ export function BuilderPageList({
                   </th>
                   <th className="crud-actions-cell">Actions</th>
                 </tr>
+                </>
               ) : null}
             </thead>
             {!collapsedPanels.pages ? (
@@ -592,6 +657,7 @@ export function BuilderPageList({
                         <code>/{page.slug}</code>
                       </td>
                       <td>{templates.find((template) => template.id === page.templateId)?.name || "Unknown"}</td>
+                      <td>{pageVisibilityLabel(page) || "—"}</td>
                       <td>{formatTemplateTimestamp(page.updatedAt)}</td>
                       <td className="crud-actions-cell">
                         <div className="builder-template-actions">
@@ -640,7 +706,7 @@ export function BuilderPageList({
                 })}
                 {filteredPages.length === 0 ? (
                   <tr>
-                    <td className="empty-cell" colSpan={6}>
+                    <td className="empty-cell" colSpan={7}>
                       {pages.length === 0 ? "No pages found." : "No pages match your search."}
                     </td>
                   </tr>
