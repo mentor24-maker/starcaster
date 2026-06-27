@@ -9387,12 +9387,11 @@ body.asset-associations-modal-open {
   border-radius: 10px;
   box-sizing: border-box;
 }
-.builder-react-root .builder-button-background-popup {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 30;
-  width: min(360px, 92vw);
+.builder-react-root .builder-editor-popup {
+  width: min(360px, calc(100vw - 48px));
+  max-height: min(85vh, calc(100dvh - 48px));
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid rgba(9, 16, 24, 0.12);
   border-radius: 18px;
   background: #fff;
@@ -13898,6 +13897,7 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-gallery-modal,
 .builder-react-root .builder-gallery-empty,
 .builder-react-root .builder-workspace-empty,
+.builder-react-root .builder-editor-popup,
 .builder-react-root .builder-button-background-popup,
 .builder-react-root .builder-crud-filter-row,
 .builder-react-root .builder-template-format-group,

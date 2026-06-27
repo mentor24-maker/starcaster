@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { BuilderEditorPopup } from "./builder-editor-popup";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeSwatches } from "./builder-theme-swatches";
 
@@ -26,42 +27,15 @@ export function BuilderThemeColorField({
   dialogLabel = "Choose color"
 }: BuilderThemeColorFieldProps) {
   const popupId = useId();
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const resolved = resolveHexColor(value, fallback);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen]);
 
   function selectColor(hex: string) {
     onChange(hex);
   }
 
   return (
-    <div className="builder-button-background-picker builder-theme-color-picker" ref={rootRef}>
+    <div className="builder-button-background-picker builder-theme-color-picker">
       <button
         aria-controls={popupId}
         aria-expanded={isOpen}
@@ -74,11 +48,11 @@ export function BuilderThemeColorField({
         type="button"
       />
       {isOpen ? (
-        <div
-          className="builder-button-background-popup builder-theme-color-popup"
+        <BuilderEditorPopup
+          ariaLabel={dialogLabel}
+          className="builder-theme-color-popup"
           id={popupId}
-          role="dialog"
-          aria-label={dialogLabel}
+          onClose={() => setIsOpen(false)}
         >
           <div className="builder-button-background-popup-body">
             <BuilderThemeSwatches colors={themeColors} onSelect={selectColor} />
@@ -90,7 +64,7 @@ export function BuilderThemeColorField({
               />
             </BuilderSettingRow>
           </div>
-        </div>
+        </BuilderEditorPopup>
       ) : null}
     </div>
   );
