@@ -12163,34 +12163,37 @@
   border-radius: 10px;
 }
 
-.builder-react-root .builder-admin-data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-  color: var(--admin-table-ink);
-  table-layout: fixed;
-}
-
-.builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-filter-row th {
+.builder-react-root .builder-admin-data-table-filter-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
   background: var(--admin-table-filter-bg);
   border-bottom: 1px solid var(--admin-table-border);
-  padding: 8px 12px;
-  font-weight: 400;
-  cursor: default;
-  vertical-align: middle;
+  border-radius: 10px 10px 0 0;
+  min-height: 52px;
 }
 
 .builder-react-root .builder-admin-data-table-filter-fields {
-  text-align: left;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
 }
 
 .builder-react-root .builder-admin-data-table-filter-fields--spacer {
-  padding: 8px 12px;
+  min-height: 36px;
 }
 
-.builder-react-root .builder-admin-data-table-filter-search {
+.builder-react-root .builder-admin-data-table-filter-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   width: 100%;
-  max-width: 100%;
+}
+
+.builder-react-root .builder-admin-data-table-filter-input {
+  width: 100%;
   padding: 7px 12px;
   border: 1px solid var(--admin-table-border);
   border-radius: 8px;
@@ -12202,10 +12205,14 @@
 }
 
 .builder-react-root .builder-admin-data-table-filter-actions {
-  text-align: center;
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 8.5rem;
   width: 8.5rem;
   min-width: 8.5rem;
+  padding: 8px 10px;
+  border-left: 1px solid color-mix(in srgb, var(--admin-table-border) 70%, transparent);
 }
 
 .builder-react-root .builder-admin-data-table-add-btn {
@@ -12225,6 +12232,14 @@
   background: color-mix(in srgb, var(--admin-table-filter-bg) 70%, #fff);
 }
 
+.builder-react-root .builder-admin-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  color: var(--admin-table-ink);
+  table-layout: fixed;
+}
+
 .builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-header-row th,
 .builder-react-root .builder-admin-data-table thead tr:not(.builder-admin-data-table-filter-row) th {
   background: var(--admin-table-header-bg);
@@ -12235,6 +12250,17 @@
   text-align: left;
   border-bottom: 1px solid color-mix(in srgb, var(--admin-table-header-bg) 80%, #000);
   white-space: nowrap;
+}
+
+.builder-react-root .builder-admin-data-table-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.builder-react-root .builder-admin-data-table-sortable:hover {
+  background: color-mix(in srgb, var(--admin-table-filter-bg) 65%, var(--admin-table-header-bg)) !important;
+  color: var(--admin-table-header-bg) !important;
 }
 
 .builder-react-root .builder-admin-data-table thead th.builder-admin-data-table-actions-col {
@@ -12279,6 +12305,137 @@
   text-align: center;
   width: 8.5rem;
   min-width: 8.5rem;
+}
+
+.builder-react-root .builder-admin-data-table-actions .table-actions-row {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+
+.builder-react-root .builder-admin-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--admin-table-border);
+  background: #fff;
+  color: var(--admin-table-ink);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(19, 44, 68, 0.08);
+}
+
+.builder-react-root .builder-admin-icon-btn-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.builder-react-root .builder-admin-icon-btn-glyph svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.builder-react-root .builder-admin-icon-btn:hover,
+.builder-react-root .builder-admin-icon-btn:focus-visible {
+  background: color-mix(in srgb, var(--admin-table-filter-bg) 45%, #fff);
+  border-color: color-mix(in srgb, var(--admin-table-accent) 45%, var(--admin-table-border));
+  color: var(--admin-table-accent);
+}
+
+.builder-react-root .builder-admin-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.builder-react-root .builder-admin-icon-btn-danger {
+  color: #8f1f1f;
+  border-color: #e0c0c0;
+}
+
+.builder-react-root .builder-admin-icon-btn-danger:hover,
+.builder-react-root .builder-admin-icon-btn-danger:focus-visible {
+  background: #fff0f0;
+  border-color: #d8a0a0;
+  color: #8f1f1f;
+}
+
+.builder-react-root a.builder-admin-icon-btn {
+  text-decoration: none;
+  color: var(--admin-table-ink);
+}
+
+.builder-react-root .builder-blog-post-create-form {
+  width: 100%;
+  max-width: none;
+}
+
+.builder-react-root .builder-blog-post-manager-module {
+  width: 100%;
+}
+
+.builder-react-root .builder-blog-post-manager-stub {
+  padding: 2rem;
+  text-align: center;
+  color: #7b8fa3;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.builder-react-root .builder-blog-post-manager-thumb-col {
+  width: 4.5rem;
+  min-width: 4.5rem;
+}
+
+.builder-react-root .builder-blog-post-manager-actions-col {
+  width: 10.5rem;
+  min-width: 10.5rem;
+}
+
+.builder-react-root .builder-blog-post-manager-thumb {
+  display: block;
+  width: 56px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #f3f4f6;
+}
+
+.builder-react-root .builder-blog-post-manager-thumb-placeholder {
+  display: block;
+  width: 56px;
+  height: 42px;
+  border-radius: 4px;
+  background: #f3f4f6;
+  border: 1px dashed #d1d5db;
+}
+
+.builder-react-root .builder-admin-data-table-delete-copy {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--admin-table-ink);
+}
+
+.builder-react-root .crm-contacts-modal-btn-danger {
+  background: #8f1f1f;
+  border-color: #8f1f1f;
+  color: #fff;
+  font-weight: 600;
+}
+
+.builder-react-root .crm-contacts-modal-btn-danger:hover:not(:disabled) {
+  background: #761919;
 }
 
 .builder-react-root .builder-admin-data-table-role-badge {

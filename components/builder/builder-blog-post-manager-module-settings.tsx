@@ -29,6 +29,15 @@ export function BuilderBlogPostManagerModuleSettings({ module, onUpdateModule }:
         />
       </BuilderSettingRow>
 
+      <BuilderSettingRow label="View page URL" fullWidth>
+        <input
+          type="text"
+          value={s.viewPageUrl ?? ""}
+          onChange={(e) => set("viewPageUrl", e.target.value)}
+          placeholder="/builder-preview.html?slug=blog-post-view"
+        />
+      </BuilderSettingRow>
+
       <BuilderSettingRow label="Show status">
         <select value={s.showStatus ?? "true"} onChange={(e) => set("showStatus", e.target.value)}>
           <option value="true">Show</option>
