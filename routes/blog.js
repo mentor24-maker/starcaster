@@ -127,6 +127,10 @@ async function handle(req, res, pathname, method) {
       ? await getPostBySlug(id, requestScope(req))
       : await getPost(id, requestScope(req));
     if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+    const isPublicSlugRead = bySlug && !req.authUser;
+    if (isPublicSlugRead && String(post.status || '').trim() !== 'published') {
+      return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+    }
     return sendOk(res, 200, post, { post }), true;
   }
 

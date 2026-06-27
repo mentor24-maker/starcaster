@@ -567,6 +567,7 @@ function AdminTableIconButton({
   label,
   onClick,
   href,
+  linkTarget,
   danger = false,
   disabled = false,
 }: {
@@ -574,6 +575,7 @@ function AdminTableIconButton({
   label: string;
   onClick?: () => void;
   href?: string;
+  linkTarget?: string;
   danger?: boolean;
   disabled?: boolean;
 }) {
@@ -585,7 +587,14 @@ function AdminTableIconButton({
   );
   if (href) {
     return (
-      <a className={className} href={href} aria-label={label} title={label}>
+      <a
+        className={className}
+        href={href}
+        aria-label={label}
+        title={label}
+        target={linkTarget}
+        rel={linkTarget === "_blank" ? "noopener noreferrer" : undefined}
+      >
         {glyph}
       </a>
     );
@@ -1728,6 +1737,12 @@ function shouldRenderBlogPostManager(settings: Record<string, string>): boolean 
   return isAdminBlogManagerPageSlug();
 }
 
+const DEFAULT_BLOG_POST_VIEW_PATH = "/blog-post-view";
+
+function defaultBlogPostViewPath(): string {
+  return DEFAULT_BLOG_POST_VIEW_PATH;
+}
+
 function resolveBlogPostManagerSettings(settings: Record<string, string>): Record<string, string> {
   const resolved = { ...settings };
   if (!String(resolved.editPageUrl || "").trim()) {
@@ -1737,7 +1752,7 @@ function resolveBlogPostManagerSettings(settings: Record<string, string>): Recor
 
   if (!String(resolved.viewPageUrl || "").trim()) {
     const postPageUrl = String(resolved.postPageUrl || "").trim();
-    if (postPageUrl) resolved.viewPageUrl = postPageUrl;
+    resolved.viewPageUrl = postPageUrl || defaultBlogPostViewPath();
   }
 
   return resolved;
@@ -1761,7 +1776,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const layout = settings.layout || "grid";
   const cols = Math.max(1, parseInt(settings.columns || "3", 10) || 3);
   const postsPerPage = Math.max(1, parseInt(settings.postsPerPage || "9", 10) || 9);
-  const postPageUrl = (settings.postPageUrl || "").trim();
+  const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
   const readMoreLabel = settings.readMoreLabel || "Read More";
   const showReadMore = (settings.showReadMore ?? "true") !== "false";
   const showFeaturedImage = (settings.showFeaturedImage ?? "true") !== "false";
@@ -2358,13 +2373,17 @@ function buildBlogPostEditHref(baseUrl: string, postId: string): string {
   return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(postId)}`;
 }
 
+function blogManagerViewBaseUrl(settings: Record<string, string>): string {
+  const fromSettings = String(settings.viewPageUrl || "").trim();
+  if (fromSettings) return fromSettings;
+  const postPageUrl = String(settings.postPageUrl || "").trim();
+  if (postPageUrl) return postPageUrl;
+  return defaultBlogPostViewPath();
+}
+
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
   const editBaseUrl = useMemo(() => blogManagerEditBaseUrl(settings), [settings.editPageUrl]);
-  const viewBaseUrl = useMemo(() => {
-    const fromSettings = String(settings.viewPageUrl || "").trim();
-    if (fromSettings) return fromSettings;
-    return String(settings.postPageUrl || "").trim();
-  }, [settings.viewPageUrl, settings.postPageUrl]);
+  const viewBaseUrl = useMemo(() => blogManagerViewBaseUrl(settings), [settings.viewPageUrl, settings.postPageUrl]);
   const showStatus = (settings.showStatus ?? "true") !== "false";
   const showDate = (settings.showDate ?? "true") !== "false";
   const showDelete = (settings.showDelete ?? "true") !== "false";
@@ -2521,6 +2540,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
                     icon="view"
                     label="View"
                     href={viewHref}
+                    linkTarget="_blank"
                     disabled={!viewHref}
                     onClick={!viewHref ? () => {} : undefined}
                   />
@@ -3121,57 +3141,104 @@ function BlogPostTagsPreview({ settings }: { settings: Record<string, string> })
 }
 
 function BlogPostViewPreview({ settings }: { settings: Record<string, string> }) {
-  const [post, setPost] = useState<BlogPostRecord & { body?: string; author?: string; excerpt?: string; published_at?: string } | null>(null);
+  type LivePost = BlogPostRecord & {
+    body?: string;
+    author?: string;
+    excerpt?: string;
+    published_at?: string;
+    publishedAt?: string;
+    featuredImageUrl?: string;
+    status?: string;
+  };
+
+  const [postSlug, setPostSlug] = useState("");
+  const [post, setPost] = useState<LivePost | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    // ?post= carries the blog post slug; ?slug= is reserved for the builder page slug
-    const slug = new URLSearchParams(window.location.search).get("post") ?? "";
-    if (!slug) return;
+    function syncSlugFromUrl() {
+      setPostSlug(new URLSearchParams(window.location.search).get("post") ?? "");
+    }
+    syncSlugFromUrl();
+    window.addEventListener("popstate", syncSlugFromUrl);
+    return () => window.removeEventListener("popstate", syncSlugFromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (!postSlug) {
+      setPost(null);
+      setNotFound(false);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    fetch(`/api/blog/posts/${encodeURIComponent(slug)}?by=slug`, {
+    setNotFound(false);
+    fetch(`/api/blog/posts/${encodeURIComponent(postSlug)}?by=slug`, {
       credentials: "include",
       headers: getCrmProjectHeaders()
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        const p = d?.data ?? d?.post ?? null;
-        setPost(p && typeof p === "object" ? (p as BlogPostRecord & { body?: string; author?: string; excerpt?: string; published_at?: string }) : null);
+        const raw = d?.data ?? d?.post ?? null;
+        if (!raw || typeof raw !== "object") {
+          setPost(null);
+          setNotFound(true);
+          return;
+        }
+        setPost(raw as LivePost);
       })
-      .catch(() => {})
+      .catch(() => {
+        setPost(null);
+        setNotFound(true);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [postSlug]);
 
-  if (loading) {
-    return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading post…</div>;
-  }
+  if (postSlug) {
+    if (loading) {
+      return <div className="builder-blog-post-manager-stub">Loading post…</div>;
+    }
+    if (notFound || !post) {
+      return (
+        <div className="builder-blog-post-manager-stub">
+          Post not found. It may be unpublished or the link is incorrect.
+        </div>
+      );
+    }
 
-  // Render live fetched post when navigated via ?slug=
-  if (post) {
-    const pubDate = post.published_at ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : "";
+    const imageUrl = blogPostFeaturedImageUrl(post as unknown as Record<string, unknown>);
+    const pubRaw = post.published_at || post.publishedAt || "";
+    const pubDate = pubRaw
+      ? new Date(pubRaw).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+      : "";
+    const showFeaturedImage = (settings.showFeaturedImage ?? "true") !== "false";
+    const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+    const showAuthor = (settings.showAuthor ?? "true") !== "false";
+    const showDate = (settings.showDate ?? "true") !== "false";
+
     return (
-      <article style={{ maxWidth: 720, margin: "0 auto" }}>
-        {(post as unknown as { featured_image_url?: string }).featured_image_url ? (
-          <img
-            alt={post.title}
-            src={(post as unknown as { featured_image_url?: string }).featured_image_url}
-            style={{ width: "100%", borderRadius: 8, marginBottom: "1.5rem", display: "block" }}
-          />
-        ) : null}
-        <h1 style={{ margin: "0 0 0.75rem", fontSize: "2rem", color: "#111827" }}>{post.title}</h1>
-        <p style={{ margin: "0 0 1.5rem", fontSize: "0.875rem", color: "#6b7280" }}>
-          {post.author ? <>By {post.author}</> : null}
-          {post.author && pubDate ? " · " : null}
-          {pubDate}
-        </p>
-        {post.excerpt ? (
-          <p style={{ margin: "0 0 1.5rem", fontSize: "1.1rem", color: "#4a5568", fontStyle: "italic", borderLeft: "3px solid #e2e8f0", paddingLeft: "1rem" }}>
-            {post.excerpt}
-          </p>
-        ) : null}
+      <article className="blog-post-page">
+        <header className="blog-post-header">
+          {showFeaturedImage && imageUrl ? (
+            <img alt={post.title} className="blog-post-featured-image" src={imageUrl} />
+          ) : null}
+          <h1 className="blog-post-title">{post.title}</h1>
+          {(showAuthor && post.author) || (showDate && pubDate) ? (
+            <p className="blog-post-meta blog-card-date">
+              {showAuthor && post.author ? <>By {post.author}</> : null}
+              {showAuthor && post.author && showDate && pubDate ? " · " : null}
+              {showDate && pubDate ? pubDate : null}
+            </p>
+          ) : null}
+          {showExcerpt && post.excerpt ? (
+            <p className="blog-post-excerpt">{post.excerpt}</p>
+          ) : null}
+        </header>
         {post.body ? (
           <div
-            className="builder-preview-text"
+            className="blog-post-body builder-preview-text"
             dangerouslySetInnerHTML={{ __html: formatRichTextContent(post.body) || "" }}
           />
         ) : null}
@@ -3179,26 +3246,26 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
     );
   }
 
-  // Canvas preview (no ?slug= in URL) — show placeholder from settings
+  // Canvas preview (no ?post= in URL) — show placeholder from settings
   const title = settings.title || "Post Title";
   const body = settings.body || "";
   const author = settings.author || "";
   const excerpt = settings.excerpt || "";
 
   return (
-    <article style={{ maxWidth: 720, margin: "0 auto" }}>
-      <h1 style={{ margin: "0 0 0.75rem", fontSize: "2rem", color: "#111827" }}>{title}</h1>
-      {author ? <p style={{ margin: "0 0 1rem", fontSize: "0.875rem", color: "#6b7280" }}>By {author}</p> : null}
-      {excerpt ? (
-        <p style={{ margin: "0 0 1.5rem", fontSize: "1.1rem", color: "#4a5568", fontStyle: "italic" }}>{excerpt}</p>
-      ) : null}
+    <article className="blog-post-page">
+      <header className="blog-post-header">
+        <h1 className="blog-post-title">{title}</h1>
+        {author ? <p className="blog-post-meta">By {author}</p> : null}
+        {excerpt ? <p className="blog-post-excerpt">{excerpt}</p> : null}
+      </header>
       {body ? (
         <div
-          className="builder-preview-text"
+          className="blog-post-body builder-preview-text"
           dangerouslySetInnerHTML={{ __html: formatRichTextContent(body) || "" }}
         />
       ) : (
-        <p style={{ color: "#9ca3af" }}>Post body will appear here.</p>
+        <p className="blog-post-body" style={{ color: "#9ca3af" }}>Post body will appear here when opened with ?post=slug.</p>
       )}
     </article>
   );
