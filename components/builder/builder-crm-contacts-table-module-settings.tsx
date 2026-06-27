@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { BuilderSettingRow } from "./builder-setting-row";
 
 type Props = {
@@ -15,12 +16,7 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
   const [loadingConfigs, setLoadingConfigs] = useState(true);
 
   useEffect(() => {
-    const projectId =
-      (window as unknown as { App?: { projectContext?: { getSessionProjectId?: () => string } } })
-        ?.App?.projectContext?.getSessionProjectId?.() ?? "";
-    const headers: Record<string, string> = {};
-    if (projectId) headers["X-Project-ID"] = projectId;
-    fetch("/api/crm/configs", { headers })
+    fetch("/api/crm/configs", { credentials: "include", headers: starcasterScopedHeaders() })
       .then((r) => r.json())
       .then((d) => {
         const list = d?.configs ?? d?.data ?? [];
