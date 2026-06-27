@@ -68,6 +68,17 @@ export function BuilderAdminTeamUsersModuleSettings({ module, onUpdateModule }: 
               <option value="false">Hide</option>
             </select>
           </BuilderSettingRow>
+
+          {(s.showAddButton ?? "true") === "true" && (
+            <BuilderSettingRow label="Add button label" fullWidth>
+              <input
+                type="text"
+                value={s.addButtonLabel ?? "Add Team Member"}
+                onChange={(e) => set("addButtonLabel", e.target.value)}
+                placeholder="Add Team Member"
+              />
+            </BuilderSettingRow>
+          )}
         </div>
       </div>
     </div>

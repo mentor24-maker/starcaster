@@ -401,54 +401,48 @@ function renderModulePreview(module: BuilderTemplateModule) {
       { email: "bob@example.com", name: "Bob Smith", company: "Globex" },
       { email: "carol@example.com", name: "Carol White", company: "Initech" },
     ];
-    const thStyle: React.CSSProperties = { background: "#e8f2fb", color: "#18324a", fontWeight: 700, fontSize: 11, padding: "6px 10px", textAlign: "left", borderBottom: "1px solid #c9dcea" };
-    const tdStyle: React.CSSProperties = { padding: "6px 10px", fontSize: 11, color: "#18324a", borderBottom: "1px solid #edf2f7", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-    const actionBtnStyle: React.CSSProperties = { fontSize: 10, padding: "2px 6px", border: "1px solid #c9dcea", borderRadius: 4, background: "#fff", color: "#18324a", cursor: "default", marginRight: 3 };
-    const dangerBtnStyle: React.CSSProperties = { ...actionBtnStyle, borderColor: "#e8c0c0", color: "#8f1f1f" };
     return (
-      <div className="builder-module-preview-copy">
-        {showTitle && (
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#18324a", marginBottom: 8 }}>{title}</div>
-        )}
-        <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+      <div className="builder-module-preview-copy builder-admin-data-table-module">
+        {showTitle && <div className="builder-admin-data-table-title">{title}</div>}
+        <div className="builder-admin-data-table-toolbar">
           {showSearch && (
-            <div style={{ flex: 1, height: 28, border: "1px solid #c9dcea", borderRadius: 6, background: "#fff", display: "flex", alignItems: "center", padding: "0 8px" }}>
-              <span style={{ color: "#9ab0c4", fontSize: 11 }}>Search contacts…</span>
+            <div className="builder-admin-data-table-search" aria-hidden="true" style={{ color: "#9ab0c4" }}>
+              Search contacts…
             </div>
           )}
           {showAdd && (
-            <div style={{ height: 28, padding: "0 10px", border: "1px solid #c9dcea", borderRadius: 6, background: "#f0f7ff", display: "flex", alignItems: "center", fontSize: 11, color: "#0b4f8f", fontWeight: 600, whiteSpace: "nowrap" }}>
-              + {addLabel}
+            <div className="builder-admin-data-table-add-btn" aria-hidden="true" style={{ cursor: "default" }}>
+              {addLabel}
             </div>
           )}
         </div>
-        <div style={{ border: "1px solid #c9dcea", borderRadius: 8, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <div className="builder-admin-data-table-wrap">
+          <table className="builder-admin-data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Email</th>
-                <th style={thStyle}>Name</th>
-                <th style={thStyle}>Company</th>
-                <th style={{ ...thStyle, width: 90 }}>Actions</th>
+                <th>Email</th>
+                <th>Name</th>
+                <th>Company</th>
+                <th className="builder-admin-data-table-actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
               {previewRows.map((row) => (
                 <tr key={row.email}>
-                  <td style={tdStyle}>{row.email}</td>
-                  <td style={tdStyle}>{row.name}</td>
-                  <td style={tdStyle}>{row.company}</td>
-                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                    {s.showViewButton !== "false" && <span style={actionBtnStyle}>View</span>}
-                    {s.showEditButton !== "false" && <span style={actionBtnStyle}>Edit</span>}
-                    {s.showDeleteButton !== "false" && <span style={dangerBtnStyle}>Delete</span>}
+                  <td className="builder-admin-data-table-cell">{row.email}</td>
+                  <td className="builder-admin-data-table-cell">{row.name}</td>
+                  <td className="builder-admin-data-table-cell">{row.company}</td>
+                  <td className="builder-admin-data-table-actions">
+                    {s.showViewButton !== "false" && <span className="builder-admin-action-btn">View</span>}
+                    {s.showEditButton !== "false" && <span className="builder-admin-action-btn">Edit</span>}
+                    {s.showDeleteButton !== "false" && <span className="builder-admin-action-btn builder-admin-action-btn-danger">Delete</span>}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div style={{ marginTop: 6, fontSize: 10, color: "#9ab0c4", textAlign: "right" }}>3 contacts · Page 1 of 1</div>
+        <div className="builder-admin-data-table-count">3 contacts</div>
       </div>
     );
   }
@@ -1758,36 +1752,49 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const showTitle  = module.settings.showTitle !== "false";
     const title      = module.settings.tableTitle || "Team Members";
     const showAdd    = module.settings.showAddButton !== "false";
+    const addLabel   = module.settings.addButtonLabel || "Add Team Member";
     const previewRows = [
       { email: "alice@example.com", role: "admin" },
       { email: "bob@example.com",   role: "editor" },
     ];
-    const thStyle: React.CSSProperties = { background: "#e8f2fb", color: "#18324a", fontWeight: 700, fontSize: 11, padding: "5px 10px", textAlign: "left", borderBottom: "1px solid #c9dcea" };
-    const tdStyle: React.CSSProperties = { padding: "5px 10px", fontSize: 11, color: "#18324a", borderBottom: "1px solid #edf2f7" };
     return (
-      <div className="builder-module-preview-copy">
-        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
-        <div style={{ border: "1px solid #c9dcea", borderRadius: 8, overflow: "hidden", marginBottom: showAdd ? 8 : 0 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="builder-module-preview-copy builder-admin-data-table-module">
+        {showTitle && <div className="builder-admin-data-table-title">{title}</div>}
+        {showAdd && (
+          <div className="builder-admin-data-table-toolbar">
+            <div className="builder-admin-data-table-add-btn" aria-hidden="true" style={{ cursor: "default" }}>
+              {addLabel}
+            </div>
+          </div>
+        )}
+        <div className="builder-admin-data-table-wrap">
+          <table className="builder-admin-data-table">
             <thead>
               <tr>
-                <th style={thStyle}>Email</th>
-                <th style={thStyle}>Role</th>
-                <th style={{ ...thStyle, width: 90 }}>Actions</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Added</th>
+                <th className="builder-admin-data-table-actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
               {previewRows.map((row) => (
                 <tr key={row.email}>
-                  <td style={tdStyle}>{row.email}</td>
-                  <td style={tdStyle}><span style={{ fontSize: 10, background: "#f0f4f8", padding: "1px 6px", borderRadius: 3, textTransform: "capitalize" }}>{row.role}</span></td>
-                  <td style={tdStyle}><span style={{ fontSize: 10, color: "#587592", cursor: "default" }}>Edit · Remove</span></td>
+                  <td className="builder-admin-data-table-cell">{row.email}</td>
+                  <td className="builder-admin-data-table-cell">
+                    <span className="builder-admin-data-table-role-badge">{row.role}</span>
+                  </td>
+                  <td className="builder-admin-data-table-cell builder-admin-data-table-date">Jan 1, 2026</td>
+                  <td className="builder-admin-data-table-actions">
+                    <span className="builder-admin-action-btn">Edit</span>
+                    <span className="builder-admin-action-btn builder-admin-action-btn-danger">Remove</span>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {showAdd && <div style={{ fontSize: 11, color: "#0b4f8f", fontWeight: 600, cursor: "default" }}>+ Add Team Member</div>}
+        <div className="builder-admin-data-table-count">2 team members</div>
       </div>
     );
   }

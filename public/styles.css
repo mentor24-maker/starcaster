@@ -13366,24 +13366,24 @@ body.asset-associations-modal-open {
   gap: 6px;
   flex-wrap: wrap;
 }
-.builder-react-root .crm-contacts-table-module {
+.builder-react-root .builder-admin-data-table-module {
   width: 100%;
   font-family: inherit;
 }
-.builder-react-root .crm-contacts-table-title {
+.builder-react-root .builder-admin-data-table-title {
   margin: 0 0 12px;
   font-size: 1.25rem;
   font-weight: 700;
   color: #18324a;
 }
-.builder-react-root .crm-contacts-table-toolbar {
+.builder-react-root .builder-admin-data-table-toolbar {
   display: flex;
   gap: 8px;
   align-items: center;
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
-.builder-react-root .crm-contacts-table-search {
+.builder-react-root .builder-admin-data-table-search {
   flex: 1;
   min-width: 160px;
   padding: 7px 12px;
@@ -13394,7 +13394,8 @@ body.asset-associations-modal-open {
   background: #fff;
   color: #18324a;
 }
-.builder-react-root .crm-contacts-table-add-btn {
+.builder-react-root .builder-admin-data-table-add-btn {
+  margin-left: auto;
   padding: 7px 14px;
   border: 1px solid #0b4f8f;
   border-radius: 8px;
@@ -13406,22 +13407,22 @@ body.asset-associations-modal-open {
   cursor: pointer;
   white-space: nowrap;
 }
-.builder-react-root .crm-contacts-table-add-btn:hover {
+.builder-react-root .builder-admin-data-table-add-btn:hover {
   background: #d0e6f7;
 }
-.builder-react-root .crm-contacts-table-wrap {
+.builder-react-root .builder-admin-data-table-wrap {
   width: 100%;
   overflow-x: auto;
   border: 1px solid #c9dcea;
   border-radius: 10px;
 }
-.builder-react-root .crm-contacts-table {
+.builder-react-root .builder-admin-data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
   color: #18324a;
 }
-.builder-react-root .crm-contacts-table thead th {
+.builder-react-root .builder-admin-data-table thead th {
   background: #0b3d7a;
   color: #fff;
   font-weight: 700;
@@ -13431,13 +13432,16 @@ body.asset-associations-modal-open {
   border-bottom: 1px solid #09306a;
   white-space: nowrap;
 }
-.builder-react-root .crm-contacts-table tbody tr:nth-child(even) {
+.builder-react-root .builder-admin-data-table thead th.builder-admin-data-table-actions-col {
+  text-align: center;
+}
+.builder-react-root .builder-admin-data-table tbody tr:nth-child(even) {
   background: #f8fbfe;
 }
-.builder-react-root .crm-contacts-table tbody tr:hover {
+.builder-react-root .builder-admin-data-table tbody tr:hover {
   background: #eef5fc;
 }
-.builder-react-root .crm-contacts-table .crm-contacts-table-cell {
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-cell {
   padding: 8px 12px;
   border-bottom: 1px solid #edf2f7;
   max-width: 200px;
@@ -13445,23 +13449,33 @@ body.asset-associations-modal-open {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.builder-react-root .crm-contacts-table .crm-contacts-table-date {
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-date {
   white-space: nowrap;
   color: #587592;
   font-size: 0.8rem;
 }
-.builder-react-root .crm-contacts-table .crm-contacts-table-empty {
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-empty {
   padding: 24px;
   text-align: center;
   color: #7b8fa3;
   font-size: 0.9rem;
 }
-.builder-react-root .crm-contacts-table .crm-contacts-table-actions {
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-actions {
   padding: 6px 8px;
   white-space: nowrap;
   border-bottom: 1px solid #edf2f7;
+  text-align: center;
 }
-.builder-react-root .crm-contacts-action-btn {
+.builder-react-root .builder-admin-data-table-role-badge {
+  display: inline-block;
+  text-transform: capitalize;
+  font-size: 0.8rem;
+  background: #f0f4f8;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #18324a;
+}
+.builder-react-root .builder-admin-action-btn {
   padding: 3px 8px;
   border: 1px solid #c9dcea;
   border-radius: 5px;
@@ -13472,17 +13486,17 @@ body.asset-associations-modal-open {
   cursor: pointer;
   margin-right: 4px;
 }
-.builder-react-root .crm-contacts-action-btn:hover {
+.builder-react-root .builder-admin-action-btn:hover {
   background: #eef5fc;
 }
-.builder-react-root .crm-contacts-action-btn-danger {
+.builder-react-root .builder-admin-action-btn-danger {
   border-color: #e0c0c0;
   color: #8f1f1f;
 }
-.builder-react-root .crm-contacts-action-btn-danger:hover {
+.builder-react-root .builder-admin-action-btn-danger:hover {
   background: #fff0f0;
 }
-.builder-react-root .crm-contacts-table-pagination {
+.builder-react-root .builder-admin-data-table-pagination {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -13490,7 +13504,7 @@ body.asset-associations-modal-open {
   font-size: 0.875rem;
   color: #18324a;
 }
-.builder-react-root .crm-contacts-table-pagination button {
+.builder-react-root .builder-admin-data-table-pagination button {
   padding: 4px 10px;
   border: 1px solid #c9dcea;
   border-radius: 6px;
@@ -13500,14 +13514,28 @@ body.asset-associations-modal-open {
   font-size: 0.875rem;
   cursor: pointer;
 }
-.builder-react-root .crm-contacts-table-pagination button:disabled {
+.builder-react-root .builder-admin-data-table-pagination button:disabled {
   opacity: 0.4;
   cursor: default;
 }
-.builder-react-root .crm-contacts-table-count {
+.builder-react-root .builder-admin-data-table-count {
   margin-top: 6px;
   font-size: 0.8rem;
   color: #7b8fa3;
+}
+.builder-react-root .builder-admin-data-table-stub {
+  padding: 16px 0;
+  font-size: 0.9rem;
+  color: #7b8fa3;
+}
+.builder-react-root .builder-admin-data-table-stub.is-error {
+  color: #8f1f1f;
+}
+.builder-react-root .builder-admin-data-table-inline-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #8f1f1f;
 }
 .builder-react-root .crm-contacts-modal-overlay {
   position: fixed;
