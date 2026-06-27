@@ -4,7 +4,7 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj, nextId } = require('./http');
 const { assertProjectIdAllowedOnHost } = require('../lib/publicSiteHostBinding');
 const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = require('../lib/crmConfigStore');
 const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
-const { listForms, getForm, createForm, updateForm, deleteForm } = require('../lib/crmFormsStore');
+const { listForms, getForm, createForm, updateForm, deleteForm, getLastFormStoreError } = require('../lib/crmFormsStore');
 const { logActivity } = require('../lib/activityLog');
 
 function requestScope(req) {
@@ -194,7 +194,13 @@ async function handle(req, res, pathname, method) {
       fields: Array.isArray(body.fields) ? body.fields : [],
     }, requestScope(req));
     if (!created) {
-      return sendErr(res, 500, 'Failed to create CRM form. If styles were recently added, reload the Supabase API schema cache.', { code: 'CRM_FORM_SAVE_FAILED' }), true;
+      const detail = getLastFormStoreError();
+      return sendErr(
+        res,
+        500,
+        detail || 'Failed to create CRM form. If styles were recently added, reload the Supabase API schema cache.',
+        { code: 'CRM_FORM_SAVE_FAILED', details: detail ? [detail] : [] }
+      ), true;
     }
     logActivity({ action: 'crm_form.created', entityType: 'crm_form', entityId: created.id, summary: `CRM form created: "${name}"` });
     return sendOk(res, 201, created, { form: created }), true;
@@ -223,13 +229,19 @@ async function handle(req, res, pathname, method) {
     if (body.successMessage !== undefined) patch.successMessage = String(body.successMessage || '').trim();
     if (body.errorMessage !== undefined) patch.errorMessage = String(body.errorMessage || '').trim();
     if (body.accentColor !== undefined) patch.accentColor = String(body.accentColor || '').trim();
-    if (body.styles !== undefined && body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles)) {
+    if ('styles' in body && body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles)) {
       patch.styles = body.styles;
     }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
     const updated = await updateForm(id, patch, scope);
     if (!updated) {
-      return sendErr(res, 500, 'Failed to update CRM form. If styles were recently added, reload the Supabase API schema cache.', { code: 'CRM_FORM_SAVE_FAILED' }), true;
+      const detail = getLastFormStoreError();
+      return sendErr(
+        res,
+        500,
+        detail || 'Failed to update CRM form. If styles were recently added, reload the Supabase API schema cache.',
+        { code: 'CRM_FORM_SAVE_FAILED', details: detail ? [detail] : [] }
+      ), true;
     }
     logActivity({ action: 'crm_form.updated', entityType: 'crm_form', entityId: id, summary: `CRM form updated: "${updated.name}"` });
     return sendOk(res, 200, updated, { form: updated }), true;
