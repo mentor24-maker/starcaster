@@ -17,6 +17,7 @@ import {
   getAdminAuthHeaders,
   redirectAfterAdminLogout,
 } from "@/lib/public-admin-session";
+import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 
 type SitePage = {
@@ -208,7 +209,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       return;
     }
     const themeId = String(page.themeId || "").trim();
-    fetch("/api/builder/themes", { credentials: "include" })
+    fetch("/api/builder/themes", {
+      credentials: "include",
+      headers: starcasterScopedHeaders(),
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { themes?: Array<{ id?: string; primaryColor?: string; secondaryColor?: string; backgroundColor?: string; accentColor?: string }> } | null) => {
         const themes = Array.isArray(data?.themes) ? data.themes : [];

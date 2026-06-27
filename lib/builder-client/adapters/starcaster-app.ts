@@ -138,3 +138,6 @@ export function unwrapEnvelope<T>(body: StarcasterEnvelope, ...keys: string[]): 
   }
   return body.data as T;
 }
+
+/** Canonical headers for tenant site + CMS module fetch calls. */
+export const tenantApiHeaders = starcasterScopedHeaders;
