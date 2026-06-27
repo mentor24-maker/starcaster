@@ -23,6 +23,7 @@ App.crm = (function () {
   let loadPageGeneration = 0;
 
   const CRM_META_KEY = '__crm_meta__';
+  const CRM_FORM_STYLES_META_KEY = '__crm_form_styles__';
 
   let formEditorThemePalette = null;
   let formEditorThemeTypography = null;
@@ -188,40 +189,6 @@ App.crm = (function () {
     ].filter((entry) => Boolean(entry.hex));
   }
 
-  function pickFormEditorReferencePage(pages) {
-    const list = Array.isArray(pages) ? pages : [];
-    const home = list.find((page) => {
-      const slug = safeText(page?.slug).toLowerCase();
-      return !slug || slug === 'home';
-    });
-    if (home) return home;
-    const withTheme = list.find((page) => safeText(page?.themeId || page?.theme_id));
-    return withTheme || list[0] || null;
-  }
-
-  function mergePageThemePalette(page, themeRecord) {
-    const fromPage = {
-      primaryColor: safeText(page?.primaryColor || page?.primary_color),
-      secondaryColor: safeText(page?.secondaryColor || page?.secondary_color),
-      backgroundColor: safeText(page?.backgroundColor || page?.background_color),
-      accentColor: safeText(page?.accentColor || page?.accent_color),
-    };
-    const fromTheme = themeRecord
-      ? {
-        primaryColor: safeText(themeRecord.primaryColor),
-        secondaryColor: safeText(themeRecord.secondaryColor),
-        backgroundColor: safeText(themeRecord.backgroundColor),
-        accentColor: safeText(themeRecord.accentColor),
-      }
-      : {};
-    return {
-      primaryColor: fromPage.primaryColor || fromTheme.primaryColor,
-      secondaryColor: fromPage.secondaryColor || fromTheme.secondaryColor,
-      backgroundColor: fromPage.backgroundColor || fromTheme.backgroundColor,
-      accentColor: fromPage.accentColor || fromTheme.accentColor,
-    };
-  }
-
   function hasThemePaletteColors(palette) {
     if (!palette || typeof palette !== 'object') return false;
     return Boolean(
@@ -230,6 +197,28 @@ App.crm = (function () {
       palette.backgroundColor ||
       palette.accentColor
     );
+  }
+
+  function findGoNavyTheme(themes) {
+    return (Array.isArray(themes) ? themes : []).find((theme) => /go[\s-]*navy/i.test(safeText(theme?.name))) || null;
+  }
+
+  function themeRecordToEditorPalette(themeRecord) {
+    if (!themeRecord || typeof themeRecord !== 'object') return null;
+    const palette = {
+      primaryColor: safeText(themeRecord.primaryColor),
+      secondaryColor: safeText(themeRecord.secondaryColor),
+      backgroundColor: safeText(themeRecord.backgroundColor),
+      accentColor: safeText(themeRecord.accentColor),
+    };
+    return hasThemePaletteColors(palette) ? palette : null;
+  }
+
+  function pickPageForTheme(pages, themeId) {
+    const targetThemeId = safeText(themeId);
+    if (!targetThemeId) return null;
+    const list = Array.isArray(pages) ? pages : [];
+    return list.find((page) => safeText(page?.themeId || page?.theme_id) === targetThemeId) || null;
   }
 
   async function loadFormEditorTheme() {
@@ -244,15 +233,16 @@ App.crm = (function () {
       const pages = Array.isArray(pagesRes?.pages)
         ? pagesRes.pages
         : (Array.isArray(pagesRes?.data) ? pagesRes.data : []);
-      const page = pickFormEditorReferencePage(pages);
-      const themeId = safeText(page?.themeId || page?.theme_id);
-      const themeRecord = themeId
-        ? themes.find((theme) => safeText(theme?.id) === themeId) || null
-        : null;
-      const palette = mergePageThemePalette(page, themeRecord);
-      formEditorThemePalette = hasThemePaletteColors(palette) ? palette : null;
-      const pageTheme = page?.theme && typeof page.theme === 'object' ? page.theme : null;
-      formEditorThemeTypography = pageTheme?.typography || themeRecord?.typography || null;
+      const goNavyTheme = findGoNavyTheme(themes);
+      if (!goNavyTheme) {
+        formEditorThemePalette = null;
+        formEditorThemeTypography = null;
+      } else {
+        formEditorThemePalette = themeRecordToEditorPalette(goNavyTheme);
+        const linkedPage = pickPageForTheme(pages, goNavyTheme.id);
+        const pageTheme = linkedPage?.theme && typeof linkedPage.theme === 'object' ? linkedPage.theme : null;
+        formEditorThemeTypography = goNavyTheme.typography || pageTheme?.typography || null;
+      }
     } catch {
       formEditorThemePalette = null;
       formEditorThemeTypography = null;
@@ -336,6 +326,11 @@ App.crm = (function () {
       padding: cssSize(source.padding, DEFAULT_FORM_STYLES.padding),
       margin: cssSize(source.margin, DEFAULT_FORM_STYLES.margin),
     };
+  }
+
+  function publicFormFields(fields) {
+    return (Array.isArray(fields) ? fields : [])
+      .filter((field) => safeText(field?.key) && safeText(field.key) !== CRM_FORM_STYLES_META_KEY);
   }
 
   function formAlignToJustify(align) {
@@ -1236,7 +1231,7 @@ App.crm = (function () {
     }
     const byKey = new Map(allFields.map((f) => [f.key, f]));
     const ordered = [];
-    (form.fields || []).forEach((ff) => {
+    (publicFormFields(form.fields)).forEach((ff) => {
       const field = byKey.get(ff.key);
       if (field) ordered.push({ ...field, selected: true });
     });
@@ -1473,7 +1468,7 @@ App.crm = (function () {
       ? App.projectContext.getSessionProjectId()
       : (App.state?.currentProjectId || '');
     const styles = normalizeFormStyles(form.styles, form.accentColor);
-    const fields = Array.isArray(form.fields) ? form.fields : [];
+    const fields = publicFormFields(form.fields);
     const labelJustify = formAlignToJustify(styles.labelAlign);
     const fieldJustify = formAlignToJustify(styles.fieldAlign);
     const buttonJustify = formAlignToJustify(styles.buttonAlign);

@@ -15,7 +15,8 @@ import {
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
   buildCrmFormRenderContext,
-  crmFormStylesToRenderStyles
+  crmFormStylesToRenderStyles,
+  publicFormFields
 } from "../lib/crmFormStyles.js";
 import {
   getAdminAuthHeaders,
@@ -381,6 +382,7 @@ function CrmFormPreview({
   const renderContext = buildCrmFormRenderContext(themePalette, theme?.typography);
   const themeContextStyle = getCrmFormThemeContextStyle(themePalette, theme);
   const renderStyles = crmFormStylesToRenderStyles(form.styles, form.accentColor, renderContext);
+  const visibleFields = publicFormFields(form.fields ?? []);
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
@@ -414,7 +416,7 @@ function CrmFormPreview({
         {message ? <div className="builder-contact-form-message">{message}</div> : null}
         {error ? <div className="builder-contact-form-error">{error}</div> : null}
         <div className="builder-contact-form-fields">
-          {(form.fields ?? []).map((field) => (
+          {visibleFields.map((field) => (
             <label className="builder-contact-form-field" key={field.key}>
               <span style={labelStyle}>{field.label}</span>
               <CrmFormFieldControl
