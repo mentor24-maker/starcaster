@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { BuilderEditorPopup } from "./builder-editor-popup";
 import { BuilderSettingRow } from "./builder-setting-row";
 
 export type ButtonBorderStyle = "none" | "solid" | "dashed" | "dotted";
@@ -42,7 +43,6 @@ export function BuilderButtonBorderColorPicker({
   onChange
 }: BuilderButtonBorderColorPickerProps) {
   const popupId = useId();
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const width = Math.max(Number.parseInt(borderWidth ?? "2", 10) || 0, 0);
   const radius = Math.max(Number.parseInt(borderRadius ?? "0", 10) || 0, 0);
@@ -54,34 +54,8 @@ export function BuilderButtonBorderColorPicker({
     borderRadius: `${radius}px`
   };
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen]);
-
   return (
-    <div className="builder-button-background-picker" ref={rootRef}>
+    <div className="builder-button-background-picker">
       <button
         aria-controls={popupId}
         aria-expanded={isOpen}
@@ -94,11 +68,10 @@ export function BuilderButtonBorderColorPicker({
         type="button"
       />
       {isOpen ? (
-        <div
-          className="builder-button-background-popup"
+        <BuilderEditorPopup
+          ariaLabel="Button border color"
           id={popupId}
-          role="dialog"
-          aria-label="Button border color"
+          onClose={() => setIsOpen(false)}
         >
           <div className="builder-button-background-popup-body">
             <BuilderSettingRow label="Color" fullWidth>
@@ -109,7 +82,7 @@ export function BuilderButtonBorderColorPicker({
               />
             </BuilderSettingRow>
           </div>
-        </div>
+        </BuilderEditorPopup>
       ) : null}
     </div>
   );

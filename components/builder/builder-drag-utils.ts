@@ -15,6 +15,7 @@ const builderFormInteractionSelector = [
   ".builder-setting-row",
   ".builder-module-editor",
   ".builder-module-preview-button",
+  ".builder-editor-popup",
   ".builder-button-background-popup",
   ".builder-contact-form-field"
 ].join(", ");
