@@ -12199,21 +12199,9 @@
   min-width: 8.5rem;
 }
 
-.builder-react-root .builder-admin-data-table-add-btn {
-  padding: 7px 14px;
-  border: 1px solid var(--admin-table-accent);
-  border-radius: 8px;
-  background: var(--admin-table-btn-bg);
-  color: var(--admin-table-accent);
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
+.builder-react-root .builder-admin-data-table-filter-row .btn.tiny-btn {
   white-space: nowrap;
-}
-
-.builder-react-root .builder-admin-data-table-add-btn:hover {
-  background: color-mix(in srgb, var(--admin-table-filter-bg) 70%, #fff);
+  width: fit-content;
 }
 
 .builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-header-row th,
@@ -12441,8 +12429,11 @@
 
 .builder-react-root .builder-blog-post-manager-thumb {
   display: block;
-  width: 72px;
-  height: 54px;
+  width: 64px;
+  height: 48px;
+  max-width: 64px;
+  max-height: 48px;
+  flex-shrink: 0;
   object-fit: cover;
   border-radius: 4px;
   background: #f3f4f6;
@@ -12450,8 +12441,11 @@
 
 .builder-react-root .builder-blog-post-manager-thumb-placeholder {
   display: block;
-  width: 72px;
-  height: 54px;
+  width: 64px;
+  height: 48px;
+  max-width: 64px;
+  max-height: 48px;
+  flex-shrink: 0;
   border-radius: 4px;
   background: #f3f4f6;
   border: 1px dashed #d1d5db;
