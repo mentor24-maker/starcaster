@@ -3268,6 +3268,10 @@
   width: 20%;
 }
 
+.builder-react-root .builder-pages-list-table col.builder-pages-col-visibility {
+  width: 7.5rem;
+}
+
 .builder-react-root .builder-pages-list-table col.builder-pages-col-updated {
   width: 9.5rem;
 }
@@ -3321,6 +3325,16 @@
 
 .builder-react-root .builder-pages-list-columns-row th {
   border-top: 1px solid rgba(9, 16, 24, 0.08);
+}
+
+.builder-react-root .builder-pages-list-table .builder-crud-filter-row th {
+  padding: 10px 12px;
+  background: rgba(248, 253, 255, 0.96);
+  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  vertical-align: top;
 }
 
 .builder-react-root .builder-pages-filter-bar {
