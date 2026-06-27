@@ -6778,10 +6778,6 @@ button.builder-inline-asset-status-btn:focus-visible {
   min-width: 8rem;
 }
 
-#builderManagePagesPage .builder-pages-col-theme {
-  min-width: 6.5rem;
-}
-
 #builderManagePagesPage .builder-pages-col-slug {
   min-width: 7rem;
 }

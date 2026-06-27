@@ -4106,13 +4106,6 @@ App.builder = (function () {
     }
   }
 
-  function getSavedThemeName(themeId) {
-    const id = safeText(themeId);
-    if (!id) return '';
-    const found = savedThemes.find((t) => String(t?.id) === id);
-    return found ? (safeText(found.name) || id) : id;
-  }
-
   async function loadSavedExtensions() {
     const result = await api('/api/builder/extensions');
     savedExtensions = Array.isArray(result.extensions) ? result.extensions : [];
@@ -8074,9 +8067,6 @@ App.builder = (function () {
       } else if (key === 'templateId') {
         left = getLandingPageTemplateName(a.templateId).toLowerCase();
         right = getLandingPageTemplateName(b.templateId).toLowerCase();
-      } else if (key === 'themeId') {
-        left = getSavedThemeName(a.themeId).toLowerCase();
-        right = getSavedThemeName(b.themeId).toLowerCase();
       } else if (key === 'slug') {
         left = safeText(a.slug).toLowerCase();
         right = safeText(b.slug).toLowerCase();
@@ -8152,7 +8142,6 @@ App.builder = (function () {
     const sortButtons = [
       ['builderPagesSortNameBtn', 'name', 'Name'],
       ['builderPagesSortTemplateBtn', 'templateId', 'Template'],
-      ['builderPagesSortThemeBtn', 'themeId', 'Theme'],
       ['builderPagesSortSlugBtn', 'slug', 'Slug'],
       ['builderPagesSortVisibilityBtn', 'isPrivate', 'Visibility'],
       ['builderPagesSortPublishedBtn', 'isPublished', 'Published'],
@@ -8222,7 +8211,6 @@ App.builder = (function () {
 
       append(safeText(item.name) || '-', 'builder-pages-col-name');
       append(getLandingPageTemplateName(item.templateId) || '-', 'builder-pages-col-template');
-      append(getSavedThemeName(item.themeId) || '-', 'builder-pages-col-theme');
 
       const slugTd = document.createElement('td');
       slugTd.className = 'builder-pages-col-slug';
@@ -13217,7 +13205,6 @@ App.builder = (function () {
     [
       ['builderPagesSortNameBtn', 'name', 'asc'],
       ['builderPagesSortTemplateBtn', 'templateId', 'asc'],
-      ['builderPagesSortThemeBtn', 'themeId', 'asc'],
       ['builderPagesSortSlugBtn', 'slug', 'asc'],
       ['builderPagesSortVisibilityBtn', 'isPrivate', 'asc'],
       ['builderPagesSortPublishedBtn', 'isPublished', 'desc'],
