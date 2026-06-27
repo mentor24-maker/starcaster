@@ -10,9 +10,10 @@ const {
 } = require('../../lib/builder-client/public-site-page-slugs');
 
 describe('public-site-page-slugs', () => {
-  it('treats admin-* slugs as private except admin-login', () => {
+  it('treats admin-* slugs as private except admin-login and admin-logout', () => {
     assert.equal(isPrivateSiteSlug('admin-dashboard'), true);
     assert.equal(isPrivateSiteSlug('admin-login'), false);
+    assert.equal(isPrivateSiteSlug('admin-logout'), false);
     assert.equal(isPrivateSiteSlug('admin'), true);
   });
 

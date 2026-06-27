@@ -12,7 +12,11 @@ import {
   createDefaultTheme,
   normalizeBuilderDocument,
 } from "@/lib/builder-template";
-import { getAdminAuthHeaders } from "@/lib/public-admin-session";
+import {
+  ADMIN_LOGIN_PATH,
+  getAdminAuthHeaders,
+  redirectAfterAdminLogout,
+} from "@/lib/public-admin-session";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 
 type SitePage = {
@@ -161,6 +165,13 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     if (!projectId) { setLoaded(true); return; }
     const routingPath = window.location.pathname || "/";
     const slug = normalizePublicSlug(routingPath);
+
+    if (slug === "admin-logout") {
+      setRedirecting(true);
+      void redirectAfterAdminLogout(ADMIN_LOGIN_PATH);
+      return;
+    }
+
     const isPrivate = isPrivateSiteSlug(slug);
 
     const load = isPrivate
