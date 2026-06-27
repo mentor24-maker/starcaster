@@ -32,6 +32,7 @@ import {
 type BuilderButtonDesignSettingsProps = {
   module: BuilderTemplateModule;
   isEmailTemplate?: boolean;
+  themeColors?: Array<{ label: string; hex: string }>;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   onOpenButtonBackgroundGallery?: () => void;
   onUploadButtonBackgroundMedia?: (file: File | null) => void;
@@ -61,6 +62,7 @@ function ButtonDesignSection({
 export function BuilderButtonDesignSettings({
   module,
   isEmailTemplate = false,
+  themeColors = [],
   onUpdateModule,
   onOpenButtonBackgroundGallery,
   onUploadButtonBackgroundMedia
@@ -174,6 +176,7 @@ export function BuilderButtonDesignSettings({
                 onChange={updateButtonBackground}
                 onChooseImage={onOpenButtonBackgroundGallery}
                 onUploadImage={onUploadButtonBackgroundMedia}
+                themeColors={themeColors}
               />
             </BuilderSettingRow>
             <BuilderSettingRow label="Hover">

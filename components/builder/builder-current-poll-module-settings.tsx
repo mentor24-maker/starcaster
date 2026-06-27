@@ -12,12 +12,18 @@ type BuilderCurrentPollModuleSettingsProps = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (module: BuilderTemplateModule) => BuilderTemplateModule) => void;
   onUpdateModuleBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 export function BuilderCurrentPollModuleSettings({
   module,
   onUpdateModule,
-  onUpdateModuleBackground
+  onUpdateModuleBackground,
+  themeColors = [],
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderCurrentPollModuleSettingsProps) {
   const moduleAlignment = getModuleAlignment(module.settings);
 
@@ -34,7 +40,7 @@ export function BuilderCurrentPollModuleSettings({
           }
         >
           {POLL_CONTENT_WIDTH_OPTIONS.map((width) => (
-            <option key={width} value={width}>
+            <option key={width} value={String(width)}>
               {width}%
             </option>
           ))}
@@ -46,6 +52,9 @@ export function BuilderCurrentPollModuleSettings({
         background={getModuleBackgroundSettings(module.settings)}
         horizontal
         onChange={onUpdateModuleBackground}
+        themeBackgroundColor={themeBackgroundColor}
+        themeColors={themeColors}
+        themePrimaryColor={themePrimaryColor}
       />
 
       <BuilderSettingRow label="Alignment" fullWidth>

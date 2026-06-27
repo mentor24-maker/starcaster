@@ -867,6 +867,23 @@ export function builderThemeToCrmPalette(theme: {
   };
 }
 
+export type BuilderThemePaletteSwatch = { label: string; hex: string };
+
+/** Primary, Secondary, Background, and Accent swatches for editor color pickers. */
+export function buildBuilderThemePaletteColors(theme: {
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  accentColor?: string;
+} | null | undefined): BuilderThemePaletteSwatch[] {
+  return [
+    { label: "Primary", hex: theme?.primaryColor ?? "" },
+    { label: "Secondary", hex: theme?.secondaryColor ?? "" },
+    { label: "Background", hex: theme?.backgroundColor ?? "" },
+    { label: "Accent", hex: theme?.accentColor ?? "" },
+  ].filter((entry) => Boolean(entry.hex));
+}
+
 export function mergeCrmThemePalette(
   primary: CrmThemePalette | undefined,
   fallback: CrmThemePalette | undefined

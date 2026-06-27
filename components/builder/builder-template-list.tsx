@@ -32,6 +32,9 @@ type BuilderTemplateListProps = {
   onPreviewDraft: () => void;
   onNewTemplate: () => void;
   onTemplateEditorFocus: (focused: boolean) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 export function BuilderTemplateList({
@@ -53,7 +56,10 @@ export function BuilderTemplateList({
   onSetPreviewDevice,
   onPreviewDraft,
   onNewTemplate,
-  onTemplateEditorFocus
+  onTemplateEditorFocus,
+  themeColors = [],
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderTemplateListProps) {
   const isEmailTemplate = templateKind === "email";
   const [collapsedPanels, setCollapsedPanels] = useState({
@@ -342,6 +348,9 @@ export function BuilderTemplateList({
               background={pageBackground}
               compact
               onChange={onUpdatePageBackground}
+              themeBackgroundColor={themeBackgroundColor}
+              themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
             />
           </div>
         ) : null}

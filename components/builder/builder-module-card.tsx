@@ -147,6 +147,8 @@ type BuilderModuleCardProps = {
   onModuleDragStart?: (event: DragEvent<HTMLDivElement>) => void;
   themeColors?: Array<{ label: string; hex: string }>;
   themeStyle?: CSSProperties;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 type ContactFormField = {
@@ -2832,11 +2834,17 @@ function NavColorField({
 function NavModuleEditor({
   module,
   onUpdateModule,
-  onUpdateModuleBackground
+  onUpdateModuleBackground,
+  themeColors = [],
+  themeBackgroundColor,
+  themePrimaryColor
 }: {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   onUpdateModuleBackground: (updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 }) {
   const [styleCollapsed, setStyleCollapsed] = useState(false);
   const [linksCollapsed, setLinksCollapsed] = useState(false);
@@ -2952,6 +2960,9 @@ function NavModuleEditor({
               label="Background"
               background={getModuleBackgroundSettings(module.settings)}
               onChange={onUpdateModuleBackground}
+              themeBackgroundColor={themeBackgroundColor}
+              themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
             />
           </div>
         )}
@@ -3007,11 +3018,17 @@ function NavModuleEditor({
 function PollCategoryListModuleEditor({
   module,
   onUpdateModule,
-  onUpdateModuleBackground
+  onUpdateModuleBackground,
+  themeColors = [],
+  themeBackgroundColor,
+  themePrimaryColor
 }: {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   onUpdateModuleBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 }) {
   function updateSetting(key: string, value: string) {
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
@@ -3028,6 +3045,9 @@ function PollCategoryListModuleEditor({
           background={getModuleBackgroundSettings(module.settings)}
           horizontal
           onChange={onUpdateModuleBackground}
+          themeBackgroundColor={themeBackgroundColor}
+          themeColors={themeColors}
+          themePrimaryColor={themePrimaryColor}
         />
         {!isPollCategoryListPanelTransparent(module.settings) ? (
           <BuilderSettingRow label="Panel Border" fullWidth>
@@ -3364,8 +3384,10 @@ export function BuilderModuleCard({
   isEmailTemplate = false,
   moduleClassOverride,
   onModuleDragStart,
-  themeColors,
-  themeStyle
+  themeColors = [],
+  themeStyle,
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderModuleCardProps) {
     const [isPopped, setIsPopped] = useState(false);
     const moduleHeaderRef = useRef<HTMLDivElement | null>(null);
@@ -3601,6 +3623,9 @@ export function BuilderModuleCard({
                 module={module}
                 onUpdateModule={onUpdateModule}
                 onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
               />
             ) : isConfettiModule ? (
               <BuilderConfettiModuleSettings module={module} onUpdateModule={onUpdateModule} />
@@ -3652,7 +3677,9 @@ export function BuilderModuleCard({
                 onUpdateModule={onUpdateModule}
                 onUpdateModuleBackground={onUpdateModuleBackground}
                 onOpenGallery={onOpenSocialIconGallery}
+                themeBackgroundColor={themeBackgroundColor}
                 themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
               />
             ) : module.type === "heading" ? (
               <div className="builder-heading-module-chrome">
@@ -3661,6 +3688,9 @@ export function BuilderModuleCard({
                   background={getModuleBackgroundSettings(module.settings)}
                   horizontal
                   onChange={onUpdateModuleBackground}
+                  themeBackgroundColor={themeBackgroundColor}
+                  themeColors={themeColors}
+                  themePrimaryColor={themePrimaryColor}
                 />
                 <BuilderSettingRow label="Alignment" fullWidth>
                   <BuilderAlignmentIconGroup
@@ -3681,6 +3711,9 @@ export function BuilderModuleCard({
                   horizontal
                   label="Background"
                   onChange={onUpdateModuleBackground}
+                  themeBackgroundColor={themeBackgroundColor}
+                  themeColors={themeColors}
+                  themePrimaryColor={themePrimaryColor}
                 />
               </div>
             ) : (
@@ -3693,6 +3726,9 @@ export function BuilderModuleCard({
                     background={getModuleBackgroundSettings(module.settings)}
                     horizontal
                     onChange={onUpdateModuleBackground}
+                    themeBackgroundColor={themeBackgroundColor}
+                    themeColors={themeColors}
+                    themePrimaryColor={themePrimaryColor}
                   />
                 ) : null}
                 <BuilderSettingRow label="Alignment" fullWidth>
@@ -3804,6 +3840,7 @@ export function BuilderModuleCard({
             <BuilderButtonDesignSettings
               isEmailTemplate={isEmailTemplate}
               module={module}
+              themeColors={themeColors}
               onUpdateModule={onUpdateModule}
               onOpenButtonBackgroundGallery={onOpenButtonBackgroundGallery}
               onUploadButtonBackgroundMedia={onUploadButtonBackgroundMedia}
@@ -3921,13 +3958,25 @@ export function BuilderModuleCard({
 
           {module.type === "table" && <TableModuleEditor module={module} pages={pages} onUpdateModule={onUpdateModule} />}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
-          {module.type === "navigation" && <NavModuleEditor module={module} onUpdateModule={onUpdateModule} onUpdateModuleBackground={onUpdateModuleBackground} />}
+          {module.type === "navigation" && (
+            <NavModuleEditor
+              module={module}
+              onUpdateModule={onUpdateModule}
+              onUpdateModuleBackground={onUpdateModuleBackground}
+              themeBackgroundColor={themeBackgroundColor}
+              themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
+            />
+          )}
           {module.type === "headline-rotator" && <HeadlineRotatorModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "poll-category-list" && (
             <PollCategoryListModuleEditor
               module={module}
               onUpdateModule={onUpdateModule}
               onUpdateModuleBackground={onUpdateModuleBackground}
+              themeBackgroundColor={themeBackgroundColor}
+              themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
             />
           )}
           {module.type === "social-share" && <SocialShareModuleEditor module={module} onUpdateModule={onUpdateModule} />}
