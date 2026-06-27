@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   formatRichTextContent,
@@ -19,8 +19,11 @@ import {
   publicFormFields
 } from "../lib/crmFormStyles.js";
 import {
+  ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
+  isAdminLogoutHref,
   readApiErrorMessage,
+  redirectAfterAdminLogout,
   setAdminSessionToken,
 } from "@/lib/public-admin-session";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
@@ -902,6 +905,19 @@ export function BuilderTemplatePreview({
   };
   const sitePlayerRegistered = useSitePlayerRegistration();
 
+  function handleAdminLogoutLinkClick(event: MouseEvent<HTMLDivElement>) {
+    if (emailPreview) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest("a[href]");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href") || "";
+    if (!isAdminLogoutHref(href)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void redirectAfterAdminLogout(ADMIN_LOGIN_PATH);
+  }
+
   /** Live and builder previews need the shell so overlay-flow rows stack above the game wash. */
   const shellClassName = !emailPreview ? "builder-preview-shell" : undefined;
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
@@ -915,6 +931,7 @@ export function BuilderTemplatePreview({
             : shellClassName
           : undefined
       }
+      onClickCapture={shellClassName ? handleAdminLogoutLinkClick : undefined}
       style={rootStyle}
     >
       {pageOverlaySections.length > 0 ? (
