@@ -2,6 +2,10 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 export type TocItem = { id: string; label: string; anchor: string; depth: 1 | 2 };
 
@@ -22,9 +26,14 @@ function serializeTocItems(items: TocItem[]): string {
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
-export function BuilderBlogTocModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderBlogTocModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
   const s = module.settings;
   const items = parseTocItems(s);
 
@@ -117,13 +126,13 @@ export function BuilderBlogTocModuleSettings({ module, onUpdateModule }: Props) 
             />
           </BuilderSettingRow>
 
-          <BuilderSettingRow label="Link color">
-            <input
-              type="color"
-              value={s.color ?? "#0f4f8f"}
-              onChange={(e) => set("color", e.target.value)}
-            />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#0f4f8f"
+            label="Link color"
+            themeColors={themeColors}
+            value={s.color ?? "#0f4f8f"}
+            onChange={(color) => set("color", color)}
+          />
         </div>
       </div>
 

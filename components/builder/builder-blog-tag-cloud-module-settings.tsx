@@ -2,6 +2,10 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 export type CloudTag = { id: string; label: string; slug: string; count?: number };
 
@@ -22,9 +26,14 @@ function serializeCloudTags(tags: CloudTag[]): string {
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
-export function BuilderBlogTagCloudModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderBlogTagCloudModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
   const s = module.settings;
   const tags = parseCloudTags(s);
   const isCloud = (s.layout ?? "cloud") === "cloud";
@@ -122,17 +131,29 @@ export function BuilderBlogTagCloudModuleSettings({ module, onUpdateModule }: Pr
             </>
           ) : null}
 
-          <BuilderSettingRow label="Tag color">
-            <input type="color" value={s.inactiveColor ?? "#587592"} onChange={(e) => set("inactiveColor", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#587592"
+            label="Tag color"
+            themeColors={themeColors}
+            value={s.inactiveColor ?? "#587592"}
+            onChange={(inactiveColor) => set("inactiveColor", inactiveColor)}
+          />
 
-          <BuilderSettingRow label="Tag bg">
-            <input type="color" value={s.inactiveBg ?? "#f0f4f8"} onChange={(e) => set("inactiveBg", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#f0f4f8"
+            label="Tag bg"
+            themeColors={themeColors}
+            value={s.inactiveBg ?? "#f0f4f8"}
+            onChange={(inactiveBg) => set("inactiveBg", inactiveBg)}
+          />
 
-          <BuilderSettingRow label="Active color">
-            <input type="color" value={s.activeColor ?? "#0f4f8f"} onChange={(e) => set("activeColor", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#0f4f8f"
+            label="Active color"
+            themeColors={themeColors}
+            value={s.activeColor ?? "#0f4f8f"}
+            onChange={(activeColor) => set("activeColor", activeColor)}
+          />
         </div>
       </div>
 

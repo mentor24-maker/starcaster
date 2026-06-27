@@ -9,7 +9,10 @@ import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderSettingRow } from "./builder-setting-row";
-import { BuilderThemeSwatches } from "./builder-theme-swatches";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 import {
   DEFAULT_SOCIAL_ICON_BACKGROUND,
   normalizeSocialIconBackgroundColor
@@ -263,53 +266,31 @@ export function BuilderSocialModuleSettings({
         />
       </BuilderSettingRow>
 
-      <BuilderSettingRow label="Icon BG Color">
-        <div className="builder-color-with-swatches">
-          <input
-            type="color"
-            value={module.settings.socialIconBgColor || "#ffffff"}
-            onChange={(event) =>
-              onUpdateModule((current) => ({
-                ...current,
-                settings: { ...current.settings, socialIconBgColor: event.target.value }
-              }))
-            }
-          />
-          <BuilderThemeSwatches
-            colors={themeColors}
-            onSelect={(hex) =>
-              onUpdateModule((current) => ({
-                ...current,
-                settings: { ...current.settings, socialIconBgColor: hex }
-              }))
-            }
-          />
-        </div>
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fallback="#ffffff"
+        label="Icon BG Color"
+        themeColors={themeColors}
+        value={module.settings.socialIconBgColor || "#ffffff"}
+        onChange={(socialIconBgColor) =>
+          onUpdateModule((current) => ({
+            ...current,
+            settings: { ...current.settings, socialIconBgColor }
+          }))
+        }
+      />
 
-      <BuilderSettingRow label="Border Color">
-        <div className="builder-color-with-swatches">
-          <input
-            type="color"
-            value={module.settings.socialBorderColor || "#000000"}
-            onChange={(event) =>
-              onUpdateModule((current) => ({
-                ...current,
-                settings: { ...current.settings, socialBorderColor: event.target.value }
-              }))
-            }
-          />
-          <BuilderThemeSwatches
-            colors={themeColors}
-            onSelect={(hex) =>
-              onUpdateModule((current) => ({
-                ...current,
-                settings: { ...current.settings, socialBorderColor: hex }
-              }))
-            }
-          />
-        </div>
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fallback="#000000"
+        label="Border Color"
+        themeColors={themeColors}
+        value={module.settings.socialBorderColor || "#000000"}
+        onChange={(socialBorderColor) =>
+          onUpdateModule((current) => ({
+            ...current,
+            settings: { ...current.settings, socialBorderColor }
+          }))
+        }
+      />
 
       <BuilderSettingRow label="Border Width">
         <BuilderNumberSelectControl
@@ -342,29 +323,18 @@ export function BuilderSocialModuleSettings({
         />
       </BuilderSettingRow>
 
-      <BuilderSettingRow label="Shadow Color">
-        <div className="builder-color-with-swatches">
-          <input
-            type="color"
-            value={module.settings.socialShadowColor || "#000000"}
-            onChange={(event) =>
-              onUpdateModule((current) => ({
-                ...current,
-                settings: { ...current.settings, socialShadowColor: event.target.value }
-              }))
-            }
-          />
-          <BuilderThemeSwatches
-            colors={themeColors}
-            onSelect={(hex) =>
-              onUpdateModule((current) => ({
-                ...current,
-                settings: { ...current.settings, socialShadowColor: hex }
-              }))
-            }
-          />
-        </div>
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fallback="#000000"
+        label="Shadow Color"
+        themeColors={themeColors}
+        value={module.settings.socialShadowColor || "#000000"}
+        onChange={(socialShadowColor) =>
+          onUpdateModule((current) => ({
+            ...current,
+            settings: { ...current.settings, socialShadowColor }
+          }))
+        }
+      />
 
       <BuilderSettingRow label="Shadow X">
         <BuilderNumberSelectControl

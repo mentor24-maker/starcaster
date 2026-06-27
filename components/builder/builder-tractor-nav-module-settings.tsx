@@ -2,10 +2,15 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (m: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
 function update(
@@ -15,7 +20,11 @@ function update(
   onUpdateModule((m) => ({ ...m, settings: { ...m.settings, ...patch } }));
 }
 
-export function BuilderTractorNavModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderTractorNavModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
   const s = module.settings;
   const sizingMode = s.sizingMode || "linear";
 
@@ -26,10 +35,14 @@ export function BuilderTractorNavModuleSettings({ module, onUpdateModule }: Prop
   return (
     <div className="builder-tractor-nav-module-settings">
 
-      <BuilderSettingRow label="Color" fullWidth>
-        <input type="color" value={s.color || "#0000ff"}
-          onChange={(e) => set({ color: e.target.value })} />
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fullWidth
+        fallback="#0000ff"
+        label="Color"
+        themeColors={themeColors}
+        value={s.color || "#0000ff"}
+        onChange={(color) => set({ color })}
+      />
 
       <BuilderSettingRow label="Center Dot Size" fullWidth>
         <input type="number" min={2} max={100} step={1}
@@ -38,10 +51,14 @@ export function BuilderTractorNavModuleSettings({ module, onUpdateModule }: Prop
         <span style={{ marginLeft: 6, fontSize: 12, color: "var(--text-muted, #888)" }}>px</span>
       </BuilderSettingRow>
 
-      <BuilderSettingRow label="Dot Hover Color" fullWidth>
-        <input type="color" value={s.dotHoverColor || "#ffffff"}
-          onChange={(e) => set({ dotHoverColor: e.target.value })} />
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fullWidth
+        fallback="#ffffff"
+        label="Dot Hover Color"
+        themeColors={themeColors}
+        value={s.dotHoverColor || "#ffffff"}
+        onChange={(dotHoverColor) => set({ dotHoverColor })}
+      />
 
       <BuilderSettingRow label="Dot Link" fullWidth>
         <input type="url" placeholder="https://…"

@@ -2,13 +2,22 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
-export function BuilderMessagingTopicListModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderMessagingTopicListModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
   const s = module.settings;
 
   function set(key: string, value: string) {
@@ -58,21 +67,37 @@ export function BuilderMessagingTopicListModuleSettings({ module, onUpdateModule
         </div>
 
         <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Active color">
-            <input type="color" value={s.activeColor ?? "#0f4f8f"} onChange={(e) => set("activeColor", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#0f4f8f"
+            label="Active color"
+            themeColors={themeColors}
+            value={s.activeColor ?? "#0f4f8f"}
+            onChange={(activeColor) => set("activeColor", activeColor)}
+          />
 
-          <BuilderSettingRow label="Active bg">
-            <input type="color" value={s.activeBg ?? "#0f4f8f"} onChange={(e) => set("activeBg", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#0f4f8f"
+            label="Active bg"
+            themeColors={themeColors}
+            value={s.activeBg ?? "#0f4f8f"}
+            onChange={(activeBg) => set("activeBg", activeBg)}
+          />
 
-          <BuilderSettingRow label="Inactive color">
-            <input type="color" value={s.inactiveColor ?? "#587592"} onChange={(e) => set("inactiveColor", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#587592"
+            label="Inactive color"
+            themeColors={themeColors}
+            value={s.inactiveColor ?? "#587592"}
+            onChange={(inactiveColor) => set("inactiveColor", inactiveColor)}
+          />
 
-          <BuilderSettingRow label="Inactive bg">
-            <input type="color" value={s.inactiveBg ?? "#f0f4f8"} onChange={(e) => set("inactiveBg", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#f0f4f8"
+            label="Inactive bg"
+            themeColors={themeColors}
+            value={s.inactiveBg ?? "#f0f4f8"}
+            onChange={(inactiveBg) => set("inactiveBg", inactiveBg)}
+          />
 
           <BuilderSettingRow label="Border radius (px)">
             <input

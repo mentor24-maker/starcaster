@@ -5382,6 +5382,27 @@
   gap: 5px;
 }
 
+.builder-react-root .builder-theme-swatches-labeled {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 8px;
+  width: 100%;
+}
+
+.builder-react-root .builder-theme-swatch-cell {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.builder-react-root .builder-theme-swatch-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #587592;
+  text-align: center;
+}
+
 .builder-react-root .builder-theme-swatch {
   width: 18px;
   height: 18px;
@@ -5393,6 +5414,23 @@
   transition: transform 0.1s, border-color 0.1s;
 }
 
+.builder-react-root .builder-theme-swatch-empty {
+  background:
+    linear-gradient(45deg, rgba(9, 16, 24, 0.08) 25%, transparent 25%, transparent 75%, rgba(9, 16, 24, 0.08) 75%),
+    linear-gradient(45deg, rgba(9, 16, 24, 0.08) 25%, transparent 25%, transparent 75%, rgba(9, 16, 24, 0.08) 75%);
+  background-color: #ffffff;
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  border-style: dashed;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.builder-react-root .builder-theme-swatch-empty:hover {
+  transform: none;
+  border-color: rgba(9, 16, 24, 0.25);
+}
+
 .builder-react-root .builder-theme-swatch:hover {
   transform: scale(1.25);
   border-color: rgba(9, 16, 24, 0.55);
@@ -5401,6 +5439,11 @@
 .builder-react-root .builder-theme-color-popup .builder-theme-swatches {
   justify-content: center;
   padding: 4px 0 2px;
+}
+
+.builder-react-root .builder-theme-color-popup .builder-theme-swatches-labeled {
+  justify-content: stretch;
+  padding: 2px 0 4px;
 }
 
 .builder-react-root .builder-theme-color-popup .builder-theme-swatch {
