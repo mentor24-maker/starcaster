@@ -863,7 +863,7 @@ function CrmContactsTablePreview({
                     {showAddButton && (
                       <button
                         type="button"
-                        className="builder-admin-data-table-add-btn"
+                        className="btn tiny-btn"
                         onClick={() => { setAddValues({}); setAddMode(true); }}
                       >
                         {addButtonLabel}
@@ -1725,15 +1725,9 @@ function shouldRenderBlogPostManager(settings: Record<string, string>): boolean 
 
 function resolveBlogPostManagerSettings(settings: Record<string, string>): Record<string, string> {
   const resolved = { ...settings };
-  if (typeof window === "undefined") return resolved;
-
-  const pathname = window.location.pathname || "/";
-  const params = new URLSearchParams(window.location.search);
-  params.delete("id");
-  const qs = params.toString();
-
-  if (!String(resolved.editPageUrl || "").trim() && isAdminBlogManagerPageSlug()) {
-    resolved.editPageUrl = qs ? `${pathname}?${qs}` : pathname;
+  if (!String(resolved.editPageUrl || "").trim()) {
+    const autoEdit = blogManagerEditBaseUrl(resolved);
+    if (autoEdit) resolved.editPageUrl = autoEdit;
   }
 
   if (!String(resolved.viewPageUrl || "").trim()) {
@@ -2333,16 +2327,39 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   );
 }
 
-function blogPostFeaturedImageUrl(post: { featured_image_url?: string; featuredImageUrl?: string }) {
-  return String(post.featured_image_url || post.featuredImageUrl || "").trim();
+function blogPostFeaturedImageUrl(post: Record<string, unknown>): string {
+  return String(
+    post.featured_image_url ||
+    post.featuredImageUrl ||
+    post.featured_image ||
+    ""
+  ).trim();
+}
+
+function blogManagerEditBaseUrl(settings: Record<string, string>): string {
+  const fromSettings = String(settings.editPageUrl || "").trim();
+  if (fromSettings) return fromSettings;
+  if (typeof window === "undefined") return "";
+  if (!isAdminBlogManagerPageSlug()) return "";
+  const pathname = window.location.pathname || "/";
+  const params = new URLSearchParams(window.location.search);
+  params.delete("id");
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+function buildBlogPostEditHref(baseUrl: string, postId: string): string {
+  if (!baseUrl) return "";
+  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(postId)}`;
 }
 
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
-  const editPageUrl = (settings.editPageUrl || "").trim();
+  const editBaseUrl = useMemo(() => blogManagerEditBaseUrl(settings), [settings.editPageUrl]);
   const viewPageUrl = (settings.viewPageUrl || "").trim();
   const showStatus = (settings.showStatus ?? "true") !== "false";
   const showDate = (settings.showDate ?? "true") !== "false";
   const showDelete = (settings.showDelete ?? "true") !== "false";
+  const isBlogManagerPage = isAdminBlogManagerPageSlug();
 
   type PostRow = BlogPostRecord & {
     status?: string;
@@ -2451,9 +2468,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
       {listHeading}
       <div className="builder-blog-post-manager-list">
         {posts.map((post) => {
-          const editHref = editPageUrl
-            ? `${editPageUrl}${editPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`
-            : undefined;
+          const editHref = buildBlogPostEditHref(editBaseUrl, post.id);
           const viewSep = viewPageUrl.includes("?") ? "&" : "?";
           const viewHref = viewPageUrl
             ? `${viewPageUrl}${viewSep}post=${encodeURIComponent(post.slug)}`
@@ -2462,7 +2477,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
           const displayDate = dateStr
             ? new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
             : "—";
-          const imageUrl = blogPostFeaturedImageUrl(post);
+          const imageUrl = blogPostFeaturedImageUrl(post as unknown as Record<string, unknown>);
           return (
             <div key={post.id} className="builder-blog-post-manager-item">
               <div className="builder-blog-post-manager-item-thumb">
@@ -2494,35 +2509,47 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
               </div>
               <div className="builder-blog-post-manager-item-actions">
                 <div className="table-actions-row" role="group">
-                  <AdminTableIconButton
-                    icon="view"
-                    label="View"
-                    href={viewHref}
-                    disabled={!viewHref}
-                    onClick={!viewHref ? () => {} : undefined}
-                  />
-                  <AdminTableIconButton
-                    icon="edit"
-                    label="Edit"
-                    href={editHref}
-                    disabled={!editHref}
-                    onClick={!editHref ? () => {} : undefined}
-                  />
-                  <AdminTableIconButton
-                    icon="clone"
-                    label="Clone"
-                    disabled={cloningId === post.id}
-                    onClick={() => clonePost(post)}
-                  />
-                  {showDelete ? (
+                  {isBlogManagerPage ? (
                     <AdminTableIconButton
-                      icon="delete"
-                      label="Delete"
-                      danger
-                      disabled={deletingId === post.id}
-                      onClick={() => deletePost(post.id)}
+                      icon="edit"
+                      label="Edit"
+                      href={editHref || undefined}
+                      onClick={editHref ? undefined : () => {}}
+                      disabled={!editHref}
                     />
-                  ) : null}
+                  ) : (
+                    <>
+                      <AdminTableIconButton
+                        icon="view"
+                        label="View"
+                        href={viewHref}
+                        disabled={!viewHref}
+                        onClick={!viewHref ? () => {} : undefined}
+                      />
+                      <AdminTableIconButton
+                        icon="edit"
+                        label="Edit"
+                        href={editHref || undefined}
+                        disabled={!editHref}
+                        onClick={!editHref ? () => {} : undefined}
+                      />
+                      <AdminTableIconButton
+                        icon="clone"
+                        label="Clone"
+                        disabled={cloningId === post.id}
+                        onClick={() => clonePost(post)}
+                      />
+                      {showDelete ? (
+                        <AdminTableIconButton
+                          icon="delete"
+                          label="Delete"
+                          danger
+                          disabled={deletingId === post.id}
+                          onClick={() => deletePost(post.id)}
+                        />
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -3922,7 +3949,7 @@ function AdminTeamUsersPreview({
                       {showAddButton && (
                         <button
                           type="button"
-                          className="builder-admin-data-table-add-btn"
+                          className="btn tiny-btn"
                           onClick={() => setShowAddForm(true)}
                         >
                           {addButtonLabel}

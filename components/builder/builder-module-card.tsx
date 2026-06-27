@@ -431,7 +431,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
                 <th />
                 <th className="builder-admin-data-table-actions-col actions-col">
                   {showAdd && (
-                    <button type="button" className="builder-admin-data-table-add-btn" disabled aria-hidden="true" style={{ cursor: "default" }}>
+                    <button type="button" className="btn tiny-btn" disabled aria-hidden="true" style={{ cursor: "default" }}>
                       {addLabel}
                     </button>
                   )}
@@ -1793,7 +1793,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
                 <th />
                 <th className="builder-admin-data-table-actions-col actions-col">
                   {showAdd && (
-                    <button type="button" className="builder-admin-data-table-add-btn" disabled aria-hidden="true" style={{ cursor: "default" }}>
+                    <button type="button" className="btn tiny-btn" disabled aria-hidden="true" style={{ cursor: "default" }}>
                       {addLabel}
                     </button>
                   )}
