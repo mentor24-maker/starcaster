@@ -634,13 +634,13 @@ function CrmContactsTablePreview({
   if (!config)    return <div className="builder-contact-form-stub">No CRM configured. Set one up in Builder › CRM, or select a config in module settings.</div>;
 
   return (
-    <div className="crm-contacts-table-module">
-      {showTitle && <h2 className="crm-contacts-table-title">{tableTitle}</h2>}
+    <div className="builder-admin-data-table-module">
+      {showTitle && <h2 className="builder-admin-data-table-title">{tableTitle}</h2>}
 
-      <div className="crm-contacts-table-toolbar">
+      <div className="builder-admin-data-table-toolbar">
         {showSearch && (
           <input
-            className="crm-contacts-table-search"
+            className="builder-admin-data-table-search"
             type="search"
             placeholder="Search contacts…"
             value={search}
@@ -649,7 +649,7 @@ function CrmContactsTablePreview({
         )}
         {showAddButton && (
           <button
-            className="crm-contacts-table-add-btn"
+            className="builder-admin-data-table-add-btn"
             type="button"
             onClick={() => { setAddValues({}); setAddMode(true); }}
           >
@@ -658,37 +658,37 @@ function CrmContactsTablePreview({
         )}
       </div>
 
-      <div className="crm-contacts-table-wrap">
-        <table className="crm-contacts-table">
+      <div className="builder-admin-data-table-wrap">
+        <table className="builder-admin-data-table">
           <thead>
             <tr>
               {tableCols.map((f) => <th key={f.key}>{f.label}</th>)}
               <th>Added</th>
-              {hasActions && <th>Actions</th>}
+              {hasActions && <th className="builder-admin-data-table-actions-col">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {pageContacts.length === 0 ? (
               <tr>
-                <td colSpan={tableCols.length + 1 + (hasActions ? 1 : 0)} className="crm-contacts-table-empty">
+                <td colSpan={tableCols.length + 1 + (hasActions ? 1 : 0)} className="builder-admin-data-table-empty">
                   {search ? "No contacts match your search." : "No contacts yet."}
                 </td>
               </tr>
             ) : pageContacts.map((c) => (
               <tr key={c.id}>
                 {tableCols.map((f) => (
-                  <td key={f.key} className="crm-contacts-table-cell">
+                  <td key={f.key} className="builder-admin-data-table-cell">
                     {f.key === "email" ? (c.email ?? "") : String(c.data?.[f.key] ?? "")}
                   </td>
                 ))}
-                <td className="crm-contacts-table-cell crm-contacts-table-date">
+                <td className="builder-admin-data-table-cell builder-admin-data-table-date">
                   {c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}
                 </td>
                 {hasActions && (
-                  <td className="crm-contacts-table-actions">
-                    {showViewBtn   && <button type="button" className="crm-contacts-action-btn" onClick={() => setViewContact(c)}>View</button>}
-                    {showEditBtn   && <button type="button" className="crm-contacts-action-btn" onClick={() => openEdit(c)}>Edit</button>}
-                    {showDeleteBtn && <button type="button" className="crm-contacts-action-btn crm-contacts-action-btn-danger" onClick={() => deleteContact(c.id)}>Delete</button>}
+                  <td className="builder-admin-data-table-actions">
+                    {showViewBtn   && <button type="button" className="builder-admin-action-btn" onClick={() => setViewContact(c)}>View</button>}
+                    {showEditBtn   && <button type="button" className="builder-admin-action-btn" onClick={() => openEdit(c)}>Edit</button>}
+                    {showDeleteBtn && <button type="button" className="builder-admin-action-btn builder-admin-action-btn-danger" onClick={() => deleteContact(c.id)}>Delete</button>}
                   </td>
                 )}
               </tr>
@@ -698,13 +698,13 @@ function CrmContactsTablePreview({
       </div>
 
       {totalPages > 1 && (
-        <div className="crm-contacts-table-pagination">
+        <div className="builder-admin-data-table-pagination">
           <button type="button" disabled={safePage <= 1} onClick={() => setPage((p) => p - 1)}>‹ Prev</button>
           <span>Page {safePage} of {totalPages}</span>
           <button type="button" disabled={safePage >= totalPages} onClick={() => setPage((p) => p + 1)}>Next ›</button>
         </div>
       )}
-      <div className="crm-contacts-table-count">
+      <div className="builder-admin-data-table-count">
         {filtered.length} contact{filtered.length !== 1 ? "s" : ""}
       </div>
 
@@ -3355,11 +3355,13 @@ function AdminTeamUsersPreview({
   settings: Record<string, string>;
   projectId?: string;
 }) {
-  const tableTitle    = settings.tableTitle || "Team Members";
-  const showTitle     = settings.showTitle !== "false";
-  const showAddButton = settings.showAddButton !== "false";
-  const showEditBtn   = settings.showEditButton !== "false";
-  const showDeleteBtn = settings.showDeleteButton !== "false";
+  const tableTitle     = settings.tableTitle || "Team Members";
+  const showTitle      = settings.showTitle !== "false";
+  const showAddButton  = settings.showAddButton !== "false";
+  const addButtonLabel = settings.addButtonLabel || "Add Team Member";
+  const showEditBtn    = settings.showEditButton !== "false";
+  const showDeleteBtn  = settings.showDeleteButton !== "false";
+  const hasActions     = showEditBtn || showDeleteBtn;
 
   const [users, setUsers]           = useState<AdminTeamUser[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -3464,60 +3466,106 @@ function AdminTeamUsersPreview({
     }
   }
 
-  const thStyle: React.CSSProperties = { textAlign: "left", padding: "6px 10px", fontWeight: 600, fontSize: 12, borderBottom: "2px solid var(--border, #e5e7eb)", color: "var(--muted, #6b7280)" };
-  const tdStyle: React.CSSProperties = { padding: "8px 10px", fontSize: 13, borderBottom: "1px solid var(--border, #f0f4f8)", verticalAlign: "middle" };
-
   return (
-    <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
-      {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{tableTitle}</h3>}
+    <div className="builder-admin-data-table-module">
+      {showTitle && <h2 className="builder-admin-data-table-title">{tableTitle}</h2>}
       {loading ? (
-        <p className="builder-module-runtime-note">Loading team members…</p>
+        <div className="builder-admin-data-table-stub">Loading team members…</div>
       ) : loadError ? (
-        <p className="builder-module-runtime-note" style={{ color: "var(--danger, #c00)" }}>{loadError}</p>
+        <div className="builder-admin-data-table-stub is-error">{loadError}</div>
       ) : (
         <>
-          <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid var(--border, #e5e7eb)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          {showAddButton && (
+            <div className="builder-admin-data-table-toolbar">
+              <button
+                type="button"
+                className="builder-admin-data-table-add-btn"
+                onClick={() => setShowAddForm(true)}
+              >
+                {addButtonLabel}
+              </button>
+            </div>
+          )}
+
+          <div className="builder-admin-data-table-wrap">
+            <table className="builder-admin-data-table">
               <thead>
                 <tr>
-                  <th style={thStyle}>Email</th>
-                  <th style={thStyle}>Role</th>
-                  <th style={thStyle}>Added</th>
-                  {(showEditBtn || showDeleteBtn) && <th style={{ ...thStyle, width: 140 }}></th>}
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Added</th>
+                  {hasActions && <th className="builder-admin-data-table-actions-col">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 ? (
-                  <tr><td colSpan={4} style={{ ...tdStyle, color: "var(--muted, #888)" }}>No team members yet.</td></tr>
+                  <tr>
+                    <td colSpan={hasActions ? 4 : 3} className="builder-admin-data-table-empty">
+                      No team members yet.
+                    </td>
+                  </tr>
                 ) : users.map((u) => (
                   <tr key={u.id}>
-                    <td style={tdStyle}>{u.email}</td>
-                    <td style={tdStyle}>
+                    <td className="builder-admin-data-table-cell">{u.email}</td>
+                    <td className="builder-admin-data-table-cell">
                       {editUserId === u.id ? (
-                        <select value={editRole} onChange={(e) => setEditRole(e.target.value)} style={{ fontSize: 12 }}>
+                        <select
+                          className="crm-contacts-modal-input"
+                          value={editRole}
+                          onChange={(e) => setEditRole(e.target.value)}
+                        >
                           <option value="editor">Editor</option>
                           <option value="admin">Admin</option>
                         </select>
                       ) : (
-                        <span style={{ textTransform: "capitalize", fontSize: 12, background: "var(--surface, #f3f4f6)", padding: "2px 8px", borderRadius: 4 }}>{u.role}</span>
+                        <span className="builder-admin-data-table-role-badge">{u.role}</span>
                       )}
                     </td>
-                    <td style={{ ...tdStyle, color: "var(--muted, #888)", fontSize: 11 }}>
+                    <td className="builder-admin-data-table-cell builder-admin-data-table-date">
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
                     </td>
-                    {(showEditBtn || showDeleteBtn) && (
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                    {hasActions && (
+                      <td className="builder-admin-data-table-actions">
                         {editUserId === u.id ? (
-                          <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <button type="button" disabled={editLoading} onClick={() => handleEditSave(u.id)} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer" }}>{editLoading ? "Saving…" : "Save"}</button>
-                            <button type="button" onClick={() => { setEditUserId(null); setEditError(""); }} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer" }}>Cancel</button>
-                            {editError && <span style={{ color: "var(--danger, #c00)", fontSize: 11 }}>{editError}</span>}
-                          </span>
+                          <>
+                            <button
+                              type="button"
+                              className="builder-admin-action-btn"
+                              disabled={editLoading}
+                              onClick={() => handleEditSave(u.id)}
+                            >
+                              {editLoading ? "Saving…" : "Save"}
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-admin-action-btn"
+                              onClick={() => { setEditUserId(null); setEditError(""); }}
+                            >
+                              Cancel
+                            </button>
+                            {editError && <span className="builder-admin-data-table-inline-error">{editError}</span>}
+                          </>
                         ) : (
-                          <span style={{ display: "flex", gap: 6 }}>
-                            {showEditBtn && <button type="button" onClick={() => { setEditUserId(u.id); setEditRole(u.role); setEditError(""); }} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer" }}>Edit</button>}
-                            {showDeleteBtn && <button type="button" onClick={() => handleDelete(u.id, u.email)} style={{ fontSize: 11, padding: "3px 10px", cursor: "pointer", color: "var(--danger, #c00)" }}>Remove</button>}
-                          </span>
+                          <>
+                            {showEditBtn && (
+                              <button
+                                type="button"
+                                className="builder-admin-action-btn"
+                                onClick={() => { setEditUserId(u.id); setEditRole(u.role); setEditError(""); }}
+                              >
+                                Edit
+                              </button>
+                            )}
+                            {showDeleteBtn && (
+                              <button
+                                type="button"
+                                className="builder-admin-action-btn builder-admin-action-btn-danger"
+                                onClick={() => handleDelete(u.id, u.email)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </>
                         )}
                       </td>
                     )}
@@ -3526,24 +3574,86 @@ function AdminTeamUsersPreview({
               </tbody>
             </table>
           </div>
-          {showAddButton && !showAddForm && (
-            <button type="button" onClick={() => setShowAddForm(true)} style={{ marginTop: 12, fontSize: 13, padding: "6px 14px", cursor: "pointer" }}>+ Add Team Member</button>
-          )}
+
+          <div className="builder-admin-data-table-count">
+            {users.length} team member{users.length !== 1 ? "s" : ""}
+          </div>
+
           {showAddButton && showAddForm && (
-            <form onSubmit={handleAdd} style={{ marginTop: 14, display: "grid", gap: 8, maxWidth: 380 }}>
-              <strong style={{ fontSize: 13 }}>Add Team Member</strong>
-              <input type="email" required placeholder="Email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} style={{ fontSize: 13, padding: "6px 8px" }} />
-              <input type="password" required minLength={8} placeholder="Password (min 8 chars)" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} style={{ fontSize: 13, padding: "6px 8px" }} />
-              <select value={addRole} onChange={(e) => setAddRole(e.target.value)} style={{ fontSize: 13, padding: "6px 8px" }}>
-                <option value="editor">Editor</option>
-                <option value="admin">Admin</option>
-              </select>
-              {addError && <p style={{ color: "var(--danger, #c00)", fontSize: 12, margin: 0 }}>{addError}</p>}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="submit" disabled={addLoading} style={{ fontSize: 13, padding: "6px 14px", cursor: "pointer" }}>{addLoading ? "Adding…" : "Add"}</button>
-                <button type="button" onClick={() => { setShowAddForm(false); setAddError(""); }} style={{ fontSize: 13, padding: "6px 14px", cursor: "pointer" }}>Cancel</button>
+            <BuilderBodyPortal>
+              <div className="crm-contacts-modal-overlay" onClick={() => !addLoading && setShowAddForm(false)}>
+                <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="crm-contacts-modal-header">
+                    <strong>Add Team Member</strong>
+                    <button
+                      type="button"
+                      className="crm-contacts-modal-close"
+                      onClick={() => setShowAddForm(false)}
+                      disabled={addLoading}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <form onSubmit={handleAdd}>
+                    <div className="crm-contacts-modal-body">
+                      <div className="crm-contacts-modal-row crm-contacts-modal-row-edit">
+                        <label className="crm-contacts-modal-label" htmlFor="admin-team-add-email">Email</label>
+                        <input
+                          id="admin-team-add-email"
+                          className="crm-contacts-modal-input"
+                          type="email"
+                          required
+                          value={addEmail}
+                          onChange={(e) => setAddEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="crm-contacts-modal-row crm-contacts-modal-row-edit">
+                        <label className="crm-contacts-modal-label" htmlFor="admin-team-add-password">Password</label>
+                        <input
+                          id="admin-team-add-password"
+                          className="crm-contacts-modal-input"
+                          type="password"
+                          required
+                          minLength={8}
+                          value={addPassword}
+                          onChange={(e) => setAddPassword(e.target.value)}
+                        />
+                      </div>
+                      <div className="crm-contacts-modal-row crm-contacts-modal-row-edit">
+                        <label className="crm-contacts-modal-label" htmlFor="admin-team-add-role">Role</label>
+                        <select
+                          id="admin-team-add-role"
+                          className="crm-contacts-modal-input"
+                          value={addRole}
+                          onChange={(e) => setAddRole(e.target.value)}
+                        >
+                          <option value="editor">Editor</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                      {addError && <p className="builder-admin-data-table-stub is-error">{addError}</p>}
+                    </div>
+                    <div className="crm-contacts-modal-footer">
+                      <button
+                        type="button"
+                        className="crm-contacts-modal-btn"
+                        onClick={() => { setShowAddForm(false); setAddError(""); }}
+                        disabled={addLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="crm-contacts-modal-btn crm-contacts-modal-btn-primary"
+                        disabled={addLoading}
+                      >
+                        {addLoading ? "Adding…" : addButtonLabel}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </form>
+            </BuilderBodyPortal>
           )}
         </>
       )}

@@ -2038,6 +2038,7 @@ export function createEmptyModule(
                             tableTitle: "Team Members",
                             showTitle: "true",
                             showAddButton: "true",
+                            addButtonLabel: "Add Team Member",
                             showEditButton: "true",
                             showDeleteButton: "true"
                           }
