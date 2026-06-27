@@ -3,6 +3,8 @@
 import { useId, useState } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
 import { BuilderEditorPopup } from "./builder-editor-popup";
+import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 import {
   BACKGROUND_STYLE_PRESETS,
   getBuilderBackgroundStyle,
@@ -24,13 +26,15 @@ type BuilderButtonBackgroundPickerProps = {
   onChange: (background: BackgroundSettings) => void;
   onChooseImage?: () => void;
   onUploadImage?: (file: File | null) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
 };
 
 export function BuilderButtonBackgroundPicker({
   background,
   onChange,
   onChooseImage,
-  onUploadImage
+  onUploadImage,
+  themeColors = []
 }: BuilderButtonBackgroundPickerProps) {
   const popupId = useId();
   const [isOpen, setIsOpen] = useState(false);
@@ -132,12 +136,12 @@ export function BuilderButtonBackgroundPicker({
           <div className="builder-button-background-popup-body">
             {activeMode === "color" ? (
               <BuilderSettingRow label="Color" fullWidth>
-                <input
-                  type="color"
+                <BuilderThemeColorField
+                  dialogLabel="Button background color"
+                  fallback="#214c71"
+                  themeColors={themeColors}
                   value={background.color}
-                  onChange={(event) =>
-                    updateBackground((current) => ({ ...current, color: event.target.value }))
-                  }
+                  onChange={(color) => updateBackground((current) => ({ ...current, color }))}
                 />
               </BuilderSettingRow>
             ) : null}
@@ -145,21 +149,21 @@ export function BuilderButtonBackgroundPicker({
             {activeMode === "gradient" ? (
               <>
                 <BuilderSettingRow label="Color 1" fullWidth>
-                  <input
-                    type="color"
+                  <BuilderThemeColorField
+                    dialogLabel="Gradient color 1"
+                    fallback="#214c71"
+                    themeColors={themeColors}
                     value={background.color}
-                    onChange={(event) =>
-                      updateBackground((current) => ({ ...current, color: event.target.value }))
-                    }
+                    onChange={(color) => updateBackground((current) => ({ ...current, color }))}
                   />
                 </BuilderSettingRow>
                 <BuilderSettingRow label="Color 2" fullWidth>
-                  <input
-                    type="color"
+                  <BuilderThemeColorField
+                    dialogLabel="Gradient color 2"
+                    fallback="#eaf4ff"
+                    themeColors={themeColors}
                     value={background.color2}
-                    onChange={(event) =>
-                      updateBackground((current) => ({ ...current, color2: event.target.value }))
-                    }
+                    onChange={(color2) => updateBackground((current) => ({ ...current, color2 }))}
                   />
                 </BuilderSettingRow>
               </>

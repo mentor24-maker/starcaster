@@ -2,7 +2,7 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary,
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
-import { formatTemplateTimestamp } from "./builder-utils";
+import { buildBuilderThemePaletteColors, formatTemplateTimestamp } from "./builder-utils";
 
 type SortField = "name" | "slug" | "template" | "visibility" | "updatedAt";
 type SortDir = "asc" | "desc";
@@ -128,6 +128,11 @@ export function BuilderPageList({
   const [sortField, setSortField] = useState<SortField>("updatedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [archiveView, setArchiveView] = useState<ArchiveView>("pages");
+
+  const activeTheme = pageThemeId
+    ? themes.find((theme) => theme.id === pageThemeId) ?? themes[0] ?? null
+    : themes[0] ?? null;
+  const themeColors = buildBuilderThemePaletteColors(activeTheme);
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const shouldFocusDetailsRef = useRef(false);
@@ -838,6 +843,9 @@ export function BuilderPageList({
                 hideClear
                 showColorFieldLabel={false}
                 onChange={onUpdatePageBackground}
+                themeBackgroundColor={activeTheme?.backgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={activeTheme?.primaryColor}
               />
             </div>
           </div>

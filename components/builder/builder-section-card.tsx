@@ -561,6 +561,8 @@ export function BuilderSectionCard({
                                   onUploadButtonBackgroundMedia={(file) => onUploadButtonBackgroundMedia(module.id, file)}
                                   themeColors={themeColors}
                                   themeStyle={themeStyle}
+                                  themeBackgroundColor={themeBackgroundColor}
+                                  themePrimaryColor={themePrimaryColor}
                                   onModuleDragStart={(event) => {
                                     if (cancelBuilderDragIfFormField(event)) {
                                       return;
