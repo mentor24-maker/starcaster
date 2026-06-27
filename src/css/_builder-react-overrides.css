@@ -15,6 +15,20 @@
  * Darkest builder blue (= --ink-primary): #18324a — used for low-contrast button borders.
  */
 
+.builder-react-root .builder-editor-popup {
+  border: 1px solid rgba(9, 16, 24, 0.16) !important;
+  background: #ffffff !important;
+  box-shadow: 0 18px 40px rgba(9, 16, 24, 0.2) !important;
+}
+
+.builder-react-root .builder-editor-popup-header {
+  background: #ffffff;
+}
+
+.builder-react-root .builder-editor-popup-body {
+  background: #ffffff;
+}
+
 /* ============================================================== */
 /* CONTAINERS → 10px                                              */
 /* ============================================================== */

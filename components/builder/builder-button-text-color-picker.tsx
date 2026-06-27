@@ -50,6 +50,7 @@ export function BuilderButtonTextColorPicker({ colors, onChange }: BuilderButton
           ariaLabel="Button text color"
           id={popupId}
           onClose={() => setIsOpen(false)}
+          title="Text Color"
         >
           <div className="builder-button-background-mode-tabs" role="tablist" aria-label="Text color options">
             {textColorTabs.map((tab) => (

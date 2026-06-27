@@ -72,6 +72,7 @@ export function BuilderButtonBorderColorPicker({
           ariaLabel="Button border color"
           id={popupId}
           onClose={() => setIsOpen(false)}
+          title="Border Color"
         >
           <div className="builder-button-background-popup-body">
             <BuilderSettingRow label="Color" fullWidth>

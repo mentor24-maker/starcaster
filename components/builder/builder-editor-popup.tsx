@@ -6,6 +6,7 @@ import { BuilderBodyPortal } from "./builder-body-portal";
 type BuilderEditorPopupProps = {
   id?: string;
   ariaLabel: string;
+  title?: string;
   className?: string;
   onClose: () => void;
   children: ReactNode;
@@ -19,6 +20,7 @@ type BuilderEditorPopupProps = {
 export function BuilderEditorPopup({
   id,
   ariaLabel,
+  title,
   className = "",
   onClose,
   children
@@ -38,6 +40,7 @@ export function BuilderEditorPopup({
   }, [onClose]);
 
   const dialogClassName = ["builder-editor-popup", className].filter(Boolean).join(" ");
+  const popupTitle = title ?? ariaLabel;
 
   return (
     <BuilderBodyPortal>
@@ -50,7 +53,19 @@ export function BuilderEditorPopup({
           aria-label={ariaLabel}
           onClick={(event) => event.stopPropagation()}
         >
-          {children}
+          <div className="builder-editor-popup-header">
+            <h3 className="builder-editor-popup-title">{popupTitle}</h3>
+            <button
+              aria-label="Close"
+              className="builder-icon-button"
+              onClick={onClose}
+              title="Close"
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="builder-editor-popup-body">{children}</div>
         </div>
       </div>
     </BuilderBodyPortal>

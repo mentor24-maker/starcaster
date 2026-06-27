@@ -109,6 +109,7 @@ export function BuilderButtonBackgroundPicker({
           ariaLabel="Button background"
           id={popupId}
           onClose={() => setIsOpen(false)}
+          title="Background"
         >
           <div className="builder-button-background-mode-tabs" role="tablist" aria-label="Background type">
             {buttonBackgroundModes.map((mode) => (
