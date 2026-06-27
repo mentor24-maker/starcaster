@@ -29,6 +29,12 @@ const { getUserFromSessionToken, getAuthSession } = require('../lib/authStore');
 const { getAdminSession } = require('../lib/projectAdminStore');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 const { requireProjectContext } = require('../lib/requireProjectContext');
+const {
+  acceptsProjectAdminSession,
+  isPublicCrmRoute: isPublicCrmRouteForAuth,
+  isPublicTenantContentReadRoute,
+  resolvePublicTenantProjectContext,
+} = require('../lib/projectAdminApiAuth');
 
 const auth        = require('./auth');
 const projectAdmin = require('./projectAdmin');
@@ -217,8 +223,8 @@ async function handleRequest(req, res) {
   const isDebugRoute = pathname === '/api/debug-routes';
   const isWebhookRoute = pathname === '/api/builder/devAgent/worker' || pathname.startsWith('/api/tasks');
   const isPublicContactSubmit = pathname === '/api/contact' && method === 'POST';
-  const isPublicCrmRoute = (pathname === '/api/crm/contact-submit' && method === 'POST')
-    || (/^\/api\/crm\/forms\/[^/]+$/.test(pathname) && method === 'GET');
+  const isPublicCrmRoute = isPublicCrmRouteForAuth(pathname, method);
+  const isPublicTenantReadRoute = isPublicTenantContentReadRoute(pathname, method, req);
   const isPublicSiteRoute = pathname.startsWith('/api/public/');
   const isFacebookOAuthCallback =
     pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
@@ -234,27 +240,9 @@ async function handleRequest(req, res) {
   req.projectContext = null;
   req.cronPublish = isCronAuthorized;
 
-  // For builder API calls, project-admin API calls, and CRM management on
-  // tenant admin sites, accept an admin session in place of a platform session.
-  // Synthesize req.authUser and req.projectContext so route handlers work
-  // without modification. Public CRM routes (form submit, form config GET)
-  // are excluded — those stay on the unauthenticated allowlist.
-  // /api/admin/platform-users is excluded — platform owners only.
-  const isProjectAdminApiRoute = pathname.startsWith('/api/admin')
-    && !pathname.startsWith('/api/admin/platform-users');
-  const isProjectAdminCrmRoute = pathname.startsWith('/api/crm') && !isPublicCrmRoute;
-  const isProjectAdminAssetsRoute = pathname === '/api/assets'
-    || pathname.startsWith('/api/assets/')
-    || pathname.startsWith('/api/asset-categories');
-  if (
-    !authUser
-    && (
-      pathname.startsWith('/api/builder')
-      || isProjectAdminApiRoute
-      || isProjectAdminCrmRoute
-      || isProjectAdminAssetsRoute
-    )
-  ) {
+  // Tenant admin sites: accept project-admin session for CMS APIs (blog, CRM,
+  // assets, builder, messaging, etc.) when no platform session is present.
+  if (!authUser && acceptsProjectAdminSession(pathname, { isPublicCrmRoute, method, req })) {
     const adminToken = projectAdmin.readAdminSessionToken(req);
     if (adminToken) {
       const adminSession = await getAdminSession(adminToken);
@@ -276,12 +264,34 @@ async function handleRequest(req, res) {
     }
   }
 
+  // Public tenant pages: scoped read-only content (blog list, themes, etc.)
+  // via X-Project-ID on the site host — no login required.
+  if (!authUser && isPublicTenantReadRoute) {
+    const publicCtx = await resolvePublicTenantProjectContext(req);
+    if (publicCtx) {
+      req.projectContext = publicCtx;
+    }
+  }
+
   if (isImportDriveFolderHealth) {
     const handled = await assets.handleImportDriveFolder(req, res, {}, 'GET');
     if (handled) return;
   }
 
-  if (!isAuthRoute && !isAdminAuthRoute && !isDebugRoute && !isWebhookRoute && !isCronAuthorized && !isFacebookOAuthCallback && !isPublicContactSubmit && !isPublicCrmRoute && !isPublicSiteRoute && !authUser) {
+  const hasPublicTenantReadAccess = isPublicTenantReadRoute && req.projectContext?.project?.id;
+  if (
+    !isAuthRoute
+    && !isAdminAuthRoute
+    && !isDebugRoute
+    && !isWebhookRoute
+    && !isCronAuthorized
+    && !isFacebookOAuthCallback
+    && !isPublicContactSubmit
+    && !isPublicCrmRoute
+    && !isPublicSiteRoute
+    && !hasPublicTenantReadAccess
+    && !authUser
+  ) {
 
     return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' });
   }

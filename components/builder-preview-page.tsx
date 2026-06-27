@@ -15,6 +15,7 @@ import {
   builderThemeToCrmPalette,
   mergeCrmThemePalette,
 } from "@/components/builder/builder-utils";
+import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 
 type PreviewDraft = {
   name: string;
@@ -45,7 +46,10 @@ function hasCrmPaletteColors(palette: CrmThemePalette | undefined): boolean {
 
 async function fetchBuilderThemePalette(themeId?: string): Promise<CrmThemePalette | undefined> {
   try {
-    const res = await fetch("/api/builder/themes", { credentials: "include" });
+    const res = await fetch("/api/builder/themes", {
+      credentials: "include",
+      headers: starcasterScopedHeaders(),
+    });
     if (!res.ok) return undefined;
     const data = await res.json() as { themes?: BuilderThemeRecord[] };
     const themes = Array.isArray(data.themes) ? data.themes : [];
@@ -66,7 +70,10 @@ function slugFromPathname(pathname: string): string {
 
 async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
   try {
-    const res = await fetch("/api/builder/landing-pages", { credentials: "include" });
+    const res = await fetch("/api/builder/landing-pages", {
+      credentials: "include",
+      headers: starcasterScopedHeaders(),
+    });
     if (!res.ok) return null;
     const data = await res.json() as { pages?: unknown[] };
     const pages = Array.isArray(data.pages) ? data.pages : [];

@@ -4,6 +4,7 @@ import type { RichTextGalleryBinding } from "@/components/builder/builder-types"
 import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import type {
   BackgroundSettings,
@@ -3266,10 +3267,7 @@ function CrmFormModuleSettings({ crmFormId, onChange }: { crmFormId: string; onC
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const projectId = (window as unknown as { App?: { projectContext?: { getSessionProjectId?: () => string } } })?.App?.projectContext?.getSessionProjectId?.() ?? '';
-    const headers: Record<string, string> = {};
-    if (projectId) headers['X-Project-ID'] = projectId;
-    fetch("/api/crm/forms", { headers })
+    fetch("/api/crm/forms", { credentials: "include", headers: starcasterScopedHeaders() })
       .then((r) => r.json())
       .then((d) => {
         const list = d?.forms ?? d?.data ?? [];

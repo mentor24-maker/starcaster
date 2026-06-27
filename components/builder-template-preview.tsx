@@ -26,6 +26,7 @@ import {
   redirectAfterAdminLogout,
   setAdminSessionToken,
 } from "@/lib/public-admin-session";
+import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { TractorNavRuntime } from "@/components/builder-tractor-nav-module";
@@ -440,33 +441,10 @@ function CrmFormPreview({
 
 // ── CRM Contacts Table ────────────────────────────────────────────────────────
 
-function getCrmProjectHeaders(): Record<string, string> {
-  // Prefer window.App (available inside builder admin where projectContext.js is loaded).
-  const fromApp =
-    (window as unknown as { App?: { projectContext?: { getSessionProjectId?: () => string } } })
-      ?.App?.projectContext?.getSessionProjectId?.() ?? "";
-  if (fromApp) return { "X-Project-ID": fromApp };
-
-  // Public tenant sites inject projectId via site.html → window.__SITE_CONFIG__.
-  try {
-    const fromSiteConfig =
-      (window as unknown as { __SITE_CONFIG__?: { projectId?: string } })
-        ?.__SITE_CONFIG__?.projectId ?? "";
-    if (fromSiteConfig) return { "X-Project-ID": String(fromSiteConfig).trim() };
-  } catch {}
-
-  // Fall back to localStorage — projectContext.js stores the active project ID there
-  // under 'alphire.currentProjectId'. builder-preview.html doesn't load projectContext.js
-  // but the key is already written by the main builder session.
-  try {
-    const key =
-      (window as unknown as { App?: { CURRENT_PROJECT_ID_STORAGE_KEY?: string } })
-        ?.App?.CURRENT_PROJECT_ID_STORAGE_KEY ?? "alphire.currentProjectId";
-    const fromStorage = localStorage.getItem(key) ?? "";
-    if (fromStorage) return { "X-Project-ID": fromStorage };
-  } catch {}
-
-  return {};
+function getCrmProjectHeaders(projectIdOverride?: string): Record<string, string> {
+  const headers = starcasterScopedHeaders();
+  if (projectIdOverride) headers["X-Project-ID"] = projectIdOverride;
+  return headers;
 }
 
 type CrmContactsField = { key: string; label: string; type: string; required?: boolean };
@@ -537,11 +515,7 @@ function CrmContactsTablePreview({
   useEffect(() => {
     setLoading(true);
     setLoadError("");
-    const headers = {
-      ...getCrmProjectHeaders(),
-      ...getAdminAuthHeaders(),
-      ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
-    };
+    const headers = getCrmProjectHeaders(projectIdProp);
     const configUrl = crmConfigId ? `/api/crm/configs/${encodeURIComponent(crmConfigId)}` : "/api/crm/configs";
     fetch(configUrl, { credentials: "include", headers })
       .then(async (r) => {
@@ -586,11 +560,7 @@ function CrmContactsTablePreview({
   const tableCols    = fields.slice(0, 5);
   const hasActions   = showViewBtn || showEditBtn || showDeleteBtn;
 
-  const scopedHeaders = () => ({
-    ...getCrmProjectHeaders(),
-    ...getAdminAuthHeaders(),
-    ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
-  });
+  const scopedHeaders = () => getCrmProjectHeaders(projectIdProp);
 
   async function deleteContact(id: string) {
     if (!confirm("Delete this contact? This cannot be undone.")) return;
@@ -3405,11 +3375,7 @@ function AdminTeamUsersPreview({
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError]   = useState("");
 
-  const headers = {
-    ...getCrmProjectHeaders(),
-    ...getAdminAuthHeaders(),
-    ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
-  };
+  const headers = getCrmProjectHeaders(projectIdProp);
 
   async function loadUsers() {
     setLoading(true);
@@ -3743,11 +3709,7 @@ function AdminModulesPreview({
   const [saving, setSaving]     = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
 
-  const headers = {
-    ...getCrmProjectHeaders(),
-    ...getAdminAuthHeaders(),
-    ...(projectIdProp ? { "X-Project-ID": projectIdProp } : {}),
-  };
+  const headers = getCrmProjectHeaders(projectIdProp);
 
   useEffect(() => {
     const projectId = headers["X-Project-ID"] || "";
