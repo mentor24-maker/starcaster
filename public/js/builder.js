@@ -8176,7 +8176,7 @@ App.builder = (function () {
     if (!rows.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.colSpan = 9;
+      cell.colSpan = 8;
       cell.textContent = 'No pages yet.';
       row.appendChild(cell);
       tbody.appendChild(row);
