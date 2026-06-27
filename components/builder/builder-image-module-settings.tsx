@@ -1,9 +1,14 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderInlineNumberSelect, BuilderInlineNumberSelectRow } from "./builder-inline-number-select";
+import {
+  BuilderThemeColorField,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type BuilderImageModuleSettingsProps = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
 /**
@@ -11,7 +16,11 @@ type BuilderImageModuleSettingsProps = {
  * top-level image module and nested image modules (e.g. inside table cells), so
  * an image gets the same robust treatment wherever it lives.
  */
-export function BuilderImageModuleSettings({ module, onUpdateModule }: BuilderImageModuleSettingsProps) {
+export function BuilderImageModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: BuilderImageModuleSettingsProps) {
   return (
     <>
       <label className="field">
@@ -68,11 +77,13 @@ export function BuilderImageModuleSettings({ module, onUpdateModule }: BuilderIm
         </BuilderInlineNumberSelectRow>
         <label className="field">
           <span>Border color</span>
-          <input
-            type="color"
+          <BuilderThemeColorField
+            dialogLabel="Image border color"
+            fallback="#0f4f8f"
+            themeColors={themeColors}
             value={module.settings.borderColor ?? "#0f4f8f"}
-            onChange={(event) =>
-              onUpdateModule((current) => ({ ...current, settings: { ...current.settings, borderColor: event.target.value } }))
+            onChange={(borderColor) =>
+              onUpdateModule((current) => ({ ...current, settings: { ...current.settings, borderColor } }))
             }
           />
         </label>

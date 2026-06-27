@@ -7,17 +7,23 @@ import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type BuilderSpeechBubbleModuleSettingsProps = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   richTextGallery?: RichTextGalleryBinding;
+  themeColors?: BuilderThemePalette;
 };
 
 export function BuilderSpeechBubbleModuleSettings({
   module,
   onUpdateModule,
-  richTextGallery
+  richTextGallery,
+  themeColors = []
 }: BuilderSpeechBubbleModuleSettingsProps) {
   function updateSettings(updates: Record<string, string>) {
     onUpdateModule((current) => ({
@@ -35,24 +41,26 @@ export function BuilderSpeechBubbleModuleSettings({
           {...richTextGallery}
         />
       </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Background Color">
-        <input
-          type="color"
-          value={normalizeBuilderHexColor(module.settings.backgroundColor || "#ffffff")}
-          onChange={(event) =>
-            updateSettings({ backgroundColor: normalizeBuilderHexColor(event.target.value) })
-          }
-        />
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Border Color">
-        <input
-          type="color"
-          value={normalizeBuilderHexColor(module.settings.borderColor || "#9ed4ee")}
-          onChange={(event) =>
-            updateSettings({ borderColor: normalizeBuilderHexColor(event.target.value) })
-          }
-        />
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fullWidth
+        fallback="#ffffff"
+        label="Background Color"
+        themeColors={themeColors}
+        value={normalizeBuilderHexColor(module.settings.backgroundColor || "#ffffff")}
+        onChange={(backgroundColor) =>
+          updateSettings({ backgroundColor: normalizeBuilderHexColor(backgroundColor) })
+        }
+      />
+      <BuilderThemeColorSettingRow
+        fullWidth
+        fallback="#9ed4ee"
+        label="Border Color"
+        themeColors={themeColors}
+        value={normalizeBuilderHexColor(module.settings.borderColor || "#9ed4ee")}
+        onChange={(borderColor) =>
+          updateSettings({ borderColor: normalizeBuilderHexColor(borderColor) })
+        }
+      />
       <BuilderSettingRow fullWidth label="Border Size">
         <BuilderNumberSelectControl
           fallback="2"
@@ -85,15 +93,16 @@ export function BuilderSpeechBubbleModuleSettings({
           <span className="builder-module-offset-hint">0 fits content; larger values set a minimum height.</span>
         </div>
       </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Text Color">
-        <input
-          type="color"
-          value={normalizeBuilderHexColor(module.settings.textColor || "#18324a")}
-          onChange={(event) =>
-            updateSettings({ textColor: normalizeBuilderHexColor(event.target.value) })
-          }
-        />
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fullWidth
+        fallback="#18324a"
+        label="Text Color"
+        themeColors={themeColors}
+        value={normalizeBuilderHexColor(module.settings.textColor || "#18324a")}
+        onChange={(textColor) =>
+          updateSettings({ textColor: normalizeBuilderHexColor(textColor) })
+        }
+      />
       <BuilderSettingRow fullWidth label="X-Index Offset">
         <div className="builder-setting-value-stack">
           <input

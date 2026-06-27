@@ -32,11 +32,16 @@ import {
   type BuilderReminderRecord
 } from "@/lib/builder-reminder-module";
 import { readAdminJson } from "@/lib/admin-fetch";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type BuilderReminderModuleSettingsProps = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   richTextGallery?: RichTextGalleryBinding;
+  themeColors?: BuilderThemePalette;
 };
 
 type BuilderReminderRecordEditorProps = {
@@ -44,13 +49,15 @@ type BuilderReminderRecordEditorProps = {
   pollOptions: ReminderPollOption[];
   onChange: (record: BuilderReminderRecord) => void;
   richTextGallery?: RichTextGalleryBinding;
+  themeColors?: BuilderThemePalette;
 };
 
 function BuilderReminderRecordEditor({
   record,
   pollOptions,
   onChange,
-  richTextGallery
+  richTextGallery,
+  themeColors = []
 }: BuilderReminderRecordEditorProps) {
   const { config } = useMemo(() => parseReminderCriteriaFromRecord(record), [record]);
   const criteria = config.criteria.length > 0 ? config.criteria : [createDefaultReminderCriterion()];
@@ -125,32 +132,29 @@ function BuilderReminderRecordEditor({
         </div>
       </BuilderSettingRow>
       {record.appearance === "speech_bubble" ? (
-        <BuilderSettingRow fullWidth label="Background Color">
-          <div className="builder-setting-value-stack">
-            <input
-              type="color"
-              value={normalizeBuilderHexColor(record.backgroundColor)}
-              onChange={(event) =>
-                updateRecord({ backgroundColor: normalizeBuilderHexColor(event.target.value) })
-              }
-            />
-            <span className="builder-module-offset-hint">
-              Fills the bubble body and the pointer diamond (same color on both).
-            </span>
-          </div>
-        </BuilderSettingRow>
+        <BuilderThemeColorSettingRow
+          fullWidth
+          fallback="#ffffff"
+          label="Background Color"
+          themeColors={themeColors}
+          value={normalizeBuilderHexColor(record.backgroundColor)}
+          onChange={(backgroundColor) =>
+            updateRecord({ backgroundColor: normalizeBuilderHexColor(backgroundColor) })
+          }
+        />
       ) : null}
       {record.appearance === "speech_bubble" ? (
         <>
-          <BuilderSettingRow fullWidth label="Border Color">
-            <input
-              type="color"
-              value={normalizeBuilderHexColor(record.borderColor)}
-              onChange={(event) =>
-                updateRecord({ borderColor: normalizeBuilderHexColor(event.target.value) })
-              }
-            />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fullWidth
+            fallback="#9ed4ee"
+            label="Border Color"
+            themeColors={themeColors}
+            value={normalizeBuilderHexColor(record.borderColor)}
+            onChange={(borderColor) =>
+              updateRecord({ borderColor: normalizeBuilderHexColor(borderColor) })
+            }
+          />
           <BuilderSettingRow fullWidth label="Border Size">
             <BuilderNumberSelectControl
               fallback="2"
@@ -222,7 +226,8 @@ function BuilderReminderRecordEditor({
 export function BuilderReminderModuleSettings({
   module,
   onUpdateModule,
-  richTextGallery
+  richTextGallery,
+  themeColors = []
 }: BuilderReminderModuleSettingsProps) {
   const [pollOptions, setPollOptions] = useState<ReminderPollOption[]>([]);
   const [collapsedRecords, setCollapsedRecords] = useState<Record<string, boolean>>({});
@@ -380,6 +385,7 @@ export function BuilderReminderModuleSettings({
                   pollOptions={pollOptions}
                   record={record}
                   richTextGallery={richTextGallery}
+                  themeColors={themeColors}
                   onChange={(nextRecord) => updateRecord(record.id, nextRecord)}
                 />
               ) : null}

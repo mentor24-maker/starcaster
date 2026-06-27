@@ -2,6 +2,10 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 export type BreadcrumbItem = { id: string; label: string; url: string };
 
@@ -22,9 +26,14 @@ function serializeBreadcrumbItems(items: BreadcrumbItem[]): string {
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
-export function BuilderBreadcrumbModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderBreadcrumbModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
   const settings = module.settings;
   const items = parseBreadcrumbItems(settings);
 
@@ -87,20 +96,20 @@ export function BuilderBreadcrumbModuleSettings({ module, onUpdateModule }: Prop
             onChange={(e) => updateSetting("fontSize", e.target.value)}
           />
         </BuilderSettingRow>
-        <BuilderSettingRow label="Link color">
-          <input
-            type="color"
-            value={settings.color ?? "#587592"}
-            onChange={(e) => updateSetting("color", e.target.value)}
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Current color">
-          <input
-            type="color"
-            value={settings.activeColor ?? "#18324a"}
-            onChange={(e) => updateSetting("activeColor", e.target.value)}
-          />
-        </BuilderSettingRow>
+        <BuilderThemeColorSettingRow
+          fallback="#587592"
+          label="Link color"
+          themeColors={themeColors}
+          value={settings.color ?? "#587592"}
+          onChange={(color) => updateSetting("color", color)}
+        />
+        <BuilderThemeColorSettingRow
+          fallback="#18324a"
+          label="Current color"
+          themeColors={themeColors}
+          value={settings.activeColor ?? "#18324a"}
+          onChange={(activeColor) => updateSetting("activeColor", activeColor)}
+        />
         <BuilderSettingRow label="Bold">
           <select
             value={settings.bold ?? "false"}

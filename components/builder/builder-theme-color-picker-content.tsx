@@ -27,7 +27,7 @@ export function BuilderThemeColorPickerContent({
 
   return (
     <>
-      <BuilderThemeSwatches colors={themeColors} onSelect={onChange} />
+      <BuilderThemeSwatches colors={themeColors} onSelect={onChange} showLabels />
       <BuilderSettingRow label="Custom" fullWidth>
         <input
           type="color"

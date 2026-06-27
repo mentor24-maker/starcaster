@@ -3,13 +3,22 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
-export function BuilderBlogNewsletterSubscribeModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderBlogNewsletterSubscribeModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
   const s = module.settings;
 
   function set(key: string, value: string) {
@@ -71,21 +80,21 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({ module, onUpdateM
             </select>
           </BuilderSettingRow>
 
-          <BuilderSettingRow label="Accent color">
-            <input
-              type="color"
-              value={s.accentColor ?? "#0f4f8f"}
-              onChange={(e) => set("accentColor", e.target.value)}
-            />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#0f4f8f"
+            label="Accent color"
+            themeColors={themeColors}
+            value={s.accentColor ?? "#0f4f8f"}
+            onChange={(accentColor) => set("accentColor", accentColor)}
+          />
 
-          <BuilderSettingRow label="Background">
-            <input
-              type="color"
-              value={s.bgColor ?? "#eaf4ff"}
-              onChange={(e) => set("bgColor", e.target.value)}
-            />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#eaf4ff"
+            label="Background"
+            themeColors={themeColors}
+            value={s.bgColor ?? "#eaf4ff"}
+            onChange={(bgColor) => set("bgColor", bgColor)}
+          />
         </div>
 
         <div className="builder-button-setting-column">
