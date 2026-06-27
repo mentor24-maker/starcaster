@@ -1628,13 +1628,16 @@ function BuilderModulePreview({
   }
 
   if (module.type === "blog-post-list") {
+    if (shouldRenderBlogPostManager(module.settings)) {
+      return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
+    }
     return <BlogPostListPreview settings={module.settings} />;
   }
   if (module.type === "blog-post-create") {
     return <BlogPostCreatePreview settings={module.settings} />;
   }
   if (module.type === "blog-post-manager") {
-    return <BlogPostManagerPreview settings={module.settings} />;
+    return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
   if (module.type === "blog-category-manager") {
     return <BlogCategoryManagerPreview settings={module.settings} />;
@@ -1704,6 +1707,42 @@ type BlogPostRecord = {
 };
 
 type BlogCategory = { id: string; name: string; slug: string };
+
+function currentSitePageSlug(): string {
+  if (typeof window === "undefined") return "";
+  return window.location.pathname.replace(/^\//, "").replace(/\/$/, "").toLowerCase();
+}
+
+function isAdminBlogManagerPageSlug(slug = currentSitePageSlug()): boolean {
+  return slug === "admin-blog-manager" || slug.endsWith("-blog-manager");
+}
+
+function shouldRenderBlogPostManager(settings: Record<string, string>): boolean {
+  const layout = String(settings.layout || "").trim().toLowerCase();
+  if (layout === "admin-manager") return true;
+  return isAdminBlogManagerPageSlug();
+}
+
+function resolveBlogPostManagerSettings(settings: Record<string, string>): Record<string, string> {
+  const resolved = { ...settings };
+  if (typeof window === "undefined") return resolved;
+
+  const pathname = window.location.pathname || "/";
+  const params = new URLSearchParams(window.location.search);
+  params.delete("id");
+  const qs = params.toString();
+
+  if (!String(resolved.editPageUrl || "").trim() && isAdminBlogManagerPageSlug()) {
+    resolved.editPageUrl = qs ? `${pathname}?${qs}` : pathname;
+  }
+
+  if (!String(resolved.viewPageUrl || "").trim()) {
+    const postPageUrl = String(resolved.postPageUrl || "").trim();
+    if (postPageUrl) resolved.viewPageUrl = postPageUrl;
+  }
+
+  return resolved;
+}
 
 function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
