@@ -397,36 +397,40 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const showAdd = s.showAddButton !== "false";
     const addLabel = s.addButtonLabel || "Add Contact";
     const previewRows = [
-      { email: "alice@example.com", name: "Alice Johnson", company: "Acme Co." },
-      { email: "bob@example.com", name: "Bob Smith", company: "Globex" },
-      { email: "carol@example.com", name: "Carol White", company: "Initech" },
+      { email: "alice@example.com", firstName: "Alice", lastName: "Johnson", phone: "555-0100" },
+      { email: "bob@example.com", firstName: "Bob", lastName: "Smith", phone: "555-0101" },
+      { email: "carol@example.com", firstName: "Carol", lastName: "White", phone: "555-0102" },
     ];
     return (
       <div className="builder-module-preview-copy builder-admin-data-table-module">
         {showTitle && <div className="builder-admin-data-table-title">{title}</div>}
         <div className="builder-admin-data-table-wrap">
+          <div className="builder-admin-data-table-filter-bar">
+            <div className="builder-admin-data-table-filter-fields">
+              {showSearch && (
+                <div className="builder-admin-data-table-filter-inputs">
+                  <div className="builder-admin-data-table-filter-input" aria-hidden="true" style={{ color: "#9ab0c4" }}>First Name</div>
+                  <div className="builder-admin-data-table-filter-input" aria-hidden="true" style={{ color: "#9ab0c4" }}>Last Name</div>
+                  <div className="builder-admin-data-table-filter-input" aria-hidden="true" style={{ color: "#9ab0c4" }}>Phone</div>
+                </div>
+              )}
+            </div>
+            <div className="builder-admin-data-table-filter-actions">
+              {showAdd && (
+                <div className="builder-admin-data-table-add-btn" aria-hidden="true" style={{ cursor: "default" }}>
+                  {addLabel}
+                </div>
+              )}
+            </div>
+          </div>
           <table className="builder-admin-data-table">
             <thead>
-              <tr className="builder-admin-data-table-filter-row">
-                  <th colSpan={3} className="builder-admin-data-table-filter-fields">
-                    {showSearch && (
-                      <div className="builder-admin-data-table-filter-search" aria-hidden="true" style={{ color: "#9ab0c4" }}>
-                        Search contacts…
-                      </div>
-                    )}
-                  </th>
-                  <th className="builder-admin-data-table-filter-actions">
-                    {showAdd && (
-                      <div className="builder-admin-data-table-add-btn" aria-hidden="true" style={{ cursor: "default" }}>
-                        {addLabel}
-                      </div>
-                    )}
-                  </th>
-              </tr>
               <tr className="builder-admin-data-table-header-row">
                 <th>Email</th>
-                <th>Name</th>
-                <th>Company</th>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Phone</th>
+                <th>Added</th>
                 <th className="builder-admin-data-table-actions-col">Actions</th>
               </tr>
             </thead>
@@ -434,12 +438,16 @@ function renderModulePreview(module: BuilderTemplateModule) {
               {previewRows.map((row) => (
                 <tr key={row.email}>
                   <td className="builder-admin-data-table-cell">{row.email}</td>
-                  <td className="builder-admin-data-table-cell">{row.name}</td>
-                  <td className="builder-admin-data-table-cell">{row.company}</td>
+                  <td className="builder-admin-data-table-cell">{row.firstName}</td>
+                  <td className="builder-admin-data-table-cell">{row.lastName}</td>
+                  <td className="builder-admin-data-table-cell">{row.phone}</td>
+                  <td className="builder-admin-data-table-cell builder-admin-data-table-date">Jan 1, 2026</td>
                   <td className="builder-admin-data-table-actions">
-                    {s.showViewButton !== "false" && <span className="builder-admin-action-btn">View</span>}
-                    {s.showEditButton !== "false" && <span className="builder-admin-action-btn">Edit</span>}
-                    {s.showDeleteButton !== "false" && <span className="builder-admin-action-btn builder-admin-action-btn-danger">Delete</span>}
+                    <div className="table-actions-row" role="group">
+                      {s.showViewButton !== "false" && <span className="builder-admin-icon-btn" aria-hidden="true" />}
+                      {s.showEditButton !== "false" && <span className="builder-admin-icon-btn" aria-hidden="true" />}
+                      {s.showDeleteButton !== "false" && <span className="builder-admin-icon-btn builder-admin-icon-btn-danger" aria-hidden="true" />}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1765,24 +1773,21 @@ function renderModulePreview(module: BuilderTemplateModule) {
       <div className="builder-module-preview-copy builder-admin-data-table-module">
         {showTitle && <div className="builder-admin-data-table-title">{title}</div>}
         <div className="builder-admin-data-table-wrap">
+          <div className="builder-admin-data-table-filter-bar">
+            <div
+              className="builder-admin-data-table-filter-fields builder-admin-data-table-filter-fields--spacer"
+              aria-hidden="true"
+            />
+            <div className="builder-admin-data-table-filter-actions">
+              {showAdd && (
+                <div className="builder-admin-data-table-add-btn" aria-hidden="true" style={{ cursor: "default" }}>
+                  {addLabel}
+                </div>
+              )}
+            </div>
+          </div>
           <table className="builder-admin-data-table">
             <thead>
-              <tr className="builder-admin-data-table-filter-row">
-                <th
-                  colSpan={3}
-                  className="builder-admin-data-table-filter-fields builder-admin-data-table-filter-fields--spacer"
-                  aria-hidden="true"
-                >
-                  {"\u00a0"}
-                </th>
-                <th className="builder-admin-data-table-filter-actions">
-                  {showAdd && (
-                    <div className="builder-admin-data-table-add-btn" aria-hidden="true" style={{ cursor: "default" }}>
-                      {addLabel}
-                    </div>
-                  )}
-                </th>
-              </tr>
               <tr className="builder-admin-data-table-header-row">
                 <th>Email</th>
                 <th>Role</th>
@@ -1799,8 +1804,10 @@ function renderModulePreview(module: BuilderTemplateModule) {
                   </td>
                   <td className="builder-admin-data-table-cell builder-admin-data-table-date">Jan 1, 2026</td>
                   <td className="builder-admin-data-table-actions">
-                    <span className="builder-admin-action-btn">Edit</span>
-                    <span className="builder-admin-action-btn builder-admin-action-btn-danger">Remove</span>
+                    <div className="table-actions-row" role="group">
+                      <span className="builder-admin-icon-btn" aria-hidden="true" />
+                      <span className="builder-admin-icon-btn builder-admin-icon-btn-danger" aria-hidden="true" />
+                    </div>
                   </td>
                 </tr>
               ))}
