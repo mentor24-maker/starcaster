@@ -482,6 +482,123 @@ function getContactFields(config: CrmConfigData | null): CrmContactsField[] {
   return [{ key: "email", label: "Email", type: "email" }, ...stdFields, ...customFields];
 }
 
+const CONTACTS_TABLE_COLUMNS: CrmContactsField[] = [
+  { key: "email", label: "Email", type: "email" },
+  { key: "first_name", label: "First Name", type: "text" },
+  { key: "last_name", label: "Last Name", type: "text" },
+  { key: "phone", label: "Phone", type: "tel" },
+];
+
+type AdminTableSortDirection = "asc" | "desc";
+
+function getContactColumnValue(contact: CrmContact, key: string): string {
+  if (key === "email") return contact.email ?? "";
+  if (key === "createdAt") return contact.createdAt ?? "";
+  return String(contact.data?.[key] ?? "");
+}
+
+function compareAdminTableValues(
+  a: string,
+  b: string,
+  direction: AdminTableSortDirection,
+  asDate = false
+): number {
+  const dir = direction === "asc" ? 1 : -1;
+  if (asDate) {
+    const at = Date.parse(a) || 0;
+    const bt = Date.parse(b) || 0;
+    return (at - bt) * dir;
+  }
+  return a.localeCompare(b, undefined, { sensitivity: "base" }) * dir;
+}
+
+function formatAdminSortableHeader(
+  label: string,
+  column: string,
+  sortColumn: string,
+  sortDirection: AdminTableSortDirection
+): string {
+  if (sortColumn !== column) return label;
+  return `${label} ${sortDirection === "asc" ? "▲" : "▼"}`;
+}
+
+function AdminTableActionIcon({ name }: { name: "view" | "edit" | "delete" | "clone" }) {
+  if (name === "view") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 12s3.6-6 9-6 9 6 9 6-3.6 6-9 6-9-6-9-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+  if (name === "edit") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 20h9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (name === "clone") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 9a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V9Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AdminTableIconButton({
+  icon,
+  label,
+  onClick,
+  href,
+  danger = false,
+  disabled = false,
+}: {
+  icon: "view" | "edit" | "delete" | "clone";
+  label: string;
+  onClick?: () => void;
+  href?: string;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  const className = `builder-admin-icon-btn${danger ? " builder-admin-icon-btn-danger" : ""}`;
+  const glyph = (
+    <span className="builder-admin-icon-btn-glyph">
+      <AdminTableActionIcon name={icon} />
+    </span>
+  );
+  if (href) {
+    return (
+      <a className={className} href={href} aria-label={label} title={label}>
+        {glyph}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      {glyph}
+    </button>
+  );
+}
+
 function CrmContactsTablePreview({
   settings,
   projectId: projectIdProp = "",
@@ -508,14 +625,20 @@ function CrmContactsTablePreview({
   const [contacts, setContacts]     = useState<CrmContact[]>([]);
   const [loading, setLoading]       = useState(true);
   const [loadError, setLoadError]   = useState("");
-  const [search, setSearch]         = useState("");
+  const [filterFirstName, setFilterFirstName] = useState("");
+  const [filterLastName, setFilterLastName]   = useState("");
+  const [filterPhone, setFilterPhone]         = useState("");
+  const [sortColumn, setSortColumn]           = useState("email");
+  const [sortDirection, setSortDirection]     = useState<AdminTableSortDirection>("asc");
   const [page, setPage]             = useState(1);
   const [viewContact, setViewContact] = useState<CrmContact | null>(null);
   const [editContact, setEditContact] = useState<CrmContact | null>(null);
+  const [deleteContactTarget, setDeleteContactTarget] = useState<CrmContact | null>(null);
   const [editValues, setEditValues]   = useState<Record<string, string>>({});
   const [addMode, setAddMode]         = useState(false);
   const [addValues, setAddValues]     = useState<Record<string, string>>({});
   const [saving, setSaving]           = useState(false);
+  const [deleting, setDeleting]       = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -549,28 +672,53 @@ function CrmContactsTablePreview({
   }, [crmConfigId, projectIdProp]);
 
   const fields = getContactFields(config);
+  const tableCols = CONTACTS_TABLE_COLUMNS;
+  const hasActions = showViewBtn || showEditBtn || showDeleteBtn;
+  const hasActiveFilters = Boolean(filterFirstName || filterLastName || filterPhone);
 
   const filtered = contacts.filter((c) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (c.email ?? "").toLowerCase().includes(q) ||
-      Object.values(c.data ?? {}).some((v) => String(v).toLowerCase().includes(q))
+    if (filterFirstName) {
+      const q = filterFirstName.toLowerCase();
+      if (!String(c.data?.first_name ?? "").toLowerCase().includes(q)) return false;
+    }
+    if (filterLastName) {
+      const q = filterLastName.toLowerCase();
+      if (!String(c.data?.last_name ?? "").toLowerCase().includes(q)) return false;
+    }
+    if (filterPhone) {
+      const q = filterPhone.toLowerCase();
+      if (!String(c.data?.phone ?? "").toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    const asDate = sortColumn === "createdAt";
+    return compareAdminTableValues(
+      getContactColumnValue(a, sortColumn),
+      getContactColumnValue(b, sortColumn),
+      sortDirection,
+      asDate
     );
   });
 
-  const totalPages   = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const totalPages   = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
   const safePage     = Math.min(page, totalPages);
-  const pageContacts = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
-  const tableCols    = fields.slice(0, 5);
-  const hasActions   = showViewBtn || showEditBtn || showDeleteBtn;
-  const dataColCount = tableCols.length + 1;
-  const showFilterRow = showSearch || hasActions;
+  const pageContacts = sorted.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+  const showFilterBar = showSearch || hasActions;
+
+  function toggleSort(column: string) {
+    if (sortColumn === column) {
+      setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortColumn(column);
+    setSortDirection("asc");
+  }
 
   const scopedHeaders = () => getCrmProjectHeaders(projectIdProp);
 
   async function deleteContact(id: string) {
-    if (!confirm("Delete this contact? This cannot be undone.")) return;
     const res = await fetch(`/api/crm/contacts/${encodeURIComponent(id)}`, {
       method: "DELETE",
       credentials: "include",
@@ -578,10 +726,22 @@ function CrmContactsTablePreview({
     });
     if (!res.ok) {
       alert("Failed to delete contact. Please try again.");
-      return;
+      return false;
     }
     setContacts((prev) => prev.filter((c) => c.id !== id));
     if (viewContact?.id === id) setViewContact(null);
+    return true;
+  }
+
+  async function confirmDeleteContact() {
+    if (!deleteContactTarget) return;
+    setDeleting(true);
+    try {
+      const ok = await deleteContact(deleteContactTarget.id);
+      if (ok) setDeleteContactTarget(null);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function openEdit(contact: CrmContact) {
@@ -648,37 +808,66 @@ function CrmContactsTablePreview({
       {showTitle && <h2 className="builder-admin-data-table-title">{tableTitle}</h2>}
 
       <div className="builder-admin-data-table-wrap">
+        {showFilterBar && (
+          <div className="builder-admin-data-table-filter-bar">
+            <div className="builder-admin-data-table-filter-fields">
+              {showSearch && (
+                <div className="builder-admin-data-table-filter-inputs">
+                  <input
+                    className="builder-admin-data-table-filter-input"
+                    type="search"
+                    placeholder="First Name"
+                    value={filterFirstName}
+                    onChange={(e) => { setFilterFirstName(e.target.value); setPage(1); }}
+                  />
+                  <input
+                    className="builder-admin-data-table-filter-input"
+                    type="search"
+                    placeholder="Last Name"
+                    value={filterLastName}
+                    onChange={(e) => { setFilterLastName(e.target.value); setPage(1); }}
+                  />
+                  <input
+                    className="builder-admin-data-table-filter-input"
+                    type="search"
+                    placeholder="Phone"
+                    value={filterPhone}
+                    onChange={(e) => { setFilterPhone(e.target.value); setPage(1); }}
+                  />
+                </div>
+              )}
+            </div>
+            {hasActions && showAddButton && (
+              <div className="builder-admin-data-table-filter-actions">
+                <button
+                  className="builder-admin-data-table-add-btn"
+                  type="button"
+                  onClick={() => { setAddValues({}); setAddMode(true); }}
+                >
+                  {addButtonLabel}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <table className="builder-admin-data-table">
           <thead>
-            {showFilterRow && (
-              <tr className="builder-admin-data-table-filter-row">
-                <th colSpan={dataColCount} className="builder-admin-data-table-filter-fields">
-                  {showSearch && (
-                    <input
-                      className="builder-admin-data-table-filter-search"
-                      type="search"
-                      placeholder="Search contacts…"
-                      value={search}
-                      onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    />
-                  )}
-                </th>
-                {hasActions && showAddButton && (
-                  <th className="builder-admin-data-table-filter-actions">
-                    <button
-                      className="builder-admin-data-table-add-btn"
-                      type="button"
-                      onClick={() => { setAddValues({}); setAddMode(true); }}
-                    >
-                      {addButtonLabel}
-                    </button>
-                  </th>
-                )}
-              </tr>
-            )}
             <tr className="builder-admin-data-table-header-row">
-              {tableCols.map((f) => <th key={f.key}>{f.label}</th>)}
-              <th>Added</th>
+              {tableCols.map((f) => (
+                <th
+                  key={f.key}
+                  className="builder-admin-data-table-sortable"
+                  onClick={() => toggleSort(f.key)}
+                >
+                  {formatAdminSortableHeader(f.label, f.key, sortColumn, sortDirection)}
+                </th>
+              ))}
+              <th
+                className="builder-admin-data-table-sortable"
+                onClick={() => toggleSort("createdAt")}
+              >
+                {formatAdminSortableHeader("Added", "createdAt", sortColumn, sortDirection)}
+              </th>
               {hasActions && <th className="builder-admin-data-table-actions-col">Actions</th>}
             </tr>
           </thead>
@@ -686,7 +875,7 @@ function CrmContactsTablePreview({
             {pageContacts.length === 0 ? (
               <tr>
                 <td colSpan={tableCols.length + 1 + (hasActions ? 1 : 0)} className="builder-admin-data-table-empty">
-                  {search ? "No contacts match your search." : "No contacts yet."}
+                  {hasActiveFilters ? "No contacts match your filters." : "No contacts yet."}
                 </td>
               </tr>
             ) : pageContacts.map((c) => (
@@ -701,9 +890,22 @@ function CrmContactsTablePreview({
                 </td>
                 {hasActions && (
                   <td className="builder-admin-data-table-actions">
-                    {showViewBtn   && <button type="button" className="builder-admin-action-btn" onClick={() => setViewContact(c)}>View</button>}
-                    {showEditBtn   && <button type="button" className="builder-admin-action-btn" onClick={() => openEdit(c)}>Edit</button>}
-                    {showDeleteBtn && <button type="button" className="builder-admin-action-btn builder-admin-action-btn-danger" onClick={() => deleteContact(c.id)}>Delete</button>}
+                    <div className="table-actions-row" role="group">
+                      {showViewBtn && (
+                        <AdminTableIconButton icon="view" label="View" onClick={() => setViewContact(c)} />
+                      )}
+                      {showEditBtn && (
+                        <AdminTableIconButton icon="edit" label="Edit" onClick={() => openEdit(c)} />
+                      )}
+                      {showDeleteBtn && (
+                        <AdminTableIconButton
+                          icon="delete"
+                          label="Delete"
+                          danger
+                          onClick={() => setDeleteContactTarget(c)}
+                        />
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -841,6 +1043,31 @@ function CrmContactsTablePreview({
               <button type="button" className="crm-contacts-modal-btn" onClick={() => setAddMode(false)} disabled={saving}>Cancel</button>
               <button type="button" className="crm-contacts-modal-btn crm-contacts-modal-btn-primary" onClick={saveAdd} disabled={saving}>
                 {saving ? "Adding…" : "Add Contact"}
+              </button>
+            </div>
+          </div>
+        </div>
+        </BuilderBodyPortal>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteContactTarget && (
+        <BuilderBodyPortal>
+        <div className="crm-contacts-modal-overlay" onClick={() => !deleting && setDeleteContactTarget(null)}>
+          <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="crm-contacts-modal-header">
+              <strong>Delete Contact</strong>
+              <button type="button" className="crm-contacts-modal-close" onClick={() => setDeleteContactTarget(null)} disabled={deleting}>✕</button>
+            </div>
+            <div className="crm-contacts-modal-body">
+              <p className="builder-admin-data-table-delete-copy">
+                Delete <strong>{deleteContactTarget.email}</strong>? This cannot be undone.
+              </p>
+            </div>
+            <div className="crm-contacts-modal-footer">
+              <button type="button" className="crm-contacts-modal-btn" onClick={() => setDeleteContactTarget(null)} disabled={deleting}>Cancel</button>
+              <button type="button" className="crm-contacts-modal-btn crm-contacts-modal-btn-danger" onClick={confirmDeleteContact} disabled={deleting}>
+                {deleting ? "Deleting…" : "Delete Contact"}
               </button>
             </div>
           </div>
@@ -1848,9 +2075,10 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
 
   return (
     <div
+      className="builder-blog-post-create-form"
       style={{
-        maxWidth: 720,
-        margin: "0 auto",
+        width: "100%",
+        boxSizing: "border-box",
         padding: "1.5rem",
         background: "#fff",
         borderRadius: 8,
@@ -2045,17 +2273,27 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   );
 }
 
+function blogPostFeaturedImageUrl(post: { featured_image_url?: string; featuredImageUrl?: string }) {
+  return String(post.featured_image_url || post.featuredImageUrl || "").trim();
+}
+
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
-  const accent = settings.accentColor || "#0f4f8f";
   const editPageUrl = (settings.editPageUrl || "").trim();
+  const viewPageUrl = (settings.viewPageUrl || "").trim();
   const showStatus = (settings.showStatus ?? "true") !== "false";
   const showDate = (settings.showDate ?? "true") !== "false";
   const showDelete = (settings.showDelete ?? "true") !== "false";
 
-  type PostRow = BlogPostRecord & { status?: string; created_at?: string };
+  type PostRow = BlogPostRecord & {
+    status?: string;
+    created_at?: string;
+    createdAt?: string;
+    featuredImageUrl?: string;
+  };
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   function loadPosts() {
     setLoading(true);
@@ -2085,76 +2323,149 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
     setDeletingId(null);
   }
 
+  async function clonePost(post: PostRow) {
+    if (!window.confirm("Clone this post as a draft?")) return;
+    setCloningId(post.id);
+    try {
+      const res = await fetch(`/api/blog/posts/${encodeURIComponent(post.id)}`, {
+        credentials: "include",
+        headers: getCrmProjectHeaders()
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { data?: Record<string, unknown>; post?: Record<string, unknown> };
+      const source = data.data ?? data.post;
+      if (!source || typeof source !== "object") return;
+      const title = String(source.title || post.title || "Untitled");
+      const createRes = await fetch("/api/blog/posts", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({
+          title: `Copy of ${title}`,
+          slug: "",
+          status: "draft",
+          author: String(source.author || ""),
+          featuredImageUrl: String(source.featuredImageUrl || source.featured_image_url || ""),
+          excerpt: String(source.excerpt || ""),
+          body: String(source.body || ""),
+          seoTitle: String(source.seoTitle || source.seo_title || ""),
+          seoDescription: String(source.seoDescription || source.seo_description || ""),
+          tags: Array.isArray(source.tags) ? source.tags : [],
+          categoryIds: Array.isArray(source.categoryIds) ? source.categoryIds : [],
+        })
+      });
+      if (createRes.ok) loadPosts();
+    } catch {}
+    setCloningId(null);
+  }
+
   const statusColor = (s?: string) => s === "published" ? "#16a34a" : s === "archived" ? "#9ca3af" : "#d97706";
   const statusBg   = (s?: string) => s === "published" ? "#f0fdf4" : s === "archived" ? "#f9fafb" : "#fffbeb";
 
-  const thStyle: CSSProperties = { padding: "0.6rem 0.75rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e5e7eb", background: "#f9fafb" };
-  const tdStyle: CSSProperties = { padding: "0.6rem 0.75rem", fontSize: "0.875rem", color: "#111827", borderBottom: "1px solid #f3f4f6", verticalAlign: "middle" };
-
   if (loading) {
-    return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
+    return <div className="builder-blog-post-manager-stub">Loading posts…</div>;
   }
 
   if (!posts.length) {
     return (
-      <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+      <div className="builder-blog-post-manager-stub">
         No posts yet. Use the Create Post module to add your first post.
       </div>
     );
   }
 
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Title</th>
-            {showStatus ? <th style={{ ...thStyle, width: 100 }}>Status</th> : null}
-            {showDate ? <th style={{ ...thStyle, width: 120 }}>Date</th> : null}
-            <th style={{ ...thStyle, width: 80, textAlign: "center" }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {posts.map((post) => {
-            const editHref = editPageUrl
-              ? `${editPageUrl}${editPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`
-              : "#";
-            const dateStr = post.published_at ?? post.created_at ?? "";
-            const displayDate = dateStr ? new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
-            return (
-              <tr key={post.id}>
-                <td style={tdStyle}>
-                  <span style={{ fontWeight: 500 }}>{post.title}</span>
-                </td>
-                {showStatus ? (
-                  <td style={tdStyle}>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 600, color: statusColor(post.status), background: statusBg(post.status), borderRadius: 4, padding: "2px 8px" }}>
-                      {post.status ?? "draft"}
-                    </span>
+    <div className="builder-blog-post-manager-module">
+      <div className="builder-admin-data-table-wrap">
+        <table className="builder-admin-data-table">
+          <thead>
+            <tr className="builder-admin-data-table-header-row">
+              <th className="builder-blog-post-manager-thumb-col">Image</th>
+              <th>Title</th>
+              {showStatus ? <th style={{ width: 100 }}>Status</th> : null}
+              {showDate ? <th style={{ width: 120 }}>Date</th> : null}
+              <th className="builder-admin-data-table-actions-col builder-blog-post-manager-actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {posts.map((post) => {
+              const editHref = editPageUrl
+                ? `${editPageUrl}${editPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`
+                : undefined;
+              const viewSep = viewPageUrl.includes("?") ? "&" : "?";
+              const viewHref = viewPageUrl
+                ? `${viewPageUrl}${viewSep}post=${encodeURIComponent(post.slug)}`
+                : undefined;
+              const dateStr = post.published_at ?? post.created_at ?? post.createdAt ?? "";
+              const displayDate = dateStr
+                ? new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                : "—";
+              const imageUrl = blogPostFeaturedImageUrl(post);
+              return (
+                <tr key={post.id}>
+                  <td className="builder-admin-data-table-cell builder-blog-post-manager-thumb-col">
+                    {imageUrl ? (
+                      <img
+                        alt=""
+                        className="builder-blog-post-manager-thumb"
+                        src={imageUrl}
+                      />
+                    ) : (
+                      <span aria-hidden="true" className="builder-blog-post-manager-thumb-placeholder" />
+                    )}
                   </td>
-                ) : null}
-                {showDate ? <td style={{ ...tdStyle, color: "#6b7280", fontSize: "0.8rem" }}>{displayDate}</td> : null}
-                <td style={{ ...tdStyle, textAlign: "center" }}>
-                  <span style={{ display: "inline-flex", gap: "0.75rem", alignItems: "center" }}>
-                    <a href={editHref} style={{ color: accent, fontSize: "1rem", textDecoration: "none", lineHeight: 1 }} title="Edit">✎</a>
-                    {showDelete ? (
-                      <button
-                        disabled={deletingId === post.id}
-                        onClick={() => deletePost(post.id)}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "1rem", padding: 0, lineHeight: 1 }}
-                        title="Delete"
-                        type="button"
-                      >
-                        ✕
-                      </button>
-                    ) : null}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  <td className="builder-admin-data-table-cell">
+                    <span style={{ fontWeight: 500 }}>{post.title}</span>
+                  </td>
+                  {showStatus ? (
+                    <td className="builder-admin-data-table-cell">
+                      <span style={{ fontSize: "0.75rem", fontWeight: 600, color: statusColor(post.status), background: statusBg(post.status), borderRadius: 4, padding: "2px 8px" }}>
+                        {post.status ?? "draft"}
+                      </span>
+                    </td>
+                  ) : null}
+                  {showDate ? (
+                    <td className="builder-admin-data-table-cell builder-admin-data-table-date">{displayDate}</td>
+                  ) : null}
+                  <td className="builder-admin-data-table-actions">
+                    <div className="table-actions-row" role="group">
+                      <AdminTableIconButton
+                        icon="view"
+                        label="View"
+                        href={viewHref}
+                        disabled={!viewHref}
+                        onClick={!viewHref ? () => {} : undefined}
+                      />
+                      <AdminTableIconButton
+                        icon="edit"
+                        label="Edit"
+                        href={editHref}
+                        disabled={!editHref}
+                        onClick={!editHref ? () => {} : undefined}
+                      />
+                      <AdminTableIconButton
+                        icon="clone"
+                        label="Clone"
+                        disabled={cloningId === post.id}
+                        onClick={() => clonePost(post)}
+                      />
+                      {showDelete ? (
+                        <AdminTableIconButton
+                          icon="delete"
+                          label="Delete"
+                          danger
+                          disabled={deletingId === post.id}
+                          onClick={() => deletePost(post.id)}
+                        />
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -3409,8 +3720,33 @@ function AdminTeamUsersPreview({
   const [editRole, setEditRole]     = useState("editor");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError]   = useState("");
+  const [sortColumn, setSortColumn] = useState("email");
+  const [sortDirection, setSortDirection] = useState<AdminTableSortDirection>("asc");
 
   const headers = getCrmProjectHeaders(projectIdProp);
+
+  function getTeamColumnValue(user: AdminTeamUser, key: string): string {
+    if (key === "email") return user.email ?? "";
+    if (key === "role") return user.role ?? "";
+    if (key === "createdAt") return user.createdAt ?? "";
+    return "";
+  }
+
+  const sortedUsers = [...users].sort((a, b) => compareAdminTableValues(
+    getTeamColumnValue(a, sortColumn),
+    getTeamColumnValue(b, sortColumn),
+    sortDirection,
+    sortColumn === "createdAt"
+  ));
+
+  function toggleSort(column: string) {
+    if (sortColumn === column) {
+      setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortColumn(column);
+    setSortDirection("asc");
+  }
 
   async function loadUsers() {
     setLoading(true);
@@ -3512,45 +3848,57 @@ function AdminTeamUsersPreview({
       ) : (
         <>
           <div className="builder-admin-data-table-wrap">
+            <div className="builder-admin-data-table-filter-bar">
+              <div
+                className="builder-admin-data-table-filter-fields builder-admin-data-table-filter-fields--spacer"
+                aria-hidden="true"
+              />
+              {hasActions && (
+                <div className="builder-admin-data-table-filter-actions">
+                  {showAddButton && (
+                    <button
+                      type="button"
+                      className="builder-admin-data-table-add-btn"
+                      onClick={() => setShowAddForm(true)}
+                    >
+                      {addButtonLabel}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             <table className="builder-admin-data-table">
               <thead>
-                <tr className="builder-admin-data-table-filter-row">
-                  <th
-                    colSpan={3}
-                    className="builder-admin-data-table-filter-fields builder-admin-data-table-filter-fields--spacer"
-                    aria-hidden="true"
-                  >
-                    {"\u00a0"}
-                  </th>
-                  {hasActions && (
-                    <th className="builder-admin-data-table-filter-actions">
-                      {showAddButton && (
-                        <button
-                          type="button"
-                          className="builder-admin-data-table-add-btn"
-                          onClick={() => setShowAddForm(true)}
-                        >
-                          {addButtonLabel}
-                        </button>
-                      )}
-                    </th>
-                  )}
-                </tr>
                 <tr className="builder-admin-data-table-header-row">
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Added</th>
+                  <th
+                    className="builder-admin-data-table-sortable"
+                    onClick={() => toggleSort("email")}
+                  >
+                    {formatAdminSortableHeader("Email", "email", sortColumn, sortDirection)}
+                  </th>
+                  <th
+                    className="builder-admin-data-table-sortable"
+                    onClick={() => toggleSort("role")}
+                  >
+                    {formatAdminSortableHeader("Role", "role", sortColumn, sortDirection)}
+                  </th>
+                  <th
+                    className="builder-admin-data-table-sortable"
+                    onClick={() => toggleSort("createdAt")}
+                  >
+                    {formatAdminSortableHeader("Added", "createdAt", sortColumn, sortDirection)}
+                  </th>
                   {hasActions && <th className="builder-admin-data-table-actions-col">Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {users.length === 0 ? (
+                {sortedUsers.length === 0 ? (
                   <tr>
                     <td colSpan={hasActions ? 4 : 3} className="builder-admin-data-table-empty">
                       No team members yet.
                     </td>
                   </tr>
-                ) : users.map((u) => (
+                ) : sortedUsers.map((u) => (
                   <tr key={u.id}>
                     <td className="builder-admin-data-table-cell">{u.email}</td>
                     <td className="builder-admin-data-table-cell">
@@ -3592,26 +3940,23 @@ function AdminTeamUsersPreview({
                             {editError && <span className="builder-admin-data-table-inline-error">{editError}</span>}
                           </>
                         ) : (
-                          <>
+                          <div className="table-actions-row" role="group">
                             {showEditBtn && (
-                              <button
-                                type="button"
-                                className="builder-admin-action-btn"
+                              <AdminTableIconButton
+                                icon="edit"
+                                label="Edit"
                                 onClick={() => { setEditUserId(u.id); setEditRole(u.role); setEditError(""); }}
-                              >
-                                Edit
-                              </button>
+                              />
                             )}
                             {showDeleteBtn && (
-                              <button
-                                type="button"
-                                className="builder-admin-action-btn builder-admin-action-btn-danger"
+                              <AdminTableIconButton
+                                icon="delete"
+                                label="Remove"
+                                danger
                                 onClick={() => handleDelete(u.id, u.email)}
-                              >
-                                Remove
-                              </button>
+                              />
                             )}
-                          </>
+                          </div>
                         )}
                       </td>
                     )}
