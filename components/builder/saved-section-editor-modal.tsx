@@ -7,11 +7,13 @@ import {
   type BuilderCellModuleRecord,
   type BuilderTemplateModule,
   type BuilderTemplateSection,
+  type BuilderThemeSummary,
 } from "@/lib/builder-template";
 import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import { appApi } from "@/lib/adapters/starcaster-app";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
+import { buildBuilderThemePaletteColors } from "./builder-utils";
 import { BuilderBodyPortal } from "./builder-body-portal";
 import { BuilderFloatingSaveRail } from "./builder-floating-save-rail";
 import { BuilderSectionCard } from "./builder-section-card";
@@ -51,6 +53,10 @@ export function SavedSectionEditorModal({
   const [localName, setLocalName] = useState(savedSectionName);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [builderThemes, setBuilderThemes] = useState<BuilderThemeSummary[]>([]);
+
+  const activeTheme = builderThemes[0] ?? null;
+  const themeColors = buildBuilderThemePaletteColors(activeTheme);
 
   // Close when the user navigates to a different page in the SPA.
   const onCloseRef = useRef(onClose);
@@ -59,6 +65,30 @@ export function SavedSectionEditorModal({
     function handleHashChange() { onCloseRef.current(); }
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadThemes() {
+      try {
+        const response = await appApi("/api/builder/themes");
+        const themes = Array.isArray(response?.themes) ? response.themes : [];
+        if (!cancelled) {
+          setBuilderThemes(themes);
+        }
+      } catch {
+        if (!cancelled) {
+          setBuilderThemes([]);
+        }
+      }
+    }
+
+    void loadThemes();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // --- Section updaters ---
@@ -383,6 +413,9 @@ export function SavedSectionEditorModal({
                 onOpenSectionBackgroundGallery={() => openSectionBackgroundGallery()}
                 onUploadSectionBackgroundMedia={() => {}}
                 onOpenModulePalette={(col, anchor) => openModulePalette(col, anchor)}
+                themeBackgroundColor={activeTheme?.backgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={activeTheme?.primaryColor}
               />
             </div>
           </div>

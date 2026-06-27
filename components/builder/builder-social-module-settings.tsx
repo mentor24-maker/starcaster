@@ -58,6 +58,8 @@ type BuilderSocialModuleSettingsProps = {
   onUpdateModuleBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onOpenGallery: (itemId: string) => void;
   themeColors?: Array<{ label: string; hex: string }>;
+  themeBackgroundColor?: string;
+  themePrimaryColor?: string;
 };
 
 export function BuilderSocialModuleSettings({
@@ -65,7 +67,9 @@ export function BuilderSocialModuleSettings({
   onUpdateModule,
   onUpdateModuleBackground,
   onOpenGallery,
-  themeColors = []
+  themeColors = [],
+  themeBackgroundColor,
+  themePrimaryColor
 }: BuilderSocialModuleSettingsProps) {
   const moduleAlignment = getModuleAlignment(module.settings);
   const items = parseSocialItems(module.settings);
@@ -166,6 +170,9 @@ export function BuilderSocialModuleSettings({
         background={getModuleBackgroundSettings(module.settings)}
         horizontal
         onChange={onUpdateModuleBackground}
+        themeBackgroundColor={themeBackgroundColor}
+        themeColors={themeColors}
+        themePrimaryColor={themePrimaryColor}
       />
 
       <BuilderSettingRow label="Alignment">

@@ -36,6 +36,7 @@ import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder/builder-types";
 import { layoutOptions } from "./builder/builder-types";
 import {
+  buildBuilderThemePaletteColors,
   buildClonedPageCreatePayload,
   builderThemeToCrmPalette,
   createDraftFromTemplate,
@@ -168,10 +169,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     ? builderThemes.find((t) => t.id === pageThemeId) ?? builderThemes[0] ?? null
     : builderThemes[0] ?? null;
   const rteThemeColors = [
-    { label: "Primary", hex: activeTheme?.primaryColor ?? "" },
-    { label: "Secondary", hex: activeTheme?.secondaryColor ?? "" },
-    { label: "Background", hex: activeTheme?.backgroundColor ?? "" },
-    { label: "Accent", hex: activeTheme?.accentColor ?? "" },
+    ...buildBuilderThemePaletteColors(activeTheme),
     { label: "Body text", hex: draft.theme.typography.colors.text },
     { label: "Headings", hex: draft.theme.typography.colors.heading },
     { label: "Link", hex: draft.theme.typography.colors.link },
@@ -2173,6 +2171,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onPreviewDraft={openPreviewPage}
           onNewTemplate={startNewTemplate}
           onTemplateEditorFocus={setTemplateEditorFocused}
+          themeBackgroundColor={activeTheme?.backgroundColor}
+          themeColors={buildBuilderThemePaletteColors(activeTheme)}
+          themePrimaryColor={activeTheme?.primaryColor}
         />
       ) : builderMode === "modules" ? (
         <BuilderModuleRepositoryList
