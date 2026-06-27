@@ -1978,6 +1978,7 @@ export function createEmptyModule(
                       : type === "blog-post-manager"
                         ? {
                             editPageUrl: "",
+                            viewPageUrl: "",
                             showStatus: "true",
                             showDate: "true",
                             showDelete: "true",
