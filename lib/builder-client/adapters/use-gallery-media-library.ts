@@ -12,7 +12,7 @@ import {
 import type { AdminMediaItem, AdminMediaKind } from '../admin-media-shared';
 import { getMediaKind } from '../admin-media-shared';
 import { normalizeGalleryMediaAspect } from '../gallery-media-aspect';
-import { appApi, unwrapEnvelope } from './starcaster-app';
+import { starcasterApi, unwrapEnvelope } from './starcaster-app';
 import { registerGalleryMediaThumbnail } from './gallery-media-thumbnail';
 
 const PAGE_SIZE = 60;
@@ -149,7 +149,7 @@ export function useGalleryMediaLibrary(options?: {
 
       try {
         if (!allItemsRef.current || loadOptions?.sync) {
-          const body = await appApi(source === 'community' ? '/api/community-assets' : '/api/assets');
+          const body = await starcasterApi(source === 'community' ? '/api/community-assets' : '/api/assets');
           const assets = unwrapEnvelope<StarcasterAsset[]>(body, 'assets') ?? [];
           allItemsRef.current = assets
             .map(assetToAdminMediaItem)
