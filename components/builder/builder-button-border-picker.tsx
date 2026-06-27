@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { BuilderEditorPopup } from "./builder-editor-popup";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 export type ButtonBorderStyle = "none" | "solid" | "dashed" | "dotted";
 
@@ -24,6 +25,7 @@ type BuilderButtonBorderColorPickerProps = {
   borderRadius: string;
   disabled?: boolean;
   onChange: (border: ButtonBorderColorSettings) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
 };
 
 export function getButtonBorderSettings(settings: Record<string, string>): ButtonBorderColorSettings {
@@ -40,7 +42,8 @@ export function BuilderButtonBorderColorPicker({
   borderWidth,
   borderRadius,
   disabled = false,
-  onChange
+  onChange,
+  themeColors = []
 }: BuilderButtonBorderColorPickerProps) {
   const popupId = useId();
   const [isOpen, setIsOpen] = useState(false);
@@ -76,10 +79,13 @@ export function BuilderButtonBorderColorPicker({
         >
           <div className="builder-button-background-popup-body">
             <BuilderSettingRow label="Color" fullWidth>
-              <input
-                type="color"
+              <BuilderThemeColorField
+                dialogLabel="Button border color"
+                disabled={disabled}
+                fallback="#214c71"
+                themeColors={themeColors}
                 value={border.color}
-                onChange={(event) => onChange({ ...border, color: event.target.value })}
+                onChange={(color) => onChange({ ...border, color })}
               />
             </BuilderSettingRow>
           </div>
