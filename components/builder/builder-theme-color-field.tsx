@@ -53,6 +53,7 @@ export function BuilderThemeColorField({
           className="builder-theme-color-popup"
           id={popupId}
           onClose={() => setIsOpen(false)}
+          title={dialogLabel}
         >
           <div className="builder-button-background-popup-body">
             <BuilderThemeSwatches colors={themeColors} onSelect={selectColor} />
