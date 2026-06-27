@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { BuilderBodyPortal } from "./builder-body-portal";
 
 type BuilderEditorPopupProps = {
@@ -12,10 +12,65 @@ type BuilderEditorPopupProps = {
   children: ReactNode;
 };
 
+const overlayStyle: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(9, 16, 24, 0.42)",
+  display: "grid",
+  placeItems: "center",
+  padding: 24,
+  overflow: "hidden",
+  zIndex: 10200
+};
+
+const dialogStyle: CSSProperties = {
+  width: "min(360px, calc(100vw - 48px))",
+  maxHeight: "min(85vh, calc(100dvh - 48px))",
+  overflow: "hidden",
+  border: "1px solid rgba(9, 16, 24, 0.16)",
+  borderRadius: 18,
+  background: "#ffffff",
+  boxShadow: "0 18px 40px rgba(9, 16, 24, 0.2)",
+  display: "flex",
+  flexDirection: "column"
+};
+
+const headerStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "14px 14px 10px",
+  borderBottom: "1px solid rgba(9, 16, 24, 0.08)",
+  background: "#ffffff"
+};
+
+const titleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "1rem",
+  fontWeight: 700,
+  lineHeight: 1.2,
+  color: "#18324a"
+};
+
+const bodyStyle: CSSProperties = {
+  padding: 14,
+  overflowX: "hidden",
+  overflowY: "auto",
+  display: "grid",
+  gap: 12,
+  flex: "1 1 auto",
+  minHeight: 0,
+  background: "#ffffff"
+};
+
 /**
  * Viewport-centered popup for compact module editor controls (color swatches,
  * background pickers, etc.). Portals through {@link BuilderBodyPortal} so the
  * dialog is never clipped by nested editor layout or overflow containers.
+ *
+ * Critical shell styles are inlined so the dialog remains readable even when
+ * cached stylesheet bundles lag behind JS deploys.
  */
 export function BuilderEditorPopup({
   id,
@@ -44,7 +99,12 @@ export function BuilderEditorPopup({
 
   return (
     <BuilderBodyPortal>
-      <div className="builder-gallery-overlay" onClick={onClose} role="presentation">
+      <div
+        className="builder-gallery-overlay"
+        onClick={onClose}
+        role="presentation"
+        style={overlayStyle}
+      >
         <div
           className={dialogClassName}
           id={id}
@@ -52,9 +112,12 @@ export function BuilderEditorPopup({
           aria-modal="true"
           aria-label={ariaLabel}
           onClick={(event) => event.stopPropagation()}
+          style={dialogStyle}
         >
-          <div className="builder-editor-popup-header">
-            <h3 className="builder-editor-popup-title">{popupTitle}</h3>
+          <div className="builder-editor-popup-header" style={headerStyle}>
+            <h3 className="builder-editor-popup-title" style={titleStyle}>
+              {popupTitle}
+            </h3>
             <button
               aria-label="Close"
               className="builder-icon-button"
@@ -65,7 +128,9 @@ export function BuilderEditorPopup({
               ✕
             </button>
           </div>
-          <div className="builder-editor-popup-body">{children}</div>
+          <div className="builder-editor-popup-body" style={bodyStyle}>
+            {children}
+          </div>
         </div>
       </div>
     </BuilderBodyPortal>

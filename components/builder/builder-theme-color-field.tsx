@@ -2,8 +2,7 @@
 
 import { useId, useState } from "react";
 import { BuilderEditorPopup } from "./builder-editor-popup";
-import { BuilderSettingRow } from "./builder-setting-row";
-import { BuilderThemeSwatches } from "./builder-theme-swatches";
+import { BuilderThemeColorPickerContent } from "./builder-theme-color-picker-content";
 
 type BuilderThemeColorFieldProps = {
   value: string;
@@ -56,14 +55,13 @@ export function BuilderThemeColorField({
           title={dialogLabel}
         >
           <div className="builder-button-background-popup-body">
-            <BuilderThemeSwatches colors={themeColors} onSelect={selectColor} />
-            <BuilderSettingRow label="Custom" fullWidth>
-              <input
-                type="color"
-                value={resolved}
-                onChange={(event) => selectColor(event.target.value)}
-              />
-            </BuilderSettingRow>
+            <BuilderThemeColorPickerContent
+              disabled={disabled}
+              fallback={fallback}
+              themeColors={themeColors}
+              value={value}
+              onChange={selectColor}
+            />
           </div>
         </BuilderEditorPopup>
       ) : null}

@@ -2,15 +2,14 @@
 
 import { useId, useState } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
-import { BuilderEditorPopup } from "./builder-editor-popup";
-import { BuilderSettingRow } from "./builder-setting-row";
-import { BuilderThemeColorField } from "./builder-theme-color-field";
 import {
   BACKGROUND_STYLE_PRESETS,
   getBuilderBackgroundStyle,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
+import { BuilderEditorPopup } from "./builder-editor-popup";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorPickerContent } from "./builder-theme-color-picker-content";
 
 const buttonBackgroundModes = [
   { value: "color", label: "Color" },
@@ -111,6 +110,7 @@ export function BuilderButtonBackgroundPicker({
       {isOpen ? (
         <BuilderEditorPopup
           ariaLabel="Button background"
+          className="builder-theme-color-popup"
           id={popupId}
           onClose={() => setIsOpen(false)}
           title="Background"
@@ -135,22 +135,18 @@ export function BuilderButtonBackgroundPicker({
           </div>
           <div className="builder-button-background-popup-body">
             {activeMode === "color" ? (
-              <BuilderSettingRow label="Color" fullWidth>
-                <BuilderThemeColorField
-                  dialogLabel="Button background color"
-                  fallback="#214c71"
-                  themeColors={themeColors}
-                  value={background.color}
-                  onChange={(color) => updateBackground((current) => ({ ...current, color }))}
-                />
-              </BuilderSettingRow>
+              <BuilderThemeColorPickerContent
+                fallback="#214c71"
+                themeColors={themeColors}
+                value={background.color}
+                onChange={(color) => updateBackground((current) => ({ ...current, color }))}
+              />
             ) : null}
 
             {activeMode === "gradient" ? (
               <>
                 <BuilderSettingRow label="Color 1" fullWidth>
-                  <BuilderThemeColorField
-                    dialogLabel="Gradient color 1"
+                  <BuilderThemeColorPickerContent
                     fallback="#214c71"
                     themeColors={themeColors}
                     value={background.color}
@@ -158,8 +154,7 @@ export function BuilderButtonBackgroundPicker({
                   />
                 </BuilderSettingRow>
                 <BuilderSettingRow label="Color 2" fullWidth>
-                  <BuilderThemeColorField
-                    dialogLabel="Gradient color 2"
+                  <BuilderThemeColorPickerContent
                     fallback="#eaf4ff"
                     themeColors={themeColors}
                     value={background.color2}
