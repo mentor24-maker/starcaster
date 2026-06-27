@@ -1,14 +1,17 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderButtonDropShadowSettingsProps = {
   settings: BuilderTemplateModule["settings"];
   onUpdateSetting: (key: string, value: string) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
 };
 
 export function BuilderButtonDropShadowSettings({
   settings,
-  onUpdateSetting
+  onUpdateSetting,
+  themeColors = []
 }: BuilderButtonDropShadowSettingsProps) {
   const dropShadowEnabled = settings.dropShadow === "true" || settings.dropShadow === "on";
   const shadowColor = settings.dropShadowColor?.startsWith("#")
@@ -30,10 +33,12 @@ export function BuilderButtonDropShadowSettings({
         <div className="builder-button-setting-columns">
           <div className="builder-button-setting-column">
             <BuilderSettingRow label="Shadow Color">
-              <input
-                type="color"
+              <BuilderThemeColorField
+                dialogLabel="Button shadow color"
+                fallback="#000000"
+                themeColors={themeColors}
                 value={shadowColor}
-                onChange={(event) => onUpdateSetting("dropShadowColor", event.target.value)}
+                onChange={(color) => onUpdateSetting("dropShadowColor", color)}
               />
             </BuilderSettingRow>
             <BuilderSettingRow label="Shadow X">

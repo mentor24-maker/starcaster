@@ -19,6 +19,7 @@ import {
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 import {
   applyButtonBackgroundSettings,
   getButtonBackgroundSettings,
@@ -180,10 +181,12 @@ export function BuilderButtonDesignSettings({
               />
             </BuilderSettingRow>
             <BuilderSettingRow label="Hover">
-              <input
-                type="color"
+              <BuilderThemeColorField
+                dialogLabel="Button hover color"
+                fallback="#0f4f8f"
+                themeColors={themeColors}
                 value={settings.buttonHoverColor ?? "#0f4f8f"}
-                onChange={(event) => updateSetting("buttonHoverColor", event.target.value)}
+                onChange={(color) => updateSetting("buttonHoverColor", color)}
               />
             </BuilderSettingRow>
             <BuilderSettingRow label="Size">
@@ -266,6 +269,7 @@ export function BuilderButtonDesignSettings({
               borderRadius={settings.borderRadius ?? "0"}
               disabled={borderDisabled}
               onChange={updateButtonBorder}
+              themeColors={themeColors}
             />
           </BuilderSettingRow>
           <BuilderSettingRow label="Style">
@@ -319,6 +323,7 @@ export function BuilderButtonDesignSettings({
               <BuilderButtonTextColorPicker
                 colors={getButtonTextColorSettings(settings)}
                 onChange={updateButtonTextColors}
+                themeColors={themeColors}
               />
             </BuilderSettingRow>
           </div>
@@ -352,7 +357,11 @@ export function BuilderButtonDesignSettings({
             </BuilderSettingRow>
           </div>
         </div>
-        <BuilderButtonDropShadowSettings settings={settings} onUpdateSetting={updateSetting} />
+        <BuilderButtonDropShadowSettings
+          settings={settings}
+          onUpdateSetting={updateSetting}
+          themeColors={themeColors}
+        />
       </ButtonDesignSection>
     </div>
   );
