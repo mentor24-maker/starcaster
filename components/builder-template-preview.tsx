@@ -178,13 +178,14 @@ function ContactFormPreview({ settings, projectId = "" }: { settings: Record<str
           companyWebsite: honeypot
         })
       });
-      const data = (await response.json()) as { message?: string; error?: string };
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Failed to submit the form.");
+        throw new Error(readApiErrorMessage(data, "Failed to submit the form."));
       }
 
-      setMessage(data.message ?? "Thanks. Your information has been saved.");
+      const success = data as { message?: string };
+      setMessage(success.message ?? "Thanks. Your information has been saved.");
       setValues({});
       setHoneypot("");
     } catch (submitError) {
@@ -317,11 +318,13 @@ function CrmFormFieldControl({
 function CrmFormPreview({
   settings,
   theme,
-  themePalette
+  themePalette,
+  projectId = ""
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  projectId?: string;
 }) {
   const crmFormId = settings.crmFormId ?? "";
   const [form, setForm] = useState<CrmFormData | null>(null);
@@ -357,16 +360,18 @@ function CrmFormPreview({
           data: Object.fromEntries(Object.entries(values).filter(([k]) => k !== "email")),
           crmConfigId: form?.crmConfigId ?? "",
           crm_form_id: crmFormId,
+          projectId,
           _trap: honeypot
         })
       });
-      const data = (await response.json()) as { message?: string; error?: string };
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Failed to submit the form.");
+        throw new Error(readApiErrorMessage(data, "Failed to submit the form."));
       }
 
-      setMessage(data.message ?? form?.successMessage ?? "Thank you!");
+      const success = data as { message?: string };
+      setMessage(success.message ?? form?.successMessage ?? "Thank you!");
       setValues({});
       setHoneypot("");
     } catch (submitError) {
@@ -1487,7 +1492,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "crm-form") {
-    return <CrmFormPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+    return <CrmFormPreview settings={module.settings} theme={theme} themePalette={themePalette} projectId={projectId} />;
   }
 
   if (module.type === "crm-contacts-table") {
@@ -2355,11 +2360,14 @@ function buildBlogPostEditHref(baseUrl: string, postId: string): string {
 
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
   const editBaseUrl = useMemo(() => blogManagerEditBaseUrl(settings), [settings.editPageUrl]);
-  const viewPageUrl = (settings.viewPageUrl || "").trim();
+  const viewBaseUrl = useMemo(() => {
+    const fromSettings = String(settings.viewPageUrl || "").trim();
+    if (fromSettings) return fromSettings;
+    return String(settings.postPageUrl || "").trim();
+  }, [settings.viewPageUrl, settings.postPageUrl]);
   const showStatus = (settings.showStatus ?? "true") !== "false";
   const showDate = (settings.showDate ?? "true") !== "false";
   const showDelete = (settings.showDelete ?? "true") !== "false";
-  const isBlogManagerPage = isAdminBlogManagerPageSlug();
 
   type PostRow = BlogPostRecord & {
     status?: string;
@@ -2469,9 +2477,9 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
       <div className="builder-blog-post-manager-list">
         {posts.map((post) => {
           const editHref = buildBlogPostEditHref(editBaseUrl, post.id);
-          const viewSep = viewPageUrl.includes("?") ? "&" : "?";
-          const viewHref = viewPageUrl
-            ? `${viewPageUrl}${viewSep}post=${encodeURIComponent(post.slug)}`
+          const viewSep = viewBaseUrl.includes("?") ? "&" : "?";
+          const viewHref = viewBaseUrl
+            ? `${viewBaseUrl}${viewSep}post=${encodeURIComponent(post.slug)}`
             : undefined;
           const dateStr = post.published_at ?? post.created_at ?? post.createdAt ?? "";
           const displayDate = dateStr
@@ -2509,47 +2517,35 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
               </div>
               <div className="builder-blog-post-manager-item-actions">
                 <div className="table-actions-row" role="group">
-                  {isBlogManagerPage ? (
+                  <AdminTableIconButton
+                    icon="view"
+                    label="View"
+                    href={viewHref}
+                    disabled={!viewHref}
+                    onClick={!viewHref ? () => {} : undefined}
+                  />
+                  <AdminTableIconButton
+                    icon="edit"
+                    label="Edit"
+                    href={editHref || undefined}
+                    disabled={!editHref}
+                    onClick={!editHref ? () => {} : undefined}
+                  />
+                  <AdminTableIconButton
+                    icon="clone"
+                    label="Clone"
+                    disabled={cloningId === post.id}
+                    onClick={() => clonePost(post)}
+                  />
+                  {showDelete ? (
                     <AdminTableIconButton
-                      icon="edit"
-                      label="Edit"
-                      href={editHref || undefined}
-                      onClick={editHref ? undefined : () => {}}
-                      disabled={!editHref}
+                      icon="delete"
+                      label="Delete"
+                      danger
+                      disabled={deletingId === post.id}
+                      onClick={() => deletePost(post.id)}
                     />
-                  ) : (
-                    <>
-                      <AdminTableIconButton
-                        icon="view"
-                        label="View"
-                        href={viewHref}
-                        disabled={!viewHref}
-                        onClick={!viewHref ? () => {} : undefined}
-                      />
-                      <AdminTableIconButton
-                        icon="edit"
-                        label="Edit"
-                        href={editHref || undefined}
-                        disabled={!editHref}
-                        onClick={!editHref ? () => {} : undefined}
-                      />
-                      <AdminTableIconButton
-                        icon="clone"
-                        label="Clone"
-                        disabled={cloningId === post.id}
-                        onClick={() => clonePost(post)}
-                      />
-                      {showDelete ? (
-                        <AdminTableIconButton
-                          icon="delete"
-                          label="Delete"
-                          danger
-                          disabled={deletingId === post.id}
-                          onClick={() => deletePost(post.id)}
-                        />
-                      ) : null}
-                    </>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
