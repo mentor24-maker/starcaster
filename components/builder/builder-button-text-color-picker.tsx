@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { BuilderEditorPopup } from "./builder-editor-popup";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 export type ButtonTextColorSettings = {
   color: string;
@@ -19,6 +20,7 @@ type TextColorTab = (typeof textColorTabs)[number]["value"];
 type BuilderButtonTextColorPickerProps = {
   colors: ButtonTextColorSettings;
   onChange: (colors: ButtonTextColorSettings) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
 };
 
 export function getButtonTextColorSettings(settings: Record<string, string>): ButtonTextColorSettings {
@@ -28,7 +30,11 @@ export function getButtonTextColorSettings(settings: Record<string, string>): Bu
   };
 }
 
-export function BuilderButtonTextColorPicker({ colors, onChange }: BuilderButtonTextColorPickerProps) {
+export function BuilderButtonTextColorPicker({
+  colors,
+  onChange,
+  themeColors = []
+}: BuilderButtonTextColorPickerProps) {
   const popupId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TextColorTab>("color");
@@ -73,19 +79,23 @@ export function BuilderButtonTextColorPicker({ colors, onChange }: BuilderButton
           <div className="builder-button-background-popup-body">
             {activeTab === "color" ? (
               <BuilderSettingRow label="Color" fullWidth>
-                <input
-                  type="color"
+                <BuilderThemeColorField
+                  dialogLabel="Button text color"
+                  fallback="#ffffff"
+                  themeColors={themeColors}
                   value={colors.color}
-                  onChange={(event) => onChange({ ...colors, color: event.target.value })}
+                  onChange={(color) => onChange({ ...colors, color })}
                 />
               </BuilderSettingRow>
             ) : null}
             {activeTab === "hover" ? (
               <BuilderSettingRow label="Hover" fullWidth>
-                <input
-                  type="color"
+                <BuilderThemeColorField
+                  dialogLabel="Button text hover color"
+                  fallback="#ffffff"
+                  themeColors={themeColors}
                   value={colors.hoverColor}
-                  onChange={(event) => onChange({ ...colors, hoverColor: event.target.value })}
+                  onChange={(hoverColor) => onChange({ ...colors, hoverColor })}
                 />
               </BuilderSettingRow>
             ) : null}
