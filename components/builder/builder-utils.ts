@@ -881,6 +881,14 @@ export function mergeCrmThemePalette(
   };
 }
 
+/** Theme palette + typography vars for builder admin data tables on public pages. */
+export function getAdminDataTableThemeStyle(
+  themePalette: CrmThemePalette | undefined,
+  theme: import("@/lib/builder-template").BuilderTheme | undefined
+): CSSProperties {
+  return getCrmFormThemeContextStyle(themePalette, theme);
+}
+
 /** Theme palette + typography vars for CRM form color tokens on builder/public pages. */
 export function getCrmFormThemeContextStyle(
   themePalette: CrmThemePalette | undefined,
