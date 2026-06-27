@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
+import { BuilderEditorPopup } from "./builder-editor-popup";
 import {
   BACKGROUND_STYLE_PRESETS,
   getBuilderBackgroundStyle,
@@ -32,7 +33,6 @@ export function BuilderButtonBackgroundPicker({
   onUploadImage
 }: BuilderButtonBackgroundPickerProps) {
   const popupId = useId();
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const activeMode: ButtonBackgroundMode =
     background.mode === "none" ? "color" : (background.mode as ButtonBackgroundMode);
@@ -92,34 +92,8 @@ export function BuilderButtonBackgroundPicker({
     });
   }
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen]);
-
   return (
-    <div className="builder-button-background-picker" ref={rootRef}>
+    <div className="builder-button-background-picker">
       <button
         aria-controls={popupId}
         aria-expanded={isOpen}
@@ -131,7 +105,11 @@ export function BuilderButtonBackgroundPicker({
         type="button"
       />
       {isOpen ? (
-        <div className="builder-button-background-popup" id={popupId} role="dialog" aria-label="Button background">
+        <BuilderEditorPopup
+          ariaLabel="Button background"
+          id={popupId}
+          onClose={() => setIsOpen(false)}
+        >
           <div className="builder-button-background-mode-tabs" role="tablist" aria-label="Background type">
             {buttonBackgroundModes.map((mode) => (
               <button
@@ -264,7 +242,7 @@ export function BuilderButtonBackgroundPicker({
               </button>
             </BuilderSettingRow>
           </div>
-        </div>
+        </BuilderEditorPopup>
       ) : null}
     </div>
   );

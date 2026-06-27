@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { BuilderEditorPopup } from "./builder-editor-popup";
 import { BuilderSettingRow } from "./builder-setting-row";
 
 export type ButtonTextColorSettings = {
@@ -29,38 +30,11 @@ export function getButtonTextColorSettings(settings: Record<string, string>): Bu
 
 export function BuilderButtonTextColorPicker({ colors, onChange }: BuilderButtonTextColorPickerProps) {
   const popupId = useId();
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TextColorTab>("color");
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen]);
-
   return (
-    <div className="builder-button-background-picker" ref={rootRef}>
+    <div className="builder-button-background-picker">
       <button
         aria-controls={popupId}
         aria-expanded={isOpen}
@@ -72,11 +46,10 @@ export function BuilderButtonTextColorPicker({ colors, onChange }: BuilderButton
         type="button"
       />
       {isOpen ? (
-        <div
-          className="builder-button-background-popup"
+        <BuilderEditorPopup
+          ariaLabel="Button text color"
           id={popupId}
-          role="dialog"
-          aria-label="Button text color"
+          onClose={() => setIsOpen(false)}
         >
           <div className="builder-button-background-mode-tabs" role="tablist" aria-label="Text color options">
             {textColorTabs.map((tab) => (
@@ -116,7 +89,7 @@ export function BuilderButtonTextColorPicker({ colors, onChange }: BuilderButton
               </BuilderSettingRow>
             ) : null}
           </div>
-        </div>
+        </BuilderEditorPopup>
       ) : null}
     </div>
   );
