@@ -28,10 +28,11 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
             <select value={s.layout ?? "grid"} onChange={(e) => set("layout", e.target.value)}>
               <option value="grid">Grid</option>
               <option value="list">List</option>
+              <option value="admin-manager">Admin Manager</option>
             </select>
           </BuilderSettingRow>
 
-          {isGrid ? (
+          {(s.layout ?? "grid") === "grid" ? (
             <BuilderSettingRow label="Columns">
               <select value={s.columns ?? "3"} onChange={(e) => set("columns", e.target.value)}>
                 <option value="1">1</option>
