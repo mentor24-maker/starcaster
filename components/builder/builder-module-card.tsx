@@ -100,6 +100,12 @@ import {
 } from "./builder-utils";
 import { BuilderButtonDesignSettings } from "./builder-button-design-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
+import {
+  BuilderThemeColorField,
+  BuilderThemeColorFieldWithDefault,
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 import { BuilderPlayerPortalSettings } from "./builder-player-portal-settings";
 import { getPlayerPortalAuthSettings, PlayerPortalAuthForm } from "@/components/player-portal-auth-form";
 import { BuilderSettingRow } from "./builder-setting-row";
@@ -2120,11 +2126,13 @@ function TableCellModules({
   cellKey,
   modules,
   pages = [],
+  themeColors = [],
   onUpdate
 }: {
   cellKey: string;
   modules: BuilderTemplateModule[];
   pages?: BuilderPageRecord[];
+  themeColors?: BuilderThemePalette;
   onUpdate: (cellKey: string, modules: BuilderTemplateModule[]) => void;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -2202,6 +2210,7 @@ function TableCellModules({
                 <BuilderHeadingModuleSettings
                   compact
                   module={mod}
+                  themeColors={themeColors}
                   onUpdateModule={(updater) => {
                     onUpdate(cellKey, modules.map((item) => (item.id === mod.id ? updater(item) : item)));
                   }}
@@ -2250,17 +2259,21 @@ function TableCellModules({
                     />
                   </BuilderSettingRow>
                   <BuilderSettingRow label="Button color">
-                    <input
-                      type="color"
+                    <BuilderThemeColorField
+                      dialogLabel="Button color"
+                      fallback="#214c71"
+                      themeColors={themeColors}
                       value={mod.settings.buttonColor ?? "#214c71"}
-                      onChange={(e) => updateModuleSettings(mod.id, { buttonColor: e.target.value })}
+                      onChange={(buttonColor) => updateModuleSettings(mod.id, { buttonColor })}
                     />
                   </BuilderSettingRow>
                   <BuilderSettingRow label="Text color">
-                    <input
-                      type="color"
+                    <BuilderThemeColorField
+                      dialogLabel="Button text color"
+                      fallback="#ffffff"
+                      themeColors={themeColors}
                       value={mod.settings.textColor ?? "#ffffff"}
-                      onChange={(e) => updateModuleSettings(mod.id, { textColor: e.target.value })}
+                      onChange={(textColor) => updateModuleSettings(mod.id, { textColor })}
                     />
                   </BuilderSettingRow>
                 </div>
@@ -2313,7 +2326,11 @@ function TableCellModules({
                       onChange={(e) => updateModuleSettings(mod.id, { newTab: e.target.checked ? "true" : "false" })}
                     />
                   </label>
-                  <BuilderImageModuleSettings module={mod} onUpdateModule={(updater) => updateCellModule(mod.id, updater)} />
+                  <BuilderImageModuleSettings
+                    module={mod}
+                    themeColors={themeColors}
+                    onUpdateModule={(updater) => updateCellModule(mod.id, updater)}
+                  />
                 </>
               )}
             </div>
@@ -2355,10 +2372,12 @@ function TableCellModules({
 function TableModuleEditor({
   module,
   pages = [],
+  themeColors = [],
   onUpdateModule
 }: {
   module: BuilderTemplateModule;
   pages?: BuilderPageRecord[];
+  themeColors?: BuilderThemePalette;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 }) {
   const td = parseTableData(module.settings);
@@ -2449,7 +2468,16 @@ function TableModuleEditor({
             fallback="1"
             onChange={(value) => updateSetting("borderWidth", value)}
           />
-          <label className="builder-table-color-field"><span>Color</span><input type="color" value={module.settings.borderColor ?? "#cccccc"} onChange={(e) => updateSetting("borderColor", e.target.value)} /></label>
+          <label className="builder-table-color-field">
+            <span>Color</span>
+            <BuilderThemeColorField
+              dialogLabel="Table border color"
+              fallback="#cccccc"
+              themeColors={themeColors}
+              value={module.settings.borderColor ?? "#cccccc"}
+              onChange={(borderColor) => updateSetting("borderColor", borderColor)}
+            />
+          </label>
         </div>
         <BuilderInlineNumberSelect
           label="Padding"
@@ -2517,7 +2545,13 @@ function TableModuleEditor({
                 </td>
                 {td.headers.map((_, ci) => (
                   <td key={ci} className="builder-table-editor-cell">
-                    <TableCellModules cellKey={`${ri}-${ci}`} modules={td.cells[`${ri}-${ci}`] || []} pages={pages} onUpdate={updateCellModules} />
+                    <TableCellModules
+                      cellKey={`${ri}-${ci}`}
+                      modules={td.cells[`${ri}-${ci}`] || []}
+                      pages={pages}
+                      themeColors={themeColors}
+                      onUpdate={updateCellModules}
+                    />
                   </td>
                 ))}
               </tr>
@@ -2617,9 +2651,11 @@ function SliderModuleEditor({
 
 function SocialShareModuleEditor({
   module,
+  themeColors = [],
   onUpdateModule
 }: {
   module: BuilderTemplateModule;
+  themeColors?: BuilderThemePalette;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 }) {
   function updateSetting(key: string, value: string) {
@@ -2628,11 +2664,6 @@ function SocialShareModuleEditor({
 
   function platformSettingKey(platformId: SocialSharePlatformId, suffix: string) {
     return `share${platformId}${suffix}`;
-  }
-
-  function getPlatformColor(platformId: SocialSharePlatformId, fallback: string) {
-    const color = module.settings[platformSettingKey(platformId, "Color")];
-    return color?.startsWith("#") ? color : fallback;
   }
 
   return (
@@ -2703,10 +2734,12 @@ function SocialShareModuleEditor({
         </BuilderInlineNumberSelectRow>
         <label className="field">
           <span>Icon background</span>
-          <input
-            type="color"
+          <BuilderThemeColorField
+            dialogLabel="Share icon background"
+            fallback="#ffffff"
+            themeColors={themeColors}
             value={module.settings.shareIconBackground?.startsWith("#") ? module.settings.shareIconBackground : "#ffffff"}
-            onChange={(event) => updateSetting("shareIconBackground", event.target.value)}
+            onChange={(shareIconBackground) => updateSetting("shareIconBackground", shareIconBackground)}
           />
         </label>
         <BuilderInlineNumberSelectRow>
@@ -2757,11 +2790,31 @@ function SocialShareModuleEditor({
             <div className="builder-slider-item-grid">
               <label className="field">
                 <span>Button color</span>
-                <input
-                  type="color"
-                  value={getPlatformColor(platform.id, platform.color)}
-                  onChange={(event) => updateSetting(platformSettingKey(platform.id, "Color"), event.target.value)}
-                />
+                <div className="builder-nav-color-field">
+                  <BuilderThemeColorField
+                    dialogLabel={`${platform.label} button color`}
+                    fallback={platform.color}
+                    themeColors={themeColors}
+                    value={
+                      module.settings[platformSettingKey(platform.id, "Color")]?.startsWith("#")
+                        ? module.settings[platformSettingKey(platform.id, "Color")]
+                        : platform.color
+                    }
+                    onChange={(color) => updateSetting(platformSettingKey(platform.id, "Color"), color)}
+                  />
+                  {module.settings[platformSettingKey(platform.id, "Color")] ? (
+                    <button
+                      className="builder-nav-color-clear"
+                      onClick={() => updateSetting(platformSettingKey(platform.id, "Color"), "")}
+                      title="Reset to default"
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  ) : (
+                    <span className="builder-nav-color-hint">default</span>
+                  )}
+                </div>
               </label>
               {platform.id === "instagram" ? (
                 <label className="field builder-slider-item-grid-full">
@@ -2805,29 +2858,24 @@ function NavColorField({
   label,
   value,
   defaultColor,
+  themeColors = [],
   onChange
 }: {
   label: string;
   value: string;
   defaultColor: string;
+  themeColors?: BuilderThemePalette;
   onChange: (v: string) => void;
 }) {
-  const isSet = !!value;
   return (
-    <BuilderSettingRow label={label} fullWidth>
-      <div className="builder-nav-color-field">
-        <input
-          type="color"
-          value={isSet ? value : defaultColor}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        {isSet ? (
-          <button type="button" className="builder-nav-color-clear" onClick={() => onChange("")} title="Reset to default">✕</button>
-        ) : (
-          <span className="builder-nav-color-hint">default</span>
-        )}
-      </div>
-    </BuilderSettingRow>
+    <BuilderThemeColorFieldWithDefault
+      defaultColor={defaultColor}
+      dialogLabel={label}
+      label={label}
+      themeColors={themeColors}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 
@@ -2953,9 +3001,9 @@ function NavModuleEditor({
                 </select>
               </BuilderSettingRow>
             </div>
-            <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" onChange={(v) => updateSetting("navColor", v)} />
-            <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" onChange={(v) => updateSetting("navHoverColor", v)} />
-            <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" onChange={(v) => updateSetting("navHoverBackground", v)} />
+            <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" themeColors={themeColors} onChange={(v) => updateSetting("navColor", v)} />
+            <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" themeColors={themeColors} onChange={(v) => updateSetting("navHoverColor", v)} />
+            <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" themeColors={themeColors} onChange={(v) => updateSetting("navHoverBackground", v)} />
             <BuilderBackgroundControls
               label="Background"
               background={getModuleBackgroundSettings(module.settings)}
@@ -3050,17 +3098,18 @@ function PollCategoryListModuleEditor({
           themePrimaryColor={themePrimaryColor}
         />
         {!isPollCategoryListPanelTransparent(module.settings) ? (
-          <BuilderSettingRow label="Panel Border" fullWidth>
-            <input
-              type="color"
-              value={
-                module.settings.panelBorderColor?.startsWith("#")
-                  ? module.settings.panelBorderColor
-                  : "#c6e8f5"
-              }
-              onChange={(event) => updateSetting("panelBorderColor", event.target.value)}
-            />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#c6e8f5"
+            fullWidth
+            label="Panel Border"
+            themeColors={themeColors}
+            value={
+              module.settings.panelBorderColor?.startsWith("#")
+                ? module.settings.panelBorderColor
+                : "#c6e8f5"
+            }
+            onChange={(panelBorderColor) => updateSetting("panelBorderColor", panelBorderColor)}
+          />
         ) : null}
       </div>
       <BuilderSettingRow label="Headline" fullWidth>
@@ -3097,14 +3146,13 @@ function PollCategoryListModuleEditor({
           onChange={(event) => updateSetting("fontSize", event.target.value)}
         />
       </BuilderSettingRow>
-      <BuilderSettingRow label="Color">
-        <input
-          type="text"
-          value={module.settings.color ?? "#18324a"}
-          onChange={(event) => updateSetting("color", event.target.value)}
-          placeholder="#18324a"
-        />
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fallback="#18324a"
+        label="Color"
+        themeColors={themeColors}
+        value={module.settings.color ?? "#18324a"}
+        onChange={(color) => updateSetting("color", color)}
+      />
       <BuilderSettingRow label="Bold">
         <input
           type="checkbox"
@@ -3137,9 +3185,11 @@ function PollCategoryListModuleEditor({
 
 function HeadlineRotatorModuleEditor({
   module,
+  themeColors = [],
   onUpdateModule
 }: {
   module: BuilderTemplateModule;
+  themeColors?: BuilderThemePalette;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 }) {
   const items = parseHeadlineItems(module.settings);
@@ -3188,14 +3238,32 @@ function HeadlineRotatorModuleEditor({
     <>
       <div className="builder-slider-design-grid">
         <label className="field"><span>Font size (px)</span><input type="number" min="10" max="120" value={module.settings.fontSize ?? HEADLINE_ROTATOR_DEFAULT_FONT_SIZE} onChange={(e) => updateSetting("fontSize", e.target.value)} /></label>
-        <label className="field"><span>Color</span><input type="text" value={module.settings.color ?? "#18324a"} onChange={(e) => updateSetting("color", e.target.value)} placeholder="#18324a" /></label>
+        <label className="field">
+          <span>Color</span>
+          <BuilderThemeColorField
+            dialogLabel="Headline rotator color"
+            fallback="#18324a"
+            themeColors={themeColors}
+            value={module.settings.color ?? "#18324a"}
+            onChange={(color) => updateSetting("color", color)}
+          />
+        </label>
         <label className="field builder-checkbox-field"><span>Bold</span><input type="checkbox" checked={module.settings.bold !== "false"} onChange={(e) => updateSetting("bold", e.target.checked ? "true" : "false")} /></label>
         <label className="field"><span>Vertical alignment</span><select value={module.settings.verticalAlignment ?? "center"} onChange={(e) => updateSetting("verticalAlignment", e.target.value)}><option value="top">Top</option><option value="center">Center</option><option value="bottom">Bottom</option></select></label>
         <label className="field"><span>Min height (px)</span><input type="number" min="0" max="1200" step="4" value={module.settings.minHeight ?? "480"} onChange={(e) => updateSetting("minHeight", e.target.value)} /></label>
         <label className="field"><span>Fade duration (ms)</span><input type="number" min="0" max="5000" step="50" value={module.settings.fadeDuration ?? "800"} onChange={(e) => updateSetting("fadeDuration", e.target.value)} /></label>
         <label className="field"><span>Display speed (ms)</span><input type="number" min="500" max="20000" step="100" value={module.settings.displaySpeed ?? "3000"} onChange={(e) => updateSetting("displaySpeed", e.target.value)} /></label>
         <label className="field"><span>Drop shadow</span><select value={module.settings.dropShadow ?? "false"} onChange={(e) => updateSetting("dropShadow", e.target.value)}><option value="false">Off</option><option value="true">On</option></select></label>
-        <label className="field"><span>Shadow color</span><input type="color" value={module.settings.dropShadowColor?.startsWith("#") ? module.settings.dropShadowColor : "#000000"} onChange={(e) => updateSetting("dropShadowColor", e.target.value)} /></label>
+        <label className="field">
+          <span>Shadow color</span>
+          <BuilderThemeColorField
+            dialogLabel="Headline shadow color"
+            fallback="#000000"
+            themeColors={themeColors}
+            value={module.settings.dropShadowColor?.startsWith("#") ? module.settings.dropShadowColor : "#000000"}
+            onChange={(dropShadowColor) => updateSetting("dropShadowColor", dropShadowColor)}
+          />
+        </label>
         <label className="field"><span>Shadow X</span><input type="number" min="-20" max="20" step="1" value={module.settings.dropShadowX ?? "3"} onChange={(e) => updateSetting("dropShadowX", e.target.value)} /></label>
         <label className="field"><span>Shadow Y</span><input type="number" min="-20" max="20" step="1" value={module.settings.dropShadowY ?? "3"} onChange={(e) => updateSetting("dropShadowY", e.target.value)} /></label>
         <label className="field"><span>Shadow blur</span><input type="number" min="0" max="30" step="1" value={module.settings.dropShadowBlur ?? "2"} onChange={(e) => updateSetting("dropShadowBlur", e.target.value)} /></label>
@@ -3258,11 +3326,12 @@ function HeadlineRotatorModuleEditor({
                   />
                 </td>
                 <td>
-                  <input
-                    aria-label={`Headline ${index + 1} color`}
-                    type="color"
+                  <BuilderThemeColorField
+                    dialogLabel={`Headline ${index + 1} color`}
+                    fallback={module.settings.color || "#18324a"}
+                    themeColors={themeColors}
                     value={item.color.startsWith("#") ? item.color : module.settings.color || "#18324a"}
-                    onChange={(e) => updateItem(item.id, { color: e.target.value })}
+                    onChange={(color) => updateItem(item.id, { color })}
                   />
                 </td>
                 <td>
@@ -3630,9 +3699,9 @@ export function BuilderModuleCard({
             ) : isConfettiModule ? (
               <BuilderConfettiModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isTractorNavModule ? (
-              <BuilderTractorNavModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderTractorNavModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBreadcrumbModule ? (
-              <BuilderBreadcrumbModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBreadcrumbModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostListModule ? (
               <BuilderBlogPostListModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostCardModule ? (
@@ -3640,29 +3709,29 @@ export function BuilderModuleCard({
             ) : isBlogAuthorBioModule ? (
               <BuilderBlogAuthorBioModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogTocModule ? (
-              <BuilderBlogTocModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogTocModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogNewsletterModule ? (
-              <BuilderBlogNewsletterSubscribeModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogNewsletterSubscribeModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogRelatedPostsModule ? (
               <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryFilterModule ? (
-              <BuilderBlogCategoryFilterModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogCategoryFilterModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostModule ? (
               <BuilderBlogPostModuleSettings module={module} onUpdateModule={onUpdateModule} richTextGallery={richTextGalleryProps} />
             ) : isBlogTagCloudModule ? (
-              <BuilderBlogTagCloudModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogTagCloudModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostTagsModule ? (
-              <BuilderBlogPostTagsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogPostTagsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostCreateModule ? (
-              <BuilderBlogPostCreateModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostManagerModule ? (
-              <BuilderBlogPostManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (
-              <BuilderBlogCategoryManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTopicListModule ? (
-              <BuilderMessagingTopicListModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderMessagingTopicListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTagListModule ? (
-              <BuilderMessagingTagListModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderMessagingTagListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isCrmContactsTableModule ? (
               <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminTeamUsersModule ? (
@@ -3926,6 +3995,7 @@ export function BuilderModuleCard({
           {isFloatingImage ? (
             <BuilderFloatingImageModuleSettings
               module={module}
+              themeColors={themeColors}
               onOpenGallery={onOpenGallery}
               onUploadMedia={onUploadMedia}
               onUpdateModule={onUpdateModule}
@@ -3935,6 +4005,7 @@ export function BuilderModuleCard({
           {module.type === "speech-bubble" ? (
             <BuilderSpeechBubbleModuleSettings
               module={module}
+              themeColors={themeColors}
               onUpdateModule={onUpdateModule}
               richTextGallery={richTextGalleryProps}
             />
@@ -3943,20 +4014,23 @@ export function BuilderModuleCard({
           {module.type === "reminder" ? (
             <BuilderReminderModuleSettings
               module={module}
+              themeColors={themeColors}
               onUpdateModule={onUpdateModule}
               richTextGallery={richTextGalleryProps}
             />
           ) : null}
 
           {isStandardImage ? (
-            <BuilderImageModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            <BuilderImageModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
           ) : null}
 
           {module.type === "heading" ? (
-            <BuilderHeadingModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            <BuilderHeadingModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
           ) : null}
 
-          {module.type === "table" && <TableModuleEditor module={module} pages={pages} onUpdateModule={onUpdateModule} />}
+          {module.type === "table" && (
+            <TableModuleEditor module={module} pages={pages} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          )}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "navigation" && (
             <NavModuleEditor
@@ -3968,7 +4042,9 @@ export function BuilderModuleCard({
               themePrimaryColor={themePrimaryColor}
             />
           )}
-          {module.type === "headline-rotator" && <HeadlineRotatorModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "headline-rotator" && (
+            <HeadlineRotatorModuleEditor module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          )}
           {module.type === "poll-category-list" && (
             <PollCategoryListModuleEditor
               module={module}
@@ -3979,7 +4055,9 @@ export function BuilderModuleCard({
               themePrimaryColor={themePrimaryColor}
             />
           )}
-          {module.type === "social-share" && <SocialShareModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "social-share" && (
+            <SocialShareModuleEditor module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          )}
 
           {module.type === "merch" ? (
             <MerchModuleEditor module={module} products={products} onUpdateModule={onUpdateModule} />

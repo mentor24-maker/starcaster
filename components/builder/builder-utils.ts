@@ -880,8 +880,8 @@ export function buildBuilderThemePaletteColors(theme: {
     { label: "Primary", hex: theme?.primaryColor ?? "" },
     { label: "Secondary", hex: theme?.secondaryColor ?? "" },
     { label: "Background", hex: theme?.backgroundColor ?? "" },
-    { label: "Accent", hex: theme?.accentColor ?? "" },
-  ].filter((entry) => Boolean(entry.hex));
+    { label: "Accent", hex: theme?.accentColor ?? "" }
+  ];
 }
 
 export function mergeCrmThemePalette(

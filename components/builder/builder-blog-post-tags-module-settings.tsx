@@ -2,13 +2,22 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
-export function BuilderBlogPostTagsModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderBlogPostTagsModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
   const s = module.settings;
 
   function set(key: string, value: string) {
@@ -90,13 +99,21 @@ export function BuilderBlogPostTagsModuleSettings({ module, onUpdateModule }: Pr
         </div>
 
         <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Tag color">
-            <input type="color" value={s.color ?? "#587592"} onChange={(e) => set("color", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#587592"
+            label="Tag color"
+            themeColors={themeColors}
+            value={s.color ?? "#587592"}
+            onChange={(color) => set("color", color)}
+          />
 
-          <BuilderSettingRow label="Tag background">
-            <input type="color" value={s.bgColor ?? "#f0f4f8"} onChange={(e) => set("bgColor", e.target.value)} />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#f0f4f8"
+            label="Tag background"
+            themeColors={themeColors}
+            value={s.bgColor ?? "#f0f4f8"}
+            onChange={(bgColor) => set("bgColor", bgColor)}
+          />
 
           <BuilderSettingRow label="Border radius (px)">
             <input

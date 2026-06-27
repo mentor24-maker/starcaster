@@ -9,12 +9,17 @@ import { isGameModuleTrigger } from "@/lib/module-trigger";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type BuilderFloatingImageModuleSettingsProps = {
   module: BuilderTemplateModule;
   onOpenGallery?: () => void;
   onUploadMedia?: (file: File | null) => void;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
 const OVERLAY_ANCHOR_OPTIONS = [
@@ -45,7 +50,8 @@ export function BuilderFloatingImageModuleSettings({
   module,
   onOpenGallery,
   onUploadMedia,
-  onUpdateModule
+  onUpdateModule,
+  themeColors = []
 }: BuilderFloatingImageModuleSettingsProps) {
   const durationValue = getGameFloatingImageDurationSelectValue(module.settings);
   const showGameDuration = isGameModuleTrigger(module.settings);
@@ -168,13 +174,14 @@ export function BuilderFloatingImageModuleSettings({
         />
       </BuilderSettingRow>
 
-      <BuilderSettingRow fullWidth label="Border Color">
-        <input
-          type="color"
-          value={module.settings.borderColor ?? "#0f4f8f"}
-          onChange={(event) => updateSettings({ borderColor: event.target.value })}
-        />
-      </BuilderSettingRow>
+      <BuilderThemeColorSettingRow
+        fullWidth
+        fallback="#0f4f8f"
+        label="Border Color"
+        themeColors={themeColors}
+        value={module.settings.borderColor ?? "#0f4f8f"}
+        onChange={(borderColor) => updateSettings({ borderColor })}
+      />
 
       <BuilderSettingRow fullWidth label="Effect">
         <select

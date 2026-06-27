@@ -10,17 +10,23 @@ import {
   HEADING_VARIANT_PRESETS,
   type HeadingVariantPresetKey
 } from "./builder-utils";
+import {
+  BuilderThemeColorSettingRow,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 type BuilderHeadingModuleSettingsProps = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   compact?: boolean;
+  themeColors?: BuilderThemePalette;
 };
 
 export function BuilderHeadingModuleSettings({
   module,
   onUpdateModule,
-  compact = false
+  compact = false,
+  themeColors = []
 }: BuilderHeadingModuleSettingsProps) {
   const settings = module.settings;
 
@@ -111,13 +117,13 @@ export function BuilderHeadingModuleSettings({
               onChange={(event) => updateSetting("fontSize", event.target.value)}
             />
           </BuilderSettingRow>
-          <BuilderSettingRow label="Color">
-            <input
-              type="color"
-              value={settings.color ?? "#18324a"}
-              onChange={(event) => updateSetting("color", event.target.value)}
-            />
-          </BuilderSettingRow>
+          <BuilderThemeColorSettingRow
+            fallback="#18324a"
+            label="Color"
+            themeColors={themeColors}
+            value={settings.color ?? "#18324a"}
+            onChange={(color) => updateSetting("color", color)}
+          />
           <BuilderSettingRow label="Weight">
             <select
               value={settings.fontWeight ?? (settings.bold === "false" ? "500" : "800")}
@@ -227,7 +233,11 @@ export function BuilderHeadingModuleSettings({
       </div>
       {!compact ? (
         <>
-          <BuilderButtonDropShadowSettings settings={settings} onUpdateSetting={updateSetting} />
+          <BuilderButtonDropShadowSettings
+            settings={settings}
+            themeColors={themeColors}
+            onUpdateSetting={updateSetting}
+          />
           <BuilderModuleOffsetFields
             horizontalOffset={settings.horizontalOffset ?? "0"}
             verticalOffset={settings.verticalOffset ?? "0"}
