@@ -58,6 +58,7 @@ import {
   sectionHasOnlyPageOverlayImageModules,
   sectionHasOnlySectionScopedOverlayModules,
   getCellContentAlignmentStyle,
+  getAdminDataTableThemeStyle,
   getCrmFormThemeContextStyle,
   getCrmThemePaletteVars,
   getModuleAlignment,
@@ -484,9 +485,13 @@ function getContactFields(config: CrmConfigData | null): CrmContactsField[] {
 function CrmContactsTablePreview({
   settings,
   projectId: projectIdProp = "",
+  theme,
+  themePalette,
 }: {
   settings: Record<string, string>;
   projectId?: string;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
 }) {
   const crmConfigId    = settings.crmConfigId ?? "";
   const tableTitle     = settings.tableTitle || "Contacts";
@@ -559,6 +564,8 @@ function CrmContactsTablePreview({
   const pageContacts = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
   const tableCols    = fields.slice(0, 5);
   const hasActions   = showViewBtn || showEditBtn || showDeleteBtn;
+  const dataColCount = tableCols.length + 1;
+  const showFilterRow = showSearch || hasActions;
 
   const scopedHeaders = () => getCrmProjectHeaders(projectIdProp);
 
@@ -634,34 +641,42 @@ function CrmContactsTablePreview({
   if (!config)    return <div className="builder-contact-form-stub">No CRM configured. Set one up in Builder › CRM, or select a config in module settings.</div>;
 
   return (
-    <div className="builder-admin-data-table-module">
+    <div
+      className="builder-admin-data-table-module"
+      style={getAdminDataTableThemeStyle(themePalette, theme)}
+    >
       {showTitle && <h2 className="builder-admin-data-table-title">{tableTitle}</h2>}
-
-      <div className="builder-admin-data-table-toolbar">
-        {showSearch && (
-          <input
-            className="builder-admin-data-table-search"
-            type="search"
-            placeholder="Search contacts…"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          />
-        )}
-        {showAddButton && (
-          <button
-            className="builder-admin-data-table-add-btn"
-            type="button"
-            onClick={() => { setAddValues({}); setAddMode(true); }}
-          >
-            {addButtonLabel}
-          </button>
-        )}
-      </div>
 
       <div className="builder-admin-data-table-wrap">
         <table className="builder-admin-data-table">
           <thead>
-            <tr>
+            {showFilterRow && (
+              <tr className="builder-admin-data-table-filter-row">
+                <th colSpan={dataColCount} className="builder-admin-data-table-filter-fields">
+                  {showSearch && (
+                    <input
+                      className="builder-admin-data-table-filter-search"
+                      type="search"
+                      placeholder="Search contacts…"
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                    />
+                  )}
+                </th>
+                {hasActions && showAddButton && (
+                  <th className="builder-admin-data-table-filter-actions">
+                    <button
+                      className="builder-admin-data-table-add-btn"
+                      type="button"
+                      onClick={() => { setAddValues({}); setAddMode(true); }}
+                    >
+                      {addButtonLabel}
+                    </button>
+                  </th>
+                )}
+              </tr>
+            )}
+            <tr className="builder-admin-data-table-header-row">
               {tableCols.map((f) => <th key={f.key}>{f.label}</th>)}
               <th>Added</th>
               {hasActions && <th className="builder-admin-data-table-actions-col">Actions</th>}
@@ -1228,7 +1243,14 @@ function BuilderModulePreview({
   }
 
   if (module.type === "crm-contacts-table") {
-    return <CrmContactsTablePreview settings={module.settings} projectId={projectId} />;
+    return (
+      <CrmContactsTablePreview
+        settings={module.settings}
+        projectId={projectId}
+        theme={theme}
+        themePalette={themePalette}
+      />
+    );
   }
 
   if (module.type === "player-portal") {
@@ -1398,7 +1420,14 @@ function BuilderModulePreview({
   }
 
   if (module.type === "admin-team-users") {
-    return <AdminTeamUsersPreview settings={module.settings} projectId={projectId} />;
+    return (
+      <AdminTeamUsersPreview
+        settings={module.settings}
+        projectId={projectId}
+        theme={theme}
+        themePalette={themePalette}
+      />
+    );
   }
 
   if (module.type === "admin-modules") {
@@ -3351,9 +3380,13 @@ type AdminTeamUser = { id: string; email: string; role: string; createdAt: strin
 function AdminTeamUsersPreview({
   settings,
   projectId: projectIdProp = "",
+  theme,
+  themePalette,
 }: {
   settings: Record<string, string>;
   projectId?: string;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
 }) {
   const tableTitle     = settings.tableTitle || "Team Members";
   const showTitle      = settings.showTitle !== "false";
@@ -3467,7 +3500,10 @@ function AdminTeamUsersPreview({
   }
 
   return (
-    <div className="builder-admin-data-table-module">
+    <div
+      className="builder-admin-data-table-module"
+      style={getAdminDataTableThemeStyle(themePalette, theme)}
+    >
       {showTitle && <h2 className="builder-admin-data-table-title">{tableTitle}</h2>}
       {loading ? (
         <div className="builder-admin-data-table-stub">Loading team members…</div>
@@ -3475,22 +3511,32 @@ function AdminTeamUsersPreview({
         <div className="builder-admin-data-table-stub is-error">{loadError}</div>
       ) : (
         <>
-          {showAddButton && (
-            <div className="builder-admin-data-table-toolbar">
-              <button
-                type="button"
-                className="builder-admin-data-table-add-btn"
-                onClick={() => setShowAddForm(true)}
-              >
-                {addButtonLabel}
-              </button>
-            </div>
-          )}
-
           <div className="builder-admin-data-table-wrap">
             <table className="builder-admin-data-table">
               <thead>
-                <tr>
+                <tr className="builder-admin-data-table-filter-row">
+                  <th
+                    colSpan={3}
+                    className="builder-admin-data-table-filter-fields builder-admin-data-table-filter-fields--spacer"
+                    aria-hidden="true"
+                  >
+                    {"\u00a0"}
+                  </th>
+                  {hasActions && (
+                    <th className="builder-admin-data-table-filter-actions">
+                      {showAddButton && (
+                        <button
+                          type="button"
+                          className="builder-admin-data-table-add-btn"
+                          onClick={() => setShowAddForm(true)}
+                        >
+                          {addButtonLabel}
+                        </button>
+                      )}
+                    </th>
+                  )}
+                </tr>
+                <tr className="builder-admin-data-table-header-row">
                   <th>Email</th>
                   <th>Role</th>
                   <th>Added</th>
