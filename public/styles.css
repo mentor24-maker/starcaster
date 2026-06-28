@@ -14225,6 +14225,11 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-textarea {
   border-radius: 10px !important;
 }
+.builder-react-root .builder-pages-details-shell .builder-page-details-field:focus,
+.builder-react-root .builder-pages-details-shell .builder-page-details-field.is-auto-focused {
+  outline: none !important;
+  border: 3px solid var(--sc-field-focus-color, #22c55e) !important;
+}
 .builder-react-root .submit-button,
 .builder-react-root .secondary-button,
 .builder-react-root .danger-button,
