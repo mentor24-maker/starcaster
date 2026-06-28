@@ -89,6 +89,13 @@ Sourced from `docs/UI_STANDARDS.md`, `docs/STYLE_GUIDE.md`, and prior agent/huma
 - **Dense modals:** `.standard-form-grid-4col` when needed.
 - **Checkboxes in grid:** `.standard-form-checkbox` on the input; group related checkboxes in a flex/grid in column 2 under one label.
 - **Submit row:** empty `<div></div>` first cell, button in second column — or `.standard-form-grid-full` for full-width actions.
+- **Field width (do not stretch):** Inputs and selects must not expand to fill a row just because the container is wide. Size controls to their content or a declared width class — e.g. `.builder-field-width-label` (`200px`–`250px` for module Label), `width: auto` / `width: fit-content` on numeric selects and compact pickers. Override the global `input, select { width: 100% }` rule inside Builder editors where appropriate.
+- **Builder module editor layout** (`components/builder/*-module-settings.tsx`, styles in `src/css/_builder-react.css`):
+  - **Multi-column rows:** Group related fields in `.builder-module-form-row` (responsive `auto-fit` grid; wraps cleanly in narrow columns). Use `.builder-module-meta-row` for top-of-module pairs such as Label + Background.
+  - **H / V Margin:** Always offer **H Margin** and **V Margin** together (`horizontalMargin` / `verticalMargin` settings), on the same row or adjacent in a stacked pair — never a lone “Margin” control.
+  - **Labels never wrap:** `.builder-setting-label` and inline field labels use `white-space: nowrap`. If a label does not fit, shorten the label text or rearrange the row — do not allow two-line labels.
+  - **Collapsible advanced blocks:** Border, shadow, and infrequently edited groups go in `<details class="hanging-details">`.
+  - After TSX/CSS changes: `npm run build:builder` and rebuild `public/styles.css`.
 - **Validation glow:** persisted populated fields get green completeness outline; empty required fields red (existing pattern in app).
 - **Builder CRM public forms** (embedded `crm-form` module + `CrmFormPreview` in `components/builder-template-preview.tsx`; styles in `src/css/_builder-react.css` — **not** `_crm.css` / `public/js/crm.js` admin preview alone):
   - Persist layout/style settings on the form record in `styles` JSON (`lib/crmFormStyles.js`): heading color, button background/text/size/weight (1–10), label align, field alignment, field width.

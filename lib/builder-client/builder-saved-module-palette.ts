@@ -2,8 +2,8 @@ import { modulePaletteGroups, modulePaletteItems, type ModulePaletteGroup } from
 import type { BuilderCellModuleRecord, BuilderTemplateModule } from "@/lib/builder-template";
 import { resolveSavedModuleClass } from "@/lib/module-class-triggers";
 
-/** Palette groups populated only from saved modules matched by module class. */
-export const SAVED_MODULE_ONLY_PALETTE_GROUPS: ModulePaletteGroup[] = ["special-effects"];
+/** Palette groups with no native starters — saved modules only (none today). */
+export const SAVED_MODULE_ONLY_PALETTE_GROUPS: ModulePaletteGroup[] = [];
 
 export function isSavedModuleOnlyPaletteGroup(group: ModulePaletteGroup): boolean {
   return SAVED_MODULE_ONLY_PALETTE_GROUPS.includes(group);

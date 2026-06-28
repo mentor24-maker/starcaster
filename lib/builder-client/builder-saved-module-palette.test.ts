@@ -7,9 +7,10 @@ import {
 } from "@/lib/builder-saved-module-palette";
 
 describe("builder saved module palette", () => {
-  it("treats special effects as saved-module-only", () => {
-    expect(isSavedModuleOnlyPaletteGroup("special-effects")).toBe(true);
-    expect(getStarterModulesForPaletteGroup("special-effects")).toEqual([]);
+  it("exposes native confetti starter in special effects", () => {
+    expect(isSavedModuleOnlyPaletteGroup("special-effects")).toBe(false);
+    const starters = getStarterModulesForPaletteGroup("special-effects");
+    expect(starters.some((item) => item.type === "confetti")).toBe(true);
   });
 
   it("still exposes starter modules for standard builder groups", () => {
