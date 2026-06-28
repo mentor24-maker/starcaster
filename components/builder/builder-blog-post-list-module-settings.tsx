@@ -23,6 +23,14 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
 
       {/* General */}
       <div className="builder-blog-post-list-general-row">
+        <BuilderSettingRow label="Label">
+          <input
+            type="text"
+            value={module.name}
+            onChange={(e) => onUpdateModule((current) => ({ ...current, name: e.target.value }))}
+            placeholder="Optional internal label"
+          />
+        </BuilderSettingRow>
         <BuilderSettingRow label="Post Title">
           <input
             type="text"
@@ -37,14 +45,6 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
             value={s.postSlug ?? ""}
             onChange={(e) => set("postSlug", e.target.value)}
             placeholder=""
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Post view page URL">
-          <input
-            type="text"
-            value={s.postPageUrl ?? ""}
-            onChange={(e) => set("postPageUrl", e.target.value)}
-            placeholder="/builder-preview.html?slug=blog-post-view"
           />
         </BuilderSettingRow>
       </div>

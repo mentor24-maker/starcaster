@@ -3612,7 +3612,7 @@ export function BuilderModuleCard({
 
       {(isExpanded || isPopped) ? (
         <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
-          {module.type !== "social" ? (
+          {module.type !== "social" && module.type !== "blog-post-list" ? (
             <BuilderSettingRow label="Label" fullWidth>
               <input
                 type="text"
