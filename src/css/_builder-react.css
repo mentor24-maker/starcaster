@@ -4977,8 +4977,12 @@
 
 .builder-react-root .builder-module-card .builder-module-editor .builder-setting-label {
   font-size: 0.8rem;
-  white-space: normal;
+  white-space: nowrap;
   line-height: 1.25;
+}
+
+.builder-react-root .builder-module-card .builder-module-editor .builder-inline-number-field span {
+  white-space: nowrap;
 }
 
 .builder-react-root .builder-module-card .builder-module-editor .builder-setting-value select {
@@ -5362,11 +5366,78 @@
   gap: 12px;
 }
 
-.builder-react-root .builder-social-module-settings > .builder-setting-row {
-  grid-template-columns: 9rem minmax(0, 1fr);
+.builder-react-root .builder-social-module-layout {
+  display: grid;
+  gap: 10px;
 }
 
-.builder-react-root .builder-social-module-settings > .builder-setting-row .builder-setting-label {
+.builder-react-root .builder-field-width-label {
+  width: min(250px, 100%);
+  min-width: 200px;
+  max-width: 250px;
+}
+
+.builder-react-root .builder-module-meta-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 10px 14px;
+  align-items: start;
+}
+
+.builder-react-root .builder-module-meta-row-slot {
+  min-width: 0;
+}
+
+.builder-react-root .builder-module-meta-row .builder-setting-value > input[type="text"],
+.builder-react-root .builder-module-meta-row .builder-setting-value select {
+  width: auto;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
+  gap: 10px 14px;
+  align-items: center;
+}
+
+.builder-react-root .builder-module-form-row .builder-setting-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+.builder-react-root .builder-module-form-row .builder-setting-value {
+  justify-content: flex-start;
+}
+
+.builder-react-root .builder-module-form-row .builder-setting-value select,
+.builder-react-root .builder-module-form-row .builder-number-select-control {
+  width: auto;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-social-module-panel {
+  gap: 10px;
+}
+
+.builder-react-root .builder-social-module-panel-body {
+  display: grid;
+  gap: 10px;
+}
+
+.builder-react-root .builder-social-advanced-details {
+  margin: 0;
+}
+
+.builder-react-root .builder-social-advanced-details-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.builder-react-root .builder-social-add-button {
+  width: fit-content;
   white-space: nowrap;
 }
 
@@ -5507,19 +5578,18 @@
 
 .builder-react-root .builder-social-module-item-settings {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
-.builder-react-root .builder-social-module-item-settings .builder-setting-row-full {
-  grid-template-columns: 7.5rem minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
+.builder-react-root .builder-social-module-item-settings .builder-setting-row {
+  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
+  gap: 6px;
 }
 
 .builder-react-root .builder-social-module-item-settings .builder-setting-label {
-  font-size: 1.125rem;
-  padding: 10px 14px 10px 8px;
-  line-height: 1.35;
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  line-height: 1.25;
   white-space: normal;
 }
 
@@ -7581,6 +7651,12 @@
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
   font: inherit;
+}
+
+.builder-react-root .builder-setting-value input.builder-field-width-label[type="text"] {
+  width: min(250px, 100%);
+  min-width: 200px;
+  max-width: 250px;
 }
 
 .builder-react-root select.builder-number-select-control,

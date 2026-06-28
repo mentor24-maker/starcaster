@@ -3519,7 +3519,7 @@ export function BuilderModuleCard({
           : {}),
         ...(isHeadingModule
           ? getModuleMarginStyle(module.settings)
-          : module.type === "button"
+          : module.type === "button" || isSocialModule
             ? getModuleOuterSpacingStyle(module.settings)
             : isFloatingImage || isReminderModule
               ? {}
@@ -3612,14 +3612,16 @@ export function BuilderModuleCard({
 
       {(isExpanded || isPopped) ? (
         <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
-          <BuilderSettingRow label="Label" fullWidth>
-            <input
-              type="text"
-              value={module.name}
-              onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Optional internal label"
-            />
-          </BuilderSettingRow>
+          {module.type !== "social" ? (
+            <BuilderSettingRow label="Label" fullWidth>
+              <input
+                type="text"
+                value={module.name}
+                onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Optional internal label"
+              />
+            </BuilderSettingRow>
+          ) : null}
 
           {editorDevice === "mobile" ? (
             <div
