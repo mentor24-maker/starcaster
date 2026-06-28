@@ -57,7 +57,7 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
             <select value={s.layout ?? "grid"} onChange={(e) => set("layout", e.target.value)}>
               <option value="grid">Grid</option>
               <option value="list">List</option>
-              <option value="admin-manager">Admin Manager</option>
+              <option value="admin-manager">Admin</option>
             </select>
           </BuilderSettingRow>
           <BuilderSettingRow label="Search bar">

@@ -453,7 +453,7 @@ App.builder = (function () {
         { key: 'postTitle', label: 'Post Title', control: 'text', placeholder: 'Section title' },
         { key: 'postSlug', label: 'Post Slug', control: 'text', placeholder: '' },
         { key: 'postPageUrl', label: 'Post view page URL', control: 'text', placeholder: '/builder-preview.html?slug=blog-post-view' },
-        { key: 'layout', label: 'Layout', control: 'select', options: [{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }, { value: 'admin-manager', label: 'Admin Manager' }] },
+        { key: 'layout', label: 'Layout', control: 'select', options: [{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }, { value: 'admin-manager', label: 'Admin' }] },
         { key: 'columns', label: 'Columns', control: 'select', options: ['1', '2', '3'] },
         { key: 'postsPerPage', label: 'Posts per page', control: 'select', options: ['3', '6', '9', '12', '18'] },
         { key: 'showSearch', label: 'Search bar', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
