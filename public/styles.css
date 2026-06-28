@@ -3016,8 +3016,6 @@ body.asset-associations-modal-open {
   box-shadow: var(--shadow-soft);
 }
 .builder-react-root .site-nav {
-  display: flex;
-  flex-wrap: wrap;
   gap: 0;
   padding: 8px;
   border-radius: 26px;
@@ -3026,10 +3024,11 @@ body.asset-associations-modal-open {
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
 }
-.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
-.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
-  flex: 1 1 0;
-  min-width: 0;
+.builder-react-root .site-nav:not(.site-nav--vertical) {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  width: 100%;
 }
 .builder-react-root .site-nav-link {
   min-height: 48px;
@@ -3041,14 +3040,22 @@ body.asset-associations-modal-open {
   color: var(--site-nav-link-color, #163a5e);
   text-decoration: none;
   font-weight: 700;
+  box-sizing: border-box;
   transition:
     background 140ms ease,
     transform 140ms ease,
     color 140ms ease;
 }
+.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
 .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
   width: 100%;
-  box-sizing: border-box;
+  min-width: 0;
+}
+.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
+  min-width: 0;
+}
+.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
+  flex: 1 1 auto;
 }
 .builder-react-root .site-nav-link:hover,
 .builder-react-root .site-nav-link-active {
@@ -3099,13 +3106,18 @@ body.asset-associations-modal-open {
   white-space: nowrap;
 }
 .builder-react-root .site-nav--vertical {
+  display: flex;
   flex-direction: column;
   border-radius: 14px;
   align-items: stretch;
 }
 .builder-react-root .site-nav--vertical .site-nav-link {
-  flex: unset;
+  width: auto;
   justify-content: flex-start;
+}
+.builder-react-root .site-nav--vertical > .site-nav-dropdown {
+  width: auto;
+  min-width: 0;
 }
 .builder-react-root .site-nav--vertical .site-nav-dropdown {
   flex-direction: column;
@@ -10710,9 +10722,14 @@ body.asset-associations-modal-open {
   padding: 5px;
   border-radius: 16px;
 }
+.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: row;
+  grid-auto-columns: unset;
+  gap: 5px;
+}
 .builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) > .site-nav-link,
-.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
-  flex-basis: calc(50% - 5px);
+.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
   min-height: 38px;
   border-radius: 12px;
   padding: 0 8px;
@@ -12507,9 +12524,10 @@ body.asset-associations-modal-open {
   .builder-react-root .admin-nav-bar .admin-nav-link {
     flex-basis: calc(50% - 6px);
   }
-  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
-  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
-    flex-basis: calc(50% - 6px);
+  .builder-react-root .site-nav:not(.site-nav--vertical) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
   }
   .builder-react-root .builder-module-alignment-controls {
     justify-items: start;
@@ -12536,9 +12554,14 @@ body.asset-associations-modal-open {
     padding: 5px;
     gap: 5px;
   }
+  .builder-react-root .site-nav:not(.site-nav--vertical) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
+    gap: 5px;
+  }
   .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
-  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
-    flex-basis: calc(50% - 5px);
+  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
     min-height: 38px;
     border-radius: 12px;
     padding: 0 8px;
@@ -14400,6 +14423,89 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-themes-columns {
     grid-template-columns: 1fr;
   }
+}
+.builder-react-root .builder-module-field-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.builder-react-root .builder-module-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+.builder-react-root .builder-module-field-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.builder-react-root .builder-module-field-control {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.builder-react-root .builder-module-field-control input[type=text],
+.builder-react-root .builder-module-field-control select {
+  width: auto;
+  max-width: 100%;
+}
+.builder-react-root .builder-module-field--label .builder-module-field-control input[type=text] {
+  width: 230px;
+  max-width: min(230px, 100%);
+}
+.builder-react-root .builder-module-field--select-sm .builder-module-field-control select {
+  width: 7.5ch;
+  min-width: 7.5ch;
+}
+.builder-react-root .builder-module-field--select-md .builder-module-field-control select {
+  width: 9.5ch;
+  min-width: 9.5ch;
+}
+.builder-react-root .builder-module-field--text-md .builder-module-field-control input[type=text] {
+  width: 280px;
+  max-width: min(280px, 100%);
+}
+.builder-react-root .builder-module-field--align .builder-module-field-control,
+.builder-react-root .builder-module-field--check .builder-module-field-control,
+.builder-react-root .builder-module-field--color .builder-module-field-control {
+  flex-shrink: 0;
+}
+.builder-react-root .builder-module-field--full {
+  flex: 1 1 100%;
+  align-items: center;
+}
+.builder-react-root .builder-module-field--num .builder-module-field-control .builder-number-select-control {
+  width: calc(var(--numeric-select-digit-count, 2) * var(--numeric-select-digit-width) + var(--numeric-select-padding-inline));
+  max-width: 100%;
+}
+.builder-react-root .builder-module-background-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.builder-react-root .builder-module-background-details .builder-background-controls-horizontal {
+  display: contents;
+}
+.builder-react-root .builder-module-background-details .builder-setting-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  grid-template-columns: none;
+}
+.builder-react-root .builder-module-background-details .builder-setting-label {
+  white-space: nowrap;
+}
+.builder-react-root .builder-module-background-details .builder-setting-value select,
+.builder-react-root .builder-module-background-details .builder-setting-value input[type=text] {
+  width: auto;
+  max-width: min(280px, 100%);
 }
 
 /* src/css/_builder-theme.css */
@@ -25251,9 +25357,11 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   padding: 0;
 }
 .site-nav-menu {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   flex: 1 1 auto;
-  flex-wrap: wrap;
+  width: 100%;
   gap: 4px;
   align-items: stretch;
   min-width: 0;
@@ -25308,12 +25416,27 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   align-items: stretch;
 }
 .site-nav-menu--horizontal > .site-nav-item {
-  flex: 1 1 0;
   min-width: 0;
 }
 .site-nav-menu--horizontal > .site-nav-item > .site-nav-link {
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
+}
+.site-nav:not(.site-nav--vertical) {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  width: 100%;
+}
+.site-nav:not(.site-nav--vertical) > .site-nav-link,
+.site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
+  min-width: 0;
 }
 .site-nav-link {
   display: inline-flex;
@@ -25327,6 +25450,7 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   text-decoration: none;
   font-weight: 600;
   white-space: nowrap;
+  box-sizing: border-box;
   transition:
     background 140ms ease,
     color 140ms ease,
