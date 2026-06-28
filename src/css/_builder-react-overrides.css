@@ -468,3 +468,110 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================== */
+/* MODULE FIELD STRIP — flex-wrap toolbar rows in module editors  */
+/* ============================================================== */
+
+.builder-react-root .builder-module-field-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.builder-react-root .builder-module-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-field-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.builder-react-root .builder-module-field-control {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.builder-react-root .builder-module-field-control input[type="text"],
+.builder-react-root .builder-module-field-control select {
+  width: auto;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-field--label .builder-module-field-control input[type="text"] {
+  width: 230px;
+  max-width: min(230px, 100%);
+}
+
+.builder-react-root .builder-module-field--select-sm .builder-module-field-control select {
+  width: 7.5ch;
+  min-width: 7.5ch;
+}
+
+.builder-react-root .builder-module-field--select-md .builder-module-field-control select {
+  width: 9.5ch;
+  min-width: 9.5ch;
+}
+
+.builder-react-root .builder-module-field--text-md .builder-module-field-control input[type="text"] {
+  width: 280px;
+  max-width: min(280px, 100%);
+}
+
+.builder-react-root .builder-module-field--align .builder-module-field-control,
+.builder-react-root .builder-module-field--check .builder-module-field-control,
+.builder-react-root .builder-module-field--color .builder-module-field-control {
+  flex-shrink: 0;
+}
+
+.builder-react-root .builder-module-field--full {
+  flex: 1 1 100%;
+  align-items: center;
+}
+
+.builder-react-root .builder-module-field--num .builder-module-field-control .builder-number-select-control {
+  width: calc(
+    var(--numeric-select-digit-count, 2) * var(--numeric-select-digit-width) +
+      var(--numeric-select-padding-inline)
+  );
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-background-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.builder-react-root .builder-module-background-details .builder-background-controls-horizontal {
+  display: contents;
+}
+
+.builder-react-root .builder-module-background-details .builder-setting-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  grid-template-columns: none;
+}
+
+.builder-react-root .builder-module-background-details .builder-setting-label {
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-module-background-details .builder-setting-value select,
+.builder-react-root .builder-module-background-details .builder-setting-value input[type="text"] {
+  width: auto;
+  max-width: min(280px, 100%);
+}
