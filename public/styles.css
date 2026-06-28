@@ -3026,8 +3026,12 @@ body.asset-associations-modal-open {
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
 }
-.builder-react-root .site-nav-link {
+.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
+.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
   flex: 1 1 0;
+  min-width: 0;
+}
+.builder-react-root .site-nav-link {
   min-height: 48px;
   display: inline-flex;
   align-items: center;
@@ -3041,6 +3045,10 @@ body.asset-associations-modal-open {
     background 140ms ease,
     transform 140ms ease,
     color 140ms ease;
+}
+.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
+  width: 100%;
+  box-sizing: border-box;
 }
 .builder-react-root .site-nav-link:hover,
 .builder-react-root .site-nav-link-active {
@@ -10702,7 +10710,8 @@ body.asset-associations-modal-open {
   padding: 5px;
   border-radius: 16px;
 }
-.builder-react-root .builder-preview-device-mobile .site-nav-link {
+.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) > .site-nav-link,
+.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
   flex-basis: calc(50% - 5px);
   min-height: 38px;
   border-radius: 12px;
@@ -12498,7 +12507,8 @@ body.asset-associations-modal-open {
   .builder-react-root .admin-nav-bar .admin-nav-link {
     flex-basis: calc(50% - 6px);
   }
-  .builder-react-root .site-nav-link {
+  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
+  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
     flex-basis: calc(50% - 6px);
   }
   .builder-react-root .builder-module-alignment-controls {
@@ -12526,7 +12536,8 @@ body.asset-associations-modal-open {
     padding: 5px;
     gap: 5px;
   }
-  .builder-react-root .site-nav-link {
+  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
+  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
     flex-basis: calc(50% - 5px);
     min-height: 38px;
     border-radius: 12px;
@@ -25297,7 +25308,12 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   align-items: stretch;
 }
 .site-nav-menu--horizontal > .site-nav-item {
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.site-nav-menu--horizontal > .site-nav-item > .site-nav-link {
+  width: 100%;
+  box-sizing: border-box;
 }
 .site-nav-link {
   display: inline-flex;
