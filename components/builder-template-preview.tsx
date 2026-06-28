@@ -1714,7 +1714,8 @@ type BlogPostRecord = {
   slug: string;
   excerpt?: string;
   author?: string;
-  featured_image_url?: string;
+  featuredImageUrl?: string;    // API returns camelCase from sanitize()
+  featured_image_url?: string;  // keep for any legacy / direct-DB paths
   published_at?: string;
   categoryIds?: string[];
   tags?: string[];
@@ -1966,9 +1967,9 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                 }}
               >
                 {/* List layout: image on the left as a fixed-width column */}
-                {showFeaturedImage && post.featured_image_url && layout === "list" ? (
+                {showFeaturedImage && (post.featuredImageUrl || post.featured_image_url) && layout === "list" ? (
                   <div style={{ flexShrink: 0, width: 220, overflow: "hidden" }}>
-                    <img alt={post.title} src={post.featured_image_url}
+                    <img alt={post.title} src={post.featuredImageUrl || post.featured_image_url}
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   </div>
                 ) : null}
@@ -1989,9 +1990,9 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                     {post.title}
                   </h3>
                   {/* Grid layout: image below headline, above excerpt */}
-                  {showFeaturedImage && post.featured_image_url && layout !== "list" ? (
+                  {showFeaturedImage && (post.featuredImageUrl || post.featured_image_url) && layout !== "list" ? (
                     <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", marginBottom: "0.875rem", overflow: "hidden", aspectRatio: imgAspectRatio }}>
-                      <img alt={post.title} src={post.featured_image_url}
+                      <img alt={post.title} src={post.featuredImageUrl || post.featured_image_url}
                         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     </div>
                   ) : null}
@@ -3222,10 +3223,10 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
     return (
       <article className="blog-post-page">
         <header className="blog-post-header">
+          <h1 className="blog-post-title">{post.title}</h1>
           {showFeaturedImage && imageUrl ? (
             <img alt={post.title} className="blog-post-featured-image" src={imageUrl} />
           ) : null}
-          <h1 className="blog-post-title">{post.title}</h1>
           {(showAuthor && post.author) || (showDate && pubDate) ? (
             <p className="blog-post-meta blog-card-date">
               {showAuthor && post.author ? <>By {post.author}</> : null}
