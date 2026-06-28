@@ -7688,18 +7688,19 @@
   gap: 12px 20px;
 }
 
-.builder-react-root .builder-blog-post-list-3col .builder-setting-row {
+.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-row {
   grid-template-columns: 1fr;
   gap: 3px;
 }
 
-.builder-react-root .builder-blog-post-list-3col .builder-setting-label {
+.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-label {
   white-space: normal;
 }
 
-.builder-react-root .builder-blog-post-list-3col .builder-setting-value select,
-.builder-react-root .builder-blog-post-list-3col .builder-setting-value input[type="number"] {
-  width: 100px;
+.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-value select,
+.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-value input[type="number"] {
+  width: 200px;
+  max-width: 100%;
 }
 
 .builder-react-root .builder-button-border-grid {
