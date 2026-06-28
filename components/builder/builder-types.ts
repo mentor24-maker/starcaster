@@ -109,7 +109,7 @@ export const modulePaletteGroups: Array<{
     value: "special-effects",
     label: "Special Effects",
     icon: "🪄",
-    description: "Saved celebration and game-layer effects from your module repository."
+    description: "Confetti bursts and saved celebration effects for buttons, page load, and the game layer."
   },
   {
     value: "admin",
@@ -613,6 +613,28 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: {}
+  },
+  {
+    id: "confetti-celebration",
+    type: "confetti",
+    group: "special-effects",
+    label: "Confetti",
+    icon: "🎉",
+    description: "Celebration burst — button click, on load, or game-layer trigger.",
+    name: "Confetti",
+    text: "",
+    settings: {
+      particleCount: "100",
+      spread: "70",
+      originX: "0.5",
+      originY: "0.6",
+      zIndex: "12000",
+      trigger: "button",
+      buttonLabel: "Confetti",
+      disableForReducedMotion: "false",
+      sound: "pop",
+      popVolume: "35"
+    }
   },
   {
     id: "blog-post-create-standard",
