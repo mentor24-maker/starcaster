@@ -117,6 +117,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [pageVisibility, setPageVisibility] = useState<PageVisibility>("public");
   const [draft, setDraft] = useState(createDraftFromTemplate(null));
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
+  const [newSectionOpenFocusId, setNewSectionOpenFocusId] = useState<string | null>(null);
   const [expandedModuleIds, setExpandedModuleIds] = useState<string[]>([]);
   const [pageEditorFocused, setPageEditorFocused] = useState(false);
   const [templateEditorFocused, setTemplateEditorFocused] = useState(false);
@@ -618,7 +619,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   function addSection(layout: BuilderTemplateLayout) {
     const newSection = createEmptySection(layout);
     setDraft((c) => ({ ...c, layoutSections: [...c.layoutSections, newSection] }));
-    setCollapsedSectionIds((c) => [...c, newSection.id]);
+    setCollapsedSectionIds((c) => c.filter((id) => id !== newSection.id));
+    setNewSectionOpenFocusId(newSection.id);
   }
 
   function removeSection(sectionId: string) {
@@ -2353,6 +2355,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             section={section}
                             sectionIndex={sectionIndex}
                             editorDevice="browser"
+                            autoOpenFirstCellContent={newSectionOpenFocusId === section.id}
+                            onAutoOpenFirstCellContentHandled={() => {
+                              setNewSectionOpenFocusId((current) => (current === section.id ? null : current));
+                            }}
                             isCollapsed={collapsedSectionIds.includes(section.id)}
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
@@ -2426,6 +2432,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         section={section}
                         sectionIndex={sectionIndex}
                         editorDevice={previewDevice === "mobile" ? "mobile" : "browser"}
+                        autoOpenFirstCellContent={newSectionOpenFocusId === section.id}
+                        onAutoOpenFirstCellContentHandled={() => {
+                          setNewSectionOpenFocusId((current) => (current === section.id ? null : current));
+                        }}
                         isCollapsed={collapsedSectionIds.includes(section.id)}
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
