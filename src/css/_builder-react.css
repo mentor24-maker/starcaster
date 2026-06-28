@@ -5884,6 +5884,17 @@
   min-width: 0;
 }
 
+.builder-react-root .builder-pages-details-shell {
+  scroll-margin-top: 12px;
+}
+
+.builder-react-root .builder-meta-grid-pages .field input:not([type="checkbox"]):not([type="radio"]):focus,
+.builder-react-root .builder-meta-grid-pages .field select:focus,
+.builder-react-root .builder-meta-grid-pages .field textarea:focus {
+  outline: none;
+  border: 3px solid var(--sc-field-focus-color, #22c55e);
+}
+
 .builder-react-root .builder-meta-grid-pages-background {
   min-width: 0;
 }

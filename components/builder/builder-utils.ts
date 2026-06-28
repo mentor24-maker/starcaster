@@ -852,6 +852,20 @@ export function getCrmThemePaletteVars(palette: CrmThemePalette | undefined): CS
   return vars as CSSProperties;
 }
 
+/** Form-control tokens for builder/admin shells (radio groups, focused inputs). */
+export function getThemeFormControlVars(
+  theme: BuilderTheme | undefined,
+  palette?: CrmThemePalette
+): CSSProperties {
+  const vars: Record<string, string> = {};
+  const forms = theme?.typography?.forms;
+  const radioAccent = forms?.radioAccent || palette?.primaryColor;
+  if (radioAccent) vars["--sc-radio-accent"] = radioAccent;
+  if (forms?.radioLabel) vars["--sc-radio-label-color"] = forms.radioLabel;
+  vars["--sc-field-focus-color"] = forms?.fieldFocus || "#22c55e";
+  return vars as CSSProperties;
+}
+
 export function builderThemeToCrmPalette(theme: {
   primaryColor?: string;
   secondaryColor?: string;

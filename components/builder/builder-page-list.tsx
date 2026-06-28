@@ -2,7 +2,7 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary,
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
-import { buildBuilderThemePaletteColors, formatTemplateTimestamp } from "./builder-utils";
+import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars } from "./builder-utils";
 
 type SortField = "name" | "slug" | "template" | "visibility" | "updatedAt";
 type SortDir = "asc" | "desc";
@@ -136,6 +136,36 @@ export function BuilderPageList({
     ? themes.find((theme) => theme.id === pageThemeId) ?? themes[0] ?? null
     : themes[0] ?? null;
   const themeColors = buildBuilderThemePaletteColors(activeTheme);
+  const pageDetailsThemeStyle = useMemo(
+    () =>
+      getThemeFormControlVars(
+        activeTheme?.typography ? { typography: activeTheme.typography } : undefined,
+        builderThemeToCrmPalette(activeTheme)
+      ),
+    [activeTheme]
+  );
+
+  function openPageDetailsPanel(scrollIntoView = false) {
+    shouldFocusDetailsRef.current = true;
+    if (scrollIntoView) {
+      shouldScrollDetailsRef.current = true;
+    }
+    setCollapsedPanels({ pages: true, details: false });
+  }
+
+  function scrollAndFocusPageDetails() {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const shell = pageDetailsShellRef.current;
+        if (shell) {
+          const top = shell.getBoundingClientRect().top + window.scrollY;
+          window.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
+        }
+        titleInputRef.current?.focus({ preventScroll: true });
+        titleInputRef.current?.select();
+      });
+    });
+  }
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const pageDetailsShellRef = useRef<HTMLDivElement | null>(null);
@@ -159,7 +189,7 @@ export function BuilderPageList({
     onPageEditorFocus(true);
     shouldFocusDetailsRef.current = true;
     shouldScrollDetailsRef.current = true;
-    setCollapsedPanels((current) => ({ ...current, details: false }));
+    openPageDetailsPanel(true);
   }, [autoNewPage, onNewPage, onPageEditorFocus]);
 
   // When mounted to edit a specific page (Manage Pages CRUD → Builder: Pages).
@@ -167,10 +197,19 @@ export function BuilderPageList({
     if (!autoOpenPageDetails || didAutoOpenPageDetailsRef.current || !selectedPageId) return;
     didAutoOpenPageDetailsRef.current = true;
     onPageEditorFocus(true);
-    shouldFocusDetailsRef.current = true;
-    shouldScrollDetailsRef.current = true;
-    setCollapsedPanels((current) => ({ ...current, details: false }));
+    openPageDetailsPanel(true);
   }, [autoOpenPageDetails, onPageEditorFocus, selectedPageId]);
+
+  // Backup when legacy builder.js mounts an existing page editor (after navigation settles).
+  useEffect(() => {
+    function handleOpenPageDetails() {
+      onPageEditorFocus(true);
+      openPageDetailsPanel(true);
+      window.setTimeout(() => scrollAndFocusPageDetails(), 150);
+    }
+    window.addEventListener("builder:openPageDetails", handleOpenPageDetails);
+    return () => window.removeEventListener("builder:openPageDetails", handleOpenPageDetails);
+  }, [onPageEditorFocus]);
 
   useEffect(() => {
     onPageEditorFocus(!collapsedPanels.details || Boolean(selectedPageId));
@@ -271,11 +310,7 @@ export function BuilderPageList({
   }
 
   function openDetailsAndFocus(scrollIntoView = false) {
-    shouldFocusDetailsRef.current = true;
-    if (scrollIntoView) {
-      shouldScrollDetailsRef.current = true;
-    }
-    setCollapsedPanels((current) => ({ ...current, details: false }));
+    openPageDetailsPanel(scrollIntoView);
   }
 
   function handleEditPage(pageId: string) {
@@ -298,12 +333,16 @@ export function BuilderPageList({
     shouldFocusDetailsRef.current = false;
     const shouldScroll = shouldScrollDetailsRef.current;
     shouldScrollDetailsRef.current = false;
-    window.requestAnimationFrame(() => {
+    const runFocus = () => {
       if (shouldScroll) {
-        pageDetailsShellRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        scrollAndFocusPageDetails();
+        return;
       }
-      titleInputRef.current?.focus();
+      titleInputRef.current?.focus({ preventScroll: true });
       titleInputRef.current?.select();
+    };
+    window.requestAnimationFrame(() => {
+      window.setTimeout(runFocus, shouldScroll ? 120 : 0);
     });
   }, [collapsedPanels.details, selectedPageId]);
 
@@ -747,7 +786,11 @@ export function BuilderPageList({
         </div>
       </div>
 
-      <div className="builder-toolbar-shell builder-pages-details-shell" ref={pageDetailsShellRef}>
+      <div
+        className="builder-toolbar-shell builder-pages-details-shell"
+        ref={pageDetailsShellRef}
+        style={pageDetailsThemeStyle}
+      >
         <div className="builder-pages-crud-heading-layout">
           <div className="builder-pages-crud-heading-primary">
             <button
@@ -837,8 +880,8 @@ export function BuilderPageList({
             </label>
             <div className="field">
               <span>Visibility</span>
-              <div className="builder-radio-group">
-                <label>
+              <div className="sc-radio-group">
+                <label className="sc-radio-option">
                   <input
                     type="radio"
                     name="page-visibility"
@@ -846,9 +889,9 @@ export function BuilderPageList({
                     checked={!pageIsPrivate}
                     onChange={() => onSetPageIsPrivate(false)}
                   />
-                  {" "}Public
+                  <span className="sc-radio-label">Public</span>
                 </label>
-                <label>
+                <label className="sc-radio-option">
                   <input
                     type="radio"
                     name="page-visibility"
@@ -856,7 +899,7 @@ export function BuilderPageList({
                     checked={pageIsPrivate}
                     onChange={() => onSetPageIsPrivate(true)}
                   />
-                  {" "}Private
+                  <span className="sc-radio-label">Private</span>
                 </label>
               </div>
             </div>
