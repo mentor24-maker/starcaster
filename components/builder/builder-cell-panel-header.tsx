@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 
 type BuilderCellPanelHeaderProps = {
@@ -8,6 +8,7 @@ type BuilderCellPanelHeaderProps = {
   panelName?: string;
   leadingActions?: ReactNode;
   headingActions?: ReactNode;
+  headerRef?: Ref<HTMLDivElement>;
 };
 
 export function BuilderCellPanelHeader({
@@ -16,12 +17,13 @@ export function BuilderCellPanelHeader({
   onToggle,
   panelName,
   leadingActions,
-  headingActions
+  headingActions,
+  headerRef
 }: BuilderCellPanelHeaderProps) {
   const label = panelName ?? title;
 
   const header = (
-    <div aria-expanded={!isCollapsed} className="builder-cell-panel-header">
+    <div aria-expanded={!isCollapsed} className="builder-cell-panel-header" ref={headingActions ? undefined : headerRef}>
       <div className="builder-cell-panel-title">
         {leadingActions ? (
           <span className="builder-cell-panel-leading-actions">{leadingActions}</span>
@@ -48,7 +50,7 @@ export function BuilderCellPanelHeader({
   }
 
   return (
-    <div className="builder-panel-toggle-row">
+    <div className="builder-panel-toggle-row" ref={headerRef}>
       {header}
       <span className="builder-panel-heading-actions">{headingActions}</span>
     </div>
