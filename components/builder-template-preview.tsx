@@ -1864,10 +1864,10 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       ? { display: "flex", flexDirection: "column", gap: `${cardGap}px` }
       : { display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: `${cardGap}px` };
 
-  const ratioMap: Record<string, string> = {
-    "16:9": "56.25%", "4:3": "75%", "3:2": "66.67%", "1:1": "100%",
+  const aspectRatioMap: Record<string, string> = {
+    "16:9": "16/9", "4:3": "4/3", "3:2": "3/2", "1:1": "1/1",
   };
-  const paddingTop = ratioMap[settings.imageAspectRatio || "16:9"] || "56.25%";
+  const imgAspectRatio = aspectRatioMap[settings.imageAspectRatio || "16:9"] || "16/9";
 
   const inputStyle: CSSProperties = {
     padding: "0.5rem 0.75rem",
@@ -1965,18 +1965,12 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                   flexDirection: layout === "list" ? "row" : "column",
                 }}
               >
-                {showFeaturedImage && post.featured_image_url ? (
-                  layout === "list" ? (
-                    <div style={{ flexShrink: 0, width: 220 }}>
-                      <img alt={post.title} src={post.featured_image_url}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                    </div>
-                  ) : (
-                    <div style={{ position: "relative", paddingTop, width: "100%" }}>
-                      <img alt={post.title} src={post.featured_image_url}
-                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                    </div>
-                  )
+                {/* List layout: image on the left as a fixed-width column */}
+                {showFeaturedImage && post.featured_image_url && layout === "list" ? (
+                  <div style={{ flexShrink: 0, width: 220, overflow: "hidden" }}>
+                    <img alt={post.title} src={post.featured_image_url}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </div>
                 ) : null}
                 <div style={{ padding: "1.125rem 1.25rem", flex: 1, display: "flex", flexDirection: "column" }}>
                   {postCats.length > 0 ? (
@@ -1991,9 +1985,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                       ))}
                     </div>
                   ) : null}
-                  <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700 }}>
+                  <h3 style={{ margin: "0 0 0.75rem", fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700 }}>
                     {post.title}
                   </h3>
+                  {/* Grid layout: image below headline, above excerpt */}
+                  {showFeaturedImage && post.featured_image_url && layout !== "list" ? (
+                    <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", marginBottom: "0.875rem", overflow: "hidden", aspectRatio: imgAspectRatio }}>
+                      <img alt={post.title} src={post.featured_image_url}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </div>
+                  ) : null}
                   {showExcerpt && post.excerpt ? (
                     <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5, flex: 1 }}>
                       {post.excerpt}
