@@ -7495,7 +7495,7 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-module-meta-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
   align-items: start;
 }
@@ -7509,7 +7509,7 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-module-form-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px 14px;
   align-items: center;
 }
@@ -7525,6 +7525,47 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-module-form-row .builder-number-select-control {
   width: auto;
   max-width: 100%;
+}
+.builder-react-root .builder-module-editor,
+.builder-react-root .builder-table-cell-module-editor {
+  container-type: inline-size;
+  container-name: module-editor;
+}
+@container module-editor (max-width: 33rem) {
+  .builder-module-form-row,
+  .builder-inline-number-row,
+  .builder-columns-3,
+  .builder-preview-columns-3 {
+    grid-template-columns: 1fr;
+  }
+}
+@container module-editor (max-width: 22.5rem) {
+  .builder-module-meta-row,
+  .builder-button-setting-columns,
+  .builder-button-border-grid,
+  .builder-image-controls-grid,
+  .builder-typography-controls-grid,
+  .builder-columns-2,
+  .builder-preview-columns-2,
+  .builder-nav-dir-levels-row,
+  .builder-player-portal-settings-row,
+  .builder-module-offset-fields,
+  .builder-background-inline-row,
+  .builder-social-module-layout-row {
+    grid-template-columns: 1fr;
+  }
+  .builder-inline-number-row,
+  .builder-button-padding-row,
+  .builder-nav-four-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .builder-field-width-label {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 .builder-react-root .builder-social-module-panel {
   gap: 10px;
@@ -9571,9 +9612,10 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-inline-number-row,
 .builder-react-root .builder-button-padding-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 14px;
   align-items: center;
-  gap: 64px;
   width: 100%;
 }
 .builder-react-root .builder-inline-number-row {
@@ -9581,11 +9623,10 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-inline-number-field,
 .builder-react-root .builder-button-padding-inline {
-  display: flex;
-  flex: 1;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 .builder-react-root .builder-inline-number-field span,
@@ -9597,10 +9638,9 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-inline-number-field select,
 .builder-react-root .builder-button-padding-inline select {
-  flex: 1;
   width: auto;
-  min-width: 88px;
-  max-width: none;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 12px;
 }
 .builder-react-root .admin-blog-opacity-row {
