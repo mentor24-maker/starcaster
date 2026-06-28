@@ -113,6 +113,13 @@
   border-radius: 10px !important;
 }
 
+/* Page Details — 3px green ring on focused inputs (Page title auto-focus, manual tab/click). */
+.builder-react-root .builder-pages-details-shell .builder-page-details-field:focus,
+.builder-react-root .builder-pages-details-shell .builder-page-details-field.is-auto-focused {
+  outline: none !important;
+  border: 3px solid var(--sc-field-focus-color, #22c55e) !important;
+}
+
 /* ============================================================== */
 /* BUTTONS → 10px                                                 */
 /* ============================================================== */
