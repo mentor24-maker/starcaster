@@ -81,7 +81,12 @@ type BuilderSectionCardProps = {
   themeStyle?: CSSProperties;
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
+  /** When true (e.g. new row from layout toolbar), open first-cell Content after focusing the section header. */
+  autoOpenFirstCellContent?: boolean;
+  onAutoOpenFirstCellContentHandled?: () => void;
 };
+
+type FirstCellContentAction = "open-and-focus-content" | "open-after-header-focus";
 
 function getModulePaletteAnchorFromButton(button: HTMLButtonElement) {
   const rect = button.getBoundingClientRect();
@@ -140,7 +145,9 @@ export function BuilderSectionCard({
   themeColors,
   themeStyle,
   themeBackgroundColor,
-  themePrimaryColor
+  themePrimaryColor,
+  autoOpenFirstCellContent = false,
+  onAutoOpenFirstCellContentHandled
 }: BuilderSectionCardProps) {
   const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
   const isCanonical = sectionAny.canonical === true;
@@ -163,33 +170,72 @@ export function BuilderSectionCard({
   const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
   const firstColumnRef = useRef<HTMLDivElement | null>(null);
   const firstCellContentHeaderRef = useRef<HTMLDivElement | null>(null);
-  const pendingFirstCellContentFocusRef = useRef(false);
+  const pendingFirstCellContentActionRef = useRef<FirstCellContentAction | null>(null);
+  const shouldFocusContentHeaderRef = useRef(false);
   const sectionMountedRef = useRef(false);
+
+  function openFirstCellContentPanels() {
+    const firstColumn = columns[0];
+    if (!firstColumn) {
+      return;
+    }
+    setCollapsedCellPanels((current) => ({
+      ...current,
+      [firstColumn]: { styles: true, content: false }
+    }));
+  }
 
   function handleToggleSectionCollapsed() {
     if (isCollapsed && !isCanonical) {
-      pendingFirstCellContentFocusRef.current = true;
+      pendingFirstCellContentActionRef.current = "open-and-focus-content";
+      shouldFocusContentHeaderRef.current = true;
     }
     onToggleCollapsed();
   }
 
   useEffect(() => {
-    if (isCollapsed) {
-      pendingFirstCellContentFocusRef.current = false;
-    }
-  }, [isCollapsed]);
-
-  useEffect(() => {
-    if (isCollapsed || isCanonical || !pendingFirstCellContentFocusRef.current || !columns[0]) {
+    if (isCollapsed || isCanonical || !columns[0]) {
       return;
     }
 
-    const firstColumn = columns[0];
-    setCollapsedCellPanels((current) => ({
-      ...current,
-      [firstColumn]: { styles: true, content: false }
-    }));
-  }, [isCollapsed, isCanonical, columns]);
+    if (autoOpenFirstCellContent && !pendingFirstCellContentActionRef.current) {
+      pendingFirstCellContentActionRef.current = "open-after-header-focus";
+      onAutoOpenFirstCellContentHandled?.();
+    }
+
+    const action = pendingFirstCellContentActionRef.current;
+    if (!action) {
+      return;
+    }
+
+    if (action === "open-after-header-focus") {
+      pendingFirstCellContentActionRef.current = null;
+      window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
+          const sectionHeader = sectionHeaderRef.current;
+          if (sectionHeader) {
+            document.querySelectorAll("[data-builder-focus]").forEach((node) => node.removeAttribute("data-builder-focus"));
+            sectionHeader.setAttribute("data-builder-focus", "true");
+            sectionHeader.scrollIntoView({ behavior: "smooth", block: "start" });
+            sectionHeader.querySelector<HTMLElement>(".builder-section-title-label")?.focus({ preventScroll: true });
+          }
+          openFirstCellContentPanels();
+        }, 80);
+      });
+      return;
+    }
+
+    pendingFirstCellContentActionRef.current = null;
+    shouldFocusContentHeaderRef.current = false;
+    openFirstCellContentPanels();
+  }, [isCollapsed, isCanonical, columns, autoOpenFirstCellContent, onAutoOpenFirstCellContentHandled]);
+
+  useEffect(() => {
+    if (isCollapsed) {
+      pendingFirstCellContentActionRef.current = null;
+      shouldFocusContentHeaderRef.current = false;
+    }
+  }, [isCollapsed]);
 
   useEffect(() => {
     if (isCollapsed || isCanonical || !columns[0]) {
@@ -198,11 +244,11 @@ export function BuilderSectionCard({
 
     const firstColumn = columns[0];
     const cellPanels = collapsedCellPanels[firstColumn] ?? { styles: true, content: true };
-    if (cellPanels.content || !pendingFirstCellContentFocusRef.current) {
+    if (cellPanels.content || !shouldFocusContentHeaderRef.current) {
       return;
     }
 
-    pendingFirstCellContentFocusRef.current = false;
+    shouldFocusContentHeaderRef.current = false;
 
     window.requestAnimationFrame(() => {
       window.setTimeout(() => {
@@ -219,7 +265,7 @@ export function BuilderSectionCard({
   useEffect(() => {
     if (!sectionMountedRef.current) { sectionMountedRef.current = true; return; }
     if (isCollapsed || !sectionHeaderRef.current) return;
-    if (pendingFirstCellContentFocusRef.current) return;
+    if (pendingFirstCellContentActionRef.current) return;
 
     const el = sectionHeaderRef.current;
     document.querySelectorAll("[data-builder-focus]").forEach((n) => n.removeAttribute("data-builder-focus"));
