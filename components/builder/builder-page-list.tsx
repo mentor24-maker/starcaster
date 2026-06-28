@@ -69,6 +69,8 @@ type BuilderPageListProps = {
   pageIsPrivate: boolean;
   onSetPageIsPrivate: (val: boolean) => void;
   autoNewPage?: boolean;
+  /** When mounted to edit a specific page (e.g. Manage Pages CRUD edit), open Page Details. */
+  autoOpenPageDetails?: boolean;
   snapshots: BuilderPageSnapshotSummary[];
   isSnapshoting: boolean;
   isRestoring: boolean;
@@ -109,6 +111,7 @@ export function BuilderPageList({
   pageIsPrivate,
   onSetPageIsPrivate,
   autoNewPage,
+  autoOpenPageDetails,
   snapshots,
   isSnapshoting,
   isRestoring,
@@ -135,8 +138,11 @@ export function BuilderPageList({
   const themeColors = buildBuilderThemePaletteColors(activeTheme);
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const pageDetailsShellRef = useRef<HTMLDivElement | null>(null);
   const shouldFocusDetailsRef = useRef(false);
+  const shouldScrollDetailsRef = useRef(false);
   const didAutoNewPageRef = useRef(false);
+  const didAutoOpenPageDetailsRef = useRef(false);
 
   function togglePanel(panel: keyof typeof collapsedPanels) {
     setCollapsedPanels((current) => ({
@@ -152,8 +158,19 @@ export function BuilderPageList({
     onNewPage();
     onPageEditorFocus(true);
     shouldFocusDetailsRef.current = true;
+    shouldScrollDetailsRef.current = true;
     setCollapsedPanels((current) => ({ ...current, details: false }));
   }, [autoNewPage, onNewPage, onPageEditorFocus]);
+
+  // When mounted to edit a specific page (Manage Pages CRUD → Builder: Pages).
+  useEffect(() => {
+    if (!autoOpenPageDetails || didAutoOpenPageDetailsRef.current || !selectedPageId) return;
+    didAutoOpenPageDetailsRef.current = true;
+    onPageEditorFocus(true);
+    shouldFocusDetailsRef.current = true;
+    shouldScrollDetailsRef.current = true;
+    setCollapsedPanels((current) => ({ ...current, details: false }));
+  }, [autoOpenPageDetails, onPageEditorFocus, selectedPageId]);
 
   useEffect(() => {
     onPageEditorFocus(!collapsedPanels.details || Boolean(selectedPageId));
@@ -253,21 +270,24 @@ export function BuilderPageList({
     );
   }
 
-  function openDetailsAndFocus() {
+  function openDetailsAndFocus(scrollIntoView = false) {
     shouldFocusDetailsRef.current = true;
+    if (scrollIntoView) {
+      shouldScrollDetailsRef.current = true;
+    }
     setCollapsedPanels((current) => ({ ...current, details: false }));
   }
 
   function handleEditPage(pageId: string) {
     onSelectPage(pageId);
     onPageEditorFocus(true);
-    openDetailsAndFocus();
+    openDetailsAndFocus(true);
   }
 
   function handleNewPage() {
     onNewPage();
     onPageEditorFocus(true);
-    openDetailsAndFocus();
+    openDetailsAndFocus(true);
   }
 
   useEffect(() => {
@@ -276,7 +296,12 @@ export function BuilderPageList({
     }
 
     shouldFocusDetailsRef.current = false;
+    const shouldScroll = shouldScrollDetailsRef.current;
+    shouldScrollDetailsRef.current = false;
     window.requestAnimationFrame(() => {
+      if (shouldScroll) {
+        pageDetailsShellRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
       titleInputRef.current?.focus();
       titleInputRef.current?.select();
     });
@@ -722,7 +747,7 @@ export function BuilderPageList({
         </div>
       </div>
 
-      <div className="builder-toolbar-shell builder-pages-details-shell">
+      <div className="builder-toolbar-shell builder-pages-details-shell" ref={pageDetailsShellRef}>
         <div className="builder-pages-crud-heading-layout">
           <div className="builder-pages-crud-heading-primary">
             <button

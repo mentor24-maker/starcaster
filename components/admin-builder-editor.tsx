@@ -138,9 +138,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [activeModuleGroup, setActiveModuleGroup] = useState<ModulePaletteGroup | null>(null);
   const [collapsedBuilderPanels, setCollapsedBuilderPanels] = useState({
     rowConfigurations: true,
-    // Reveal the workspace immediately when we mount to edit a specific record;
-    // otherwise the page's sections stay hidden behind a collapsed panel.
-    workspace: !initialRecordId
+    workspace: true
   });
   const workspaceLayoutToolbarRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollWorkspaceRef = useRef(false);
@@ -2262,6 +2260,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           pageIsPrivate={pageIsPrivate}
           onSetPageIsPrivate={setPageIsPrivate}
           autoNewPage={autoNewPage}
+          autoOpenPageDetails={Boolean(initialRecordId && initialMode === "pages")}
           snapshots={snapshots}
           activeArchive={activeArchive}
           isSnapshoting={isSnapshoting}
