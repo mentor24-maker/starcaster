@@ -5470,7 +5470,9 @@
   .builder-player-portal-settings-row,
   .builder-module-offset-fields,
   .builder-background-inline-row,
-  .builder-social-module-layout-row {
+  .builder-social-module-layout-row,
+  .builder-blog-post-list-3col,
+  .builder-blog-post-list-general-row {
     grid-template-columns: 1fr;
   }
 
@@ -7655,6 +7657,35 @@
   display: grid;
   gap: 12px;
   align-content: start;
+}
+
+.builder-react-root .builder-blog-post-list-settings {
+  display: grid;
+  gap: 16px;
+}
+
+.builder-react-root .builder-blog-post-list-general-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 20px;
+  align-items: start;
+}
+
+.builder-react-root .builder-blog-post-list-section-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: -4px;
+}
+
+.builder-react-root .builder-blog-post-list-3col {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 20px;
 }
 
 .builder-react-root .builder-button-border-grid {

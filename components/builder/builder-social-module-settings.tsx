@@ -12,6 +12,7 @@ import {
   BuilderInlineNumberSelectRow,
   BuilderNumberSelectControl
 } from "./builder-inline-number-select";
+import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
   BuilderThemeColorField,
@@ -180,40 +181,73 @@ export function BuilderSocialModuleSettings({
     setCollapsedItems((current) => ({ ...current, [id]: false }));
   }
 
+  function handleBackgroundModeChange(newMode: BackgroundSettings["mode"]) {
+    onUpdateModuleBackground((current) => {
+      const next = { ...current, mode: newMode };
+      if (newMode === "color" && themeBackgroundColor) {
+        next.color = themeBackgroundColor;
+      } else if (newMode === "gradient") {
+        if (themePrimaryColor) next.color = themePrimaryColor;
+        next.color2 = "#ffffff";
+      }
+      return next;
+    });
+  }
+
+  const moduleBackground = getModuleBackgroundSettings(module.settings);
+
   return (
     <div className="builder-social-module-settings">
       <div className="builder-social-module-layout">
-        <div className="builder-module-meta-row">
-          <BuilderSettingRow label="Label">
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Label" width="label">
             <input
-              className="builder-field-width-label"
               type="text"
               value={module.name}
               onChange={(event) =>
                 onUpdateModule((current) => ({ ...current, name: event.target.value }))
               }
             />
-          </BuilderSettingRow>
-          <div className="builder-module-meta-row-slot">
+          </BuilderModuleField>
+          <BuilderModuleField label="Background" width="select-md">
+            <select
+              value={moduleBackground.mode}
+              onChange={(event) =>
+                handleBackgroundModeChange(event.target.value as BackgroundSettings["mode"])
+              }
+            >
+              <option value="none">None</option>
+              <option value="color">Color</option>
+              <option value="gradient">Gradient</option>
+              <option value="image">Image</option>
+              <option value="style">Style</option>
+            </select>
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+
+        {moduleBackground.mode !== "none" ? (
+          <div className="builder-module-background-details">
             <BuilderBackgroundControls
-              label="Background"
-              background={getModuleBackgroundSettings(module.settings)}
+              hideModeRow
               horizontal
+              label="Background"
+              background={moduleBackground}
               onChange={onUpdateModuleBackground}
               themeBackgroundColor={themeBackgroundColor}
               themeColors={themeColors}
               themePrimaryColor={themePrimaryColor}
             />
           </div>
-        </div>
-        <div className="builder-module-form-row">
-          <BuilderSettingRow label="Alignment">
+        ) : null}
+
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Alignment" width="align">
             <BuilderAlignmentIconGroup
               value={moduleAlignment}
               onChange={(alignment) => updateSetting("alignment", alignment)}
             />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="H Margin">
+          </BuilderModuleField>
+          <BuilderModuleField label="H Margin" width="num">
             <BuilderNumberSelectControl
               value={module.settings.horizontalMargin ?? "0"}
               min={0}
@@ -221,8 +255,8 @@ export function BuilderSocialModuleSettings({
               fallback="0"
               onChange={(horizontalMargin) => updateSetting("horizontalMargin", horizontalMargin)}
             />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="V Margin">
+          </BuilderModuleField>
+          <BuilderModuleField label="V Margin" width="num">
             <BuilderNumberSelectControl
               value={module.settings.verticalMargin ?? "0"}
               min={0}
@@ -230,8 +264,8 @@ export function BuilderSocialModuleSettings({
               fallback="0"
               onChange={(verticalMargin) => updateSetting("verticalMargin", verticalMargin)}
             />
-          </BuilderSettingRow>
-        </div>
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
       </div>
 
       <div className="builder-cell-panel builder-social-module-panel">

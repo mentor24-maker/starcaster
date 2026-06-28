@@ -421,6 +421,58 @@ App.builder = (function () {
         { key: 'targetPage', label: 'Target Page ID', control: 'text', placeholder: 'e.g., acquireWebPage' },
       ],
     },
+    {
+      value: 'blog-post-list',
+      label: 'Blog Post List',
+      description: 'A configurable grid or list of blog posts with filtering, search, and display options.',
+      starterName: 'Blog Post List',
+      defaults: {
+        postTitle: '',
+        postSlug: '',
+        postPageUrl: '',
+        layout: 'grid',
+        columns: '3',
+        postsPerPage: '9',
+        showSearch: 'true',
+        showDateFilter: 'false',
+        showCategoryFilter: 'true',
+        showAuthorFilter: 'true',
+        popularityFilter: 'false',
+        showTagFilter: 'true',
+        cardStyle: 'default',
+        cardGap: '24',
+        cardBorderRadius: '12',
+        showAuthor: 'true',
+        showDate: 'true',
+        showExcerpt: 'true',
+        showFeaturedImage: 'true',
+        showCategories: 'true',
+        showTags: 'true',
+      },
+      fields: [
+        { key: 'postTitle', label: 'Post Title', control: 'text', placeholder: 'Section title' },
+        { key: 'postSlug', label: 'Post Slug', control: 'text', placeholder: '' },
+        { key: 'postPageUrl', label: 'Post view page URL', control: 'text', placeholder: '/builder-preview.html?slug=blog-post-view' },
+        { key: 'layout', label: 'Layout', control: 'select', options: [{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }, { value: 'admin-manager', label: 'Admin Manager' }] },
+        { key: 'columns', label: 'Columns', control: 'select', options: ['1', '2', '3'] },
+        { key: 'postsPerPage', label: 'Posts per page', control: 'select', options: ['3', '6', '9', '12', '18'] },
+        { key: 'showSearch', label: 'Search bar', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showDateFilter', label: 'Date range filter', control: 'select', options: [{ value: 'false', label: 'Hide' }, { value: 'true', label: 'Show' }] },
+        { key: 'popularityFilter', label: 'Popularity filter', control: 'select', options: [{ value: 'false', label: 'Off' }, { value: 'views', label: 'By Views' }, { value: 'likes', label: 'By Likes' }] },
+        { key: 'showCategoryFilter', label: 'Category filter', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showAuthorFilter', label: 'Author filter', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showTagFilter', label: 'Tag filter', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'cardStyle', label: 'Card style', control: 'select', options: [{ value: 'default', label: 'Default' }, { value: 'bordered', label: 'Bordered' }, { value: 'shadow', label: 'Shadow' }] },
+        { key: 'cardGap', label: 'Card gap (px)', control: 'number', min: 8, max: 64, step: 4 },
+        { key: 'cardBorderRadius', label: 'Card radius (px)', control: 'number', min: 0, max: 32, step: 2 },
+        { key: 'showAuthor', label: 'Author', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showDate', label: 'Date', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showExcerpt', label: 'Excerpt', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showFeaturedImage', label: 'Featured image', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showCategories', label: 'Categories', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+        { key: 'showTags', label: 'Tags', control: 'select', options: [{ value: 'true', label: 'Show' }, { value: 'false', label: 'Hide' }] },
+      ],
+    },
   ];
   let selectedTemplateId = LANDING_TEMPLATES[0].id;
   let selectedFormTemplateId = FORM_TEMPLATES[0].id;
@@ -3091,11 +3143,18 @@ App.builder = (function () {
         control = document.createElement('select');
         (field.options || []).forEach((optionValue) => {
           const option = document.createElement('option');
-          option.value = String(optionValue);
-          option.textContent = String(optionValue);
+          if (optionValue && typeof optionValue === 'object') {
+            option.value = String(optionValue.value);
+            option.textContent = String(optionValue.label || optionValue.value);
+          } else {
+            option.value = String(optionValue);
+            option.textContent = String(optionValue);
+          }
           control.appendChild(option);
         });
-        control.value = safeText(value) || String(field.options?.[0] || '');
+        const _firstOpt = field.options?.[0];
+        const _firstVal = _firstOpt && typeof _firstOpt === 'object' ? String(_firstOpt.value) : String(_firstOpt || '');
+        control.value = safeText(value) || _firstVal;
       } else if (field.control === 'saved-form-select') {
         control = document.createElement('select');
         const empty = document.createElement('option');
@@ -3461,6 +3520,12 @@ App.builder = (function () {
     }
     if (type === 'pod') {
       return `${safeText(settings.title) || 'Channel Pod'} · ${safeText(settings.description, 60) || 'No description'}`;
+    }
+    if (type === 'blog-post-list') {
+      const layout = safeText(settings.layout) || 'grid';
+      const cols = layout === 'grid' ? ` · ${safeText(settings.columns) || '3'} col` : '';
+      const perPage = safeText(settings.postsPerPage) || '9';
+      return `${layout.charAt(0).toUpperCase() + layout.slice(1)}${cols} · ${perPage} per page`;
     }
     return safeText(module?.name) || '-';
   }
