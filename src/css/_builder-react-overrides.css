@@ -113,6 +113,13 @@
   border-radius: 10px !important;
 }
 
+.builder-react-root .builder-pages-details-shell input:not([type="checkbox"]):not([type="radio"]):focus,
+.builder-react-root .builder-pages-details-shell select:focus,
+.builder-react-root .builder-pages-details-shell textarea:focus {
+  outline: none;
+  border: 3px solid #22c55e !important;
+}
+
 /* ============================================================== */
 /* BUTTONS → 10px                                                 */
 /* ============================================================== */
