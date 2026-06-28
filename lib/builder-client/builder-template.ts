@@ -180,6 +180,12 @@ export type BuilderThemeTypography = {
   };
   /** Sparse map — only elements the user has customized are present. */
   elements: Partial<Record<BuilderThemeElement, BuilderThemeElementStyle>>;
+  /** Form control chrome (radio accent, labels, field focus ring). Stored in typography JSON. */
+  forms?: {
+    radioAccent?: string;
+    radioLabel?: string;
+    fieldFocus?: string;
+  };
 };
 
 export type BuilderTheme = {

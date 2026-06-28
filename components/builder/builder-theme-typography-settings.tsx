@@ -23,11 +23,14 @@ const COLOR_PLACEHOLDERS = {
   text: "#214c71",
   heading: "#18324a",
   link: "#0f4f8f",
-  linkHover: "#0f4f8f"
+  linkHover: "#0f4f8f",
+  radioAccent: "#0b82d4",
+  radioLabel: "#214c71",
+  fieldFocus: "#22c55e"
 } as const;
 
 export function BuilderThemeTypographySettings({ theme, onChange }: BuilderThemeTypographySettingsProps) {
-  const { fonts, colors, scale } = theme.typography;
+  const { fonts, colors, scale, forms = {} } = theme.typography;
 
   function updateFont(role: "heading" | "body", value: string) {
     onChange((current) => ({
@@ -65,6 +68,16 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
       typography: {
         ...current.typography,
         scale: { ...current.typography.scale, [key]: value }
+      }
+    }));
+  }
+
+  function updateFormColor(role: keyof Pick<typeof COLOR_PLACEHOLDERS, "radioAccent" | "radioLabel" | "fieldFocus">, value: string) {
+    onChange((current) => ({
+      ...current,
+      typography: {
+        ...current.typography,
+        forms: { ...(current.typography.forms ?? {}), [role]: value }
       }
     }));
   }
@@ -219,6 +232,41 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
               onChange={(event) => updateScale(`${h}Fw`, Number.parseInt(event.target.value, 10) || 0)}
             />
           </div>
+        ))}
+      </div>
+
+      <div className="builder-theme-typography-group">
+        <h4 className="builder-theme-typography-heading">Form Controls</h4>
+        <p className="builder-theme-typography-note">
+          Radio groups and focused inputs in builder forms (e.g. Page Details). Leave unset to inherit palette defaults.
+        </p>
+        {(
+          [
+            ["radioAccent", "Radio accent"],
+            ["radioLabel", "Radio label"],
+            ["fieldFocus", "Field focus ring"]
+          ] as Array<[keyof Pick<typeof COLOR_PLACEHOLDERS, "radioAccent" | "radioLabel" | "fieldFocus">, string]>
+        ).map(([role, label]) => (
+          <BuilderSettingRow key={role} label={label}>
+            <span className="builder-theme-color-control">
+              <input
+                type="color"
+                value={forms[role] || COLOR_PLACEHOLDERS[role]}
+                onChange={(event) => updateFormColor(role, event.target.value)}
+              />
+              {forms[role] ? (
+                <button
+                  className="builder-theme-color-reset"
+                  type="button"
+                  onClick={() => updateFormColor(role, "")}
+                >
+                  Reset
+                </button>
+              ) : (
+                <span className="builder-theme-color-inherit">Inherit</span>
+              )}
+            </span>
+          </BuilderSettingRow>
         ))}
       </div>
 

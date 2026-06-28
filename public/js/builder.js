@@ -9570,6 +9570,11 @@ App.builder = (function () {
       if (safeText(options.targetPage)) {
         App.setActivePage(safeText(options.targetPage), { skipNormalize: true });
       }
+      if (modularPageEditorMode === 'page' && safeText(source.id)) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('builder:openPageDetails'));
+        }, 200);
+      }
     }
     // If !mounted, App.builder.mount() already surfaced a diagnostic notification.
   }

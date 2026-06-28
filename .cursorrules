@@ -88,6 +88,7 @@ Sourced from `docs/UI_STANDARDS.md`, `docs/STYLE_GUIDE.md`, and prior agent/huma
 - **Vertical stacks in modals:** `.form-group` for label → input sequences.
 - **Dense modals:** `.standard-form-grid-4col` when needed.
 - **Checkboxes in grid:** `.standard-form-checkbox` on the input; group related checkboxes in a flex/grid in column 2 under one label.
+- **Radio buttons:** Use `.sc-radio-group` wrapping `.sc-radio-option` rows (see `src/css/_forms.css`). Each option is one row: native `input[type="radio"]` on the **left**, `.sc-radio-label` on the **right** — never label-left / circle-right. Stack options vertically by default (`flex-direction: column` on the group). Theme tokens: `--sc-radio-accent`, `--sc-radio-label-color` (configured under Builder → Themes → Typography → Form Controls via `typography.forms` JSON).
 - **Submit row:** empty `<div></div>` first cell, button in second column — or `.standard-form-grid-full` for full-width actions.
 - **Field width (do not stretch):** Inputs and selects must not expand to fill a row just because the container is wide. Size controls to their content or a declared width class — e.g. `.builder-field-width-label` (`200px`–`250px` for module Label), `width: auto` / `width: fit-content` on numeric selects and compact pickers. Override the global `input, select { width: 100% }` rule inside Builder editors where appropriate.
 - **Builder module editor layout** (`components/builder/builder-module-field.tsx`, `components/builder/*-module-settings.tsx`, styles in `src/css/_builder-react-overrides.css`):
