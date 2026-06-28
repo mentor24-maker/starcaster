@@ -582,3 +582,28 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   width: auto;
   max-width: min(280px, 100%);
 }
+
+/* ============================================================== */
+/* COLLAPSE ICONS — triangle stroke + toned colors + tinted bg    */
+/* ============================================================== */
+.builder-react-root {
+  --collapse-expand-color: #00aa00;
+  --collapse-expand-border: #006600;
+  --collapse-expand-bg: #e8fae8;
+  --collapse-collapse-color: #aa0000;
+  --collapse-collapse-border: #660000;
+  --collapse-collapse-bg: #fae8e8;
+}
+
+.builder-react-root .builder-collapse-icon-svg polygon {
+  stroke: var(--collapse-expand-border);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+
+.builder-react-root .builder-icon-button[aria-label^="Collapse"] .builder-collapse-icon-svg polygon,
+.builder-react-root .builder-panel-toggle[aria-expanded="true"] .builder-collapse-icon-svg polygon,
+.builder-react-root .builder-table-cell-module-toggle[aria-expanded="true"] .builder-collapse-icon-svg polygon {
+  stroke: var(--collapse-collapse-border);
+}
