@@ -142,6 +142,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // otherwise the page's sections stay hidden behind a collapsed panel.
     workspace: !initialRecordId
   });
+  const workspaceLayoutToolbarRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollWorkspaceRef = useRef(false);
   const appliedInitialSelectionRef = useRef(false);
   const [savedSectionSelectKey, setSavedSectionSelectKey] = useState(0);
   const [insertCanonical, setInsertCanonical] = useState(true);
@@ -485,6 +487,17 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     );
   }, [draft.layoutSections]);
 
+  useEffect(() => {
+    if (collapsedBuilderPanels.workspace || !shouldScrollWorkspaceRef.current) {
+      return;
+    }
+
+    shouldScrollWorkspaceRef.current = false;
+    window.requestAnimationFrame(() => {
+      workspaceLayoutToolbarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [collapsedBuilderPanels.workspace]);
+
   // --- Draft mutations ---
 
   function setDraftName(name: string) {
@@ -520,7 +533,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }
 
   function toggleBuilderPanel(panel: keyof typeof collapsedBuilderPanels) {
-    setCollapsedBuilderPanels((current) => ({ ...current, [panel]: !current[panel] }));
+    setCollapsedBuilderPanels((current) => {
+      if (panel === "workspace" && current.workspace) {
+        shouldScrollWorkspaceRef.current = true;
+      }
+      return { ...current, [panel]: !current[panel] };
+    });
   }
 
   function updatePageBackground(updater: (bg: BackgroundSettings) => BackgroundSettings) {
@@ -2269,7 +2287,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             </button>
             {!collapsedBuilderPanels.workspace ? (
               <div className="builder-workspace-pods">
-                    <div className="builder-layout-toolbar">
+                    <div className="builder-layout-toolbar" ref={workspaceLayoutToolbarRef}>
                       {layoutOptions.map((layout) => renderLayoutTile(layout))}
                       <div className="builder-saved-section-group">
                         <label className="field builder-cell-repository-select">
