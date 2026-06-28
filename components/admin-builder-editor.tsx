@@ -45,7 +45,7 @@ import {
   getThemeRootVars
 } from "./builder/builder-utils";
 import { BuilderTemplateList } from "./builder/builder-template-list";
-import { BuilderPageList } from "./builder/builder-page-list";
+import { BuilderPageList, pageVisibilityFromRecord, pageVisibilityToFlags, type PageVisibility } from "./builder/builder-page-list";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -114,7 +114,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [selectedPageId, setSelectedPageId] = useState("");
   const [pageSlug, setPageSlug] = useState("");
   const [pageTemplateId, setPageTemplateId] = useState("");
-  const [pageIsPrivate, setPageIsPrivate] = useState(false);
+  const [pageVisibility, setPageVisibility] = useState<PageVisibility>("public");
   const [draft, setDraft] = useState(createDraftFromTemplate(null));
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
   const [expandedModuleIds, setExpandedModuleIds] = useState<string[]>([]);
@@ -419,7 +419,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setPageSlug(page?.slug ?? "");
     setPageTemplateId(page?.templateId ?? "");
     setPageThemeId(page?.themeId ?? "");
-    setPageIsPrivate(page?.isPrivate ?? false);
+    setPageVisibility(pageVisibilityFromRecord(page));
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
 
@@ -1442,6 +1442,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setPageSlug("");
     setPageTemplateId("");
     setPageThemeId("");
+    setPageVisibility("public");
     setDraft(createDraftFromPage(null));
     setMessage(null);
     setError(null);
@@ -1746,7 +1747,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, slug: pageSlug, templateId: pageTemplateId, themeId: pageThemeId || undefined, isPrivate: pageIsPrivate, pageBackground: draft.pageBackground, theme: draft.theme, layoutSections: draft.layoutSections })
+        body: JSON.stringify({
+          name: draft.name,
+          slug: pageSlug,
+          templateId: pageTemplateId,
+          themeId: pageThemeId || undefined,
+          ...pageVisibilityToFlags(pageVisibility),
+          pageBackground: draft.pageBackground,
+          theme: draft.theme,
+          layoutSections: draft.layoutSections
+        })
       });
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       setMessage(selectedPageId ? "Page updated." : "Page created.");
@@ -2257,8 +2267,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}
           onSavePage={() => void savePage()}
-          pageIsPrivate={pageIsPrivate}
-          onSetPageIsPrivate={setPageIsPrivate}
+          pageVisibility={pageVisibility}
+          onSetPageVisibility={setPageVisibility}
           autoNewPage={autoNewPage}
           autoOpenPageDetails={Boolean(initialRecordId && initialMode === "pages")}
           snapshots={snapshots}

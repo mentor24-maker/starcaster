@@ -7,27 +7,39 @@ import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplat
 type SortField = "name" | "slug" | "template" | "visibility" | "updatedAt";
 type SortDir = "asc" | "desc";
 type ArchiveView = "pages" | "archive-list" | "archive-detail";
-type VisibilityFilter = "" | "public" | "private" | "unset";
+type VisibilityFilter = "" | "public" | "private" | "draft";
 
-function pageVisibilityState(page: BuilderPageRecord): "public" | "private" | "unset" {
-  const raw = page as BuilderPageRecord & { is_private?: boolean | null };
-  if (page.isPrivate === true || raw.is_private === true) return "private";
-  if (page.isPrivate === false || raw.is_private === false) return "public";
-  return "unset";
+export type PageVisibility = "public" | "private" | "draft";
+
+export function pageVisibilityFromRecord(page: BuilderPageRecord | null | undefined): PageVisibility {
+  if (!page) return "public";
+  if (page.isPublished === false) return "draft";
+  if (page.isPrivate === true) return "private";
+  return "public";
+}
+
+export function pageVisibilityToFlags(visibility: PageVisibility): { isPublished: boolean; isPrivate: boolean } {
+  if (visibility === "draft") return { isPublished: false, isPrivate: false };
+  if (visibility === "private") return { isPublished: true, isPrivate: true };
+  return { isPublished: true, isPrivate: false };
+}
+
+function pageVisibilityState(page: BuilderPageRecord): PageVisibility {
+  return pageVisibilityFromRecord(page);
 }
 
 function pageVisibilityLabel(page: BuilderPageRecord): string {
   const state = pageVisibilityState(page);
+  if (state === "draft") return "Draft";
   if (state === "private") return "Private";
-  if (state === "public") return "Public";
-  return "";
+  return "Public";
 }
 
 function pageVisibilitySortKey(page: BuilderPageRecord): string {
   const state = pageVisibilityState(page);
+  if (state === "draft") return "0";
   if (state === "public") return "1";
-  if (state === "private") return "2";
-  return "0";
+  return "2";
 }
 
 type ActiveArchive = {
@@ -66,8 +78,8 @@ type BuilderPageListProps = {
   onMakeTemplate: () => void;
   onPageEditorFocus: (focused: boolean) => void;
   onSavePage: () => void;
-  pageIsPrivate: boolean;
-  onSetPageIsPrivate: (val: boolean) => void;
+  pageVisibility: PageVisibility;
+  onSetPageVisibility: (visibility: PageVisibility) => void;
   autoNewPage?: boolean;
   /** When mounted to edit a specific page (e.g. Manage Pages CRUD edit), open Page Details. */
   autoOpenPageDetails?: boolean;
@@ -108,8 +120,8 @@ export function BuilderPageList({
   onMakeTemplate,
   onPageEditorFocus,
   onSavePage,
-  pageIsPrivate,
-  onSetPageIsPrivate,
+  pageVisibility,
+  onSetPageVisibility,
   autoNewPage,
   autoOpenPageDetails,
   snapshots,
@@ -635,7 +647,7 @@ export function BuilderPageList({
                         <option value="">All Visibility</option>
                         <option value="public">Public</option>
                         <option value="private">Private</option>
-                        <option value="unset">Unset</option>
+                        <option value="draft">Draft</option>
                       </select>
                     </label>
                   </th>
@@ -878,31 +890,17 @@ export function BuilderPageList({
                 ))}
               </select>
             </label>
-            <div className="field">
+            <label className="field">
               <span>Visibility</span>
-              <div className="sc-radio-group">
-                <label className="sc-radio-option">
-                  <input
-                    type="radio"
-                    name="page-visibility"
-                    value="public"
-                    checked={!pageIsPrivate}
-                    onChange={() => onSetPageIsPrivate(false)}
-                  />
-                  <span className="sc-radio-label">Public</span>
-                </label>
-                <label className="sc-radio-option">
-                  <input
-                    type="radio"
-                    name="page-visibility"
-                    value="private"
-                    checked={pageIsPrivate}
-                    onChange={() => onSetPageIsPrivate(true)}
-                  />
-                  <span className="sc-radio-label">Private</span>
-                </label>
-              </div>
-            </div>
+              <select
+                value={pageVisibility}
+                onChange={(event) => onSetPageVisibility(event.target.value as PageVisibility)}
+              >
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+                <option value="draft">Draft</option>
+              </select>
+            </label>
             <div className="builder-meta-grid-pages-background">
               <BuilderBackgroundControls
                 label="Background"
