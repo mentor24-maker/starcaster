@@ -69,7 +69,7 @@ export function BuilderImagePreview({
         isVideoMedia(mediaUrl) ? (
           <video className="builder-preview-video" controls preload="metadata" src={mediaUrl} />
         ) : linkUrl ? (
-          <a href={linkUrl} rel={opensInNewTab ? "noopener noreferrer" : undefined} target={opensInNewTab ? "_blank" : undefined}>
+          <a href={linkUrl} rel={opensInNewTab ? "noopener noreferrer" : undefined} target={opensInNewTab ? "_blank" : undefined} style={{ display: "block", borderRadius: "inherit" }}>
             <img
               alt={module.settings.alt || module.text || ""}
               src={mediaUrl}
