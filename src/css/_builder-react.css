@@ -7688,6 +7688,20 @@
   gap: 12px 20px;
 }
 
+.builder-react-root .builder-blog-post-list-3col .builder-setting-row {
+  grid-template-columns: 1fr;
+  gap: 3px;
+}
+
+.builder-react-root .builder-blog-post-list-3col .builder-setting-label {
+  white-space: normal;
+}
+
+.builder-react-root .builder-blog-post-list-3col .builder-setting-value select,
+.builder-react-root .builder-blog-post-list-3col .builder-setting-value input[type="number"] {
+  width: 100px;
+}
+
 .builder-react-root .builder-button-border-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

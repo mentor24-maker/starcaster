@@ -4170,7 +4170,8 @@ export function BuilderModuleCard({
           module.type !== "speech-bubble" &&
           module.type !== "reminder" &&
           module.type !== "button" &&
-          module.type !== "heading" ? (
+          module.type !== "heading" &&
+          module.type !== "blog-post-list" ? (
             <label className="field">
               <span>Content</span>
               {module.type === "text" ? (
