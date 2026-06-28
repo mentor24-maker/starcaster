@@ -162,11 +162,65 @@ export function BuilderSectionCard({
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
   const firstColumnRef = useRef<HTMLDivElement | null>(null);
+  const firstCellContentHeaderRef = useRef<HTMLDivElement | null>(null);
+  const pendingFirstCellContentFocusRef = useRef(false);
   const sectionMountedRef = useRef(false);
+
+  function handleToggleSectionCollapsed() {
+    if (isCollapsed && !isCanonical) {
+      pendingFirstCellContentFocusRef.current = true;
+    }
+    onToggleCollapsed();
+  }
+
+  useEffect(() => {
+    if (isCollapsed) {
+      pendingFirstCellContentFocusRef.current = false;
+    }
+  }, [isCollapsed]);
+
+  useEffect(() => {
+    if (isCollapsed || isCanonical || !pendingFirstCellContentFocusRef.current || !columns[0]) {
+      return;
+    }
+
+    const firstColumn = columns[0];
+    setCollapsedCellPanels((current) => ({
+      ...current,
+      [firstColumn]: { styles: true, content: false }
+    }));
+  }, [isCollapsed, isCanonical, columns]);
+
+  useEffect(() => {
+    if (isCollapsed || isCanonical || !columns[0]) {
+      return;
+    }
+
+    const firstColumn = columns[0];
+    const cellPanels = collapsedCellPanels[firstColumn] ?? { styles: true, content: true };
+    if (cellPanels.content || !pendingFirstCellContentFocusRef.current) {
+      return;
+    }
+
+    pendingFirstCellContentFocusRef.current = false;
+
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        const contentHeader = firstCellContentHeaderRef.current;
+        if (!contentHeader) {
+          return;
+        }
+        contentHeader.scrollIntoView({ behavior: "smooth", block: "start" });
+        contentHeader.querySelector<HTMLElement>(".builder-cell-panel-title-label")?.focus({ preventScroll: true });
+      }, 80);
+    });
+  }, [isCollapsed, isCanonical, collapsedCellPanels, columns]);
 
   useEffect(() => {
     if (!sectionMountedRef.current) { sectionMountedRef.current = true; return; }
     if (isCollapsed || !sectionHeaderRef.current) return;
+    if (pendingFirstCellContentFocusRef.current) return;
+
     const el = sectionHeaderRef.current;
     document.querySelectorAll("[data-builder-focus]").forEach((n) => n.removeAttribute("data-builder-focus"));
     el.setAttribute("data-builder-focus", "true");
@@ -335,7 +389,7 @@ export function BuilderSectionCard({
           )}
         </div>
         <div className="builder-section-actions">
-          <button aria-label={isCollapsed ? "Expand section" : "Collapse section"} className="builder-icon-button" onClick={onToggleCollapsed} title={isCollapsed ? "Expand section" : "Collapse section"} type="button"><BuilderCollapseIcon expanded={!isCollapsed} /></button>
+          <button aria-label={isCollapsed ? "Expand section" : "Collapse section"} className="builder-icon-button" onClick={handleToggleSectionCollapsed} title={isCollapsed ? "Expand section" : "Collapse section"} type="button"><BuilderCollapseIcon expanded={!isCollapsed} /></button>
           <button aria-label="Move section up" className="builder-icon-button" onClick={onMoveUp} title="Move section up" type="button">↑</button>
           <button aria-label="Move section down" className="builder-icon-button" onClick={onMoveDown} title="Move section down" type="button">↓</button>
           {isCanonical ? (
@@ -455,6 +509,7 @@ export function BuilderSectionCard({
 
                   <div className="builder-cell-panel">
                     <BuilderCellPanelHeader
+                      headerRef={colIndex === 0 ? firstCellContentHeaderRef : undefined}
                       isCollapsed={cellPanels.content}
                       headingActions={
                         <button
