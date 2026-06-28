@@ -11822,7 +11822,12 @@ App.builder = (function () {
         align-items: stretch;
       }
       .site-nav-menu--horizontal > .site-nav-item {
-        flex: 0 0 auto;
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      .site-nav-menu--horizontal > .site-nav-item > .site-nav-link {
+        width: 100%;
+        box-sizing: border-box;
       }
       .site-nav-link {
         display: inline-flex;
