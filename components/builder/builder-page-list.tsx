@@ -1,5 +1,5 @@
 import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary, BuilderTemplateRecord, BuilderTheme, BuilderThemeSummary } from "@/lib/builder-template";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars } from "./builder-utils";
@@ -173,10 +173,17 @@ export function BuilderPageList({
           const top = shell.getBoundingClientRect().top + window.scrollY;
           window.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
         }
-        titleInputRef.current?.focus({ preventScroll: true });
-        titleInputRef.current?.select();
+        const titleInput = titleInputRef.current;
+        if (!titleInput) return;
+        titleInput.classList.add("is-auto-focused");
+        titleInput.focus({ preventScroll: true });
+        titleInput.select();
       });
     });
+  }
+
+  function handlePageDetailsFieldBlur(event: FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
+    event.currentTarget.classList.remove("is-auto-focused");
   }
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
@@ -351,6 +358,7 @@ export function BuilderPageList({
         return;
       }
       titleInputRef.current?.focus({ preventScroll: true });
+      titleInputRef.current?.classList.add("is-auto-focused");
       titleInputRef.current?.select();
     };
     window.requestAnimationFrame(() => {
@@ -849,26 +857,32 @@ export function BuilderPageList({
               <span>Page title</span>
               <input
                 ref={titleInputRef}
+                className="builder-page-details-field"
                 type="text"
                 value={draftName}
                 onChange={(event) => onSetDraftName(event.target.value)}
+                onBlur={handlePageDetailsFieldBlur}
                 placeholder="About Normie"
               />
             </label>
             <label className="field">
               <span>Slug</span>
               <input
+                className="builder-page-details-field"
                 type="text"
                 value={pageSlug}
                 onChange={(event) => onSetPageSlug(event.target.value)}
+                onBlur={handlePageDetailsFieldBlur}
                 placeholder="about"
               />
             </label>
             <label className="field">
               <span>Template</span>
               <select
+                className="builder-page-details-field"
                 value={pageTemplateId}
                 onChange={(event) => onApplyTemplate(event.target.value)}
+                onBlur={handlePageDetailsFieldBlur}
               >
                 <option value="">Select a template</option>
                 {templates.map((template) => (
@@ -881,8 +895,10 @@ export function BuilderPageList({
             <label className="field">
               <span>Theme</span>
               <select
+                className="builder-page-details-field"
                 value={pageThemeId}
                 onChange={(event) => onApplyTheme(event.target.value)}
+                onBlur={handlePageDetailsFieldBlur}
               >
                 <option value="">None (use template default)</option>
                 {themes.map((t) => (
@@ -893,8 +909,10 @@ export function BuilderPageList({
             <label className="field">
               <span>Visibility</span>
               <select
+                className="builder-page-details-field"
                 value={pageVisibility}
                 onChange={(event) => onSetPageVisibility(event.target.value as PageVisibility)}
+                onBlur={handlePageDetailsFieldBlur}
               >
                 <option value="public">Public</option>
                 <option value="private">Private</option>
