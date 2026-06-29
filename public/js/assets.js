@@ -878,11 +878,8 @@ App.assets = (function () {
       }
       tr.appendChild(nameTd);
 
-      const captionTd = document.createElement('td');
-      captionTd.textContent = assetTypeText === 'Image'
-        ? (String(asset.caption || '').trim() || '-')
-        : '-';
-      tr.appendChild(captionTd);
+      appendCell(tr, asset.imageWidth > 0 ? String(asset.imageWidth) : '-');
+      appendCell(tr, asset.imageHeight > 0 ? String(asset.imageHeight) : '-');
 
       appendCell(tr, displayAssetType(asset.assetType));
       appendCell(tr, asset.category);
@@ -1328,7 +1325,8 @@ App.assets = (function () {
     };
 
     bindSortButton('assetsSortNameBtn', 'assetName', 'asc');
-    bindSortButton('assetsSortCaptionBtn', 'caption', 'asc');
+    bindSortButton('assetsSortWidthBtn', 'imageWidth', 'desc');
+    bindSortButton('assetsSortHeightBtn', 'imageHeight', 'desc');
     bindSortButton('assetsSortTypeBtn', 'assetType', 'asc');
     bindSortButton('assetsSortCategoryBtn', 'category', 'asc');
     bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
