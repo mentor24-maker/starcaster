@@ -1,20 +1,11 @@
--- content_types: seed row for Web Pages mirror into content_items.
--- content_items.type_id references content_types(id), not messaging_formats.
--- Run after confirming the FK in Supabase:
---   select pg_get_constraintdef(oid)
---   from pg_constraint
---   where conname = 'content_items_type_id_fkey';
+-- content_types: seed row for Web Pages (used by content_items.type_id FK).
+-- Required columns on this table include name and key (NOT NULL).
 
-insert into public.content_types (name, project_id)
-select 'Web Pages', 'YOUR_PROJECT_ID'
+insert into public.content_types (name, key)
+select 'Web Pages', 'web-pages'
 where not exists (
   select 1
   from public.content_types
   where lower(name) = lower('Web Pages')
-    and project_id = 'YOUR_PROJECT_ID'
+     or lower(key) = lower('web-pages')
 );
-
--- Replace YOUR_PROJECT_ID with the project id from the app switcher (e.g. vvtahaxqrzudrzyfvfej).
--- If content_types has no project_id column, use only:
---   insert into public.content_types (name)
---   select 'Web Pages' where not exists (select 1 from public.content_types where lower(name) = lower('Web Pages'));

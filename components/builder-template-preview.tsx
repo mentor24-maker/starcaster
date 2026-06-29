@@ -2384,7 +2384,7 @@ function blogManagerEditBaseUrl(settings: Record<string, string>): string {
   const fromSettings = String(settings.editPageUrl || "").trim();
   if (fromSettings) return fromSettings;
   if (typeof window === "undefined") return "";
-  if (!isAdminBlogManagerPageSlug()) return "";
+  if (!isAdminBlogManagerPageSlug()) return "/blog-post-edit";
   const pathname = window.location.pathname || "/";
   const params = new URLSearchParams(window.location.search);
   params.delete("id");
