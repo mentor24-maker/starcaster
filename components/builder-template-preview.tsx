@@ -3233,7 +3233,7 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
 
     return (
       <article className="blog-post-page">
-        <header className="blog-post-header">
+        <div className="blog-post-header">
           {showFeaturedImage && imageUrl ? (
             <img alt={post.title} className="blog-post-featured-image" src={imageUrl} />
           ) : null}
@@ -3248,7 +3248,7 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
           {showExcerpt && post.excerpt ? (
             <p className="blog-post-excerpt">{post.excerpt}</p>
           ) : null}
-        </header>
+        </div>
         {post.body ? (
           <div
             className="blog-post-body builder-preview-text"
@@ -3267,11 +3267,11 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
 
   return (
     <article className="blog-post-page">
-      <header className="blog-post-header">
+      <div className="blog-post-header">
         <h1 className="blog-post-title">{title}</h1>
         {author ? <p className="blog-post-meta">By {author}</p> : null}
         {excerpt ? <p className="blog-post-excerpt">{excerpt}</p> : null}
-      </header>
+      </div>
       {body ? (
         <div
           className="blog-post-body builder-preview-text"
