@@ -344,7 +344,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, existing.status || 404, existing.error || 'Asset not found', { code: 'NOT_FOUND' }), true;
     }
 
-    const asset = rowToAsset(row);
+    const asset = rowToAsset(existing.data);
     if (asset?.assetType !== 'Image') {
       return sendErr(res, 400, 'Only image assets have source media', { code: 'VALIDATION_ERROR' }), true;
     }
