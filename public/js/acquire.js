@@ -976,14 +976,52 @@ App.acquire = (function () {
       }
       tr.appendChild(siteTd);
 
+      const candidateHarvestKey = String(item?.url || '').trim();
+      const candidateHarvested = candidateHarvestKey ? peerHarvestedKeywords.get(candidateHarvestKey) : null;
+
       const keywordsTd = document.createElement('td');
-      keywordsTd.textContent = Array.isArray(item.matched_keywords) && item.matched_keywords.length
-        ? item.matched_keywords.join(', ')
-        : '-';
+      if (candidateHarvested && candidateHarvested.length) {
+        candidateHarvested.forEach(({ keyword }) => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'btn tiny-btn';
+          chip.style.cssText = 'margin:1px 2px;font-size:0.75em;padding:1px 7px;border-radius:10px';
+          chip.title = `Save "${keyword}" to Messaging › Keywords`;
+          chip.textContent = keyword;
+          chip.addEventListener('click', async () => {
+            try {
+              await api('/api/messaging/keywords', { method: 'POST', body: JSON.stringify({ keyword }) });
+              notify(`Saved "${keyword}" to Messaging › Keywords`);
+            } catch (err) {
+              notify(err.message || 'Could not save keyword', true);
+            }
+          });
+          keywordsTd.appendChild(chip);
+        });
+      } else {
+        keywordsTd.textContent = Array.isArray(item.matched_keywords) && item.matched_keywords.length
+          ? item.matched_keywords.join(', ')
+          : '-';
+      }
       tr.appendChild(keywordsTd);
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'actions-col';
+
+      if (candidateHarvestKey) {
+        if (candidateHarvested) {
+          const stackedBtn = App.makeIconButton('stacked', 'View Harvested Keywords', () => {
+            openPeerKeywordArchiveDialog({ url: item.url, domain: item.domain });
+          });
+          actionsTd.appendChild(stackedBtn);
+        } else {
+          const harvestBtn = App.makeIconButton('harvest', 'Harvest Keywords', () => {
+            openPeerKeywordHarvestDialog({ url: item.url, domain: item.domain });
+          });
+          actionsTd.appendChild(harvestBtn);
+        }
+      }
+
       const deleteBtn = App.makeIconButton('trash', 'Delete', async () => {
         const peerId = Number(item?.id || 0) || 0;
         if (!peerId) {
@@ -3033,8 +3071,9 @@ App.acquire = (function () {
       }
       tr.appendChild(siteTd);
 
+      const peerHarvestKey = String(peer?.site_url || peer?.url || '').trim();
       const keywordsTd = document.createElement('td');
-      const harvested = peerHarvestedKeywords.get(peerId);
+      const harvested = peerHarvestKey ? peerHarvestedKeywords.get(peerHarvestKey) : null;
       if (harvested && harvested.length) {
         harvested.forEach(({ keyword }) => {
           const chip = document.createElement('button');
@@ -3082,7 +3121,7 @@ App.acquire = (function () {
       });
       actionsTd.appendChild(editBtn);
 
-      if (peerHarvestedKeywords.has(peerId)) {
+      if (peerHarvestKey && peerHarvestedKeywords.has(peerHarvestKey)) {
         const stackedBtn = App.makeIconButton('stacked', 'View Harvested Keywords', () => {
           openPeerKeywordArchiveDialog(peer);
         });
@@ -3116,9 +3155,9 @@ App.acquire = (function () {
   }
 
   function openPeerKeywordHarvestDialog(peer) {
-    const siteUrl = String(peer?.site_url || '').trim();
+    const siteUrl = String(peer?.site_url || peer?.url || '').trim();
     const domain = String(peer?.domain || siteUrl || 'this peer').trim();
-    const peerId = String(peer?.id || '').trim();
+    const harvestKey = siteUrl;
 
     const bodyEl = document.createElement('div');
 
@@ -3185,8 +3224,9 @@ App.acquire = (function () {
                 notify('No keywords found on this site', true);
                 return;
               }
-              if (peerId) peerHarvestedKeywords.set(peerId, keywords);
+              if (harvestKey) peerHarvestedKeywords.set(harvestKey, keywords);
               notify(`Harvested ${keywords.length} keyword${keywords.length === 1 ? '' : 's'} from ${domain}`);
+              renderDirectAcquirePeerDiscoveryResults();
               renderDirectAcquireWebsitePeersTable();
               openPeerKeywordArchiveDialog(peer);
             } catch (err) {
@@ -3202,9 +3242,9 @@ App.acquire = (function () {
   }
 
   function openPeerKeywordArchiveDialog(peer) {
-    const peerId = String(peer?.id || '').trim();
-    const domain = String(peer?.domain || peer?.site_url || 'this peer').trim();
-    const keywords = peerHarvestedKeywords.get(peerId) || [];
+    const harvestKey = String(peer?.site_url || peer?.url || '').trim();
+    const domain = String(peer?.domain || harvestKey || 'this peer').trim();
+    const keywords = peerHarvestedKeywords.get(harvestKey) || [];
 
     if (!keywords.length) {
       notify('No harvested keywords for this peer', true);
