@@ -19,10 +19,14 @@ alter table if exists public.content_items
   add column if not exists source_id text not null default '',
   add column if not exists source_slug text not null default '',
   add column if not exists content_hash text not null default '',
+  add column if not exists type_id bigint,
   add column if not exists project_id text,
   add column if not exists owner_user_id text,
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
+
+create index if not exists idx_content_items_type_id
+  on public.content_items (type_id);
 
 create index if not exists idx_content_items_format
   on public.content_items (format);
