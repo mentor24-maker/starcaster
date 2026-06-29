@@ -11711,6 +11711,7 @@
 
 .builder-react-root .blog-index-header,
 .builder-react-root .blog-post-header {
+  display: block;
   margin-bottom: 28px;
 }
 
