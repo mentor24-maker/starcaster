@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 /**
- * scripts/bump_cache.js
+ * scripts/bump_cache.js  (emergency override)
  * Usage: node scripts/bump_cache.js [label]
  *
- * Replaces every ?v=... query stamp on <script> and <link> tags in
- * src/layout.html with a new version, then rebuilds public/app-shell.html.
+ * Normally you don't need this — build_html.js automatically stamps every
+ * <script> and <link> with an MD5 hash of the file contents, so the cache
+ * busts itself whenever a file changes.
  *
- * Examples:
- *   node scripts/bump_cache.js            → uses a timestamp  e.g. ?v=1751200000
- *   node scripts/bump_cache.js my-fix     → ?v=my-fix
+ * Use this only if you need to force-bust the cache for a file whose
+ * content on disk hasn't changed (e.g. the CDN cached a corrupt version):
+ *
+ *   npm run bust              → stamps everything with a Unix timestamp
+ *   npm run bust my-label     → stamps everything with a named label
+ *
+ * This overwrites the auto-hashes with a fixed label in layout.html and
+ * then rebuilds app-shell.html.
  */
 
 'use strict';
@@ -23,18 +29,10 @@ const label = process.argv[2]
   : String(Math.floor(Date.now() / 1000));
 
 let html = fs.readFileSync(layoutPath, 'utf8');
-
-// Replace existing ?v=... stamps
 html = html.replace(/(\.(js|css))\?v=[^"'\s>]*/g, `$1?v=${label}`);
-
-// Add ?v= to script/link tags that have no stamp yet
-html = html.replace(
-  /(src|href)="(\/[^"]+\.(js|css))(?!\?v=)"/g,
-  `$1="$2?v=${label}"`
-);
-
+html = html.replace(/(src|href)="(\/[^"]+\.(js|css))(?!\?v=)"/g, `$1="$2?v=${label}"`);
 fs.writeFileSync(layoutPath, html, 'utf8');
-console.log(`✓ Bumped all ?v= stamps to v=${label} in src/layout.html`);
+console.log(`✓ Force-stamped all ?v= to v=${label} in src/layout.html`);
+console.log('  Run npm run build:html to restore automatic content-hash stamping.');
 
-// Rebuild app-shell.html
 require('./build_html');
