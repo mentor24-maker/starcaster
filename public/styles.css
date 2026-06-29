@@ -13024,11 +13024,12 @@ body.asset-associations-modal-open {
   margin-bottom: 28px;
 }
 .builder-react-root .blog-post-page .blog-post-header h1.blog-post-title {
-  margin: 50px 0 12px;
+  margin: 0 0 16px;
   max-width: none;
-  font-size: clamp(1.1rem, 2vw, 1.4rem);
-  line-height: 1.15;
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  line-height: 1.2;
   font-weight: 800;
+  color: var(--ink-primary, #111);
 }
 .builder-react-root .blog-post-header .blog-card-date {
   margin: 0 0 8px;
