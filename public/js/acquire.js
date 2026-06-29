@@ -567,14 +567,16 @@ App.acquire = (function () {
     const addRefBtn = document.getElementById('directAcquireAddReferenceBtn');
     const modelSelect = document.getElementById('directAcquireReferenceModelSelect');
     const urlInput = document.getElementById('directAcquireUrlInput');
-    if (submitBtn) submitBtn.classList.toggle('hidden', !isProject);
+    if (submitBtn) submitBtn.classList.toggle('hidden', !isProject && !isPeer);
     if (discoverBtn) discoverBtn.classList.toggle('hidden', !isPeer);
     if (addRefBtn) addRefBtn.classList.toggle('hidden', !isModel);
     if (modelSelect) modelSelect.classList.toggle('hidden', !isModel);
     if (urlInput) {
-      if (isProject || isPeer) {
+      if (isProject) {
         urlInput.value = String(directAcquireProjectSourceUrl || urlInput.value || '').trim();
-        urlInput.placeholder = isPeer ? 'Project website used for peer discovery' : 'https://example.com';
+        urlInput.placeholder = 'https://example.com';
+      } else if (isPeer) {
+        urlInput.placeholder = 'https://peer-site.example';
       } else {
         urlInput.placeholder = 'https://model-site.example';
       }
@@ -1059,8 +1061,10 @@ App.acquire = (function () {
   }
 
   async function discoverAcquireWebPeers() {
-    const projectUrl = String(directAcquireProjectSourceUrl || await fetchProjectWebsiteUrl()).trim();
-    if (!projectUrl) throw new Error('Project website is required before discovering peers.');
+    const urlInput = document.getElementById('directAcquireUrlInput');
+    const inputUrl = String(urlInput?.value || '').trim();
+    const projectUrl = String(inputUrl || directAcquireProjectSourceUrl || await fetchProjectWebsiteUrl()).trim();
+    if (!projectUrl) throw new Error('A website URL is required to discover peers.');
     const exclusionsInput = document.getElementById('directAcquireKeywordExclusionsInput');
     const maxPagesSelect = document.getElementById('directAcquireMaxPagesSelect');
     startPeerDiscoveryProgress();
@@ -5261,11 +5265,13 @@ App.acquire = (function () {
           startDirectAcquireProgress();
           const formData = new FormData(els.directAcquireForm);
           setDirectAcquireScreenshotStatus('');
-          const acquireUrl = String(formData.get('source_url') || directAcquireProjectSourceUrl || '').trim()
-            || String(await fetchProjectWebsiteUrl()).trim();
+          const websiteRole = String(formData.get('website_role') || getAcquireWebWebsiteRole() || 'project').trim();
+          const isPeerAcquire = websiteRole === 'peer';
+          const acquireUrl = String(formData.get('source_url') || '').trim()
+            || (!isPeerAcquire ? String(directAcquireProjectSourceUrl || await fetchProjectWebsiteUrl()).trim() : '');
           const shouldCaptureScreenshots = formData.get('capture_platform_screenshots') === 'on';
-          if (!acquireUrl) throw new Error('Project website URL is required.');
-          directAcquireProjectSourceUrl = acquireUrl;
+          if (!acquireUrl) throw new Error('Website URL is required.');
+          if (!isPeerAcquire) directAcquireProjectSourceUrl = acquireUrl;
           const payload = {
             source_url: acquireUrl,
             max_pages: Number(formData.get('max_pages') || 10),
