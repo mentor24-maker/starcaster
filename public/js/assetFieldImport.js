@@ -31,6 +31,7 @@ App.assetFieldImport = (function assetFieldImportModule() {
     { id: 'report', label: 'Report', group: 'Messaging' },
     { id: 'white-paper', label: 'White Paper', group: 'Messaging' },
     { id: 'ebook', label: 'eBook', group: 'Messaging' },
+    { id: 'web-page', label: 'Web Page', group: 'Messaging' },
   ];
 
   const FALLBACK_SUPPORTED_PAIRS = new Set(['image:tweet', 'image:headline', 'tweet:headline', 'tweet:post']);
@@ -61,6 +62,7 @@ App.assetFieldImport = (function assetFieldImportModule() {
     report: 'report',
     'white-paper': 'white paper',
     ebook: 'eBook',
+    'web-page': 'web page',
   };
 
   let modal;
@@ -262,12 +264,23 @@ App.assetFieldImport = (function assetFieldImportModule() {
     syncUi();
     if (resultEl) {
       resultEl.classList.remove('hidden');
-      resultEl.textContent = isAssetSource(fromType)
-        ? 'Running OCR and building items…'
-        : 'Repurposing content with AI…';
+      if (fromType === 'web-page') {
+        resultEl.textContent = 'Rolling up Builder pages…';
+      } else {
+        resultEl.textContent = isAssetSource(fromType)
+          ? 'Running OCR and building items…'
+          : 'Repurposing content with AI…';
+      }
     }
 
     try {
+      if (fromType === 'web-page') {
+        await api('/api/messaging/content-items/sync-web-pages', {
+          method: 'POST',
+          body: JSON.stringify({}),
+        }).catch(() => null);
+      }
+
       const dryRes = await api('/api/assets/import-from-fields', {
         method: 'POST',
         body: JSON.stringify({
@@ -281,8 +294,17 @@ App.assetFieldImport = (function assetFieldImportModule() {
       const planned = Number(dryData.planned || 0);
       if (!planned) {
         if (resultEl) resultEl.textContent = formatResult(dryData);
-        notify('No matching images found for that Includes filter.', true);
+        const emptyMsg = fromType === 'web-page'
+          ? 'No Builder pages with text content were found for this project.'
+          : isAssetSource(fromType)
+            ? 'No matching images found for that Includes filter.'
+            : 'No matching source items found.';
+        notify(emptyMsg, true);
         return;
+      }
+
+      if (resultEl && fromType === 'web-page') {
+        resultEl.textContent = `Repurposing ${planned} page(s) with AI…`;
       }
 
       const applyRes = await api('/api/assets/import-from-fields', {
