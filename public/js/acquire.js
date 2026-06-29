@@ -3221,7 +3221,10 @@ App.acquire = (function () {
               const keywords = Array.isArray(result?.keywords) ? result.keywords : [];
               modal.close();
               if (!keywords.length) {
-                notify('No keywords found on this site', true);
+                const pagesNote = result?.pages_succeeded != null
+                  ? ` (${result.pages_succeeded} page${result.pages_succeeded === 1 ? '' : 's'} crawled, ${result.pages_failed} failed)`
+                  : '';
+                notify(`No keywords found on this site${pagesNote}`, true);
                 return;
               }
               if (harvestKey) peerHarvestedKeywords.set(harvestKey, keywords);
