@@ -274,13 +274,6 @@ App.assetFieldImport = (function assetFieldImportModule() {
     }
 
     try {
-      if (fromType === 'web-page') {
-        await api('/api/messaging/content-items/sync-web-pages', {
-          method: 'POST',
-          body: JSON.stringify({}),
-        }).catch(() => null);
-      }
-
       const dryRes = await api('/api/assets/import-from-fields', {
         method: 'POST',
         body: JSON.stringify({
