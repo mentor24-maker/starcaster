@@ -2266,7 +2266,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         </div>
 
         {showFeaturedImage ? (
-          <div style={{ width: 200, flexShrink: 0, paddingTop: "1.6rem" }}>
+          <div style={{ flex: 1, minWidth: 0, paddingTop: "1.6rem" }}>
             {values.featuredImageUrl ? (
               <img
                 alt="Featured image preview"
