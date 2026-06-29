@@ -1943,6 +1943,60 @@ body.asset-associations-modal-open {
   opacity: 0.45;
   cursor: not-allowed;
 }
+.asset-field-import-done-btn {
+  margin-top: 0.75rem;
+  width: fit-content;
+  white-space: nowrap;
+}
+.asset-field-import-done-btn.hidden {
+  display: none;
+}
+.asset-field-import-progress-dock {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 4.5rem;
+  z-index: 10040;
+  max-width: min(420px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+.asset-field-import-progress-dock.hidden {
+  display: none;
+}
+.asset-field-import-progress-dock-inner {
+  pointer-events: auto;
+  background: #fff;
+  border: 1px solid var(--border-light, #d9dee7);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  padding: 0.85rem 1rem;
+}
+.asset-field-import-progress-dock.is-running .asset-field-import-progress-dock-inner {
+  border-color: var(--accent, #0066cc);
+}
+.asset-field-import-progress-dock.is-success .asset-field-import-progress-dock-inner {
+  border-color: #7bc47f;
+  background: #f4fbf4;
+}
+.asset-field-import-progress-dock.is-error .asset-field-import-progress-dock-inner {
+  border-color: #e08a8a;
+  background: #fff5f5;
+}
+.asset-field-import-progress-dock-message {
+  margin: 0;
+  color: var(--ink-primary, #111);
+  line-height: 1.45;
+}
+.asset-field-import-progress-dock-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.65rem;
+}
+.asset-field-import-progress-dock-actions.hidden {
+  display: none;
+}
+.asset-field-import-progress-dock-close {
+  white-space: nowrap;
+}
 
 /* src/css/_messaging-tweet-edit.css */
 .messaging-tweet-edit-layout,

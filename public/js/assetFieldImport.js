@@ -73,6 +73,11 @@ App.assetFieldImport = (function assetFieldImportModule() {
   let hintEl;
   let resultEl;
   let closeBtn;
+  let doneBtn;
+  let progressDock;
+  let progressDockMessage;
+  let progressDockActions;
+  let progressDockCloseBtn;
   let running = false;
   let initialized = false;
   let listenersBound = false;
@@ -182,15 +187,106 @@ App.assetFieldImport = (function assetFieldImportModule() {
     }
   }
 
+  function shouldUseBackgroundProgress(fromType, planned) {
+    if (isAssetSource(fromType)) return false;
+    return planned >= 2 || fromType === 'web-page';
+  }
+
+  function ensureProgressDock() {
+    if (progressDock) return progressDock;
+    progressDock = document.createElement('div');
+    progressDock.id = 'assetFieldImportProgressDock';
+    progressDock.className = 'asset-field-import-progress-dock hidden';
+    progressDock.innerHTML = [
+      '<div class="asset-field-import-progress-dock-inner">',
+      '  <p class="asset-field-import-progress-dock-message" aria-live="polite"></p>',
+      '  <div class="asset-field-import-progress-dock-actions hidden">',
+      '    <button type="button" class="btn btn-primary asset-field-import-progress-dock-close">Close</button>',
+      '  </div>',
+      '</div>',
+    ].join('');
+    progressDockMessage = progressDock.querySelector('.asset-field-import-progress-dock-message');
+    progressDockActions = progressDock.querySelector('.asset-field-import-progress-dock-actions');
+    progressDockCloseBtn = progressDock.querySelector('.asset-field-import-progress-dock-close');
+    progressDockCloseBtn?.addEventListener('click', hideProgressDock);
+    document.body.appendChild(progressDock);
+    return progressDock;
+  }
+
+  function showProgressDock(message, options = {}) {
+    ensureProgressDock();
+    if (!progressDock || !progressDockMessage) return;
+    progressDock.classList.remove('hidden', 'is-running', 'is-success', 'is-error');
+    if (options.running) progressDock.classList.add('is-running');
+    if (options.variant === 'success') progressDock.classList.add('is-success');
+    if (options.variant === 'error') progressDock.classList.add('is-error');
+    progressDockMessage.textContent = String(message || '').trim();
+    if (progressDockActions) {
+      progressDockActions.classList.toggle('hidden', !options.showClose);
+    }
+  }
+
+  function hideProgressDock() {
+    if (!progressDock) return;
+    progressDock.classList.add('hidden');
+    progressDock.classList.remove('is-running', 'is-success', 'is-error');
+    if (progressDockMessage) progressDockMessage.textContent = '';
+    if (progressDockActions) progressDockActions.classList.add('hidden');
+  }
+
+  function ensureDoneButton() {
+    if (doneBtn) return doneBtn;
+    const host = resultEl?.parentElement;
+    if (!host) return null;
+    doneBtn = document.createElement('button');
+    doneBtn.id = 'assetFieldImportDoneBtn';
+    doneBtn.type = 'button';
+    doneBtn.className = 'btn btn-primary asset-field-import-done-btn hidden';
+    doneBtn.textContent = 'Done';
+    doneBtn.addEventListener('click', () => {
+      resetModalResultState();
+      setModalOpen(false);
+    });
+    host.appendChild(doneBtn);
+    return doneBtn;
+  }
+
+  function resetModalResultState() {
+    if (resultEl) {
+      resultEl.classList.add('hidden');
+      resultEl.textContent = '';
+    }
+    if (doneBtn) doneBtn.classList.add('hidden');
+    if (runBtn) runBtn.classList.remove('hidden');
+  }
+
+  function showModalComplete(message, variant = 'success') {
+    if (resultEl) {
+      resultEl.classList.remove('hidden');
+      resultEl.textContent = message;
+    }
+    const button = ensureDoneButton();
+    if (button) button.classList.remove('hidden');
+    if (runBtn) runBtn.classList.add('hidden');
+    if (closeBtn) closeBtn.disabled = false;
+  }
+
+  function setRunningState(active) {
+    running = active;
+    if (closeBtn) closeBtn.disabled = active;
+    syncUi();
+  }
+
   function setModalOpen(open) {
     if (!modal) return;
     modal.classList.toggle('hidden', !open);
     if (open) {
+      resetModalResultState();
       syncUi();
       includesInput?.focus();
-    } else if (resultEl) {
-      resultEl.classList.add('hidden');
-      resultEl.textContent = '';
+    } else {
+      resetModalResultState();
+      if (closeBtn) closeBtn.disabled = false;
     }
   }
 
@@ -260,18 +356,18 @@ App.assetFieldImport = (function assetFieldImportModule() {
       return;
     }
 
-    running = true;
-    syncUi();
+    setRunningState(true);
+    resetModalResultState();
     if (resultEl) {
       resultEl.classList.remove('hidden');
-      if (fromType === 'web-page') {
-        resultEl.textContent = 'Rolling up Builder pages…';
-      } else {
-        resultEl.textContent = isAssetSource(fromType)
+      resultEl.textContent = fromType === 'web-page'
+        ? 'Rolling up Builder pages…'
+        : isAssetSource(fromType)
           ? 'Running OCR and building items…'
           : 'Repurposing content with AI…';
-      }
     }
+
+    let useBackground = false;
 
     try {
       const dryRes = await api('/api/assets/import-from-fields', {
@@ -286,18 +382,29 @@ App.assetFieldImport = (function assetFieldImportModule() {
       const dryData = dryRes?.data || dryRes || {};
       const planned = Number(dryData.planned || 0);
       if (!planned) {
-        if (resultEl) resultEl.textContent = formatResult(dryData);
+        const summary = formatResult(dryData);
         const emptyMsg = fromType === 'web-page'
           ? 'No Builder pages with text content were found for this project.'
           : isAssetSource(fromType)
             ? 'No matching images found for that Includes filter.'
             : 'No matching source items found.';
+        showModalComplete(summary, 'error');
         notify(emptyMsg, true);
         return;
       }
 
-      if (resultEl && fromType === 'web-page') {
-        resultEl.textContent = `Repurposing ${planned} page(s) with AI…`;
+      useBackground = shouldUseBackgroundProgress(fromType, planned);
+      const workingMessage = fromType === 'web-page'
+        ? `Repurposing ${planned} page(s) with AI… You can keep working.`
+        : `Repurposing ${planned} item(s) with AI… You can keep working.`;
+
+      if (useBackground) {
+        setModalOpen(false);
+        showProgressDock(workingMessage, { running: true, showClose: false });
+      } else if (resultEl) {
+        resultEl.textContent = fromType === 'web-page'
+          ? `Repurposing ${planned} page(s) with AI…`
+          : `Repurposing ${planned} item(s) with AI…`;
       }
 
       const applyRes = await api('/api/assets/import-from-fields', {
@@ -311,24 +418,36 @@ App.assetFieldImport = (function assetFieldImportModule() {
         }),
       });
       const data = applyRes?.data || applyRes || {};
-      if (resultEl) resultEl.textContent = formatResult(data);
+      const summary = formatResult(data);
       const created = Number(data.created || 0);
+      const transformErrors = Number(data.transformErrors || 0);
+      const variant = created > 0 ? 'success' : (transformErrors > 0 ? 'error' : 'info');
+
+      if (useBackground) {
+        showProgressDock(summary, { running: false, showClose: true, variant });
+      } else {
+        showModalComplete(summary, variant);
+      }
+
       if (created > 0) {
         notify(`Created ${created} ${created === 1 ? label : `${label}s`}.`, false);
         await refreshAfterImport(toType);
       } else {
-        notify(formatResult(data), false);
+        notify(summary, transformErrors > 0);
       }
     } catch (err) {
       let message = err?.message || 'Import failed';
       if (/not available yet/i.test(message)) {
         message = `${message} Restart the Node server on port 3001 (an old process may still be running).`;
       }
-      if (resultEl) resultEl.textContent = message;
+      if (useBackground) {
+        showProgressDock(message, { running: false, showClose: true, variant: 'error' });
+      } else {
+        showModalComplete(message, 'error');
+      }
       notify(message, true);
     } finally {
-      running = false;
-      syncUi();
+      setRunningState(false);
     }
   }
 
@@ -377,9 +496,12 @@ App.assetFieldImport = (function assetFieldImportModule() {
       runBtn?.addEventListener('click', () => {
         runImport();
       });
-      closeBtn?.addEventListener('click', () => setModalOpen(false));
+      closeBtn?.addEventListener('click', () => {
+        if (running) return;
+        setModalOpen(false);
+      });
       modal?.addEventListener('click', (event) => {
-        if (event.target === modal) setModalOpen(false);
+        if (event.target === modal && !running) setModalOpen(false);
       });
     }
 
