@@ -97,6 +97,9 @@ App.acquire = (function () {
     filters: { url: '', title: '', emails: '' },
     sort: { key: '', dir: 'asc' },
   };
+  const projectWebsitesSortState = { key: '', dir: 'asc' };
+  const peerDiscoverySortState = { key: '', dir: 'asc' };
+  const otherWebsitesSortState = { key: '', dir: 'asc' };
   let directAcquirePagesSelected = new Set();
   const directAcquirePeerDiscoveryBulkDraft = {
     type: '',
@@ -692,9 +695,24 @@ App.acquire = (function () {
 
   function getFilteredPeerDiscoveryEntries() {
     const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
-    return results
+    const entries = results
       .map((item, index) => ({ item, index }))
       .filter(({ item }) => peerDiscoveryItemMatchesFilters(item));
+    if (peerDiscoverySortState.key) {
+      const { key, dir } = peerDiscoverySortState;
+      entries.sort((a, b) => {
+        if (key === 'similarity_score') {
+          const diff = Number(a.item.similarity_score || 0) - Number(b.item.similarity_score || 0);
+          return dir === 'asc' ? diff : -diff;
+        }
+        const av = String(a.item[key] || '').toLowerCase();
+        const bv = String(b.item[key] || '').toLowerCase();
+        if (av < bv) return dir === 'asc' ? -1 : 1;
+        if (av > bv) return dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return entries;
   }
 
   function isPeerDiscoveryBulkMode() {
@@ -886,6 +904,17 @@ App.acquire = (function () {
     const selectAll = document.getElementById('directAcquirePeerDiscoverySelectAll');
     if (!tableBody) return;
     tableBody.innerHTML = '';
+    [
+      ['directAcquirePeerDiscoverySortScore', 'similarity_score', 'Score'],
+      ['directAcquirePeerDiscoverySortDomain', 'domain', 'Domain'],
+      ['directAcquirePeerDiscoverySortSite', 'url', 'Site'],
+    ].forEach(([id, key, label]) => {
+      const th = document.getElementById(id);
+      if (!th) return;
+      const marker = peerDiscoverySortState.key === key
+        ? (peerDiscoverySortState.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      th.textContent = label + marker;
+    });
     const results = Array.isArray(directAcquirePeerDiscoveryResults) ? directAcquirePeerDiscoveryResults : [];
     const filteredEntries = getFilteredPeerDiscoveryEntries();
     setDirectAcquirePeerDiscoveryPanelVisible(results.length > 0);
@@ -2947,7 +2976,29 @@ App.acquire = (function () {
     const countEl = document.getElementById('directAcquireProjectWebsitesCount');
     if (!tableBody) return;
     tableBody.innerHTML = '';
-    const peers = listProjectWebsitePeers(directAcquireWebsitePeers);
+    [
+      ['directAcquireProjectWebsitesSortDomain', 'domain', 'Domain'],
+      ['directAcquireProjectWebsitesSortSite', 'site_url', 'Website'],
+      ['directAcquireProjectWebsitesSortTitle', 'title', 'Title'],
+      ['directAcquireProjectWebsitesSortUpdated', 'updated_at', 'Updated'],
+    ].forEach(([id, key, label]) => {
+      const th = document.getElementById(id);
+      if (!th) return;
+      const marker = projectWebsitesSortState.key === key
+        ? (projectWebsitesSortState.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      th.textContent = label + marker;
+    });
+    let peers = listProjectWebsitePeers(directAcquireWebsitePeers);
+    if (projectWebsitesSortState.key) {
+      const { key, dir } = projectWebsitesSortState;
+      peers = peers.slice().sort((a, b) => {
+        const av = String(a[key] || '').toLowerCase();
+        const bv = String(b[key] || '').toLowerCase();
+        if (av < bv) return dir === 'asc' ? -1 : 1;
+        if (av > bv) return dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
     if (countEl) countEl.textContent = `${peers.length} saved`;
     if (!peers.length) {
       if (metaEl) metaEl.textContent = 'No project websites saved yet.';
@@ -3026,7 +3077,29 @@ App.acquire = (function () {
     const countEl = document.getElementById('directAcquireOtherWebsitesCount');
     if (!tableBody) return;
     tableBody.innerHTML = '';
-    const peers = listReferenceWebsitePeers(directAcquireWebsitePeers);
+    [
+      ['directAcquireOtherWebsitesSortType', 'website_role', 'Website Type'],
+      ['directAcquireOtherWebsitesSortDomain', 'domain', 'Domain'],
+      ['directAcquireOtherWebsitesSortSite', 'site_url', 'Site'],
+      ['directAcquireOtherWebsitesSortUpdated', 'updated_at', 'Updated'],
+    ].forEach(([id, key, label]) => {
+      const th = document.getElementById(id);
+      if (!th) return;
+      const marker = otherWebsitesSortState.key === key
+        ? (otherWebsitesSortState.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      th.textContent = label + marker;
+    });
+    let peers = listReferenceWebsitePeers(directAcquireWebsitePeers);
+    if (otherWebsitesSortState.key) {
+      const { key, dir } = otherWebsitesSortState;
+      peers = peers.slice().sort((a, b) => {
+        const av = String(a[key] || '').toLowerCase();
+        const bv = String(b[key] || '').toLowerCase();
+        if (av < bv) return dir === 'asc' ? -1 : 1;
+        if (av > bv) return dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
     state.directAcquireWebsitePeers = Array.isArray(directAcquireWebsitePeers) ? directAcquireWebsitePeers.slice() : [];
     if (countEl) countEl.textContent = `${peers.length} saved`;
     if (!peers.length) {
@@ -6028,6 +6101,39 @@ App.acquire = (function () {
           directAcquirePagesTableState.sort.dir = defaultDir;
         }
         renderDirectAcquirePagesTable();
+      });
+    });
+
+    [
+      ['directAcquireProjectWebsitesSortDomain', 'domain', 'asc', 'project'],
+      ['directAcquireProjectWebsitesSortSite', 'site_url', 'asc', 'project'],
+      ['directAcquireProjectWebsitesSortTitle', 'title', 'asc', 'project'],
+      ['directAcquireProjectWebsitesSortUpdated', 'updated_at', 'desc', 'project'],
+      ['directAcquirePeerDiscoverySortScore', 'similarity_score', 'desc', 'discovery'],
+      ['directAcquirePeerDiscoverySortDomain', 'domain', 'asc', 'discovery'],
+      ['directAcquirePeerDiscoverySortSite', 'url', 'asc', 'discovery'],
+      ['directAcquireOtherWebsitesSortType', 'website_role', 'asc', 'other'],
+      ['directAcquireOtherWebsitesSortDomain', 'domain', 'asc', 'other'],
+      ['directAcquireOtherWebsitesSortSite', 'site_url', 'asc', 'other'],
+      ['directAcquireOtherWebsitesSortUpdated', 'updated_at', 'desc', 'other'],
+    ].forEach(([id, key, defaultDir, table]) => {
+      const th = document.getElementById(id);
+      if (!th || th.dataset.bound) return;
+      th.dataset.bound = '1';
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => {
+        const sortState = table === 'project' ? projectWebsitesSortState
+                        : table === 'discovery' ? peerDiscoverySortState
+                        : otherWebsitesSortState;
+        if (sortState.key === key) {
+          sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortState.key = key;
+          sortState.dir = defaultDir;
+        }
+        if (table === 'project') renderDirectAcquireProjectWebsitesTable();
+        else if (table === 'discovery') renderDirectAcquirePeerDiscoveryResults();
+        else renderDirectAcquireWebsitePeersTable();
       });
     });
 
