@@ -653,9 +653,11 @@ App.assets = (function () {
     }
 
     if (els.assetsBulkEditBtn) els.assetsBulkEditBtn.disabled = !bulkMode;
+    if (els.assetsBulkResizeBtn) els.assetsBulkResizeBtn.disabled = !bulkMode;
     if (els.assetsBulkDeleteBtn) els.assetsBulkDeleteBtn.disabled = !bulkMode;
     if (els.assetsFilterActionRow) els.assetsFilterActionRow.classList.toggle('hidden', bulkMode);
     if (els.assetsBulkActionRow) els.assetsBulkActionRow.classList.toggle('hidden', !bulkMode);
+    if (!bulkMode) closeBulkResizePanel();
 
     if (!els.assetsFilterName || !els.assetsFilterType || !els.assetsFilterTags) return;
 
@@ -1164,6 +1166,65 @@ App.assets = (function () {
     }
   }
 
+  function openBulkResizePanel() {
+    if (!els.assetsBulkResizePanel) return;
+    const count = selectedAssetIds.size;
+    if (els.bulkResizeRunBtn) els.bulkResizeRunBtn.textContent = `Resize ${count} Image${count === 1 ? '' : 's'}`;
+    if (els.bulkResizeStatus) els.bulkResizeStatus.textContent = '';
+    els.assetsBulkResizePanel.classList.remove('hidden');
+    els.assetsBulkResizePanel.setAttribute('aria-hidden', 'false');
+    els.assetsBulkResizePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closeBulkResizePanel() {
+    if (!els.assetsBulkResizePanel) return;
+    els.assetsBulkResizePanel.classList.add('hidden');
+    els.assetsBulkResizePanel.setAttribute('aria-hidden', 'true');
+  }
+
+  async function runBulkResize() {
+    const selectedAssets = getSelectedAssets().filter((a) => String(a.assetType || '') === 'Image');
+    if (!selectedAssets.length) {
+      notify('Select one or more image assets first', true);
+      return;
+    }
+    const width = Math.max(0, Number(els.bulkResizeWidth?.value || 0) || 0) || null;
+    const height = Math.max(0, Number(els.bulkResizeHeight?.value || 0) || 0) || null;
+    if (!width && !height) {
+      notify('Enter a target width or height', true);
+      return;
+    }
+    const fit = String(els.bulkResizeFit?.value || 'inside');
+    if (els.bulkResizeRunBtn) els.bulkResizeRunBtn.disabled = true;
+    if (els.bulkResizeStatus) els.bulkResizeStatus.textContent = `Resizing ${selectedAssets.length} image${selectedAssets.length === 1 ? '' : 's'}…`;
+    try {
+      const result = await api('/api/assets/bulk-resize', {
+        method: 'POST',
+        body: JSON.stringify({ assetIds: selectedAssets.map((a) => a.id), width, height, fit }),
+      });
+      const results = result?.results || [];
+      const succeeded = results.filter((r) => r.ok);
+      const failed = results.filter((r) => !r.ok);
+
+      const statusParts = [`${succeeded.length} resized`];
+      if (failed.length) statusParts.push(`${failed.length} failed: ${failed.map((r) => `#${r.id} ${r.error || 'unknown error'}`).join('; ')}`);
+      if (els.bulkResizeStatus) els.bulkResizeStatus.textContent = statusParts.join(' · ');
+
+      if (succeeded.length) {
+        notify(`${succeeded.length} image${succeeded.length === 1 ? '' : 's'} resized`);
+        exitBulkMode();
+        await refresh();
+      } else if (failed.length) {
+        notify(failed[0].error || 'Resize failed', true);
+      }
+    } catch (err) {
+      notify(err.message || 'Bulk resize failed', true);
+      if (els.bulkResizeStatus) els.bulkResizeStatus.textContent = '';
+    } finally {
+      if (els.bulkResizeRunBtn) els.bulkResizeRunBtn.disabled = false;
+    }
+  }
+
   async function editSelectedAssets() {
     const selectedAssets = getSelectedAssets();
     if (!selectedAssets.length) {
@@ -1629,6 +1690,18 @@ App.assets = (function () {
 
     if (els.assetsBulkEditBtn) {
       els.assetsBulkEditBtn.addEventListener('click', editSelectedAssets);
+    }
+
+    if (els.assetsBulkResizeBtn) {
+      els.assetsBulkResizeBtn.addEventListener('click', openBulkResizePanel);
+    }
+
+    if (els.bulkResizeRunBtn) {
+      els.bulkResizeRunBtn.addEventListener('click', runBulkResize);
+    }
+
+    if (els.bulkResizeCancelBtn) {
+      els.bulkResizeCancelBtn.addEventListener('click', closeBulkResizePanel);
     }
 
     if (els.assetsBulkDeleteBtn) {
