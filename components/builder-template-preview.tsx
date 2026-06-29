@@ -1674,12 +1674,23 @@ function BuilderModulePreview({
   if (module.type === "blog-post" || module.type === "blog-post-view") {
     return <BlogPostViewPreview settings={module.settings} />;
   }
+  if (module.type === "blog-newsletter-subscribe") {
+    return (
+      <BlogNewsletterSubscribePreview
+        settings={module.settings}
+        theme={theme}
+        themePalette={themePalette}
+        projectId={projectId}
+      />
+    );
+  }
+  if (module.type === "blog-related-posts") {
+    return <BlogRelatedPostsPreview settings={module.settings} />;
+  }
   if (
     module.type === "blog-post-card" ||
     module.type === "blog-author-bio" ||
-    module.type === "blog-toc" ||
-    module.type === "blog-newsletter-subscribe" ||
-    module.type === "blog-related-posts"
+    module.type === "blog-toc"
   ) {
     return <BlogModulePlaceholder type={module.type} />;
   }
@@ -3284,13 +3295,405 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   );
 }
 
+function BlogNewsletterSubscribePreview({
+  settings,
+  theme,
+  themePalette,
+  projectId = ""
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  projectId?: string;
+}) {
+  const headline = settings.headline || "Stay in the loop";
+  const description = settings.description || "";
+  const bgColor = settings.bgColor || "#eaf4ff";
+  const crmFormId = settings.crmFormId ?? "";
+  const showImage = settings.showImage === "true";
+  const imageUrl = settings.imageUrl ?? "";
+
+  return (
+    <div style={{ background: bgColor, borderRadius: 8, padding: "1.5rem" }}>
+      <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+        {showImage && imageUrl ? (
+          <img
+            alt=""
+            src={imageUrl}
+            style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+          />
+        ) : null}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {headline ? (
+            <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.125rem", fontWeight: 700 }}>{headline}</h3>
+          ) : null}
+          {description ? (
+            <p style={{ margin: "0 0 1rem", fontSize: "0.875rem", color: "#4a5568" }}>{description}</p>
+          ) : null}
+          {crmFormId ? (
+            <CrmFormPreview settings={settings} theme={theme} themePalette={themePalette} projectId={projectId} />
+          ) : (
+            <div className="builder-contact-form-stub">
+              Paste a CRM Form ID in module settings to activate this newsletter block.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string> }) {
+  const matchBy = settings.matchBy ?? "categories";
+  const isManual = matchBy === "manual";
+  const count = Math.max(1, parseInt(settings.count ?? "3", 10) || 3);
+  const layout = settings.layout ?? "grid";
+  const cols = Math.max(1, parseInt(settings.columns ?? "3", 10) || 3);
+  const cardGap = parseInt(settings.cardGap ?? "20", 10) || 20;
+  const cardStyle = settings.cardStyle ?? "default";
+  const showFeaturedImage = (settings.showFeaturedImage ?? "true") !== "false";
+  const showExcerpt = settings.showExcerpt === "true";
+  const showAuthor = settings.showAuthor === "true";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showCategories = (settings.showCategories ?? "true") !== "false";
+  const showTitle = (settings.showTitle ?? "true") !== "false";
+  const titleText = settings.title || "You Might Also Like";
+  const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
+  const imgAspectRatioMap: Record<string, string> = {
+    "16:9": "16/9",
+    "4:3": "4/3",
+    "3:2": "3/2",
+    "1:1": "1/1"
+  };
+  const imgAspectRatio = imgAspectRatioMap[settings.imageAspectRatio ?? "16:9"] ?? "16/9";
+
+  const [postSlug, setPostSlug] = useState(() =>
+    typeof window !== "undefined"
+      ? (new URLSearchParams(window.location.search).get("post") ?? "")
+      : ""
+  );
+  const [relatedPosts, setRelatedPosts] = useState<BlogPostRecord[]>([]);
+  const [categories, setCategories] = useState<BlogCategory[]>([]);
+  const [loading, setLoading] = useState(!isManual);
+
+  useEffect(() => {
+    function sync() {
+      setPostSlug(new URLSearchParams(window.location.search).get("post") ?? "");
+    }
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+
+  useEffect(() => {
+    if (isManual) {
+      setLoading(false);
+      return;
+    }
+    if (!postSlug) {
+      setRelatedPosts([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const headers = getCrmProjectHeaders();
+
+    Promise.all([
+      fetch(`/api/blog/posts/${encodeURIComponent(postSlug)}?by=slug`, {
+        credentials: "include",
+        headers
+      }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/blog/posts?status=published&limit=100`, {
+        credentials: "include",
+        headers
+      }).then((r) => (r.ok ? r.json() : null)),
+      showCategories
+        ? fetch("/api/blog/categories", { credentials: "include", headers }).then((r) =>
+            r.ok ? r.json() : null
+          )
+        : Promise.resolve(null)
+    ])
+      .then(([currentData, allData, catData]) => {
+        const current: BlogPostRecord | null =
+          (currentData?.data ?? currentData?.post ?? null) as BlogPostRecord | null;
+        const allPosts: BlogPostRecord[] = Array.isArray(allData?.posts)
+          ? (allData.posts as BlogPostRecord[])
+          : [];
+        const fetchedCats: BlogCategory[] = Array.isArray(catData?.categories)
+          ? (catData.categories as BlogCategory[])
+          : [];
+
+        if (fetchedCats.length > 0) setCategories(fetchedCats);
+
+        if (!current) {
+          setRelatedPosts([]);
+          return;
+        }
+
+        const filtered = allPosts.filter((p) => {
+          if (p.slug === current.slug) return false;
+          if (matchBy === "tags") {
+            return (current.tags ?? []).some((t) => p.tags?.includes(t));
+          }
+          const sharedCat = (current.categoryIds ?? []).some((id) => p.categoryIds?.includes(id));
+          if (matchBy === "categories") return sharedCat;
+          const sharedTag = (current.tags ?? []).some((t) => p.tags?.includes(t));
+          return sharedCat || sharedTag;
+        });
+
+        setRelatedPosts(filtered.slice(0, count));
+      })
+      .catch(() => setRelatedPosts([]))
+      .finally(() => setLoading(false));
+  }, [postSlug, isManual, matchBy, count, showCategories]);
+
+  const manualPosts = useMemo((): Array<{
+    id: string;
+    title: string;
+    imageUrl: string;
+    url: string;
+    date: string;
+    categories: string;
+  }> => {
+    if (!isManual) return [];
+    try {
+      const parsed = JSON.parse(settings.manualPosts || "[]") as unknown;
+      return Array.isArray(parsed) ? (parsed as typeof manualPosts).slice(0, count) : [];
+    } catch {
+      return [];
+    }
+  }, [isManual, settings.manualPosts, count]);
+
+  const cardBorderStyle: CSSProperties =
+    cardStyle === "shadow"
+      ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
+      : { border: "1px solid #e2e8f0", boxShadow: "none" };
+
+  const gridStyle: CSSProperties =
+    layout === "list"
+      ? { display: "flex", flexDirection: "column", gap: `${cardGap}px` }
+      : { display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: `${cardGap}px` };
+
+  const cardBase: CSSProperties = { ...cardBorderStyle, borderRadius: 8, overflow: "hidden", background: "#fff" };
+
+  const sectionTitle = showTitle ? (
+    <h3 style={{ margin: "0 0 1rem", fontSize: "1.125rem", fontWeight: 700 }}>{titleText}</h3>
+  ) : null;
+
+  if (loading) {
+    return (
+      <div>
+        {sectionTitle}
+        <div style={{ color: "#888", fontSize: "0.875rem" }}>Loading related posts…</div>
+      </div>
+    );
+  }
+
+  if (isManual) {
+    if (manualPosts.length === 0) {
+      return (
+        <div>
+          {sectionTitle}
+          <div
+            style={{
+              padding: "1.5rem",
+              border: "1px dashed #d1d5db",
+              borderRadius: 8,
+              textAlign: "center",
+              color: "#9ca3af",
+              fontSize: "0.875rem"
+            }}
+          >
+            Add posts in module settings.
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div>
+        {sectionTitle}
+        <div style={gridStyle}>
+          {manualPosts.map((p) => (
+            <article
+              key={p.id}
+              style={{ ...cardBase, display: "flex", flexDirection: layout === "list" ? "row" : "column" }}
+            >
+              {showFeaturedImage && p.imageUrl ? (
+                layout === "list" ? (
+                  <div style={{ flexShrink: 0, width: 140, overflow: "hidden" }}>
+                    <img
+                      alt={p.title}
+                      src={p.imageUrl}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ overflow: "hidden", aspectRatio: imgAspectRatio }}>
+                    <img
+                      alt={p.title}
+                      src={p.imageUrl}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  </div>
+                )
+              ) : null}
+              <div style={{ padding: "0.875rem 1rem", flex: 1 }}>
+                {showCategories && p.categories ? (
+                  <div
+                    style={{
+                      fontSize: "0.6875rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      color: "#0f4f8f",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    {p.categories}
+                  </div>
+                ) : null}
+                <h4 style={{ margin: "0 0 0.375rem", fontSize: "0.9375rem", fontWeight: 600, lineHeight: 1.3 }}>
+                  <a href={p.url || "#"} style={{ color: "#1a202c", textDecoration: "none" }}>
+                    {p.title}
+                  </a>
+                </h4>
+                {showDate && p.date ? (
+                  <div style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{p.date}</div>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!postSlug) {
+    return (
+      <div>
+        {sectionTitle}
+        <div
+          style={{
+            padding: "1.5rem",
+            border: "1px dashed #d1d5db",
+            borderRadius: 8,
+            textAlign: "center",
+            color: "#9ca3af",
+            fontSize: "0.875rem"
+          }}
+        >
+          Related posts appear here when viewing a blog post.
+        </div>
+      </div>
+    );
+  }
+
+  if (relatedPosts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      {sectionTitle}
+      <div style={gridStyle}>
+        {relatedPosts.map((post) => {
+          const sep = postPageUrl.includes("?") ? "&" : "?";
+          const href = `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}`;
+          const postCats = showCategories ? categories.filter((c) => post.categoryIds?.includes(c.id)) : [];
+          const dateStr = post.published_at
+            ? new Date(post.published_at).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "short",
+                day: "numeric"
+              })
+            : "";
+          const imageUrl = post.featuredImageUrl || post.featured_image_url || "";
+          return (
+            <article
+              key={post.id}
+              style={{ ...cardBase, display: "flex", flexDirection: layout === "list" ? "row" : "column" }}
+            >
+              {showFeaturedImage && imageUrl && layout === "list" ? (
+                <div style={{ flexShrink: 0, width: 140, overflow: "hidden" }}>
+                  <img
+                    alt={post.title}
+                    src={imageUrl}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                </div>
+              ) : null}
+              <div style={{ padding: "0.875rem 1rem", flex: 1 }}>
+                {postCats.length > 0 ? (
+                  <div
+                    style={{
+                      fontSize: "0.6875rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      color: "#0f4f8f",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    {postCats.map((c) => c.name).join(", ")}
+                  </div>
+                ) : null}
+                {showFeaturedImage && imageUrl && layout !== "list" ? (
+                  <div
+                    style={{
+                      width: "calc(100% + 2rem)",
+                      marginLeft: "-1rem",
+                      marginTop: "-0.875rem",
+                      marginBottom: "0.75rem",
+                      overflow: "hidden",
+                      aspectRatio: imgAspectRatio
+                    }}
+                  >
+                    <img
+                      alt={post.title}
+                      src={imageUrl}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  </div>
+                ) : null}
+                <h4 style={{ margin: "0 0 0.375rem", fontSize: "0.9375rem", fontWeight: 600, lineHeight: 1.3 }}>
+                  <a href={href} style={{ color: "#1a202c", textDecoration: "none" }}>
+                    {post.title}
+                  </a>
+                </h4>
+                {showExcerpt && post.excerpt ? (
+                  <p style={{ margin: "0 0 0.5rem", fontSize: "0.8125rem", color: "#4a5568", lineHeight: 1.5 }}>
+                    {post.excerpt}
+                  </p>
+                ) : null}
+                {(showAuthor && post.author) || (showDate && dateStr) ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                      fontSize: "0.8125rem",
+                      color: "#a0aec0",
+                      marginTop: "0.375rem"
+                    }}
+                  >
+                    {showAuthor && post.author ? <span>{post.author}</span> : null}
+                    {showDate && dateStr ? <span>{dateStr}</span> : null}
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function BlogModulePlaceholder({ type }: { type: string }) {
   const labels: Record<string, string> = {
     "blog-post-card": "Post Card",
     "blog-author-bio": "Author Bio",
-    "blog-toc": "Table of Contents",
-    "blog-newsletter-subscribe": "Newsletter Subscribe",
-    "blog-related-posts": "Related Posts"
+    "blog-toc": "Table of Contents"
   };
   return (
     <div
