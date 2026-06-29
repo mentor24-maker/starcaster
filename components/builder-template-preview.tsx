@@ -1986,7 +1986,18 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                       ))}
                     </div>
                   ) : null}
-                  <h3 style={{ margin: "0 0 0.75rem", fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700 }}>
+                  <h3 style={{
+                    margin: "0 0 0.75rem",
+                    fontSize: "1.0625rem",
+                    lineHeight: 1.3,
+                    color: "#1a202c",
+                    fontWeight: 700,
+                    height: "5.525rem",    // 4 lines × 1.0625rem × 1.3
+                    display: "-webkit-box",
+                    WebkitLineClamp: 4,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}>
                     {post.title}
                   </h3>
                   {/* Grid layout: image below headline, above excerpt */}
