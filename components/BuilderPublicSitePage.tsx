@@ -15,6 +15,7 @@ import {
 import {
   ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
+  isAdminNavCookieSet,
   redirectAfterAdminLogout,
 } from "@/lib/public-admin-session";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
@@ -161,6 +162,11 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   const [themePalette, setThemePalette] = useState<CrmThemePalette | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [isAdminNav, setIsAdminNav] = useState(false);
+
+  useEffect(() => {
+    setIsAdminNav(isAdminNavCookieSet());
+  }, []);
 
   useEffect(() => {
     if (!projectId) { setLoaded(true); return; }
@@ -256,12 +262,23 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     : filterPublicSections(page.layoutSections);
 
   return (
-    <BuilderTemplatePreview
-      layoutSections={sections}
-      pageBackground={page.pageBackground}
-      theme={page.theme}
-      themePalette={themePalette ?? pageThemePalette(page)}
-      projectId={projectId}
-    />
+    <>
+      {isAdminNav ? (
+        <a
+          href={ADMIN_LOGIN_PATH}
+          className="site-admin-nav-link"
+          aria-label="Admin"
+        >
+          Admin
+        </a>
+      ) : null}
+      <BuilderTemplatePreview
+        layoutSections={sections}
+        pageBackground={page.pageBackground}
+        theme={page.theme}
+        themePalette={themePalette ?? pageThemePalette(page)}
+        projectId={projectId}
+      />
+    </>
   );
 }
