@@ -149,6 +149,7 @@
                   </div>
                   <div id="assetsBulkActionRow" class="assets-bulk-action-row hidden">
                     <button id="assetsBulkEditBtn" type="button" class="btn" disabled>Edit All</button>
+                    <button id="assetsBulkResizeBtn" type="button" class="btn" disabled>Resize Images</button>
                     <button id="assetsBulkDeleteBtn" type="button" class="btn" disabled>Delete All</button>
                   </div>
                 </th>
@@ -168,6 +169,35 @@
             </thead>
             <tbody id="assetsTable"></tbody>
           </table>
+        </div>
+
+        <div id="assetsBulkResizePanel" class="assets-bulk-resize-panel hidden" aria-hidden="true">
+          <div class="assets-bulk-resize-header">
+            <h3>Resize Selected Images</h3>
+            <p class="meta">Server-side resize — originals are replaced. Leave Height blank to resize proportionally by width only.</p>
+          </div>
+          <div class="assets-bulk-resize-controls">
+            <label class="stack-form" for="bulkResizeWidth">
+              <span>Target Width (px)</span>
+              <input id="bulkResizeWidth" type="number" min="1" step="1" placeholder="e.g. 960" />
+            </label>
+            <label class="stack-form" for="bulkResizeHeight">
+              <span>Target Height (px)</span>
+              <input id="bulkResizeHeight" type="number" min="1" step="1" placeholder="optional" />
+            </label>
+            <label class="stack-form" for="bulkResizeFit">
+              <span>Fit Mode</span>
+              <select id="bulkResizeFit">
+                <option value="inside">Inside — proportional</option>
+                <option value="cover">Cover — crop to fill</option>
+              </select>
+            </label>
+          </div>
+          <div class="assets-bulk-resize-actions">
+            <button type="button" id="bulkResizeRunBtn" class="btn btn-primary">Resize Images</button>
+            <button type="button" id="bulkResizeCancelBtn" class="btn btn-ghost">Cancel</button>
+          </div>
+          <div id="bulkResizeStatus" class="assets-bulk-resize-status"></div>
         </div>
 
         <div id="assetAssociationsModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assetAssociationsModalTitle">
