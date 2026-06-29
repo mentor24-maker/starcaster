@@ -251,6 +251,7 @@ App.els = {
   bulkResizeRunBtn: document.getElementById('bulkResizeRunBtn'),
   bulkResizeCancelBtn: document.getElementById('bulkResizeCancelBtn'),
   bulkResizeStatus: document.getElementById('bulkResizeStatus'),
+  bulkResizeImageList: document.getElementById('bulkResizeImageList'),
   assetCategoriesTable: document.getElementById('assetCategoriesTable'),
   openCreateAssetCategoryPageBtn: document.getElementById('openCreateAssetCategoryPageBtn'),
   backToAssetCategoriesBtn: document.getElementById('backToAssetCategoriesBtn'),
