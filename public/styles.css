@@ -20677,6 +20677,39 @@ button.builder-inline-asset-status-btn:focus-visible {
   color: #587592;
   min-height: 1.4em;
 }
+.bulk-resize-image-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.bulk-resize-image-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  width: 80px;
+}
+.bulk-resize-image-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border-light, rgba(15, 79, 143, 0.16));
+  background: #dde8f4;
+  display: block;
+}
+.bulk-resize-image-thumb--empty {
+  background: #dde8f4;
+}
+.bulk-resize-image-name {
+  font-size: 0.72rem;
+  color: #587592;
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.3;
+  max-height: 2.6em;
+  overflow: hidden;
+}
 .tiny-btn {
   width: auto;
   padding: 0.35rem 0.5rem;
