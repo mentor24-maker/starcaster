@@ -2214,53 +2214,89 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         </div>
       ) : null}
 
-      <div style={fieldStyle}>
-        <label style={labelStyle}>Title *</label>
-        <input
-          style={inputStyle}
-          type="text"
-          value={values.title || ""}
-          onChange={(e) => setField("title", e.target.value)}
-          placeholder="Post title"
-        />
+      <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start", marginBottom: "0.25rem" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={fieldStyle}>
+            <label style={labelStyle}>Title *</label>
+            <input
+              style={inputStyle}
+              type="text"
+              value={values.title || ""}
+              onChange={(e) => setField("title", e.target.value)}
+              placeholder="Post title"
+            />
+          </div>
+
+          {showSlug ? (
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Slug</label>
+              <input
+                style={inputStyle}
+                type="text"
+                value={values.slug || ""}
+                onChange={(e) => setField("slug", e.target.value)}
+                placeholder="post-slug (auto-generated if blank)"
+              />
+            </div>
+          ) : null}
+
+          {showAuthorField ? (
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Author</label>
+              <input
+                style={inputStyle}
+                type="text"
+                value={values.author || ""}
+                onChange={(e) => setField("author", e.target.value)}
+                placeholder="Author name"
+              />
+            </div>
+          ) : null}
+
+          {showFeaturedImage ? (
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Featured Image</label>
+              <BuilderImagePickerField
+                value={values.featuredImageUrl || ""}
+                onChange={(url) => setField("featuredImageUrl", url)}
+                placeholder="https://…"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {showFeaturedImage ? (
+          <div style={{ width: 200, flexShrink: 0, paddingTop: "1.6rem" }}>
+            {values.featuredImageUrl ? (
+              <img
+                alt="Featured image preview"
+                src={values.featuredImageUrl}
+                style={{
+                  width: "100%",
+                  aspectRatio: "16 / 9",
+                  objectFit: "cover",
+                  borderRadius: 6,
+                  border: "1px solid #e5e7eb",
+                  display: "block"
+                }}
+              />
+            ) : (
+              <div style={{
+                width: "100%",
+                aspectRatio: "16 / 9",
+                background: "#f3f4f6",
+                borderRadius: 6,
+                border: "1px dashed #d1d5db",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <span style={{ fontSize: 11, color: "#9ca3af" }}>No image</span>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
-
-      {showSlug ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Slug</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.slug || ""}
-            onChange={(e) => setField("slug", e.target.value)}
-            placeholder="post-slug (auto-generated if blank)"
-          />
-        </div>
-      ) : null}
-
-      {showAuthorField ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Author</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.author || ""}
-            onChange={(e) => setField("author", e.target.value)}
-            placeholder="Author name"
-          />
-        </div>
-      ) : null}
-
-      {showFeaturedImage ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Featured Image</label>
-          <BuilderImagePickerField
-            value={values.featuredImageUrl || ""}
-            onChange={(url) => setField("featuredImageUrl", url)}
-            placeholder="https://…"
-          />
-        </div>
-      ) : null}
 
       {showExcerpt ? (
         <div style={fieldStyle}>
