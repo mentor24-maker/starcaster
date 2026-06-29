@@ -887,7 +887,8 @@ App.assets = (function () {
       appendCell(tr, displayAssetType(asset.assetType));
       appendCell(tr, asset.category);
       appendCell(tr, displayAspect(resolvedAssetAspect(asset)));
-      appendCell(tr, Array.isArray(asset.tags) ? asset.tags.join(', ') : '-');
+      const updatedAt = String(asset.updatedAt || asset.createdAt || '').trim();
+      appendCell(tr, updatedAt ? new Date(updatedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '-');
       appendCell(tr, formatBytes(asset.size));
 
       const actionsTd = document.createElement('td');
@@ -1331,7 +1332,7 @@ App.assets = (function () {
     bindSortButton('assetsSortTypeBtn', 'assetType', 'asc');
     bindSortButton('assetsSortCategoryBtn', 'category', 'asc');
     bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
-    bindSortButton('assetsSortTagsBtn', 'tags', 'asc');
+    bindSortButton('assetsSortUpdatedBtn', 'updatedAt', 'desc');
     bindSortButton('assetsSortSizeBtn', 'size', 'desc');
 
     if (els.backToAssetsBtn) {
