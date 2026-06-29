@@ -3234,10 +3234,10 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
     return (
       <article className="blog-post-page">
         <header className="blog-post-header">
-          <h1 className="blog-post-title">{post.title}</h1>
           {showFeaturedImage && imageUrl ? (
             <img alt={post.title} className="blog-post-featured-image" src={imageUrl} />
           ) : null}
+          <h1 className="blog-post-title">{post.title}</h1>
           {(showAuthor && post.author) || (showDate && pubDate) ? (
             <p className="blog-post-meta blog-card-date">
               {showAuthor && post.author ? <>By {post.author}</> : null}
