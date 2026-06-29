@@ -1545,7 +1545,7 @@ async function handle(req, res, pathname, method) {
     const crawl = await crawlProjectPagesForKeywords({
       source_url: siteUrl,
       max_pages: maxPages,
-      body_snippet_chars: 500,
+      body_snippet_chars: 2000,
       keyword_exclusions: safeText(body?.keyword_exclusions),
       capture_contact_data: false,
     });
