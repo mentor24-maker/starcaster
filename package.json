@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "build:html": "node scripts/build_html.js",
+    "bust": "node scripts/bump_cache.js",
     "build:builder": "node scripts/build_builder_bundle.mjs",
     "typecheck": "tsc --noEmit",
     "test:builder-ui": "vitest run",
