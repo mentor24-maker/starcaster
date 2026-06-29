@@ -1168,9 +1168,19 @@ App.assets = (function () {
 
   function openBulkResizePanel() {
     if (!els.assetsBulkResizePanel) return;
-    const count = selectedAssetIds.size;
+    const selected = getSelectedAssets().filter((a) => String(a.assetType || '') === 'Image');
+    const count = selected.length;
     if (els.bulkResizeRunBtn) els.bulkResizeRunBtn.textContent = `Resize ${count} Image${count === 1 ? '' : 's'}`;
     if (els.bulkResizeStatus) els.bulkResizeStatus.textContent = '';
+    if (els.bulkResizeImageList) {
+      els.bulkResizeImageList.innerHTML = selected.map((asset) => {
+        const thumb = assetImageUrl(asset, { preferThumbnail: true });
+        const imgTag = thumb
+          ? `<img src="${thumb}" alt="" class="bulk-resize-image-thumb" />`
+          : `<span class="bulk-resize-image-thumb bulk-resize-image-thumb--empty"></span>`;
+        return `<div class="bulk-resize-image-item">${imgTag}<span class="bulk-resize-image-name">${String(asset.assetName || '').trim() || '(unnamed)'}</span></div>`;
+      }).join('');
+    }
     els.assetsBulkResizePanel.classList.remove('hidden');
     els.assetsBulkResizePanel.setAttribute('aria-hidden', 'false');
     els.assetsBulkResizePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
