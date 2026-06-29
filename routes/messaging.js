@@ -131,6 +131,9 @@ const {
   deleteMessagingKeyword,
 } = require('../lib/messagingKeywordsStore');
 const { generateMessagingContentSuggestions, generateMessagingTopicSuggestions, prepareMessagingContentPrompt } = require('../lib/messagingContentSuggestions');
+const { listContentItems, WEB_PAGES_FORMAT } = require('../lib/contentItemsStore');
+const { syncAllWebPageContentItems } = require('../lib/webPageContentSync');
+const { rollupWebPageContent } = require('../lib/webPageContentRollup');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 
 const FORMAT_IMPORT_PATH_RE = /^\/api\/messaging\/([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*)\/import\/?$/;
@@ -912,6 +915,31 @@ async function handle(req, res, pathname, method) {
     updateFn: updateMessagingHashtag,
     deleteFn: deleteMessagingHashtag,
   })) return true;
+
+  if (pathname === '/api/messaging/web-pages/rollup' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const limit = Number(urlObj.searchParams.get('limit') || 5000);
+    const result = await rollupWebPageContent(scope, { limit });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not load web pages'), true;
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/messaging/content-items/sync-web-pages' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const result = await syncAllWebPageContentItems(scope, { limit: body?.limit });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not sync web pages'), true;
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
+  if (pathname === '/api/messaging/content-items' && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const limit = Number(urlObj.searchParams.get('limit') || 5000);
+    const format = String(urlObj.searchParams.get('format') || WEB_PAGES_FORMAT).trim();
+    const result = await listContentItems(limit, scope, { format });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const items = result.data || [];
+    return sendOk(res, 200, items, { items }, { total: items.length }), true;
+  }
 
   if (pathname === '/api/messaging/formats' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
