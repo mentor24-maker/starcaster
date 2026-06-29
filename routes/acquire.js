@@ -1539,8 +1539,15 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/acquire/peer-keywords/harvest' && method === 'POST') {
     if (checkEndpointLimit(req, res, 'acquire.direct')) return true;
     const body = await parseJsonBody(req);
-    const siteUrl = safeText(body?.site_url);
-    if (!siteUrl) return sendErr(res, 400, 'site_url is required'), true;
+    const rawUrl = safeText(body?.site_url);
+    if (!rawUrl) return sendErr(res, 400, 'site_url is required'), true;
+    // Always crawl from the site root — interior page URLs give narrow crawls
+    // and are more likely to be bot-blocked than the homepage.
+    let siteUrl = rawUrl;
+    try {
+      const withProto = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+      siteUrl = new URL(withProto).origin;
+    } catch { /* leave as-is */ }
     const maxPages = Math.max(1, Math.min(Number(body?.max_pages || 10) || 10, 50));
     const crawl = await crawlProjectPagesForKeywords({
       source_url: siteUrl,
