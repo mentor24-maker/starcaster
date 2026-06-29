@@ -2215,7 +2215,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
       ) : null}
 
       <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start", marginBottom: "0.25rem" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 2, minWidth: 0 }}>
           <div style={fieldStyle}>
             <label style={labelStyle}>Title *</label>
             <input
