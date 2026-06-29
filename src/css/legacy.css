@@ -6696,6 +6696,53 @@ button.builder-inline-asset-status-btn:focus-visible {
   width: fit-content;
 }
 
+.assets-bulk-resize-panel {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--panel-bg, #f0f6fd);
+  border: 1px solid var(--border-light, rgba(15, 79, 143, 0.16));
+  border-radius: 10px;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.assets-bulk-resize-panel.hidden {
+  display: none;
+}
+
+.assets-bulk-resize-header h3 {
+  margin: 0;
+}
+
+.assets-bulk-resize-header .meta {
+  margin: 0.35rem 0 0;
+  color: #587592;
+  font-size: 0.88rem;
+}
+
+.assets-bulk-resize-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem 0.85rem;
+  align-items: end;
+}
+
+.assets-bulk-resize-controls .stack-form {
+  margin: 0;
+}
+
+.assets-bulk-resize-actions {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: flex-end;
+}
+
+.assets-bulk-resize-status {
+  font-size: 0.88rem;
+  color: #587592;
+  min-height: 1.4em;
+}
+
 .tiny-btn {
   width: auto;
   padding: 0.35rem 0.5rem;
@@ -12542,4 +12589,12 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   color: var(--primary-color, #0b82d4);
   border-bottom-color: var(--primary-color, #0b82d4);
   font-weight: 600;
+}
+
+/* Peer keyword harvest / archive dialogs */
+.c-modal__dialog.peer-keyword-archive-dialog {
+  width: min(620px, 92vw);
+}
+.c-modal__dialog.peer-keyword-harvest-dialog {
+  width: min(480px, 92vw);
 }

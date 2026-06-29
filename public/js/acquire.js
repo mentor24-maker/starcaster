@@ -84,6 +84,7 @@ App.acquire = (function () {
   let directAcquireWebsitePeerEditingId = '';
   let directAcquireProjectSourceUrl = '';
   let directAcquirePeerDiscoveryResults = [];
+  const peerHarvestedKeywords = new Map(); // peerId → [{keyword, score}]
   const directAcquirePeerDiscoveryFilters = {
     type: '',
     category: '',
@@ -3004,6 +3005,7 @@ App.acquire = (function () {
     peers.forEach((peer) => {
       const tr = document.createElement('tr');
       const referenceRole = getWebsitePeerReferenceRole(peer);
+      const peerId = String(peer?.id || '').trim();
 
       const typeTd = document.createElement('td');
       typeTd.textContent = ACQUIRE_WEBSITE_TYPE_LABELS[referenceRole] || 'Peer';
@@ -3032,9 +3034,30 @@ App.acquire = (function () {
       tr.appendChild(siteTd);
 
       const keywordsTd = document.createElement('td');
-      keywordsTd.textContent = Array.isArray(peer?.matched_keywords) && peer.matched_keywords.length
-        ? peer.matched_keywords.join(', ')
-        : '-';
+      const harvested = peerHarvestedKeywords.get(peerId);
+      if (harvested && harvested.length) {
+        harvested.forEach(({ keyword }) => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'btn tiny-btn';
+          chip.style.cssText = 'margin:1px 2px;font-size:0.75em;padding:1px 7px;border-radius:10px';
+          chip.title = `Save "${keyword}" to Messaging › Keywords`;
+          chip.textContent = keyword;
+          chip.addEventListener('click', async () => {
+            try {
+              await api('/api/messaging/keywords', { method: 'POST', body: JSON.stringify({ keyword }) });
+              notify(`Saved "${keyword}" to Messaging › Keywords`);
+            } catch (err) {
+              notify(err.message || 'Could not save keyword', true);
+            }
+          });
+          keywordsTd.appendChild(chip);
+        });
+      } else {
+        keywordsTd.textContent = Array.isArray(peer?.matched_keywords) && peer.matched_keywords.length
+          ? peer.matched_keywords.join(', ')
+          : '-';
+      }
       tr.appendChild(keywordsTd);
 
       const sourceTd = document.createElement('td');
@@ -3059,6 +3082,18 @@ App.acquire = (function () {
       });
       actionsTd.appendChild(editBtn);
 
+      if (peerHarvestedKeywords.has(peerId)) {
+        const stackedBtn = App.makeIconButton('stacked', 'View Harvested Keywords', () => {
+          openPeerKeywordArchiveDialog(peer);
+        });
+        actionsTd.appendChild(stackedBtn);
+      } else {
+        const harvestBtn = App.makeIconButton('harvest', 'Harvest Keywords', () => {
+          openPeerKeywordHarvestDialog(peer);
+        });
+        actionsTd.appendChild(harvestBtn);
+      }
+
       const deleteBtn = App.makeIconButton('trash', 'Delete', async () => {
         if (!confirm(`Delete ${String(peer?.domain || peer?.site_url || 'this website').trim()}?`)) return;
         try {
@@ -3078,6 +3113,219 @@ App.acquire = (function () {
       tr.appendChild(actionsTd);
       tableBody.appendChild(tr);
     });
+  }
+
+  function openPeerKeywordHarvestDialog(peer) {
+    const siteUrl = String(peer?.site_url || '').trim();
+    const domain = String(peer?.domain || siteUrl || 'this peer').trim();
+    const peerId = String(peer?.id || '').trim();
+
+    const bodyEl = document.createElement('div');
+
+    const introP = document.createElement('p');
+    introP.style.cssText = 'margin-bottom:1rem;color:var(--text-secondary)';
+    introP.innerHTML = `Crawl <strong>${domain}</strong> and extract its top keywords.`;
+    bodyEl.appendChild(introP);
+
+    const maxPagesGroup = document.createElement('div');
+    maxPagesGroup.className = 'form-group';
+    maxPagesGroup.innerHTML = '<label>Max pages to crawl</label>';
+    const maxPagesInput = document.createElement('input');
+    maxPagesInput.type = 'number';
+    maxPagesInput.id = 'peerHarvestMaxPages';
+    maxPagesInput.min = '1';
+    maxPagesInput.max = '50';
+    maxPagesInput.value = '10';
+    maxPagesInput.className = 'form-control';
+    maxPagesInput.style.width = '100px';
+    maxPagesGroup.appendChild(maxPagesInput);
+    bodyEl.appendChild(maxPagesGroup);
+
+    const exclusionsGroup = document.createElement('div');
+    exclusionsGroup.className = 'form-group';
+    exclusionsGroup.innerHTML = '<label>Keyword exclusions <span style="color:var(--text-secondary);font-weight:normal">(comma-separated)</span></label>';
+    const exclusionsInput = document.createElement('textarea');
+    exclusionsInput.className = 'form-control';
+    exclusionsInput.rows = 2;
+    exclusionsInput.placeholder = 'brand name, location terms…';
+    exclusionsGroup.appendChild(exclusionsInput);
+    bodyEl.appendChild(exclusionsGroup);
+
+    const statusEl = document.createElement('div');
+    statusEl.style.cssText = 'display:none;margin-top:1rem;color:var(--text-secondary);font-style:italic';
+    bodyEl.appendChild(statusEl);
+
+    const modal = App.components.Modal({
+      title: `Harvest Keywords — ${domain}`,
+      body: bodyEl,
+      dialogClass: 'peer-keyword-harvest-dialog',
+      actions: [
+        {
+          label: 'Cancel',
+          onClick: () => modal.close(),
+        },
+        {
+          label: 'Run Harvest',
+          primary: true,
+          onClick: async () => {
+            const maxPages = Math.max(1, Math.min(Number(maxPagesInput.value || 10) || 10, 50));
+            const exclusions = String(exclusionsInput.value || '').trim();
+            const footerBtns = modal.el.querySelectorAll('.c-modal__footer button');
+            footerBtns.forEach((b) => { b.disabled = true; });
+            statusEl.style.display = '';
+            statusEl.textContent = `Harvesting ${domain} (up to ${maxPages} pages)…`;
+            try {
+              const result = await api('/api/acquire/peer-keywords/harvest', {
+                method: 'POST',
+                body: JSON.stringify({ site_url: siteUrl, max_pages: maxPages, keyword_exclusions: exclusions }),
+              });
+              const keywords = Array.isArray(result?.keywords) ? result.keywords : [];
+              modal.close();
+              if (!keywords.length) {
+                notify('No keywords found on this site', true);
+                return;
+              }
+              if (peerId) peerHarvestedKeywords.set(peerId, keywords);
+              notify(`Harvested ${keywords.length} keyword${keywords.length === 1 ? '' : 's'} from ${domain}`);
+              renderDirectAcquireWebsitePeersTable();
+              openPeerKeywordArchiveDialog(peer);
+            } catch (err) {
+              statusEl.textContent = `Error: ${err.message || 'Harvest failed'}`;
+              statusEl.style.color = 'var(--danger)';
+              footerBtns.forEach((b) => { b.disabled = false; });
+            }
+          },
+        },
+      ],
+    });
+    modal.open();
+  }
+
+  function openPeerKeywordArchiveDialog(peer) {
+    const peerId = String(peer?.id || '').trim();
+    const domain = String(peer?.domain || peer?.site_url || 'this peer').trim();
+    const keywords = peerHarvestedKeywords.get(peerId) || [];
+
+    if (!keywords.length) {
+      notify('No harvested keywords for this peer', true);
+      return;
+    }
+
+    const bodyEl = document.createElement('div');
+
+    const introP = document.createElement('p');
+    introP.style.cssText = 'margin-bottom:1rem;color:var(--text-secondary)';
+    introP.innerHTML = `Select keywords from <strong>${domain}</strong> to save to Messaging › Keywords.`;
+    bodyEl.appendChild(introP);
+
+    const topicGroup = document.createElement('div');
+    topicGroup.className = 'form-group';
+    topicGroup.style.marginBottom = '1rem';
+    topicGroup.innerHTML = '<label>Topic <span style="color:var(--text-secondary);font-weight:normal">(optional, applied to all selected)</span></label>';
+    const topicInput = document.createElement('input');
+    topicInput.type = 'text';
+    topicInput.className = 'form-control';
+    topicInput.placeholder = 'e.g. SEO, Product, Brand…';
+    topicGroup.appendChild(topicInput);
+    bodyEl.appendChild(topicGroup);
+
+    const selectAllRow = document.createElement('div');
+    selectAllRow.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem';
+    const selectAllCb = document.createElement('input');
+    selectAllCb.type = 'checkbox';
+    selectAllCb.id = 'peerKeywordSelectAll';
+    selectAllCb.checked = true;
+    const selectAllLabel = document.createElement('label');
+    selectAllLabel.htmlFor = 'peerKeywordSelectAll';
+    selectAllLabel.style.fontWeight = '600';
+    selectAllLabel.style.cursor = 'pointer';
+    selectAllLabel.textContent = 'Select all';
+    selectAllRow.appendChild(selectAllCb);
+    selectAllRow.appendChild(selectAllLabel);
+    bodyEl.appendChild(selectAllRow);
+
+    const table = document.createElement('table');
+    table.className = 'data-table';
+    table.style.cssText = 'width:100%;margin-bottom:1rem';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th style="width:2rem"></th><th>Keyword</th><th style="width:6rem;text-align:right">Score</th></tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    keywords.forEach(({ keyword, score }) => {
+      const tr = document.createElement('tr');
+      const cbTd = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.keyword = keyword;
+      cb.checked = true;
+      cbTd.appendChild(cb);
+      tr.appendChild(cbTd);
+      const kwTd = document.createElement('td');
+      kwTd.textContent = keyword;
+      tr.appendChild(kwTd);
+      const scoreTd = document.createElement('td');
+      scoreTd.style.textAlign = 'right';
+      scoreTd.style.color = 'var(--text-secondary)';
+      scoreTd.textContent = typeof score === 'number' ? score.toFixed(1) : '-';
+      tr.appendChild(scoreTd);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    bodyEl.appendChild(table);
+
+    selectAllCb.addEventListener('change', () => {
+      tbody.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = selectAllCb.checked; });
+    });
+
+    const statusEl = document.createElement('div');
+    statusEl.style.cssText = 'display:none;margin-top:0.5rem;font-style:italic';
+    bodyEl.appendChild(statusEl);
+
+    const modal = App.components.Modal({
+      title: `Harvested Keywords — ${domain}`,
+      body: bodyEl,
+      dialogClass: 'peer-keyword-archive-dialog',
+      actions: [
+        {
+          label: 'Close',
+          onClick: () => modal.close(),
+        },
+        {
+          label: 'Save Selected',
+          primary: true,
+          onClick: async () => {
+            const selected = Array.from(tbody.querySelectorAll('input[type="checkbox"]:checked'))
+              .map((cb) => cb.dataset.keyword)
+              .filter(Boolean);
+            if (!selected.length) {
+              notify('Select at least one keyword to save', true);
+              return;
+            }
+            const topic = String(topicInput.value || '').trim();
+            const footerBtns = modal.el.querySelectorAll('.c-modal__footer button');
+            footerBtns.forEach((b) => { b.disabled = true; });
+            statusEl.style.display = '';
+            statusEl.style.color = 'var(--text-secondary)';
+            statusEl.textContent = `Saving ${selected.length} keyword${selected.length === 1 ? '' : 's'}…`;
+            try {
+              for (const keyword of selected) {
+                await api('/api/messaging/keywords', {
+                  method: 'POST',
+                  body: JSON.stringify({ keyword, ...(topic ? { topic } : {}) }),
+                });
+              }
+              modal.close();
+              notify(`Saved ${selected.length} keyword${selected.length === 1 ? '' : 's'} to Messaging › Keywords`);
+            } catch (err) {
+              statusEl.textContent = `Error: ${err.message || 'Could not save keywords'}`;
+              statusEl.style.color = 'var(--danger)';
+              footerBtns.forEach((b) => { b.disabled = false; });
+            }
+          },
+        },
+      ],
+    });
+    modal.open();
   }
 
   async function refreshDirectAcquireWebsitePeers() {
