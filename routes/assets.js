@@ -333,6 +333,28 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, rowToAssociation(created), { association: rowToAssociation(created) }), true;
   }
 
+  if (normalizedPath === '/api/assets/bulk-resize' && requestMethod === 'POST') {
+    if (!isAssetStorageConfigured()) {
+      return sendErr(res, 400, 'No asset storage backend is configured.', { code: 'ASSET_STORAGE_NOT_CONFIGURED' }), true;
+    }
+    const body = await parseJsonBody(req);
+    const assetIds = Array.isArray(body?.assetIds)
+      ? body.assetIds.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (!assetIds.length) {
+      return sendErr(res, 400, 'assetIds must be a non-empty array', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const width = Math.max(0, Number(body?.width || 0) || 0) || null;
+    const height = Math.max(0, Number(body?.height || 0) || 0) || null;
+    if (!width && !height) {
+      return sendErr(res, 400, 'At least one of width or height is required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const fit = ['inside', 'cover'].includes(String(body?.fit || '')) ? String(body.fit) : 'inside';
+    const { bulkResizeImages } = require('../lib/assetBulkResize');
+    const results = await bulkResizeImages(assetIds, { width, height, fit }, scope);
+    return sendOk(res, 200, results, { results }), true;
+  }
+
   const assetIdMatch = normalizedPath.match(/^\/api\/assets\/(\d+)$/);
   const assetReplaceImageMatch = normalizedPath.match(/^\/api\/assets\/(\d+)\/replace-image$/);
   const assetSourceMediaMatch = normalizedPath.match(/^\/api\/assets\/(\d+)\/source-media$/);
