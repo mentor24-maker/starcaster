@@ -15,7 +15,7 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listAcquireJobs }    = require('../lib/acquireJobs');
 const { deleteMirroredAcquireJob } = require('../lib/acquireMirror');
-const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun, patchDirectAcquireRunPages } = require('../lib/directAcquire');
+const { runDirectAcquire, listDirectAcquireRuns, getDirectAcquireRun, patchDirectAcquireRunPages, crawlProjectPagesForKeywords, buildKeywordSummary } = require('../lib/directAcquire');
 const { sanitizeImportHtml, identifyHeaderLines, detectModel: detectContentModel, getModel: getContentModel } = require('../lib/contentDisplayModels');
 const { analyzeRunPages } = require('../lib/patternAnalysis');
 const { listHandlers: listContentHandlers, createHandler: createContentHandler, deleteHandler: deleteContentHandler, toggleHandler: toggleContentHandler } = require('../lib/contentHandlersStore');
@@ -1532,6 +1532,35 @@ async function handle(req, res, pathname, method) {
       keyword_summary: discovery?.keyword_summary || {},
       peer_summary: peerSummary,
       discovery,
+    }), true;
+  }
+
+  // POST /api/acquire/peer-keywords/harvest — ⚡ RATE LIMITED (crawls external site)
+  if (pathname === '/api/acquire/peer-keywords/harvest' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'acquire.direct')) return true;
+    const body = await parseJsonBody(req);
+    const siteUrl = safeText(body?.site_url);
+    if (!siteUrl) return sendErr(res, 400, 'site_url is required'), true;
+    const maxPages = Math.max(1, Math.min(Number(body?.max_pages || 10) || 10, 50));
+    const crawl = await crawlProjectPagesForKeywords({
+      source_url: siteUrl,
+      max_pages: maxPages,
+      body_snippet_chars: 500,
+      keyword_exclusions: safeText(body?.keyword_exclusions),
+      capture_contact_data: false,
+    });
+    const summary = await buildKeywordSummary({
+      sourceUrl: siteUrl,
+      pages: crawl.pages,
+      exclusions: crawl.keyword_exclusions,
+    });
+    return sendOk(res, 200, {
+      site_url: siteUrl,
+      pages_succeeded: crawl.pages_succeeded,
+      pages_failed: crawl.pages_failed,
+      keywords: summary.top_keywords,
+      ai_ranked: summary.ai_ranked,
+      ai_error: summary.ai_error,
     }), true;
   }
 
