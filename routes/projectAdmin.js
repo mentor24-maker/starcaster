@@ -22,6 +22,7 @@ const { sbQuery, isConfigured: isSupabaseConfigured } = require('../lib/supabase
 const PROJECTS_TABLE = 'app_projects';
 
 const ADMIN_SESSION_COOKIE_NAME = 'app_admin_session';
+const ADMIN_NAV_COOKIE_NAME = 'app_admin_nav';
 const ADMIN_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 function isSecureRequest(req) {
@@ -68,12 +69,38 @@ function buildAdminSessionCookieHeader(token, req, { clear = false } = {}) {
   return parts.join('; ');
 }
 
+function buildAdminNavCookieHeader(req, { clear = false } = {}) {
+  const secure = isSecureRequest(req);
+  const parts = [
+    `${ADMIN_NAV_COOKIE_NAME}=${clear ? '' : '1'}`,
+    'Path=/',
+  ];
+  if (clear) {
+    parts.push('Max-Age=0');
+  } else {
+    parts.push(`Max-Age=${ADMIN_SESSION_MAX_AGE_SECONDS}`);
+    parts.push(`Expires=${new Date(Date.now() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000).toUTCString()}`);
+  }
+  if (secure) {
+    parts.push('SameSite=None', 'Secure');
+  } else {
+    parts.push('SameSite=Lax');
+  }
+  return parts.join('; ');
+}
+
 function setAdminSessionCookie(res, token, req) {
-  res.setHeader('Set-Cookie', buildAdminSessionCookieHeader(token, req));
+  res.setHeader('Set-Cookie', [
+    buildAdminSessionCookieHeader(token, req),
+    buildAdminNavCookieHeader(req),
+  ]);
 }
 
 function clearAdminSessionCookie(res, req) {
-  res.setHeader('Set-Cookie', buildAdminSessionCookieHeader('', req, { clear: true }));
+  res.setHeader('Set-Cookie', [
+    buildAdminSessionCookieHeader('', req, { clear: true }),
+    buildAdminNavCookieHeader(req, { clear: true }),
+  ]);
 }
 
 async function handle(req, res, pathname, method) {

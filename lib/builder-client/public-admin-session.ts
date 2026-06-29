@@ -1,6 +1,9 @@
 /** Matches public/js/projectAdmin.js — cookie is auth-of-record; token backs up fetch calls. */
 export const ADMIN_SESSION_TOKEN_KEY = "app.adminSessionToken";
 
+/** Non-HttpOnly cookie set alongside the session — readable by client JS to show admin UI. */
+export const ADMIN_NAV_COOKIE_NAME = "app_admin_nav";
+
 /** Virtual action path — link text/button modules here to sign out (not a published page). */
 export const ADMIN_LOGOUT_PATH = "/admin-logout";
 
@@ -28,6 +31,16 @@ export function setAdminSessionToken(token: string): void {
 export function getAdminAuthHeaders(): Record<string, string> {
   const token = getAdminSessionToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** Returns true when the non-HttpOnly admin nav cookie is present (user is logged in as admin). */
+export function isAdminNavCookieSet(): boolean {
+  if (typeof document === "undefined") return false;
+  try {
+    return document.cookie.split(";").some((c) => c.trim().startsWith(`${ADMIN_NAV_COOKIE_NAME}=`));
+  } catch {
+    return false;
+  }
 }
 
 export function isAdminLogoutHref(href: string): boolean {
