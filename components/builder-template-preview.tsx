@@ -2773,6 +2773,7 @@ function MessagingTagListPreview({ settings }: { settings: Record<string, string
   const minFs = parseInt(settings.minFontSize || "12", 10) || 12;
   const maxFs = parseInt(settings.maxFontSize || "22", 10) || 22;
   const alignment = settings.alignment || "left";
+  const maxTags = parseInt(settings.maxTags || "0", 10) || 0;
   const targetPageUrl = (settings.targetPageUrl || "").trim();
   const filterParam = (settings.filterParam || "tag").trim();
   const destinationType = settings.destinationType || (targetPageUrl ? "custom" : "none");
@@ -2808,7 +2809,8 @@ function MessagingTagListPreview({ settings }: { settings: Record<string, string
   }
 
   // Assign a pseudo-weight (1–5) by alphabetic hash so the cloud looks varied
-  const withWeight = tags.map((t, i) => ({ ...t, slug: textToSlug(t.tag), weight: ((i * 7 + t.tag.length) % 5) + 1 }));
+  const allWithWeight = tags.map((t, i) => ({ ...t, slug: textToSlug(t.tag), weight: ((i * 7 + t.tag.length) % 5) + 1 }));
+  const withWeight = maxTags > 0 ? allWithWeight.slice(0, maxTags) : allWithWeight;
   const maxWeight = 5;
 
   if (layout === "list") {
