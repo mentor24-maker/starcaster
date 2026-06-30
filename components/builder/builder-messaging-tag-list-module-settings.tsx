@@ -74,6 +74,15 @@ export function BuilderMessagingTagListModuleSettings({
               onChange={(e) => set("gap", e.target.value)}
             />
           </BuilderSettingRow>
+
+          <BuilderSettingRow label="Max tags">
+            <select value={s.maxTags ?? ""} onChange={(e) => set("maxTags", e.target.value)}>
+              <option value="">All</option>
+              {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={String(n)}>{n}</option>
+              ))}
+            </select>
+          </BuilderSettingRow>
         </div>
 
         <div className="builder-button-setting-column">
