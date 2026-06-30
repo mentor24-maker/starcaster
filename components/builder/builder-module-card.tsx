@@ -73,6 +73,7 @@ import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-modu
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
+import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderMessagingTopicListModuleSettings } from "./builder-messaging-topic-list-module-settings";
 import { BuilderMessagingTagListModuleSettings } from "./builder-messaging-tag-list-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
@@ -3502,6 +3503,7 @@ export function BuilderModuleCard({
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
+    const isBlogCardManagerModule = module.type === "blog-card-manager";
     const isMessagingTopicListModule = module.type === "messaging-topic-list";
     const isMessagingTagListModule = module.type === "messaging-tag-list";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
@@ -3730,6 +3732,8 @@ export function BuilderModuleCard({
               <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (
               <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogCardManagerModule ? (
+              <BuilderBlogCardManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isMessagingTopicListModule ? (
               <BuilderMessagingTopicListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTagListModule ? (

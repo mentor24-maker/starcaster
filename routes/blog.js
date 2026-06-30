@@ -3,6 +3,7 @@
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { listCategories, getCategory, getCategoryBySlug, createCategory, updateCategory, deleteCategory } = require('../lib/blogCategoriesStore');
 const { listPosts, getPost, getPostBySlug, createPost, updatePost, deletePost } = require('../lib/blogPostsStore');
+const { getCardTemplate, saveCardTemplate } = require('../lib/blogCardTemplateStore');
 const { logActivity } = require('../lib/activityLog');
 
 function requestScope(req) {
@@ -165,6 +166,19 @@ async function handle(req, res, pathname, method) {
     if (!deleted) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
     logActivity({ action: 'blog_post.deleted', entityType: 'blog_post', entityId: id, summary: `Blog post deleted: ${id}` });
     return sendOk(res, 200, { deleted: true, id }, { deleted: true }), true;
+  }
+
+  // ── Blog Card Template ──────────────────────────────────────────────────────
+
+  if (pathname === '/api/blog/card-template' && method === 'GET') {
+    const template = await getCardTemplate(requestScope(req));
+    return sendOk(res, 200, template, { template }), true;
+  }
+
+  if (pathname === '/api/blog/card-template' && method === 'PUT') {
+    const body = await parseJsonBody(req);
+    const saved = await saveCardTemplate(body, requestScope(req));
+    return sendOk(res, 200, saved, { template: saved }), true;
   }
 
   return false;
