@@ -46,6 +46,7 @@ App.assetFieldImport = (function assetFieldImportModule() {
     'tweet:headline': 'Matching tweets become headlines: WYR main question only; otherwise first statement (skip if over 20 words).',
     'tweet:post': 'Matching tweets become posts: copies text, URL, hashtags, image, and topic unchanged.',
     'web-page:keyword': 'Each Builder page is distilled into 8–15 SEO keyword phrases (one keyword record per phrase).',
+    'web-page:tag': 'Each Builder page becomes 5–10 plain tags (no # symbols, Title Case, 1–3 words with spaces).',
   };
 
   const TARGET_LABELS = {
