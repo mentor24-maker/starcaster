@@ -3134,30 +3134,41 @@ function BlogCardManagerPreview() {
           <div className="bcm-panel-header">Card Rows</div>
           <div className="bcm-panel-hint">Each row is 1–3 equal-width columns. Assign an element to each slot.</div>
 
-          <ul className="bcm-row-list">
+          <ul style={{ listStyle: "none", margin: "0 0 12px", padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
             {tpl.rows.map((row, idx) => (
-              <li key={row.id} className="bcm-row-item">
-                <div className="bcm-row-arrows">
+              <li key={row.id} style={{ display: "flex", flexDirection: "row", alignItems: "center", flexWrap: "nowrap", gap: 6, padding: "4px 8px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#f8fafc" }}>
+                {/* ▲▼ */}
+                <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                   <button type="button" className="bcm-arrow-btn" disabled={idx === 0} onClick={() => moveRow(idx, -1)} aria-label="Move row up">▲</button>
                   <button type="button" className="bcm-arrow-btn" disabled={idx === tpl.rows.length - 1} onClick={() => moveRow(idx, 1)} aria-label="Move row down">▼</button>
                 </div>
-                <span className="bcm-col-label">Cols:</span>
-                <div className="bcm-btn-group">
+                {/* 1 2 3 col selector */}
+                <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#64748b", whiteSpace: "nowrap", flexShrink: 0 }}>Cols:</span>
+                <div className="bcm-btn-group" style={{ flexShrink: 0 }}>
                   {([1, 2, 3] as const).map((n) => (
                     <button key={n} type="button" className={`bcm-col-btn${row.cols === n ? " is-on" : ""}`} onClick={() => setRowCols(idx, n)}>{n}</button>
                   ))}
                 </div>
-                <div className="bcm-row-slots">
-                  {row.slots.slice(0, row.cols).map((slot, si) => (
-                    <select key={si} className="bcm-slot-select" value={slot ?? ""} onChange={(e) => setSlot(idx, si, e.target.value)}>
-                      <option value="">(empty)</option>
-                      {ALL_CARD_ELEMENTS.map((id) => (
+                {/* Always 3 slot selects — disabled if beyond active col count */}
+                {([0, 1, 2] as const).map((si) => {
+                  const active = si < row.cols;
+                  return (
+                    <select
+                      key={si}
+                      style={{ flex: 1, minWidth: 0, padding: "3px 4px", border: "1px solid #cbd5e0", borderRadius: 4, fontSize: "0.76rem", background: active ? "#fff" : "#f1f5f9", color: active ? "#1a202c" : "#94a3b8", cursor: active ? "pointer" : "default" }}
+                      value={row.slots[si] ?? ""}
+                      disabled={!active}
+                      onChange={(e) => setSlot(idx, si, e.target.value)}
+                    >
+                      <option value="">{active ? "(empty)" : "—"}</option>
+                      {active && ALL_CARD_ELEMENTS.map((id) => (
                         <option key={id} value={id}>{CARD_ELEMENT_LABELS[id]}</option>
                       ))}
                     </select>
-                  ))}
-                </div>
-                <button type="button" className="bcm-delete-icon-btn" onClick={() => removeRow(idx)} aria-label="Delete row">
+                  );
+                })}
+                {/* Trash */}
+                <button type="button" className="bcm-delete-icon-btn" style={{ flexShrink: 0 }} onClick={() => removeRow(idx)} aria-label="Delete row">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6"/>
                     <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
