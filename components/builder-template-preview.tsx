@@ -2787,12 +2787,13 @@ function MessagingTagListPreview({ settings }: { settings: Record<string, string
     const base = targetPageUrl || (destinationType === "blog-search-results" ? "/blog-search-results"
       : destinationType === "blog-post-list" ? "/blog" : "");
     if (!base || destinationType === "none") return "#";
+    const cleanBase = base.split("?")[0];
     const encoded = encodeURIComponent(slug);
-    if (destinationType === "blog-search-results") {
-      return `${base}?search=${encoded}&tag=${encoded}`;
+    if (destinationType === "blog-search-results" || cleanBase.includes("blog-search-results")) {
+      return `${cleanBase}?search=${encoded}&tag=${encoded}`;
     }
     if (destinationType === "blog-post-list") {
-      return `${base}?tag=${encoded}`;
+      return `${cleanBase}?tag=${encoded}`;
     }
     const sep = base.includes("?") ? "&" : "?";
     return `${base}${sep}${filterParam}=${encoded}`;
