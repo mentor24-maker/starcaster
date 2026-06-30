@@ -129,6 +129,7 @@ App.messaging = (function () {
       tag: '',
       topic: '',
       importance: '',
+      maxDisplay: '',
     },
     sort: {
       key: 'tag',
@@ -7607,7 +7608,8 @@ App.messaging = (function () {
       return messagingTagTableState.sort.dir === 'asc' ? result : -result;
     });
 
-    return rows;
+    const maxDisplay = Number(messagingTagTableState.filters.maxDisplay) || 0;
+    return maxDisplay > 0 ? rows.slice(0, maxDisplay) : rows;
   }
 
   function syncMessagingTagSortLabels() {
@@ -7647,9 +7649,11 @@ App.messaging = (function () {
     const filterInput = document.getElementById('messagingTagsTextFilter');
     const topicFilter = document.getElementById('messagingTagsTopicFilter');
     const importanceFilter = document.getElementById('messagingTagsImportanceFilter');
+    const maxDisplayFilter = document.getElementById('messagingTagsMaxDisplayFilter');
     messagingTagTableState.filters.tag = String(filterInput?.value || '').trim();
     messagingTagTableState.filters.topic = String(topicFilter?.value || '').trim();
     messagingTagTableState.filters.importance = String(importanceFilter?.value || '').trim();
+    messagingTagTableState.filters.maxDisplay = String(maxDisplayFilter?.value || '').trim();
     renderMessagingTagsTable(currentMessagingTags);
   }
 
@@ -9738,6 +9742,16 @@ App.messaging = (function () {
         });
         renderMessagingTagsTable(currentMessagingTags);
       });
+    }
+
+    const messagingTagsMaxDisplayFilter = document.getElementById('messagingTagsMaxDisplayFilter');
+    if (messagingTagsMaxDisplayFilter && messagingTagsMaxDisplayFilter.options.length < 2) {
+      for (let i = 1; i <= 100; i++) {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = String(i);
+        messagingTagsMaxDisplayFilter.appendChild(opt);
+      }
     }
 
     if (messagingTagsFilterBtn) {
