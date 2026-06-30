@@ -14762,6 +14762,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     grid-template-columns: 1fr;
   }
 }
+.builder-react-root .builder-module-palette-modal .builder-module-item-card,
+.builder-react-root .builder-module-palette-modal .builder-module-group-card {
+  justify-content: flex-start;
+}
 .builder-react-root .builder-module-field-strip {
   display: flex;
   flex-wrap: wrap;
