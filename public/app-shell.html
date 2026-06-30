@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Builder heading fonts (keep in sync with BUILDER_GOOGLE_FONTS_HREF in components/builder/builder-utils.ts) -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@400;700;900&family=Lora:wght@400;500;600;700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=b01cd528" />
+  <link rel="stylesheet" href="/styles.css?v=6a3130e6" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -7650,6 +7650,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tweets</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tweet' }); return false;">Import Other Formats</button>
+            <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tweet' }); return false;">Import from Web Pages</button>
             <button id="messagingTweetsToggleFormBtn" type="button" class="btn">Add Tweet</button>
           </div>
         </div>
@@ -7848,6 +7849,11 @@
               class="btn"
               onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'post' }); return false;"
             >Import Other Formats</button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'post' }); return false;"
+            >Import from Web Pages</button>
             <button id="messagingPostsToggleFormBtn" type="button" class="btn">Add Post</button>
           </div>
         </div>
@@ -8037,6 +8043,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Pitches</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'pitch' }); return false;">Import Other Formats</button>
+            <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'pitch' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromPitchesBtn" type="button" class="btn">Topics</button>
             <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
           </div>
@@ -8530,6 +8537,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tags</h2>
           <div class="page-heading-actions">
             <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tag' }); return false;">Import from Web Pages</button>
           </div>
         </div>
         <section id="messagingTagCreatePanel" class="hidden" style="margin-top: 1rem;">
@@ -8598,6 +8606,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Sub-headings</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'subheading' }); return false;">Import Other Formats</button>
+            <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'subheading' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromSubheadingsBtn" type="button" class="btn">Topics</button>
             <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
           </div>
@@ -8746,6 +8755,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Taglines</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tagline' }); return false;">Import Other Formats</button>
+            <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tagline' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromTaglinesBtn" type="button" class="btn">Topics</button>
             <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
           </div>
@@ -10818,14 +10828,14 @@
   <script src="/js/youtubeComments.js?v=c830d1e2"></script>
   <script src="/js/messagingFormatImport.js?v=6472a0c4"></script>
   <script src="/js/messagingPostsEditor.js?v=8761ec8f"></script>
-  <script src="/js/messaging.js?v=ecca40e5"></script>
+  <script src="/js/messaging.js?v=b4f3aa28"></script>
 
   <script src="/js/promoteSocial.js?v=ee0aa31e"></script>
   <script src="/js/engageComments.js?v=7fd165eb"></script>
 
   <script src="/js/richtext-vendor.js?v=de4c7474"></script>
   <script src="/js/richtext.js?v=fdc87b33"></script>
-  <script src="/builder-bundle.js?v=a1e370f5"></script>
+  <script src="/builder-bundle.js?v=6d36967d"></script>
   <script src="/js/builderNavMenu.js?v=57766978"></script>
   <script src="/js/builder.js?v=a404f587"></script>
   <script src="/js/polls.js?v=2b8387ed"></script>
@@ -10833,7 +10843,7 @@
   <script src="/js/observe.js?v=ef4fd429"></script>
   <script src="/js/devAgent.js?v=9547f859"></script>
   <script src="/js/assetAssociations.js?v=d8193c51"></script>
-  <script src="/js/assetFieldImport.js?v=d2d76b9e"></script>
+  <script src="/js/assetFieldImport.js?v=e99f7be6"></script>
   <script src="/js/pageHeadingNav.js?v=5379875e"></script>
   <script src="/js/assetImageEditor.js?v=070701f6"></script>
   <script src="/js/assets.js?v=eac157fa"></script>

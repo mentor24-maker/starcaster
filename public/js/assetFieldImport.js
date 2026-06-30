@@ -26,6 +26,8 @@ App.assetFieldImport = (function assetFieldImportModule() {
     { id: 'transcript', label: 'Transcript', group: 'Messaging' },
     { id: 'comment', label: 'Comment', group: 'Messaging' },
     { id: 'hashtag', label: 'Hashtag', group: 'Messaging' },
+    { id: 'keyword', label: 'Keyword', group: 'Messaging' },
+    { id: 'tag', label: 'Tag', group: 'Messaging' },
     { id: 'cta', label: 'Call to Action', group: 'Messaging' },
     { id: 'article', label: 'Article', group: 'Messaging' },
     { id: 'report', label: 'Report', group: 'Messaging' },
@@ -43,6 +45,7 @@ App.assetFieldImport = (function assetFieldImportModule() {
     'image:headline': 'Matching images become headlines: Caption when set, otherwise title-case the file name (lowercase stop words).',
     'tweet:headline': 'Matching tweets become headlines: WYR main question only; otherwise first statement (skip if over 20 words).',
     'tweet:post': 'Matching tweets become posts: copies text, URL, hashtags, image, and topic unchanged.',
+    'web-page:keyword': 'Each Builder page is distilled into 8–15 SEO keyword phrases (one keyword record per phrase).',
   };
 
   const TARGET_LABELS = {
@@ -57,6 +60,8 @@ App.assetFieldImport = (function assetFieldImportModule() {
     transcript: 'transcript',
     comment: 'comment',
     hashtag: 'hashtag',
+    keyword: 'keyword',
+    tag: 'tag',
     cta: 'call to action',
     article: 'article',
     report: 'report',
@@ -331,6 +336,12 @@ App.assetFieldImport = (function assetFieldImportModule() {
     if (toType === 'post' && App.messagingPostsEditor?.refreshPosts) {
       try {
         await App.messagingPostsEditor.refreshPosts();
+      } catch (_) { /* optional */ }
+      return;
+    }
+    if (toType === 'tag' && App.messaging?.refreshMessagingTags) {
+      try {
+        await App.messaging.refreshMessagingTags();
       } catch (_) { /* optional */ }
       return;
     }

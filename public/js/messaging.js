@@ -242,6 +242,7 @@ App.messaging = (function () {
       rows: 4,
       itemStem: 'Keyword',
       pageStem: 'messagingKeywords',
+      webPageImportToType: 'keyword',
     },
     {
       key: 'hashtags',
@@ -484,6 +485,7 @@ App.messaging = (function () {
           <h2>Messaging: ${config.pluralLabel}</h2>
           <div class="page-heading-actions">
             <button id="${ids.categoryBtnId}" type="button" class="btn">Topics</button>
+            ${config.webPageImportToType ? `<button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: '${config.webPageImportToType}' }); return false;">Import from Web Pages</button>` : ''}
             <button id="${ids.toggleBtnId}" type="button" class="btn">Create ${config.pluralLabel}</button>
             <button type="button" class="btn" onclick="App.messaging.openContentLanding(); return false;">Back To Messaging</button>
           </div>
@@ -9826,6 +9828,9 @@ App.messaging = (function () {
     },
     refreshHeadlines: function () {
       return refreshHeadlines();
+    },
+    refreshMessagingTags: function () {
+      return refreshMessagingTags();
     },
     onPageActivated: function () {
       return loadThumbnailOptions().then(function () {
