@@ -131,6 +131,7 @@ App.builderNavMenu = (function () {
     const location = safeText(resolved.menuLocation) || 'primary';
     const variant = safeText(resolved.variant) === 'vertical' ? 'vertical' : 'horizontal';
 
+    const itemSizing = safeText(resolved.navItemSizing) === 'auto' ? 'auto' : 'equal';
     const fontSize = Number(resolved.navFontSize) > 0 ? `${Number(resolved.navFontSize)}px` : '';
     const fontWeight = resolved.navBold ? '700' : '';
     const linkPadding = safeText(resolved.navPadding) || '8px 12px';
@@ -160,7 +161,7 @@ App.builderNavMenu = (function () {
       ? ''
       : ` data-menu-location="${escapeHtml(location)}" data-menu-name="${escapeHtml(menuName)}"`;
 
-    return `<nav class="site-nav site-nav--${variant}" aria-label="${escapeHtml(menuName)}"${dataAttrs} style="${escapeHtml(styleParts.join(';'))}">${menuMarkup}</nav>`;
+    return `<nav class="site-nav site-nav--${variant} site-nav--sizing-${itemSizing}" aria-label="${escapeHtml(menuName)}"${dataAttrs} style="${escapeHtml(styleParts.join(';'))}">${menuMarkup}</nav>`;
   }
 
   function applyNestedModalPresentation(modal, options = {}) {
