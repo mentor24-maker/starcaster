@@ -12378,6 +12378,12 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   gap: 0.2rem;
 }
 
+/* Auto-sizing: items shrink to content width instead of equal columns */
+.site-nav--sizing-auto .site-nav-menu--horizontal {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
 .site-nav-menu--horizontal .site-nav-item--has-children {
   position: relative;
 }

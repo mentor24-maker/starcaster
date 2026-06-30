@@ -2794,6 +2794,16 @@ body.asset-associations-modal-open {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.builder-field-section-header {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0 0.25rem;
+  border-top: 1px solid rgba(15, 55, 90, 0.1);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #6b7d8f;
+}
 
 /* src/css/_builder-react.css */
 .builder-react-root {
@@ -25931,6 +25941,10 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   border-left: none;
   display: grid;
   gap: 0.2rem;
+}
+.site-nav--sizing-auto .site-nav-menu--horizontal {
+  display: flex;
+  flex-wrap: nowrap;
 }
 .site-nav-menu--horizontal .site-nav-item--has-children {
   position: relative;
