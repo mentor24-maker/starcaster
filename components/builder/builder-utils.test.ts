@@ -11,6 +11,8 @@ import {
   getOverlayFlowCollapsedSectionStyle,
   getSpeechBubbleBodyStyle,
   getSpeechBubbleModuleStyle,
+  buildBuilderThemeStyles,
+  getBuilderThemeStyleVars,
   getThemeRootVars,
   isFloatingImageModule,
   isOverlayImageModule,
@@ -399,5 +401,38 @@ describe("getThemeRootVars", () => {
 
     expect(vars["--bx-size-base"]).toBe("18px");
     expect(vars).not.toHaveProperty("--bx-size-h1");
+  });
+});
+
+describe("getBuilderThemeStyleVars", () => {
+  it("emits no custom properties when styles are absent", () => {
+    expect(getBuilderThemeStyleVars(undefined)).toEqual({});
+  });
+
+  it("maps saved theme margins and container tokens to shell CSS variables", () => {
+    const vars = getBuilderThemeStyleVars(
+      buildBuilderThemeStyles({
+        primaryColor: "#0b82d4",
+        backgroundColor: "#f5fbff",
+        accentColor: "#1a4f81",
+        borderThickness: 2,
+        borderRadius: 16,
+        containerBlur: 4,
+        contrastLevel: 20,
+        topMargin: 12,
+        bottomMargin: 24,
+        sideMargins: 80,
+      })
+    ) as Record<string, string>;
+
+    expect(vars["--bx-theme-padding-top"]).toBe("12px");
+    expect(vars["--bx-theme-padding-bottom"]).toBe("24px");
+    expect(vars["--bx-theme-padding-inline"]).toBe("80px");
+    expect(vars["--lp-border-thickness"]).toBe("2px");
+    expect(vars["--lp-radius"]).toBe("16px");
+    expect(vars["--lp-blur"]).toBe("4px");
+    expect(vars["--lp-filter"]).toBe("contrast(1.2)");
+    expect(vars["--lp-background"]).toBe("#f5fbff");
+    expect(vars["--lp-accent"]).toBe("#1a4f81");
   });
 });

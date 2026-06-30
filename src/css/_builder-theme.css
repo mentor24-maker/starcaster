@@ -113,3 +113,32 @@
   line-height: var(--bx-line-h6, var(--bx-line-base, 1.2));
   font-weight: var(--bx-weight-h6, 800);
 }
+
+/* Saved theme container styles (Builder: Themes → Styles) */
+.builder-react-root .builder-preview-shell.has-builder-theme-styles {
+  padding-top: var(--bx-theme-padding-top, 0);
+  padding-bottom: var(--bx-theme-padding-bottom, 0);
+  padding-left: var(--bx-theme-padding-inline, 0);
+  padding-right: var(--bx-theme-padding-inline, 0);
+  background-color: var(--lp-background, var(--builder-bg-workspace));
+  filter: var(--lp-filter, none);
+  box-sizing: border-box;
+}
+
+.builder-react-root.builder-public-site .builder-preview-shell.has-builder-theme-styles {
+  border: none;
+  border-radius: 0;
+  min-height: 100vh;
+}
+
+.builder-react-root .builder-preview-shell.has-builder-theme-styles > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot) {
+  border-radius: var(--lp-radius, 24px);
+}
+
+.builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-column:not(.builder-preview-column-navigation):not(.builder-preview-column-overlay-flow):not(.builder-preview-column-overlay-slot) {
+  backdrop-filter: blur(var(--lp-blur, 0));
+}
+
+.builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-column:not(.builder-preview-column-navigation):not(.builder-preview-column-overlay-flow):not(.builder-preview-column-overlay-slot)[style*="border"] {
+  border-width: var(--lp-border-thickness, 1px);
+}

@@ -37,6 +37,7 @@ import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./bui
 import { layoutOptions } from "./builder/builder-types";
 import {
   buildBuilderThemePaletteColors,
+  buildBuilderThemeStyles,
   buildClonedPageCreatePayload,
   builderThemeToCrmPalette,
   createDraftFromTemplate,
@@ -1948,7 +1949,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       theme: typeof draft.theme;
       layoutSections: typeof draft.layoutSections;
     },
-    options: { themeId?: string; themePaletteSource?: { primaryColor?: string; secondaryColor?: string; backgroundColor?: string; accentColor?: string } | null } = {}
+    options: { themeId?: string; themePaletteSource?: BuilderThemeSummary | null } = {}
   ) {
     const themeId = options.themeId || pageThemeId || undefined;
     const paletteSource = options.themePaletteSource ?? activeTheme;
@@ -1959,6 +1960,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       layoutSections: payload.layoutSections,
       themeId,
       themePalette: builderThemeToCrmPalette(paletteSource),
+      themeStyles: buildBuilderThemeStyles(paletteSource),
     };
   }
 
