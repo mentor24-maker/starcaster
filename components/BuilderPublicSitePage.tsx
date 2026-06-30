@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   builderThemeToCrmPalette,
@@ -163,10 +163,48 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [isAdminNav, setIsAdminNav] = useState(false);
+  const adminLinkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     setIsAdminNav(isAdminNavCookieSet());
   }, []);
+
+  // Position Admin link just above the language/globe social icon.
+  useEffect(() => {
+    if (!isAdminNav || !loaded) return;
+    const adminEl = adminLinkRef.current;
+    if (!adminEl) return;
+
+    function findLangEntry(): HTMLElement | null {
+      const imgs = Array.from(
+        document.querySelectorAll<HTMLImageElement>(".builder-preview-social-entry img")
+      );
+      const langImg = imgs.find((img) => /\/language|\/globe/.test(img.getAttribute("src") ?? ""));
+      if (!langImg) return null;
+      return langImg.closest<HTMLElement>(".builder-preview-social-entry") ?? langImg;
+    }
+
+    function reposition() {
+      const entry = findLangEntry();
+      if (!entry) return;
+      const rect = entry.getBoundingClientRect();
+      const h = adminEl!.offsetHeight || 24;
+      const topVal = rect.top - h - 6;
+      adminEl!.style.top = `${topVal}px`;
+      adminEl!.style.left = `${rect.left + Math.round((rect.width - (adminEl!.offsetWidth || 54)) / 2)}px`;
+      adminEl!.style.bottom = "auto";
+      adminEl!.style.right = "auto";
+    }
+
+    const timer = setTimeout(reposition, 80);
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition);
+    };
+  }, [isAdminNav, loaded]);
 
   useEffect(() => {
     if (!projectId) { setLoaded(true); return; }
@@ -265,6 +303,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     <>
       {isAdminNav ? (
         <a
+          ref={adminLinkRef}
           href={ADMIN_LOGIN_PATH}
           className="site-admin-nav-link"
           aria-label="Admin"

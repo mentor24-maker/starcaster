@@ -619,24 +619,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* ============================================================== */
 /* ADMIN NAV LINK — visible to logged-in admin users on public site */
+/* JS in BuilderPublicSitePage positions it just above the language icon. */
 /* ============================================================== */
 .site-admin-nav-link {
   display: block;
   position: fixed;
   z-index: 9999;
+  /* Fallback position used until JS calculates the language-icon location. */
   bottom: 72px;
   right: 12px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   background: rgba(15, 79, 143, 0.88);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   font-family: sans-serif;
   letter-spacing: 0.04em;
-  border-radius: 6px;
+  border-radius: 5px;
   text-decoration: none;
   line-height: 1.4;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.22);
   transition: background 0.15s;
 }
 .site-admin-nav-link:hover {
