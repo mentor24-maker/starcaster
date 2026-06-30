@@ -4166,34 +4166,58 @@ function BlogSearchResultsPreview({ settings }: { settings: Record<string, strin
   const emptyMessage = settings.emptyMessage || "No posts found.";
   const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
 
-  const [allPosts, setAllPosts] = useState<(BlogPostRecord & { updatedAt?: string })[]>([]);
+  const [allPosts, setAllPosts] = useState<(BlogPostRecord & { updatedAt?: string; categoryIds?: string[] })[]>([]);
+  const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  const query =
-    typeof window !== "undefined"
-      ? (new URLSearchParams(window.location.search).get(searchParam) ?? "").trim().toLowerCase()
-      : "";
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
-    fetch(`/api/blog/posts?status=published&limit=${limit}`, {
+    if (typeof window === "undefined") return;
+    const q = (new URLSearchParams(window.location.search).get(searchParam) ?? "").trim().toLowerCase();
+    setQuery(q);
+  }, [searchParam]);
+
+  useEffect(() => {
+    const headers = getCrmProjectHeaders();
+    const fetchPosts = fetch(`/api/blog/posts?status=published&limit=${limit}`, {
       credentials: "include",
-      headers: getCrmProjectHeaders()
+      headers
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (Array.isArray(d?.posts)) setAllPosts(d.posts as (BlogPostRecord & { updatedAt?: string })[]);
+        if (Array.isArray(d?.posts)) {
+          setAllPosts(d.posts as (BlogPostRecord & { updatedAt?: string; categoryIds?: string[] })[]);
+        }
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
+
+    const fetchCategories = fetch("/api/blog/categories", {
+      credentials: "include",
+      headers
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const cats = Array.isArray(d?.categories) ? d.categories : [];
+        const map: Record<string, string> = {};
+        for (const c of cats) {
+          if (c.id && c.name) map[String(c.id)] = String(c.name).toLowerCase();
+        }
+        setCategoryNames(map);
+      })
+      .catch(() => {});
+
+    Promise.all([fetchPosts, fetchCategories]).finally(() => setLoading(false));
   }, [limit]);
 
   const filtered = useMemo(() => {
     if (!query) return allPosts;
     return allPosts.filter((p) => {
-      const haystack = [p.title, p.excerpt, ...(p.tags ?? [])].join(" ").toLowerCase();
+      const catText = (p.categoryIds ?? []).map((id) => categoryNames[id] ?? "").join(" ");
+      const haystack = [p.title, p.excerpt, ...(p.tags ?? []), catText].join(" ").toLowerCase();
       return haystack.includes(query);
     });
-  }, [allPosts, query]);
+  }, [allPosts, categoryNames, query]);
 
   function postHref(p: BlogPostRecord) {
     return `${postPageUrl}?slug=${encodeURIComponent(p.slug)}`;
