@@ -432,7 +432,7 @@ describe("getBuilderThemeStyleVars", () => {
     expect(vars["--lp-radius"]).toBe("16px");
     expect(vars["--lp-blur"]).toBe("4px");
     expect(vars["--lp-filter"]).toBe("contrast(1.2)");
-    expect(vars["--lp-background"]).toBe("#f5fbff");
     expect(vars["--lp-accent"]).toBe("#1a4f81");
+    expect(vars).not.toHaveProperty("--lp-background");
   });
 });

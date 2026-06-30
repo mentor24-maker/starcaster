@@ -1,8 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import type { BuilderTheme, BuilderThemeTypography } from "@/lib/builder-template";
+import type { BackgroundSettings, BuilderTheme, BuilderThemeTypography } from "@/lib/builder-template";
+import {
+  createDefaultBackgroundSettings,
+  normalizeBackgroundSettings,
+  normalizeBuilderAssetUrl,
+} from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { BuilderButtonBackgroundPicker } from "./builder-button-background-picker";
+import { BuilderGalleryModal } from "./builder-gallery-modal";
+import { buildBuilderThemePaletteColors } from "./builder-utils";
 import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 
 type DevelopThemeRecord = {
@@ -23,6 +31,7 @@ type DevelopThemeRecord = {
   logoSquareId: string;
   featureImageId: string;
   backgroundImageId: string;
+  pageBackground: BackgroundSettings;
   typography: BuilderThemeTypography | null;
   createdAt: string;
   updatedAt: string;
@@ -54,6 +63,7 @@ function defaultDraft(): DevelopThemeRecord {
     logoSquareId: "",
     featureImageId: "",
     backgroundImageId: "",
+    pageBackground: createDefaultBackgroundSettings(),
     typography: { ...DEFAULT_TYPOGRAPHY },
     createdAt: "",
     updatedAt: "",
@@ -82,6 +92,7 @@ function buildPayload(draft: DevelopThemeRecord) {
     logoSquareId: draft.logoSquareId,
     featureImageId: draft.featureImageId,
     backgroundImageId: draft.backgroundImageId,
+    pageBackground: draft.pageBackground,
     typography: draft.typography ?? DEFAULT_TYPOGRAPHY,
   };
 }
@@ -133,6 +144,9 @@ export function BuilderThemesPage() {
   const [draft, setDraft] = useState<DevelopThemeRecord>(defaultDraft());
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
+
+  const themeColors = buildBuilderThemePaletteColors(draft);
 
   const loadThemes = useCallback(async () => {
     try {
@@ -151,7 +165,15 @@ export function BuilderThemesPage() {
   function handleSelect(id: string) {
     setSelectedId(id);
     const found = themes.find((t) => t.id === id);
-    setDraft(found ? { ...found, typography: found.typography ?? { ...DEFAULT_TYPOGRAPHY } } : defaultDraft());
+    setDraft(
+      found
+        ? {
+            ...found,
+            pageBackground: normalizeBackgroundSettings(found.pageBackground),
+            typography: found.typography ?? { ...DEFAULT_TYPOGRAPHY },
+          }
+        : defaultDraft()
+    );
     setStatus(null);
   }
 
@@ -182,7 +204,11 @@ export function BuilderThemesPage() {
       const saved: DevelopThemeRecord = unwrapEnvelope(res, "theme");
       await loadThemes();
       setSelectedId(saved.id);
-      setDraft({ ...saved, typography: saved.typography ?? { ...DEFAULT_TYPOGRAPHY } });
+      setDraft({
+        ...saved,
+        pageBackground: normalizeBackgroundSettings(saved.pageBackground),
+        typography: saved.typography ?? { ...DEFAULT_TYPOGRAPHY },
+      });
       setStatus({ message: isNew ? "Theme created" : "Theme saved", isError: false });
     } catch (err: unknown) {
       setStatus({ message: (err as Error).message || "Could not save theme", isError: true });
@@ -282,7 +308,39 @@ export function BuilderThemesPage() {
       <div className="builder-themes-columns">
         <div className="builder-themes-col-stack">
           <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Palette</h3>
+            <ColorRow
+              label="Primary"
+              value={draft.primaryColor}
+              onChange={(v) => updateDraft({ primaryColor: v })}
+            />
+            <ColorRow
+              label="Secondary"
+              value={draft.secondaryColor}
+              onChange={(v) => updateDraft({ secondaryColor: v })}
+            />
+            <ColorRow
+              label="Background"
+              value={draft.backgroundColor}
+              onChange={(v) => updateDraft({ backgroundColor: v })}
+            />
+            <ColorRow
+              label="Accent"
+              value={draft.accentColor}
+              onChange={(v) => updateDraft({ accentColor: v })}
+            />
+          </div>
+
+          <div className="builder-themes-col">
             <h3 className="builder-themes-col-heading">Styles</h3>
+            <BuilderSettingRow label="Background">
+              <BuilderButtonBackgroundPicker
+                background={draft.pageBackground}
+                onChange={(pageBackground) => updateDraft({ pageBackground })}
+                onChooseImage={() => setIsBackgroundGalleryOpen(true)}
+                themeColors={themeColors}
+              />
+            </BuilderSettingRow>
             <SliderRow
               label="Top Margin"
               value={draft.topMargin}
@@ -331,30 +389,6 @@ export function BuilderThemesPage() {
               min={0}
               max={100}
               onChange={(v) => updateDraft({ contrastLevel: v })}
-            />
-          </div>
-
-          <div className="builder-themes-col">
-            <h3 className="builder-themes-col-heading">Palette</h3>
-            <ColorRow
-              label="Primary"
-              value={draft.primaryColor}
-              onChange={(v) => updateDraft({ primaryColor: v })}
-            />
-            <ColorRow
-              label="Secondary"
-              value={draft.secondaryColor}
-              onChange={(v) => updateDraft({ secondaryColor: v })}
-            />
-            <ColorRow
-              label="Background"
-              value={draft.backgroundColor}
-              onChange={(v) => updateDraft({ backgroundColor: v })}
-            />
-            <ColorRow
-              label="Accent"
-              value={draft.accentColor}
-              onChange={(v) => updateDraft({ accentColor: v })}
             />
           </div>
         </div>
@@ -407,6 +441,23 @@ export function BuilderThemesPage() {
           </div>
         </div>
       </div>
+
+      {isBackgroundGalleryOpen ? (
+        <BuilderGalleryModal
+          isUploading={false}
+          onSelectImage={(path) => {
+            updateDraft({
+              pageBackground: {
+                ...draft.pageBackground,
+                mode: "image",
+                imageUrl: normalizeBuilderAssetUrl(path),
+              },
+            });
+            setIsBackgroundGalleryOpen(false);
+          }}
+          onClose={() => setIsBackgroundGalleryOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

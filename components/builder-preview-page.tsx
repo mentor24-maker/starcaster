@@ -10,7 +10,7 @@ import {
   normalizeBuilderDocument
 } from "@/lib/builder-template";
 
-import type { BuilderThemeStyles, CrmThemePalette } from "@/components/builder/builder-utils";
+import type { BuilderThemeStyles, CrmThemePalette, ThemeShellBackgroundSource } from "@/components/builder/builder-utils";
 import {
   builderThemeToCrmPalette,
   buildBuilderThemeStyles,
@@ -26,6 +26,7 @@ type PreviewDraft = {
   themePalette?: CrmThemePalette;
   themeStyles?: BuilderThemeStyles;
   themeId?: string;
+  themeShellBackground?: ThemeShellBackgroundSource;
 };
 
 type BuilderThemeRecord = {
@@ -34,6 +35,7 @@ type BuilderThemeRecord = {
   secondaryColor?: string;
   backgroundColor?: string;
   accentColor?: string;
+  pageBackground?: unknown;
   borderThickness?: number;
   borderRadius?: number;
   containerBlur?: number;
@@ -71,6 +73,7 @@ async function fetchBuilderTheme(themeId?: string): Promise<{
     return {
       palette: builderThemeToCrmPalette(theme),
       styles: buildBuilderThemeStyles(theme),
+      shellBackground: theme,
     };
   } catch {
     return {};
@@ -116,7 +119,8 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
       layoutSections: doc.layoutSections,
       themePalette: resolvedPalette,
       themeStyles: themeRecord.styles,
-      themeId
+      themeId,
+      themeShellBackground: themeRecord.shellBackground,
     };
   } catch {
     return null;
@@ -127,6 +131,7 @@ export function BuilderPreviewPage() {
   const [draft, setDraft] = useState<PreviewDraft | null>(null);
   const [themePalette, setThemePalette] = useState<CrmThemePalette | undefined>(undefined);
   const [themeStyles, setThemeStyles] = useState<BuilderThemeStyles | undefined>(undefined);
+  const [themeShellBackground, setThemeShellBackground] = useState<ThemeShellBackgroundSource>(null);
   const [loaded, setLoaded] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile" | "email">("desktop");
   const isEmailPreview = previewDevice === "email";
@@ -149,6 +154,7 @@ export function BuilderPreviewPage() {
             setDraft(page);
             setThemePalette(page.themePalette);
             setThemeStyles(page.themeStyles);
+            setThemeShellBackground(page.themeShellBackground ?? null);
           } else {
             loadFromLocalStorage();
           }
@@ -168,6 +174,7 @@ export function BuilderPreviewPage() {
           fetchBuilderTheme().then((themeRecord) => {
             setThemePalette(themeRecord.palette);
             setThemeStyles(themeRecord.styles);
+            setThemeShellBackground(themeRecord.shellBackground ?? null);
           });
           return;
         }
@@ -179,10 +186,12 @@ export function BuilderPreviewPage() {
           themePalette?: CrmThemePalette;
           themeStyles?: BuilderThemeStyles;
           themeId?: string;
+          themeShellBackground?: ThemeShellBackgroundSource;
         };
         const document = normalizeBuilderDocument(parsed);
         const storedPalette = parsed.themePalette;
         const storedStyles = parsed.themeStyles;
+        const storedShellBackground = parsed.themeShellBackground;
         const themeId = String(parsed.themeId || "").trim();
         setDraft({
           name: String(parsed.name ?? "").trim(),
@@ -191,16 +200,19 @@ export function BuilderPreviewPage() {
           layoutSections: document.layoutSections,
           themePalette: storedPalette,
           themeStyles: storedStyles,
-          themeId
+          themeId,
+          themeShellBackground: storedShellBackground,
         });
         if (hasCrmPaletteColors(storedPalette) && storedStyles) {
           setThemePalette(storedPalette);
           setThemeStyles(storedStyles);
+          setThemeShellBackground(storedShellBackground ?? null);
           return;
         }
         fetchBuilderTheme(themeId).then((themeRecord) => {
           setThemePalette(mergeCrmThemePalette(storedPalette, themeRecord.palette));
           setThemeStyles(storedStyles ?? themeRecord.styles);
+          setThemeShellBackground(storedShellBackground ?? themeRecord.shellBackground ?? null);
         });
       } catch {
         setDraft({
@@ -212,6 +224,7 @@ export function BuilderPreviewPage() {
         fetchBuilderTheme().then((themeRecord) => {
           setThemePalette(themeRecord.palette);
           setThemeStyles(themeRecord.styles);
+          setThemeShellBackground(themeRecord.shellBackground ?? null);
         });
       }
     }
@@ -281,6 +294,7 @@ export function BuilderPreviewPage() {
                 theme={draft.theme}
                 themePalette={themePalette}
                 themeStyles={themeStyles ?? draft.themeStyles}
+                themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
                 previewMode
                 showShell={false}
               />

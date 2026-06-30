@@ -42,6 +42,8 @@ import {
   builderThemeToCrmPalette,
   createDraftFromTemplate,
   createDraftFromPage,
+  getBuilderThemeStyleVars,
+  getShellPageBackgroundStyle,
   getModuleBackgroundSettings,
   getThemeRootVars
 } from "./builder/builder-utils";
@@ -126,6 +128,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [repositorySaveActive, setRepositorySaveActive] = useState(false);
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
+  const pageThemeDirtyRef = useRef(false);
   const hydratedTemplateSelectionRef = useRef("");
   const [galleryMedia, setGalleryMedia] = useState<AdminMediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -164,12 +167,20 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   );
   const isEmailTemplateDraft = builderMode === "templates" && draft.templateKind === "email";
 
-  // Palette swatches for the RTE toolbar: use the active theme's palette colors.
-  // Falls back to the first available theme so swatches always appear when a single theme
-  // is loaded (theme_id column may not be persisted yet if migration hasn't run).
-  const activeTheme = pageThemeId
-    ? builderThemes.find((t) => t.id === pageThemeId) ?? builderThemes[0] ?? null
-    : builderThemes[0] ?? null;
+  const linkedTheme = pageThemeId
+    ? builderThemes.find((theme) => theme.id === pageThemeId) ?? null
+    : null;
+  // Palette swatches for the RTE toolbar: prefer the linked page theme, then fall back to the
+  // first available theme so swatches still appear when no theme is selected on the page.
+  const activeTheme = linkedTheme ?? builderThemes[0] ?? null;
+  const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
+  const workspaceShellStyle = useMemo(
+    () => ({
+      ...getBuilderThemeStyleVars(workspaceThemeStyles),
+      ...getShellPageBackgroundStyle(draft.pageBackground, linkedTheme),
+    }),
+    [workspaceThemeStyles, linkedTheme, draft.pageBackground]
+  );
   const rteThemeColors = [
     ...buildBuilderThemePaletteColors(activeTheme),
     { label: "Body text", hex: draft.theme.typography.colors.text },
@@ -358,6 +369,20 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }, [pageThemeId, builderThemes]);
 
   useEffect(() => {
+    if (builderMode !== "pages" || !selectedPageId || pageThemeDirtyRef.current) {
+      return;
+    }
+
+    const page = pages.find((entry) => entry.id === selectedPageId);
+    if (!page) {
+      return;
+    }
+
+    const persistedThemeId = page.themeId ?? "";
+    setPageThemeId((current) => (current === persistedThemeId ? current : persistedThemeId));
+  }, [builderMode, selectedPageId, pages]);
+
+  useEffect(() => {
     const handler = () => setShowBulkCreate(true);
     window.addEventListener("builder:openBulkCreate", handler);
     return () => window.removeEventListener("builder:openBulkCreate", handler);
@@ -417,6 +442,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
 
     hydratedPageSelectionRef.current = selectionKey;
+    pageThemeDirtyRef.current = false;
     setDraft(createDraftFromPage(page));
     setPageSlug(page?.slug ?? "");
     setPageTemplateId(page?.templateId ?? "");
@@ -1441,6 +1467,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
 
   function startNewPage() {
     hydratedPageSelectionRef.current = "";
+    pageThemeDirtyRef.current = false;
     setSelectedPageId("");
     setPageSlug("");
     setPageTemplateId("");
@@ -1452,6 +1479,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }
 
   function applyThemeToPage(themeId: string) {
+    pageThemeDirtyRef.current = true;
     setPageThemeId(themeId);
     if (!themeId) return;
     const found = builderThemes.find((t) => t.id === themeId);
@@ -1754,7 +1782,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           name: draft.name,
           slug: pageSlug,
           templateId: pageTemplateId,
-          themeId: pageThemeId || undefined,
+          themeId: pageThemeId || null,
           ...pageVisibilityToFlags(pageVisibility),
           pageBackground: draft.pageBackground,
           theme: draft.theme,
@@ -1762,6 +1790,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         })
       });
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
+      if (data.page) {
+        pageThemeDirtyRef.current = false;
+        setPageThemeId(data.page.themeId ?? "");
+      }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
       await loadPages();
       if (data.page?.id) setSelectedPageId(data.page.id);
@@ -1952,7 +1984,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     options: { themeId?: string; themePaletteSource?: BuilderThemeSummary | null } = {}
   ) {
     const themeId = options.themeId || pageThemeId || undefined;
-    const paletteSource = options.themePaletteSource ?? activeTheme;
+    const paletteSource = options.themePaletteSource ?? linkedTheme ?? activeTheme;
     return {
       name: payload.name,
       pageBackground: payload.pageBackground,
@@ -1961,6 +1993,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       themeId,
       themePalette: builderThemeToCrmPalette(paletteSource),
       themeStyles: buildBuilderThemeStyles(paletteSource),
+      themeShellBackground: paletteSource,
     };
   }
 
@@ -1993,8 +2026,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     const page = pages.find((entry) => entry.slug === slug) ?? pages.find((entry) => String(entry.id) === slug);
     if (!page) return;
     const pageTheme = page.themeId
-      ? builderThemes.find((theme) => theme.id === page.themeId) ?? activeTheme
-      : activeTheme;
+      ? builderThemes.find((theme) => theme.id === page.themeId) ?? null
+      : null;
     window.localStorage.setItem(
       BUILDER_PREVIEW_STORAGE_KEY,
       JSON.stringify(
@@ -2331,7 +2364,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                       </div>
                     </div>
                     <div
-                      className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}`}
+                      className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}${linkedTheme && workspaceThemeStyles ? " has-builder-theme-styles" : ""}`}
+                      style={linkedTheme && workspaceThemeStyles ? workspaceShellStyle : undefined}
                       onDragOver={(event) => { event.preventDefault(); setDragOverWorkspace(true); }}
                       onDragLeave={() => setDragOverWorkspace(false)}
                       onDrop={handleWorkspaceDrop}

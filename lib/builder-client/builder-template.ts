@@ -214,6 +214,8 @@ export type BuilderThemeSummary = {
   logoSquareId?: string;
   featureImageId?: string;
   backgroundImageId?: string;
+  /** Default website shell background (color, gradient, image, or style). */
+  pageBackground?: BackgroundSettings;
   typography?: BuilderThemeTypography;
 };
 
@@ -2144,6 +2146,7 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
     name: safeText(row.name, 255),
     slug: safeText(row.slug, 255),
     templateId: safeText(row.template_id ?? row.templateId, 120),
+    themeId: safeText(row.theme_id ?? row.themeId, 120) || undefined,
     pageBackground: document.pageBackground,
     theme: document.theme,
     layoutSections: document.layoutSections,
