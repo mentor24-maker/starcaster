@@ -29,20 +29,22 @@ App.builderNavMenu = (function () {
 
   function defaultNavMenuItems() {
     return [
-      { id: 'nav-home', label: 'Home', url: '/', parentId: '', target: '_self' },
-      { id: 'nav-about', label: 'About', url: '/about', parentId: '', target: '_self' },
-      { id: 'nav-blog', label: 'Blog', url: '/blog', parentId: '', target: '_self' },
+      { id: 'nav-home', label: 'Home', href: '/', parentId: '', target: '_self' },
+      { id: 'nav-about', label: 'About', href: '/about', parentId: '', target: '_self' },
+      { id: 'nav-blog', label: 'Blog', href: '/blog', parentId: '', target: '_self' },
     ];
   }
 
   function normalizeNavMenuItem(raw, index) {
     const item = raw && typeof raw === 'object' ? raw : {};
+    const width = safeText(item.width, 20);
     return {
       id: safeText(item.id, 120) || createNavMenuItemId(index + 1),
       label: safeText(item.label, 200),
-      url: safeText(item.url || item.href, 2000) || '#',
+      href: safeText(item.href || item.url, 2000) || '#',
       parentId: safeText(item.parentId || item.parent_id, 120),
       target: safeText(item.target) === '_blank' ? '_blank' : '_self',
+      ...(width ? { width } : {}),
     };
   }
 
@@ -97,31 +99,37 @@ App.builderNavMenu = (function () {
     return nested ? `${base} · ${nested} nested` : base;
   }
 
-  function renderNavMenuBranch(nodes, settings, depth) {
-    const variant = safeText(settings?.variant) === 'vertical' ? 'vertical' : 'horizontal';
+  function renderNavMenuBranch(nodes, settings, depth, itemSizing) {
+    const direction = safeText(settings?.navDirection || settings?.variant) === 'vertical' ? 'vertical' : 'horizontal';
     const showSubmenu = settings?.showSubmenuIndicator !== false;
     const isRoot = depth === 0;
     const listTag = isRoot ? 'div' : 'ul';
     const itemTag = isRoot ? 'div' : 'li';
     const listClass = isRoot
-      ? `site-nav-menu site-nav-menu--${variant}`
+      ? `site-nav-menu site-nav-menu--${direction}`
       : 'site-nav-submenu';
+    const rawAlignment = safeText(settings?.navAlignment) || 'center';
+    const justify = rawAlignment === 'left' ? 'flex-start' : rawAlignment === 'right' ? 'flex-end' : 'center';
+    const listStyle = isRoot && itemSizing !== 'equal' ? ` style="justify-content:${justify}"` : '';
 
     const itemsHtml = nodes.map((node) => {
-      const href = safeText(node.url) || '#';
+      const href = safeText(node.href || node.url) || '#';
       const targetAttr = node.target === '_blank' ? ' target="_blank" rel="noopener noreferrer"' : '';
       const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-      const childMarkup = hasChildren ? renderNavMenuBranch(node.children, settings, depth + 1) : '';
+      const childMarkup = hasChildren ? renderNavMenuBranch(node.children, settings, depth + 1, itemSizing) : '';
       const indicator = hasChildren && showSubmenu
         ? '<span class="site-nav-submenu-indicator" aria-hidden="true">▾</span>'
         : '';
-      return `<${itemTag} class="site-nav-item${hasChildren ? ' site-nav-item--has-children' : ''}">`
+      const widthStyle = isRoot && itemSizing === 'custom' && safeText(node.width)
+        ? ` style="flex:0 0 ${escapeHtml(safeText(node.width))};width:${escapeHtml(safeText(node.width))}"`
+        : '';
+      return `<${itemTag} class="site-nav-item${hasChildren ? ' site-nav-item--has-children' : ''}"${widthStyle}>`
         + `<a class="site-nav-link" href="${escapeHtml(href)}"${targetAttr}>${escapeHtml(node.label || 'Link')}${indicator}</a>`
         + childMarkup
         + `</${itemTag}>`;
     }).join('');
 
-    return `<${listTag} class="${listClass}" role="${isRoot ? 'menubar' : 'menu'}">${itemsHtml}</${listTag}>`;
+    return `<${listTag} class="${listClass}" role="${isRoot ? 'menubar' : 'menu'}"${listStyle}>${itemsHtml}</${listTag}>`;
   }
 
   function buildNavigationModuleMarkup(settings = {}, options = {}) {
@@ -129,9 +137,11 @@ App.builderNavMenu = (function () {
     const items = parseNavMenuItems(resolved.navItems);
     const menuName = safeText(resolved.menuName) || 'Menu';
     const location = safeText(resolved.menuLocation) || 'primary';
-    const variant = safeText(resolved.variant) === 'vertical' ? 'vertical' : 'horizontal';
+    const direction = safeText(resolved.navDirection || resolved.variant) === 'vertical' ? 'vertical' : 'horizontal';
 
-    const itemSizing = safeText(resolved.navItemSizing) === 'auto' ? 'auto' : 'equal';
+    const itemSizing = ['auto', 'equal', 'custom'].includes(safeText(resolved.navItemSizing))
+      ? safeText(resolved.navItemSizing)
+      : 'auto';
     const fontSize = Number(resolved.navFontSize) > 0 ? `${Number(resolved.navFontSize)}px` : '';
     const fontWeight = resolved.navBold ? '700' : '';
     const linkPadding = safeText(resolved.navPadding) || '8px 12px';
@@ -141,6 +151,7 @@ App.builderNavMenu = (function () {
     const color = safeText(resolved.navColor) || '#173c61';
     const hoverColor = safeText(resolved.navHoverColor) || '#0b82d4';
     const hoverBg = safeText(resolved.navHoverBackground) || '#e8f4ff';
+    const marginV = Number(resolved.navMarginV) >= 0 ? `${Number(resolved.navMarginV)}px` : '';
 
     const styleParts = [
       `--site-nav-link-color:${color}`,
@@ -151,17 +162,20 @@ App.builderNavMenu = (function () {
     ];
     if (fontSize) styleParts.push(`font-size:${fontSize}`);
     if (fontWeight) styleParts.push(`font-weight:${fontWeight}`);
+    if (marginV) styleParts.push(`margin-top:${marginV}`, `margin-bottom:${marginV}`);
 
+    const navLevels = Number.parseInt(resolved.navLevels, 10) || 2;
     const tree = buildNavMenuTree(items);
+    const limitedTree = navLevels >= 2 ? tree : tree.map((node) => ({ ...node, children: [] }));
     const menuMarkup = items.length
-      ? renderNavMenuBranch(tree, resolved, 0)
+      ? renderNavMenuBranch(limitedTree, resolved, 0, itemSizing)
       : '<p class="site-nav-empty">No menu items yet. Add links in the menu editor.</p>';
 
     const dataAttrs = options.includeDataAttrs === false
       ? ''
       : ` data-menu-location="${escapeHtml(location)}" data-menu-name="${escapeHtml(menuName)}"`;
 
-    return `<nav class="site-nav site-nav--${variant} site-nav--sizing-${itemSizing}" aria-label="${escapeHtml(menuName)}"${dataAttrs} style="${escapeHtml(styleParts.join(';'))}">${menuMarkup}</nav>`;
+    return `<nav class="site-nav site-nav--${direction} site-nav--sizing-${itemSizing}" aria-label="${escapeHtml(menuName)}"${dataAttrs} style="${escapeHtml(styleParts.join(';'))}">${menuMarkup}</nav>`;
   }
 
   function applyNestedModalPresentation(modal, options = {}) {
@@ -329,13 +343,25 @@ App.builderNavMenu = (function () {
         const urlInput = document.createElement('input');
         urlInput.type = 'text';
         urlInput.id = `nav-url-${item.id}`;
-        urlInput.value = item.url;
+        urlInput.value = item.href;
         urlInput.placeholder = '/path-or-url';
         urlInput.addEventListener('input', () => {
-          item.url = urlInput.value;
+          item.href = urlInput.value;
           persist(items);
         });
         makeField('URL', urlInput);
+
+        const widthInput = document.createElement('input');
+        widthInput.type = 'text';
+        widthInput.id = `nav-width-${item.id}`;
+        widthInput.value = item.width || '';
+        widthInput.placeholder = 'e.g. 140px (top-level only)';
+        widthInput.disabled = Boolean(safeText(item.parentId));
+        widthInput.addEventListener('input', () => {
+          item.width = widthInput.value;
+          persist(items);
+        });
+        makeField('Width (Custom sizing)', widthInput);
 
         const parentSelect = document.createElement('select');
         parentSelect.id = `nav-parent-${item.id}`;
@@ -374,7 +400,7 @@ App.builderNavMenu = (function () {
         {
           id: createNavMenuItemId(items.length + 1),
           label: '',
-          url: '',
+          href: '',
           parentId: '',
           target: '_self',
         },

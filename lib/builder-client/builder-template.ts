@@ -1158,6 +1158,15 @@ export function normalizeBuilderModuleSettingsForType(
   if (type === "navigation") {
     delete settings.navBackground;
 
+    // Schema unification: the Module Studio editor historically wrote
+    // `variant`/`navItems[].url`; the page-builder editor writes
+    // `navDirection`/`navItems[].href`. Migrate legacy data to the
+    // canonical keys here so every renderer/editor can read one schema.
+    if (!settings.navDirection && settings.variant) {
+      settings.navDirection = settings.variant === "vertical" ? "vertical" : "horizontal";
+    }
+    delete settings.variant;
+
     if (settings.navItems != null && typeof settings.navItems !== "string") {
       try {
         settings.navItems = JSON.stringify(settings.navItems);
@@ -1165,9 +1174,29 @@ export function normalizeBuilderModuleSettingsForType(
         settings.navItems = "[]";
       }
     }
+    if (typeof settings.navItems === "string" && settings.navItems) {
+      try {
+        const items = JSON.parse(settings.navItems);
+        if (Array.isArray(items)) {
+          settings.navItems = JSON.stringify(
+            items.map((item) => {
+              if (!item || typeof item !== "object") return item;
+              const next: Record<string, unknown> = { ...item };
+              if (!next.href && next.url) next.href = next.url;
+              delete next.url;
+              return next;
+            })
+          );
+        }
+      } catch {
+        // Malformed JSON is left as-is; downstream parsers already guard against it.
+      }
+    }
+
     if (!settings.menuName) settings.menuName = "Main Menu";
     if (!settings.menuLocation) settings.menuLocation = "primary";
-    if (!settings.variant) settings.variant = "horizontal";
+    if (!settings.navDirection) settings.navDirection = "horizontal";
+    if (!settings.navItemSizing) settings.navItemSizing = "auto";
   }
 
   if (type === "image") {
