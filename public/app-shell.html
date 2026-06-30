@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Builder heading fonts (keep in sync with BUILDER_GOOGLE_FONTS_HREF in components/builder/builder-utils.ts) -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@400;700;900&family=Lora:wght@400;500;600;700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=a83a9204" />
+  <link rel="stylesheet" href="/styles.css?v=bd4f29c5" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -8597,19 +8597,10 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="messagingTagsPage">Messaging: Tags</a></h2>
         </div>
-        <p id="messagingTagsBulkEditSummary">No tags selected.</p>
-        <form id="messagingTagsBulkEditForm" class="standard-form-grid">
-          <label for="messagingTagsBulkEditTopic">Topic</label>
-          <select id="messagingTagsBulkEditTopic" name="topic" data-messaging-topic-select="true">
-            <option value="">No Topic</option>
-          </select>
-          <label for="messagingTagsBulkEditTag">Tag</label>
-          <input id="messagingTagsBulkEditTag" name="tag" placeholder="Leave blank to keep current tag text" />
-          <div></div>
-          <button type="submit" class="btn btn-primary">Apply To Selected Tags</button>
-        </form>
+        <p id="messagingTagsBulkEditMessage" style="margin-top: 0;"></p>
+        <ul id="messagingTagsBulkEditList" class="messaging-tags-bulk-list"></ul>
         <div class="page-heading-actions" style="margin-top: 1rem;">
-          <button id="messagingTagsBulkDeleteBtn" type="button" class="btn btn-danger">Delete Selected Tags</button>
+          <button id="messagingTagsBulkConfirmBtn" type="button" class="btn btn-primary">Confirm</button>
         </div>
       </section>
       <section id="messagingManageTagsPage" class="app-page hidden">
@@ -10879,7 +10870,7 @@
   <script src="/js/youtubeComments.js?v=c830d1e2"></script>
   <script src="/js/messagingFormatImport.js?v=6472a0c4"></script>
   <script src="/js/messagingPostsEditor.js?v=8761ec8f"></script>
-  <script src="/js/messaging.js?v=18e41fc1"></script>
+  <script src="/js/messaging.js?v=dfea4c92"></script>
 
   <script src="/js/promoteSocial.js?v=ee0aa31e"></script>
   <script src="/js/engageComments.js?v=7fd165eb"></script>
