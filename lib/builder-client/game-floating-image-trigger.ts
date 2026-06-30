@@ -1,6 +1,6 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 
-export const PLAYER_GAME_FLOATING_IMAGE_EVENT = "normie-player-game-floating-image";
+export const PLAYER_GAME_FLOATING_IMAGE_EVENT = "starcaster-player-game-floating-image";
 
 /** Stored on floating-image modules; empty / `page` keeps the overlay until navigation. */
 export const GAME_FLOATING_IMAGE_DURATION_PAGE = "page";

@@ -33,7 +33,7 @@ export const SOCIAL_SHARE_PLATFORMS: SocialSharePlatform[] = [
   { id: "instagram", label: "Instagram", color: "#e1306c", supportsText: false, supportsUrl: false, defaultEnabled: false }
 ];
 
-const DEFAULT_SHARE_URL = "https://normie.one";
+const DEFAULT_SHARE_URL = "https://starcaster.pro";
 export const DEFAULT_SHARE_TEMPLATE = 'I just answered: "{pollQuestion}" What would you pick? {url}';
 
 function getNumberSetting(settings: Record<string, string>, key: string, fallback: number, min: number, max: number) {
@@ -113,7 +113,7 @@ function buildShareText({
     .replaceAll("{pollQuestion}", question)
     .replaceAll("{question}", question)
     .replaceAll("{url}", url)
-    .replaceAll("{siteName}", settings.shareSiteName || "Normie");
+    .replaceAll("{siteName}", settings.shareSiteName || "StarCaster");
 }
 
 function escapeRegExp(value: string) {

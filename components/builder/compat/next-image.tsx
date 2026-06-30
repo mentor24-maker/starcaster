@@ -1,5 +1,5 @@
 /**
- * Drop-in replacement for next/image so vendored normie components render
+ * Drop-in replacement for next/image so ported Builder components render
  * with a plain <img>. Optimization-only props are accepted and ignored.
  */
 import type { CSSProperties, ImgHTMLAttributes } from 'react';

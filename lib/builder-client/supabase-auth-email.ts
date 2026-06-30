@@ -28,10 +28,10 @@ export type SupabaseSendEmailPayload = {
 };
 
 const AUTH_EMAIL_SUBJECTS: Record<BuilderEmailFunction, string> = {
-  signup_confirmation: "Confirm your Normie account",
-  password_reset: "Reset your Normie password",
-  admin_invite: "You have been invited to Normie",
-  magic_link: "Your Normie sign-in link"
+  signup_confirmation: "Confirm your StarCaster account",
+  password_reset: "Reset your StarCaster password",
+  admin_invite: "You have been invited to StarCaster",
+  magic_link: "Your StarCaster sign-in link"
 };
 
 export function mapAuthEmailActionToFunction(action: string): BuilderEmailFunction | "" {

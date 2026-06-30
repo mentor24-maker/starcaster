@@ -42,11 +42,11 @@ export function galleryAssetPathFromUrl(url: URL): string {
   return "";
 }
 
-function isNormieSiteOrigin(origin: string) {
+function isStarcasterSiteOrigin(origin: string) {
   return (
     origin === "http://localhost:3000" ||
-    origin === "https://www.normie.one" ||
-    origin === "https://normie.one"
+    origin === "https://www.starcaster.pro" ||
+    origin === "https://starcaster.pro"
   );
 }
 
@@ -88,7 +88,7 @@ export function normalizeBuilderAssetUrl(value: unknown): string {
       return url.pathname.replace("/api/admin/media-file/gallery/", "/gallery/") + url.search;
     }
 
-    if (isNormieSiteOrigin(url.origin)) {
+    if (isStarcasterSiteOrigin(url.origin)) {
       return `${url.pathname}${url.search}`;
     }
   } catch {

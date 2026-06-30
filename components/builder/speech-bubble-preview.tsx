@@ -18,7 +18,7 @@ export function SpeechBubblePreview({
 }: SpeechBubblePreviewProps) {
   const bubbleStyle = getSpeechBubbleModuleStyle(module.settings, layoutMode);
   const bodyStyle = getSpeechBubbleBodyStyle(module.settings);
-  const contentHtml = formatRichTextContent(module.text) || "<p>What Normie has to say goes here.</p>";
+  const contentHtml = formatRichTextContent(module.text) || "<p>What the character has to say goes here.</p>";
 
   return (
     <div className={`${classNamePrefix}-speech-bubble`} style={bubbleStyle}>

@@ -1,7 +1,6 @@
 /**
- * Type subset of normie's lib/poll-deep-dive needed by the previous-results
- * runtime. Deep-dive content loading (blog/youtube/related) is a normie
- * feature; starcaster renders the "empty" kind (capability pollDeepDive off).
+ * Type subset for poll-deep-dive used by the previous-results runtime.
+ * Deep-dive content loading is not implemented; starcaster renders the "empty" kind (pollDeepDive off).
  */
 import { DEEP_DIVE_RELATED_LIMIT } from '../poll-deep-dive-constants';
 

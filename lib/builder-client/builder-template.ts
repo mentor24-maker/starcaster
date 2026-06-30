@@ -320,8 +320,8 @@ export type BuilderPageSnapshotSummary = {
   createdAt: string;
 };
 
-export const BUILDER_PREVIEW_STORAGE_KEY = "normie_builder_preview_draft";
-export const BUILDER_PREVIEW_DEVICE_STORAGE_KEY = "normie_builder_preview_device";
+export const BUILDER_PREVIEW_STORAGE_KEY = "starcaster_builder_preview_draft";
+export const BUILDER_PREVIEW_DEVICE_STORAGE_KEY = "starcaster_builder_preview_device";
 export const BACKGROUND_STYLE_PRESETS: Array<{ value: BackgroundStylePreset; label: string }> = [
   { value: "blue-yellow-circles", label: "blue-yellow-circles" }
 ];
@@ -1792,8 +1792,8 @@ export function createEmptyModule(
                     ? {
                         shareLabel: "Share this poll",
                         shareTemplate: 'I just answered: "{pollQuestion}" What would you pick? {url}',
-                        shareHashtags: "Normie,WYR",
-                        shareVia: "Normie765714",
+                        shareHashtags: "StarCaster,WYR",
+                        shareVia: "",
                         shareLabelSize: "14",
                         shareIconBackground: "#ffffff",
                         shareIconSize: "36",

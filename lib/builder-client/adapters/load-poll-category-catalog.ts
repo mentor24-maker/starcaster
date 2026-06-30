@@ -1,7 +1,6 @@
 /**
- * Client-safe subset of normie's lib/load-poll-category-catalog.
- * The catalog loader there is server-only (supabase-admin); the builder
- * UI only needs the sort helper. Category data comes from /api/polls
+ * Client-safe poll-category-catalog helpers.
+ * The full catalog loader is server-only; the builder UI only needs the sort helper. Category data comes from /api/polls
  * via lib/builder-client/poll-category-catalog-client.ts.
  */
 export function sortPollCategoryNames(names: readonly string[]): string[] {

@@ -79,7 +79,7 @@ export const modulePaletteGroups: Array<{
     value: "speech-bubble",
     label: "Speech Bubble",
     icon: "💬",
-    description: "Normie speech callouts with a tail pointing toward the character."
+    description: "Speech callouts with a tail pointing toward a character."
   },
   {
     value: "reminder",
@@ -318,14 +318,14 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { variant: "embed", url: "", videoName: "", videoDescription: "" }
   },
   {
-    id: "speech-bubble-normie",
+    id: "speech-bubble-default",
     type: "speech-bubble",
     group: "speech-bubble",
     label: "Speech Bubble",
     icon: "💬",
-    description: "Rounded callout with a tail for Normie dialogue.",
+    description: "Rounded callout with a tail for character dialogue.",
     name: "",
-    text: "<p>Hi! I'm Normie.</p>",
+    text: "<p>Hi! What's up?</p>",
     settings: {
       backgroundColor: "#ffffff",
       borderColor: "#9ed4ee",
@@ -561,8 +561,8 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {
       shareLabel: "Share this poll",
       shareTemplate: 'I just answered: "{pollQuestion}" What would you pick? {url}',
-      shareHashtags: "Normie,WYR",
-      shareVia: "Normie765714",
+      shareHashtags: "StarCaster,WYR",
+      shareVia: "",
       shareLabelSize: "14",
       shareIconBackground: "#ffffff",
       shareIconSize: "36",

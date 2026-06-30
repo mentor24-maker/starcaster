@@ -33,7 +33,7 @@ type SocialItem = {
   backgroundColor: string;
 };
 
-const SOCIAL_ITEM_DRAG_TYPE = "application/normie-builder-social-item";
+const SOCIAL_ITEM_DRAG_TYPE = "application/starcaster-builder-social-item";
 
 function parseSocialItems(settings: Record<string, string>): SocialItem[] {
   try {

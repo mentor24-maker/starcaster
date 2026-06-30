@@ -1,9 +1,8 @@
 /**
- * Drop-in replacement for `fetch` in components ported from normie.
- * Rewrites normie's /api/admin/* paths to starcaster's project-scoped
- * endpoints, injects scope/session headers, and re-keys response JSON to
- * the shapes the ported components expect. Components keep using
- * readAdminJson() on the returned Response unchanged.
+ * Drop-in replacement for `fetch` used by the ported Builder components.
+ * Rewrites /api/admin/* paths to starcaster's project-scoped endpoints,
+ * injects scope/session headers, and re-keys response JSON to the shapes
+ * the components expect. Components keep using readAdminJson() unchanged.
  */
 
 import type { AdminMediaItem } from '../admin-media-shared';
@@ -12,7 +11,7 @@ import { assetToAdminMediaItem } from './use-gallery-media-library';
 
 type JsonObject = Record<string, unknown>;
 
-/** normie key ← starcaster key, applied to response bodies per resource. */
+/** Component-expected key ← API key, re-keyed in response bodies per resource. */
 const RESPONSE_KEY_MAPS: Record<string, Array<[string, string]>> = {
   pages: [],
   'cell-modules': [
@@ -48,15 +47,15 @@ function applyResponseKeys(body: JsonObject, resource: string): JsonObject {
   const map = RESPONSE_KEY_MAPS[resource];
   if (!map) return body;
   const next: JsonObject = { ...body };
-  for (const [normieKey, starcasterKey] of map) {
-    if (next[normieKey] === undefined && next[starcasterKey] !== undefined) {
-      next[normieKey] = next[starcasterKey];
+  for (const [componentKey, apiKey] of map) {
+    if (next[componentKey] === undefined && next[apiKey] !== undefined) {
+      next[componentKey] = next[apiKey];
     }
   }
   return next;
 }
 
-/** starcaster error envelopes ({ error: { message } }) → normie ({ error: string }). */
+/** Flatten starcaster error envelopes ({ error: { message } }) to a plain string. */
 function flattenError(body: JsonObject): JsonObject {
   const err = body.error;
   if (err && typeof err === 'object' && !Array.isArray(err)) {

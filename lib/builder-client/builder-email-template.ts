@@ -58,7 +58,7 @@ export const BUILDER_EMAIL_CONFIRMATION_URL_TOKEN = "{{ .ConfirmationURL }}";
 
 export function resolveEmailMergeTokensForPreview(value: string): string {
   return String(value ?? "")
-    .replace(/\{\{\s*\.ConfirmationURL\s*\}\}/gi, "https://example.supabase.co/auth/v1/verify?token=example&type=signup&redirect_to=https://normie.one/portal/auth/callback")
+    .replace(/\{\{\s*\.ConfirmationURL\s*\}\}/gi, "https://example.supabase.co/auth/v1/verify?token=example&type=signup&redirect_to=https://starcaster.pro/portal/auth/callback")
     .replace(/\{\{\s*\.Email\s*\}\}/gi, "player@example.com")
-    .replace(/\{\{\s*\.SiteURL\s*\}\}/gi, "https://normie.one");
+    .replace(/\{\{\s*\.SiteURL\s*\}\}/gi, "https://starcaster.pro");
 }

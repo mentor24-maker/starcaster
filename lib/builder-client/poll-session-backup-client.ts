@@ -1,9 +1,9 @@
 "use client";
 
-export const POLL_SESSION_BACKUP_STORAGE_KEY = "normie_poll_session_backup";
+export const POLL_SESSION_BACKUP_STORAGE_KEY = "starcaster_poll_session_backup";
 
 function claimedStorageKey(playerId: string) {
-  return `normie_poll_session_claimed_${playerId}`;
+  return `starcaster_poll_session_claimed_${playerId}`;
 }
 
 const UUID_PATTERN =

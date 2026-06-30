@@ -52,7 +52,7 @@ const KEEP_PATTERNS = [
   /\.error\b/,
   /\.success\b/,
   /\.sr-only/,
-  /\.normie-effect/,
+  /\.starcaster-effect/,
   /\.blog-post/
 ];
 

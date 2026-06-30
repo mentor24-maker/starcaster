@@ -1,6 +1,5 @@
 /**
- * Starcaster replacement for normie's lib/site-url.
- * Client-side only: derives the site origin from the current window.
+ * Client-side site-url helper. Derives the site origin from the current window.
  */
 
 export function getSiteUrl(): string {

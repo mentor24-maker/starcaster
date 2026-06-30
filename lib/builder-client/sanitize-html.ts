@@ -192,7 +192,7 @@ const BLOG_EMBED_HOSTS = [
 
 function isAllowedBlogEmbedSrc(src: string) {
   try {
-    const url = new URL(src, "https://normie.one");
+    const url = new URL(src, "https://starcaster.pro");
 
     return BLOG_EMBED_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`));
   } catch {

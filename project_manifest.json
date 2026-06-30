@@ -8,11 +8,6 @@
   "backend": "Node.js (server.js local, Vercel serverless api/[...slug].js)",
   "styling": "CSS3 (src/css/ → public/styles.css; no Tailwind)",
   "database": "Supabase (PostgreSQL)",
-  "referenceProject": {
-    "name": "Normie",
-    "path": "/Users/mentor/WebApps/normie",
-    "role": "Primary test case / tenant for end-to-end StarCaster flows"
-  },
   "keyDirectories": {
     "public": "Built static assets, JS modules (window.App), React bundle for Campaigns",
     "src": "HTML partials (pages/), CSS sources, layout.html — run npm run build:html",

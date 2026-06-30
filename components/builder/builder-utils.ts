@@ -317,7 +317,7 @@ export function columnHasOnlyOverlayImageModules(modules: BuilderTemplateModule[
   return modules.length > 0 && modules.every(isOverlayImageModule);
 }
 
-/** Button-trigger floating images (e.g. Bouncing Normie) anchor to their row below the nav, not the full page. */
+/** Button-trigger floating images anchor to their row below the nav, not the full page. */
 export function isSectionScopedOverlayDecor(module: Pick<BuilderTemplateModule, "type" | "settings">) {
   return isFloatingImageModule(module) && getModuleTrigger(module.settings) === "button";
 }

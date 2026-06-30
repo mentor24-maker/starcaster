@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Import tweet rows from the Normie WYR CSV (or any compatible CSV).
+ * Import tweet rows from a WYR CSV.
  *
  *   node scripts/import_messaging_tweets_csv.js
  *   node scripts/import_messaging_tweets_csv.js --apply

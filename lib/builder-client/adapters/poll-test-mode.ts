@@ -1,9 +1,8 @@
 /**
- * Client-safe subset of normie's lib/poll-test-mode (the original mixes
- * next/headers cookie helpers with these browser-side helpers).
+ * Client-safe poll-test-mode helpers (server-side cookie helpers are excluded).
  */
 
-export const POLL_TEST_MODE_CHANGED_EVENT = 'normie:poll-test-mode-changed';
+export const POLL_TEST_MODE_CHANGED_EVENT = 'starcaster:poll-test-mode-changed';
 
 export type PollAnswerClientPayload = {
   duplicate?: boolean;

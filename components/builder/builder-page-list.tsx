@@ -862,7 +862,7 @@ export function BuilderPageList({
                 value={draftName}
                 onChange={(event) => onSetDraftName(event.target.value)}
                 onBlur={handlePageDetailsFieldBlur}
-                placeholder="About Normie"
+                placeholder="About StarCaster"
               />
             </label>
             <label className="field">

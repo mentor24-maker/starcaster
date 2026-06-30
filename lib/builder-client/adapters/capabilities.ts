@@ -1,6 +1,6 @@
 /**
- * Feature switches for normie builder modules that have no starcaster
- * backend yet. Modules stay in the codebase but are hidden from the
+ * Feature switches for Builder modules not yet backed by a starcaster
+ * backend. Modules stay in the codebase but are hidden from the
  * palette and render placeholders when a capability is off.
  */
 export const BUILDER_CAPABILITIES = {
