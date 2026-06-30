@@ -7620,7 +7620,11 @@
 }
 
 .builder-react-root .builder-module-preview-social-item img,
-.builder-react-root .builder-preview-social-item img {
+.builder-react-root .builder-preview-social-item img,
+.builder-react-root .builder-preview-social-icon-img {
+  display: block;
+  width: 100%;
+  height: 100%;
   box-sizing: border-box;
   object-fit: contain;
   padding: clamp(6px, 12%, 16px);
@@ -12742,187 +12746,272 @@
 
 /* ── Blog Card Manager ─────────────────────────────────────────────────────── */
 
+/* ── Blog Card Manager ──────────────────────────────────────────────────────── */
+
 .builder-react-root .builder-blog-card-manager-module {
   font-family: inherit;
 }
 
-.builder-react-root .builder-blog-card-manager-controls {
+/* Controls bar: all settings in one compact strip */
+.builder-react-root .bcm-controls-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px 24px;
+  gap: 12px 20px;
   align-items: flex-end;
-  padding: 14px 16px;
+  padding: 12px 16px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   margin-bottom: 16px;
 }
 
-.builder-react-root .builder-blog-card-manager-control-group {
+.builder-react-root .bcm-control {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
-.builder-react-root .builder-blog-card-manager-layout-btn {
-  padding: 4px 10px;
+.builder-react-root .bcm-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.builder-react-root .bcm-unit {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.builder-react-root .bcm-color-input {
+  padding: 2px;
+  width: 40px;
+  height: 28px;
   border: 1px solid #cbd5e0;
   border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* Shared toggle button group */
+.builder-react-root .bcm-btn-group {
+  display: flex;
+  gap: 0;
+}
+
+.builder-react-root .bcm-toggle-btn,
+.builder-react-root .bcm-col-btn {
+  padding: 4px 10px;
+  border: 1px solid #cbd5e0;
+  border-right-width: 0;
   background: #fff;
   color: #4a5568;
   font: inherit;
   font-size: 0.78rem;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  transition: background 0.1s, color 0.1s;
 }
 
-.builder-react-root .builder-blog-card-manager-layout-btn:hover:not(:disabled) {
+.builder-react-root .bcm-toggle-btn:first-child,
+.builder-react-root .bcm-col-btn:first-child {
+  border-radius: 5px 0 0 5px;
+}
+
+.builder-react-root .bcm-toggle-btn:last-child,
+.builder-react-root .bcm-col-btn:last-child {
+  border-right-width: 1px;
+  border-radius: 0 5px 5px 0;
+}
+
+.builder-react-root .bcm-toggle-btn:only-child,
+.builder-react-root .bcm-col-btn:only-child {
+  border-right-width: 1px;
+  border-radius: 5px;
+}
+
+.builder-react-root .bcm-toggle-btn:hover:not(:disabled),
+.builder-react-root .bcm-col-btn:hover:not(:disabled) {
   background: #f1f5f9;
 }
 
-.builder-react-root .builder-blog-card-manager-layout-btn.is-active {
+.builder-react-root .bcm-toggle-btn.is-on,
+.builder-react-root .bcm-col-btn.is-on {
   background: #0f4f8f;
   border-color: #0f4f8f;
   color: #fff;
   font-weight: 600;
 }
 
-.builder-react-root .builder-blog-card-manager-body {
+/* Two-column layout: row editor on left, preview on right */
+.builder-react-root .bcm-body {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 1fr 300px;
   gap: 20px;
   align-items: start;
   margin-bottom: 16px;
 }
 
-@media (max-width: 680px) {
-  .builder-react-root .builder-blog-card-manager-body {
+@media (max-width: 720px) {
+  .builder-react-root .bcm-body {
     grid-template-columns: 1fr;
   }
 }
 
-.builder-react-root .builder-blog-card-manager-elements {
+.builder-react-root .bcm-rows-panel,
+.builder-react-root .bcm-preview-panel {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 14px;
 }
 
-.builder-react-root .builder-blog-card-manager-elements-header {
-  font-size: 0.75rem;
+.builder-react-root .bcm-preview-panel {
+  background: #f8fafc;
+}
+
+.builder-react-root .bcm-panel-header {
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #64748b;
   margin-bottom: 4px;
 }
 
-.builder-react-root .builder-blog-card-manager-elements-hint {
+.builder-react-root .bcm-panel-hint {
   font-size: 0.72rem;
   color: #94a3b8;
   margin-bottom: 12px;
   line-height: 1.4;
 }
 
-.builder-react-root .builder-blog-card-manager-element-list {
+/* Row list */
+.builder-react-root .bcm-row-list {
   list-style: none;
-  margin: 0;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.builder-react-root .builder-blog-card-manager-element-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 5px;
-  background: #f8fafc;
   gap: 8px;
-  transition: background 0.1s;
 }
 
-.builder-react-root .builder-blog-card-manager-element-row.is-enabled {
-  background: #fff;
-  border-color: #c7d7e8;
+.builder-react-root .bcm-row-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.builder-react-root .builder-blog-card-manager-element-check {
+/* Row header: arrows | Columns: label | col buttons | delete — all in one line */
+.builder-react-root .bcm-row-header {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.8rem;
-  color: #374151;
-  cursor: pointer;
-  flex: 1;
-  user-select: none;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
-.builder-react-root .builder-blog-card-manager-element-row:not(.is-enabled) .builder-blog-card-manager-element-check {
-  color: #9ca3af;
-}
-
-.builder-react-root .builder-blog-card-manager-element-arrows {
+.builder-react-root .bcm-row-arrows {
   display: flex;
   gap: 2px;
+  flex-shrink: 0;
 }
 
-.builder-react-root .builder-blog-card-manager-element-arrows button {
-  padding: 0 4px;
+.builder-react-root .bcm-arrow-btn {
+  padding: 2px 6px;
   border: 1px solid #e2e8f0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: #fff;
   color: #64748b;
   font-size: 0.6rem;
   cursor: pointer;
-  line-height: 1.6;
+  line-height: 1.5;
   transition: background 0.1s;
 }
 
-.builder-react-root .builder-blog-card-manager-element-arrows button:hover:not(:disabled) {
+.builder-react-root .bcm-arrow-btn:hover:not(:disabled) {
   background: #f1f5f9;
 }
 
-.builder-react-root .builder-blog-card-manager-element-arrows button:disabled {
+.builder-react-root .bcm-arrow-btn:disabled {
   opacity: 0.3;
   cursor: default;
 }
 
-.builder-react-root .builder-blog-card-manager-preview {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 14px;
-}
-
-.builder-react-root .builder-blog-card-manager-preview-header {
+.builder-react-root .bcm-col-label {
   font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: #64748b;
-  margin-bottom: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.builder-react-root .builder-blog-card-manager-preview-body {
+.builder-react-root .bcm-delete-btn {
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  background: #fff;
+  color: #dc2626;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s;
+}
+
+.builder-react-root .bcm-delete-btn:hover {
+  background: #fef2f2;
+}
+
+/* Slot selects: display:grid applied inline (col count varies) */
+.builder-react-root .bcm-row-slots {
+  display: grid;
+  gap: 6px;
+}
+
+/* Add row button */
+.builder-react-root .bcm-add-row-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 0;
+  border: 1px dashed #94a3b8;
+  border-radius: 5px;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.builder-react-root .bcm-add-row-btn:hover {
+  background: #f1f5f9;
+  border-color: #64748b;
+}
+
+/* Preview */
+.builder-react-root .bcm-preview-body {
   display: flex;
   justify-content: center;
 }
 
-.builder-react-root .builder-blog-card-manager-save-bar {
+/* Save bar */
+.builder-react-root .bcm-save-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 16px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
 }
 
-.builder-react-root .builder-blog-card-manager-save-btn {
+.builder-react-root .bcm-save-btn {
   padding: 7px 18px;
   border: none;
   border-radius: 6px;
@@ -12932,37 +13021,34 @@
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.15s;
 }
 
-.builder-react-root .builder-blog-card-manager-save-btn:hover:not(:disabled) {
+.builder-react-root .bcm-save-btn:hover:not(:disabled) {
   background: #0d4278;
 }
 
-.builder-react-root .builder-blog-card-manager-save-btn:disabled {
+.builder-react-root .bcm-save-btn:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-.builder-react-root .builder-blog-card-manager-save-msg {
+.builder-react-root .bcm-save-msg {
   font-size: 0.82rem;
   font-weight: 600;
 }
 
-.builder-react-root .builder-blog-card-manager-save-msg.is-ok {
-  color: #16a34a;
-}
+.builder-react-root .bcm-save-msg.is-ok  { color: #16a34a; }
+.builder-react-root .bcm-save-msg.is-err { color: #dc2626; }
 
-.builder-react-root .builder-blog-card-manager-save-msg.is-err {
-  color: #dc2626;
-}
-
-.builder-react-root .builder-blog-card-manager-save-note {
-  font-size: 0.75rem;
+.builder-react-root .bcm-save-note {
+  font-size: 0.72rem;
   color: #94a3b8;
   margin-left: auto;
 }
 
+/* Settings panel (sidebar, not canvas) */
 .builder-react-root .builder-blog-card-manager-settings {
   padding: 8px 0;
 }

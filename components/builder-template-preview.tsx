@@ -1798,31 +1798,17 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const cols = Math.max(1, parseInt(settings.columns || "3", 10) || 3);
   const postsPerPage = Math.max(1, parseInt(settings.postsPerPage || "9", 10) || 9);
   const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
-  // Card template settings: use saved template when available, fall back to module settings
-  const tplElements   = cardTemplate?.elements   ?? DEFAULT_CARD_TEMPLATE.elements;
-  const tplLayout     = cardTemplate?.cardLayout  ?? "single";
-  const tplStyle      = cardTemplate?.cardStyle   ?? (settings.cardStyle  || "default");
-  const tplRadius     = cardTemplate?.cardBorderRadius ?? parseInt(settings.cardBorderRadius || "12", 10);
-  const tplAccent     = cardTemplate?.accentColor ?? (settings.accentColor || "#0f4f8f");
-  const tplAspect     = cardTemplate?.imageAspectRatio ?? (settings.imageAspectRatio || "16:9");
-  const tplReadMore   = cardTemplate?.readMoreLabel ?? (settings.readMoreLabel || "Read More");
 
-  function isElementEnabled(id: CardElementId) {
-    return tplElements.find((e) => e.id === id)?.enabled ?? true;
-  }
-
-  const readMoreLabel = tplReadMore;
-  const showReadMore = isElementEnabled("read_more");
-  const showFeaturedImage = isElementEnabled("featured_image");
-  const showExcerpt = isElementEnabled("excerpt");
-  const showAuthor = isElementEnabled("author");
-  const showDate = isElementEnabled("date");
-  const showCategories = isElementEnabled("categories");
-  const showTags = isElementEnabled("tags");
+  // Card template — migrate from API (supports both old elements[] and new rows[] format)
+  const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
+  const tplRows    = tpl.rows;
+  const cardLayout = tpl.cardLayout;
+  const cardStyle  = tpl.cardStyle;
+  const cardRadius = tpl.cardBorderRadius;
+  const accent     = tpl.accentColor;
+  const tplAspect  = tpl.imageAspectRatio;
+  const readMoreLabel = tpl.readMoreLabel;
   const cardGap = parseInt(settings.cardGap || "24", 10) || 24;
-  const cardRadius = tplRadius;
-  const cardStyle = tplStyle;
-  const accent = tplAccent;
 
   // Filter bar visibility
   const showSearchBar = (settings.showSearch ?? "true") !== "false";
@@ -1849,7 +1835,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         setAllPosts(fetchedPosts);
         setCategories(fetchedCats);
         const tplData = td?.template ?? td;
-        if (tplData && Array.isArray(tplData.elements)) setCardTemplate(tplData as CardTemplate);
+        if (tplData && typeof tplData === "object") setCardTemplate(migrateTemplate(tplData));
         // Pre-seed filters from URL params
         const params = new URLSearchParams(window.location.search);
         const urlCatSlug = params.get("category") ?? "";
@@ -1989,95 +1975,80 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
           {visiblePosts.map((post) => {
             const sep = postPageUrl.includes("?") ? "&" : "?";
             const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
-            const postCats = showCategories ? categories.filter((c) => post.categoryIds?.includes(c.id)) : [];
+            const postCats = categories.filter((c) => post.categoryIds?.includes(c.id));
             const dateStr = post.published_at
               ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
               : "";
             const imageUrl = post.featuredImageUrl || post.featured_image_url;
-            const isSideBySide = tplLayout === "side-by-side" || layout === "list";
+            const isSideBySide = cardLayout === "side-by-side" || layout === "list";
+            const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
 
-            // Render each enabled element in template order, grouping meta into one row
-            const metaElIds: CardElementId[] = ["author", "date", "tags", "read_more"];
-            const metaItems: React.ReactNode[] = [];
-            let metaGroupInserted = false;
-
-            const slots = tplElements.map((el) => {
-              if (!el.enabled) return null;
-              if (metaElIds.includes(el.id)) {
-                if (metaGroupInserted) return null;
-                metaGroupInserted = true;
-                // Collect all enabled meta elements in their template order
-                const metaRow = tplElements
-                  .filter((e) => e.enabled && metaElIds.includes(e.id))
-                  .map((e) => {
-                    if (e.id === "author") return showAuthor && post.author ? <span key="author" style={{ fontSize: "0.8125rem", color: "#718096" }}>{post.author}</span> : null;
-                    if (e.id === "date")   return showDate && dateStr ? <span key="date" style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{dateStr}</span> : null;
-                    if (e.id === "tags")   return showTags && post.tags?.length ? (
-                      <div key="tags" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {post.tags.map((tag) => (
-                          <span key={tag} style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>{tag}</span>
-                        ))}
-                      </div>
-                    ) : null;
-                    if (e.id === "read_more") return showReadMore ? <a key="read_more" href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600, marginLeft: "auto", textDecoration: "none" }}>{readMoreLabel} →</a> : null;
-                    return null;
-                  });
-                return (
-                  <div key="meta-row" style={{ marginTop: "auto", paddingTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                    {metaRow}
-                  </div>
-                );
+            function renderEl(id: CardElementId): React.ReactNode {
+              switch (id) {
+                case "categories":
+                  return postCats.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {postCats.map((c) => (
+                        <span key={c.id} style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: accent }}>{c.name}</span>
+                      ))}
+                    </div>
+                  ) : null;
+                case "headline":
+                  return (
+                    <h3 style={{ margin: 0, fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700,
+                      display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {post.title}
+                    </h3>
+                  );
+                case "featured_image":
+                  if (isSideBySide || !imageUrl) return null;
+                  return (
+                    <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", overflow: "hidden", aspectRatio: aspectRatioMap[tplAspect] ?? "16/9" }}>
+                      <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </div>
+                  );
+                case "excerpt":
+                  return post.excerpt ? (
+                    <p style={{ margin: 0, fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5 }}>{post.excerpt}</p>
+                  ) : null;
+                case "author":
+                  return post.author ? <span style={{ fontSize: "0.8125rem", color: "#718096" }}>{post.author}</span> : null;
+                case "date":
+                  return dateStr ? <span style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{dateStr}</span> : null;
+                case "tags":
+                  return post.tags?.length ? (
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {post.tags.map((tag) => (
+                        <span key={tag} style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>{tag}</span>
+                      ))}
+                    </div>
+                  ) : null;
+                case "read_more":
+                  return <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>{readMoreLabel} →</a>;
+                default:
+                  return null;
               }
-
-              if (el.id === "categories") {
-                return postCats.length > 0 ? (
-                  <div key="categories" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: "0.5rem" }}>
-                    {postCats.map((c) => (
-                      <span key={c.id} style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: accent }}>
-                        {c.name}
-                      </span>
-                    ))}
-                  </div>
-                ) : null;
-              }
-              if (el.id === "headline") {
-                return (
-                  <h3 key="headline" style={{ margin: "0 0 0.75rem", fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700,
-                    height: "5.525rem", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    {post.title}
-                  </h3>
-                );
-              }
-              if (el.id === "featured_image") {
-                if (!showFeaturedImage || !imageUrl || isSideBySide) return null;
-                return (
-                  <div key="featured_image" style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", marginBottom: "0.875rem", overflow: "hidden", aspectRatio: aspectRatioMap[tplAspect] ?? "16/9" }}>
-                    <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </div>
-                );
-              }
-              if (el.id === "excerpt") {
-                return showExcerpt && post.excerpt ? (
-                  <p key="excerpt" style={{ margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5, flex: 1 }}>
-                    {post.excerpt}
-                  </p>
-                ) : null;
-              }
-              return null;
-            });
+            }
 
             return (
-              <article
-                key={post.id}
-                style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? "row" : "column" }}
-              >
-                {isSideBySide && showFeaturedImage && imageUrl ? (
+              <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? "row" : "column" }}>
+                {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
                   <div style={{ flexShrink: 0, width: 220, overflow: "hidden" }}>
                     <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   </div>
                 ) : null}
-                <div style={{ padding: "1.125rem 1.25rem", flex: 1, display: "flex", flexDirection: "column" }}>
-                  {slots}
+                <div style={{ padding: "1.125rem 1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                  {tplRows.map((row) => {
+                    const hasContent = row.slots.some((s) => s && !(isSideBySide && s === "featured_image"));
+                    if (!hasContent) return null;
+                    return (
+                      <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
+                        {row.slots.slice(0, row.cols).map((slot, si) => slot ? (
+                          <div key={si}>{renderEl(slot)}</div>
+                        ) : <div key={si} />)}
+                      </div>
+                    );
+                  })}
                 </div>
               </article>
             );
@@ -2873,7 +2844,7 @@ type CategoryFormValues = { name: string; slug: string; description: string; col
 // ── Blog Card Manager ─────────────────────────────────────────────────────────
 
 type CardElementId = "categories" | "headline" | "featured_image" | "excerpt" | "author" | "date" | "tags" | "read_more";
-type CardElement = { id: CardElementId; enabled: boolean };
+type CardRow = { id: string; cols: 1 | 2 | 3; slots: (CardElementId | null)[] };
 type CardTemplate = {
   cardLayout: string;
   imageAspectRatio: string;
@@ -2881,7 +2852,7 @@ type CardTemplate = {
   cardBorderRadius: number;
   readMoreLabel: string;
   accentColor: string;
-  elements: CardElement[];
+  rows: CardRow[];
 };
 
 const CARD_ELEMENT_LABELS: Record<CardElementId, string> = {
@@ -2892,8 +2863,10 @@ const CARD_ELEMENT_LABELS: Record<CardElementId, string> = {
   author:         "Author",
   date:           "Date",
   tags:           "Tags",
-  read_more:      "Read More link",
+  read_more:      "Read More",
 };
+
+const ALL_CARD_ELEMENTS: CardElementId[] = ["categories", "headline", "featured_image", "excerpt", "author", "date", "tags", "read_more"];
 
 const DEFAULT_CARD_TEMPLATE: CardTemplate = {
   cardLayout: "single",
@@ -2902,104 +2875,114 @@ const DEFAULT_CARD_TEMPLATE: CardTemplate = {
   cardBorderRadius: 12,
   readMoreLabel: "Read More",
   accentColor: "#0f4f8f",
-  elements: [
-    { id: "categories",     enabled: true  },
-    { id: "headline",       enabled: true  },
-    { id: "featured_image", enabled: true  },
-    { id: "excerpt",        enabled: true  },
-    { id: "author",         enabled: true  },
-    { id: "date",           enabled: true  },
-    { id: "tags",           enabled: false },
-    { id: "read_more",      enabled: true  },
+  rows: [
+    { id: "r1", cols: 1, slots: ["categories"] },
+    { id: "r2", cols: 1, slots: ["headline"] },
+    { id: "r3", cols: 1, slots: ["featured_image"] },
+    { id: "r4", cols: 1, slots: ["excerpt"] },
+    { id: "r5", cols: 3, slots: ["author", "date", "read_more"] },
   ],
 };
 
+function migrateTemplate(raw: unknown): CardTemplate {
+  if (!raw || typeof raw !== "object") return DEFAULT_CARD_TEMPLATE;
+  const d = raw as Record<string, unknown>;
+  let rows: CardRow[];
+  if (Array.isArray(d.rows) && d.rows.length > 0) {
+    rows = d.rows as CardRow[];
+  } else if (Array.isArray(d.elements)) {
+    // Backward compat: convert old elements[] to rows[]
+    const metaIds: CardElementId[] = ["author", "date", "tags", "read_more"];
+    const newRows: CardRow[] = [];
+    const metaSlots: CardElementId[] = [];
+    let n = 0;
+    for (const el of d.elements as Array<{ id: CardElementId; enabled: boolean }>) {
+      if (!el.enabled) continue;
+      if (metaIds.includes(el.id)) { if (metaSlots.length < 3) metaSlots.push(el.id); }
+      else newRows.push({ id: `r${++n}`, cols: 1, slots: [el.id] });
+    }
+    if (metaSlots.length) newRows.push({ id: "rmeta", cols: metaSlots.length as 1 | 2 | 3, slots: metaSlots });
+    rows = newRows.length ? newRows : DEFAULT_CARD_TEMPLATE.rows;
+  } else {
+    rows = DEFAULT_CARD_TEMPLATE.rows;
+  }
+  return {
+    cardLayout:       String(d.cardLayout       || DEFAULT_CARD_TEMPLATE.cardLayout),
+    imageAspectRatio: String(d.imageAspectRatio || DEFAULT_CARD_TEMPLATE.imageAspectRatio),
+    cardStyle:        String(d.cardStyle        || DEFAULT_CARD_TEMPLATE.cardStyle),
+    cardBorderRadius: Number(d.cardBorderRadius ?? DEFAULT_CARD_TEMPLATE.cardBorderRadius),
+    readMoreLabel:    String(d.readMoreLabel     || DEFAULT_CARD_TEMPLATE.readMoreLabel),
+    accentColor:      String(d.accentColor       || DEFAULT_CARD_TEMPLATE.accentColor),
+    rows,
+  };
+}
+
+function renderSampleElement(id: CardElementId, accentColor: string, readMoreLabel: string, imgAspect: string, isSideBySide: boolean): React.ReactNode {
+  const sampleImageUrl = "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=600&q=70";
+  switch (id) {
+    case "categories":
+      return <span style={{ fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: accentColor }}>Technology</span>;
+    case "headline":
+      return <span style={{ fontSize: "0.95rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700, display: "block" }}>Sample Blog Post Title</span>;
+    case "featured_image":
+      if (isSideBySide) return null;
+      return (
+        <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", overflow: "hidden", aspectRatio: imgAspect }}>
+          <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        </div>
+      );
+    case "excerpt":
+      return <span style={{ fontSize: "0.78rem", color: "#4a5568", lineHeight: 1.5, display: "block" }}>A brief excerpt giving readers a preview of the content inside this post.</span>;
+    case "author":
+      return <span style={{ fontSize: "0.72rem", color: "#718096" }}>Jane Smith</span>;
+    case "date":
+      return <span style={{ fontSize: "0.72rem", color: "#a0aec0" }}>Jun 15, 2026</span>;
+    case "tags":
+      return (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.62rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>design</span>
+          <span style={{ fontSize: "0.62rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>ux</span>
+        </div>
+      );
+    case "read_more":
+      return <a href="#" style={{ color: accentColor, fontSize: "0.78rem", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>{readMoreLabel} →</a>;
+    default:
+      return null;
+  }
+}
+
 function renderCardPreview(tpl: CardTemplate) {
-  const { cardLayout, imageAspectRatio, cardStyle, cardBorderRadius, readMoreLabel, accentColor, elements } = tpl;
+  const { cardLayout, imageAspectRatio, cardStyle, cardBorderRadius, readMoreLabel, accentColor, rows } = tpl;
   const aspectRatioMap: Record<string, string> = { "16:9": "16/9", "4:3": "4/3", "3:2": "3/2", "1:1": "1/1" };
   const imgAspect = aspectRatioMap[imageAspectRatio] ?? "16/9";
   const cardBorder: CSSProperties =
-    cardStyle === "bordered"
-      ? { border: `1px solid ${accentColor}40`, boxShadow: "none" }
-      : cardStyle === "shadow"
-      ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
-      : { border: "1px solid #e2e8f0", boxShadow: "none" };
-
+    cardStyle === "bordered" ? { border: `1px solid ${accentColor}40`, boxShadow: "none" }
+    : cardStyle === "shadow"  ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
+    : { border: "1px solid #e2e8f0", boxShadow: "none" };
   const isSideBySide = cardLayout === "side-by-side";
-  const enabledIds = new Set(elements.filter((e) => e.enabled).map((e) => e.id));
-
+  const hasFeaturedImage = rows.some((r) => r.slots.includes("featured_image"));
   const sampleImageUrl = "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=600&q=70";
-
-  const contentSlots: Array<{ id: CardElementId; node: React.ReactNode }> = elements.map((el) => {
-    if (!el.enabled) return null as unknown as { id: CardElementId; node: React.ReactNode };
-    switch (el.id) {
-      case "categories":
-        return { id: el.id, node: (
-          <div key="categories" style={{ display: "flex", gap: 6, marginBottom: "0.4rem" }}>
-            <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: accentColor }}>Technology</span>
-          </div>
-        )};
-      case "headline":
-        return { id: el.id, node: (
-          <h3 key="headline" style={{ margin: "0 0 0.6rem", fontSize: "1rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700 }}>
-            Sample Blog Post Title
-          </h3>
-        )};
-      case "featured_image":
-        if (isSideBySide) return null as unknown as { id: CardElementId; node: React.ReactNode };
-        return { id: el.id, node: (
-          <div key="featured_image" style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", marginBottom: "0.75rem", overflow: "hidden", aspectRatio: imgAspect }}>
-            <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          </div>
-        )};
-      case "excerpt":
-        return { id: el.id, node: (
-          <p key="excerpt" style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: "#4a5568", lineHeight: 1.5, flex: 1 }}>
-            A brief excerpt from the post appears here, giving readers a preview of the content inside.
-          </p>
-        )};
-      case "author":
-        return { id: el.id, node: <span key="author" style={{ fontSize: "0.75rem", color: "#718096" }}>Jane Smith</span> };
-      case "date":
-        return { id: el.id, node: <span key="date" style={{ fontSize: "0.75rem", color: "#a0aec0" }}>Jun 15, 2026</span> };
-      case "tags":
-        return { id: el.id, node: (
-          <div key="tags" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>design</span>
-            <span style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>ux</span>
-          </div>
-        )};
-      case "read_more":
-        return { id: el.id, node: <a key="read_more" href="#" style={{ color: accentColor, fontSize: "0.8rem", fontWeight: 600, marginLeft: "auto", textDecoration: "none" }}>{readMoreLabel} →</a> };
-      default:
-        return null as unknown as { id: CardElementId; node: React.ReactNode };
-    }
-  }).filter(Boolean);
-
-  // Group metadata elements into a single row
-  const metaIds: CardElementId[] = ["author", "date", "tags", "read_more"];
-  const metaSlots = contentSlots.filter((s) => metaIds.includes(s.id));
-  const topSlots  = contentSlots.filter((s) => !metaIds.includes(s.id));
-
-  const contentArea = (
-    <div style={{ padding: "1rem 1.25rem", flex: 1, display: "flex", flexDirection: "column" }}>
-      {topSlots.map((s) => s.node)}
-      {metaSlots.length > 0 && (
-        <div style={{ marginTop: "auto", paddingTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          {metaSlots.map((s) => s.node)}
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <article style={{ ...cardBorder, borderRadius: cardBorderRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? "row" : "column", maxWidth: 340 }}>
-      {isSideBySide && enabledIds.has("featured_image") ? (
+      {isSideBySide && hasFeaturedImage ? (
         <div style={{ flexShrink: 0, width: 110, overflow: "hidden" }}>
           <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
         </div>
       ) : null}
-      {contentArea}
+      <div style={{ padding: "1rem 1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {rows.map((row) => {
+          const filledSlots = row.slots.filter(Boolean);
+          if (filledSlots.length === 0) return null;
+          return (
+            <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
+              {row.slots.map((slot, si) => slot ? (
+                <div key={si}>{renderSampleElement(slot, accentColor, readMoreLabel, imgAspect, isSideBySide)}</div>
+              ) : <div key={si} />)}
+            </div>
+          );
+        })}
+      </div>
     </article>
   );
 }
@@ -3010,15 +2993,12 @@ function BlogCardManagerPreview() {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
 
-  const headers = { ...getCrmProjectHeaders(), "Content-Type": "application/json" };
+  const jsonHeaders = { ...getCrmProjectHeaders(), "Content-Type": "application/json" };
 
   useEffect(() => {
     fetch("/api/blog/card-template", { credentials: "include", headers: getCrmProjectHeaders() })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.template && Array.isArray(d.template.elements)) setTpl(d.template as CardTemplate);
-        else if (d && Array.isArray(d.elements)) setTpl(d as CardTemplate);
-      })
+      .then((d) => { if (d) setTpl(migrateTemplate(d.template ?? d)); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -3028,21 +3008,51 @@ function BlogCardManagerPreview() {
     setSavedMsg("");
   }
 
-  function toggleElement(id: CardElementId) {
+  function addRow() {
     setTpl((prev) => ({
       ...prev,
-      elements: prev.elements.map((e) => e.id === id ? { ...e, enabled: !e.enabled } : e),
+      rows: [...prev.rows, { id: `r${Date.now()}`, cols: 1, slots: [null] }],
     }));
     setSavedMsg("");
   }
 
-  function moveElement(index: number, dir: -1 | 1) {
-    const next = index + dir;
-    if (next < 0 || next >= tpl.elements.length) return;
+  function removeRow(idx: number) {
+    setTpl((prev) => ({ ...prev, rows: prev.rows.filter((_, i) => i !== idx) }));
+    setSavedMsg("");
+  }
+
+  function moveRow(idx: number, dir: -1 | 1) {
+    const next = idx + dir;
     setTpl((prev) => {
-      const els = [...prev.elements];
-      [els[index], els[next]] = [els[next], els[index]];
-      return { ...prev, elements: els };
+      const rows = [...prev.rows];
+      [rows[idx], rows[next]] = [rows[next], rows[idx]];
+      return { ...prev, rows };
+    });
+    setSavedMsg("");
+  }
+
+  function setRowCols(idx: number, cols: 1 | 2 | 3) {
+    setTpl((prev) => {
+      const rows = prev.rows.map((row, i) => {
+        if (i !== idx) return row;
+        const slots = [...row.slots];
+        while (slots.length < cols) slots.push(null);
+        return { ...row, cols, slots: slots.slice(0, cols) };
+      });
+      return { ...prev, rows };
+    });
+    setSavedMsg("");
+  }
+
+  function setSlot(rowIdx: number, slotIdx: number, value: string) {
+    setTpl((prev) => {
+      const rows = prev.rows.map((row, i) => {
+        if (i !== rowIdx) return row;
+        const slots = [...row.slots] as (CardElementId | null)[];
+        slots[slotIdx] = value ? (value as CardElementId) : null;
+        return { ...row, slots };
+      });
+      return { ...prev, rows };
     });
     setSavedMsg("");
   }
@@ -3051,14 +3061,8 @@ function BlogCardManagerPreview() {
     setSaving(true);
     setSavedMsg("");
     try {
-      const r = await fetch("/api/blog/card-template", {
-        method: "PUT",
-        credentials: "include",
-        headers,
-        body: JSON.stringify(tpl),
-      });
-      if (r.ok) setSavedMsg("Saved");
-      else setSavedMsg("Error saving");
+      const r = await fetch("/api/blog/card-template", { method: "PUT", credentials: "include", headers: jsonHeaders, body: JSON.stringify(tpl) });
+      setSavedMsg(r.ok ? "Saved" : "Error saving");
     } catch {
       setSavedMsg("Error saving");
     } finally {
@@ -3070,119 +3074,122 @@ function BlogCardManagerPreview() {
     return <div className="builder-blog-card-manager-module"><div className="builder-blog-post-manager-stub">Loading card template…</div></div>;
   }
 
-  const inputStyle: CSSProperties = { padding: "4px 8px", border: "1px solid #cbd5e0", borderRadius: 5, fontSize: "0.8rem", background: "#fff" };
-  const labelStyle: CSSProperties = { fontSize: "0.75rem", fontWeight: 600, color: "#4a5568", marginBottom: 2, display: "block" };
+  const sel: CSSProperties = { padding: "4px 8px", border: "1px solid #cbd5e0", borderRadius: 5, fontSize: "0.8rem", background: "#fff", width: "100%" };
 
   return (
     <div className="builder-blog-card-manager-module builder-admin-data-table-module">
       <h3 className="builder-admin-data-table-title">Blog Card Template Manager</h3>
 
-      {/* Top controls */}
-      <div className="builder-blog-card-manager-controls">
-        <div className="builder-blog-card-manager-control-group">
-          <label style={labelStyle}>Card Layout</label>
-          <div style={{ display: "flex", gap: 6 }}>
+      {/* ── Card style controls ── */}
+      <div className="bcm-controls-bar">
+        <div className="bcm-control">
+          <span className="bcm-label">Layout</span>
+          <div className="bcm-btn-group">
             {(["single", "side-by-side"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                className={`builder-blog-card-manager-layout-btn${tpl.cardLayout === v ? " is-active" : ""}`}
-                onClick={() => setField("cardLayout", v)}
-              >
-                {v === "single" ? "Single column" : "Side-by-side"}
+              <button key={v} type="button" className={`bcm-toggle-btn${tpl.cardLayout === v ? " is-on" : ""}`} onClick={() => setField("cardLayout", v)}>
+                {v === "single" ? "Single" : "Side-by-side"}
               </button>
             ))}
           </div>
         </div>
-
-        <div className="builder-blog-card-manager-control-group">
-          <label style={labelStyle}>Card Style</label>
-          <select style={inputStyle} value={tpl.cardStyle} onChange={(e) => setField("cardStyle", e.target.value)}>
+        <div className="bcm-control">
+          <span className="bcm-label">Style</span>
+          <select style={sel} value={tpl.cardStyle} onChange={(e) => setField("cardStyle", e.target.value)}>
             <option value="default">Default</option>
             <option value="bordered">Bordered</option>
             <option value="shadow">Shadow</option>
           </select>
         </div>
-
-        <div className="builder-blog-card-manager-control-group">
-          <label style={labelStyle}>Image Aspect</label>
-          <select style={inputStyle} value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}>
+        <div className="bcm-control">
+          <span className="bcm-label">Image</span>
+          <select style={sel} value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}>
             <option value="16:9">16:9</option>
             <option value="4:3">4:3</option>
             <option value="3:2">3:2</option>
             <option value="1:1">1:1</option>
           </select>
         </div>
-
-        <div className="builder-blog-card-manager-control-group">
-          <label style={labelStyle}>Border Radius</label>
+        <div className="bcm-control">
+          <span className="bcm-label">Radius</span>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <input type="number" min={0} max={32} step={2} style={{ ...inputStyle, width: 52 }}
+            <input type="number" min={0} max={32} step={2} style={{ ...sel, width: 52 }}
               value={tpl.cardBorderRadius} onChange={(e) => setField("cardBorderRadius", parseInt(e.target.value, 10) || 0)} />
-            <span style={{ fontSize: "0.75rem", color: "#718096" }}>px</span>
+            <span className="bcm-unit">px</span>
           </div>
         </div>
-
-        <div className="builder-blog-card-manager-control-group">
-          <label style={labelStyle}>Accent Color</label>
-          <input type="color" style={{ ...inputStyle, padding: 2, width: 42, height: 28, cursor: "pointer" }}
-            value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
+        <div className="bcm-control">
+          <span className="bcm-label">Color</span>
+          <input type="color" className="bcm-color-input" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
         </div>
-
-        <div className="builder-blog-card-manager-control-group">
-          <label style={labelStyle}>Read More Label</label>
-          <input type="text" style={{ ...inputStyle, width: 110 }} value={tpl.readMoreLabel}
-            onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
+        <div className="bcm-control">
+          <span className="bcm-label">Read More</span>
+          <input type="text" style={{ ...sel, width: 100 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
         </div>
       </div>
 
-      {/* Two-column: element list + live preview */}
-      <div className="builder-blog-card-manager-body">
-        <div className="builder-blog-card-manager-elements">
-          <div className="builder-blog-card-manager-elements-header">Card Elements</div>
-          <div className="builder-blog-card-manager-elements-hint">Enable or reorder elements to define the card layout.</div>
-          <ul className="builder-blog-card-manager-element-list">
-            {tpl.elements.map((el, idx) => (
-              <li key={el.id} className={`builder-blog-card-manager-element-row${el.enabled ? " is-enabled" : ""}`}>
-                <label className="builder-blog-card-manager-element-check">
-                  <input type="checkbox" checked={el.enabled} onChange={() => toggleElement(el.id)} />
-                  <span>{CARD_ELEMENT_LABELS[el.id]}</span>
-                </label>
-                <div className="builder-blog-card-manager-element-arrows">
-                  <button type="button" disabled={idx === 0} onClick={() => moveElement(idx, -1)} title="Move up" aria-label="Move up">▲</button>
-                  <button type="button" disabled={idx === tpl.elements.length - 1} onClick={() => moveElement(idx, 1)} title="Move down" aria-label="Move down">▼</button>
+      {/* ── Two-column: row editor + live preview ── */}
+      <div className="bcm-body">
+
+        <div className="bcm-rows-panel">
+          <div className="bcm-panel-header">Card Rows</div>
+          <div className="bcm-panel-hint">Each row is 1–3 equal-width columns. Assign an element to each slot.</div>
+
+          <ul className="bcm-row-list">
+            {tpl.rows.map((row, idx) => (
+              <li key={row.id} className="bcm-row-card">
+                {/* Row header: arrows · col selector · delete */}
+                <div className="bcm-row-header">
+                  <div className="bcm-row-arrows">
+                    <button type="button" className="bcm-arrow-btn" disabled={idx === 0} onClick={() => moveRow(idx, -1)} aria-label="Move row up">▲</button>
+                    <button type="button" className="bcm-arrow-btn" disabled={idx === tpl.rows.length - 1} onClick={() => moveRow(idx, 1)} aria-label="Move row down">▼</button>
+                  </div>
+                  <span className="bcm-col-label">Columns:</span>
+                  <div className="bcm-btn-group">
+                    {([1, 2, 3] as const).map((n) => (
+                      <button key={n} type="button" className={`bcm-col-btn${row.cols === n ? " is-on" : ""}`} onClick={() => setRowCols(idx, n)}>{n}</button>
+                    ))}
+                  </div>
+                  <button type="button" className="bcm-delete-btn" onClick={() => removeRow(idx)} aria-label="Delete row">× Delete</button>
+                </div>
+
+                {/* Slot selects */}
+                <div className="bcm-row-slots" style={{ gridTemplateColumns: `repeat(${row.cols}, 1fr)` }}>
+                  {row.slots.slice(0, row.cols).map((slot, si) => (
+                    <select key={si} style={sel} value={slot ?? ""} onChange={(e) => setSlot(idx, si, e.target.value)}>
+                      <option value="">(empty)</option>
+                      {ALL_CARD_ELEMENTS.map((id) => (
+                        <option key={id} value={id}>{CARD_ELEMENT_LABELS[id]}</option>
+                      ))}
+                    </select>
+                  ))}
                 </div>
               </li>
             ))}
           </ul>
+
+          <button type="button" className="bcm-add-row-btn" onClick={addRow}>+ Add Row</button>
         </div>
 
-        <div className="builder-blog-card-manager-preview">
-          <div className="builder-blog-card-manager-preview-header">Live Preview</div>
-          <div className="builder-blog-card-manager-preview-body">
+        <div className="bcm-preview-panel">
+          <div className="bcm-panel-header">Live Preview</div>
+          <div className="bcm-preview-body">
             {renderCardPreview(tpl)}
           </div>
         </div>
+
       </div>
 
-      {/* Save bar */}
-      <div className="builder-blog-card-manager-save-bar">
-        <button
-          type="button"
-          className="builder-blog-card-manager-save-btn"
-          onClick={save}
-          disabled={saving}
-        >
+      {/* ── Save bar ── */}
+      <div className="bcm-save-bar">
+        <button type="button" className="bcm-save-btn" onClick={save} disabled={saving}>
           {saving ? "Saving…" : "Save Card Template"}
         </button>
         {savedMsg ? (
-          <span className={`builder-blog-card-manager-save-msg${savedMsg === "Saved" ? " is-ok" : " is-err"}`}>
+          <span className={`bcm-save-msg${savedMsg === "Saved" ? " is-ok" : " is-err"}`}>
             {savedMsg === "Saved" ? "✓ Saved" : savedMsg}
           </span>
         ) : null}
-        <span className="builder-blog-card-manager-save-note">
-          Applies to all Post Feed modules on your site
-        </span>
+        <span className="bcm-save-note">Applies to all Post Feed modules on your site</span>
       </div>
     </div>
   );
@@ -4865,7 +4872,8 @@ function SocialModulePreview({ module }: { module: import("@/lib/builder-templat
               }}
             >
               {item.iconUrl ? (
-                <Image alt={item.label || "Social icon"} fill sizes={`${iconSize}px`} src={item.iconUrl} unoptimized />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img alt={item.label || "Social icon"} src={item.iconUrl} className="builder-preview-social-icon-img" />
               ) : (
                 <span className="builder-preview-social-fallback">{item.label.slice(0, 1) || "@"}</span>
               )}
