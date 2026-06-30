@@ -281,6 +281,8 @@ App.assets = (function () {
     const aspect = normalizeAspect(filters.aspect);
     const tags = String(filters.tags || '').trim().toLowerCase();
     const size = String(filters.size || '').trim().toLowerCase();
+    const imageWidth = Number(filters.image_width || 0) || 0;
+    const imageHeight = Number(filters.image_height || 0) || 0;
 
     const filtered = (state.assets || []).filter((asset) => {
       const assetName = String(asset.assetName || '').toLowerCase();
@@ -299,6 +301,8 @@ App.assets = (function () {
       if (aspect && assetAspect !== aspect) return false;
       if (tags && !assetTags.includes(tags)) return false;
       if (size && !assetSizeRaw.includes(size) && !assetSizeFmt.includes(size)) return false;
+      if (imageWidth && Number(asset.imageWidth || 0) !== imageWidth) return false;
+      if (imageHeight && Number(asset.imageHeight || 0) !== imageHeight) return false;
       return true;
     });
 
@@ -694,6 +698,8 @@ App.assets = (function () {
     const activeType = String(state.assetsFilters?.asset_type || '').trim();
     els.assetsFilterType.value = activeType;
     if (els.assetsFilterAspect) els.assetsFilterAspect.value = normalizeAspect(state.assetsFilters?.aspect);
+    if (els.assetsFilterWidth) els.assetsFilterWidth.value = String(state.assetsFilters?.image_width || '');
+    if (els.assetsFilterHeight) els.assetsFilterHeight.value = String(state.assetsFilters?.image_height || '');
     els.assetsFilterTags.value = String(state.assetsFilters?.tags || '');
     renderAssetFilterCategoryOptions(
       activeType,
@@ -1643,6 +1649,8 @@ App.assets = (function () {
     bindHeaderField(els.assetsFilterCaption, 'caption');
     bindHeaderField(els.assetsFilterCategory, 'category');
     bindHeaderField(els.assetsFilterAspect, 'aspect');
+    bindHeaderField(els.assetsFilterWidth, 'image_width');
+    bindHeaderField(els.assetsFilterHeight, 'image_height');
     bindHeaderField(els.assetsFilterTags, 'tags');
 
     if (els.assetsFilterType) {
@@ -1677,6 +1685,8 @@ App.assets = (function () {
         state.assetsFilters.asset_type = String(els.assetsFilterType?.value || '');
         state.assetsFilters.category = String(els.assetsFilterCategory?.value || '');
         state.assetsFilters.aspect = normalizeAspect(els.assetsFilterAspect?.value);
+        state.assetsFilters.image_width = String(els.assetsFilterWidth?.value || '');
+        state.assetsFilters.image_height = String(els.assetsFilterHeight?.value || '');
         state.assetsFilters.tags = String(els.assetsFilterTags?.value || '');
         renderAssets();
       });
