@@ -48,6 +48,8 @@ import {
   getBuilderThemeStyleVars,
   getThemeRootVars,
   type BuilderThemeStyles,
+  resolveShellPageBackground,
+  type ThemeShellBackgroundSource,
   columnHasOnlySectionScopedOverlayModules,
   getOverlayFlowCollapsedColumnStyle,
   getOverlayFlowCollapsedModuleStyle,
@@ -99,6 +101,8 @@ type BuilderTemplatePreviewProps = {
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   /** Saved theme container styles (margins, border, blur, contrast). */
   themeStyles?: BuilderThemeStyles;
+  /** Linked saved theme — supplies default website shell background when page background is unset. */
+  themeShellBackground?: ThemeShellBackgroundSource;
   showShell?: boolean;
   emailPreview?: boolean;
   /** When true (Builder /preview), speech bubbles with game/on-load triggers do not auto-fire. */
@@ -1142,12 +1146,13 @@ export function BuilderTemplatePreview({
   theme,
   themePalette,
   themeStyles,
+  themeShellBackground,
   showShell = true,
   emailPreview = false,
   previewMode = false,
   projectId = ""
 }: BuilderTemplatePreviewProps) {
-  const pageStyle = getBuilderBackgroundStyle(pageBackground);
+  const pageStyle = getBuilderBackgroundStyle(resolveShellPageBackground(pageBackground, themeShellBackground));
   // Theme tokens go first so the page background (and any per-module inline
   // styles further down) still win where they overlap.
   const rootStyle = {

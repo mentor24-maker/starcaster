@@ -20,6 +20,7 @@ import {
   createDefaultTheme,
   getBuilderBackgroundStyle,
   normalizeBackgroundMode,
+  normalizeBackgroundSettings,
   normalizeBuilderAssetUrl,
   resolvePublicBuilderAssetUrl,
   normalizeSignedOffsetValue,
@@ -892,6 +893,50 @@ export function buildBuilderThemeStyles(
   };
 }
 
+export type ThemeShellBackgroundSource = {
+  pageBackground?: BackgroundSettings | Record<string, unknown> | null;
+  backgroundColor?: string;
+} | null | undefined;
+
+/** Saved theme website background, with legacy fallback from palette Background. */
+export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
+  const saved = theme?.pageBackground;
+  if (saved && typeof saved === "object") {
+    const normalized = normalizeBackgroundSettings(saved);
+    if (normalized.mode !== "none") {
+      return normalized;
+    }
+  }
+  const legacy = String(theme?.backgroundColor ?? "").trim();
+  if (legacy) {
+    return {
+      ...createDefaultBackgroundSettings(),
+      mode: "color",
+      color: legacy,
+    };
+  }
+  return createDefaultBackgroundSettings();
+}
+
+/** Page background wins when set; otherwise use the linked theme default. */
+export function resolveShellPageBackground(
+  pageBackground: BackgroundSettings | undefined,
+  theme: ThemeShellBackgroundSource
+): BackgroundSettings {
+  const page = normalizeBackgroundSettings(pageBackground);
+  if (page.mode !== "none") {
+    return page;
+  }
+  return resolveThemePageBackground(theme);
+}
+
+export function getShellPageBackgroundStyle(
+  pageBackground: BackgroundSettings | undefined,
+  theme: ThemeShellBackgroundSource
+): CSSProperties | undefined {
+  return getBuilderBackgroundStyle(resolveShellPageBackground(pageBackground, theme));
+}
+
 /**
  * Emit saved theme palette + container style tokens for the preview shell root.
  * Margins map to shell padding; border radius, blur, and contrast cascade via --lp-* vars.
@@ -901,10 +946,8 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   if (!styles) return vars as CSSProperties;
 
   const primary = String(styles.primaryColor || "").trim();
-  const background = String(styles.backgroundColor || "").trim();
   const accent = String(styles.accentColor || "").trim();
   if (primary) vars["--lp-primary"] = primary;
-  if (background) vars["--lp-background"] = background;
   if (accent) {
     vars["--lp-accent"] = accent;
     vars["--lp-border"] = accentBorderColor(accent);
