@@ -16,6 +16,9 @@ type DevelopThemeRecord = {
   borderRadius: number;
   containerBlur: number;
   contrastLevel: number;
+  topMargin: number;
+  bottomMargin: number;
+  sideMargins: number;
   logoWideId: string;
   logoSquareId: string;
   featureImageId: string;
@@ -44,6 +47,9 @@ function defaultDraft(): DevelopThemeRecord {
     borderRadius: 12,
     containerBlur: 0,
     contrastLevel: 0,
+    topMargin: 0,
+    bottomMargin: 0,
+    sideMargins: 0,
     logoWideId: "",
     logoSquareId: "",
     featureImageId: "",
@@ -69,6 +75,9 @@ function buildPayload(draft: DevelopThemeRecord) {
     borderRadius: draft.borderRadius,
     containerBlur: draft.containerBlur,
     contrastLevel: draft.contrastLevel,
+    topMargin: draft.topMargin,
+    bottomMargin: draft.bottomMargin,
+    sideMargins: draft.sideMargins,
     logoWideId: draft.logoWideId,
     logoSquareId: draft.logoSquareId,
     featureImageId: draft.featureImageId,
@@ -271,57 +280,83 @@ export function BuilderThemesPage() {
       )}
 
       <div className="builder-themes-columns">
-        <div className="builder-themes-col">
-          <h3 className="builder-themes-col-heading">Palette</h3>
-          <ColorRow
-            label="Primary"
-            value={draft.primaryColor}
-            onChange={(v) => updateDraft({ primaryColor: v })}
-          />
-          <ColorRow
-            label="Secondary"
-            value={draft.secondaryColor}
-            onChange={(v) => updateDraft({ secondaryColor: v })}
-          />
-          <ColorRow
-            label="Background"
-            value={draft.backgroundColor}
-            onChange={(v) => updateDraft({ backgroundColor: v })}
-          />
-          <ColorRow
-            label="Accent"
-            value={draft.accentColor}
-            onChange={(v) => updateDraft({ accentColor: v })}
-          />
-          <h4 className="builder-themes-sub-heading">Styles</h4>
-          <SliderRow
-            label="Border thickness"
-            value={draft.borderThickness}
-            min={0}
-            max={20}
-            onChange={(v) => updateDraft({ borderThickness: v })}
-          />
-          <SliderRow
-            label="Border radius"
-            value={draft.borderRadius}
-            min={0}
-            max={50}
-            onChange={(v) => updateDraft({ borderRadius: v })}
-          />
-          <SliderRow
-            label="Container blur"
-            value={draft.containerBlur}
-            min={0}
-            max={24}
-            onChange={(v) => updateDraft({ containerBlur: v })}
-          />
-          <SliderRow
-            label="Contrast"
-            value={draft.contrastLevel}
-            min={0}
-            max={100}
-            onChange={(v) => updateDraft({ contrastLevel: v })}
-          />
+        <div className="builder-themes-col-stack">
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Styles</h3>
+            <SliderRow
+              label="Top Margin"
+              value={draft.topMargin}
+              min={0}
+              max={80}
+              onChange={(v) => updateDraft({ topMargin: v })}
+            />
+            <SliderRow
+              label="Bottom Margin"
+              value={draft.bottomMargin}
+              min={0}
+              max={80}
+              onChange={(v) => updateDraft({ bottomMargin: v })}
+            />
+            <SliderRow
+              label="Side Margins"
+              value={draft.sideMargins}
+              min={0}
+              max={80}
+              onChange={(v) => updateDraft({ sideMargins: v })}
+            />
+            <SliderRow
+              label="Border thickness"
+              value={draft.borderThickness}
+              min={0}
+              max={20}
+              onChange={(v) => updateDraft({ borderThickness: v })}
+            />
+            <SliderRow
+              label="Border radius"
+              value={draft.borderRadius}
+              min={0}
+              max={50}
+              onChange={(v) => updateDraft({ borderRadius: v })}
+            />
+            <SliderRow
+              label="Container blur"
+              value={draft.containerBlur}
+              min={0}
+              max={24}
+              onChange={(v) => updateDraft({ containerBlur: v })}
+            />
+            <SliderRow
+              label="Contrast"
+              value={draft.contrastLevel}
+              min={0}
+              max={100}
+              onChange={(v) => updateDraft({ contrastLevel: v })}
+            />
+          </div>
+
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Palette</h3>
+            <ColorRow
+              label="Primary"
+              value={draft.primaryColor}
+              onChange={(v) => updateDraft({ primaryColor: v })}
+            />
+            <ColorRow
+              label="Secondary"
+              value={draft.secondaryColor}
+              onChange={(v) => updateDraft({ secondaryColor: v })}
+            />
+            <ColorRow
+              label="Background"
+              value={draft.backgroundColor}
+              onChange={(v) => updateDraft({ backgroundColor: v })}
+            />
+            <ColorRow
+              label="Accent"
+              value={draft.accentColor}
+              onChange={(v) => updateDraft({ accentColor: v })}
+            />
+          </div>
         </div>
 
         <div className="builder-themes-col">
