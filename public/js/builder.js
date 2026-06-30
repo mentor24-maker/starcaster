@@ -224,6 +224,7 @@ App.builder = (function () {
         menuLocation: 'primary',
         variant: 'horizontal',
         navItems: App.builderNavMenu?.defaultNavMenuItemsJson?.() || '[]',
+        navItemSizing: 'auto',
         navFontSize: 16,
         navBold: false,
         navBorderRadius: 0,
@@ -235,9 +236,11 @@ App.builder = (function () {
       },
       fields: [
         { key: 'menuName', label: 'Menu Name', control: 'text', placeholder: 'Main Menu' },
-        { key: 'menuLocation', label: 'Theme Location', control: 'select', options: ['primary', 'footer', 'social'] },
-        { key: 'variant', label: 'Layout', control: 'select', options: ['horizontal', 'vertical'] },
+        { key: 'menuLocation', label: 'Theme Location', control: 'select', options: App.builderNavMenu?.MENU_LOCATIONS || [{ value: 'primary', label: 'Primary Menu (Header)' }, { value: 'footer', label: 'Footer Menu' }, { value: 'social', label: 'Social Links' }] },
+        { key: 'variant', label: 'Layout', control: 'select', options: [{ value: 'horizontal', label: 'Horizontal' }, { value: 'vertical', label: 'Vertical' }] },
         { key: 'navItems', label: 'Menu Structure', control: 'nav-menu-editor' },
+        { control: 'section-header', label: 'Appearance' },
+        { key: 'navItemSizing', label: 'Link Sizing', control: 'select', options: [{ value: 'auto', label: 'Auto (fit content)' }, { value: 'equal', label: 'Equal width' }] },
         { key: 'navFontSize', label: 'Link Font Size', control: 'number', min: 10, max: 48, step: 1 },
         { key: 'navBold', label: 'Bold Links', control: 'checkbox' },
         { key: 'navBorderRadius', label: 'Link Border Radius', control: 'number', min: 0, max: 48, step: 1 },
@@ -2526,6 +2529,13 @@ App.builder = (function () {
     }
 
     definition.fields.forEach((field) => {
+      if (field.control === 'section-header') {
+        const header = document.createElement('div');
+        header.className = useGridLayout ? 'standard-form-grid-full builder-field-section-header' : 'builder-field-section-header';
+        header.textContent = safeText(field.label);
+        host.appendChild(header);
+        return;
+      }
       if (field.control === 'modular-background') {
         const bgPrefix = `${prefix}_${field.key}`;
         const background = normalizeBackgroundSettings(
@@ -3400,7 +3410,7 @@ App.builder = (function () {
   function renderDevelopModuleSettingsFields(type, settings = {}) {
     const host = byId('builderModulesSettingsFields');
     const help = byId('builderModulesTypeHelp');
-    renderDevelopModuleSettingsFieldsInto(host, type, settings, { helpNode: help, prefix: 'builderModuleField' });
+    renderDevelopModuleSettingsFieldsInto(host, type, settings, { helpNode: help, prefix: 'builderModuleField', gridMode: true });
   }
 
   function getDevelopModuleSettingsFromHost(type, options = {}) {

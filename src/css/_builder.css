@@ -696,3 +696,14 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+.builder-field-section-header {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0 0.25rem;
+  border-top: 1px solid rgba(15, 55, 90, 0.1);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #6b7d8f;
+}
