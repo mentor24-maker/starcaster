@@ -2775,14 +2775,27 @@ function MessagingTagListPreview({ settings }: { settings: Record<string, string
   const alignment = settings.alignment || "left";
   const targetPageUrl = (settings.targetPageUrl || "").trim();
   const filterParam = (settings.filterParam || "tag").trim();
+  const destinationType = settings.destinationType || (targetPageUrl ? "custom" : "none");
   const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
 
-  const currentParam = new URLSearchParams(window.location.search).get(filterParam) ?? "";
+  const activeFilterParam = destinationType === "blog-search-results" ? "tag"
+    : destinationType === "blog-post-list" ? "tag"
+    : filterParam;
+  const currentParam = new URLSearchParams(window.location.search).get(activeFilterParam) ?? "";
 
   function makeHref(slug: string) {
-    if (!targetPageUrl) return "#";
-    const sep = targetPageUrl.includes("?") ? "&" : "?";
-    return `${targetPageUrl}${sep}${filterParam}=${encodeURIComponent(slug)}`;
+    const base = targetPageUrl || (destinationType === "blog-search-results" ? "/blog-search-results"
+      : destinationType === "blog-post-list" ? "/blog" : "");
+    if (!base || destinationType === "none") return "#";
+    const encoded = encodeURIComponent(slug);
+    if (destinationType === "blog-search-results") {
+      return `${base}?search=${encoded}&tag=${encoded}`;
+    }
+    if (destinationType === "blog-post-list") {
+      return `${base}?tag=${encoded}`;
+    }
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}${filterParam}=${encoded}`;
   }
 
   if (tags.length === 0) {
