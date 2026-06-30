@@ -74,6 +74,8 @@ export type BuilderTemplateModuleType =
   | "blog-post-manager"
   | "blog-category-manager"
   | "blog-card-manager"
+  | "blog-search"
+  | "blog-search-results"
   | "messaging-topic-list"
   | "messaging-tag-list"
   | "admin-team-users"
@@ -1046,6 +1048,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-post-manager" ||
     type === "blog-category-manager" ||
     type === "blog-card-manager" ||
+    type === "blog-search" ||
+    type === "blog-search-results" ||
     type === "messaging-topic-list" ||
     type === "messaging-tag-list" ||
     type === "admin-team-users" ||

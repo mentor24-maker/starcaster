@@ -74,6 +74,8 @@ import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
+import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
+import { BuilderBlogSearchResultsModuleSettings } from "./builder-blog-search-results-module-settings";
 import { BuilderMessagingTopicListModuleSettings } from "./builder-messaging-topic-list-module-settings";
 import { BuilderMessagingTagListModuleSettings } from "./builder-messaging-tag-list-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
@@ -1149,6 +1151,52 @@ function renderModulePreview(module: BuilderTemplateModule) {
               No CRM form linked — paste a Form ID in settings.
             </div>
           ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-search") {
+    const s = module.settings;
+    const accent = s.accentColor || "#0f4f8f";
+    const radius = parseInt(s.borderRadius ?? "8", 10) || 8;
+    const placeholder = s.placeholder || "Search posts…";
+    const buttonLabel = s.buttonLabel || "Search";
+
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ flex: 1, height: 38, background: "#fff", border: "1px solid #c6d8e8", borderRadius: radius, padding: "0 12px", display: "flex", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "#aab" }}>{placeholder}</span>
+          </div>
+          <div style={{ height: 38, padding: "0 16px", background: accent, borderRadius: radius, display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>{buttonLabel}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-search-results") {
+    const thumbW = parseInt(module.settings.thumbWidth ?? "120", 10) || 120;
+    const rows = [
+      { title: "Getting Started with Starcaster", excerpt: "A walkthrough of the core concepts and first steps." },
+      { title: "Building Your First Blog", excerpt: "How to set up categories, posts, and a live feed." },
+      { title: "Advanced Module Settings", excerpt: "Deep dive into layouts, themes, and responsive design." },
+    ];
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {rows.map((row, i) => (
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", borderBottom: i < rows.length - 1 ? "1px solid #e8eef4" : "none", paddingBottom: i < rows.length - 1 ? 12 : 0 }}>
+              <div style={{ width: thumbW, flexShrink: 0, aspectRatio: "16/9", background: "#d4e3ef", borderRadius: 6 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "#18324a", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</div>
+                <div style={{ fontSize: 12, color: "#587592", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{row.excerpt}</div>
+              </div>
+              <div style={{ flexShrink: 0, fontSize: 11, color: "#8aa", whiteSpace: "nowrap", paddingTop: 2 }}>Jun 29, 2026</div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -3504,6 +3552,8 @@ export function BuilderModuleCard({
     const isBlogPostManagerModule = module.type === "blog-post-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
     const isBlogCardManagerModule = module.type === "blog-card-manager";
+    const isBlogSearchModule = module.type === "blog-search";
+    const isBlogSearchResultsModule = module.type === "blog-search-results";
     const isMessagingTopicListModule = module.type === "messaging-topic-list";
     const isMessagingTagListModule = module.type === "messaging-tag-list";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
@@ -3734,6 +3784,10 @@ export function BuilderModuleCard({
               <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCardManagerModule ? (
               <BuilderBlogCardManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogSearchModule ? (
+              <BuilderBlogSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogSearchResultsModule ? (
+              <BuilderBlogSearchResultsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isMessagingTopicListModule ? (
               <BuilderMessagingTopicListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTagListModule ? (
