@@ -1348,19 +1348,10 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="messagingTagsPage">Messaging: Tags</a></h2>
         </div>
-        <p id="messagingTagsBulkEditSummary">No tags selected.</p>
-        <form id="messagingTagsBulkEditForm" class="standard-form-grid">
-          <label for="messagingTagsBulkEditTopic">Topic</label>
-          <select id="messagingTagsBulkEditTopic" name="topic" data-messaging-topic-select="true">
-            <option value="">No Topic</option>
-          </select>
-          <label for="messagingTagsBulkEditTag">Tag</label>
-          <input id="messagingTagsBulkEditTag" name="tag" placeholder="Leave blank to keep current tag text" />
-          <div></div>
-          <button type="submit" class="btn btn-primary">Apply To Selected Tags</button>
-        </form>
+        <p id="messagingTagsBulkEditMessage" style="margin-top: 0;"></p>
+        <ul id="messagingTagsBulkEditList" class="messaging-tags-bulk-list"></ul>
         <div class="page-heading-actions" style="margin-top: 1rem;">
-          <button id="messagingTagsBulkDeleteBtn" type="button" class="btn btn-danger">Delete Selected Tags</button>
+          <button id="messagingTagsBulkConfirmBtn" type="button" class="btn btn-primary">Confirm</button>
         </div>
       </section>
       <section id="messagingManageTagsPage" class="app-page hidden">
