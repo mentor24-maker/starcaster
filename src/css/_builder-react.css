@@ -7045,6 +7045,52 @@
   margin-top: 0;
 }
 
+/* Theme palette swatches (background/color picker popups) */
+.builder-react-root .builder-theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.builder-react-root .builder-theme-swatches-labeled .builder-theme-swatch-cell {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.builder-react-root .builder-theme-swatch {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 2px solid var(--line, #cbd5e1);
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.builder-react-root .builder-theme-swatch-empty {
+  background:
+    linear-gradient(135deg, transparent 46%, #c94a4a 46%, #c94a4a 54%, transparent 54%),
+    #f5f8fb;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.builder-react-root .builder-theme-swatch-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #44627e;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.builder-react-root .builder-editor-popup-body .builder-theme-swatches {
+  margin-bottom: 2px;
+}
+
 .builder-react-root .builder-button-drop-shadow-settings {
   display: grid;
   gap: 12px;
