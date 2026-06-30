@@ -7,6 +7,11 @@ import {
   type BuilderThemePalette
 } from "./builder-theme-color-field";
 
+const DESTINATION_DEFAULTS: Record<string, string> = {
+  "blog-search-results": "/blog-search-results",
+  "blog-post-list": "/blog",
+};
+
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
@@ -26,6 +31,21 @@ export function BuilderMessagingTagListModuleSettings({
       settings: { ...current.settings, [key]: value }
     }));
   }
+
+  function setDestination(type: string) {
+    const defaultUrl = DESTINATION_DEFAULTS[type] ?? "";
+    onUpdateModule((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        destinationType: type,
+        targetPageUrl: type === "none" ? "" : (defaultUrl || current.settings.targetPageUrl || ""),
+      }
+    }));
+  }
+
+  const destinationType = s.destinationType ?? (s.targetPageUrl ? "custom" : "none");
+  const showUrlField = destinationType !== "none";
 
   return (
     <div className="builder-messaging-tag-list-settings">
@@ -99,23 +119,38 @@ export function BuilderMessagingTagListModuleSettings({
         </div>
       </div>
 
-      <BuilderSettingRow label="Post feed URL" fullWidth>
-        <input
-          type="text"
-          value={s.targetPageUrl ?? ""}
-          onChange={(e) => set("targetPageUrl", e.target.value)}
-          placeholder="/builder-preview.html?slug=blog"
-        />
+      <BuilderSettingRow label="Destination">
+        <select value={destinationType} onChange={(e) => setDestination(e.target.value)}>
+          <option value="none">No link</option>
+          <option value="blog-search-results">Blog Search Results</option>
+          <option value="blog-post-list">Blog Post List</option>
+          <option value="custom">Custom</option>
+        </select>
       </BuilderSettingRow>
 
-      <BuilderSettingRow label="URL param" fullWidth>
-        <input
-          type="text"
-          value={s.filterParam ?? "tag"}
-          onChange={(e) => set("filterParam", e.target.value)}
-          placeholder="tag"
-        />
-      </BuilderSettingRow>
+      {showUrlField && (
+        <>
+          <BuilderSettingRow label="Page URL" fullWidth>
+            <input
+              type="text"
+              value={s.targetPageUrl ?? ""}
+              onChange={(e) => set("targetPageUrl", e.target.value)}
+              placeholder={DESTINATION_DEFAULTS[destinationType] ?? "/blog-search-results"}
+            />
+          </BuilderSettingRow>
+
+          {destinationType === "custom" && (
+            <BuilderSettingRow label="URL param" fullWidth>
+              <input
+                type="text"
+                value={s.filterParam ?? "tag"}
+                onChange={(e) => set("filterParam", e.target.value)}
+                placeholder="tag"
+              />
+            </BuilderSettingRow>
+          )}
+        </>
+      )}
     </div>
   );
 }
