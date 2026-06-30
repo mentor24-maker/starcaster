@@ -2003,7 +2003,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                 case "featured_image":
                   if (isSideBySide || !imageUrl) return null;
                   return (
-                    <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", overflow: "hidden", aspectRatio: aspectRatioMap[tplAspect] ?? "16/9" }}>
+                    <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", marginTop: "-1.125rem", overflow: "hidden", aspectRatio: aspectRatioMap[tplAspect] ?? "16/9" }}>
                       <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     </div>
                   );
@@ -2756,7 +2756,7 @@ function MessagingTopicListPreview({ settings }: { settings: Record<string, stri
 }
 
 function MessagingTagListPreview({ settings }: { settings: Record<string, string> }) {
-  const [tags, setTags] = useState<Array<{ id: number; tag: string }>>([]);
+  const [tags, setTags] = useState<Array<{ id: number; tag: string; importance?: number }>>([]);
 
   useEffect(() => {
     fetch("/api/messaging/tags", { credentials: "include", headers: getCrmProjectHeaders() })
@@ -2808,8 +2808,13 @@ function MessagingTagListPreview({ settings }: { settings: Record<string, string
     );
   }
 
+  // Sort by importance desc (most important first); fall back to alphabetical within same importance.
+  // When maxTags is set, this ensures the N most important tags are displayed.
+  const sorted = maxTags > 0
+    ? [...tags].sort((a, b) => ((b.importance ?? 0) - (a.importance ?? 0)) || a.tag.localeCompare(b.tag))
+    : tags;
   // Assign a pseudo-weight (1–5) by alphabetic hash so the cloud looks varied
-  const allWithWeight = tags.map((t, i) => ({ ...t, slug: textToSlug(t.tag), weight: ((i * 7 + t.tag.length) % 5) + 1 }));
+  const allWithWeight = sorted.map((t, i) => ({ ...t, slug: textToSlug(t.tag), weight: ((i * 7 + t.tag.length) % 5) + 1 }));
   const withWeight = maxTags > 0 ? allWithWeight.slice(0, maxTags) : allWithWeight;
   const maxWeight = 5;
 
