@@ -13030,6 +13030,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: 16px;
   align-items: start;
 }
+.builder-react-root .builder-themes-col-stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
 .builder-react-root .builder-themes-col {
   background: #fff;
   border: 1px solid var(--border-light);
