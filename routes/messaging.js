@@ -1053,8 +1053,6 @@ async function handle(req, res, pathname, method) {
   if (messagingTagIdMatch && (requestMethod === 'PATCH' || requestMethod === 'PUT')) {
     const id = Number(messagingTagIdMatch[1]);
     const body = await parseJsonBody(req);
-    const tag = String(body?.tag || '').trim();
-    if (!tag) return sendErr(res, 400, 'tag is required', { code: 'VALIDATION_ERROR' }), true;
     const result = await updateMessagingTag(id, body || {}, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { tag: result.data }), true;
