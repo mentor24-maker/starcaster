@@ -3136,26 +3136,20 @@ function BlogCardManagerPreview() {
 
           <ul className="bcm-row-list">
             {tpl.rows.map((row, idx) => (
-              <li key={row.id} className="bcm-row-card">
-                {/* Row header: arrows · col selector · delete */}
-                <div className="bcm-row-header">
-                  <div className="bcm-row-arrows">
-                    <button type="button" className="bcm-arrow-btn" disabled={idx === 0} onClick={() => moveRow(idx, -1)} aria-label="Move row up">▲</button>
-                    <button type="button" className="bcm-arrow-btn" disabled={idx === tpl.rows.length - 1} onClick={() => moveRow(idx, 1)} aria-label="Move row down">▼</button>
-                  </div>
-                  <span className="bcm-col-label">Columns:</span>
-                  <div className="bcm-btn-group">
-                    {([1, 2, 3] as const).map((n) => (
-                      <button key={n} type="button" className={`bcm-col-btn${row.cols === n ? " is-on" : ""}`} onClick={() => setRowCols(idx, n)}>{n}</button>
-                    ))}
-                  </div>
-                  <button type="button" className="bcm-delete-btn" onClick={() => removeRow(idx)} aria-label="Delete row">× Delete</button>
+              <li key={row.id} className="bcm-row-item">
+                <div className="bcm-row-arrows">
+                  <button type="button" className="bcm-arrow-btn" disabled={idx === 0} onClick={() => moveRow(idx, -1)} aria-label="Move row up">▲</button>
+                  <button type="button" className="bcm-arrow-btn" disabled={idx === tpl.rows.length - 1} onClick={() => moveRow(idx, 1)} aria-label="Move row down">▼</button>
                 </div>
-
-                {/* Slot selects */}
-                <div className="bcm-row-slots" style={{ gridTemplateColumns: `repeat(${row.cols}, 1fr)` }}>
+                <span className="bcm-col-label">Cols:</span>
+                <div className="bcm-btn-group">
+                  {([1, 2, 3] as const).map((n) => (
+                    <button key={n} type="button" className={`bcm-col-btn${row.cols === n ? " is-on" : ""}`} onClick={() => setRowCols(idx, n)}>{n}</button>
+                  ))}
+                </div>
+                <div className="bcm-row-slots">
                   {row.slots.slice(0, row.cols).map((slot, si) => (
-                    <select key={si} style={sel} value={slot ?? ""} onChange={(e) => setSlot(idx, si, e.target.value)}>
+                    <select key={si} className="bcm-slot-select" value={slot ?? ""} onChange={(e) => setSlot(idx, si, e.target.value)}>
                       <option value="">(empty)</option>
                       {ALL_CARD_ELEMENTS.map((id) => (
                         <option key={id} value={id}>{CARD_ELEMENT_LABELS[id]}</option>
@@ -3163,6 +3157,14 @@ function BlogCardManagerPreview() {
                     </select>
                   ))}
                 </div>
+                <button type="button" className="bcm-delete-icon-btn" onClick={() => removeRow(idx)} aria-label="Delete row">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                    <path d="M10 11v6M14 11v6"/>
+                    <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                  </svg>
+                </button>
               </li>
             ))}
           </ul>
