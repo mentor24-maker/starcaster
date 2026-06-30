@@ -40,7 +40,8 @@ import {
   getSocialSharePlatformEnabled,
   type SocialSharePlatformId
 } from "@/components/social-share-module";
-import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
+import { BuilderAlignmentIconGroup, type BuilderModuleAlignment } from "./builder-alignment-icon-group";
+import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { MerchModuleEditor } from "./builder-merch-module-editor";
 import { BuilderCodeEmbed } from "./builder-code-embed";
@@ -2905,31 +2906,6 @@ function parseNavPadding(navPadding: string): { v: number; h: number } {
   return { v, h };
 }
 
-function NavColorField({
-  label,
-  value,
-  defaultColor,
-  themeColors = [],
-  onChange
-}: {
-  label: string;
-  value: string;
-  defaultColor: string;
-  themeColors?: BuilderThemePalette;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <BuilderThemeColorFieldWithDefault
-      defaultColor={defaultColor}
-      dialogLabel={label}
-      label={label}
-      themeColors={themeColors}
-      value={value}
-      onChange={onChange}
-    />
-  );
-}
-
 function NavModuleEditor({
   module,
   onUpdateModule,
@@ -2985,54 +2961,23 @@ function NavModuleEditor({
           onToggle={() => setStyleCollapsed((c) => !c)}
         />
         {!styleCollapsed && (
-          <div className="builder-nav-style-grid">
-            <div className="builder-nav-four-row">
-              <BuilderInlineNumberSelect
-                label="Font"
-                value={module.settings.navFontSize ?? "16"}
-                min={10} max={48} fallback="16"
-                onChange={(v) => updateSetting("navFontSize", v)}
-              />
-              <BuilderInlineNumberSelect
-                label="Radius"
-                value={module.settings.navBorderRadius ?? "0"}
-                min={0} max={48} fallback="0"
-                onChange={(v) => updateSetting("navBorderRadius", v)}
-              />
-              <BuilderInlineNumberSelect
-                label="Pad V"
-                value={String(padV)}
-                min={0} max={40} fallback="8"
-                onChange={(v) => updatePadding(Number(v), padH)}
-              />
-              <BuilderInlineNumberSelect
-                label="Pad H"
-                value={String(padH)}
-                min={0} max={60} fallback="12"
-                onChange={(v) => updatePadding(padV, Number(v))}
-              />
-              <BuilderInlineNumberSelect
-                label="Margin V"
-                value={module.settings.navMarginV ?? "0"}
-                min={0} max={80} fallback="0"
-                onChange={(v) => updateSetting("navMarginV", v)}
-              />
-            </div>
-            <BuilderSettingRow label="Bold" fullWidth>
-              <input type="checkbox" checked={module.settings.navBold === "true"} onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")} />
-            </BuilderSettingRow>
-            <BuilderSettingRow label="Alignment" fullWidth>
-              <select
-                value={module.settings.navAlignment ?? "center"}
-                onChange={(e) => updateSetting("navAlignment", e.target.value)}
-              >
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-            </BuilderSettingRow>
-            <div className="builder-nav-dir-levels-row">
-              <BuilderSettingRow label="Direction" fullWidth>
+          <div className="builder-nav-style-body">
+            <BuilderModuleFieldStrip>
+              <BuilderModuleField label="Font" width="num">
+                <BuilderNumberSelectControl
+                  value={module.settings.navFontSize ?? "16"}
+                  min={10} max={48} fallback="16"
+                  onChange={(v) => updateSetting("navFontSize", v)}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Bold" width="check">
+                <input
+                  type="checkbox"
+                  checked={module.settings.navBold === "true"}
+                  onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Direction" width="select-md">
                 <select
                   value={module.settings.navDirection ?? "horizontal"}
                   onChange={(e) => updateSetting("navDirection", e.target.value)}
@@ -3040,29 +2985,91 @@ function NavModuleEditor({
                   <option value="horizontal">Horizontal</option>
                   <option value="vertical">Vertical</option>
                 </select>
-              </BuilderSettingRow>
-              <BuilderSettingRow label="Levels" fullWidth>
-                <select
+              </BuilderModuleField>
+              <BuilderModuleField label="Levels" width="num">
+                <BuilderNumberSelectControl
                   value={module.settings.navLevels ?? "2"}
-                  onChange={(e) => updateSetting("navLevels", e.target.value)}
-                >
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                </select>
-              </BuilderSettingRow>
-            </div>
-            <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" themeColors={themeColors} onChange={(v) => updateSetting("navColor", v)} />
-            <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" themeColors={themeColors} onChange={(v) => updateSetting("navHoverColor", v)} />
-            <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" themeColors={themeColors} onChange={(v) => updateSetting("navHoverBackground", v)} />
-            <BuilderBackgroundControls
-              label="Background"
-              background={getModuleBackgroundSettings(module.settings)}
-              onChange={onUpdateModuleBackground}
-              themeBackgroundColor={themeBackgroundColor}
+                  min={1} max={3} fallback="2"
+                  onChange={(v) => updateSetting("navLevels", v)}
+                />
+              </BuilderModuleField>
+            </BuilderModuleFieldStrip>
+
+            <BuilderModuleFieldStrip>
+              <BuilderModuleField label="Alignment" width="align">
+                <BuilderAlignmentIconGroup
+                  value={(module.settings.navAlignment ?? "center") as BuilderModuleAlignment}
+                  onChange={(alignment) => updateSetting("navAlignment", alignment)}
+                  ariaLabel="Navigation alignment"
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Pad V" width="num">
+                <BuilderNumberSelectControl
+                  value={String(padV)} min={0} max={40} fallback="8"
+                  onChange={(v) => updatePadding(Number(v), padH)}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Pad H" width="num">
+                <BuilderNumberSelectControl
+                  value={String(padH)} min={0} max={60} fallback="12"
+                  onChange={(v) => updatePadding(padV, Number(v))}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Radius" width="num">
+                <BuilderNumberSelectControl
+                  value={module.settings.navBorderRadius ?? "0"}
+                  min={0} max={48} fallback="0"
+                  onChange={(v) => updateSetting("navBorderRadius", v)}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="H Margin" width="num">
+                <BuilderNumberSelectControl
+                  value={module.settings.navMarginH ?? "0"}
+                  min={0} max={80} fallback="0"
+                  onChange={(v) => updateSetting("navMarginH", v)}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="V Margin" width="num">
+                <BuilderNumberSelectControl
+                  value={module.settings.navMarginV ?? "0"}
+                  min={0} max={80} fallback="0"
+                  onChange={(v) => updateSetting("navMarginV", v)}
+                />
+              </BuilderModuleField>
+            </BuilderModuleFieldStrip>
+
+            <BuilderThemeColorSettingRow
+              label="Text"
+              fallback="#163a5e"
               themeColors={themeColors}
-              themePrimaryColor={themePrimaryColor}
+              value={module.settings.navColor ?? ""}
+              onChange={(v) => updateSetting("navColor", v)}
             />
+            <BuilderThemeColorSettingRow
+              label="Hover text"
+              fallback="#0a8fc4"
+              themeColors={themeColors}
+              value={module.settings.navHoverColor ?? ""}
+              onChange={(v) => updateSetting("navHoverColor", v)}
+            />
+            <BuilderThemeColorSettingRow
+              label="Hover bg"
+              fallback="#d0f0fb"
+              themeColors={themeColors}
+              value={module.settings.navHoverBackground ?? ""}
+              onChange={(v) => updateSetting("navHoverBackground", v)}
+            />
+            <details className="hanging-details">
+              <summary>Background</summary>
+              <BuilderBackgroundControls
+                label="Background"
+                background={getModuleBackgroundSettings(module.settings)}
+                onChange={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+            </details>
           </div>
         )}
       </div>
@@ -3075,16 +3082,18 @@ function NavModuleEditor({
         />
         {!linksCollapsed && (
           <>
-            <BuilderSettingRow label="Link Sizing" fullWidth>
-              <select
-                value={module.settings.navItemSizing ?? "auto"}
-                onChange={(e) => updateSetting("navItemSizing", e.target.value)}
-              >
-                <option value="auto">Auto (fit content)</option>
-                <option value="equal">Equal width</option>
-                <option value="custom">Custom per link</option>
-              </select>
-            </BuilderSettingRow>
+            <BuilderModuleFieldStrip>
+              <BuilderModuleField label="Sizing" width="select-md">
+                <select
+                  value={module.settings.navItemSizing ?? "auto"}
+                  onChange={(e) => updateSetting("navItemSizing", e.target.value)}
+                >
+                  <option value="auto">Auto</option>
+                  <option value="equal">Equal</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </BuilderModuleField>
+            </BuilderModuleFieldStrip>
             <div className="builder-nav-items">
               {items.map((item, index) => {
                 const isCustomSizing = module.settings.navItemSizing === "custom";
@@ -3120,15 +3129,15 @@ function NavModuleEditor({
                       )}
                     </div>
                     <div className="builder-nav-item-actions">
-                      <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-                      <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-                      <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
+                      <button type="button" className="builder-icon-button" aria-label="Move Up" onClick={() => moveItem(item.id, -1)}>↑</button>
+                      <button type="button" className="builder-icon-button" aria-label="Move Down" onClick={() => moveItem(item.id, 1)}>↓</button>
+                      <button type="button" className="builder-icon-button builder-icon-button-danger" aria-label="Delete" onClick={() => removeItem(item.id)}>✕</button>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <button type="button" className="secondary-button" onClick={addItem}>+ Add Link</button>
+            <button type="button" className="secondary-button builder-nav-add-link-button" onClick={addItem}>+ Add Link</button>
           </>
         )}
       </div>
