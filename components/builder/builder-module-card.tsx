@@ -1965,6 +1965,7 @@ type NavItem = {
   label: string;
   href: string;
   parentId?: string;
+  width?: string;
 };
 
 type HeadlineItem = HeadlineRotatorEntry;
@@ -1986,8 +1987,9 @@ function parseNavItems(settings: Record<string, string>): NavItem[] {
       return {
         id: String(raw.id || `nav-${index + 1}`),
         label: String(raw.label || ""),
-        href: String(raw.href || ""),
-        ...(raw.parentId ? { parentId: String(raw.parentId) } : {})
+        href: String(raw.href || raw.url || ""),
+        ...(raw.parentId ? { parentId: String(raw.parentId) } : {}),
+        ...(raw.width ? { width: String(raw.width) } : {})
       };
     });
   } catch {
@@ -3050,6 +3052,16 @@ function NavModuleEditor({
                 </select>
               </BuilderSettingRow>
             </div>
+            <BuilderSettingRow label="Link Sizing" fullWidth>
+              <select
+                value={module.settings.navItemSizing ?? "auto"}
+                onChange={(e) => updateSetting("navItemSizing", e.target.value)}
+              >
+                <option value="auto">Auto (fit content)</option>
+                <option value="equal">Equal width</option>
+                <option value="custom">Custom (set width per link)</option>
+              </select>
+            </BuilderSettingRow>
             <NavColorField label="Text" value={module.settings.navColor ?? ""} defaultColor="#163a5e" themeColors={themeColors} onChange={(v) => updateSetting("navColor", v)} />
             <NavColorField label="Hover text" value={module.settings.navHoverColor ?? ""} defaultColor="#0a8fc4" themeColors={themeColors} onChange={(v) => updateSetting("navHoverColor", v)} />
             <NavColorField label="Hover bg" value={module.settings.navHoverBackground ?? ""} defaultColor="#d0f0fb" themeColors={themeColors} onChange={(v) => updateSetting("navHoverBackground", v)} />
@@ -3094,6 +3106,15 @@ function NavModuleEditor({
                       </select>
                       <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
                       <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
+                      <input
+                        type="text"
+                        className="builder-nav-item-width"
+                        value={item.width ?? ""}
+                        disabled={Boolean(item.parentId)}
+                        onChange={(e) => updateItem(item.id, { width: e.target.value })}
+                        placeholder={item.parentId ? "—" : "Width (e.g. 140px)"}
+                        title={module.settings.navItemSizing === "custom" ? "Width applied while Link Sizing is set to Custom" : "Set Link Sizing to Custom (above) to apply this width"}
+                      />
                     </div>
                     <div className="builder-nav-item-actions">
                       <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>

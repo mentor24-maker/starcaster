@@ -4598,14 +4598,15 @@ function NavigationModulePreview({
   module: import("@/lib/builder-template").BuilderTemplateModule;
   previewMode?: boolean;
 }) {
-  const variant = module.settings.variant ?? "";
   const pathname = usePathname();
   const activePath = normalizeNavPath(pathname || "/");
 
-  let navItems: { href: string; label: string; id?: string; parentId?: string }[] = [];
+  let navItems: { href: string; label: string; id?: string; parentId?: string; width?: string }[] = [];
   try {
     const parsed = JSON.parse(module.settings.navItems || "[]");
-    navItems = Array.isArray(parsed) ? parsed : [];
+    navItems = Array.isArray(parsed)
+      ? parsed.map((item) => ({ ...item, href: item?.href || item?.url || "" }))
+      : [];
   } catch {
     navItems = [];
   }
@@ -4626,10 +4627,13 @@ function NavigationModulePreview({
   const flexAlign = rawAlignment === "left" ? "flex-start" : rawAlignment === "right" ? "flex-end" : "center";
   const isVertical = module.settings.navDirection === "vertical";
   const navLevels = Number.parseInt(module.settings.navLevels ?? "2", 10) || 2;
+  const itemSizing = module.settings.navItemSizing === "custom" || module.settings.navItemSizing === "equal"
+    ? module.settings.navItemSizing
+    : "auto";
 
   return (
     <nav
-      className={`site-nav builder-preview-nav-${variant || "site-nav"}${isVertical ? " site-nav--vertical" : ""}`}
+      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}`}
       aria-label="Main navigation"
       style={
         {
@@ -4653,6 +4657,7 @@ function NavigationModulePreview({
         const isActive = normalizeNavPath(item.href || "#") === activePath;
         const itemId = item.id ?? `${href}-${item.label}`;
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
+        const itemWidth = itemSizing === "custom" && item.width ? item.width : undefined;
 
         if (children.length === 0) {
           return (
@@ -4661,6 +4666,7 @@ function NavigationModulePreview({
               className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
               href={href}
               key={itemId}
+              style={itemWidth ? { flex: `0 0 ${itemWidth}`, width: itemWidth } : undefined}
             >
               {item.label}
             </Link>
@@ -4668,7 +4674,11 @@ function NavigationModulePreview({
         }
 
         return (
-          <div key={itemId} className="site-nav-dropdown">
+          <div
+            key={itemId}
+            className="site-nav-dropdown"
+            style={itemWidth ? { flex: `0 0 ${itemWidth}`, width: itemWidth } : undefined}
+          >
             <Link
               aria-current={isActive ? "page" : undefined}
               className={`site-nav-link site-nav-dropdown-trigger${isActive ? " site-nav-link-active" : ""}`}
