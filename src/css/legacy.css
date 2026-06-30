@@ -12453,19 +12453,20 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   flex-wrap: nowrap;
 }
 
+.site-nav:not(.site-nav--vertical) > .site-nav-link,
+.site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Auto/custom flex modes: reset the equal-grid 100% width — must come after the rule above */
 .site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-link,
 .site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-dropdown,
 .site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-link,
 .site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-dropdown {
   flex: 0 0 auto;
   width: auto;
-}
-
-.site-nav:not(.site-nav--vertical) > .site-nav-link,
-.site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
 }
 
 .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
