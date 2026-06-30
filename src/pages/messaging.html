@@ -1305,6 +1305,16 @@
               <select id="messagingTagTopic" name="topic" data-messaging-topic-select="true">
                 <option value="">No Topic</option>
               </select>
+
+              <label for="messagingTagImportance">Importance</label>
+              <select id="messagingTagImportance" name="importance">
+                <option value="">Importance</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
             
             <div></div>
               <button type="submit" class="btn btn-primary">Save Tag</button>
@@ -1321,6 +1331,17 @@
                     <option value="">All Topics</option>
                   </select>
                 </th>
+                <th>
+                  <select id="messagingTagsImportanceFilter" aria-label="Filter importance">
+                    <option value="">All Importance</option>
+                    <option value="unset">Unset</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                </th>
                 <th></th>
                 <th></th>
                 <th class="actions-col">
@@ -1335,6 +1356,7 @@
                 <th></th>
                 <th id="messagingTagsSortBtn">Tag</th>
                 <th id="messagingTagsSortTopicBtn">Topic</th>
+                <th id="messagingTagsSortImportanceBtn">Importance</th>
                 <th id="messagingTagsSortCreatedBtn">Created</th>
                 <th id="messagingTagsSortUpdatedBtn">Updated</th>
                 <th class="actions-col">Actions</th>
@@ -1350,9 +1372,25 @@
         </div>
         <p id="messagingTagsBulkEditMessage" style="margin-top: 0;"></p>
         <ul id="messagingTagsBulkEditList" class="messaging-tags-bulk-list"></ul>
-        <div class="page-heading-actions" style="margin-top: 1rem;">
-          <button id="messagingTagsBulkConfirmBtn" type="button" class="btn btn-primary">Confirm</button>
-        </div>
+        <form id="messagingTagsBulkEditForm" class="standard-form-grid" style="margin-top: 1rem;">
+          <label for="messagingTagsBulkEditTopicSelect">Topic</label>
+          <select id="messagingTagsBulkEditTopicSelect" name="topic" data-messaging-topic-select="true">
+            <option value="">No Topic</option>
+          </select>
+
+          <label for="messagingTagsBulkEditImportanceSelect">Importance</label>
+          <select id="messagingTagsBulkEditImportanceSelect" name="importance">
+            <option value="">No Change</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+
+          <div></div>
+          <button type="submit" class="btn btn-primary">Apply To Selected Tags</button>
+        </form>
       </section>
       <section id="messagingManageTagsPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -1388,6 +1426,16 @@
             <label for="messagingTagEditTopic">Topic</label>
             <select id="messagingTagEditTopic" name="topic" data-messaging-topic-select="true">
               <option value="">No Topic</option>
+            </select>
+
+            <label for="messagingTagEditImportance">Importance</label>
+            <select id="messagingTagEditImportance" name="importance">
+              <option value="">Importance</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
             </select>
           
           <div></div>
