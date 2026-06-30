@@ -1,5 +1,5 @@
 /**
- * Stub for normie's player portal auth form (no player portal in starcaster;
+ * Stub for the player portal auth form (no player portal in starcaster;
  * see BUILDER_CAPABILITIES.playerPortal). Keeps the pure settings helpers so
  * the module editor still round-trips settings; the form renders a placeholder.
  */

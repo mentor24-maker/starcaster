@@ -57,7 +57,7 @@ export function PlayerGameSpeechBubbleHost() {
     }
 
     return () => {
-      window.dispatchEvent(new CustomEvent("normie-player-game-speech-bubble-end"));
+      window.dispatchEvent(new CustomEvent("starcaster-player-game-speech-bubble-end"));
     };
   }, [activeModule]);
 

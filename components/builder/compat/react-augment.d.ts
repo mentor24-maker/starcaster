@@ -1,5 +1,5 @@
 /**
- * React 19 type features used by vendored normie components, backfilled for
+ * React 19 type features used by the ported Builder components, backfilled for
  * the React 18 type definitions starcaster builds against.
  */
 import 'react';

@@ -1,6 +1,5 @@
 /**
- * Starcaster replacement for normie's lib/use-gallery-media-library.
- * Same hook signature, backed by GET /api/assets (project-scoped via
+ * Gallery media library hook, backed by GET /api/assets (project-scoped via
  * App.api) with filtering/sorting applied client-side.
  */
 

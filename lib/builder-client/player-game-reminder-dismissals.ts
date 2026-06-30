@@ -1,4 +1,4 @@
-export const DISMISSED_REMINDERS_STORAGE_KEY = "normie_dismissed_game_reminders";
+export const DISMISSED_REMINDERS_STORAGE_KEY = "starcaster_dismissed_game_reminders";
 
 export function readDismissedReminderIds(): string[] {
   if (typeof window === "undefined") {

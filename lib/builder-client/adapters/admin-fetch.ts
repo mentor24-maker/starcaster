@@ -1,7 +1,6 @@
 /**
- * Starcaster replacement for normie's lib/admin-fetch.
- * Handles both error envelopes: normie `{ error: string }` and
- * starcaster `{ ok: false, error: { message, code } }`.
+ * Admin fetch helpers. Handles both error envelope shapes:
+ * `{ error: string }` and `{ ok: false, error: { message, code } }`.
  */
 
 type AdminApiPayload = {

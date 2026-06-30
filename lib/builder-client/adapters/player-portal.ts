@@ -1,7 +1,6 @@
 /**
- * Type/constant subset of normie's lib/player-portal needed by the
- * builder's game-trigger libs. The full player portal is not part of
- * starcaster; see adapters/capabilities.ts.
+ * Type/constant subset for player-portal used by the builder's game-trigger libs.
+ * The full player portal is not part of starcaster; see adapters/capabilities.ts.
  */
 import type { BuilderTemplateModule } from '../builder-template';
 import type { GameAudience } from '../game-audience';

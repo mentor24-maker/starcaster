@@ -12,12 +12,12 @@ import {
 } from "./builder-utils";
 
 export function getImageEffectClassName(effect: string | undefined) {
-  if (effect === "bounce") return " normie-effect-bounce";
-  if (effect === "fast-bounce") return " normie-effect-fast-bounce";
-  if (effect === "big-bounce") return " normie-effect-big-bounce";
-  if (effect === "spin") return " normie-effect-spin";
-  if (effect === "cruise") return " normie-effect-cruise";
-  if (effect === "tumbleweed") return " normie-effect-tumbleweed";
+  if (effect === "bounce") return " starcaster-effect-bounce";
+  if (effect === "fast-bounce") return " starcaster-effect-fast-bounce";
+  if (effect === "big-bounce") return " starcaster-effect-big-bounce";
+  if (effect === "spin") return " starcaster-effect-spin";
+  if (effect === "cruise") return " starcaster-effect-cruise";
+  if (effect === "tumbleweed") return " starcaster-effect-tumbleweed";
   return "";
 }
 
@@ -96,7 +96,7 @@ export function BuilderImagePreview({
       className={`builder-preview-image-shell${floating ? " builder-preview-image-shell-overlay" : ""}`}
       style={shellStyle}
     >
-      {motionClip ? <div className="normie-effect-motion-clip">{figure}</div> : figure}
+      {motionClip ? <div className="starcaster-effect-motion-clip">{figure}</div> : figure}
     </div>
   );
 }

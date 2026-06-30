@@ -1,5 +1,5 @@
 export const ADMIN_SESSION_EXPIRED_CODE = "ADMIN_SESSION_EXPIRED";
-export const ADMIN_SESSION_EXPIRED_EVENT = "normie-admin-session-expired";
+export const ADMIN_SESSION_EXPIRED_EVENT = "starcaster-admin-session-expired";
 
 export function isAdminApiRequestUrl(url: string) {
   return url.includes("/api/admin/") || url.includes("/api/import");

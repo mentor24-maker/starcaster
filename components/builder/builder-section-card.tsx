@@ -362,7 +362,7 @@ export function BuilderSectionCard({
 
   function readDragPayload(event: DragEvent<HTMLElement>) {
     try {
-      const raw = event.dataTransfer.getData("application/normie-builder-module");
+      const raw = event.dataTransfer.getData("application/starcaster-builder-module");
       return raw ? (JSON.parse(raw) as { moduleId: string; sourceSectionId: string; sourceColumn: string }) : null;
     } catch {
       return null;
@@ -671,7 +671,7 @@ export function BuilderSectionCard({
 
                                     event.dataTransfer.effectAllowed = "move";
                                     event.dataTransfer.setData(
-                                      "application/normie-builder-module",
+                                      "application/starcaster-builder-module",
                                       encodeDragPayload(module.id, column)
                                     );
                                   }}

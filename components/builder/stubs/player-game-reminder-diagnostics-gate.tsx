@@ -1,6 +1,5 @@
 /**
- * Stub for normie's reminder diagnostics HUD (debug tooling tied to the
- * normie player session model).
+ * Stub for the reminder diagnostics HUD (debug tooling; no player session model in starcaster).
  */
 import type { PlayerGameReminderDiagnostics } from "@/lib/player-game-reminders";
 

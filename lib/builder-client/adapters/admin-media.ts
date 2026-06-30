@@ -1,7 +1,6 @@
 /**
- * Starcaster replacement for normie's lib/admin-media.
- * The normie original adds node:fs directory listing for its API route;
- * the builder UI only needs the shared types/helpers.
+ * Admin media types and helpers for the Builder UI.
+ * Only the shared types/helpers are needed client-side; directory listing is handled server-side.
  */
 export type { AdminMediaItem, AdminMediaKind } from '../admin-media-shared';
 export {

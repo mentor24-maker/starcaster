@@ -16,7 +16,7 @@ type BuilderFloatingImageRuntimeProps = {
   previewMode?: boolean;
   gamePlayContext?: ModuleGamePlayContext;
   /**
-   * Overlay-flow row mascot (e.g. home Bouncing Normie): stay inline on the page;
+   * Overlay-flow row mascot (e.g. a bouncing character anchored to a row): stay inline on the page;
    * do not auto-fire the full-screen host on load (game events still can).
    */
   overlayFlowDecor?: boolean;

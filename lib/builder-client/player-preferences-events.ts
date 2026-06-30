@@ -1,5 +1,5 @@
-export const PLAYER_PREFERENCES_UPDATED_EVENT = "normie-player-preferences-updated";
-const PLAYER_PREFERENCES_UPDATED_STORAGE_KEY = "normie-player-preferences-updated";
+export const PLAYER_PREFERENCES_UPDATED_EVENT = "starcaster-player-preferences-updated";
+const PLAYER_PREFERENCES_UPDATED_STORAGE_KEY = "starcaster-player-preferences-updated";
 
 export function dispatchPlayerPreferencesUpdated(): void {
   if (typeof window === "undefined") {

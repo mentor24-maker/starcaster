@@ -66,14 +66,14 @@ export function PlayerGameEventBackdrop() {
 
     window.addEventListener(PLAYER_GAME_FLOATING_IMAGE_EVENT, onFloatingImage);
     window.addEventListener(PLAYER_GAME_SPEECH_BUBBLE_EVENT, onSpeechBubble);
-    window.addEventListener("normie-player-game-floating-image-end", onFloatingImageEnd);
-    window.addEventListener("normie-player-game-speech-bubble-end", onSpeechBubbleEnd);
+    window.addEventListener("starcaster-player-game-floating-image-end", onFloatingImageEnd);
+    window.addEventListener("starcaster-player-game-speech-bubble-end", onSpeechBubbleEnd);
 
     return () => {
       window.removeEventListener(PLAYER_GAME_FLOATING_IMAGE_EVENT, onFloatingImage);
       window.removeEventListener(PLAYER_GAME_SPEECH_BUBBLE_EVENT, onSpeechBubble);
-      window.removeEventListener("normie-player-game-floating-image-end", onFloatingImageEnd);
-      window.removeEventListener("normie-player-game-speech-bubble-end", onSpeechBubbleEnd);
+      window.removeEventListener("starcaster-player-game-floating-image-end", onFloatingImageEnd);
+      window.removeEventListener("starcaster-player-game-speech-bubble-end", onSpeechBubbleEnd);
     };
   }, []);
 

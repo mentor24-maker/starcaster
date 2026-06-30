@@ -78,7 +78,7 @@ export function PlayerGameFloatingImageHost() {
     }
 
     return () => {
-      window.dispatchEvent(new CustomEvent("normie-player-game-floating-image-end"));
+      window.dispatchEvent(new CustomEvent("starcaster-player-game-floating-image-end"));
     };
   }, [activeModule]);
 

@@ -1,5 +1,5 @@
 /**
- * Stub for normie's poll deep-dive overlay content (blog/youtube/related
+ * Stub for poll deep-dive overlay content (blog/youtube/related
  * polls). BUILDER_CAPABILITIES.pollDeepDive is off in starcaster, so the
  * previous-results runtime only ever renders the "empty" kind.
  */
