@@ -1308,13 +1308,38 @@
         <div class="table-wrap" style="margin-top: 1rem;">
           <table>
             <thead>
+              <tr class="table-filter-row">
+                <th><input id="messagingTagsSelectAllVisible" type="checkbox" aria-label="Select all visible tags" /></th>
+                <th><input id="messagingTagsTextFilter" placeholder="Filter tag" /></th>
+                <th></th>
+                <th></th>
+                <th class="actions-col"><button id="messagingTagsFilterActionBtn" type="button" class="btn tiny-btn">Filter</button></th>
+              </tr>
               <tr>
+                <th></th>
                 <th id="messagingTagsSortBtn">Tag</th>
+                <th id="messagingTagsSortCreatedBtn">Created</th>
+                <th id="messagingTagsSortUpdatedBtn">Updated</th>
                 <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="messagingTagsTable"></tbody>
           </table>
+        </div>
+      </section>
+      <section id="messagingTagsBulkEditPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2><a href="#" class="page-heading-back-link" data-back-page="messagingTagsPage">Messaging: Tags</a></h2>
+        </div>
+        <p id="messagingTagsBulkEditSummary">No tags selected.</p>
+        <form id="messagingTagsBulkEditForm" class="standard-form-grid">
+          <label for="messagingTagsBulkEditTag">Tag</label>
+          <input id="messagingTagsBulkEditTag" name="tag" placeholder="Leave blank to keep current tag text" />
+          <div></div>
+          <button type="submit" class="btn btn-primary">Apply To Selected Tags</button>
+        </form>
+        <div class="page-heading-actions" style="margin-top: 1rem;">
+          <button id="messagingTagsBulkDeleteBtn" type="button" class="btn btn-danger">Delete Selected Tags</button>
         </div>
       </section>
       <section id="messagingManageTagsPage" class="app-page hidden">
