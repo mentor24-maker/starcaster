@@ -659,6 +659,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "blog-card-manager-standard",
+    type: "blog-card-manager",
+    group: "blog",
+    label: "Card Manager (Admin)",
+    icon: "▭",
+    description: "Visual designer for the blog post card template — element order, visibility, layout, and style. Saves project-wide. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "messaging-topic-list-standard",
     type: "messaging-topic-list",
     group: "blog",
