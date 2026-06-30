@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   builderThemeToCrmPalette,
+  buildBuilderThemeStyles,
   mergeCrmThemePalette,
+  type BuilderThemeStyles,
   type CrmThemePalette,
 } from "@/components/builder/builder-utils";
 import {
@@ -160,6 +162,7 @@ type Props = { projectId: string };
 export function BuilderPublicSitePage({ projectId }: Props) {
   const [page, setPage] = useState<SitePage | null>(null);
   const [themePalette, setThemePalette] = useState<CrmThemePalette | undefined>(undefined);
+  const [themeStyles, setThemeStyles] = useState<BuilderThemeStyles | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [isAdminNav, setIsAdminNav] = useState(false);
@@ -239,34 +242,40 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   useEffect(() => {
     if (!page) {
       setThemePalette(undefined);
+      setThemeStyles(undefined);
       return;
     }
     const fromPage = pageThemePalette(page);
-    const hasColors = Boolean(
+    const themeId = String(page.themeId || "").trim();
+    const hasPageColors = Boolean(
       fromPage.primaryColor ||
       fromPage.secondaryColor ||
       fromPage.backgroundColor ||
       fromPage.accentColor
     );
-    if (hasColors) {
+
+    if (!themeId && hasPageColors) {
       setThemePalette(fromPage);
+      setThemeStyles(undefined);
       return;
     }
-    const themeId = String(page.themeId || "").trim();
+
     fetch("/api/builder/themes", {
       credentials: "include",
       headers: starcasterScopedHeaders(),
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { themes?: Array<{ id?: string; primaryColor?: string; secondaryColor?: string; backgroundColor?: string; accentColor?: string }> } | null) => {
+      .then((data: { themes?: Array<Record<string, unknown>> } | null) => {
         const themes = Array.isArray(data?.themes) ? data.themes : [];
         const match = themeId
-          ? themes.find((theme) => String(theme.id || "") === themeId) || themes[0]
-          : themes[0];
+          ? themes.find((theme) => String(theme.id || "") === themeId) || null
+          : themes[0] || null;
         setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(match)));
+        setThemeStyles(buildBuilderThemeStyles(match));
       })
       .catch(() => {
         setThemePalette(fromPage);
+        setThemeStyles(undefined);
       });
   }, [page]);
 
@@ -316,6 +325,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
         pageBackground={page.pageBackground}
         theme={page.theme}
         themePalette={themePalette ?? pageThemePalette(page)}
+        themeStyles={themeStyles}
         projectId={projectId}
       />
     </>

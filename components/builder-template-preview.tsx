@@ -45,7 +45,9 @@ import {
   getAlignmentClass,
   getButtonModuleStyle,
   getHeadingModuleStyle,
+  getBuilderThemeStyleVars,
   getThemeRootVars,
+  type BuilderThemeStyles,
   columnHasOnlySectionScopedOverlayModules,
   getOverlayFlowCollapsedColumnStyle,
   getOverlayFlowCollapsedModuleStyle,
@@ -95,6 +97,8 @@ type BuilderTemplatePreviewProps = {
   theme?: import("@/lib/builder-template").BuilderTheme;
   /** Builder theme palette for CRM form color tokens. */
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** Saved theme container styles (margins, border, blur, contrast). */
+  themeStyles?: BuilderThemeStyles;
   showShell?: boolean;
   emailPreview?: boolean;
   /** When true (Builder /preview), speech bubbles with game/on-load triggers do not auto-fire. */
@@ -1137,6 +1141,7 @@ export function BuilderTemplatePreview({
   pageBackground,
   theme,
   themePalette,
+  themeStyles,
   showShell = true,
   emailPreview = false,
   previewMode = false,
@@ -1148,6 +1153,7 @@ export function BuilderTemplatePreview({
   const rootStyle = {
     ...getThemeRootVars(theme),
     ...getCrmThemePaletteVars(themePalette),
+    ...getBuilderThemeStyleVars(themeStyles),
     ...pageStyle
   };
   const sitePlayerRegistered = useSitePlayerRegistration();
@@ -1166,7 +1172,9 @@ export function BuilderTemplatePreview({
   }
 
   /** Live and builder previews need the shell so overlay-flow rows stack above the game wash. */
-  const shellClassName = !emailPreview ? "builder-preview-shell" : undefined;
+  const shellClassName = !emailPreview
+    ? `builder-preview-shell${themeStyles ? " has-builder-theme-styles" : ""}`
+    : undefined;
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
 
   return (
@@ -4657,7 +4665,10 @@ function NavigationModulePreview({
         const isActive = normalizeNavPath(item.href || "#") === activePath;
         const itemId = item.id ?? `${href}-${item.label}`;
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
-        const itemWidth = itemSizing === "custom" && item.width ? item.width : undefined;
+        const rawWidth = itemSizing === "custom" && item.width ? item.width.trim() : undefined;
+        const itemWidth = rawWidth
+          ? /^\d+(\.\d+)?$/.test(rawWidth) ? `${rawWidth}px` : rawWidth
+          : undefined;
 
         if (children.length === 0) {
           return (

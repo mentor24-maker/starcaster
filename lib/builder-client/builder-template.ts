@@ -203,6 +203,17 @@ export type BuilderThemeSummary = {
   secondaryColor?: string;
   backgroundColor?: string;
   accentColor?: string;
+  borderThickness?: number;
+  borderRadius?: number;
+  containerBlur?: number;
+  contrastLevel?: number;
+  topMargin?: number;
+  bottomMargin?: number;
+  sideMargins?: number;
+  logoWideId?: string;
+  logoSquareId?: string;
+  featureImageId?: string;
+  backgroundImageId?: string;
   typography?: BuilderThemeTypography;
 };
 
