@@ -152,6 +152,7 @@ App.builderNavMenu = (function () {
     const hoverColor = safeText(resolved.navHoverColor) || '#0b82d4';
     const hoverBg = safeText(resolved.navHoverBackground) || '#e8f4ff';
     const marginV = Number(resolved.navMarginV) >= 0 ? `${Number(resolved.navMarginV)}px` : '';
+    const marginH = Number(resolved.navMarginH) >= 0 ? `${Number(resolved.navMarginH)}px` : '';
 
     const styleParts = [
       `--site-nav-link-color:${color}`,
@@ -163,6 +164,7 @@ App.builderNavMenu = (function () {
     if (fontSize) styleParts.push(`font-size:${fontSize}`);
     if (fontWeight) styleParts.push(`font-weight:${fontWeight}`);
     if (marginV) styleParts.push(`margin-top:${marginV}`, `margin-bottom:${marginV}`);
+    if (marginH) styleParts.push(`margin-left:${marginH}`, `margin-right:${marginH}`);
 
     const navLevels = Number.parseInt(resolved.navLevels, 10) || 2;
     const tree = buildNavMenuTree(items);
