@@ -5445,11 +5445,7 @@ button.builder-inline-asset-status-btn:focus-visible {
   color: #365271;
 }
 
-#builderModulesSettingsFields {
-  display: grid;
-  gap: 0.7rem;
-  grid-template-columns: 1fr;
-}
+
 
 #builderModulesForm input[type="text"],
 #builderModulesForm input[type="number"],
@@ -12384,6 +12380,16 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   flex-wrap: nowrap;
 }
 
+/* Custom-sizing: each top-level item gets an explicit width (inline style) */
+.site-nav--sizing-custom .site-nav-menu--horizontal {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+.site-nav--sizing-custom .site-nav-menu--horizontal > .site-nav-item {
+  flex: 0 0 auto;
+}
+
 .site-nav-menu--horizontal .site-nav-item--has-children {
   position: relative;
 }
@@ -12438,6 +12444,21 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   width: 100%;
+}
+
+/* Auto and custom sizing override the equal-width grid with flex */
+.site-nav--sizing-auto:not(.site-nav--vertical),
+.site-nav--sizing-custom:not(.site-nav--vertical) {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+.site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-link,
+.site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-dropdown,
+.site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-link,
+.site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-dropdown {
+  flex: 0 0 auto;
+  width: auto;
 }
 
 .site-nav:not(.site-nav--vertical) > .site-nav-link,

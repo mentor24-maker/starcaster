@@ -2849,12 +2849,13 @@ body.asset-associations-modal-open {
   --crud-delete-icon-hover-bg: #ffd4df;
   --crud-delete-tooltip-bg: #c46878;
   --crud-view-border: #17b7ee;
-  --crud-view-bg: #e4f4ff;
+  --crud-view-bg: #dff4fc;
   --crud-view-ink: #0a8fc4;
   --crud-view-iris: #17b7ee;
   --crud-edit-border: #22a06b;
-  --crud-edit-bg: #e4ffec;
+  --crud-edit-bg: #e5f8ed;
   --crud-edit-ink: #1a7a4c;
+  --image-radius: 0px;
   --poll-pod-bg: transparent;
   --poll-pod-radius: 34px;
   --poll-header-radius: 999px;
@@ -3106,6 +3107,8 @@ body.asset-associations-modal-open {
   box-shadow: var(--shadow-soft);
 }
 .builder-react-root .site-nav {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0;
   padding: 8px;
   border-radius: 26px;
@@ -3114,13 +3117,8 @@ body.asset-associations-modal-open {
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
 }
-.builder-react-root .site-nav:not(.site-nav--vertical) {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  width: 100%;
-}
 .builder-react-root .site-nav-link {
+  flex: 1 1 0;
   min-height: 48px;
   display: inline-flex;
   align-items: center;
@@ -3130,103 +3128,16 @@ body.asset-associations-modal-open {
   color: var(--site-nav-link-color, #163a5e);
   text-decoration: none;
   font-weight: 700;
-  box-sizing: border-box;
   transition:
     background 140ms ease,
     transform 140ms ease,
     color 140ms ease;
-}
-.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
-.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
-  width: 100%;
-  min-width: 0;
-}
-.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
-  min-width: 0;
-}
-.builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
-  flex: 1 1 auto;
 }
 .builder-react-root .site-nav-link:hover,
 .builder-react-root .site-nav-link-active {
   background: var(--site-nav-link-hover-bg, rgba(23, 183, 238, 0.12));
   color: var(--site-nav-link-hover-color, #0a8fc4);
   transform: translateY(-1px);
-}
-.builder-react-root .site-nav-dropdown {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-}
-.builder-react-root .site-nav-dropdown-trigger {
-  gap: 4px;
-}
-.builder-react-root .site-nav-dropdown-arrow {
-  font-size: 0.7em;
-  line-height: 1;
-  opacity: 0.6;
-}
-.builder-react-root .site-nav-dropdown-menu {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 160px;
-  background: var(--site-nav-bg, rgba(255, 255, 255, 0.94));
-  border: 1px solid rgba(9, 16, 24, 0.08);
-  border-radius: 14px;
-  box-shadow: 0 6px 24px rgba(9, 16, 24, 0.12);
-  backdrop-filter: blur(12px);
-  z-index: 200;
-  padding: 10px 6px 6px;
-  flex-direction: column;
-  gap: 2px;
-}
-.builder-react-root .site-nav-dropdown:hover .site-nav-dropdown-menu,
-.builder-react-root .site-nav-dropdown:focus-within .site-nav-dropdown-menu {
-  display: flex;
-}
-.builder-react-root .site-nav-dropdown-item {
-  flex: unset;
-  min-height: 36px;
-  border-radius: 10px;
-  justify-content: flex-start;
-  padding: 0 12px;
-  white-space: nowrap;
-}
-.builder-react-root .site-nav--vertical {
-  display: flex;
-  flex-direction: column;
-  border-radius: 14px;
-  align-items: stretch;
-}
-.builder-react-root .site-nav--vertical .site-nav-link {
-  width: auto;
-  justify-content: flex-start;
-}
-.builder-react-root .site-nav--vertical > .site-nav-dropdown {
-  width: auto;
-  min-width: 0;
-}
-.builder-react-root .site-nav--vertical .site-nav-dropdown {
-  flex-direction: column;
-  align-items: stretch;
-}
-.builder-react-root .site-nav--vertical .site-nav-dropdown-menu {
-  position: static;
-  display: flex;
-  transform: none;
-  border: none;
-  box-shadow: none;
-  padding: 0 0 4px 16px;
-  background: transparent;
-  backdrop-filter: none;
-  z-index: auto;
-  min-width: 0;
-}
-.builder-react-root .site-nav--vertical .site-nav-dropdown-item {
-  white-space: normal;
 }
 .builder-react-root .page-eyebrow {
   font-size: 0.94rem;
@@ -3406,6 +3317,78 @@ body.asset-associations-modal-open {
   transform: translateY(-3px) scale(1.01);
   background: #0358c4;
   color: #ffffff;
+}
+.builder-react-root .admin-polls-delete-dialog {
+  border: 2px solid rgba(153, 31, 31, 0.18);
+}
+.builder-react-root .admin-polls-delete-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-weight: 700;
+}
+.builder-react-root .admin-polls-delete-option input {
+  width: 18px;
+  height: 18px;
+}
+.builder-react-root .admin-polls-delete-dialog .admin-actions {
+  margin-top: 16px;
+}
+.builder-react-root .poll-reaction-corner-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  width: 100%;
+}
+.builder-react-root .poll-reaction-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 2px solid rgba(9, 16, 24, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  color: #091018;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.builder-react-root .poll-reaction-button:hover:not(:disabled),
+.builder-react-root .poll-reaction-button:focus-visible:not(:disabled) {
+  transform: translateY(-2px);
+}
+.builder-react-root .poll-reaction-button:disabled {
+  cursor: default;
+  opacity: 0.92;
+}
+.builder-react-root .poll-reaction-button-like.is-active {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+}
+.builder-react-root .poll-reaction-button-dislike.is-active {
+  background: #b42318;
+  border-color: #b42318;
+  color: #ffffff;
+}
+.builder-react-root .poll-reaction-icon {
+  display: block;
+  flex-shrink: 0;
+}
+.builder-react-root .poll-reaction-button-label {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1;
 }
 .builder-react-root .poll-deep-dive-overlay {
   position: absolute;
@@ -3913,6 +3896,93 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .poll-previous-results-panel .panel-copy {
   color: var(--poll-previous-results-question-ink);
+}
+.builder-react-root .poll-survey-interstitial-grid {
+  width: 100%;
+}
+.builder-react-root .poll-survey-interstitial-instructions,
+.builder-react-root .poll-survey-interstitial-questions {
+  min-height: 100%;
+}
+.builder-react-root .poll-survey-interstitial-copy {
+  display: grid;
+  gap: 12px;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.builder-react-root .poll-survey-interstitial-copy p {
+  margin: 0;
+}
+.builder-react-root .poll-survey-question-list {
+  display: grid;
+  gap: 22px;
+}
+.builder-react-root .poll-survey-question-block {
+  display: grid;
+  gap: 12px;
+}
+.builder-react-root .poll-survey-question-prompt {
+  margin: 0;
+  font-size: clamp(0.95rem, 1.4vw, 1.15rem);
+  line-height: 1.35;
+  color: #240251;
+}
+.builder-react-root .poll-survey-question-index {
+  margin-right: 0.35rem;
+  color: var(--muted);
+}
+.builder-react-root .poll-survey-option-list {
+  display: grid;
+  gap: 10px;
+}
+.builder-react-root .poll-survey-option-button.is-selected {
+  outline: 2px solid var(--accent-dark);
+  outline-offset: 2px;
+}
+.builder-react-root .poll-survey-submit-button {
+  width: fit-content;
+}
+.builder-react-root .admin-survey-interstitial-fields {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+.builder-react-root .admin-survey-inline-number-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.builder-react-root .admin-survey-inline-suffix {
+  font-size: 1rem;
+  color: var(--ink);
+}
+.builder-react-root .admin-survey-question-list {
+  display: grid;
+  gap: 16px;
+}
+.builder-react-root .admin-survey-question-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.builder-react-root .admin-survey-question-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.builder-react-root .admin-survey-option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.builder-react-root .admin-survey-add-button,
+.builder-react-root .admin-survey-remove-button {
+  width: fit-content;
 }
 .builder-react-root .admin-stack {
   display: grid;
@@ -5789,30 +5859,20 @@ body.asset-associations-modal-open {
   min-width: 100%;
 }
 .builder-react-root .builder-pages-list-shell {
-  --builder-pages-actions-width: 480px;
-}
-.builder-react-root .builder-pages-list-shell,
-.builder-react-root .builder-pages-details-shell {
-  padding-right: 10px;
+  --builder-pages-actions-width: 220px;
 }
 .builder-react-root .builder-pages-list-table {
   table-layout: fixed;
   width: 100%;
 }
-.builder-react-root .builder-pages-list-table col.builder-pages-col-check {
-  width: 40px;
-}
 .builder-react-root .builder-pages-list-table col.builder-pages-col-title {
-  width: 30%;
+  width: 32%;
 }
 .builder-react-root .builder-pages-list-table col.builder-pages-col-slug {
-  width: 17%;
+  width: 18%;
 }
 .builder-react-root .builder-pages-list-table col.builder-pages-col-template {
-  width: 20%;
-}
-.builder-react-root .builder-pages-list-table col.builder-pages-col-visibility {
-  width: 7.5rem;
+  width: 22%;
 }
 .builder-react-root .builder-pages-list-table col.builder-pages-col-updated {
   width: 9.5rem;
@@ -5836,7 +5896,7 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-pages-list-heading-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   width: var(--builder-pages-actions-width);
   min-width: var(--builder-pages-actions-width);
   max-width: var(--builder-pages-actions-width);
@@ -5852,58 +5912,11 @@ body.asset-associations-modal-open {
   padding-inline: 10px;
 }
 .builder-react-root .builder-pages-list-heading-actions .builder-panel-heading-button {
-  flex: 1;
-  width: auto;
+  width: 100%;
   justify-content: center;
 }
 .builder-react-root .builder-pages-list-columns-row th {
   border-top: 1px solid rgba(9, 16, 24, 0.08);
-}
-.builder-react-root .builder-pages-list-table .builder-crud-filter-row th {
-  padding: 10px 12px;
-  background: rgba(248, 253, 255, 0.96);
-  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
-  vertical-align: top;
-}
-.builder-react-root .builder-pages-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px 4px;
-}
-.builder-react-root .builder-pages-filter-input {
-  flex: 1;
-  min-width: 0;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid rgba(9, 16, 24, 0.18);
-  border-radius: 6px;
-  background: var(--surface, #fff);
-  font: inherit;
-  font-size: 0.9rem;
-}
-.builder-react-root .builder-pages-filter-input:focus {
-  outline: 2px solid var(--accent, #2563eb);
-  outline-offset: -1px;
-}
-.builder-react-root .builder-pages-delete-selected {
-  white-space: nowrap;
-  height: 34px;
-  padding: 0 14px;
-  font-size: 0.88rem;
-}
-.builder-react-root .builder-pages-delete-selected.is-no-selection {
-  opacity: 0.45;
-  cursor: default;
-  pointer-events: none;
-}
-.builder-react-root .builder-pages-check-cell {
-  width: 40px;
-  text-align: center;
-  padding-inline: 8px;
 }
 .builder-react-root .builder-pages-crud-heading-layout {
   display: grid;
@@ -5912,7 +5925,7 @@ body.asset-associations-modal-open {
   gap: 20px;
 }
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-layout {
-  grid-template-columns: minmax(0, 1fr) 480px;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 .builder-react-root .builder-pages-crud-heading-primary {
   min-width: 0;
@@ -5934,235 +5947,16 @@ body.asset-associations-modal-open {
   box-sizing: border-box;
 }
 .builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions {
-  width: 480px;
-  min-width: 480px;
-  max-width: 480px;
-  gap: 10px;
-  padding: 0;
-  justify-content: flex-start;
+  width: auto;
+  min-width: min-content;
+  max-width: none;
 }
 .builder-react-root .builder-pages-crud-heading-actions .builder-panel-heading-button {
-  flex: 1;
-  width: auto;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  padding-inline: 18px;
   justify-content: center;
-}
-.builder-react-root .builder-bulk-create-shell {
-  padding: 16px 20px 20px;
-}
-.builder-react-root .builder-bulk-create-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.builder-react-root .builder-bulk-create-back {
-  flex-shrink: 0;
-}
-.builder-react-root .builder-bulk-create-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-}
-.builder-react-root .builder-bulk-create-notice {
-  margin-bottom: 16px;
-}
-.builder-react-root .builder-bulk-create-template-warning {
-  display: block;
-  margin-top: 6px;
-  font-size: 0.82rem;
-  color: #7a5200;
-  font-style: italic;
-}
-.builder-react-root .builder-bulk-create-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: 24px;
-  margin-bottom: 20px;
-}
-.builder-react-root .builder-bulk-create-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.builder-react-root .builder-bulk-create-right {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  border-left: 1px solid rgba(9, 16, 24, 0.08);
-  padding-left: 24px;
-}
-.builder-react-root .builder-bulk-create-run-info {
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
-}
-.builder-react-root .builder-bulk-create-run-url {
-  font-size: 13px;
-  font-weight: 600;
-  word-break: break-all;
-}
-.builder-react-root .builder-bulk-create-run-meta {
-  font-size: 12px;
-  color: rgba(9, 16, 24, 0.5);
-  margin-top: 4px;
-}
-.builder-react-root .builder-bulk-create-right-placeholder {
-  font-size: 13px;
-  color: rgba(9, 16, 24, 0.4);
-  font-style: italic;
-}
-.builder-react-root .builder-bulk-create-preview-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(9, 16, 24, 0.6);
-}
-.builder-react-root .builder-bulk-create-item-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.builder-react-root .builder-bulk-create-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-}
-.builder-react-root .builder-bulk-create-item-name {
-  flex: 0 0 auto;
-  min-width: 120px;
-}
-.builder-react-root .builder-bulk-create-item-slug {
-  color: rgba(9, 16, 24, 0.5);
-  font-size: 12px;
-}
-.builder-react-root .builder-bulk-create-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(9, 16, 24, 0.08);
-}
-.builder-react-root .builder-bulk-create-results-shell {
-  padding: 16px 20px 20px;
-  border-top: 1px solid rgba(9, 16, 24, 0.08);
-}
-.builder-react-root .builder-bulk-create-results-header {
-  margin-bottom: 14px;
-}
-.builder-react-root .builder-bulk-create-results-summary {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(9, 16, 24, 0.6);
-}
-.builder-react-root .builder-bulk-create-results-table {
-  table-layout: fixed;
-  width: 100%;
-}
-.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-title {
-  width: 35%;
-}
-.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-slug {
-  width: 30%;
-}
-.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-status {
-  width: auto;
-}
-.builder-react-root .builder-bulk-create-results-table col.builder-bulk-create-col-actions {
-  width: 80px;
-}
-.builder-react-root .builder-bulk-create-results-table th.crud-actions-cell,
-.builder-react-root .builder-bulk-create-results-table td.crud-actions-cell {
-  width: 80px;
-  min-width: 80px;
-}
-.builder-react-root .builder-bulk-create-row-error td {
-  opacity: 0.6;
-}
-.builder-react-root .builder-bulk-create-status-ok {
-  color: #1a7d4a;
-  font-size: 13px;
-  font-weight: 500;
-}
-.builder-react-root .builder-bulk-create-status-error {
-  color: #c0392b;
-  font-size: 12px;
-}
-.builder-react-root .builder-bulk-create-detected-model {
-  background: #ebf8ff;
-  border: 1px solid #bee3f8;
-  border-radius: 4px;
-  color: #2b6cb0;
-  display: inline-block;
-  font-size: 12px;
-  margin-top: 6px;
-  padding: 2px 8px;
-}
-.builder-react-root .builder-bulk-create-status-warn {
-  color: #856404;
-  font-size: 12px;
-}
-.builder-react-root .builder-bulk-create-row-warn td {
-  background: #fffbea;
-}
-.builder-react-root .builder-bulk-create-preview-shell {
-  margin-top: 12px;
-}
-.builder-react-root .builder-bulk-create-preview-table {
-  min-width: 560px;
-  table-layout: fixed;
-  width: 100%;
-}
-.builder-react-root .builder-bulk-create-preview-table col.builder-bulk-create-col-title {
-  width: 40%;
-}
-.builder-react-root .builder-bulk-create-preview-table col.builder-bulk-create-col-status {
-  width: 20%;
-}
-.builder-react-root .builder-bulk-create-preview-table col.builder-bulk-create-col-content {
-  width: 40%;
-}
-.builder-react-root .builder-bulk-create-preview-blocks summary {
-  cursor: pointer;
-  font-size: 13px;
-  user-select: none;
-}
-.builder-react-root .builder-bulk-create-preview-block-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-}
-.builder-react-root .builder-bulk-create-preview-block {
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  font-size: 12px;
-  padding: 6px 8px;
-}
-.builder-react-root .builder-bulk-create-preview-block-layout {
-  background: #eef2ff;
-  border-radius: 3px;
-  color: #3730a3;
-  display: inline-block;
-  font-size: 11px;
-  margin-bottom: 4px;
-  padding: 1px 5px;
-}
-.builder-react-root .builder-bulk-create-preview-block-img {
-  border-radius: 3px;
-  display: block;
-  height: auto;
-  margin-bottom: 4px;
-  max-width: 120px;
-}
-.builder-react-root .builder-bulk-create-preview-block-html {
-  color: #4a5568;
-  font-size: 11px;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .builder-react-root .builder-modules-crud-shell {
   max-width: 100%;
@@ -6824,32 +6618,16 @@ body.asset-associations-modal-open {
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 12px;
 }
-.builder-react-root .builder-saved-section-group {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  background: rgba(11, 143, 196, 0.07);
-  border: 1px solid rgba(11, 143, 196, 0.18);
-  border-radius: 12px;
-  padding: 8px 16px;
-}
 .builder-react-root .builder-cell-repository-select {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: max-content;
+  max-width: 100%;
+  min-width: 16rem;
 }
 .builder-react-root .builder-cell-repository-select select {
-  min-width: 14rem;
-}
-.builder-react-root .builder-canonical-insert-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  cursor: pointer;
+  width: 100%;
+  min-width: 16rem;
 }
 .builder-react-root .builder-layout-tile {
   border: 1px solid rgba(9, 16, 24, 0.08);
@@ -6903,7 +6681,6 @@ body.asset-associations-modal-open {
       135deg,
       #15b7ef 0%,
       #79dcff 100%);
-  min-height: 30px;
 }
 .builder-react-root .builder-layout-label {
   font-size: 0.82rem;
@@ -7022,7 +6799,7 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-module-card {
   border: 1px solid rgba(9, 16, 24, 0.08);
   border-radius: 24px;
-  padding: 10px;
+  padding: 18px;
 }
 .builder-react-root .builder-section-card {
   background: var(--builder-bg-section);
@@ -7165,9 +6942,12 @@ body.asset-associations-modal-open {
   overflow: visible;
   z-index: 40;
 }
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-tumbleweed),
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-cruise) {
+.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-cartwheels),
+.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-slide) {
   min-height: 220px;
+}
+.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-parkour) {
+  min-height: 240px;
 }
 .builder-react-root .builder-preview-column:not(.builder-preview-column-overlay-slot) > .builder-preview-module-overlay-slot {
   width: calc(100% + 2 * var(--builder-cell-padding, 0px));
@@ -7202,9 +6982,6 @@ body.asset-associations-modal-open {
   display: grid;
   gap: 16px;
   align-content: start;
-}
-.builder-react-root .builder-module-card {
-  gap: 10px;
 }
 .builder-react-root .builder-column-card,
 .builder-react-root .builder-preview-column {
@@ -7254,48 +7031,17 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-module-card .builder-module-editor .field > span {
   color: var(--builder-label-on-module);
 }
-.builder-react-root .builder-module-card .builder-module-editor .builder-setting-row {
-  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
-  gap: 6px;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-setting-row-full {
-  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-setting-label {
-  font-size: 0.8rem;
-  white-space: nowrap;
-  line-height: 1.25;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-inline-number-field span {
-  white-space: nowrap;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-setting-value select {
-  width: auto;
-  max-width: 100%;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-setting-value input[type=number] {
-  width: 5rem;
-  max-width: 100%;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-setting-value input[type=text] {
-  min-width: 0;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-shell,
-.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-shell {
+.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-shell {
   background: #ffffff;
   border-color: rgba(15, 79, 143, 0.14);
 }
-.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-toolbar,
-.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-toolbar {
+.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-toolbar {
   background: #eceff3;
   border-bottom-color: rgba(9, 16, 24, 0.1);
 }
 .builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-content,
 .builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-content .ProseMirror,
-.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-code-view,
-.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-content,
-.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-content .ProseMirror,
-.builder-react-root .builder-centered-modal .builder-module-editor .builder-rich-text-code-view {
+.builder-react-root .builder-module-card .builder-module-editor .builder-rich-text-code-view {
   background: #ffffff;
 }
 .builder-react-root .builder-table-cell-module-editor .builder-rich-text-shell,
@@ -7412,23 +7158,6 @@ body.asset-associations-modal-open {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.builder-react-root .builder-canonical-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 18px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  background: #d1fae5;
-  color: #065f46;
-  flex-shrink: 0;
-}
-.builder-react-root .builder-canonical-badge-locked {
-  background: #fef3c7;
-  color: #92400e;
-}
 .builder-react-root .builder-module-header .builder-section-actions {
   display: inline-flex;
   flex-wrap: nowrap;
@@ -7472,10 +7201,6 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-icon-button-danger {
   color: #991f1f;
-}
-.builder-react-root .builder-icon-button-active {
-  color: #0a6fa8;
-  background: rgba(10, 111, 168, 0.12);
 }
 .builder-react-root .builder-section-controls,
 .builder-react-root .builder-section-settings {
@@ -7594,189 +7319,6 @@ body.asset-associations-modal-open {
   display: grid;
   gap: 12px;
 }
-.builder-react-root .builder-social-module-layout {
-  display: grid;
-  gap: 10px;
-}
-.builder-react-root .builder-field-width-label {
-  width: min(250px, 100%);
-  min-width: 200px;
-  max-width: 250px;
-}
-.builder-react-root .builder-module-meta-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
-  align-items: start;
-}
-.builder-react-root .builder-module-meta-row-slot {
-  min-width: 0;
-}
-.builder-react-root .builder-module-meta-row .builder-setting-value > input[type=text],
-.builder-react-root .builder-module-meta-row .builder-setting-value select {
-  width: auto;
-  max-width: 100%;
-}
-.builder-react-root .builder-module-form-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 14px;
-  align-items: center;
-}
-.builder-react-root .builder-module-form-row .builder-setting-row {
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px;
-  min-width: 0;
-}
-.builder-react-root .builder-module-form-row .builder-setting-value {
-  justify-content: flex-start;
-}
-.builder-react-root .builder-module-form-row .builder-setting-value select,
-.builder-react-root .builder-module-form-row .builder-number-select-control {
-  width: auto;
-  max-width: 100%;
-}
-.builder-react-root .builder-module-editor,
-.builder-react-root .builder-table-cell-module-editor {
-  container-type: inline-size;
-  container-name: module-editor;
-}
-@container module-editor (max-width: 33rem) {
-  .builder-module-form-row,
-  .builder-inline-number-row,
-  .builder-columns-3,
-  .builder-preview-columns-3 {
-    grid-template-columns: 1fr;
-  }
-}
-@container module-editor (max-width: 22.5rem) {
-  .builder-module-meta-row,
-  .builder-button-setting-columns,
-  .builder-button-border-grid,
-  .builder-image-controls-grid,
-  .builder-typography-controls-grid,
-  .builder-columns-2,
-  .builder-preview-columns-2,
-  .builder-nav-dir-levels-row,
-  .builder-player-portal-settings-row,
-  .builder-module-offset-fields,
-  .builder-background-inline-row,
-  .builder-social-module-layout-row,
-  .builder-blog-post-list-3col,
-  .builder-blog-post-list-general-row {
-    grid-template-columns: 1fr;
-  }
-  .builder-inline-number-row,
-  .builder-button-padding-row,
-  .builder-nav-four-row {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-  .builder-field-width-label {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-  }
-}
-.builder-react-root .builder-social-module-panel {
-  gap: 10px;
-}
-.builder-react-root .builder-social-module-panel-body {
-  display: grid;
-  gap: 10px;
-}
-.builder-react-root .builder-social-advanced-details {
-  margin: 0;
-}
-.builder-react-root .builder-social-advanced-details-body {
-  display: grid;
-  gap: 12px;
-  padding-top: 8px;
-}
-.builder-react-root .builder-social-add-button {
-  width: fit-content;
-  white-space: nowrap;
-}
-.builder-react-root .builder-color-with-swatches {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-}
-.builder-react-root .builder-theme-swatches {
-  display: flex;
-  gap: 5px;
-}
-.builder-react-root .builder-theme-swatches-labeled {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 8px;
-  width: 100%;
-}
-.builder-react-root .builder-theme-swatch-cell {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-}
-.builder-react-root .builder-theme-swatch-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.1;
-  color: #587592;
-  text-align: center;
-}
-.builder-react-root .builder-theme-swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(9, 16, 24, 0.25);
-  cursor: pointer;
-  padding: 0;
-  flex-shrink: 0;
-  transition: transform 0.1s, border-color 0.1s;
-}
-.builder-react-root .builder-theme-swatch-empty {
-  background:
-    linear-gradient(
-      45deg,
-      rgba(9, 16, 24, 0.08) 25%,
-      transparent 25%,
-      transparent 75%,
-      rgba(9, 16, 24, 0.08) 75%),
-    linear-gradient(
-      45deg,
-      rgba(9, 16, 24, 0.08) 25%,
-      transparent 25%,
-      transparent 75%,
-      rgba(9, 16, 24, 0.08) 75%);
-  background-color: #ffffff;
-  background-size: 8px 8px;
-  background-position: 0 0, 4px 4px;
-  border-style: dashed;
-  cursor: not-allowed;
-  opacity: 0.72;
-}
-.builder-react-root .builder-theme-swatch-empty:hover {
-  transform: none;
-  border-color: rgba(9, 16, 24, 0.25);
-}
-.builder-react-root .builder-theme-swatch:hover {
-  transform: scale(1.25);
-  border-color: rgba(9, 16, 24, 0.55);
-}
-.builder-react-root .builder-theme-color-popup .builder-theme-swatches {
-  justify-content: center;
-  padding: 4px 0 2px;
-}
-.builder-react-root .builder-theme-color-popup .builder-theme-swatches-labeled {
-  justify-content: stretch;
-  padding: 2px 0 4px;
-}
-.builder-react-root .builder-theme-color-popup .builder-theme-swatch {
-  width: 28px;
-  height: 28px;
-}
 .builder-react-root .builder-social-module-items {
   display: grid;
   gap: 12px;
@@ -7824,16 +7366,17 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-social-module-item-settings {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
-.builder-react-root .builder-social-module-item-settings .builder-setting-row {
-  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
-  gap: 6px;
+.builder-react-root .builder-social-module-item-settings .builder-setting-row-full {
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
 }
 .builder-react-root .builder-social-module-item-settings .builder-setting-label {
-  font-size: 0.8rem;
-  padding: 2px 6px;
-  line-height: 1.25;
+  font-size: 1.125rem;
+  padding: 10px 14px 10px 8px;
+  line-height: 1.35;
   white-space: normal;
 }
 .builder-react-root .builder-social-item-icon-preview {
@@ -8013,15 +7556,6 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-meta-grid-pages .builder-meta-field-status select {
   min-width: 0;
-}
-.builder-react-root .builder-pages-details-shell {
-  scroll-margin-top: 12px;
-}
-.builder-react-root .builder-meta-grid-pages .field input:not([type=checkbox]):not([type=radio]):focus,
-.builder-react-root .builder-meta-grid-pages .field select:focus,
-.builder-react-root .builder-meta-grid-pages .field textarea:focus {
-  outline: none;
-  border: 3px solid var(--sc-field-focus-color, #22c55e);
 }
 .builder-react-root .builder-meta-grid-pages-background {
   min-width: 0;
@@ -8225,152 +7759,21 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-table-design-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  font-size: 12px;
-}
-.builder-react-root .builder-nav-style-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  padding: 8px 0 4px;
-}
-.builder-react-root .builder-nav-four-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.builder-react-root .builder-nav-four-row .builder-inline-number-field {
-  flex: 1;
-  min-width: 0;
-}
-.builder-react-root .builder-nav-dir-levels-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.builder-react-root .builder-nav-color-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.builder-react-root .builder-nav-color-field input[type=color] {
-  width: 32px;
-  height: 26px;
-  padding: 1px 2px;
-  border: 1px solid rgba(9, 16, 24, 0.15);
-  border-radius: 5px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.builder-react-root .builder-nav-color-clear {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0 2px;
-  line-height: 1;
-}
-.builder-react-root .builder-nav-color-clear:hover {
-  color: #e53e3e;
-}
-.builder-react-root .builder-nav-color-hint {
-  font-size: 11px;
-  color: var(--muted);
-  font-style: italic;
-}
-.builder-react-root .builder-nav-items {
-  display: grid;
-  gap: 6px;
-}
-.builder-react-root .builder-nav-item-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.builder-react-root .builder-nav-item-fields {
-  display: grid;
-  grid-template-columns: 0.8fr 1fr 1fr;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-.builder-react-root .builder-nav-item-label,
-.builder-react-root .builder-nav-item-href {
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid rgba(9, 16, 24, 0.1);
-  border-radius: 6px;
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.85);
-  min-width: 0;
-}
-.builder-react-root .builder-nav-item-href {
-  color: #4a7096;
-}
-.builder-react-root .builder-nav-item-actions {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.builder-react-root .builder-nav-item-parent-select {
-  padding: 4px 6px;
-  border: 1px solid rgba(9, 16, 24, 0.1);
-  border-radius: 6px;
-  font-size: 11px;
-  background: rgba(255, 255, 255, 0.85);
-  color: #6a8fa8;
-  min-width: 0;
-  width: 100%;
-}
-.builder-react-root .builder-nav-item-parent-select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.builder-react-root .builder-table-border-row {
-  display: flex;
-  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
-.builder-react-root .builder-table-color-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #214c71;
-  white-space: nowrap;
-}
-.builder-react-root .builder-table-color-field span {
-  flex-shrink: 0;
-}
-.builder-react-root .builder-table-color-field input[type=color] {
-  width: 28px;
-  height: 24px;
-  padding: 1px 2px;
-  border: 1px solid rgba(9, 16, 24, 0.15);
-  border-radius: 4px;
-  cursor: pointer;
-}
-.builder-react-root .builder-table-design-grid .builder-inline-number-field {
-  font-size: 12px;
-}
 .builder-react-root .builder-table-structure-actions {
-  display: grid;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #214c71;
-}
-.builder-react-root .builder-table-structure-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #214c71;
 }
 .builder-react-root .builder-table-structure-actions .secondary-button {
-  font-size: 11px;
-  padding: 3px 9px;
+  font-size: 12px;
+  padding: 4px 10px;
   min-width: auto;
 }
 .builder-react-root .builder-table-editor-scroll {
@@ -8425,7 +7828,6 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-module-preview-table,
 .builder-react-root .builder-preview-table {
   font-size: 13px;
-  background: transparent;
 }
 .builder-react-root .builder-module-preview-table th,
 .builder-react-root .builder-preview-table th {
@@ -8733,66 +8135,6 @@ body.asset-associations-modal-open {
   border-radius: 16px;
   background: transparent;
 }
-.builder-react-root .builder-preview-module:has(> .builder-crm-form-shell) {
-  width: 100%;
-  max-width: 100%;
-  align-self: stretch;
-  min-width: 0;
-}
-.builder-react-root .builder-crm-form-shell {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  text-align: left;
-  margin: var(--crm-form-margin, 0);
-}
-.builder-react-root .builder-contact-form.builder-crm-form {
-  width: var(--crm-form-width, 75%);
-  max-width: 100%;
-  min-width: 0;
-  grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
-  box-sizing: border-box;
-  background: transparent;
-  border: none;
-  padding: 0;
-  border-radius: 0;
-}
-.builder-react-root .builder-crm-form-shell .builder-contact-form-heading {
-  width: var(--crm-form-width, 75%);
-  max-width: 100%;
-  min-width: 0;
-  margin: 0 0 0.85rem;
-  padding: 0;
-  font-size: clamp(1.15rem, 2vw, 1.45rem);
-  font-weight: 800;
-  color: var(--crm-form-heading-color, #18324a);
-  line-height: 1.25;
-  text-align: var(--crm-form-label-align, left);
-}
-.builder-react-root .builder-preview-module.is-align-center:has(> .builder-crm-form-shell),
-.builder-react-root .builder-preview-module.is-align-right:has(> .builder-crm-form-shell),
-.builder-react-root .builder-preview-module-shell.is-align-center .builder-crm-form-shell,
-.builder-react-root .builder-preview-module-shell.is-align-right .builder-crm-form-shell {
-  text-align: left;
-}
-.builder-react-root .builder-crm-form .builder-contact-form-field > span:first-child {
-  grid-column: 1;
-  justify-self: var(--crm-form-label-justify, start);
-  align-self: start;
-  text-align: var(--crm-form-label-align, left);
-}
-.builder-react-root .builder-crm-form .builder-contact-form-field input,
-.builder-react-root .builder-crm-form .builder-contact-form-field textarea,
-.builder-react-root .builder-crm-form .builder-contact-form-field select {
-  justify-self: var(--crm-form-field-justify, start);
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
-.builder-react-root .builder-crm-form .builder-contact-form-submit {
-  white-space: nowrap;
-}
 .builder-react-root .builder-contact-honeypot {
   position: absolute;
   left: -10000px;
@@ -8815,8 +8157,6 @@ body.asset-associations-modal-open {
   align-self: center;
 }
 .builder-react-root .builder-contact-form-field input,
-.builder-react-root .builder-contact-form-field textarea,
-.builder-react-root .builder-contact-form-field select,
 .builder-react-root .builder-contact-form-input-preview {
   grid-column: 2;
   width: 100%;
@@ -8828,17 +8168,6 @@ body.asset-associations-modal-open {
   color: #18324a;
   font: inherit;
   font-weight: 500;
-  box-sizing: border-box;
-}
-.builder-react-root .builder-contact-form-field textarea {
-  min-height: 96px;
-  resize: vertical;
-}
-.builder-react-root .builder-contact-form-field input[type=checkbox] {
-  width: auto;
-  min-height: 0;
-  justify-self: start;
-  margin: 0;
 }
 .builder-react-root .builder-contact-form-input-preview {
   display: flex;
@@ -8898,8 +8227,6 @@ body.asset-associations-modal-open {
   }
   .builder-react-root .builder-contact-form-field > span:first-child,
   .builder-react-root .builder-contact-form-field input,
-  .builder-react-root .builder-contact-form-field textarea,
-  .builder-react-root .builder-contact-form-field select,
   .builder-react-root .builder-contact-form-input-preview,
   .builder-react-root .builder-contact-form-submit,
   .builder-react-root .builder-contact-form-stub,
@@ -8935,10 +8262,6 @@ body.asset-associations-modal-open {
   gap: 16px;
   border-top: 1px solid rgba(9, 16, 24, 0.08);
   padding-top: 16px;
-}
-.builder-react-root .builder-centered-modal .builder-module-editor {
-  border-top: none;
-  padding-top: 0;
 }
 .builder-react-root .builder-module-preview-copy {
   display: grid;
@@ -9516,11 +8839,7 @@ body.asset-associations-modal-open {
   font-weight: 700;
 }
 .builder-react-root .builder-module-preview-social-item img,
-.builder-react-root .builder-preview-social-item img,
-.builder-react-root .builder-preview-social-icon-img {
-  display: block;
-  width: 100%;
-  height: 100%;
+.builder-react-root .builder-preview-social-item img {
   box-sizing: border-box;
   object-fit: contain;
   padding: clamp(6px, 12%, 16px);
@@ -9558,54 +8877,6 @@ body.asset-associations-modal-open {
   gap: 12px;
   align-content: start;
 }
-.builder-react-root .builder-blog-post-list-settings {
-  display: grid;
-  gap: 16px;
-}
-.builder-react-root .builder-blog-post-list-general-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 20px;
-  align-items: start;
-}
-.builder-react-root .builder-blog-post-list-section-header {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding-bottom: 2px;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: -4px;
-}
-.builder-react-root .builder-blog-post-list-3col {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 20px;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-row {
-  grid-template-columns: minmax(0, 1fr) 150px;
-  gap: 6px;
-  align-items: center;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-label {
-  white-space: normal;
-}
-.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-value select,
-.builder-react-root .builder-module-card .builder-module-editor .builder-blog-post-list-3col .builder-setting-value input[type=number] {
-  width: 150px;
-  max-width: 100%;
-}
-.builder-react-root .builder-blog-post-list-card-manager-note {
-  font-size: 0.8rem;
-  color: #64748b;
-  line-height: 1.5;
-  padding: 8px 12px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  margin-bottom: 10px;
-}
 .builder-react-root .builder-button-border-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9628,18 +8899,18 @@ body.asset-associations-modal-open {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 .builder-react-root .builder-setting-row-full {
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
 }
 .builder-react-root .builder-setting-label {
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--muted);
   text-align: left;
   white-space: nowrap;
-  padding: 2px 6px;
+  padding: 4px 12px;
 }
 .builder-react-root .builder-setting-value {
   display: flex;
@@ -9654,16 +8925,11 @@ body.asset-associations-modal-open {
   width: 100%;
   min-width: 0;
   max-width: none;
-  padding: 4px 6px;
-  border-radius: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
   font: inherit;
-}
-.builder-react-root .builder-setting-value input.builder-field-width-label[type=text] {
-  width: min(250px, 100%);
-  min-width: 200px;
-  max-width: 250px;
 }
 .builder-react-root select.builder-number-select-control,
 .builder-react-root .builder-setting-value select.builder-number-select-control {
@@ -9710,40 +8976,19 @@ body.asset-associations-modal-open {
   border-radius: 10px;
   box-sizing: border-box;
 }
-.builder-react-root .builder-editor-popup {
-  width: min(360px, calc(100vw - 48px));
-  max-height: min(85vh, calc(100dvh - 48px));
-  overflow: hidden;
-  border: 1px solid rgba(9, 16, 24, 0.14);
+.builder-react-root .builder-button-background-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(360px, 92vw);
+  border: 1px solid rgba(9, 16, 24, 0.12);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 40px rgba(9, 16, 24, 0.18);
-  display: flex;
-  flex-direction: column;
-}
-.builder-react-root .builder-editor-popup-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
-}
-.builder-react-root .builder-editor-popup-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--ink-primary, #18324a);
-}
-.builder-react-root .builder-editor-popup-body {
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(9, 16, 24, 0.16);
   padding: 14px;
-  overflow-x: hidden;
-  overflow-y: auto;
   display: grid;
   gap: 12px;
-  flex: 1 1 auto;
-  min-height: 0;
 }
 .builder-react-root .builder-button-background-mode-tabs {
   display: grid;
@@ -9785,10 +9030,9 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-inline-number-row,
 .builder-react-root .builder-button-padding-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 14px;
+  display: flex;
   align-items: center;
+  gap: 64px;
   width: 100%;
 }
 .builder-react-root .builder-inline-number-row {
@@ -9796,10 +9040,11 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-inline-number-field,
 .builder-react-root .builder-button-padding-inline {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
+  flex: 1;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
 }
 .builder-react-root .builder-inline-number-field span,
@@ -9811,9 +9056,10 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-inline-number-field select,
 .builder-react-root .builder-button-padding-inline select {
+  flex: 1;
   width: auto;
-  min-width: 0;
-  max-width: 100%;
+  min-width: 88px;
+  max-width: none;
   padding: 10px 12px;
 }
 .builder-react-root .admin-blog-opacity-row {
@@ -9866,7 +9112,7 @@ body.asset-associations-modal-open {
   width: 100%;
   min-height: 220px;
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: var(--image-radius);
   background: transparent;
 }
 .builder-react-root .builder-preview-image-frame img {
@@ -9876,7 +9122,7 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-preview-video {
   width: 100%;
   max-height: 320px;
-  border-radius: 18px;
+  border-radius: var(--image-radius);
   background: rgba(9, 16, 24, 0.92);
 }
 .builder-react-root .builder-preview-video-card,
@@ -9892,7 +9138,7 @@ body.asset-associations-modal-open {
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid rgba(9, 16, 24, 0.08);
-  border-radius: 18px;
+  border-radius: var(--image-radius);
   background: rgba(9, 16, 24, 0.92);
 }
 .builder-react-root .builder-preview-video-frame iframe,
@@ -10875,14 +10121,8 @@ body.asset-associations-modal-open {
   padding: 5px;
   border-radius: 16px;
 }
-.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-flow: row;
-  grid-auto-columns: unset;
-  gap: 5px;
-}
-.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) > .site-nav-link,
-.builder-react-root .builder-preview-device-mobile .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
+.builder-react-root .builder-preview-device-mobile .site-nav-link {
+  flex-basis: calc(50% - 5px);
   min-height: 38px;
   border-radius: 12px;
   padding: 0 8px;
@@ -11085,39 +10325,6 @@ body.asset-associations-modal-open {
   justify-self: end;
   text-align: right;
 }
-.builder-react-root .builder-preview-module.is-align-center {
-  text-align: center;
-}
-.builder-react-root .builder-preview-module.is-align-right {
-  text-align: right;
-}
-.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-text,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-heading,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-image,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module .builder-preview-button {
-  justify-self: start;
-  text-align: left;
-}
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-text,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-heading,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-image,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-center .builder-preview-button {
-  justify-self: center;
-  text-align: center;
-}
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-text,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-heading,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-image,
-.builder-react-root .builder-preview-table-wrap .builder-preview-module.is-align-right .builder-preview-button {
-  justify-self: end;
-  text-align: right;
-}
-.builder-react-root .builder-module-card.is-align-center .builder-module-preview-copy .builder-preview-button {
-  justify-self: center;
-}
-.builder-react-root .builder-module-card.is-align-right .builder-module-preview-copy .builder-preview-button {
-  justify-self: end;
-}
 .builder-react-root .builder-gallery-button {
   min-width: 0;
 }
@@ -11161,7 +10368,7 @@ body.asset-associations-modal-open {
   place-items: center;
   padding: 24px;
   overflow: hidden;
-  z-index: 10200;
+  z-index: 1000;
 }
 .builder-react-root .builder-gallery-modal {
   width: min(1040px, 100%);
@@ -11197,11 +10404,9 @@ body.asset-associations-modal-open {
   border-radius: 999px;
 }
 .builder-react-root .builder-gallery-modal.builder-module-palette-modal {
-  width: min(1200px, calc(100vw - 48px));
-  height: min(800px, 80dvh);
-  max-height: min(800px, 80dvh);
-  max-width: min(1200px, calc(100vw - 48px));
-  margin: 0 auto;
+  width: min(1200px, calc(100vw - 32px));
+  height: min(800px, calc(100dvh - 32px));
+  max-height: min(800px, calc(100dvh - 32px));
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -11236,6 +10441,7 @@ body.asset-associations-modal-open {
   display: block;
   padding: 0;
 }
+.builder-react-root .builder-gallery-modal.builder-module-palette-modal.is-anchored,
 .builder-react-root .builder-gallery-modal.builder-gallery-modal-rich-text.is-anchored {
   position: fixed;
   margin: 0;
@@ -11277,100 +10483,6 @@ body.asset-associations-modal-open {
   justify-content: flex-end;
   align-items: center;
 }
-.builder-react-root .builder-gallery-source-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid rgba(9, 16, 24, 0.14);
-  border-radius: 8px;
-  background: #f5f7fa;
-}
-.builder-react-root .builder-gallery-source-toggle button {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #415265;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.builder-react-root .builder-gallery-source-toggle button.is-active {
-  background: #101820;
-  color: #ffffff;
-}
-.builder-react-root .community-asset-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.builder-react-root .community-asset-nav-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-.builder-react-root .community-asset-nav-row-sub {
-  padding-left: 10px;
-  border-left: 3px solid rgba(9, 16, 24, 0.08);
-}
-.builder-react-root .community-asset-nav-pill {
-  padding: 5px 13px;
-  border-radius: 20px;
-  border: 1px solid rgba(9, 16, 24, 0.14);
-  background: transparent;
-  color: #415265;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background 0.1s,
-    color 0.1s,
-    border-color 0.1s;
-}
-.builder-react-root .community-asset-nav-pill:hover {
-  background: #e8f4fc;
-  border-color: #1799cb;
-  color: #0a6fa8;
-}
-.builder-react-root .community-asset-nav-pill.is-active {
-  background: #101820;
-  border-color: #101820;
-  color: #ffffff;
-}
-.builder-react-root .community-asset-nav-pill-sub {
-  font-size: 12px;
-  padding: 3px 11px;
-}
-.builder-react-root .community-asset-nav-pill-sub.is-active {
-  background: #0a6fa8;
-  border-color: #0a6fa8;
-  color: #ffffff;
-}
-.builder-react-root .community-asset-nav-search-row {
-  margin-top: 2px;
-}
-.builder-react-root .community-asset-nav-search {
-  width: 100%;
-  max-width: 320px;
-  padding: 7px 12px;
-  border: 1px solid rgba(9, 16, 24, 0.18);
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-  color: #101820;
-  background: #ffffff;
-}
-.builder-react-root .community-asset-nav-search:focus {
-  outline: none;
-  border-color: #1799cb;
-  box-shadow: 0 0 0 3px rgba(23, 153, 203, 0.15);
-}
 .builder-react-root .builder-module-palette-az-sort {
   min-width: 3.25rem;
   padding-inline: 0.85rem;
@@ -11382,54 +10494,6 @@ body.asset-associations-modal-open {
   background: #e8f7fc;
   border-color: #1799cb;
   color: #0f4f8f;
-}
-.builder-react-root .builder-module-palette-sort-icon {
-  width: 36px;
-  height: 36px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  border: 1px solid rgba(9, 16, 24, 0.18);
-  background: transparent;
-  color: #415265;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.1s, color 0.1s;
-}
-.builder-react-root .builder-module-palette-sort-icon:hover {
-  background: #e8f4fc;
-  color: #0f4f8f;
-}
-.builder-react-root .builder-module-palette-sort-icon.builder-icon-button-active {
-  background: rgba(10, 111, 168, 0.12);
-  border-color: #1799cb;
-  color: #0a6fa8;
-}
-.builder-react-root .builder-palette-sort-stars {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-  gap: 0;
-}
-.builder-react-root .builder-palette-sort-star-big {
-  font-size: 13px;
-  line-height: 1;
-}
-.builder-react-root .builder-palette-sort-star-small {
-  font-size: 9px;
-  line-height: 1;
-  opacity: 0.65;
-}
-.builder-react-root .builder-image-link-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  align-items: end;
 }
 .builder-react-root .builder-gallery-header h3 {
   margin: 0;
@@ -11447,22 +10511,6 @@ body.asset-associations-modal-open {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
-}
-.builder-react-root .builder-gallery-grid.community-asset-grid {
-  grid-template-columns: repeat(20, 1fr);
-  gap: 4px;
-}
-.builder-react-root .community-asset-grid .builder-gallery-card {
-  padding: 3px;
-  border-radius: 5px;
-  gap: 0;
-}
-.builder-react-root .community-asset-grid .builder-gallery-thumb {
-  border-radius: 3px;
-}
-.builder-react-root .community-asset-grid .builder-gallery-card > span,
-.builder-react-root .community-asset-grid .builder-gallery-card > small {
-  display: none;
 }
 .builder-react-root .admin-gallery-media-grid {
   position: relative;
@@ -11603,36 +10651,6 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-module-item-card-saved strong {
   text-wrap: balance;
-}
-.builder-react-root .builder-module-palette-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-.builder-react-root .builder-module-palette-breadcrumb-link {
-  font-weight: 700;
-  color: #0a8fc4;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.builder-react-root .builder-module-palette-breadcrumb-link:hover {
-  color: #076b96;
-}
-.builder-react-root .builder-module-palette-breadcrumb-sep {
-  color: rgba(9, 16, 24, 0.38);
-  font-size: 1.1em;
-  line-height: 1;
-}
-.builder-react-root .builder-module-palette-breadcrumb-current {
-  font-weight: 700;
-  color: var(--night);
 }
 .builder-react-root .builder-module-palette-empty {
   margin: 0;
@@ -12447,12 +11465,6 @@ body.asset-associations-modal-open {
   border: 2px solid var(--error-notice-border, #9f2d2d);
   box-shadow: none;
 }
-.builder-react-root .notice.warning {
-  color: #7a5200;
-  background: #fff8e1;
-  border: 2px solid #f0a500;
-  box-shadow: none;
-}
 @media (max-width: 900px) {
   .builder-react-root .hero-top-row,
   .builder-react-root .intro-grid,
@@ -12677,10 +11689,8 @@ body.asset-associations-modal-open {
   .builder-react-root .admin-nav-bar .admin-nav-link {
     flex-basis: calc(50% - 6px);
   }
-  .builder-react-root .site-nav:not(.site-nav--vertical) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-flow: row;
-    grid-auto-columns: unset;
+  .builder-react-root .site-nav-link {
+    flex-basis: calc(50% - 6px);
   }
   .builder-react-root .builder-module-alignment-controls {
     justify-items: start;
@@ -12707,14 +11717,8 @@ body.asset-associations-modal-open {
     padding: 5px;
     gap: 5px;
   }
-  .builder-react-root .site-nav:not(.site-nav--vertical) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-flow: row;
-    grid-auto-columns: unset;
-    gap: 5px;
-  }
-  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-link,
-  .builder-react-root .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
+  .builder-react-root .site-nav-link {
+    flex-basis: calc(50% - 5px);
     min-height: 38px;
     border-radius: 12px;
     padding: 0 8px;
@@ -12821,6 +11825,23 @@ body.asset-associations-modal-open {
 .builder-react-root .normie-effect-big-bounce {
   animation: normie-big-bounce calc(1.6s / 3) infinite;
 }
+@keyframes normie-flips {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    animation-timing-function: ease-in;
+  }
+  50% {
+    transform: translateY(-36px) rotate(180deg);
+    animation-timing-function: ease-out;
+  }
+  100% {
+    transform: translateY(0) rotate(360deg);
+    animation-timing-function: ease-in;
+  }
+}
+.builder-react-root .normie-effect-flips {
+  animation: normie-flips calc(3.2s / 3) infinite;
+}
 @keyframes normie-spin {
   from {
     transform: rotate(0deg);
@@ -12832,7 +11853,24 @@ body.asset-associations-modal-open {
 .builder-react-root .normie-effect-spin {
   animation: normie-spin 2.4s linear infinite;
 }
-@keyframes normie-cruise {
+.builder-react-root .builder-preview-image-shell:has(.normie-effect-axis-rotate),
+.builder-react-root .player-game-floating-image-host .builder-preview-image-shell:has(.normie-effect-axis-rotate) {
+  perspective: 900px;
+}
+@keyframes normie-axis-rotate {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(360deg);
+  }
+}
+.builder-react-root .normie-effect-axis-rotate {
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  animation: normie-axis-rotate 2.4s linear infinite;
+}
+@keyframes normie-slide {
   0% {
     transform: translateX(-100vw);
   }
@@ -12840,10 +11878,10 @@ body.asset-associations-modal-open {
     transform: translateX(100vw);
   }
 }
-.builder-react-root .normie-effect-cruise {
-  animation: normie-cruise 8s linear infinite;
+.builder-react-root .normie-effect-slide {
+  animation: normie-slide 8s linear infinite;
 }
-@keyframes normie-tumbleweed {
+@keyframes normie-cartwheels {
   0% {
     transform: translateX(-100vw) translateY(0) rotate(0deg);
   }
@@ -12872,14 +11910,61 @@ body.asset-associations-modal-open {
     transform: translateX(100vw) translateY(0) rotate(1440deg);
   }
 }
-.builder-react-root .normie-effect-tumbleweed {
-  animation: normie-tumbleweed 8s linear infinite;
+.builder-react-root .normie-effect-cartwheels {
+  animation: normie-cartwheels 8s linear infinite;
+}
+@keyframes normie-parkour {
+  0% {
+    transform: translateX(-100vw) translateY(0) rotate(0deg) rotateY(0deg);
+  }
+  12.5% {
+    transform: translateX(-75vw) translateY(-36px) rotate(150deg) rotateY(150deg);
+  }
+  25% {
+    transform: translateX(-50vw) translateY(0) rotate(300deg) rotateY(300deg);
+  }
+  37.5% {
+    transform: translateX(-25vw) translateY(-36px) rotate(450deg) rotateY(450deg);
+  }
+  50% {
+    transform: translateX(0) translateY(0) rotate(600deg) rotateY(600deg);
+  }
+  62.5% {
+    transform: translateX(25vw) translateY(-36px) rotate(750deg) rotateY(750deg);
+  }
+  75% {
+    transform: translateX(50vw) translateY(0) rotate(900deg) rotateY(900deg);
+  }
+  87.5% {
+    transform: translateX(75vw) translateY(-36px) rotate(1050deg) rotateY(1050deg);
+  }
+  100% {
+    transform: translateX(100vw) translateY(0) rotate(1200deg) rotateY(1200deg);
+  }
+}
+.builder-react-root .normie-effect-parkour {
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  animation: normie-parkour 8s linear infinite;
 }
 .builder-react-root .normie-effect-motion-clip {
   overflow-x: clip;
   overflow-y: visible;
   width: 100%;
   min-height: 1px;
+}
+.builder-react-root .normie-effect-motion-stage {
+  width: var(--normie-floating-image-width, 15%);
+  max-width: 100%;
+}
+.builder-react-root .normie-effect-motion-stage > .builder-preview-image,
+.builder-react-root .normie-effect-motion-stage > .builder-module-preview-image {
+  width: 100%;
+  max-width: none;
+}
+.builder-react-root .normie-effect-motion-clip:has(.normie-effect-parkour) {
+  perspective: 1600px;
+  perspective-origin: center center;
 }
 .builder-react-root .builder-preview-module-overlay-flow .normie-effect-motion-clip,
 .builder-react-root .builder-preview-overlay-layer .normie-effect-motion-clip,
@@ -12889,8 +11974,8 @@ body.asset-associations-modal-open {
   width: 100%;
   height: 100%;
 }
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-tumbleweed) > .builder-preview-image-shell-overlay,
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-cruise) > .builder-preview-image-shell-overlay {
+.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-cartwheels) > .builder-preview-image-shell-overlay,
+.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-slide) > .builder-preview-image-shell-overlay {
   inset: 0 auto auto 0 !important;
   top: 0 !important;
   right: auto !important;
@@ -12901,10 +11986,21 @@ body.asset-associations-modal-open {
   min-height: 220px;
   transform: none !important;
 }
-.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-tumbleweed) .normie-effect-motion-clip,
-.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-cruise) .normie-effect-motion-clip,
-.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-tumbleweed) .normie-effect-motion-clip,
-.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-cruise) .normie-effect-motion-clip {
+.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-parkour) > .builder-preview-image-shell-overlay {
+  inset: 0 auto auto 0 !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 240px;
+  transform: none !important;
+}
+.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-cartwheels) .normie-effect-motion-clip,
+.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-slide) .normie-effect-motion-clip,
+.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-cartwheels) .normie-effect-motion-clip,
+.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-slide) .normie-effect-motion-clip {
   position: relative;
   width: 100%;
   min-height: 220px;
@@ -12914,10 +12010,18 @@ body.asset-associations-modal-open {
   overflow-y: visible;
   box-sizing: border-box;
 }
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-tumbleweed) .normie-effect-tumbleweed,
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-cruise) .normie-effect-cruise {
-  width: auto;
-  max-width: none;
+.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-parkour) .normie-effect-motion-clip,
+.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-parkour) .normie-effect-motion-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 240px;
+  padding-top: 48px;
+  margin-top: -48px;
+  padding-bottom: 48px;
+  overflow-x: clip;
+  overflow-y: visible;
+  box-sizing: content-box;
 }
 .builder-react-root .builder-section-title-edit-hint {
   display: none;
@@ -13099,16 +12203,14 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .blog-index-header,
 .builder-react-root .blog-post-header {
-  display: block;
   margin-bottom: 28px;
 }
 .builder-react-root .blog-post-page .blog-post-header h1.blog-post-title {
-  margin: 0 0 16px;
+  margin: 50px 0 12px;
   max-width: none;
-  font-size: clamp(1.4rem, 2.5vw, 2rem);
-  line-height: 1.2;
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  line-height: 1.15;
   font-weight: 800;
-  color: var(--ink-primary, #111);
 }
 .builder-react-root .blog-post-header .blog-card-date {
   margin: 0 0 8px;
@@ -13129,6 +12231,8 @@ body.asset-associations-modal-open {
 .builder-react-root .blog-post-featured-image {
   display: block;
   width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
   border-radius: var(--blog-pod-radius, 20px);
   margin-bottom: 28px;
 }
@@ -13190,6 +12294,30 @@ body.asset-associations-modal-open {
   flex-wrap: wrap;
   gap: 8px;
   margin: 28px 0 16px;
+}
+.builder-react-root .admin-blog-posts-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.builder-react-root .admin-blog-post-thumb-cell {
+  width: 240px;
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+.builder-react-root .admin-blog-post-thumb {
+  display: block;
+  width: 240px;
+  height: 135px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(9, 16, 24, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+}
+.builder-react-root .admin-blog-featured-image-preview {
+  margin-top: 12px;
 }
 .builder-react-root .admin-blog-view-tabs {
   display: flex;
@@ -13544,6 +12672,9 @@ body.asset-associations-modal-open {
   margin: 0;
 }
 @media (max-width: 900px) {
+  .builder-react-root .admin-blog-posts-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .builder-react-root .admin-blog-editor-layout {
     grid-template-columns: 1fr;
   }
@@ -13569,929 +12700,28 @@ body.asset-associations-modal-open {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-.builder-react-root .builder-forms-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.builder-react-root .builder-forms-page-header {
+.builder-react-root .builder-nav-item-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--builder-inner-border);
-  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
 }
-.builder-react-root .builder-forms-page-title {
-  flex: 1;
-  font-size: 1rem;
-  font-weight: 700;
-  min-width: 0;
-}
-.builder-react-root .builder-forms-editor {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 24px;
-  align-items: start;
-}
-.builder-react-root .builder-forms-editor-fields {
+.builder-react-root .builder-nav-item-fields {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.builder-react-root .builder-forms-editor-preview {
-  position: sticky;
-  top: 16px;
-}
-.builder-react-root .builder-forms-section {
-  padding: 14px 16px;
-  border: 1px solid var(--builder-inner-border);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.builder-react-root .builder-forms-section-heading {
-  margin: 0 0 2px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--builder-text-muted);
-}
-.builder-react-root .builder-forms-section-note {
-  margin: 0;
-  font-size: 0.84rem;
-  color: var(--builder-text-muted);
-}
-.builder-react-root .builder-forms-field-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--builder-inner-border);
-}
-.builder-react-root .builder-forms-field-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-.builder-react-root .builder-forms-field-label {
-  flex: 1;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-.builder-react-root .builder-forms-checkbox-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
-.builder-react-root .builder-forms-preview-card {
-  padding: 22px 20px;
-  border: 2px solid #0b82d4;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: #fff;
-}
-.builder-react-root .builder-forms-preview-heading {
-  margin: 0 0 4px;
-  font-size: 1.15rem;
-  font-weight: 800;
-  line-height: 1.2;
-}
-.builder-react-root .builder-forms-preview-input {
-  display: block;
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px solid #cdd5de;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 0.92rem;
-  background: #f8fafc;
-  color: #6b7a8d;
-  pointer-events: none;
-  box-sizing: border-box;
-}
-.builder-react-root .builder-forms-preview-btn {
-  align-self: stretch;
-  padding: 11px 20px;
-  border: 2px solid currentColor;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
-  cursor: default;
-  text-align: center;
-}
-.builder-react-root .builder-forms-list {
-  margin-top: 4px;
-}
-.builder-react-root .builder-forms-empty {
-  color: var(--builder-text-muted);
-  font-style: italic;
-  padding: 12px 0;
-}
-.builder-react-root .builder-forms-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.88rem;
-}
-.builder-react-root .builder-forms-table th,
-.builder-react-root .builder-forms-table td {
-  padding: 8px 10px;
-  text-align: left;
-  border-bottom: 1px solid var(--builder-inner-border);
-}
-.builder-react-root .builder-forms-table th {
-  font-weight: 700;
-  font-size: 0.77rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--builder-text-muted);
-  white-space: nowrap;
-}
-.builder-react-root .builder-forms-table tbody tr:last-child td {
-  border-bottom: none;
-}
-.builder-react-root .builder-forms-table tbody tr:hover td {
-  background: rgba(11, 130, 212, 0.04);
-}
-.builder-react-root .builder-forms-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.builder-react-root .builder-admin-data-table-module {
-  width: 100%;
-  font-family: inherit;
-  --admin-table-header-bg: var(--crm-theme-primary, #0b3d7a);
-  --admin-table-header-text: #fff;
-  --admin-table-filter-bg: var(--crm-theme-secondary, #b8e0ff);
-  --admin-table-ink: var(--bx-heading, #18324a);
-  --admin-table-muted: #587592;
-  --admin-table-border: #c9dcea;
-  --admin-table-accent: var(--crm-theme-accent, var(--crm-theme-primary, #0b4f8f));
-  --admin-table-btn-bg: color-mix(in srgb, var(--admin-table-filter-bg) 55%, #fff);
-  --admin-table-row-alt: color-mix(in srgb, var(--admin-table-filter-bg) 18%, #fff);
-  --admin-table-row-hover: color-mix(in srgb, var(--admin-table-filter-bg) 35%, #fff);
-}
-.builder-react-root .builder-admin-data-table-title {
-  margin: 0 0 12px;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--admin-table-ink);
-}
-.builder-react-root .builder-admin-data-table-wrap {
-  width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--admin-table-border);
-  border-radius: 10px;
-}
-.builder-react-root .builder-admin-data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-  color: var(--admin-table-ink);
-  table-layout: fixed;
-}
-.builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-filter-row th {
-  background: var(--admin-table-filter-bg);
-  border-bottom: 1px solid var(--admin-table-border);
-  padding: 8px 10px;
-  font-weight: 400;
-  cursor: default;
-  vertical-align: middle;
-}
-.builder-react-root .builder-admin-data-table-filter-row .builder-admin-data-table-filter-input {
-  width: 100%;
-  min-width: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--admin-table-border);
-  border-radius: 8px;
-  font: inherit;
-  font-size: 0.875rem;
-  background: #fff;
-  color: var(--admin-table-ink);
-  box-sizing: border-box;
-}
-.builder-react-root .builder-admin-data-table-filter-row th.builder-admin-data-table-actions-col {
-  text-align: center;
-  width: 8.5rem;
-  min-width: 8.5rem;
-}
-.builder-react-root .builder-admin-data-table-filter-row .btn.tiny-btn {
-  white-space: nowrap;
-  width: fit-content;
-}
-.builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-header-row th,
-.builder-react-root .builder-admin-data-table thead tr:not(.builder-admin-data-table-filter-row) th {
-  background: var(--admin-table-header-bg);
-  color: var(--admin-table-header-text);
-  font-weight: 700;
-  font-size: 0.8rem;
-  padding: 9px 12px;
-  text-align: left;
-  border-bottom: 1px solid color-mix(in srgb, var(--admin-table-header-bg) 80%, #000);
-  white-space: nowrap;
-}
-.builder-react-root .builder-admin-data-table-sortable {
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-.builder-react-root .builder-admin-data-table-sortable:hover {
-  background: color-mix(in srgb, var(--admin-table-filter-bg) 65%, var(--admin-table-header-bg)) !important;
-  color: var(--admin-table-header-bg) !important;
-}
-.builder-react-root .builder-admin-data-table thead th.builder-admin-data-table-actions-col {
-  text-align: center;
-  width: 8.5rem;
-  min-width: 8.5rem;
-}
-.builder-react-root .builder-admin-data-table tbody tr:nth-child(even) {
-  background: var(--admin-table-row-alt);
-}
-.builder-react-root .builder-admin-data-table tbody tr:hover {
-  background: var(--admin-table-row-hover);
-}
-.builder-react-root .builder-admin-data-table .builder-admin-data-table-cell {
-  padding: 8px 12px;
-  border-bottom: 1px solid #edf2f7;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.builder-react-root .builder-admin-data-table .builder-admin-data-table-date {
-  white-space: nowrap;
-  color: var(--admin-table-muted);
-  font-size: 0.8rem;
-}
-.builder-react-root .builder-admin-data-table .builder-admin-data-table-empty {
-  padding: 24px;
-  text-align: center;
-  color: #7b8fa3;
-  font-size: 0.9rem;
-}
-.builder-react-root .builder-admin-data-table .builder-admin-data-table-actions {
-  padding: 6px 8px;
-  white-space: nowrap;
-  border-bottom: 1px solid #edf2f7;
-  text-align: center;
-  width: 8.5rem;
-  min-width: 8.5rem;
-}
-.builder-react-root .builder-admin-data-table-actions .table-actions-row {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  gap: 4px;
-  justify-content: center;
-  align-items: center;
-}
-.builder-react-root .builder-admin-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 8px;
-  border: 1px solid var(--admin-table-border);
-  background: #fff;
-  color: var(--admin-table-ink);
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(19, 44, 68, 0.08);
-}
-.builder-react-root .builder-admin-icon-btn-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-.builder-react-root .builder-admin-icon-btn-glyph svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-.builder-react-root .builder-admin-icon-btn:hover,
-.builder-react-root .builder-admin-icon-btn:focus-visible {
-  background: color-mix(in srgb, var(--admin-table-filter-bg) 45%, #fff);
-  border-color: color-mix(in srgb, var(--admin-table-accent) 45%, var(--admin-table-border));
-  color: var(--admin-table-accent);
-}
-.builder-react-root .builder-admin-icon-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-.builder-react-root .builder-admin-icon-btn-danger {
-  color: #8f1f1f;
-  border-color: #e0c0c0;
-}
-.builder-react-root .builder-admin-icon-btn-danger:hover,
-.builder-react-root .builder-admin-icon-btn-danger:focus-visible {
-  background: #fff0f0;
-  border-color: #d8a0a0;
-  color: #8f1f1f;
-}
-.builder-react-root a.builder-admin-icon-btn {
-  text-decoration: none;
-  color: var(--admin-table-ink);
-}
-.builder-react-root .builder-blog-post-create-form {
-  width: 100%;
-  max-width: none;
-}
-.builder-react-root .builder-blog-post-manager-module {
-  width: 100%;
-}
-.builder-react-root .builder-blog-post-manager-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--admin-table-border, #c9dcea);
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-}
-.builder-react-root .builder-blog-post-manager-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #edf2f7;
-}
-.builder-react-root .builder-blog-post-manager-item:last-child {
-  border-bottom: none;
-}
-.builder-react-root .builder-blog-post-manager-item:nth-child(even) {
-  background: var(--admin-table-row-alt, #f7fbff);
-}
-.builder-react-root .builder-blog-post-manager-item:hover {
-  background: var(--admin-table-row-hover, #eef6fc);
-}
-.builder-react-root .builder-blog-post-manager-item-thumb {
-  flex: 0 0 auto;
-}
-.builder-react-root .builder-blog-post-manager-item-body {
   flex: 1 1 auto;
-  min-width: 0;
-}
-.builder-react-root .builder-blog-post-manager-item-title {
-  font-weight: 600;
-  color: var(--admin-table-ink, #18324a);
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.builder-react-root .builder-blog-post-manager-item-meta {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: 8px;
-  margin-top: 4px;
-  font-size: 0.8rem;
-  color: var(--admin-table-muted, #587592);
 }
-.builder-react-root .builder-blog-post-manager-status {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  border-radius: 4px;
-  padding: 2px 8px;
-  text-transform: lowercase;
-}
-.builder-react-root .builder-blog-post-manager-item-actions {
-  flex: 0 0 auto;
-}
-.builder-react-root .builder-blog-post-manager-stub {
-  padding: 2rem;
-  text-align: center;
-  color: #7b8fa3;
-  border: 1px dashed #cbd5e1;
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-.builder-react-root .builder-blog-post-manager-thumb {
-  display: block;
-  width: 64px;
-  height: 48px;
-  max-width: 64px;
-  max-height: 48px;
-  flex-shrink: 0;
-  object-fit: cover;
-  border-radius: 4px;
-  background: #f3f4f6;
-}
-.builder-react-root .builder-blog-post-manager-thumb-placeholder {
-  display: block;
-  width: 64px;
-  height: 48px;
-  max-width: 64px;
-  max-height: 48px;
-  flex-shrink: 0;
-  border-radius: 4px;
-  background: #f3f4f6;
-  border: 1px dashed #d1d5db;
-}
-.builder-react-root .builder-blog-card-manager-module {
-  font-family: inherit;
-}
-.builder-react-root .bcm-controls-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-  align-items: flex-end;
-  padding: 12px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-.builder-react-root .bcm-control {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.builder-react-root .bcm-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-.builder-react-root .bcm-unit {
-  font-size: 0.72rem;
-  color: #94a3b8;
-}
-.builder-react-root .bcm-color-input {
-  padding: 2px;
-  width: 40px;
-  height: 28px;
-  border: 1px solid #cbd5e0;
-  border-radius: 5px;
-  background: #fff;
-  cursor: pointer;
-}
-.builder-react-root .bcm-btn-group {
-  display: flex;
-  gap: 0;
-}
-.builder-react-root .bcm-toggle-btn,
-.builder-react-root .bcm-col-btn {
-  padding: 4px 10px;
-  border: 1px solid #cbd5e0;
-  border-right-width: 0;
-  background: #fff;
-  color: #4a5568;
-  font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s;
-}
-.builder-react-root .bcm-toggle-btn:first-child,
-.builder-react-root .bcm-col-btn:first-child {
-  border-radius: 5px 0 0 5px;
-}
-.builder-react-root .bcm-toggle-btn:last-child,
-.builder-react-root .bcm-col-btn:last-child {
-  border-right-width: 1px;
-  border-radius: 0 5px 5px 0;
-}
-.builder-react-root .bcm-toggle-btn:only-child,
-.builder-react-root .bcm-col-btn:only-child {
-  border-right-width: 1px;
-  border-radius: 5px;
-}
-.builder-react-root .bcm-toggle-btn:hover:not(:disabled),
-.builder-react-root .bcm-col-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-}
-.builder-react-root .bcm-toggle-btn.is-on,
-.builder-react-root .bcm-col-btn.is-on {
-  background: #0f4f8f;
-  border-color: #0f4f8f;
-  color: #fff;
-  font-weight: 600;
-}
-.builder-react-root .bcm-body {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 16px;
-}
-@media (max-width: 720px) {
-  .builder-react-root .bcm-body {
-    grid-template-columns: 1fr;
-  }
-}
-.builder-react-root .bcm-rows-panel,
-.builder-react-root .bcm-preview-panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 14px;
-}
-.builder-react-root .bcm-preview-panel {
-  background: #f8fafc;
-}
-.builder-react-root .bcm-panel-header {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #64748b;
-  margin-bottom: 4px;
-}
-.builder-react-root .bcm-panel-hint {
-  font-size: 0.72rem;
-  color: #94a3b8;
-  margin-bottom: 12px;
-  line-height: 1.4;
-}
-.builder-react-root .bcm-row-list {
-  list-style: none;
-  margin: 0 0 12px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.builder-react-root .bcm-row-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #f8fafc;
-}
-.builder-react-root .bcm-row-arrows {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.builder-react-root .bcm-arrow-btn {
-  padding: 2px 5px;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  background: #fff;
-  color: #64748b;
-  font-size: 0.6rem;
-  cursor: pointer;
-  line-height: 1.5;
-  transition: background 0.1s;
-}
-.builder-react-root .bcm-arrow-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-}
-.builder-react-root .bcm-arrow-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-.builder-react-root .bcm-col-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #64748b;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.builder-react-root .bcm-row-slots {
-  display: flex;
-  gap: 6px;
-  flex: 1;
+.builder-react-root .builder-nav-item-fields > select,
+.builder-react-root .builder-nav-item-fields > input {
+  flex: 1 1 120px;
   min-width: 0;
 }
-.builder-react-root .bcm-slot-select {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 6px;
-  border: 1px solid #cbd5e0;
-  border-radius: 5px;
-  font: inherit;
-  font-size: 0.78rem;
-  background: #fff;
-  cursor: pointer;
+.builder-react-root .builder-nav-item-width {
+  flex: 0 0 110px;
 }
-.builder-react-root .bcm-delete-icon-btn {
-  flex-shrink: 0;
-  padding: 4px 5px;
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  cursor: pointer;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s, background 0.15s;
-}
-.builder-react-root .bcm-delete-icon-btn:hover {
-  color: #dc2626;
-  background: #fef2f2;
-}
-.builder-react-root .bcm-add-row-btn {
-  display: block;
-  width: 100%;
-  padding: 6px 0;
-  border: 1px dashed #94a3b8;
-  border-radius: 5px;
-  background: transparent;
-  color: #64748b;
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
-  text-align: center;
-  transition: background 0.1s, border-color 0.1s;
-}
-.builder-react-root .bcm-add-row-btn:hover {
-  background: #f1f5f9;
-  border-color: #64748b;
-}
-.builder-react-root .bcm-preview-body {
-  display: flex;
-  justify-content: center;
-}
-.builder-react-root .bcm-save-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-}
-.builder-react-root .bcm-save-btn {
-  padding: 7px 18px;
-  border: none;
-  border-radius: 6px;
-  background: #0f4f8f;
-  color: #fff;
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-.builder-react-root .bcm-save-btn:hover:not(:disabled) {
-  background: #0d4278;
-}
-.builder-react-root .bcm-save-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.builder-react-root .bcm-save-msg {
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-.builder-react-root .bcm-save-msg.is-ok {
-  color: #16a34a;
-}
-.builder-react-root .bcm-save-msg.is-err {
-  color: #dc2626;
-}
-.builder-react-root .bcm-save-note {
-  font-size: 0.72rem;
-  color: #94a3b8;
-  margin-left: auto;
-}
-.builder-react-root .builder-blog-card-manager-settings {
-  padding: 8px 0;
-}
-.builder-react-root .builder-blog-card-manager-settings-note {
-  font-size: 0.8rem;
-  color: #718096;
-  line-height: 1.5;
-  margin: 0;
-}
-.builder-react-root .builder-admin-data-table-delete-copy {
-  margin: 0;
-  font-size: 0.9rem;
-  color: var(--admin-table-ink);
-}
-.builder-react-root .crm-contacts-modal-btn-danger {
-  background: #8f1f1f;
-  border-color: #8f1f1f;
-  color: #fff;
-  font-weight: 600;
-}
-.builder-react-root .crm-contacts-modal-btn-danger:hover:not(:disabled) {
-  background: #761919;
-}
-.builder-react-root .builder-admin-data-table-role-badge {
-  display: inline-block;
-  text-transform: capitalize;
-  font-size: 0.8rem;
-  background: color-mix(in srgb, var(--admin-table-filter-bg) 40%, #fff);
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: var(--admin-table-ink);
-}
-.builder-react-root .builder-admin-action-btn {
-  padding: 3px 8px;
-  border: 1px solid #c9dcea;
-  border-radius: 5px;
-  background: #fff;
-  color: #18324a;
-  font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-  margin-right: 4px;
-}
-.builder-react-root .builder-admin-action-btn:hover {
-  background: #eef5fc;
-}
-.builder-react-root .builder-admin-action-btn-danger {
-  border-color: #e0c0c0;
-  color: #8f1f1f;
-}
-.builder-react-root .builder-admin-action-btn-danger:hover {
-  background: #fff0f0;
-}
-.builder-react-root .builder-admin-data-table-pagination {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 10px;
-  font-size: 0.875rem;
-  color: #18324a;
-}
-.builder-react-root .builder-admin-data-table-pagination button {
-  padding: 4px 10px;
-  border: 1px solid #c9dcea;
-  border-radius: 6px;
-  background: #fff;
-  color: #18324a;
-  font: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-.builder-react-root .builder-admin-data-table-pagination button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.builder-react-root .builder-admin-data-table-count {
-  margin-top: 6px;
-  font-size: 0.8rem;
-  color: #7b8fa3;
-}
-.builder-react-root .builder-admin-data-table-stub {
-  padding: 16px 0;
-  font-size: 0.9rem;
-  color: #7b8fa3;
-}
-.builder-react-root .builder-admin-data-table-stub.is-error {
-  color: #8f1f1f;
-}
-.builder-react-root .builder-admin-data-table-inline-error {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.78rem;
-  color: #8f1f1f;
-}
-.builder-react-root .crm-contacts-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(9, 16, 24, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2147483647;
-  padding: 16px;
-}
-.builder-react-root .crm-contacts-modal {
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 8px 40px rgba(9, 16, 24, 0.2);
-  width: 100%;
-  max-width: 520px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.builder-react-root .crm-contacts-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid #e4ecf2;
-  font-size: 1rem;
-}
-.builder-react-root .crm-contacts-modal-close {
-  background: none;
-  border: none;
-  font-size: 1.1rem;
-  cursor: pointer;
-  color: #7b8fa3;
-  line-height: 1;
-  padding: 0;
-}
-.builder-react-root .crm-contacts-modal-close:hover {
-  color: #18324a;
-}
-.builder-react-root .crm-contacts-modal-body {
-  padding: 14px 18px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.builder-react-root .crm-contacts-modal-row {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 8px;
-  align-items: start;
-  font-size: 0.9rem;
-}
-.builder-react-root .crm-contacts-modal-row-edit {
-  grid-template-columns: 120px 1fr;
-}
-.builder-react-root .crm-contacts-modal-label {
-  font-weight: 600;
-  color: #587592;
-  font-size: 0.82rem;
-  padding-top: 3px;
-}
-.builder-react-root .crm-contacts-modal-value {
-  color: #18324a;
-  word-break: break-word;
-}
-.builder-react-root .crm-contacts-modal-input {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid #c9dcea;
-  border-radius: 7px;
-  font: inherit;
-  font-size: 0.88rem;
-  color: #18324a;
-  background: #fff;
-  box-sizing: border-box;
-}
-.builder-react-root .crm-contacts-modal-input:focus {
-  outline: none;
-  border-color: #1dc3ff;
-  box-shadow: 0 0 0 2px rgba(29, 195, 255, 0.18);
-}
-.builder-react-root textarea.crm-contacts-modal-input {
-  resize: vertical;
-}
-.builder-react-root .crm-contacts-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid #e4ecf2;
-}
-.builder-react-root .crm-contacts-modal-btn {
-  padding: 7px 16px;
-  border: 1px solid #c9dcea;
-  border-radius: 8px;
-  background: #fff;
-  color: #18324a;
-  font: inherit;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
-.builder-react-root .crm-contacts-modal-btn:disabled {
+.builder-react-root .builder-nav-item-width:disabled {
   opacity: 0.5;
-  cursor: default;
-}
-.builder-react-root .crm-contacts-modal-btn-primary {
-  background: #0b4f8f;
-  border-color: #0b4f8f;
-  color: #fff;
-  font-weight: 600;
-}
-.builder-react-root .crm-contacts-modal-btn-primary:hover:not(:disabled) {
-  background: #0d3f72;
-}
-.builder-react-root .builder-crm-contacts-table-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.builder-react-root .builder-contact-form-settings {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-@media (max-width: 900px) {
-  .builder-react-root .builder-forms-editor {
-    grid-template-columns: 1fr;
-  }
-  .builder-react-root .builder-forms-editor-preview {
-    position: static;
-  }
 }
 
 /* src/css/_builder-react-overrides.css */
@@ -19902,11 +18132,6 @@ button.builder-inline-asset-status-btn:focus-visible {
 #builderModulesTypeHelp {
   margin-left: calc(var(--modules-label-col) + var(--modules-row-gap));
   color: #365271;
-}
-#builderModulesSettingsFields {
-  display: grid;
-  gap: 0.7rem;
-  grid-template-columns: 1fr;
 }
 #builderModulesForm input[type=text],
 #builderModulesForm input[type=number],
@@ -25946,6 +24171,13 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   display: flex;
   flex-wrap: nowrap;
 }
+.site-nav--sizing-custom .site-nav-menu--horizontal {
+  display: flex;
+  flex-wrap: nowrap;
+}
+.site-nav--sizing-custom .site-nav-menu--horizontal > .site-nav-item {
+  flex: 0 0 auto;
+}
 .site-nav-menu--horizontal .site-nav-item--has-children {
   position: relative;
 }
@@ -25996,6 +24228,18 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   width: 100%;
+}
+.site-nav--sizing-auto:not(.site-nav--vertical),
+.site-nav--sizing-custom:not(.site-nav--vertical) {
+  display: flex;
+  flex-wrap: nowrap;
+}
+.site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-link,
+.site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-dropdown,
+.site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-link,
+.site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-dropdown {
+  flex: 0 0 auto;
+  width: auto;
 }
 .site-nav:not(.site-nav--vertical) > .site-nav-link,
 .site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
