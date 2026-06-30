@@ -2772,6 +2772,21 @@ button[type="submit"] {
   line-height: 1.35;
 }
 
+.messaging-tags-bulk-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.messaging-tags-bulk-list li {
+  margin: 0.35rem 0;
+}
+
+.messaging-tag-topic-inline-select {
+  width: auto;
+  min-width: 140px;
+  max-width: 220px;
+}
+
 .asset-edit-layout #assetForm {
   margin: 0;
 }

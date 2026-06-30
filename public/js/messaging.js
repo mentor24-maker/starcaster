@@ -133,6 +133,7 @@ App.messaging = (function () {
       key: 'tag',
       dir: 'asc',
     },
+    pendingBulkTopic: '',
   };
   const selectedTagIds = new Set();
   const messagingFormatTableState = {
@@ -7642,20 +7643,122 @@ App.messaging = (function () {
     }
   }
 
+  function getMessagingTopicNames() {
+    return currentMessagingTopics
+      .map((item) => String(item?.topic || item?.category || '').trim())
+      .filter(Boolean)
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+      .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  }
+
+  function populateMessagingTagTopicSelect(select, currentValue, options = {}) {
+    if (!select) return;
+    const isFilter = options.isFilter === true;
+    const preserved = String(currentValue != null ? currentValue : select.value || '').trim();
+    const topicNames = getMessagingTopicNames();
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = isFilter ? 'All Topics' : 'No Topic';
+    select.appendChild(placeholder);
+    topicNames.forEach((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+    if (preserved && Array.from(select.options).some((option) => option.value === preserved)) {
+      select.value = preserved;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function buildMessagingTagTopicSelect(item) {
+    const select = document.createElement('select');
+    select.className = 'messaging-tag-topic-inline-select';
+    select.setAttribute('aria-label', `Topic for ${String(item.tag || 'tag')}`);
+    populateMessagingTagTopicSelect(select, String(item.topic || item.category || ''));
+    select.addEventListener('change', async function () {
+      const tagId = Number(item.id || 0) || 0;
+      if (!tagId) return;
+      const topic = String(select.value || '').trim();
+      const previous = String(item.topic || item.category || '').trim();
+      try {
+        await api(`/api/messaging/tags/${encodeURIComponent(tagId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ topic }),
+        });
+        item.topic = topic;
+        const stored = currentMessagingTags.find((row) => Number(row.id || 0) === tagId);
+        if (stored) stored.topic = topic;
+      } catch (err) {
+        notify(err.message, true);
+        select.value = previous;
+      }
+    });
+    return select;
+  }
+
+  async function confirmMessagingTagsBulkTopicAssociation() {
+    const topic = String(messagingTagTableState.pendingBulkTopic || '').trim();
+    const idsToUpdate = Array.from(selectedTagIds);
+    if (!idsToUpdate.length) {
+      notify('Select at least one tag first', true);
+      return false;
+    }
+    if (!topic) {
+      notify('Select a topic in the filter bar first', true);
+      return false;
+    }
+    try {
+      await Promise.all(idsToUpdate.map((id) => api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ topic }),
+      })));
+      notify(`${idsToUpdate.length} tag${idsToUpdate.length === 1 ? '' : 's'} associated with ${topic}`);
+      selectedTagIds.clear();
+      messagingTagTableState.pendingBulkTopic = '';
+      await refreshMessagingTags();
+      App.setActivePage('messagingTagsPage');
+      return true;
+    } catch (err) {
+      notify(err.message, true);
+      return false;
+    }
+  }
+
   function openMessagingTagsBulkEditPage() {
     if (!selectedTagIds.size) {
       notify('Select at least one tag first', true);
       return;
     }
-    const summary = document.getElementById('messagingTagsBulkEditSummary');
-    const tagInput = document.getElementById('messagingTagsBulkEditTag');
-    const topicSelect = document.getElementById('messagingTagsBulkEditTopic');
-    if (summary) {
-      summary.textContent = `${selectedTagIds.size} tag${selectedTagIds.size === 1 ? '' : 's'} selected.`;
+    const topic = String(document.getElementById('messagingTagsTopicFilter')?.value || '').trim();
+    if (!topic) {
+      notify('Select a topic in the filter bar first', true);
+      return;
     }
-    if (tagInput) tagInput.value = '';
-    if (topicSelect) topicSelect.value = '';
-    syncHeadlineCategorySelects();
+    const selectedTags = getFilteredSortedMessagingTags()
+      .filter((item) => selectedTagIds.has(item.id))
+      .sort((a, b) => String(a.tag || '').localeCompare(String(b.tag || '')));
+    if (!selectedTags.length) {
+      notify('No selected tags are visible with the current filters', true);
+      return;
+    }
+    const messageEl = document.getElementById('messagingTagsBulkEditMessage');
+    const listEl = document.getElementById('messagingTagsBulkEditList');
+    messagingTagTableState.pendingBulkTopic = topic;
+    if (messageEl) {
+      messageEl.textContent = `Associate these tags with the topic ${topic}.`;
+    }
+    if (listEl) {
+      listEl.innerHTML = '';
+      selectedTags.forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = String(item.tag || '').trim() || '(Untitled Tag)';
+        listEl.appendChild(li);
+      });
+    }
     App.setActivePage('messagingTagsBulkEditPage');
   }
 
@@ -7724,7 +7827,7 @@ App.messaging = (function () {
       tr.appendChild(tagTd);
 
       const topicTd = document.createElement('td');
-      topicTd.textContent = String(item.topic || item.category || '').trim() || '-';
+      topicTd.appendChild(buildMessagingTagTopicSelect(item));
       tr.appendChild(topicTd);
 
       const createdTd = document.createElement('td');
@@ -9458,8 +9561,7 @@ App.messaging = (function () {
     const messagingTagsFilterBtn = document.getElementById('messagingTagsFilterBtn');
     const messagingTagsBulkEditBtn = document.getElementById('messagingTagsBulkEditBtn');
     const messagingTagsDeleteSelectedBtn = document.getElementById('messagingTagsDeleteSelectedBtn');
-    const messagingTagsBulkEditForm = document.getElementById('messagingTagsBulkEditForm');
-    const messagingTagsBulkDeleteBtn = document.getElementById('messagingTagsBulkDeleteBtn');
+    const messagingTagsBulkConfirmBtn = document.getElementById('messagingTagsBulkConfirmBtn');
     const messagingContentTypeForm = document.getElementById('messagingContentTypeForm');
     const messagingContentTypeCancelEditBtn = document.getElementById('messagingContentTypeCancelEditBtn');
     const messagingContentTypesSortLabelBtn = document.getElementById('messagingContentTypesSortLabelBtn');
@@ -9542,39 +9644,9 @@ App.messaging = (function () {
       });
     }
 
-    if (messagingTagsBulkEditForm) {
-      messagingTagsBulkEditForm.addEventListener('submit', async function (event) {
-        event.preventDefault();
-        const idsToUpdate = Array.from(selectedTagIds);
-        if (!idsToUpdate.length) {
-          notify('Select at least one tag first', true);
-          return;
-        }
-        const formData = new FormData(messagingTagsBulkEditForm);
-        const nextTag = String(formData.get('tag') || '').trim();
-        const nextTopic = String(formData.get('topic') || '').trim();
-        try {
-          await Promise.all(idsToUpdate.map((id) => {
-            const payload = { topic: nextTopic };
-            if (nextTag) payload.tag = nextTag;
-            return api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
-              method: 'PATCH',
-              body: JSON.stringify(payload),
-            });
-          }));
-          notify(`${idsToUpdate.length} tag${idsToUpdate.length === 1 ? '' : 's'} updated`);
-          selectedTagIds.clear();
-          await refreshMessagingTags();
-          App.setActivePage('messagingTagsPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
-      });
-    }
-
-    if (messagingTagsBulkDeleteBtn) {
-      messagingTagsBulkDeleteBtn.addEventListener('click', function () {
-        deleteSelectedMessagingTags();
+    if (messagingTagsBulkConfirmBtn) {
+      messagingTagsBulkConfirmBtn.addEventListener('click', function () {
+        confirmMessagingTagsBulkTopicAssociation();
       });
     }
 
