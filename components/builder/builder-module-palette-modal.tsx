@@ -28,8 +28,8 @@ type BuilderModulePaletteModalProps = {
   onClose: () => void;
 };
 
-const MODULE_PALETTE_AZ_SORT_STORAGE_KEY = "normie-module-palette-sort-az";
-const MODULE_PALETTE_POP_SORT_STORAGE_KEY = "normie-module-palette-sort-pop";
+const MODULE_PALETTE_AZ_SORT_STORAGE_KEY = "starcaster-module-palette-sort-az";
+const MODULE_PALETTE_POP_SORT_STORAGE_KEY = "starcaster-module-palette-sort-pop";
 
 const GROUP_POPULARITY_ORDER: ModulePaletteGroup[] = [
   "heading",

@@ -5,7 +5,7 @@
 - Target users: influencers, content creators, communities, and grassroots builders who grow organic followings through comment-section and social engagement (likes, shares, replies) across articles, posts, tweets, videos, and the wider social web.
 - Prioritize vanilla, highly decoupled architectures. Keep modules small and predictable.
 - **Craftsman mindset:** take time to build well; discover before coding; plan non-trivial work; surgical edits on large files (`develop.js`, `messaging.js`, `devAgent.js`, generated `index.html`).
-- **Normie** (`~/WebApps/normie`) is the primary reference/test project for fleshing out StarCaster flows.
+- StarCaster is a standalone product; do not depend on or reference the Normie codebase (`~/WebApps/normie`).
 - Avoid unnecessary dependencies; use native web standards where possible.
 - Maintain clean, atomic git commits. Do not add placeholder/TODO comments unless asked.
 
@@ -224,4 +224,4 @@ Do not add new production features that write `data/*.json`. Known file stores: 
 - Tri-agent protocol: `docs/tri_agent_protocol_v1.md`.
 
 ## Reference Implementation
-Use **Normie** (`~/WebApps/normie`) as the live tenant/project when validating end-to-end StarCaster flows (presence, promotion, engagement). Keep product boundaries clear: Normie-specific token/branding stays in Normie unless explicitly ported.
+Use a real StarCaster tenant project when validating end-to-end flows (presence, promotion, engagement).

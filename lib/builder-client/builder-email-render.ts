@@ -113,7 +113,7 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     const size = Number.parseInt(module.settings.size ?? "100", 10);
     const width = Number.isFinite(size) ? Math.min(Math.max(size, 10), 100) : 100;
 
-    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><img src="${escapeHtml(url)}" alt="${escapeHtml(module.settings.alt || module.name || "Normie")}" width="${Math.round(600 * (width / 100))}" style="display:block;max-width:100%;height:auto;border:0;" /></td></tr>`;
+    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><img src="${escapeHtml(url)}" alt="${escapeHtml(module.settings.alt || module.name || "Image")}" width="${Math.round(600 * (width / 100))}" style="display:block;max-width:100%;height:auto;border:0;" /></td></tr>`;
   }
 
   if (module.type === "button") {
@@ -160,7 +160,7 @@ export function renderBuilderEmailHtml(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(template.name || "Normie email")}</title>
+    <title>${escapeHtml(template.name || "StarCaster email")}</title>
   </head>
   <body style="margin:0;padding:0;${bodyBackground}">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="min-width:100%;${bodyBackground}">
@@ -191,7 +191,7 @@ const AUTH_EMAIL_SHELL_OPEN = `<!DOCTYPE html>
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 50px; border: 1px solid #d9e4ef; overflow: hidden; box-shadow: 0 18px 48px rgba(24, 50, 74, 0.12);">
             <tr>
               <td align="center" style="padding: 32px 36px 20px; background-color: #ffffff;">
-                <img src="{{ .SiteURL }}/api/brand/normie-logo" alt="Normie" width="200" height="62" style="display: block; width: 200px; max-width: 100%; height: auto; border: 0; margin: 0 auto;" />
+                <img src="{{ .SiteURL }}/api/brand/logo" alt="StarCaster" width="200" height="62" style="display: block; width: 200px; max-width: 100%; height: auto; border: 0; margin: 0 auto;" />
               </td>
             </tr>`;
 
@@ -209,7 +209,7 @@ const AUTH_EMAIL_SHELL_CLOSE = `
             <tr>
               <td style="padding: 18px 40px 28px; background-color: #f7fbff; border-top: 1px solid #eef4f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
                 <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #6b8499; text-align: center;">
-                  Normie · Where Average is Awesome! · {{ .SiteURL }}
+                  StarCaster · {{ .SiteURL }}
                 </p>
               </td>
             </tr>
@@ -255,7 +255,7 @@ function buildAuthEmailFallbackHtml(emailFunction: BuilderEmailFunction): string
                   Player signup
                 </p>
                 <h1 style="margin: 0 0 16px; font-size: 26px; line-height: 1.2; color: #18324a; font-weight: 800;">
-                  Welcome to Normie
+                  Welcome to StarCaster
                 </h1>
                 <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #3d5a73;">
                   Thanks for signing up. Confirm your email address

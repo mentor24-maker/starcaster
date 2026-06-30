@@ -1,7 +1,6 @@
 /**
- * Type subset of normie's lib/player-game-reminders needed by the
- * reminder runtime's diagnostics props. The server-side reminder
- * evaluation stays in normie; starcaster uses game-reminder-eval directly.
+ * Type subset for player-game-reminders used by the reminder runtime's
+ * diagnostics props. Server-side evaluation uses game-reminder-eval directly.
  */
 
 export type PlayerGameReminderDiagnosticReminder = {

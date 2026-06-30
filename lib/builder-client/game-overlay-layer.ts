@@ -14,7 +14,7 @@ export const PLAYER_GAME_PAGE_MAIN_Z_INDEX = 1;
 /** Translucent white wash between main content and floating modules. */
 export const PLAYER_GAME_EVENT_BACKDROP_Z_INDEX = 5;
 
-/** Overlay-flow row + full-screen floating-image host (decorative Normie, game-fired images). */
+/** Overlay-flow row + full-screen floating-image host (decorative character, game-fired images). */
 export const PLAYER_GAME_FLOATING_IMAGE_LAYER_Z_INDEX = 40;
 
 /** Game / page-load speech bubbles above floating images. */

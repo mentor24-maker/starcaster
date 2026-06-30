@@ -4614,12 +4614,12 @@
   z-index: 40;
 }
 
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-cartwheels),
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-slide) {
+.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-cartwheels),
+.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-slide) {
   min-height: 220px;
 }
 
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-parkour) {
+.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-parkour) {
   min-height: 240px;
 }
 
@@ -10194,7 +10194,7 @@
   }
 }
 
-.builder-react-root .normie-effect-bounce {
+.builder-react-root .starcaster-effect-bounce {
   animation: normie-bounce 1.6s infinite;
 }
 
@@ -10212,7 +10212,7 @@
   }
 }
 
-.builder-react-root .normie-effect-fast-bounce {
+.builder-react-root .starcaster-effect-fast-bounce {
   animation: normie-fast-bounce 0.8s infinite;
 }
 
@@ -10230,7 +10230,7 @@
   }
 }
 
-.builder-react-root .normie-effect-big-bounce {
+.builder-react-root .starcaster-effect-big-bounce {
   animation: normie-big-bounce calc(1.6s / 3) infinite;
 }
 
@@ -10251,7 +10251,7 @@
   }
 }
 
-.builder-react-root .normie-effect-flips {
+.builder-react-root .starcaster-effect-flips {
   animation: normie-flips calc(3.2s / 3) infinite;
 }
 
@@ -10265,12 +10265,12 @@
   }
 }
 
-.builder-react-root .normie-effect-spin {
+.builder-react-root .starcaster-effect-spin {
   animation: normie-spin 2.4s linear infinite;
 }
 
-.builder-react-root .builder-preview-image-shell:has(.normie-effect-axis-rotate),
-.builder-react-root .player-game-floating-image-host .builder-preview-image-shell:has(.normie-effect-axis-rotate) {
+.builder-react-root .builder-preview-image-shell:has(.starcaster-effect-axis-rotate),
+.builder-react-root .player-game-floating-image-host .builder-preview-image-shell:has(.starcaster-effect-axis-rotate) {
   perspective: 900px;
 }
 
@@ -10284,7 +10284,7 @@
   }
 }
 
-.builder-react-root .normie-effect-axis-rotate {
+.builder-react-root .starcaster-effect-axis-rotate {
   transform-style: preserve-3d;
   transform-origin: center center;
   animation: normie-axis-rotate 2.4s linear infinite;
@@ -10300,7 +10300,7 @@
   }
 }
 
-.builder-react-root .normie-effect-slide {
+.builder-react-root .starcaster-effect-slide {
   animation: normie-slide 8s linear infinite;
 }
 
@@ -10342,7 +10342,7 @@
   }
 }
 
-.builder-react-root .normie-effect-cartwheels {
+.builder-react-root .starcaster-effect-cartwheels {
   animation: normie-cartwheels 8s linear infinite;
 }
 
@@ -10384,46 +10384,46 @@
   }
 }
 
-.builder-react-root .normie-effect-parkour {
+.builder-react-root .starcaster-effect-parkour {
   transform-style: preserve-3d;
   transform-origin: center center;
   animation: normie-parkour 8s linear infinite;
 }
 
-.builder-react-root .normie-effect-motion-clip {
+.builder-react-root .starcaster-effect-motion-clip {
   overflow-x: clip;
   overflow-y: visible;
   width: 100%;
   min-height: 1px;
 }
 
-.builder-react-root .normie-effect-motion-stage {
+.builder-react-root .starcaster-effect-motion-stage {
   width: var(--normie-floating-image-width, 15%);
   max-width: 100%;
 }
 
-.builder-react-root .normie-effect-motion-stage > .builder-preview-image,
-.builder-react-root .normie-effect-motion-stage > .builder-module-preview-image {
+.builder-react-root .starcaster-effect-motion-stage > .builder-preview-image,
+.builder-react-root .starcaster-effect-motion-stage > .builder-module-preview-image {
   width: 100%;
   max-width: none;
 }
 
-.builder-react-root .normie-effect-motion-clip:has(.normie-effect-parkour) {
+.builder-react-root .starcaster-effect-motion-clip:has(.starcaster-effect-parkour) {
   perspective: 1600px;
   perspective-origin: center center;
 }
 
-.builder-react-root .builder-preview-module-overlay-flow .normie-effect-motion-clip,
-.builder-react-root .builder-preview-overlay-layer .normie-effect-motion-clip,
-.builder-react-root .player-game-floating-image-host .normie-effect-motion-clip {
+.builder-react-root .builder-preview-module-overlay-flow .starcaster-effect-motion-clip,
+.builder-react-root .builder-preview-overlay-layer .starcaster-effect-motion-clip,
+.builder-react-root .player-game-floating-image-host .starcaster-effect-motion-clip {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
 
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-cartwheels) > .builder-preview-image-shell-overlay,
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-slide) > .builder-preview-image-shell-overlay {
+.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-cartwheels) > .builder-preview-image-shell-overlay,
+.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-slide) > .builder-preview-image-shell-overlay {
   inset: 0 auto auto 0 !important;
   top: 0 !important;
   right: auto !important;
@@ -10435,7 +10435,7 @@
   transform: none !important;
 }
 
-.builder-react-root .builder-preview-module-overlay-slot:has(.normie-effect-parkour) > .builder-preview-image-shell-overlay {
+.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-parkour) > .builder-preview-image-shell-overlay {
   inset: 0 auto auto 0 !important;
   top: 0 !important;
   right: auto !important;
@@ -10447,10 +10447,10 @@
   transform: none !important;
 }
 
-.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-cartwheels) .normie-effect-motion-clip,
-.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-slide) .normie-effect-motion-clip,
-.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-cartwheels) .normie-effect-motion-clip,
-.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-slide) .normie-effect-motion-clip {
+.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.starcaster-effect-cartwheels) .starcaster-effect-motion-clip,
+.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.starcaster-effect-slide) .starcaster-effect-motion-clip,
+.builder-react-root .builder-preview-section-overlay-slot:has(.starcaster-effect-cartwheels) .starcaster-effect-motion-clip,
+.builder-react-root .builder-preview-section-overlay-slot:has(.starcaster-effect-slide) .starcaster-effect-motion-clip {
   position: relative;
   width: 100%;
   min-height: 220px;
@@ -10461,8 +10461,8 @@
   box-sizing: border-box;
 }
 
-.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.normie-effect-parkour) .normie-effect-motion-clip,
-.builder-react-root .builder-preview-section-overlay-slot:has(.normie-effect-parkour) .normie-effect-motion-clip {
+.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.starcaster-effect-parkour) .starcaster-effect-motion-clip,
+.builder-react-root .builder-preview-section-overlay-slot:has(.starcaster-effect-parkour) .starcaster-effect-motion-clip {
   position: absolute;
   inset: 0;
   width: 100%;

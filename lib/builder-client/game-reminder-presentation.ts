@@ -8,7 +8,7 @@ import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { normalizeSignedOffsetValue, normalizeSpacingValue } from "@/lib/builder-template";
 import { resolveGameOverlayContentZIndex } from "@/lib/game-overlay-layer";
 
-/** Default Normie speech-bubble chrome for reminder copy (no builder module required). */
+/** Default speech-bubble chrome for reminder copy (no builder module required). */
 export const REMINDER_SPEECH_BUBBLE_SETTINGS: Record<string, string> = {
   backgroundColor: "#ffffff",
   borderColor: "#4cbb17",

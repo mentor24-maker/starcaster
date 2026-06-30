@@ -1,5 +1,5 @@
 /**
- * Stub for normie's legacy reminders import panel
+ * Stub for the legacy reminders import panel
  * (BUILDER_CAPABILITIES.legacyRemindersImport is off in starcaster).
  */
 import type { BuilderPageRecord } from "@/lib/builder-template";

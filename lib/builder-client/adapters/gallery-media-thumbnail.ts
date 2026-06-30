@@ -1,8 +1,6 @@
 /**
- * Starcaster replacement for normie's lib/gallery-media-thumbnail.
- * Normie derives thumbnails via Supabase image transforms; starcaster
- * assets carry an explicit thumbnailUrl, so the media hook registers
- * path -> thumbnail mappings here as it loads.
+ * Gallery media thumbnail registry. Starcaster assets carry an explicit
+ * thumbnailUrl, so the media hook registers path → thumbnail mappings here as it loads.
  */
 
 export const GALLERY_MEDIA_THUMB_SIZE = 180;
