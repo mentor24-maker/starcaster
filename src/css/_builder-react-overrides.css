@@ -388,6 +388,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-items: start;
 }
 
+.builder-react-root .builder-themes-col-stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+
 /* Each column is a pod card */
 .builder-react-root .builder-themes-col {
   background: #fff;
