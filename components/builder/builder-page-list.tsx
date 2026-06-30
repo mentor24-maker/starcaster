@@ -144,17 +144,17 @@ export function BuilderPageList({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [archiveView, setArchiveView] = useState<ArchiveView>("pages");
 
-  const activeTheme = pageThemeId
-    ? themes.find((theme) => theme.id === pageThemeId) ?? themes[0] ?? null
-    : themes[0] ?? null;
-  const themeColors = buildBuilderThemePaletteColors(activeTheme);
+  const linkedTheme = pageThemeId
+    ? themes.find((theme) => theme.id === pageThemeId) ?? null
+    : null;
+  const themeColors = buildBuilderThemePaletteColors(linkedTheme);
   const pageDetailsThemeStyle = useMemo(
     () =>
       getThemeFormControlVars(
-        activeTheme?.typography ? { typography: activeTheme.typography } : undefined,
-        builderThemeToCrmPalette(activeTheme)
+        linkedTheme?.typography ? { typography: linkedTheme.typography } : undefined,
+        builderThemeToCrmPalette(linkedTheme)
       ),
-    [activeTheme]
+    [linkedTheme]
   );
 
   function openPageDetailsPanel(scrollIntoView = false) {
@@ -927,9 +927,9 @@ export function BuilderPageList({
                 hideClear
                 showColorFieldLabel={false}
                 onChange={onUpdatePageBackground}
-                themeBackgroundColor={activeTheme?.backgroundColor}
+                themeBackgroundColor={linkedTheme?.backgroundColor}
                 themeColors={themeColors}
-                themePrimaryColor={activeTheme?.primaryColor}
+                themePrimaryColor={linkedTheme?.primaryColor}
               />
             </div>
           </div>

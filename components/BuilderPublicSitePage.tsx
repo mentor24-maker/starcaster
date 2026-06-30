@@ -8,6 +8,7 @@ import {
   mergeCrmThemePalette,
   type BuilderThemeStyles,
   type CrmThemePalette,
+  type ThemeShellBackgroundSource,
 } from "@/components/builder/builder-utils";
 import {
   createDefaultBackgroundSettings,
@@ -163,6 +164,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   const [page, setPage] = useState<SitePage | null>(null);
   const [themePalette, setThemePalette] = useState<CrmThemePalette | undefined>(undefined);
   const [themeStyles, setThemeStyles] = useState<BuilderThemeStyles | undefined>(undefined);
+  const [themeShellBackground, setThemeShellBackground] = useState<ThemeShellBackgroundSource>(null);
   const [loaded, setLoaded] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [isAdminNav, setIsAdminNav] = useState(false);
@@ -243,6 +245,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     if (!page) {
       setThemePalette(undefined);
       setThemeStyles(undefined);
+      setThemeShellBackground(null);
       return;
     }
     const fromPage = pageThemePalette(page);
@@ -257,6 +260,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     if (!themeId && hasPageColors) {
       setThemePalette(fromPage);
       setThemeStyles(undefined);
+      setThemeShellBackground(null);
       return;
     }
 
@@ -272,10 +276,12 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           : themes[0] || null;
         setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(match)));
         setThemeStyles(buildBuilderThemeStyles(match));
+        setThemeShellBackground(match);
       })
       .catch(() => {
         setThemePalette(fromPage);
         setThemeStyles(undefined);
+        setThemeShellBackground(null);
       });
   }, [page]);
 
@@ -326,6 +332,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
         theme={page.theme}
         themePalette={themePalette ?? pageThemePalette(page)}
         themeStyles={themeStyles}
+        themeShellBackground={themeShellBackground}
         projectId={projectId}
       />
     </>
