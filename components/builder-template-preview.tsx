@@ -4201,7 +4201,7 @@ function BlogSearchResultsPreview({ settings }: { settings: Record<string, strin
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const q = (new URLSearchParams(window.location.search).get(searchParam) ?? "").trim().toLowerCase();
+    const q = (new URLSearchParams(window.location.search).get(searchParam) ?? "").trim().toLowerCase().replace(/-/g, " ");
     setQuery(q);
   }, [searchParam]);
 
