@@ -477,6 +477,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ============================================================== */
+/* MODULE LIBRARY DIALOG — left-align card content                */
+/* ============================================================== */
+
+.builder-react-root .builder-module-palette-modal .builder-module-item-card,
+.builder-react-root .builder-module-palette-modal .builder-module-group-card {
+  justify-content: flex-start;
+}
+
+/* ============================================================== */
 /* MODULE FIELD STRIP — flex-wrap toolbar rows in module editors  */
 /* ============================================================== */
 

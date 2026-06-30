@@ -835,6 +835,28 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { layout: "list", columns: "1" }
   },
   {
+    id: "blog-search-standard",
+    type: "blog-search",
+    group: "blog",
+    label: "Blog Search",
+    icon: "⌕",
+    description: "Search field that sends a query to the Blog Search Results module via a URL parameter.",
+    name: "",
+    text: "",
+    settings: { placeholder: "Search posts…", buttonLabel: "Search", searchParam: "search" }
+  },
+  {
+    id: "blog-search-results-standard",
+    type: "blog-search-results",
+    group: "blog",
+    label: "Blog Search Results",
+    icon: "▤",
+    description: "Lists blog posts matching the current search query — thumbnail, title, excerpt, and last updated date.",
+    name: "",
+    text: "",
+    settings: { searchParam: "search", limit: "50" }
+  },
+  {
     id: "admin-team-users-table",
     type: "admin-team-users",
     group: "admin",

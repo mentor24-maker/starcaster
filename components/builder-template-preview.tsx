@@ -1690,6 +1690,12 @@ function BuilderModulePreview({
   if (module.type === "blog-related-posts") {
     return <BlogRelatedPostsPreview settings={module.settings} />;
   }
+  if (module.type === "blog-search") {
+    return <BlogSearchPreview settings={module.settings} />;
+  }
+  if (module.type === "blog-search-results") {
+    return <BlogSearchResultsPreview settings={module.settings} />;
+  }
   if (
     module.type === "blog-post-card" ||
     module.type === "blog-author-bio" ||
@@ -4074,6 +4080,236 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function BlogSearchPreview({ settings }: { settings: Record<string, string> }) {
+  const searchParam = (settings.searchParam || "search").trim();
+  const targetPageUrl = (settings.targetPageUrl || "").trim();
+  const placeholder = settings.placeholder || "Search posts…";
+  const buttonLabel = settings.buttonLabel || "Search";
+  const accent = settings.accentColor || "#0f4f8f";
+  const radius = parseInt(settings.borderRadius || "8", 10) || 8;
+
+  const initialQuery =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get(searchParam) ?? ""
+      : "";
+
+  const [query, setQuery] = useState(initialQuery);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (typeof window === "undefined") return;
+    const base = targetPageUrl || window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
+    if (query.trim()) {
+      params.set(searchParam, query.trim());
+    } else {
+      params.delete(searchParam);
+    }
+    window.location.href = `${base}${params.toString() ? "?" + params.toString() : ""}`;
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          flex: 1,
+          height: 40,
+          padding: "0 12px",
+          border: "1px solid #c6d8e8",
+          borderRadius: radius,
+          fontSize: 14,
+          color: "#18324a",
+          background: "#fff",
+          outline: "none"
+        }}
+      />
+      <button
+        type="submit"
+        style={{
+          height: 40,
+          padding: "0 18px",
+          background: accent,
+          color: "#fff",
+          border: "none",
+          borderRadius: radius,
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: "pointer",
+          flexShrink: 0
+        }}
+      >
+        {buttonLabel}
+      </button>
+    </form>
+  );
+}
+
+function BlogSearchResultsPreview({ settings }: { settings: Record<string, string> }) {
+  const searchParam = (settings.searchParam || "search").trim();
+  const limit = Math.max(1, parseInt(settings.limit || "50", 10) || 50);
+  const thumbWidth = Math.max(60, parseInt(settings.thumbWidth || "120", 10) || 120);
+  const emptyMessage = settings.emptyMessage || "No posts found.";
+  const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
+
+  const [allPosts, setAllPosts] = useState<(BlogPostRecord & { updatedAt?: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const query =
+    typeof window !== "undefined"
+      ? (new URLSearchParams(window.location.search).get(searchParam) ?? "").trim().toLowerCase()
+      : "";
+
+  useEffect(() => {
+    fetch(`/api/blog/posts?status=published&limit=${limit}`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.posts)) setAllPosts(d.posts as (BlogPostRecord & { updatedAt?: string })[]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [limit]);
+
+  const filtered = useMemo(() => {
+    if (!query) return allPosts;
+    return allPosts.filter((p) => {
+      const haystack = [p.title, p.excerpt, ...(p.tags ?? [])].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [allPosts, query]);
+
+  function postHref(p: BlogPostRecord) {
+    return `${postPageUrl}?slug=${encodeURIComponent(p.slug)}`;
+  }
+
+  function formatDate(iso?: string) {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    } catch {
+      return "";
+    }
+  }
+
+  if (loading) {
+    return <div style={{ color: "#8aa", fontSize: 13, padding: "20px 0" }}>Loading…</div>;
+  }
+
+  if (!query) {
+    return (
+      <div style={{ color: "#8aa", fontSize: 13, padding: "20px 0", fontStyle: "italic" }}>
+        Enter a search term above to find posts.
+      </div>
+    );
+  }
+
+  if (filtered.length === 0) {
+    return (
+      <div style={{ color: "#8aa", fontSize: 13, padding: "20px 0", fontStyle: "italic" }}>
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {filtered.map((post, i) => {
+        const imgUrl = post.featuredImageUrl || post.featured_image_url;
+        const updatedLabel = formatDate((post as { updatedAt?: string }).updatedAt || post.published_at);
+        return (
+          <a
+            key={post.id}
+            href={postHref(post)}
+            style={{
+              display: "flex",
+              gap: 16,
+              alignItems: "flex-start",
+              padding: "14px 0",
+              borderBottom: i < filtered.length - 1 ? "1px solid #e8eef4" : "none",
+              textDecoration: "none",
+              color: "inherit"
+            }}
+          >
+            {/* Thumbnail */}
+            <div
+              style={{
+                width: thumbWidth,
+                flexShrink: 0,
+                aspectRatio: "16/9",
+                borderRadius: 6,
+                overflow: "hidden",
+                background: "#d4e3ef"
+              }}
+            >
+              {imgUrl ? (
+                <img
+                  src={imgUrl}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              ) : null}
+            </div>
+
+            {/* Title + excerpt */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: 15,
+                  color: "#18324a",
+                  marginBottom: 4,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                {post.title}
+              </div>
+              {post.excerpt ? (
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#587592",
+                    lineHeight: 1.5,
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden"
+                  }}
+                >
+                  {post.excerpt}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Last Updated */}
+            <div
+              style={{
+                flexShrink: 0,
+                textAlign: "right",
+                minWidth: 80
+              }}
+            >
+              <div style={{ fontSize: 10, color: "#8aa", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+                Last Updated
+              </div>
+              <div style={{ fontSize: 12, color: "#587592", fontWeight: 500 }}>
+                {updatedLabel || "—"}
+              </div>
+            </div>
+          </a>
+        );
+      })}
     </div>
   );
 }
