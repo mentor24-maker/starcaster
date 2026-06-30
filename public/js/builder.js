@@ -8199,6 +8199,68 @@ App.builder = (function () {
     return '0';
   }
 
+  function buildClonePagePayload(source, allPages) {
+    const existingSlugs = new Set((Array.isArray(allPages) ? allPages : []).map((p) => safeText(p.slug)));
+    const baseSlug = safeText(source.slug).replace(/^-+|-+$/g, '') || 'page';
+    let cloneSlug = `${baseSlug}-copy`;
+    let n = 2;
+    while (existingSlugs.has(cloneSlug)) {
+      cloneSlug = `${baseSlug}-copy-${n}`;
+      n += 1;
+    }
+
+    function cloneSections(sections) {
+      if (!Array.isArray(sections)) return [];
+      return sections.map((section) => ({
+        ...section,
+        id: crypto.randomUUID(),
+        modules: Array.isArray(section.modules)
+          ? section.modules.map((mod) => ({ ...mod, id: crypto.randomUUID(), settings: { ...(mod.settings || {}) } }))
+          : [],
+      }));
+    }
+
+    const payload = {
+      name: `${(safeText(source.name) || 'Untitled page').trim()} Copy`,
+      slug: cloneSlug,
+      templateId: safeText(source.templateId) || undefined,
+      templateKind: safeText(source.templateKind) || undefined,
+      themeId: safeText(source.themeId) || undefined,
+      primaryColor: safeText(source.primaryColor) || undefined,
+      backgroundColor: safeText(source.backgroundColor) || undefined,
+      accentColor: safeText(source.accentColor) || undefined,
+      formId: safeText(source.formId) || undefined,
+      leadMagnetId: safeText(source.leadMagnetId) || undefined,
+      headlineId: safeText(source.headlineId) || undefined,
+      pitchId: safeText(source.pitchId) || undefined,
+      ctaId: safeText(source.ctaId) || undefined,
+      websiteBannerImageId: safeText(source.websiteBannerImageId) || undefined,
+      backgroundImageId: safeText(source.backgroundImageId) || undefined,
+      featureImageId: safeText(source.featureImageId) || undefined,
+      highlightImageId: safeText(source.highlightImageId) || undefined,
+      featureHeadlineId: safeText(source.featureHeadlineId) || undefined,
+      featureSubheadingId: safeText(source.featureSubheadingId) || undefined,
+      featureTitle: safeText(source.featureTitle) || undefined,
+      featureCopy: safeText(source.featureCopy) || undefined,
+      highlightHeadlineId: safeText(source.highlightHeadlineId) || undefined,
+      highlightPitchId: safeText(source.highlightPitchId) || undefined,
+      highlightTitle: safeText(source.highlightTitle) || undefined,
+      highlightCopy: safeText(source.highlightCopy) || undefined,
+      bodyHeadlineId: safeText(source.bodyHeadlineId) || undefined,
+      bodySubheadingId: safeText(source.bodySubheadingId) || undefined,
+      bodyPitchId: safeText(source.bodyPitchId) || undefined,
+      logoWideId: safeText(source.logoWideId) || undefined,
+      logoSquareId: safeText(source.logoSquareId) || undefined,
+      pageBackground: source.pageBackground ? { ...source.pageBackground } : undefined,
+      theme: source.theme ? JSON.parse(JSON.stringify(source.theme)) : undefined,
+      layoutSections: cloneSections(source.layoutSections),
+      contentOverrides: source.contentOverrides ? { ...source.contentOverrides } : undefined,
+    };
+    if (source.isPublished !== undefined) payload.isPublished = source.isPublished;
+    if (source.isPrivate !== undefined) payload.isPrivate = source.isPrivate;
+    return payload;
+  }
+
   function renderPagesTable() {
     const tbody = byId('builderPagesTableBody');
     if (!tbody) return;
@@ -8336,6 +8398,23 @@ App.builder = (function () {
           openLandingPageVisualEditor(item);
         }
       }, { marginLeft: '10px' });
+      const cloneBtn = App.makeIconButton('clone', 'Clone Page', async () => {
+        cloneBtn.disabled = true;
+        try {
+          const payload = buildClonePagePayload(item, savedPages);
+          await api('/api/builder/landing-pages', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          await loadSavedPages();
+          renderPagesTable();
+          notify(`Cloned page "${safeText(item.name) || 'Untitled page'}"`);
+        } catch (err) {
+          notify(err.message || 'Could not clone page', true);
+        } finally {
+          cloneBtn.disabled = false;
+        }
+      }, { marginLeft: '10px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Page', async () => {
         if (!window.confirm(`Delete page "${safeText(item.name) || id}"?`)) return;
         try {
@@ -8349,6 +8428,7 @@ App.builder = (function () {
       }, { danger: true, marginLeft: '10px' });
       actionsTd.appendChild(viewBtn);
       actionsTd.appendChild(editBtn);
+      actionsTd.appendChild(cloneBtn);
       actionsTd.appendChild(deleteBtn);
       row.appendChild(actionsTd);
       tbody.appendChild(row);
