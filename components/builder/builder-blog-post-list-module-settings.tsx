@@ -122,81 +122,22 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
         </div>
       </div>
 
-      {/* Card Design */}
-      <div className="builder-blog-post-list-section-header">Card Design</div>
-      <div className="builder-blog-post-list-3col">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Card style">
-            <select value={s.cardStyle ?? "default"} onChange={(e) => set("cardStyle", e.target.value)}>
-              <option value="default">Default</option>
-              <option value="bordered">Bordered</option>
-              <option value="shadow">Shadow</option>
-            </select>
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Author">
-            <select value={s.showAuthor ?? "true"} onChange={(e) => set("showAuthor", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Featured image">
-            <select value={s.showFeaturedImage ?? "true"} onChange={(e) => set("showFeaturedImage", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Card gap (px)">
-            <input
-              type="number"
-              min={8}
-              max={64}
-              step={4}
-              value={s.cardGap ?? "24"}
-              onChange={(e) => set("cardGap", e.target.value)}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Date">
-            <select value={s.showDate ?? "true"} onChange={(e) => set("showDate", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Categories">
-            <select value={s.showCategories ?? "true"} onChange={(e) => set("showCategories", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Card radius (px)">
-            <input
-              type="number"
-              min={0}
-              max={32}
-              step={2}
-              value={s.cardBorderRadius ?? "12"}
-              onChange={(e) => set("cardBorderRadius", e.target.value)}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Excerpt">
-            <select value={s.showExcerpt ?? "true"} onChange={(e) => set("showExcerpt", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Tags">
-            <select value={s.showTags ?? "true"} onChange={(e) => set("showTags", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
+      {/* Card Appearance */}
+      <div className="builder-blog-post-list-section-header">Card Appearance</div>
+      <div className="builder-blog-post-list-card-manager-note">
+        Card content, layout, and style are set in the <strong>Card Manager</strong> module.
+        Add a Card Manager to any page to edit the card template.
       </div>
+      <BuilderSettingRow label="Card gap (px)">
+        <input
+          type="number"
+          min={8}
+          max={64}
+          step={4}
+          value={s.cardGap ?? "24"}
+          onChange={(e) => set("cardGap", e.target.value)}
+        />
+      </BuilderSettingRow>
 
     </div>
   );
