@@ -189,7 +189,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       if (!entry) return;
       const rect = entry.getBoundingClientRect();
       const h = adminEl!.offsetHeight || 24;
-      const topVal = rect.top - h - 6;
+      const topVal = rect.top - h - 46;
       adminEl!.style.top = `${topVal}px`;
       adminEl!.style.left = `${rect.left + Math.round((rect.width - (adminEl!.offsetWidth || 54)) / 2)}px`;
       adminEl!.style.bottom = "auto";
