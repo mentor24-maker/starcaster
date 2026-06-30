@@ -10,9 +10,10 @@ import {
   normalizeBuilderDocument
 } from "@/lib/builder-template";
 
-import type { CrmThemePalette } from "@/components/builder/builder-utils";
+import type { BuilderThemeStyles, CrmThemePalette } from "@/components/builder/builder-utils";
 import {
   builderThemeToCrmPalette,
+  buildBuilderThemeStyles,
   mergeCrmThemePalette,
 } from "@/components/builder/builder-utils";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
@@ -23,6 +24,7 @@ type PreviewDraft = {
   theme: ReturnType<typeof normalizeBuilderDocument>["theme"];
   layoutSections: ReturnType<typeof normalizeBuilderDocument>["layoutSections"];
   themePalette?: CrmThemePalette;
+  themeStyles?: BuilderThemeStyles;
   themeId?: string;
 };
 
@@ -32,6 +34,13 @@ type BuilderThemeRecord = {
   secondaryColor?: string;
   backgroundColor?: string;
   accentColor?: string;
+  borderThickness?: number;
+  borderRadius?: number;
+  containerBlur?: number;
+  contrastLevel?: number;
+  topMargin?: number;
+  bottomMargin?: number;
+  sideMargins?: number;
 };
 
 function hasCrmPaletteColors(palette: CrmThemePalette | undefined): boolean {
@@ -44,21 +53,27 @@ function hasCrmPaletteColors(palette: CrmThemePalette | undefined): boolean {
   );
 }
 
-async function fetchBuilderThemePalette(themeId?: string): Promise<CrmThemePalette | undefined> {
+async function fetchBuilderTheme(themeId?: string): Promise<{
+  palette?: CrmThemePalette;
+  styles?: BuilderThemeStyles;
+}> {
   try {
     const res = await fetch("/api/builder/themes", {
       credentials: "include",
       headers: starcasterScopedHeaders(),
     });
-    if (!res.ok) return undefined;
+    if (!res.ok) return {};
     const data = await res.json() as { themes?: BuilderThemeRecord[] };
     const themes = Array.isArray(data.themes) ? data.themes : [];
     const theme = themeId
       ? themes.find((entry) => String(entry.id || "") === themeId) || themes[0]
       : themes[0];
-    return builderThemeToCrmPalette(theme);
+    return {
+      palette: builderThemeToCrmPalette(theme),
+      styles: buildBuilderThemeStyles(theme),
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -90,15 +105,17 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
       accentColor: String(match.accentColor ?? match.accent_color ?? "").trim()
     };
     const themeId = String(match.themeId ?? match.theme_id ?? "").trim();
+    const themeRecord = await fetchBuilderTheme(themeId);
     const resolvedPalette = hasCrmPaletteColors(themePalette)
       ? themePalette
-      : mergeCrmThemePalette(themePalette, await fetchBuilderThemePalette(themeId));
+      : mergeCrmThemePalette(themePalette, themeRecord.palette);
     return {
       name: String(match.name ?? "").trim(),
       pageBackground: doc.pageBackground,
       theme: doc.theme,
       layoutSections: doc.layoutSections,
       themePalette: resolvedPalette,
+      themeStyles: themeRecord.styles,
       themeId
     };
   } catch {
@@ -109,6 +126,7 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
 export function BuilderPreviewPage() {
   const [draft, setDraft] = useState<PreviewDraft | null>(null);
   const [themePalette, setThemePalette] = useState<CrmThemePalette | undefined>(undefined);
+  const [themeStyles, setThemeStyles] = useState<BuilderThemeStyles | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile" | "email">("desktop");
   const isEmailPreview = previewDevice === "email";
@@ -130,6 +148,7 @@ export function BuilderPreviewPage() {
           if (page) {
             setDraft(page);
             setThemePalette(page.themePalette);
+            setThemeStyles(page.themeStyles);
           } else {
             loadFromLocalStorage();
           }
@@ -146,8 +165,9 @@ export function BuilderPreviewPage() {
       try {
         const rawValue = window.localStorage.getItem(BUILDER_PREVIEW_STORAGE_KEY);
         if (!rawValue) {
-          fetchBuilderThemePalette().then((palette) => {
-            setThemePalette(palette);
+          fetchBuilderTheme().then((themeRecord) => {
+            setThemePalette(themeRecord.palette);
+            setThemeStyles(themeRecord.styles);
           });
           return;
         }
@@ -157,10 +177,12 @@ export function BuilderPreviewPage() {
           layoutSections?: unknown;
           theme?: unknown;
           themePalette?: CrmThemePalette;
+          themeStyles?: BuilderThemeStyles;
           themeId?: string;
         };
         const document = normalizeBuilderDocument(parsed);
         const storedPalette = parsed.themePalette;
+        const storedStyles = parsed.themeStyles;
         const themeId = String(parsed.themeId || "").trim();
         setDraft({
           name: String(parsed.name ?? "").trim(),
@@ -168,14 +190,17 @@ export function BuilderPreviewPage() {
           theme: document.theme,
           layoutSections: document.layoutSections,
           themePalette: storedPalette,
+          themeStyles: storedStyles,
           themeId
         });
-        if (hasCrmPaletteColors(storedPalette)) {
+        if (hasCrmPaletteColors(storedPalette) && storedStyles) {
           setThemePalette(storedPalette);
+          setThemeStyles(storedStyles);
           return;
         }
-        fetchBuilderThemePalette(themeId).then((palette) => {
-          setThemePalette(mergeCrmThemePalette(storedPalette, palette));
+        fetchBuilderTheme(themeId).then((themeRecord) => {
+          setThemePalette(mergeCrmThemePalette(storedPalette, themeRecord.palette));
+          setThemeStyles(storedStyles ?? themeRecord.styles);
         });
       } catch {
         setDraft({
@@ -184,8 +209,9 @@ export function BuilderPreviewPage() {
           theme: createDefaultTheme(),
           layoutSections: []
         });
-        fetchBuilderThemePalette().then((palette) => {
-          setThemePalette(palette);
+        fetchBuilderTheme().then((themeRecord) => {
+          setThemePalette(themeRecord.palette);
+          setThemeStyles(themeRecord.styles);
         });
       }
     }
@@ -254,6 +280,7 @@ export function BuilderPreviewPage() {
                 pageBackground={draft.pageBackground}
                 theme={draft.theme}
                 themePalette={themePalette}
+                themeStyles={themeStyles ?? draft.themeStyles}
                 previewMode
                 showShell={false}
               />

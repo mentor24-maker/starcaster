@@ -841,6 +841,96 @@ export type CrmThemePalette = {
   accentColor?: string;
 };
 
+/** Saved theme record style + palette fields applied to the live page shell. */
+export type BuilderThemeStyles = {
+  primaryColor?: string;
+  secondaryColor?: string;
+  backgroundColor?: string;
+  accentColor?: string;
+  borderThickness?: number;
+  borderRadius?: number;
+  containerBlur?: number;
+  contrastLevel?: number;
+  topMargin?: number;
+  bottomMargin?: number;
+  sideMargins?: number;
+};
+
+function safeThemeNumber(value: unknown, fallback = 0): number {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function accentBorderColor(accent: string): string {
+  const hex = accent.replace(/^#/, "").trim();
+  if (hex.length !== 6) return "rgba(15, 79, 143, 0.24)";
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return "rgba(15, 79, 143, 0.24)";
+  }
+  return `rgba(${r}, ${g}, ${b}, 0.24)`;
+}
+
+export function buildBuilderThemeStyles(
+  theme: BuilderThemeStyles | Record<string, unknown> | null | undefined
+): BuilderThemeStyles | undefined {
+  if (!theme || typeof theme !== "object") return undefined;
+  return {
+    primaryColor: String(theme.primaryColor ?? "").trim(),
+    secondaryColor: String(theme.secondaryColor ?? "").trim(),
+    backgroundColor: String(theme.backgroundColor ?? "").trim(),
+    accentColor: String(theme.accentColor ?? "").trim(),
+    borderThickness: safeThemeNumber(theme.borderThickness, 1),
+    borderRadius: safeThemeNumber(theme.borderRadius, 12),
+    containerBlur: safeThemeNumber(theme.containerBlur, 0),
+    contrastLevel: safeThemeNumber(theme.contrastLevel, 0),
+    topMargin: safeThemeNumber(theme.topMargin, 0),
+    bottomMargin: safeThemeNumber(theme.bottomMargin, 0),
+    sideMargins: safeThemeNumber(theme.sideMargins, 0),
+  };
+}
+
+/**
+ * Emit saved theme palette + container style tokens for the preview shell root.
+ * Margins map to shell padding; border radius, blur, and contrast cascade via --lp-* vars.
+ */
+export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined): CSSProperties {
+  const vars: Record<string, string> = {};
+  if (!styles) return vars as CSSProperties;
+
+  const primary = String(styles.primaryColor || "").trim();
+  const background = String(styles.backgroundColor || "").trim();
+  const accent = String(styles.accentColor || "").trim();
+  if (primary) vars["--lp-primary"] = primary;
+  if (background) vars["--lp-background"] = background;
+  if (accent) {
+    vars["--lp-accent"] = accent;
+    vars["--lp-border"] = accentBorderColor(accent);
+    vars["--lp-border-soft"] = accentBorderColor(accent);
+    vars["--lp-dash-border"] = accentBorderColor(accent);
+  }
+
+  const borderThickness = Math.max(0, safeThemeNumber(styles.borderThickness, 1));
+  const borderRadius = Math.max(0, safeThemeNumber(styles.borderRadius, 12));
+  const containerBlur = Math.max(0, safeThemeNumber(styles.containerBlur, 0));
+  const contrastLevel = Math.max(0, Math.min(100, safeThemeNumber(styles.contrastLevel, 0)));
+  const topMargin = Math.max(0, safeThemeNumber(styles.topMargin, 0));
+  const bottomMargin = Math.max(0, safeThemeNumber(styles.bottomMargin, 0));
+  const sideMargins = Math.max(0, safeThemeNumber(styles.sideMargins, 0));
+
+  vars["--lp-border-thickness"] = `${borderThickness}px`;
+  vars["--lp-radius"] = `${borderRadius}px`;
+  vars["--lp-blur"] = `${containerBlur}px`;
+  vars["--lp-filter"] = contrastLevel > 0 ? `contrast(${1 + contrastLevel / 100})` : "none";
+  vars["--bx-theme-padding-top"] = `${topMargin}px`;
+  vars["--bx-theme-padding-bottom"] = `${bottomMargin}px`;
+  vars["--bx-theme-padding-inline"] = `${sideMargins}px`;
+
+  return vars as CSSProperties;
+}
+
 /** Palette vars consumed by CRM form theme tokens on builder/public pages. */
 export function getCrmThemePaletteVars(palette: CrmThemePalette | undefined): CSSProperties {
   const vars: Record<string, string> = {};
