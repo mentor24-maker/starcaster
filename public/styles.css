@@ -14101,22 +14101,16 @@ body.asset-associations-modal-open {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
-.builder-react-root .bcm-row-card {
+.builder-react-root .bcm-row-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #f8fafc;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.builder-react-root .bcm-row-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
 }
 .builder-react-root .bcm-row-arrows {
   display: flex;
@@ -14124,7 +14118,7 @@ body.asset-associations-modal-open {
   flex-shrink: 0;
 }
 .builder-react-root .bcm-arrow-btn {
-  padding: 2px 6px;
+  padding: 2px 5px;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
   background: #fff;
@@ -14142,31 +14136,45 @@ body.asset-associations-modal-open {
   cursor: default;
 }
 .builder-react-root .bcm-col-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: #64748b;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.builder-react-root .bcm-delete-btn {
-  margin-left: auto;
-  padding: 3px 9px;
-  border: 1px solid #fca5a5;
-  border-radius: 4px;
-  background: #fff;
-  color: #dc2626;
-  font: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.1s;
-}
-.builder-react-root .bcm-delete-btn:hover {
-  background: #fef2f2;
-}
 .builder-react-root .bcm-row-slots {
-  display: grid;
+  display: flex;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.builder-react-root .bcm-slot-select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e0;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 0.78rem;
+  background: #fff;
+  cursor: pointer;
+}
+.builder-react-root .bcm-delete-icon-btn {
+  flex-shrink: 0;
+  padding: 4px 5px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.builder-react-root .bcm-delete-icon-btn:hover {
+  color: #dc2626;
+  background: #fef2f2;
 }
 .builder-react-root .bcm-add-row-btn {
   display: block;
