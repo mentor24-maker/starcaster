@@ -1301,6 +1301,11 @@
               <label for="messagingTagName">Tag</label>
               <input id="messagingTagName" name="tag" required />
             
+              <label for="messagingTagTopic">Topic</label>
+              <select id="messagingTagTopic" name="topic" data-messaging-topic-select="true">
+                <option value="">No Topic</option>
+              </select>
+            
             <div></div>
               <button type="submit" class="btn btn-primary">Save Tag</button>
           </form>
@@ -1311,13 +1316,25 @@
               <tr class="table-filter-row">
                 <th><input id="messagingTagsSelectAllVisible" type="checkbox" aria-label="Select all visible tags" /></th>
                 <th><input id="messagingTagsTextFilter" placeholder="Filter tag" /></th>
+                <th>
+                  <select id="messagingTagsTopicFilter" data-messaging-topic-select="true" data-messaging-topic-role="filter">
+                    <option value="">All Topics</option>
+                  </select>
+                </th>
                 <th></th>
                 <th></th>
-                <th class="actions-col"><button id="messagingTagsFilterActionBtn" type="button" class="btn tiny-btn">Filter</button></th>
+                <th class="actions-col">
+                  <div class="table-actions-row">
+                    <button id="messagingTagsFilterBtn" type="button" class="btn tiny-btn">Filter</button>
+                    <button id="messagingTagsBulkEditBtn" type="button" class="btn tiny-btn" disabled>Edit Selected</button>
+                    <button id="messagingTagsDeleteSelectedBtn" type="button" class="btn tiny-btn btn-danger" disabled>Delete Selected</button>
+                  </div>
+                </th>
               </tr>
               <tr>
                 <th></th>
                 <th id="messagingTagsSortBtn">Tag</th>
+                <th id="messagingTagsSortTopicBtn">Topic</th>
                 <th id="messagingTagsSortCreatedBtn">Created</th>
                 <th id="messagingTagsSortUpdatedBtn">Updated</th>
                 <th class="actions-col">Actions</th>
@@ -1333,6 +1350,10 @@
         </div>
         <p id="messagingTagsBulkEditSummary">No tags selected.</p>
         <form id="messagingTagsBulkEditForm" class="standard-form-grid">
+          <label for="messagingTagsBulkEditTopic">Topic</label>
+          <select id="messagingTagsBulkEditTopic" name="topic" data-messaging-topic-select="true">
+            <option value="">No Topic</option>
+          </select>
           <label for="messagingTagsBulkEditTag">Tag</label>
           <input id="messagingTagsBulkEditTag" name="tag" placeholder="Leave blank to keep current tag text" />
           <div></div>
@@ -1372,6 +1393,11 @@
           
             <label for="messagingTagEditName">Tag</label>
             <input id="messagingTagEditName" name="tag" required />
+          
+            <label for="messagingTagEditTopic">Topic</label>
+            <select id="messagingTagEditTopic" name="topic" data-messaging-topic-select="true">
+              <option value="">No Topic</option>
+            </select>
           
           <div></div>
               <button type="submit" class="btn btn-primary">Update Tag</button>

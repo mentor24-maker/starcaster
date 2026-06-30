@@ -127,6 +127,7 @@ App.messaging = (function () {
   const messagingTagTableState = {
     filters: {
       tag: '',
+      topic: '',
     },
     sort: {
       key: 'tag',
@@ -424,6 +425,7 @@ App.messaging = (function () {
         || select.id === 'messagingSubheadingsCategoryFilter'
         || select.id === 'messagingTaglinesCategoryFilter'
         || select.id === 'messagingPitchesTopicFilter'
+        || select.id === 'messagingTagsTopicFilter'
         || select.dataset.messagingTopicRole === 'filter';
       select.innerHTML = '';
       const placeholder = document.createElement('option');
@@ -4176,12 +4178,10 @@ App.messaging = (function () {
   function openTagsPage() {
     setTagsCreateVisible(false);
     App.setActivePage('messagingTagsPage');
+    refreshMessagingTopics().catch(function () { });
     refreshMessagingTags().catch(function (err) {
       notify(`Could not load messaging tags: ${err.message}`, true);
     });
-    window.setTimeout(function () {
-      refreshMessagingTags().catch(function () { });
-    }, 250);
     return false;
   }
 
@@ -4190,6 +4190,8 @@ App.messaging = (function () {
     if (form) form.reset();
     setTagsCreateVisible(true);
     App.setActivePage('messagingTagsPage');
+    refreshMessagingTopics().catch(function () { });
+    syncHeadlineCategorySelects();
     const panel = document.getElementById('messagingTagCreatePanel');
     if (panel && typeof panel.scrollIntoView === 'function') {
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -7552,16 +7554,19 @@ App.messaging = (function () {
 
   function getFilteredSortedMessagingTags() {
     const tagFilter = String(messagingTagTableState.filters.tag || '').trim().toLowerCase();
+    const topicFilter = String(messagingTagTableState.filters.topic || '').trim();
     const rows = (Array.isArray(currentMessagingTags) ? currentMessagingTags : []).filter((item) => {
       const tag = String(item?.tag || '').toLowerCase();
+      const topic = String(item?.topic || item?.category || '').trim();
       if (tagFilter && !tag.includes(tagFilter)) return false;
+      if (topicFilter && topic !== topicFilter) return false;
       return true;
     });
 
     rows.sort((a, b) => {
       const key = messagingTagTableState.sort.key;
-      let left = a?.[key];
-      let right = b?.[key];
+      let left = key === 'topic' ? (a?.topic || a?.category) : a?.[key];
+      let right = key === 'topic' ? (b?.topic || b?.category) : b?.[key];
       if (key === 'created_at' || key === 'updated_at') {
         left = new Date(left || 0).getTime();
         right = new Date(right || 0).getTime();
@@ -7580,6 +7585,7 @@ App.messaging = (function () {
   function syncMessagingTagSortLabels() {
     [
       ['messagingTagsSortBtn', 'tag', 'Tag'],
+      ['messagingTagsSortTopicBtn', 'topic', 'Topic'],
       ['messagingTagsSortCreatedBtn', 'created_at', 'Created'],
       ['messagingTagsSortUpdatedBtn', 'updated_at', 'Updated'],
     ].forEach(([id, key, label]) => {
@@ -7594,23 +7600,46 @@ App.messaging = (function () {
 
   function syncMessagingTagBulkUi() {
     const selectAll = document.getElementById('messagingTagsSelectAllVisible');
-    const actionBtn = document.getElementById('messagingTagsFilterActionBtn');
+    const bulkEditBtn = document.getElementById('messagingTagsBulkEditBtn');
+    const deleteSelectedBtn = document.getElementById('messagingTagsDeleteSelectedBtn');
     const visibleIds = getFilteredSortedMessagingTags().map((item) => Number(item.id || 0)).filter(Boolean);
     const selectedVisible = visibleIds.filter((id) => selectedTagIds.has(id));
+    const hasSelection = selectedTagIds.size > 0;
 
     if (selectAll) {
       selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
       selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
     }
-    if (actionBtn) {
-      actionBtn.textContent = selectedTagIds.size > 0 ? 'Edit Selected' : 'Filter';
-    }
+    if (bulkEditBtn) bulkEditBtn.disabled = !hasSelection;
+    if (deleteSelectedBtn) deleteSelectedBtn.disabled = !hasSelection;
   }
 
   function applyMessagingTagsTableFilters() {
     const filterInput = document.getElementById('messagingTagsTextFilter');
+    const topicFilter = document.getElementById('messagingTagsTopicFilter');
     messagingTagTableState.filters.tag = String(filterInput?.value || '').trim();
+    messagingTagTableState.filters.topic = String(topicFilter?.value || '').trim();
     renderMessagingTagsTable(currentMessagingTags);
+  }
+
+  async function deleteSelectedMessagingTags() {
+    const idsToDelete = Array.from(selectedTagIds);
+    if (!idsToDelete.length) {
+      notify('Select at least one tag first', true);
+      return false;
+    }
+    if (!window.confirm(`Delete ${idsToDelete.length} selected tag${idsToDelete.length === 1 ? '' : 's'}?`)) return false;
+    try {
+      await Promise.all(idsToDelete.map((id) => api(`/api/messaging/tags/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+      notify(`${idsToDelete.length} tag${idsToDelete.length === 1 ? '' : 's'} deleted`);
+      selectedTagIds.clear();
+      await refreshMessagingTags();
+      App.setActivePage('messagingTagsPage');
+      return true;
+    } catch (err) {
+      notify(err.message, true);
+      return false;
+    }
   }
 
   function openMessagingTagsBulkEditPage() {
@@ -7620,10 +7649,13 @@ App.messaging = (function () {
     }
     const summary = document.getElementById('messagingTagsBulkEditSummary');
     const tagInput = document.getElementById('messagingTagsBulkEditTag');
+    const topicSelect = document.getElementById('messagingTagsBulkEditTopic');
     if (summary) {
       summary.textContent = `${selectedTagIds.size} tag${selectedTagIds.size === 1 ? '' : 's'} selected.`;
     }
     if (tagInput) tagInput.value = '';
+    if (topicSelect) topicSelect.value = '';
+    syncHeadlineCategorySelects();
     App.setActivePage('messagingTagsBulkEditPage');
   }
 
@@ -7638,6 +7670,10 @@ App.messaging = (function () {
     form.reset();
     idInput.value = String(item.id || '');
     form.elements.tag.value = String(item.tag || '');
+    if (form.elements.topic) {
+      form.elements.topic.value = String(item.topic || item.category || '');
+    }
+    syncHeadlineCategorySelects();
     App.setActivePage('editMessagingTagPage');
   }
 
@@ -7647,6 +7683,7 @@ App.messaging = (function () {
     if (!tbody) return;
     tbody.innerHTML = '';
     syncMessagingTagSortLabels();
+    syncHeadlineCategorySelects();
 
     const validIds = new Set(currentMessagingTags.map((item) => Number(item.id || 0)).filter(Boolean));
     Array.from(selectedTagIds).forEach((id) => {
@@ -7657,7 +7694,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 5;
+      td.colSpan = 6;
       td.textContent = currentMessagingTags.length
         ? 'No messaging tags match current filters.'
         : 'No messaging tags yet.';
@@ -7685,6 +7722,10 @@ App.messaging = (function () {
       const tagTd = document.createElement('td');
       tagTd.textContent = String(item.tag || '').trim() || '-';
       tr.appendChild(tagTd);
+
+      const topicTd = document.createElement('td');
+      topicTd.textContent = String(item.topic || item.category || '').trim() || '-';
+      tr.appendChild(topicTd);
 
       const createdTd = document.createElement('td');
       createdTd.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
@@ -7748,6 +7789,7 @@ App.messaging = (function () {
     if (!form) return false;
     const formData = new FormData(form);
     const tag = String(formData.get('tag') || '').trim();
+    const topic = String(formData.get('topic') || '').trim();
     if (!tag) {
       notify('Tag is required', true);
       return false;
@@ -7755,7 +7797,7 @@ App.messaging = (function () {
     try {
       await api('/api/messaging/tags', {
         method: 'POST',
-        body: JSON.stringify({ tag }),
+        body: JSON.stringify({ tag, topic }),
       });
       notify('Messaging tag saved');
       form.reset();
@@ -7775,6 +7817,7 @@ App.messaging = (function () {
     const formData = new FormData(form);
     const id = Number(formData.get('id') || 0) || 0;
     const tag = String(formData.get('tag') || '').trim();
+    const topic = String(formData.get('topic') || '').trim();
     if (!id) {
       notify('Tag id is required', true);
       return false;
@@ -7786,7 +7829,7 @@ App.messaging = (function () {
     try {
       await api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ tag }),
+        body: JSON.stringify({ tag, topic }),
       });
       notify('Messaging tag updated');
       form.reset();
@@ -9408,10 +9451,13 @@ App.messaging = (function () {
     }
 
     const messagingTagSortBtn = document.getElementById('messagingTagsSortBtn');
+    const messagingTagsSortTopicBtn = document.getElementById('messagingTagsSortTopicBtn');
     const messagingTagsSortCreatedBtn = document.getElementById('messagingTagsSortCreatedBtn');
     const messagingTagsSortUpdatedBtn = document.getElementById('messagingTagsSortUpdatedBtn');
     const messagingTagsSelectAllVisible = document.getElementById('messagingTagsSelectAllVisible');
-    const messagingTagsFilterActionBtn = document.getElementById('messagingTagsFilterActionBtn');
+    const messagingTagsFilterBtn = document.getElementById('messagingTagsFilterBtn');
+    const messagingTagsBulkEditBtn = document.getElementById('messagingTagsBulkEditBtn');
+    const messagingTagsDeleteSelectedBtn = document.getElementById('messagingTagsDeleteSelectedBtn');
     const messagingTagsBulkEditForm = document.getElementById('messagingTagsBulkEditForm');
     const messagingTagsBulkDeleteBtn = document.getElementById('messagingTagsBulkDeleteBtn');
     const messagingContentTypeForm = document.getElementById('messagingContentTypeForm');
@@ -9456,6 +9502,18 @@ App.messaging = (function () {
       });
     }
 
+    if (messagingTagsSortTopicBtn) {
+      messagingTagsSortTopicBtn.addEventListener('click', function () {
+        if (messagingTagTableState.sort.key === 'topic') {
+          messagingTagTableState.sort.dir = messagingTagTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          messagingTagTableState.sort.key = 'topic';
+          messagingTagTableState.sort.dir = 'asc';
+        }
+        renderMessagingTagsTable(currentMessagingTags);
+      });
+    }
+
     if (messagingTagsSelectAllVisible) {
       messagingTagsSelectAllVisible.addEventListener('change', function () {
         getFilteredSortedMessagingTags().forEach((item) => {
@@ -9466,13 +9524,21 @@ App.messaging = (function () {
       });
     }
 
-    if (messagingTagsFilterActionBtn) {
-      messagingTagsFilterActionBtn.addEventListener('click', function () {
-        if (selectedTagIds.size > 0) {
-          openMessagingTagsBulkEditPage();
-          return;
-        }
+    if (messagingTagsFilterBtn) {
+      messagingTagsFilterBtn.addEventListener('click', function () {
         applyMessagingTagsTableFilters();
+      });
+    }
+
+    if (messagingTagsBulkEditBtn) {
+      messagingTagsBulkEditBtn.addEventListener('click', function () {
+        openMessagingTagsBulkEditPage();
+      });
+    }
+
+    if (messagingTagsDeleteSelectedBtn) {
+      messagingTagsDeleteSelectedBtn.addEventListener('click', function () {
+        deleteSelectedMessagingTags();
       });
     }
 
@@ -9486,15 +9552,16 @@ App.messaging = (function () {
         }
         const formData = new FormData(messagingTagsBulkEditForm);
         const nextTag = String(formData.get('tag') || '').trim();
-        if (!nextTag) {
-          notify('Enter a tag value to apply', true);
-          return;
-        }
+        const nextTopic = String(formData.get('topic') || '').trim();
         try {
-          await Promise.all(idsToUpdate.map((id) => api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ tag: nextTag }),
-          })));
+          await Promise.all(idsToUpdate.map((id) => {
+            const payload = { topic: nextTopic };
+            if (nextTag) payload.tag = nextTag;
+            return api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
+              method: 'PATCH',
+              body: JSON.stringify(payload),
+            });
+          }));
           notify(`${idsToUpdate.length} tag${idsToUpdate.length === 1 ? '' : 's'} updated`);
           selectedTagIds.clear();
           await refreshMessagingTags();
@@ -9506,22 +9573,8 @@ App.messaging = (function () {
     }
 
     if (messagingTagsBulkDeleteBtn) {
-      messagingTagsBulkDeleteBtn.addEventListener('click', async function () {
-        const idsToDelete = Array.from(selectedTagIds);
-        if (!idsToDelete.length) {
-          notify('Select at least one tag first', true);
-          return;
-        }
-        if (!window.confirm(`Delete ${idsToDelete.length} selected tag${idsToDelete.length === 1 ? '' : 's'}?`)) return;
-        try {
-          await Promise.all(idsToDelete.map((id) => api(`/api/messaging/tags/${encodeURIComponent(id)}`, { method: 'DELETE' })));
-          notify(`${idsToDelete.length} tag${idsToDelete.length === 1 ? '' : 's'} deleted`);
-          selectedTagIds.clear();
-          await refreshMessagingTags();
-          App.setActivePage('messagingTagsPage');
-        } catch (err) {
-          notify(err.message, true);
-        }
+      messagingTagsBulkDeleteBtn.addEventListener('click', function () {
+        deleteSelectedMessagingTags();
       });
     }
 
