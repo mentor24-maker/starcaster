@@ -304,6 +304,7 @@ App.messaging = (function () {
     { type: 'Comments', family: 'Support Copy', destination: 'Comments Editor', pageId: 'messagingCommentsPage' },
     { type: 'Keywords', family: 'Short Form', destination: 'Keywords Editor', pageId: 'messagingKeywordsPage' },
     { type: 'Hashtags', family: 'Support Copy', destination: 'Hashtags Editor', pageId: 'messagingHashtagsPage' },
+    { type: 'Tags', family: 'Support Copy', destination: 'Tags Editor', pageId: 'messagingTagsPage' },
     { type: 'Calls to Action', family: 'Support Copy', destination: 'Calls to Action Editor', pageId: 'messagingCtasPage' },
   ];
   const defaultMessagingFormatEntries = messagingContentLibraryEntries.map((entry) => ({
@@ -5824,7 +5825,17 @@ App.messaging = (function () {
     (Array.isArray(currentMessagingFormats) ? currentMessagingFormats : []).forEach((entry) => {
       const format = String(entry.format || entry.type || '').trim();
       if (!format) return;
-      merged.set(format, { ...entry, format, enabled: entry.enabled !== false });
+      const prior = merged.get(format) || {};
+      const pageId = String(entry.pageId || entry.page_id || prior.pageId || '').trim();
+      const destination = String(entry.destination || prior.destination || '').trim();
+      merged.set(format, {
+        ...prior,
+        ...entry,
+        format,
+        enabled: entry.enabled !== false,
+        pageId,
+        destination,
+      });
     });
     return Array.from(merged.values()).filter((entry) => entry.enabled !== false);
   }
@@ -6118,9 +6129,9 @@ App.messaging = (function () {
         a.onclick = (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const targetPage = String(item.pageId || '').trim();
+          const targetPage = resolveMessagingFormatPageId(item);
           if (targetPage) {
-            openContentTarget(targetPage);
+            openMessagingFormatContentEditor(item);
           } else {
             openMessagingFormatEdit(item);
           }
@@ -6284,6 +6295,53 @@ App.messaging = (function () {
     });
   }
 
+  function resolveMessagingFormatPageId(entry) {
+    const format = String(entry?.format || entry?.type || '').trim();
+    const fromEntry = String(entry?.pageId || entry?.page_id || '').trim();
+    if (fromEntry) return fromEntry;
+    const catalogEntry = defaultMessagingFormatEntries.find(
+      (row) => String(row.format || row.type || '').trim().toLowerCase() === format.toLowerCase()
+    );
+    if (catalogEntry?.pageId) return String(catalogEntry.pageId).trim();
+    const registryEntry = messagingContentRegistry.find(
+      (row) => String(row.format || '').trim().toLowerCase() === format.toLowerCase()
+    );
+    if (registryEntry?.pageId) return String(registryEntry.pageId).trim();
+    return '';
+  }
+
+  function openMessagingFormatContentEditor(entry) {
+    const targetPage = resolveMessagingFormatPageId(entry);
+    if (!targetPage) {
+      openMessagingFormatEdit(entry);
+      return;
+    }
+    if (targetPage === 'messagingTagsPage') {
+      openTagsPage();
+      return;
+    }
+    openContentTarget(targetPage);
+  }
+
+  function appendMessagingFormatNameCell(tr, entry) {
+    const td = document.createElement('td');
+    const formatName = String(entry.format || entry.type || '').trim();
+    const targetPage = resolveMessagingFormatPageId(entry);
+    if (formatName && targetPage) {
+      const link = document.createElement('a');
+      link.href = `#page=${encodeURIComponent(targetPage)}`;
+      link.textContent = formatName;
+      link.addEventListener('click', (event) => {
+        event.preventDefault();
+        openMessagingFormatContentEditor(entry);
+      });
+      td.appendChild(link);
+    } else {
+      td.textContent = formatName;
+    }
+    tr.appendChild(td);
+  }
+
   function renderMessagingFormatsTable() {
     const tbody = document.getElementById('messagingFormatsLibraryTable');
     if (!tbody) return;
@@ -6305,16 +6363,17 @@ App.messaging = (function () {
 
     rows.forEach((entry) => {
       const tr = document.createElement('tr');
-      [entry.format || entry.type, entry.family, entry.destination || (entry.pageId ? 'Editor' : '')].forEach((value) => {
+      appendMessagingFormatNameCell(tr, entry);
+      [entry.family, entry.destination || (resolveMessagingFormatPageId(entry) ? 'Editor' : '')].forEach((value) => {
         const td = document.createElement('td');
         td.textContent = value;
         tr.appendChild(td);
       });
       const actionsTd = document.createElement('td');
-      const targetPage = String(entry.pageId || '').trim();
+      const targetPage = resolveMessagingFormatPageId(entry);
       if (targetPage) {
         const openBtn = App.makeIconButton('edit', `Open ${entry.format || entry.type}`, function () {
-          openContentTarget(targetPage);
+          openMessagingFormatContentEditor(entry);
         });
         App.finishTableActionsCell(actionsTd, openBtn);
       } else {
@@ -6354,7 +6413,8 @@ App.messaging = (function () {
     }
     rows.forEach((entry) => {
       const tr = document.createElement('tr');
-      [entry.format, entry.family, entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : ''].forEach((value) => {
+      appendMessagingFormatNameCell(tr, entry);
+      [entry.family, entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : ''].forEach((value) => {
         const td = document.createElement('td');
         td.textContent = value;
         tr.appendChild(td);
@@ -6363,9 +6423,15 @@ App.messaging = (function () {
       enabledTd.textContent = entry.enabled ? 'Yes' : 'No';
       tr.appendChild(enabledTd);
       const actionsTd = document.createElement('td');
-      const editBtn = App.makeIconButton('edit', `Edit ${entry.format}`, function () {
-        openMessagingFormatEdit(entry);
-      });
+      const targetPage = resolveMessagingFormatPageId(entry);
+      const editBtn = App.makeIconButton(
+        'edit',
+        targetPage ? `Open ${entry.format}` : `Edit ${entry.format}`,
+        function () {
+          if (targetPage) openMessagingFormatContentEditor(entry);
+          else openMessagingFormatEdit(entry);
+        }
+      );
       const cloneBtn = App.makeIconButton('clone', `Clone ${entry.format}`, function () {
         const form = document.getElementById('messagingContentTypeForm');
         const saveBtn = document.getElementById('messagingContentTypeSaveBtn');
