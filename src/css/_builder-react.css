@@ -11236,6 +11236,20 @@
   }
 }
 
+.builder-react-root .builder-nav-style-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.builder-react-root .builder-nav-style-body .hanging-details {
+  margin-top: 2px;
+}
+
+.builder-react-root .builder-nav-items {
+  margin: 8px 0 6px;
+}
+
 .builder-react-root .builder-nav-item-row {
   display: flex;
   align-items: center;
@@ -11262,4 +11276,8 @@
 
 .builder-react-root .builder-nav-item-width:disabled {
   opacity: 0.5;
+}
+
+.builder-react-root .builder-nav-add-link-button {
+  margin-top: 4px;
 }
