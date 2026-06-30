@@ -128,12 +128,12 @@ App.messaging = (function () {
     filters: {
       tag: '',
       topic: '',
+      importance: '',
     },
     sort: {
       key: 'tag',
       dir: 'asc',
     },
-    pendingBulkTopic: '',
   };
   const selectedTagIds = new Set();
   const messagingFormatTableState = {
@@ -7553,14 +7553,35 @@ App.messaging = (function () {
     return false;
   }
 
+  function normalizeTagImportance(value) {
+    if (value == null || value === '') return null;
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    const rounded = Math.round(num);
+    if (rounded < 1 || rounded > 5) return null;
+    return rounded;
+  }
+
+  function formatTagImportanceLabel(value) {
+    const normalized = normalizeTagImportance(value);
+    return normalized == null ? '-' : String(normalized);
+  }
+
   function getFilteredSortedMessagingTags() {
     const tagFilter = String(messagingTagTableState.filters.tag || '').trim().toLowerCase();
     const topicFilter = String(messagingTagTableState.filters.topic || '').trim();
+    const importanceFilter = String(messagingTagTableState.filters.importance || '').trim();
     const rows = (Array.isArray(currentMessagingTags) ? currentMessagingTags : []).filter((item) => {
       const tag = String(item?.tag || '').toLowerCase();
       const topic = String(item?.topic || item?.category || '').trim();
+      const importance = normalizeTagImportance(item?.importance);
       if (tagFilter && !tag.includes(tagFilter)) return false;
       if (topicFilter && topic !== topicFilter) return false;
+      if (importanceFilter === 'unset' && importance != null) return false;
+      if (importanceFilter && importanceFilter !== 'unset') {
+        const filterValue = normalizeTagImportance(importanceFilter);
+        if (filterValue != null && importance !== filterValue) return false;
+      }
       return true;
     });
 
@@ -7568,7 +7589,13 @@ App.messaging = (function () {
       const key = messagingTagTableState.sort.key;
       let left = key === 'topic' ? (a?.topic || a?.category) : a?.[key];
       let right = key === 'topic' ? (b?.topic || b?.category) : b?.[key];
-      if (key === 'created_at' || key === 'updated_at') {
+      if (key === 'importance') {
+        left = normalizeTagImportance(left);
+        right = normalizeTagImportance(right);
+        if (left == null && right == null) return 0;
+        if (left == null) return 1;
+        if (right == null) return -1;
+      } else if (key === 'created_at' || key === 'updated_at') {
         left = new Date(left || 0).getTime();
         right = new Date(right || 0).getTime();
       } else {
@@ -7587,6 +7614,7 @@ App.messaging = (function () {
     [
       ['messagingTagsSortBtn', 'tag', 'Tag'],
       ['messagingTagsSortTopicBtn', 'topic', 'Topic'],
+      ['messagingTagsSortImportanceBtn', 'importance', 'Importance'],
       ['messagingTagsSortCreatedBtn', 'created_at', 'Created'],
       ['messagingTagsSortUpdatedBtn', 'updated_at', 'Updated'],
     ].forEach(([id, key, label]) => {
@@ -7618,8 +7646,10 @@ App.messaging = (function () {
   function applyMessagingTagsTableFilters() {
     const filterInput = document.getElementById('messagingTagsTextFilter');
     const topicFilter = document.getElementById('messagingTagsTopicFilter');
+    const importanceFilter = document.getElementById('messagingTagsImportanceFilter');
     messagingTagTableState.filters.tag = String(filterInput?.value || '').trim();
     messagingTagTableState.filters.topic = String(topicFilter?.value || '').trim();
+    messagingTagTableState.filters.importance = String(importanceFilter?.value || '').trim();
     renderMessagingTagsTable(currentMessagingTags);
   }
 
@@ -7700,25 +7730,73 @@ App.messaging = (function () {
     return select;
   }
 
-  async function confirmMessagingTagsBulkTopicAssociation() {
-    const topic = String(messagingTagTableState.pendingBulkTopic || '').trim();
+  function buildMessagingTagImportanceSelect(item) {
+    const select = document.createElement('select');
+    select.className = 'messaging-tag-importance-inline-select';
+    select.setAttribute('aria-label', `Importance for ${String(item.tag || 'tag')}`);
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.textContent = '-';
+    select.appendChild(emptyOption);
+    [1, 2, 3, 4, 5].forEach((value) => {
+      const option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = String(value);
+      select.appendChild(option);
+    });
+    const current = normalizeTagImportance(item?.importance);
+    select.value = current == null ? '' : String(current);
+    select.addEventListener('change', async function () {
+      const tagId = Number(item.id || 0) || 0;
+      if (!tagId) return;
+      const importance = normalizeTagImportance(select.value);
+      const previous = normalizeTagImportance(item.importance);
+      try {
+        await api(`/api/messaging/tags/${encodeURIComponent(tagId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ importance }),
+        });
+        item.importance = importance;
+        const stored = currentMessagingTags.find((row) => Number(row.id || 0) === tagId);
+        if (stored) stored.importance = importance;
+      } catch (err) {
+        notify(err.message, true);
+        select.value = previous == null ? '' : String(previous);
+      }
+    });
+    return select;
+  }
+
+  async function submitMessagingTagsBulkEdit(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const form = document.getElementById('messagingTagsBulkEditForm');
+    if (!form) return false;
     const idsToUpdate = Array.from(selectedTagIds);
     if (!idsToUpdate.length) {
       notify('Select at least one tag first', true);
       return false;
     }
-    if (!topic) {
-      notify('Select a topic in the filter bar first', true);
-      return false;
+    const formData = new FormData(form);
+    const topic = String(formData.get('topic') || '').trim();
+    const importanceRaw = String(formData.get('importance') || '').trim();
+    const importance = importanceRaw ? normalizeTagImportance(importanceRaw) : null;
+    const patch = { topic };
+    if (importanceRaw) {
+      if (importance == null) {
+        notify('Importance must be between 1 and 5', true);
+        return false;
+      }
+      patch.importance = importance;
     }
     try {
       await Promise.all(idsToUpdate.map((id) => api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ topic }),
+        body: JSON.stringify(patch),
       })));
-      notify(`${idsToUpdate.length} tag${idsToUpdate.length === 1 ? '' : 's'} associated with ${topic}`);
+      const parts = ['topic'];
+      if (importanceRaw) parts.push('importance');
+      notify(`${idsToUpdate.length} tag${idsToUpdate.length === 1 ? '' : 's'} updated (${parts.join(' and ')})`);
       selectedTagIds.clear();
-      messagingTagTableState.pendingBulkTopic = '';
       await refreshMessagingTags();
       App.setActivePage('messagingTagsPage');
       return true;
@@ -7733,11 +7811,6 @@ App.messaging = (function () {
       notify('Select at least one tag first', true);
       return;
     }
-    const topic = String(document.getElementById('messagingTagsTopicFilter')?.value || '').trim();
-    if (!topic) {
-      notify('Select a topic in the filter bar first', true);
-      return;
-    }
     const selectedTags = getFilteredSortedMessagingTags()
       .filter((item) => selectedTagIds.has(item.id))
       .sort((a, b) => String(a.tag || '').localeCompare(String(b.tag || '')));
@@ -7747,18 +7820,26 @@ App.messaging = (function () {
     }
     const messageEl = document.getElementById('messagingTagsBulkEditMessage');
     const listEl = document.getElementById('messagingTagsBulkEditList');
-    messagingTagTableState.pendingBulkTopic = topic;
+    const bulkForm = document.getElementById('messagingTagsBulkEditForm');
+    const bulkTopicSelect = document.getElementById('messagingTagsBulkEditTopicSelect');
+    const bulkImportanceSelect = document.getElementById('messagingTagsBulkEditImportanceSelect');
     if (messageEl) {
-      messageEl.textContent = `Associate these tags with the topic ${topic}.`;
+      messageEl.textContent = `${selectedTags.length} tag${selectedTags.length === 1 ? '' : 's'} selected.`;
     }
     if (listEl) {
       listEl.innerHTML = '';
       selectedTags.forEach((item) => {
         const li = document.createElement('li');
-        li.textContent = String(item.tag || '').trim() || '(Untitled Tag)';
+        const importanceLabel = formatTagImportanceLabel(item.importance);
+        const topicLabel = String(item.topic || item.category || '').trim() || 'No Topic';
+        li.textContent = `${String(item.tag || '').trim() || '(Untitled Tag)'} — ${topicLabel} — Importance ${importanceLabel}`;
         listEl.appendChild(li);
       });
     }
+    syncHeadlineCategorySelects();
+    if (bulkTopicSelect) bulkTopicSelect.value = '';
+    if (bulkImportanceSelect) bulkImportanceSelect.value = '';
+    if (bulkForm) bulkForm.reset();
     App.setActivePage('messagingTagsBulkEditPage');
   }
 
@@ -7775,6 +7856,10 @@ App.messaging = (function () {
     form.elements.tag.value = String(item.tag || '');
     if (form.elements.topic) {
       form.elements.topic.value = String(item.topic || item.category || '');
+    }
+    if (form.elements.importance) {
+      const importance = normalizeTagImportance(item.importance);
+      form.elements.importance.value = importance == null ? '' : String(importance);
     }
     syncHeadlineCategorySelects();
     App.setActivePage('editMessagingTagPage');
@@ -7797,7 +7882,7 @@ App.messaging = (function () {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 7;
       td.textContent = currentMessagingTags.length
         ? 'No messaging tags match current filters.'
         : 'No messaging tags yet.';
@@ -7830,6 +7915,10 @@ App.messaging = (function () {
       topicTd.appendChild(buildMessagingTagTopicSelect(item));
       tr.appendChild(topicTd);
 
+      const importanceTd = document.createElement('td');
+      importanceTd.appendChild(buildMessagingTagImportanceSelect(item));
+      tr.appendChild(importanceTd);
+
       const createdTd = document.createElement('td');
       createdTd.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
       tr.appendChild(createdTd);
@@ -7846,6 +7935,8 @@ App.messaging = (function () {
         try {
           await cloneMessagingItem('/api/messaging/tags', {
             tag: `${String(item.tag || '').trim()} Copy`.trim(),
+            topic: String(item.topic || item.category || '').trim(),
+            importance: normalizeTagImportance(item.importance),
           });
           notify('Messaging tag cloned');
           await refreshMessagingTags();
@@ -7893,6 +7984,7 @@ App.messaging = (function () {
     const formData = new FormData(form);
     const tag = String(formData.get('tag') || '').trim();
     const topic = String(formData.get('topic') || '').trim();
+    const importance = normalizeTagImportance(formData.get('importance'));
     if (!tag) {
       notify('Tag is required', true);
       return false;
@@ -7900,7 +7992,11 @@ App.messaging = (function () {
     try {
       await api('/api/messaging/tags', {
         method: 'POST',
-        body: JSON.stringify({ tag, topic }),
+        body: JSON.stringify({
+          tag,
+          topic,
+          importance,
+        }),
       });
       notify('Messaging tag saved');
       form.reset();
@@ -7921,6 +8017,7 @@ App.messaging = (function () {
     const id = Number(formData.get('id') || 0) || 0;
     const tag = String(formData.get('tag') || '').trim();
     const topic = String(formData.get('topic') || '').trim();
+    const importance = normalizeTagImportance(formData.get('importance'));
     if (!id) {
       notify('Tag id is required', true);
       return false;
@@ -7932,7 +8029,11 @@ App.messaging = (function () {
     try {
       await api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ tag, topic }),
+        body: JSON.stringify({
+          tag,
+          topic,
+          importance,
+        }),
       });
       notify('Messaging tag updated');
       form.reset();
@@ -9555,13 +9656,14 @@ App.messaging = (function () {
 
     const messagingTagSortBtn = document.getElementById('messagingTagsSortBtn');
     const messagingTagsSortTopicBtn = document.getElementById('messagingTagsSortTopicBtn');
+    const messagingTagsSortImportanceBtn = document.getElementById('messagingTagsSortImportanceBtn');
     const messagingTagsSortCreatedBtn = document.getElementById('messagingTagsSortCreatedBtn');
     const messagingTagsSortUpdatedBtn = document.getElementById('messagingTagsSortUpdatedBtn');
     const messagingTagsSelectAllVisible = document.getElementById('messagingTagsSelectAllVisible');
     const messagingTagsFilterBtn = document.getElementById('messagingTagsFilterBtn');
     const messagingTagsBulkEditBtn = document.getElementById('messagingTagsBulkEditBtn');
     const messagingTagsDeleteSelectedBtn = document.getElementById('messagingTagsDeleteSelectedBtn');
-    const messagingTagsBulkConfirmBtn = document.getElementById('messagingTagsBulkConfirmBtn');
+    const messagingTagsBulkEditForm = document.getElementById('messagingTagsBulkEditForm');
     const messagingContentTypeForm = document.getElementById('messagingContentTypeForm');
     const messagingContentTypeCancelEditBtn = document.getElementById('messagingContentTypeCancelEditBtn');
     const messagingContentTypesSortLabelBtn = document.getElementById('messagingContentTypesSortLabelBtn');
@@ -9616,6 +9718,18 @@ App.messaging = (function () {
       });
     }
 
+    if (messagingTagsSortImportanceBtn) {
+      messagingTagsSortImportanceBtn.addEventListener('click', function () {
+        if (messagingTagTableState.sort.key === 'importance') {
+          messagingTagTableState.sort.dir = messagingTagTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          messagingTagTableState.sort.key = 'importance';
+          messagingTagTableState.sort.dir = 'desc';
+        }
+        renderMessagingTagsTable(currentMessagingTags);
+      });
+    }
+
     if (messagingTagsSelectAllVisible) {
       messagingTagsSelectAllVisible.addEventListener('change', function () {
         getFilteredSortedMessagingTags().forEach((item) => {
@@ -9644,9 +9758,9 @@ App.messaging = (function () {
       });
     }
 
-    if (messagingTagsBulkConfirmBtn) {
-      messagingTagsBulkConfirmBtn.addEventListener('click', function () {
-        confirmMessagingTagsBulkTopicAssociation();
+    if (messagingTagsBulkEditForm) {
+      messagingTagsBulkEditForm.addEventListener('submit', function (event) {
+        submitMessagingTagsBulkEdit(event);
       });
     }
 
