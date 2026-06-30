@@ -125,8 +125,15 @@ App.messaging = (function () {
     dir: 'asc',
   };
   const messagingTagTableState = {
-    dir: 'asc',
+    filters: {
+      tag: '',
+    },
+    sort: {
+      key: 'tag',
+      dir: 'asc',
+    },
   };
+  const selectedTagIds = new Set();
   const messagingFormatTableState = {
     sort: { key: 'format', dir: 'asc' },
   };
@@ -7543,16 +7550,85 @@ App.messaging = (function () {
     return false;
   }
 
-  function getSortedMessagingTags() {
-    const rows = Array.isArray(currentMessagingTags) ? currentMessagingTags.slice() : [];
-    rows.sort(function (a, b) {
-      const left = String(a?.tag || '').toLowerCase();
-      const right = String(b?.tag || '').toLowerCase();
+  function getFilteredSortedMessagingTags() {
+    const tagFilter = String(messagingTagTableState.filters.tag || '').trim().toLowerCase();
+    const rows = (Array.isArray(currentMessagingTags) ? currentMessagingTags : []).filter((item) => {
+      const tag = String(item?.tag || '').toLowerCase();
+      if (tagFilter && !tag.includes(tagFilter)) return false;
+      return true;
+    });
+
+    rows.sort((a, b) => {
+      const key = messagingTagTableState.sort.key;
+      let left = a?.[key];
+      let right = b?.[key];
+      if (key === 'created_at' || key === 'updated_at') {
+        left = new Date(left || 0).getTime();
+        right = new Date(right || 0).getTime();
+      } else {
+        left = String(left || '').toLowerCase();
+        right = String(right || '').toLowerCase();
+      }
       if (left === right) return 0;
       const result = left < right ? -1 : 1;
-      return messagingTagTableState.dir === 'asc' ? result : -result;
+      return messagingTagTableState.sort.dir === 'asc' ? result : -result;
     });
+
     return rows;
+  }
+
+  function syncMessagingTagSortLabels() {
+    [
+      ['messagingTagsSortBtn', 'tag', 'Tag'],
+      ['messagingTagsSortCreatedBtn', 'created_at', 'Created'],
+      ['messagingTagsSortUpdatedBtn', 'updated_at', 'Updated'],
+    ].forEach(([id, key, label]) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const marker = messagingTagTableState.sort.key === key
+        ? (messagingTagTableState.sort.dir === 'asc' ? ' ▲' : ' ▼')
+        : '';
+      btn.textContent = `${label}${marker}`;
+    });
+  }
+
+  function syncMessagingTagBulkUi() {
+    const selectAll = document.getElementById('messagingTagsSelectAllVisible');
+    const actionBtn = document.getElementById('messagingTagsFilterActionBtn');
+    const visibleIds = getFilteredSortedMessagingTags().map((item) => Number(item.id || 0)).filter(Boolean);
+    const selectedVisible = visibleIds.filter((id) => selectedTagIds.has(id));
+
+    if (selectAll) {
+      selectAll.checked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+      selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleIds.length;
+    }
+    if (actionBtn) {
+      actionBtn.textContent = selectedTagIds.size > 0 ? 'Edit Selected' : 'Filter';
+    }
+  }
+
+  function applyMessagingTagsTableFilters() {
+    const filterInput = document.getElementById('messagingTagsTextFilter');
+    messagingTagTableState.filters.tag = String(filterInput?.value || '').trim();
+    renderMessagingTagsTable(currentMessagingTags);
+  }
+
+  function openMessagingTagsBulkEditPage() {
+    if (!selectedTagIds.size) {
+      notify('Select at least one tag first', true);
+      return;
+    }
+    const summary = document.getElementById('messagingTagsBulkEditSummary');
+    const tagInput = document.getElementById('messagingTagsBulkEditTag');
+    if (summary) {
+      summary.textContent = `${selectedTagIds.size} tag${selectedTagIds.size === 1 ? '' : 's'} selected.`;
+    }
+    if (tagInput) tagInput.value = '';
+    App.setActivePage('messagingTagsBulkEditPage');
+  }
+
+  function getSortedMessagingTags() {
+    return getFilteredSortedMessagingTags();
   }
 
   function openMessagingTagEditForm(item) {
@@ -7567,28 +7643,56 @@ App.messaging = (function () {
 
   function renderMessagingTagsTable(tags) {
     const tbody = document.getElementById('messagingTagsTable');
-    const sortBtn = document.getElementById('messagingTagsSortBtn');
     currentMessagingTags = Array.isArray(tags) ? tags.slice() : [];
     if (!tbody) return;
     tbody.innerHTML = '';
-    if (sortBtn) {
-      sortBtn.textContent = `Tag${messagingTagTableState.dir === 'asc' ? ' ▲' : ' ▼'}`;
-    }
-    const rows = getSortedMessagingTags();
+    syncMessagingTagSortLabels();
+
+    const validIds = new Set(currentMessagingTags.map((item) => Number(item.id || 0)).filter(Boolean));
+    Array.from(selectedTagIds).forEach((id) => {
+      if (!validIds.has(id)) selectedTagIds.delete(id);
+    });
+
+    const rows = getFilteredSortedMessagingTags();
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 2;
-      td.textContent = 'No messaging tags yet.';
+      td.colSpan = 5;
+      td.textContent = currentMessagingTags.length
+        ? 'No messaging tags match current filters.'
+        : 'No messaging tags yet.';
       tr.appendChild(td);
       tbody.appendChild(tr);
+      syncMessagingTagBulkUi();
       return;
     }
+
     rows.forEach((item) => {
       const tr = document.createElement('tr');
+
+      const selectTd = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selectedTagIds.has(item.id);
+      checkbox.addEventListener('change', function () {
+        if (checkbox.checked) selectedTagIds.add(item.id);
+        else selectedTagIds.delete(item.id);
+        syncMessagingTagBulkUi();
+      });
+      selectTd.appendChild(checkbox);
+      tr.appendChild(selectTd);
+
       const tagTd = document.createElement('td');
       tagTd.textContent = String(item.tag || '').trim() || '-';
       tr.appendChild(tagTd);
+
+      const createdTd = document.createElement('td');
+      createdTd.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
+      tr.appendChild(createdTd);
+
+      const updatedTd = document.createElement('td');
+      updatedTd.textContent = item.updated_at ? new Date(item.updated_at).toLocaleString() : '-';
+      tr.appendChild(updatedTd);
 
       const actionsTd = document.createElement('td');
       const editBtn = App.makeIconButton('edit', 'Edit Tag', function () {
@@ -7619,6 +7723,7 @@ App.messaging = (function () {
       tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
+    syncMessagingTagBulkUi();
   }
 
   async function refreshMessagingTags() {
@@ -9303,8 +9408,12 @@ App.messaging = (function () {
     }
 
     const messagingTagSortBtn = document.getElementById('messagingTagsSortBtn');
-    const messagingTagForm = document.getElementById('messagingTagForm');
-    const messagingTagEditForm = document.getElementById('messagingTagEditForm');
+    const messagingTagsSortCreatedBtn = document.getElementById('messagingTagsSortCreatedBtn');
+    const messagingTagsSortUpdatedBtn = document.getElementById('messagingTagsSortUpdatedBtn');
+    const messagingTagsSelectAllVisible = document.getElementById('messagingTagsSelectAllVisible');
+    const messagingTagsFilterActionBtn = document.getElementById('messagingTagsFilterActionBtn');
+    const messagingTagsBulkEditForm = document.getElementById('messagingTagsBulkEditForm');
+    const messagingTagsBulkDeleteBtn = document.getElementById('messagingTagsBulkDeleteBtn');
     const messagingContentTypeForm = document.getElementById('messagingContentTypeForm');
     const messagingContentTypeCancelEditBtn = document.getElementById('messagingContentTypeCancelEditBtn');
     const messagingContentTypesSortLabelBtn = document.getElementById('messagingContentTypesSortLabelBtn');
@@ -9313,8 +9422,106 @@ App.messaging = (function () {
 
     if (messagingTagSortBtn) {
       messagingTagSortBtn.addEventListener('click', function () {
-        messagingTagTableState.dir = messagingTagTableState.dir === 'asc' ? 'desc' : 'asc';
+        if (messagingTagTableState.sort.key === 'tag') {
+          messagingTagTableState.sort.dir = messagingTagTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          messagingTagTableState.sort.key = 'tag';
+          messagingTagTableState.sort.dir = 'asc';
+        }
         renderMessagingTagsTable(currentMessagingTags);
+      });
+    }
+
+    if (messagingTagsSortCreatedBtn) {
+      messagingTagsSortCreatedBtn.addEventListener('click', function () {
+        if (messagingTagTableState.sort.key === 'created_at') {
+          messagingTagTableState.sort.dir = messagingTagTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          messagingTagTableState.sort.key = 'created_at';
+          messagingTagTableState.sort.dir = 'desc';
+        }
+        renderMessagingTagsTable(currentMessagingTags);
+      });
+    }
+
+    if (messagingTagsSortUpdatedBtn) {
+      messagingTagsSortUpdatedBtn.addEventListener('click', function () {
+        if (messagingTagTableState.sort.key === 'updated_at') {
+          messagingTagTableState.sort.dir = messagingTagTableState.sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          messagingTagTableState.sort.key = 'updated_at';
+          messagingTagTableState.sort.dir = 'desc';
+        }
+        renderMessagingTagsTable(currentMessagingTags);
+      });
+    }
+
+    if (messagingTagsSelectAllVisible) {
+      messagingTagsSelectAllVisible.addEventListener('change', function () {
+        getFilteredSortedMessagingTags().forEach((item) => {
+          if (messagingTagsSelectAllVisible.checked) selectedTagIds.add(item.id);
+          else selectedTagIds.delete(item.id);
+        });
+        renderMessagingTagsTable(currentMessagingTags);
+      });
+    }
+
+    if (messagingTagsFilterActionBtn) {
+      messagingTagsFilterActionBtn.addEventListener('click', function () {
+        if (selectedTagIds.size > 0) {
+          openMessagingTagsBulkEditPage();
+          return;
+        }
+        applyMessagingTagsTableFilters();
+      });
+    }
+
+    if (messagingTagsBulkEditForm) {
+      messagingTagsBulkEditForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const idsToUpdate = Array.from(selectedTagIds);
+        if (!idsToUpdate.length) {
+          notify('Select at least one tag first', true);
+          return;
+        }
+        const formData = new FormData(messagingTagsBulkEditForm);
+        const nextTag = String(formData.get('tag') || '').trim();
+        if (!nextTag) {
+          notify('Enter a tag value to apply', true);
+          return;
+        }
+        try {
+          await Promise.all(idsToUpdate.map((id) => api(`/api/messaging/tags/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ tag: nextTag }),
+          })));
+          notify(`${idsToUpdate.length} tag${idsToUpdate.length === 1 ? '' : 's'} updated`);
+          selectedTagIds.clear();
+          await refreshMessagingTags();
+          App.setActivePage('messagingTagsPage');
+        } catch (err) {
+          notify(err.message, true);
+        }
+      });
+    }
+
+    if (messagingTagsBulkDeleteBtn) {
+      messagingTagsBulkDeleteBtn.addEventListener('click', async function () {
+        const idsToDelete = Array.from(selectedTagIds);
+        if (!idsToDelete.length) {
+          notify('Select at least one tag first', true);
+          return;
+        }
+        if (!window.confirm(`Delete ${idsToDelete.length} selected tag${idsToDelete.length === 1 ? '' : 's'}?`)) return;
+        try {
+          await Promise.all(idsToDelete.map((id) => api(`/api/messaging/tags/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+          notify(`${idsToDelete.length} tag${idsToDelete.length === 1 ? '' : 's'} deleted`);
+          selectedTagIds.clear();
+          await refreshMessagingTags();
+          App.setActivePage('messagingTagsPage');
+        } catch (err) {
+          notify(err.message, true);
+        }
       });
     }
 
