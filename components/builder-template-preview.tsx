@@ -4220,7 +4220,7 @@ function BlogSearchResultsPreview({ settings }: { settings: Record<string, strin
   }, [allPosts, categoryNames, query]);
 
   function postHref(p: BlogPostRecord) {
-    return `${postPageUrl}?slug=${encodeURIComponent(p.slug)}`;
+    return `${postPageUrl}?post=${encodeURIComponent(p.slug)}`;
   }
 
   function formatDate(iso?: string) {
