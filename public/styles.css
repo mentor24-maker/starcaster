@@ -24361,6 +24361,44 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   flex-direction: column;
   align-items: stretch;
 }
+.site-nav-toggle {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.site-nav-toggle:hover,
+.site-nav-toggle:focus-visible {
+  background: rgba(15, 79, 143, 0.08);
+}
+.site-nav-toggle-bar {
+  display: block;
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--site-nav-link-color, #173c61);
+}
+.site-nav-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.site-nav--vertical .site-nav-items {
+  flex-direction: column;
+  align-items: stretch;
+}
 .site-nav-menu,
 .site-nav-submenu,
 .site-nav ul {
@@ -24446,31 +24484,31 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
   min-width: 0;
   box-sizing: border-box;
 }
-.site-nav:not(.site-nav--vertical) {
+.site-nav:not(.site-nav--vertical) .site-nav-items {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   width: 100%;
 }
-.site-nav--sizing-auto:not(.site-nav--vertical),
-.site-nav--sizing-custom:not(.site-nav--vertical) {
+.site-nav--sizing-auto:not(.site-nav--vertical) .site-nav-items,
+.site-nav--sizing-custom:not(.site-nav--vertical) .site-nav-items {
   display: flex;
   flex-wrap: nowrap;
 }
-.site-nav:not(.site-nav--vertical) > .site-nav-link,
-.site-nav:not(.site-nav--vertical) > .site-nav-dropdown > .site-nav-link {
+.site-nav:not(.site-nav--vertical) .site-nav-items > .site-nav-link,
+.site-nav:not(.site-nav--vertical) .site-nav-items > .site-nav-dropdown > .site-nav-link {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
-.site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-link,
-.site-nav--sizing-auto:not(.site-nav--vertical) > .site-nav-dropdown,
-.site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-link,
-.site-nav--sizing-custom:not(.site-nav--vertical) > .site-nav-dropdown {
+.site-nav--sizing-auto:not(.site-nav--vertical) .site-nav-items > .site-nav-link,
+.site-nav--sizing-auto:not(.site-nav--vertical) .site-nav-items > .site-nav-dropdown,
+.site-nav--sizing-custom:not(.site-nav--vertical) .site-nav-items > .site-nav-link,
+.site-nav--sizing-custom:not(.site-nav--vertical) .site-nav-items > .site-nav-dropdown {
   flex: 0 0 auto;
   width: auto;
 }
-.site-nav:not(.site-nav--vertical) > .site-nav-dropdown {
+.site-nav:not(.site-nav--vertical) .site-nav-items > .site-nav-dropdown {
   min-width: 0;
 }
 .site-nav-link {
@@ -24570,6 +24608,51 @@ body.dev-linking-mode .dev-copy-btn[id^=linkChat_] {
 }
 .site-nav--vertical .site-nav-dropdown-item {
   white-space: normal;
+}
+@media (max-width: 720px) {
+  .site-nav:not(.site-nav--vertical) {
+    position: relative;
+  }
+  .site-nav:not(.site-nav--vertical) .site-nav-toggle {
+    display: flex;
+  }
+  .site-nav:not(.site-nav--vertical) .site-nav-items {
+    display: none;
+    flex: 1 0 100%;
+    width: 100%;
+  }
+  .site-nav:not(.site-nav--vertical).site-nav--open .site-nav-items {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .site-nav:not(.site-nav--vertical) .site-nav-items > .site-nav-link,
+  .site-nav:not(.site-nav--vertical) .site-nav-items > .site-nav-dropdown {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+  }
+  .site-nav:not(.site-nav--vertical) .site-nav-items .site-nav-link {
+    justify-content: flex-start;
+  }
+  .site-nav:not(.site-nav--vertical) .site-nav-dropdown {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .site-nav:not(.site-nav--vertical) .site-nav-dropdown-menu {
+    position: static;
+    display: flex;
+    transform: none;
+    border: none;
+    box-shadow: none;
+    padding: 0 0 4px 16px;
+    background: transparent;
+    backdrop-filter: none;
+    z-index: auto;
+    min-width: 0;
+  }
+  .site-nav:not(.site-nav--vertical) .site-nav-dropdown-item {
+    white-space: normal;
+  }
 }
 .builder-nav-menu-inline-preview {
   margin-top: 0.65rem;
