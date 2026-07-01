@@ -11367,14 +11367,34 @@
   min-width: 0;
 }
 
-.builder-react-root .builder-nav-item-width {
-  flex: 0 0 110px;
+.builder-react-root .builder-nav-item-width-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
 }
-
+.builder-react-root .builder-nav-item-width {
+  flex: 0 0 52px;
+  width: 52px;
+  min-width: 0;
+}
 .builder-react-root .builder-nav-item-width:disabled {
   opacity: 0.5;
 }
-
+.builder-react-root .builder-nav-item-width-unit {
+  font-size: 12px;
+  color: var(--color-muted, #888);
+  line-height: 1;
+}
+.builder-react-root .builder-nav-width-total {
+  font-size: 12px;
+  color: var(--color-muted, #888);
+  margin: 2px 0 6px;
+}
+.builder-react-root .builder-nav-width-total-over {
+  color: #c44;
+  font-weight: 600;
+}
 .builder-react-root .builder-nav-add-link-button {
   margin-top: 4px;
 }
