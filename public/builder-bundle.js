@@ -88348,9 +88348,11 @@ Click Cancel to discard local changes and revert to canonical.`
         const saved = unwrapEnvelope(res, "theme");
         await loadThemes();
         setSelectedId(saved.id);
+        const savedBackground = normalizeBackgroundSettings(saved.pageBackground);
         setDraft({
           ...saved,
-          pageBackground: normalizeBackgroundSettings(saved.pageBackground),
+          // If the server dropped pageBackground (column not yet migrated), keep what we sent.
+          pageBackground: savedBackground.mode !== "none" ? savedBackground : draft.pageBackground,
           typography: saved.typography ?? { ...DEFAULT_TYPOGRAPHY }
         });
         setStatus({ message: isNew ? "Theme created" : "Theme saved", isError: false });
