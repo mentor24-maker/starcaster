@@ -178,6 +178,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
     [draft.pageBackground, linkedTheme]
   );
+  const hasResolvedShellBackground = Boolean(
+    workspaceShellLayers.inlineBackground || workspaceShellLayers.backdrop
+  );
   const workspaceShellStyle = useMemo(
     () => ({
       ...getBuilderThemeStyleVars(workspaceThemeStyles),
@@ -360,6 +363,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }
 
   useEffect(() => { void loadPageTemplates(); void loadPages(); void loadCellModules(); void loadSavedSections(); void loadProducts(); void loadAcquireRuns(); void loadDevelopThemes(); void loadSnapshots(); }, []);
+
+  // Themes can be edited in the separate Themes island; reload when returning to Pages.
+  useEffect(() => {
+    if (builderMode === "pages") {
+      void loadDevelopThemes();
+    }
+  }, [builderMode]);
 
   // When the linked theme finishes loading, refresh the page's typography from the latest
   // theme data so changes made in the Themes editor (link underline, fonts, etc.) are
@@ -2368,7 +2378,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                       </div>
                     </div>
                     <div
-                      className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}${linkedTheme && workspaceThemeStyles ? " has-builder-theme-styles" : ""}${workspaceShellLayers.backdrop ? " has-shell-background-backdrop" : ""}`}
+                      className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}${linkedTheme && workspaceThemeStyles ? " has-builder-theme-styles" : ""}${hasResolvedShellBackground ? " has-resolved-shell-background" : ""}${workspaceShellLayers.backdrop ? " has-shell-background-backdrop" : ""}`}
                       style={linkedTheme && workspaceThemeStyles ? workspaceShellStyle : undefined}
                       onDragOver={(event) => { event.preventDefault(); setDragOverWorkspace(true); }}
                       onDragLeave={() => setDragOverWorkspace(false)}

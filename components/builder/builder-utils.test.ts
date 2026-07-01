@@ -19,6 +19,7 @@ import {
   sectionHasOnlyOverlayImageModules,
   resolveShellPageBackground,
   resolveThemePageBackground,
+  coerceThemeShellBackgroundSource,
   getThemeShellBackgroundSeedColor,
   sectionHasOnlyPageOverlayImageModules,
   sectionHasOnlySectionScopedOverlayModules,
@@ -431,6 +432,10 @@ describe("getBuilderThemeStyleVars", () => {
     expect(vars["--bx-theme-padding-top"]).toBe("12px");
     expect(vars["--bx-theme-padding-bottom"]).toBe("24px");
     expect(vars["--bx-theme-padding-inline"]).toBe("80px");
+    expect(vars.paddingTop).toBe("12px");
+    expect(vars.paddingBottom).toBe("24px");
+    expect(vars.paddingLeft).toBe("80px");
+    expect(vars.paddingRight).toBe("80px");
     expect(vars["--lp-border-thickness"]).toBe("2px");
     expect(vars["--lp-radius"]).toBe("16px");
     expect(vars["--lp-blur"]).toBe("4px");
@@ -472,6 +477,24 @@ describe("resolveThemePageBackground", () => {
     });
 
     expect(resolved.mode).toBe("none");
+  });
+});
+
+describe("coerceThemeShellBackgroundSource", () => {
+  it("promotes theme Styles color saved without mode", () => {
+    const coerced = coerceThemeShellBackgroundSource({
+      pageBackground: {
+        mode: "none",
+        color: "#fff5db",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      backgroundColor: "#f5fbff",
+    });
+    expect(coerced?.pageBackground?.mode).toBe("color");
+    expect(coerced?.pageBackground?.color).toBe("#fff5db");
   });
 });
 
@@ -527,6 +550,33 @@ describe("resolveShellPageBackground", () => {
     );
 
     expect(resolved.color).toBe("#ff0000");
+  });
+
+  it("inherits theme Styles color when page is none and theme mode was not committed", () => {
+    const resolved = resolveShellPageBackground(
+      {
+        mode: "none",
+        color: "#ffffff",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      {
+        pageBackground: {
+          mode: "none",
+          color: "#fff5db",
+          color2: "#eaf4ff",
+          imageUrl: "",
+          styleKey: "",
+          opacity: 100,
+        },
+        backgroundColor: "#f5fbff",
+      }
+    );
+
+    expect(resolved.mode).toBe("color");
+    expect(resolved.color).toBe("#fff5db");
   });
 });
 

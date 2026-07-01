@@ -902,14 +902,21 @@ export type ThemeShellBackgroundSource = {
 
 /** Saved theme website background from Styles → Background only (not palette Background). */
 export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
-  const saved = theme?.pageBackground;
-  if (saved && typeof saved === "object") {
-    const normalized = finalizeBackgroundSettings(saved);
-    if (normalized.mode !== "none") {
-      return normalized;
-    }
+  const saved = coerceThemeShellBackgroundSource(theme)?.pageBackground;
+  if (saved && typeof saved === "object" && saved.mode !== "none") {
+    return saved;
   }
   return createDefaultBackgroundSettings();
+}
+
+/** Normalize a theme record before shell resolution (promotes mode when color was saved without mode). */
+export function coerceThemeShellBackgroundSource(
+  theme: ThemeShellBackgroundSource
+): ThemeShellBackgroundSource {
+  if (!theme || typeof theme !== "object") return theme;
+  const raw = theme.pageBackground;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return theme;
+  return { ...theme, pageBackground: finalizeBackgroundSettings(raw) };
 }
 
 /** Page background wins when set; otherwise theme Styles → Background; palette is not used for the shell. */
@@ -917,11 +924,11 @@ export function resolveShellPageBackground(
   pageBackground: BackgroundSettings | undefined,
   theme: ThemeShellBackgroundSource
 ): BackgroundSettings {
-  const page = normalizeBackgroundSettings(pageBackground);
+  const page = finalizeBackgroundSettings(pageBackground);
   if (page.mode !== "none") {
     return page;
   }
-  return resolveThemePageBackground(theme);
+  return resolveThemePageBackground(coerceThemeShellBackgroundSource(theme));
 }
 
 /** Primary color seed for background pickers — from theme Styles shell, not palette Background. */
@@ -999,7 +1006,13 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   vars["--bx-theme-padding-bottom"] = `${bottomMargin}px`;
   vars["--bx-theme-padding-inline"] = `${sideMargins}px`;
 
-  return vars as CSSProperties;
+  return {
+    ...vars,
+    paddingTop: `${topMargin}px`,
+    paddingBottom: `${bottomMargin}px`,
+    paddingLeft: `${sideMargins}px`,
+    paddingRight: `${sideMargins}px`,
+  } as CSSProperties;
 }
 
 /** Palette vars consumed by CRM form theme tokens on builder/public pages. */
