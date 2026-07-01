@@ -115,6 +115,9 @@ export function BuilderBackgroundControls({
               fallback="#ffffff"
               themeColors={themeColors}
               value={background.color}
+              opacity={background.opacity}
+              onChangeOpacity={(opacity) => onChange((current) => ({ ...current, opacity }))}
+              onClear={() => onChange((current) => ({ ...current, mode: "none" }))}
               onChange={(color) =>
                 onChange((current) => ({
                   ...current,
@@ -242,6 +245,9 @@ export function BuilderBackgroundControls({
               fallback="#ffffff"
               themeColors={themeColors}
               value={background.color}
+              opacity={background.opacity}
+              onChangeOpacity={(opacity) => onChange((current) => ({ ...current, opacity }))}
+              onClear={() => onChange((current) => ({ ...current, mode: "none" }))}
               onChange={(color) =>
                 onChange((current) => ({
                   ...current,
