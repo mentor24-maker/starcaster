@@ -9081,6 +9081,15 @@ body.asset-associations-modal-open {
   text-align: right;
   white-space: nowrap;
 }
+.builder-react-root .builder-button-background-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+.builder-react-root .builder-button-background-popup-actions .submit-button {
+  white-space: nowrap;
+  width: fit-content;
+}
 .builder-react-root .builder-preview-shell-backdrop,
 .builder-react-root .builder-shell-background-backdrop {
   position: absolute;

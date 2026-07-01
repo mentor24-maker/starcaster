@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { BackgroundSettings, BuilderTheme, BuilderThemeTypography } from "@/lib/builder-template";
 import {
   createDefaultBackgroundSettings,
+  finalizeBackgroundSettings,
   normalizeBackgroundSettings,
   normalizeBuilderAssetUrl,
 } from "@/lib/builder-template";
@@ -92,7 +93,7 @@ function buildPayload(draft: DevelopThemeRecord) {
     logoSquareId: draft.logoSquareId,
     featureImageId: draft.featureImageId,
     backgroundImageId: draft.backgroundImageId,
-    pageBackground: draft.pageBackground,
+    pageBackground: finalizeBackgroundSettings(draft.pageBackground),
     typography: draft.typography ?? DEFAULT_TYPOGRAPHY,
   };
 }
@@ -169,7 +170,7 @@ export function BuilderThemesPage() {
       found
         ? {
             ...found,
-            pageBackground: normalizeBackgroundSettings(found.pageBackground),
+            pageBackground: finalizeBackgroundSettings(found.pageBackground),
             typography: found.typography ?? { ...DEFAULT_TYPOGRAPHY },
           }
         : defaultDraft()
@@ -204,11 +205,10 @@ export function BuilderThemesPage() {
       const saved: DevelopThemeRecord = unwrapEnvelope(res, "theme");
       await loadThemes();
       setSelectedId(saved.id);
-      const savedBackground = normalizeBackgroundSettings(saved.pageBackground);
+      const savedBackground = finalizeBackgroundSettings(saved.pageBackground);
       setDraft({
         ...saved,
-        // If the server dropped pageBackground (column not yet migrated), keep what we sent.
-        pageBackground: savedBackground.mode !== "none" ? savedBackground : draft.pageBackground,
+        pageBackground: savedBackground.mode !== "none" ? savedBackground : finalizeBackgroundSettings(draft.pageBackground),
         typography: saved.typography ?? { ...DEFAULT_TYPOGRAPHY },
       });
       setStatus({ message: isNew ? "Theme created" : "Theme saved", isError: false });
