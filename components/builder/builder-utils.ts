@@ -19,6 +19,8 @@ import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
   finalizeBackgroundSettings,
+  promoteThemeStylesPageBackground,
+  finalizeThemeStylesPageBackground,
   getBuilderBackgroundLayerOpacity,
   getBuilderBackgroundStyle,
   normalizeBackgroundMode,
@@ -876,12 +878,45 @@ function accentBorderColor(accent: string): string {
   return `rgba(${r}, ${g}, ${b}, 0.24)`;
 }
 
-function readThemeMarginField(
+type ThemePageLayoutMargins = {
+  topMargin?: number;
+  bottomMargin?: number;
+  sideMargins?: number;
+};
+
+function readThemeMarginColumn(
   theme: Record<string, unknown>,
   camel: "topMargin" | "bottomMargin" | "sideMargins",
   snake: string
+): number | undefined {
+  if (theme[snake] !== undefined && theme[snake] !== null) {
+    return safeThemeNumber(theme[snake], 0);
+  }
+  if (theme[camel] !== undefined && theme[camel] !== null) {
+    return safeThemeNumber(theme[camel], 0);
+  }
+  return undefined;
+}
+
+function readThemePageLayoutMargins(theme: Record<string, unknown>): ThemePageLayoutMargins | null {
+  const typography = theme.typography;
+  if (!typography || typeof typography !== "object" || Array.isArray(typography)) return null;
+  const pageLayout = (typography as Record<string, unknown>).pageLayout;
+  if (!pageLayout || typeof pageLayout !== "object" || Array.isArray(pageLayout)) return null;
+  return pageLayout as ThemePageLayoutMargins;
+}
+
+/** Prefer dedicated columns; fall back to typography.pageLayout when columns are 0/missing. */
+export function resolveThemeMarginValue(
+  columnMargin: number | undefined,
+  typographyMargin: number | undefined
 ): number {
-  return safeThemeNumber(theme[camel] ?? theme[snake], 0);
+  const col = columnMargin === undefined ? -1 : safeThemeNumber(columnMargin, -1);
+  const typo = typographyMargin === undefined ? -1 : safeThemeNumber(typographyMargin, -1);
+  if (col > 0) return col;
+  if (typo > 0) return typo;
+  if (col >= 0) return col;
+  return typo >= 0 ? typo : 0;
 }
 
 export function buildBuilderThemeStyles(
@@ -889,6 +924,7 @@ export function buildBuilderThemeStyles(
 ): BuilderThemeStyles | undefined {
   if (!theme || typeof theme !== "object") return undefined;
   const row = theme as Record<string, unknown>;
+  const pageLayout = readThemePageLayoutMargins(row);
   return {
     primaryColor: String(row.primaryColor ?? row.primary_color ?? "").trim(),
     secondaryColor: String(row.secondaryColor ?? row.secondary_color ?? "").trim(),
@@ -898,16 +934,64 @@ export function buildBuilderThemeStyles(
     borderRadius: safeThemeNumber(row.borderRadius ?? row.border_radius, 12),
     containerBlur: safeThemeNumber(row.containerBlur ?? row.container_blur, 0),
     contrastLevel: safeThemeNumber(row.contrastLevel ?? row.contrast_level, 0),
-    topMargin: readThemeMarginField(row, "topMargin", "top_margin"),
-    bottomMargin: readThemeMarginField(row, "bottomMargin", "bottom_margin"),
-    sideMargins: readThemeMarginField(row, "sideMargins", "side_margins"),
+    topMargin: resolveThemeMarginValue(
+      readThemeMarginColumn(row, "topMargin", "top_margin"),
+      pageLayout?.topMargin
+    ),
+    bottomMargin: resolveThemeMarginValue(
+      readThemeMarginColumn(row, "bottomMargin", "bottom_margin"),
+      pageLayout?.bottomMargin
+    ),
+    sideMargins: resolveThemeMarginValue(
+      readThemeMarginColumn(row, "sideMargins", "side_margins"),
+      pageLayout?.sideMargins
+    ),
   };
 }
 
 export type ThemeShellBackgroundSource = {
+  /** Theme Styles → Page Background (distinct from page-level pageBackground). */
+  stylesPageBackground?: BackgroundSettings | Record<string, unknown> | null;
+  /** @deprecated Use stylesPageBackground on theme records. */
   pageBackground?: BackgroundSettings | Record<string, unknown> | null;
   backgroundColor?: string;
 } | null | undefined;
+
+/** Read theme Styles → Page Background from a theme or themeShell payload. */
+export function readThemeStylesPageBackground(
+  theme: ThemeShellBackgroundSource
+): BackgroundSettings | null {
+  if (!theme || typeof theme !== "object") return null;
+  const raw = theme.stylesPageBackground ?? theme.pageBackground;
+  return promoteThemeStylesPageBackground(raw);
+}
+
+/** Normalize a theme record before shell resolution. */
+export function coerceThemeShellBackgroundSource(
+  theme: ThemeShellBackgroundSource
+): ThemeShellBackgroundSource {
+  if (!theme || typeof theme !== "object") return theme;
+  const styles = readThemeStylesPageBackground(theme);
+  if (!styles) return theme;
+  return { ...theme, stylesPageBackground: styles, pageBackground: styles };
+}
+
+/**
+ * Theme shell background: Styles → Page Background, then palette Background,
+ * then the default palette background color.
+ */
+export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
+  const coerced = coerceThemeShellBackgroundSource(theme);
+  const saved = readThemeStylesPageBackground(coerced);
+  if (saved && saved.mode !== "none") {
+    return saved;
+  }
+  const paletteColor = String(coerced?.backgroundColor ?? "").trim();
+  if (paletteColor) {
+    return shellBackgroundFromColor(paletteColor);
+  }
+  return shellBackgroundFromColor(DEFAULT_THEME_PALETTE_BACKGROUND);
+}
 
 /** Default palette Background when no theme palette value is saved. */
 export const DEFAULT_THEME_PALETTE_BACKGROUND = "#f5fbff";
@@ -918,33 +1002,6 @@ function shellBackgroundFromColor(color: string): BackgroundSettings {
     mode: "color",
     color: normalizeBuilderHexColor(color, DEFAULT_THEME_PALETTE_BACKGROUND),
   };
-}
-
-/** Normalize a theme record before shell resolution (promotes mode when color was saved without mode). */
-export function coerceThemeShellBackgroundSource(
-  theme: ThemeShellBackgroundSource
-): ThemeShellBackgroundSource {
-  if (!theme || typeof theme !== "object") return theme;
-  const raw = theme.pageBackground;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return theme;
-  return { ...theme, pageBackground: finalizeBackgroundSettings(raw) };
-}
-
-/**
- * Theme shell background: Styles → Page Background, then palette Background,
- * then the default palette background color.
- */
-export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
-  const coerced = coerceThemeShellBackgroundSource(theme);
-  const saved = coerced?.pageBackground;
-  if (saved && typeof saved === "object" && saved.mode !== "none") {
-    return saved;
-  }
-  const paletteColor = String(coerced?.backgroundColor ?? "").trim();
-  if (paletteColor) {
-    return shellBackgroundFromColor(paletteColor);
-  }
-  return shellBackgroundFromColor(DEFAULT_THEME_PALETTE_BACKGROUND);
 }
 
 /** Page background wins when set; otherwise theme Styles → Page Background → palette → default. */
@@ -961,15 +1018,12 @@ export function resolveShellPageBackground(
 
 /** Color seed for page-level background pickers: Styles page background, then palette Background. */
 export function getThemeShellBackgroundSeedColor(theme: ThemeShellBackgroundSource): string {
-  const coerced = coerceThemeShellBackgroundSource(theme);
-  const styles = coerced?.pageBackground;
-  if (styles && typeof styles === "object" && styles.mode !== "none") {
-    if (styles.mode === "color" || styles.mode === "gradient") {
-      const color = String(styles.color || "").trim();
-      if (color) return color;
-    }
+  const styles = readThemeStylesPageBackground(theme);
+  if (styles && (styles.mode === "color" || styles.mode === "gradient")) {
+    const color = String(styles.color || "").trim();
+    if (color) return color;
   }
-  return String(coerced?.backgroundColor ?? "").trim();
+  return String(theme?.backgroundColor ?? "").trim();
 }
 
 export function getShellPageBackgroundStyle(

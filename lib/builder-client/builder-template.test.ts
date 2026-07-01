@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   createDefaultTheme,
   finalizeBackgroundSettings,
+  promoteThemeStylesPageBackground,
+  finalizeThemeStylesPageBackground,
   formatRichTextContent,
   normalizeBuilderAssetUrl,
   normalizeBuilderDocument,
@@ -320,5 +322,33 @@ describe("finalizeBackgroundSettings", () => {
     });
     expect(cleared.mode).toBe("none");
     expect(cleared.color).toBe("#ffffff");
+  });
+});
+
+describe("promoteThemeStylesPageBackground", () => {
+  it("promotes theme styles when mode is none but color is set", () => {
+    const promoted = promoteThemeStylesPageBackground({
+      mode: "none",
+      color: "#ceedf8",
+      color2: "#eaf4ff",
+      imageUrl: "",
+      styleKey: "",
+      opacity: 100,
+    });
+    expect(promoted?.mode).toBe("color");
+    expect(promoted?.color).toBe("#ceedf8");
+  });
+
+  it("finalizeThemeStylesPageBackground persists promoted theme styles", () => {
+    const saved = finalizeThemeStylesPageBackground({
+      mode: "none",
+      color: "#ceedf8",
+      color2: "#eaf4ff",
+      imageUrl: "",
+      styleKey: "",
+      opacity: 100,
+    });
+    expect(saved.mode).toBe("color");
+    expect(saved.color).toBe("#ceedf8");
   });
 });

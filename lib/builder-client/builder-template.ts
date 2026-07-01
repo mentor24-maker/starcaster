@@ -191,6 +191,12 @@ export type BuilderThemeTypography = {
     radioLabel?: string;
     fieldFocus?: string;
   };
+  /** Page viewport margins (Themes → Styles). Mirrored here when DB margin columns are absent. */
+  pageLayout?: {
+    topMargin?: number;
+    bottomMargin?: number;
+    sideMargins?: number;
+  };
 };
 
 export type BuilderTheme = {
@@ -216,7 +222,9 @@ export type BuilderThemeSummary = {
   logoSquareId?: string;
   featureImageId?: string;
   backgroundImageId?: string;
-  /** Default website shell background (color, gradient, image, or style). */
+  /** Theme Styles → Page Background (website shell default). */
+  stylesPageBackground?: BackgroundSettings;
+  /** @deprecated Use stylesPageBackground — kept for API compatibility. */
   pageBackground?: BackgroundSettings;
   typography?: BuilderThemeTypography;
 };
@@ -704,7 +712,55 @@ export function finalizeBackgroundSettings(background: BackgroundSettings | unkn
   return normalized;
 }
 
-/** Image/style backgrounds need an isolated backdrop layer when opacity is below 100%. */
+/**
+ * Theme Styles → Page Background only. Promotes mode "none" when a custom color,
+ * gradient, image, or style was configured (picker often leaves mode unset).
+ * Returns null when no theme shell background is configured.
+ */
+export function promoteThemeStylesPageBackground(
+  background: BackgroundSettings | unknown
+): BackgroundSettings | null {
+  if (!background || typeof background !== "object" || Array.isArray(background)) {
+    return null;
+  }
+
+  const normalized = normalizeBackgroundSettings(background);
+  if (normalized.mode !== "none") {
+    return normalized;
+  }
+
+  if (normalized.styleKey) {
+    return { ...normalized, mode: "style" };
+  }
+
+  if (normalized.imageUrl) {
+    return { ...normalized, mode: "image" };
+  }
+
+  const defaults = createDefaultBackgroundSettings();
+  const colorChanged =
+    normalized.color !== defaults.color && !isTransparentBuilderColor(normalized.color);
+  const color2Changed = normalized.color2 !== defaults.color2;
+  const opacityChanged =
+    clampBuilderOpacity(normalized.opacity) !== clampBuilderOpacity(defaults.opacity);
+
+  if (colorChanged && color2Changed) {
+    return { ...normalized, mode: "gradient" };
+  }
+
+  if (colorChanged || opacityChanged) {
+    return { ...normalized, mode: "color" };
+  }
+
+  return null;
+}
+
+/** Persistable theme Styles page background (promotes then defaults to explicit none). */
+export function finalizeThemeStylesPageBackground(
+  background: BackgroundSettings | unknown
+): BackgroundSettings {
+  return promoteThemeStylesPageBackground(background) ?? createDefaultBackgroundSettings();
+}
 export function getBuilderBackgroundLayerOpacity(background: BackgroundSettings | undefined): number {
   if (!background || background.mode === "none") {
     return 1;

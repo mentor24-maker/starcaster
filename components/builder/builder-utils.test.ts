@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  promoteThemeStylesPageBackground,
+  finalizeThemeStylesPageBackground,
+} from "@/lib/builder-template";
+import {
   buildClonedPageCreatePayload,
   columnHasOnlyOverlayImageModules,
   getHeadingModuleStyle,
@@ -20,6 +24,7 @@ import {
   sectionHasOnlyOverlayImageModules,
   resolveShellPageBackground,
   resolveThemePageBackground,
+  readThemeStylesPageBackground,
   coerceThemeShellBackgroundSource,
   getThemeShellBackgroundSeedColor,
   sectionHasOnlyPageOverlayImageModules,
@@ -479,6 +484,36 @@ describe("buildBuilderThemeStyles", () => {
     expect(styles?.bottomMargin).toBe(24);
     expect(styles?.sideMargins).toBe(80);
   });
+
+  it("falls back to typography.pageLayout when margin columns are zero", () => {
+    const styles = buildBuilderThemeStyles({
+      top_margin: 0,
+      bottom_margin: 0,
+      side_margins: 0,
+      typography: {
+        fonts: { heading: "", body: "", mono: "" },
+        scale: { baseSize: 0, ratio: 0, baseLineHeight: 0 },
+        colors: {
+          text: "",
+          heading: "",
+          muted: "",
+          link: "",
+          linkHover: "",
+          selection: "",
+        },
+        elements: {},
+        pageLayout: {
+          topMargin: 12,
+          bottomMargin: 24,
+          sideMargins: 80,
+        },
+      },
+    });
+
+    expect(styles?.topMargin).toBe(12);
+    expect(styles?.bottomMargin).toBe(24);
+    expect(styles?.sideMargins).toBe(80);
+  });
 });
 
 describe("resolveThemePageBackground", () => {
@@ -534,10 +569,38 @@ describe("resolveThemePageBackground", () => {
   });
 });
 
+describe("promoteThemeStylesPageBackground", () => {
+  it("promotes mode none with a custom color (theme picker often leaves mode unset)", () => {
+    const promoted = promoteThemeStylesPageBackground({
+      mode: "none",
+      color: "#ceedf8",
+      color2: "#eaf4ff",
+      imageUrl: "",
+      styleKey: "",
+      opacity: 100,
+    });
+    expect(promoted?.mode).toBe("color");
+    expect(promoted?.color).toBe("#ceedf8");
+  });
+
+  it("returns null for a truly unset theme styles background", () => {
+    expect(
+      promoteThemeStylesPageBackground({
+        mode: "none",
+        color: "#ffffff",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      })
+    ).toBeNull();
+  });
+});
+
 describe("coerceThemeShellBackgroundSource", () => {
   it("promotes theme Styles color saved without mode", () => {
     const coerced = coerceThemeShellBackgroundSource({
-      pageBackground: {
+      stylesPageBackground: {
         color: "#fff5db",
         color2: "#eaf4ff",
         imageUrl: "",
@@ -546,8 +609,23 @@ describe("coerceThemeShellBackgroundSource", () => {
       },
       backgroundColor: "#f5fbff",
     });
-    expect(coerced?.pageBackground?.mode).toBe("color");
-    expect(coerced?.pageBackground?.color).toBe("#fff5db");
+    expect(coerced?.stylesPageBackground?.mode).toBe("color");
+    expect(coerced?.stylesPageBackground?.color).toBe("#fff5db");
+  });
+
+  it("reads stylesPageBackground from legacy pageBackground field on theme", () => {
+    expect(
+      readThemeStylesPageBackground({
+        pageBackground: {
+          mode: "color",
+          color: "#ceedf8",
+          color2: "#eaf4ff",
+          imageUrl: "",
+          styleKey: "",
+          opacity: 100,
+        },
+      })?.color
+    ).toBe("#ceedf8");
   });
 });
 
@@ -642,7 +720,8 @@ describe("resolveShellPageBackground", () => {
         opacity: 100,
       },
       {
-        pageBackground: {
+        stylesPageBackground: {
+          mode: "none",
           color: "#ceedf8",
           color2: "#eaf4ff",
           imageUrl: "",

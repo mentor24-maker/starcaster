@@ -22,7 +22,7 @@ import {
   isAdminNavCookieSet,
   redirectAfterAdminLogout,
 } from "@/lib/public-admin-session";
-import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 
 type SiteThemeShell = ThemeShellBackgroundSource & BuilderThemeStyles;
@@ -275,8 +275,8 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       },
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { themes?: Array<Record<string, unknown>> } | null) => {
-        const themes = Array.isArray(data?.themes) ? data.themes : [];
+      .then((data: Record<string, unknown> | null) => {
+        const themes = (unwrapEnvelope<Array<Record<string, unknown>>>(data ?? {}, "themes") ?? []);
         const match = themeId
           ? themes.find((theme) => String(theme.id || "") === themeId) || null
           : themes[0] || null;
@@ -338,7 +338,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           Admin
         </a>
       ) : null}
-      <div className="builder-public-site-layout" style={pageMarginStyle}>
+      <div className="builder-public-site-layout builder-theme-page-margin-layout" style={pageMarginStyle}>
         <BuilderTemplatePreview
           layoutSections={sections}
           pageBackground={page.pageBackground}
