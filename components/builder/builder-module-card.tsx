@@ -2925,6 +2925,9 @@ function NavModuleEditor({
   const [linksCollapsed, setLinksCollapsed] = useState(false);
   const items = parseNavItems(module.settings);
   const { v: padV, h: padH } = parseNavPadding(module.settings.navPadding ?? "");
+  const topLevelWidthTotal = items
+    .filter((i) => !i.parentId)
+    .reduce((sum, i) => sum + (parseFloat(i.width ?? "") || 0), 0);
 
   function persist(nextItems: NavItem[]) {
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, navItems: serializeNavItems(nextItems) } }));
@@ -3117,15 +3120,21 @@ function NavModuleEditor({
                       <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
                       <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
                       {isCustomSizing && (
-                        <input
-                          type="text"
-                          className="builder-nav-item-width"
-                          value={item.width ?? ""}
-                          disabled={Boolean(item.parentId)}
-                          onChange={(e) => updateItem(item.id, { width: e.target.value })}
-                          placeholder={item.parentId ? "—" : "e.g. 140px"}
-                          title="Width for this top-level link"
-                        />
+                        <div className="builder-nav-item-width-wrap">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            className="builder-nav-item-width"
+                            value={item.width ?? ""}
+                            disabled={Boolean(item.parentId)}
+                            onChange={(e) => updateItem(item.id, { width: e.target.value })}
+                            placeholder={item.parentId ? "" : "0"}
+                            title="Width percentage for this top-level link"
+                          />
+                          {!item.parentId && <span className="builder-nav-item-width-unit">%</span>}
+                        </div>
                       )}
                     </div>
                     <div className="builder-nav-item-actions">
@@ -3137,6 +3146,12 @@ function NavModuleEditor({
                 );
               })}
             </div>
+            {module.settings.navItemSizing === "custom" && (
+              <div className={`builder-nav-width-total${topLevelWidthTotal > 100 ? " builder-nav-width-total-over" : ""}`}>
+                Total: {Math.round(topLevelWidthTotal * 10) / 10}%
+                {topLevelWidthTotal > 100 && " — over 100%"}
+              </div>
+            )}
             <button type="button" className="secondary-button builder-nav-add-link-button" onClick={addItem}>+ Add Link</button>
           </>
         )}
