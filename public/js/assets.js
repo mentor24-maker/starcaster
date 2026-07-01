@@ -663,6 +663,9 @@ App.assets = (function () {
     if (els.assetsBulkActionRow) els.assetsBulkActionRow.classList.toggle('hidden', !bulkMode);
     if (!bulkMode) closeBulkResizePanel();
 
+    if (els.assetsFilterWidth) els.assetsFilterWidth.disabled = bulkMode;
+    if (els.assetsFilterHeight) els.assetsFilterHeight.disabled = bulkMode;
+
     if (!els.assetsFilterName || !els.assetsFilterType || !els.assetsFilterTags) return;
 
     if (bulkMode) {
