@@ -12815,6 +12815,21 @@ body.asset-associations-modal-open {
   flex: 1 1 120px;
   min-width: 0;
 }
+.builder-react-root .builder-nav-items-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.builder-react-root .builder-nav-items-header .builder-nav-item-fields > span {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.builder-react-root .builder-nav-items-header-action {
+  white-space: nowrap;
+}
 .builder-react-root .builder-nav-item-width-wrap {
   display: flex;
   align-items: center;
@@ -12822,8 +12837,8 @@ body.asset-associations-modal-open {
   flex: 0 0 auto;
 }
 .builder-react-root .builder-nav-item-width {
-  flex: 0 0 52px;
-  width: 52px;
+  flex: 0 0 64px;
+  width: 64px;
   min-width: 0;
 }
 .builder-react-root .builder-nav-item-width:disabled {
