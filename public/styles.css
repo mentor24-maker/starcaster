@@ -9098,11 +9098,13 @@ body.asset-associations-modal-open {
   pointer-events: none;
 }
 .builder-react-root .builder-preview-shell.has-shell-background-backdrop,
-.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop {
+.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop,
+.builder-react-root .builder-viewport-shell-layout.has-shell-background-backdrop {
   position: relative;
 }
 .builder-react-root .builder-preview-shell.has-shell-background-backdrop > :not(.builder-preview-shell-backdrop),
-.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop > :not(.builder-shell-background-backdrop) {
+.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop > :not(.builder-shell-background-backdrop),
+.builder-react-root .builder-viewport-shell-layout.has-shell-background-backdrop > :not(.builder-preview-shell-backdrop) {
   position: relative;
   z-index: 1;
 }
@@ -13433,13 +13435,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-weight: var(--bx-weight-h6, 800);
 }
 .builder-react-root.builder-public-site .builder-public-site-layout,
+.builder-react-root .builder-viewport-shell-layout,
 .builder-react-root .builder-theme-page-margin-layout {
   box-sizing: border-box;
   width: 100%;
   min-height: 100vh;
 }
+.builder-react-root .builder-preview-device-frame .builder-viewport-shell-layout,
 .builder-react-root .builder-preview-device-frame .builder-theme-page-margin-layout {
   min-height: 0;
+}
+.builder-react-root .builder-viewport-shell-content {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
 }
 .builder-react-root .builder-preview-shell.has-builder-theme-styles,
 .builder-react-root .builder-main.builder-workspace.has-builder-theme-styles {
@@ -13485,6 +13494,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 .builder-react-root.builder-public-site .builder-preview-shell.has-resolved-shell-background {
   min-height: 100vh;
+}
+.builder-react-root .builder-viewport-shell-content .builder-preview-shell {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 .builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-shell-content > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot),
 .builder-react-root .builder-preview-shell.has-builder-theme-styles > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot) {

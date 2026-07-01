@@ -112,6 +112,8 @@ type BuilderTemplatePreviewProps = {
   projectId?: string;
   /** When false, page margins are applied by an outer public-site wrapper instead. */
   applyThemePageMargins?: boolean;
+  /** When true, shell background is rendered by BuilderViewportShellLayout (or similar). */
+  suppressShellBackground?: boolean;
 };
 
 type ContactFormField = {
@@ -1154,10 +1156,13 @@ export function BuilderTemplatePreview({
   emailPreview = false,
   previewMode = false,
   projectId = "",
-  applyThemePageMargins = true
+  applyThemePageMargins = true,
+  suppressShellBackground = false
 }: BuilderTemplatePreviewProps) {
-  const shellBackground = getShellBackgroundLayers(pageBackground, themeShellBackground);
-  const hasResolvedShellBackground = Boolean(
+  const shellBackground = suppressShellBackground
+    ? {}
+    : getShellBackgroundLayers(pageBackground, themeShellBackground);
+  const hasResolvedShellBackground = !suppressShellBackground && Boolean(
     shellBackground.inlineBackground || shellBackground.backdrop
   );
   const themeMarginStyle = applyThemePageMargins ? getBuilderThemePageMarginStyle(themeStyles) : {};
@@ -1167,7 +1172,7 @@ export function BuilderTemplatePreview({
     ...getThemeRootVars(theme),
     ...getCrmThemePaletteVars(themePalette),
     ...getBuilderThemeStyleVars(themeStyles),
-    ...shellBackground.inlineBackground
+    ...(suppressShellBackground ? {} : shellBackground.inlineBackground),
   };
   const sitePlayerRegistered = useSitePlayerRegistration();
 
@@ -1207,7 +1212,7 @@ export function BuilderTemplatePreview({
       onClickCapture={shellClassName ? handleAdminLogoutLinkClick : undefined}
       style={rootStyle}
     >
-      {shellBackground.backdrop ? (
+      {shellBackground.backdrop && !suppressShellBackground ? (
         <div
           aria-hidden
           className="builder-preview-shell-backdrop"
