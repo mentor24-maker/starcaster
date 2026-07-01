@@ -18,6 +18,7 @@ import {
 import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
+  finalizeBackgroundSettings,
   getBuilderBackgroundLayerOpacity,
   getBuilderBackgroundStyle,
   normalizeBackgroundMode,
@@ -903,7 +904,7 @@ export type ThemeShellBackgroundSource = {
 export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
   const saved = theme?.pageBackground;
   if (saved && typeof saved === "object") {
-    const normalized = normalizeBackgroundSettings(saved);
+    const normalized = finalizeBackgroundSettings(saved);
     if (normalized.mode !== "none") {
       return normalized;
     }

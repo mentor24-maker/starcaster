@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createDefaultTheme,
+  finalizeBackgroundSettings,
   formatRichTextContent,
   normalizeBuilderAssetUrl,
   normalizeBuilderDocument,
@@ -280,5 +281,32 @@ describe("normalizeTheme", () => {
   it("defaults theme when a document has none", () => {
     expect(normalizeBuilderDocument({ sections: [] }).theme).toEqual(createDefaultTheme());
     expect(normalizeBuilderDocument([]).theme).toEqual(createDefaultTheme());
+  });
+});
+
+describe("finalizeBackgroundSettings", () => {
+  it("promotes mode to color when a custom color was saved without mode", () => {
+    expect(
+      finalizeBackgroundSettings({
+        mode: "none",
+        color: "#0b82d4",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: ""
+      }).mode
+    ).toBe("color");
+  });
+
+  it("leaves unset backgrounds as none", () => {
+    expect(
+      finalizeBackgroundSettings({
+        mode: "none",
+        color: "#ffffff",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100
+      }).mode
+    ).toBe("none");
   });
 });
