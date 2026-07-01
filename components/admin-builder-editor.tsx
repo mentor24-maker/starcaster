@@ -43,7 +43,7 @@ import {
   createDraftFromTemplate,
   createDraftFromPage,
   getBuilderThemeStyleVars,
-  getShellPageBackgroundStyle,
+  getShellBackgroundLayers,
   getModuleBackgroundSettings,
   getThemeRootVars
 } from "./builder/builder-utils";
@@ -174,12 +174,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // first available theme so swatches still appear when no theme is selected on the page.
   const activeTheme = linkedTheme ?? builderThemes[0] ?? null;
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
+  const workspaceShellLayers = useMemo(
+    () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
+    [draft.pageBackground, linkedTheme]
+  );
   const workspaceShellStyle = useMemo(
     () => ({
       ...getBuilderThemeStyleVars(workspaceThemeStyles),
-      ...getShellPageBackgroundStyle(draft.pageBackground, linkedTheme),
+      ...workspaceShellLayers.inlineBackground,
     }),
-    [workspaceThemeStyles, linkedTheme, draft.pageBackground]
+    [workspaceThemeStyles, workspaceShellLayers.inlineBackground]
   );
   const rteThemeColors = [
     ...buildBuilderThemePaletteColors(activeTheme),
@@ -2364,12 +2368,22 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                       </div>
                     </div>
                     <div
-                      className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}${linkedTheme && workspaceThemeStyles ? " has-builder-theme-styles" : ""}`}
+                      className={`builder-main builder-workspace ${isEmailTemplateDraft ? "builder-email-workspace" : ""} ${dragOverWorkspace ? "is-drag-over" : ""}${linkedTheme && workspaceThemeStyles ? " has-builder-theme-styles" : ""}${workspaceShellLayers.backdrop ? " has-shell-background-backdrop" : ""}`}
                       style={linkedTheme && workspaceThemeStyles ? workspaceShellStyle : undefined}
                       onDragOver={(event) => { event.preventDefault(); setDragOverWorkspace(true); }}
                       onDragLeave={() => setDragOverWorkspace(false)}
                       onDrop={handleWorkspaceDrop}
                     >
+                {workspaceShellLayers.backdrop ? (
+                  <div
+                    aria-hidden
+                    className="builder-shell-background-backdrop"
+                    style={{
+                      ...workspaceShellLayers.backdrop.style,
+                      opacity: workspaceShellLayers.backdrop.opacity,
+                    }}
+                  />
+                ) : null}
                 {isEmailTemplateDraft ? (
                   <div className="builder-email-workspace-pod">
                     {draft.layoutSections.length === 0 ? (
