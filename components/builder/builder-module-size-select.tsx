@@ -10,6 +10,7 @@ export const BUILDER_MODULE_SIZE_OPTIONS = [
   { value: "50", label: "50%" },
   { value: "66", label: "66%" },
   { value: "75", label: "75%" },
+  { value: "90", label: "90%" },
   { value: "100", label: "100%" }
 ] as const;
 
