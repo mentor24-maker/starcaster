@@ -7,6 +7,8 @@ App.assets = (function () {
   let editingAssetId = null;
   let selectedAssetIds = new Set();
   const ASSET_ASPECT_OVERRIDE_STORAGE_KEY = 'starcaster.assetAspectOverrides';
+  const STANDARD_ASSET_WIDTHS = new Set([3840, 2560, 1920, 1440, 1280, 960, 720, 480, 240]);
+  const STANDARD_ASSET_HEIGHTS = new Set([2160, 1440, 1080, 960, 720, 640, 480, 320, 160]);
   let manualAspectOverrides = {};
   let bulkDraft = {
     asset_name: '',
@@ -281,8 +283,8 @@ App.assets = (function () {
     const aspect = normalizeAspect(filters.aspect);
     const tags = String(filters.tags || '').trim().toLowerCase();
     const size = String(filters.size || '').trim().toLowerCase();
-    const imageWidth = Number(filters.image_width || 0) || 0;
-    const imageHeight = Number(filters.image_height || 0) || 0;
+    const widthFilter = String(filters.image_width || '').trim().toLowerCase();
+    const heightFilter = String(filters.image_height || '').trim().toLowerCase();
 
     const filtered = (state.assets || []).filter((asset) => {
       const assetName = String(asset.assetName || '').toLowerCase();
@@ -301,8 +303,14 @@ App.assets = (function () {
       if (aspect && assetAspect !== aspect) return false;
       if (tags && !assetTags.includes(tags)) return false;
       if (size && !assetSizeRaw.includes(size) && !assetSizeFmt.includes(size)) return false;
-      if (imageWidth && Number(asset.imageWidth || 0) !== imageWidth) return false;
-      if (imageHeight && Number(asset.imageHeight || 0) !== imageHeight) return false;
+      const assetWidth = Number(asset.imageWidth || 0) || 0;
+      const assetHeight = Number(asset.imageHeight || 0) || 0;
+      if (widthFilter === 'none' && assetWidth) return false;
+      else if (widthFilter === 'other' && (!assetWidth || STANDARD_ASSET_WIDTHS.has(assetWidth))) return false;
+      else if (widthFilter && widthFilter !== 'none' && widthFilter !== 'other' && assetWidth !== Number(widthFilter)) return false;
+      if (heightFilter === 'none' && assetHeight) return false;
+      else if (heightFilter === 'other' && (!assetHeight || STANDARD_ASSET_HEIGHTS.has(assetHeight))) return false;
+      else if (heightFilter && heightFilter !== 'none' && heightFilter !== 'other' && assetHeight !== Number(heightFilter)) return false;
       return true;
     });
 
