@@ -147,7 +147,7 @@ export function BuilderPageList({
   const linkedTheme = pageThemeId
     ? themes.find((theme) => theme.id === pageThemeId) ?? null
     : null;
-  const themeColors = buildBuilderThemePaletteColors(linkedTheme);
+  const themeColors = buildBuilderThemePaletteColors(linkedTheme ?? themes[0] ?? null);
   const pageDetailsThemeStyle = useMemo(
     () =>
       getThemeFormControlVars(
