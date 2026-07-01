@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import type { BackgroundSettings, BuilderTheme, BuilderThemeTypography } from "@/lib/builder-template";
 import {
   createDefaultBackgroundSettings,
-  finalizeBackgroundSettings,
+  finalizeThemeStylesPageBackground,
   normalizeBackgroundSettings,
   normalizeBuilderAssetUrl,
+  promoteThemeStylesPageBackground,
 } from "@/lib/builder-template";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
@@ -32,7 +33,7 @@ type DevelopThemeRecord = {
   logoSquareId: string;
   featureImageId: string;
   backgroundImageId: string;
-  pageBackground: BackgroundSettings;
+  stylesPageBackground: BackgroundSettings;
   typography: BuilderThemeTypography | null;
   createdAt: string;
   updatedAt: string;
@@ -64,7 +65,7 @@ function defaultDraft(): DevelopThemeRecord {
     logoSquareId: "",
     featureImageId: "",
     backgroundImageId: "",
-    pageBackground: createDefaultBackgroundSettings(),
+    stylesPageBackground: createDefaultBackgroundSettings(),
     typography: { ...DEFAULT_TYPOGRAPHY },
     createdAt: "",
     updatedAt: "",
@@ -75,7 +76,17 @@ function toBuilderTheme(draft: DevelopThemeRecord): BuilderTheme {
   return { typography: draft.typography ?? DEFAULT_TYPOGRAPHY };
 }
 
+function themeStylesPageBackgroundFromRecord(
+  theme: Partial<DevelopThemeRecord> & { pageBackground?: BackgroundSettings }
+): BackgroundSettings {
+  const promoted = promoteThemeStylesPageBackground(
+    theme.stylesPageBackground ?? theme.pageBackground
+  );
+  return promoted ?? createDefaultBackgroundSettings();
+}
+
 function buildPayload(draft: DevelopThemeRecord) {
+  const stylesPageBackground = finalizeThemeStylesPageBackground(draft.stylesPageBackground);
   return {
     name: draft.name.trim(),
     primaryColor: draft.primaryColor,
@@ -93,8 +104,16 @@ function buildPayload(draft: DevelopThemeRecord) {
     logoSquareId: draft.logoSquareId,
     featureImageId: draft.featureImageId,
     backgroundImageId: draft.backgroundImageId,
-    pageBackground: finalizeBackgroundSettings(draft.pageBackground),
-    typography: draft.typography ?? DEFAULT_TYPOGRAPHY,
+    stylesPageBackground,
+    pageBackground: stylesPageBackground,
+    typography: {
+      ...(draft.typography ?? DEFAULT_TYPOGRAPHY),
+      pageLayout: {
+        topMargin: draft.topMargin,
+        bottomMargin: draft.bottomMargin,
+        sideMargins: draft.sideMargins,
+      },
+    },
   };
 }
 
@@ -170,7 +189,7 @@ export function BuilderThemesPage() {
       found
         ? {
             ...found,
-            pageBackground: finalizeBackgroundSettings(found.pageBackground),
+            stylesPageBackground: themeStylesPageBackgroundFromRecord(found),
             typography: found.typography ?? { ...DEFAULT_TYPOGRAPHY },
           }
         : defaultDraft()
@@ -205,10 +224,13 @@ export function BuilderThemesPage() {
       const saved: DevelopThemeRecord = unwrapEnvelope(res, "theme");
       await loadThemes();
       setSelectedId(saved.id);
-      const savedBackground = finalizeBackgroundSettings(saved.pageBackground);
+      const savedStyles = themeStylesPageBackgroundFromRecord(saved);
       setDraft({
         ...saved,
-        pageBackground: savedBackground.mode !== "none" ? savedBackground : finalizeBackgroundSettings(draft.pageBackground),
+        stylesPageBackground:
+          savedStyles.mode !== "none"
+            ? savedStyles
+            : finalizeThemeStylesPageBackground(draft.stylesPageBackground),
         typography: saved.typography ?? { ...DEFAULT_TYPOGRAPHY },
       });
       setStatus({ message: isNew ? "Theme created" : "Theme saved", isError: false });
@@ -337,8 +359,8 @@ export function BuilderThemesPage() {
             <h3 className="builder-themes-col-heading">Styles</h3>
             <BuilderSettingRow label="Page Background">
               <BuilderButtonBackgroundPicker
-                background={draft.pageBackground}
-                onChange={(pageBackground) => updateDraft({ pageBackground })}
+                background={draft.stylesPageBackground}
+                onChange={(stylesPageBackground) => updateDraft({ stylesPageBackground })}
                 onChooseImage={() => setIsBackgroundGalleryOpen(true)}
                 themeColors={themeColors}
                 dialogTitle="Page Background"
@@ -450,8 +472,8 @@ export function BuilderThemesPage() {
           isUploading={false}
           onSelectImage={(path) => {
             updateDraft({
-              pageBackground: {
-                ...draft.pageBackground,
+              stylesPageBackground: {
+                ...draft.stylesPageBackground,
                 mode: "image",
                 imageUrl: normalizeBuilderAssetUrl(path),
               },

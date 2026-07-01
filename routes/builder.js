@@ -586,7 +586,11 @@ async function handle(req, res, pathname, method) {
     const name = String(body.name || '').trim();
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
     const typography = body.typography && typeof body.typography === 'object' ? body.typography : null;
-    const pageBackground = body.pageBackground && typeof body.pageBackground === 'object' ? body.pageBackground : null;
+    const stylesPageBackground =
+      (body.stylesPageBackground && typeof body.stylesPageBackground === 'object'
+        ? body.stylesPageBackground
+        : null)
+      || (body.pageBackground && typeof body.pageBackground === 'object' ? body.pageBackground : null);
     const result = await createTheme({
       name,
       primaryColor: String(body.primaryColor || '').trim(),
@@ -604,7 +608,8 @@ async function handle(req, res, pathname, method) {
       logoSquareId: String(body.logoSquareId || '').trim(),
       featureImageId: String(body.featureImageId || '').trim(),
       backgroundImageId: String(body.backgroundImageId || '').trim(),
-      pageBackground,
+      stylesPageBackground,
+      pageBackground: stylesPageBackground,
       typography,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
@@ -678,7 +683,11 @@ async function handle(req, res, pathname, method) {
   if (themeMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
     const typography = body.typography && typeof body.typography === 'object' ? body.typography : null;
-    const pageBackground = body.pageBackground && typeof body.pageBackground === 'object' ? body.pageBackground : null;
+    const stylesPageBackground =
+      (body.stylesPageBackground && typeof body.stylesPageBackground === 'object'
+        ? body.stylesPageBackground
+        : null)
+      || (body.pageBackground && typeof body.pageBackground === 'object' ? body.pageBackground : null);
     const result = await updateTheme(themeMatch[1], {
       name: String(body.name || '').trim(),
       primaryColor: String(body.primaryColor || '').trim(),
@@ -696,7 +705,8 @@ async function handle(req, res, pathname, method) {
       logoSquareId: String(body.logoSquareId || '').trim(),
       featureImageId: String(body.featureImageId || '').trim(),
       backgroundImageId: String(body.backgroundImageId || '').trim(),
-      pageBackground,
+      stylesPageBackground,
+      pageBackground: stylesPageBackground,
       typography,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
