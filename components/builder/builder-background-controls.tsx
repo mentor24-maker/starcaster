@@ -21,7 +21,7 @@ type BuilderBackgroundControlsProps = {
   hideClear?: boolean;
   /** When false, compact row uses the outer `label` on the mode field only (e.g. Page Details). */
   showColorFieldLabel?: boolean;
-  /** Theme palette — used to seed defaults when the user first picks a mode. */
+  /** Theme palette — used to seed defaults when the user first picks a mode (not shell background). */
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
   themeColors?: Array<{ label: string; hex: string }>;

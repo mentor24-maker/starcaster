@@ -17,6 +17,9 @@ import {
   isFloatingImageModule,
   isOverlayImageModule,
   sectionHasOnlyOverlayImageModules,
+  resolveShellPageBackground,
+  resolveThemePageBackground,
+  getThemeShellBackgroundSeedColor,
   sectionHasOnlyPageOverlayImageModules,
   sectionHasOnlySectionScopedOverlayModules,
   isSectionScopedOverlayDecor,
@@ -434,5 +437,115 @@ describe("getBuilderThemeStyleVars", () => {
     expect(vars["--lp-filter"]).toBe("contrast(1.2)");
     expect(vars["--lp-accent"]).toBe("#1a4f81");
     expect(vars).not.toHaveProperty("--lp-background");
+  });
+});
+
+describe("resolveThemePageBackground", () => {
+  it("uses theme Styles background instead of palette Background", () => {
+    const resolved = resolveThemePageBackground({
+      pageBackground: {
+        mode: "color",
+        color: "#ff4400",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      backgroundColor: "#f5fbff",
+    });
+
+    expect(resolved.mode).toBe("color");
+    expect(resolved.color).toBe("#ff4400");
+  });
+
+  it("does not fall back to palette Background when Styles background is unset", () => {
+    const resolved = resolveThemePageBackground({
+      pageBackground: {
+        mode: "none",
+        color: "#ffffff",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      backgroundColor: "#f5fbff",
+    });
+
+    expect(resolved.mode).toBe("none");
+  });
+});
+
+describe("resolveShellPageBackground", () => {
+  it("inherits theme Styles background when page background is none", () => {
+    const resolved = resolveShellPageBackground(
+      {
+        mode: "none",
+        color: "#ffffff",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      {
+        pageBackground: {
+          mode: "color",
+          color: "#2244aa",
+          color2: "#eaf4ff",
+          imageUrl: "",
+          styleKey: "",
+          opacity: 100,
+        },
+        backgroundColor: "#f5fbff",
+      }
+    );
+
+    expect(resolved.mode).toBe("color");
+    expect(resolved.color).toBe("#2244aa");
+  });
+
+  it("uses page custom background when set, ignoring theme Styles", () => {
+    const resolved = resolveShellPageBackground(
+      {
+        mode: "color",
+        color: "#ff0000",
+        color2: "#ffffff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      {
+        pageBackground: {
+          mode: "color",
+          color: "#2244aa",
+          color2: "#eaf4ff",
+          imageUrl: "",
+          styleKey: "",
+          opacity: 100,
+        },
+        backgroundColor: "#f5fbff",
+      }
+    );
+
+    expect(resolved.color).toBe("#ff0000");
+  });
+});
+
+describe("getThemeShellBackgroundSeedColor", () => {
+  it("returns theme Styles shell color, not palette Background", () => {
+    expect(
+      getThemeShellBackgroundSeedColor({
+        pageBackground: { mode: "color", color: "#2244aa", color2: "", imageUrl: "", styleKey: "", opacity: 100 },
+        backgroundColor: "#f5fbff",
+      })
+    ).toBe("#2244aa");
+  });
+
+  it("returns empty when theme Styles background is unset", () => {
+    expect(
+      getThemeShellBackgroundSeedColor({
+        pageBackground: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "", opacity: 100 },
+        backgroundColor: "#f5fbff",
+      })
+    ).toBe("");
   });
 });

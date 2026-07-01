@@ -24,6 +24,8 @@ import {
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 
+type SiteThemeShell = ThemeShellBackgroundSource & BuilderThemeStyles;
+
 type SitePage = {
   name: string;
   slug: string;
@@ -36,7 +38,30 @@ type SitePage = {
   backgroundColor?: string;
   accentColor?: string;
   themeId?: string;
+  themeShell?: SiteThemeShell | null;
 };
+
+function mapSitePageRecord(page: Record<string, unknown>): SitePage {
+  const doc = normalizeBuilderDocument(page);
+  const themeShellRaw = page.themeShell;
+  return {
+    name: String(page.name ?? "").trim(),
+    slug: String(page.slug ?? "").trim(),
+    pageBackground: doc.pageBackground,
+    theme: doc.theme,
+    layoutSections: doc.layoutSections,
+    projectId: String(page.projectId ?? page.project_id ?? ""),
+    primaryColor: String(page.primaryColor ?? page.primary_color ?? ""),
+    secondaryColor: String(page.secondaryColor ?? page.secondary_color ?? ""),
+    backgroundColor: String(page.backgroundColor ?? page.background_color ?? ""),
+    accentColor: String(page.accentColor ?? page.accent_color ?? ""),
+    themeId: String(page.themeId ?? page.theme_id ?? ""),
+    themeShell:
+      themeShellRaw && typeof themeShellRaw === "object" && !Array.isArray(themeShellRaw)
+        ? (themeShellRaw as SiteThemeShell)
+        : null,
+  };
+}
 
 function pageThemePalette(page: SitePage) {
   return {
@@ -70,23 +95,7 @@ async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
   if (!res.ok) return [];
   const data = await res.json() as { pages?: unknown[] };
   const pages = Array.isArray(data.pages) ? data.pages : [];
-  return pages.map((p: unknown) => {
-    const page = p as Record<string, unknown>;
-    const doc = normalizeBuilderDocument(page);
-    return {
-      name: String(page.name ?? "").trim(),
-      slug: String(page.slug ?? "").trim(),
-      pageBackground: doc.pageBackground,
-      theme: doc.theme,
-      layoutSections: doc.layoutSections,
-      projectId: String(page.projectId ?? page.project_id ?? ""),
-      primaryColor: String(page.primaryColor ?? page.primary_color ?? ""),
-      secondaryColor: String(page.secondaryColor ?? page.secondary_color ?? ""),
-      backgroundColor: String(page.backgroundColor ?? page.background_color ?? ""),
-      accentColor: String(page.accentColor ?? page.accent_color ?? ""),
-      themeId: String(page.themeId ?? page.theme_id ?? ""),
-    };
-  });
+  return pages.map((p: unknown) => mapSitePageRecord(p as Record<string, unknown>));
 }
 
 async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unauthorized"> {
@@ -98,23 +107,7 @@ async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unaut
   if (!res.ok) return [];
   const data = await res.json() as { pages?: unknown[] };
   const pages = Array.isArray(data.pages) ? data.pages : [];
-  return pages.map((p: unknown) => {
-    const page = p as Record<string, unknown>;
-    const doc = normalizeBuilderDocument(page);
-    return {
-      name: String(page.name ?? "").trim(),
-      slug: String(page.slug ?? "").trim(),
-      pageBackground: doc.pageBackground,
-      theme: doc.theme,
-      layoutSections: doc.layoutSections,
-      projectId: String(page.projectId ?? page.project_id ?? ""),
-      primaryColor: String(page.primaryColor ?? page.primary_color ?? ""),
-      secondaryColor: String(page.secondaryColor ?? page.secondary_color ?? ""),
-      backgroundColor: String(page.backgroundColor ?? page.background_color ?? ""),
-      accentColor: String(page.accentColor ?? page.accent_color ?? ""),
-      themeId: String(page.themeId ?? page.theme_id ?? ""),
-    };
-  });
+  return pages.map((p: unknown) => mapSitePageRecord(p as Record<string, unknown>));
 }
 
 // Strip admin-only modules from public pages (defense in depth).
@@ -249,6 +242,15 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       return;
     }
     const fromPage = pageThemePalette(page);
+    const embeddedShell = page.themeShell ?? null;
+
+    if (embeddedShell) {
+      setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(embeddedShell)));
+      setThemeStyles(buildBuilderThemeStyles(embeddedShell));
+      setThemeShellBackground(embeddedShell);
+      return;
+    }
+
     const themeId = String(page.themeId || "").trim();
     const hasPageColors = Boolean(
       fromPage.primaryColor ||
@@ -266,7 +268,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
 
     fetch("/api/builder/themes", {
       credentials: "include",
-      headers: starcasterScopedHeaders(),
+      headers: {
+        ...starcasterScopedHeaders(),
+        ...(projectId ? { "X-Project-ID": projectId } : {}),
+      },
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { themes?: Array<Record<string, unknown>> } | null) => {
@@ -283,7 +288,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
         setThemeStyles(undefined);
         setThemeShellBackground(null);
       });
-  }, [page]);
+  }, [page, projectId]);
 
   if (redirecting) {
     return (
