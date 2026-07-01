@@ -4682,7 +4682,7 @@ function NavigationModulePreview({
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
         const rawWidth = itemSizing === "custom" && item.width ? item.width.trim() : undefined;
         const itemWidth = rawWidth
-          ? /^\d+(\.\d+)?$/.test(rawWidth) ? `${rawWidth}px` : rawWidth
+          ? /^\d+(\.\d+)?$/.test(rawWidth) ? `${rawWidth}%` : rawWidth
           : undefined;
 
         if (children.length === 0) {
