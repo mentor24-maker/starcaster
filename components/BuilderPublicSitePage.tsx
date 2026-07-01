@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   builderThemeToCrmPalette,
@@ -319,15 +319,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     ? page.layoutSections
     : filterPublicSections(page.layoutSections);
 
-  const effectiveThemeStyles = useMemo(() => {
-    if (page.themeShell) return buildBuilderThemeStyles(page.themeShell);
-    return themeStyles;
-  }, [page.themeShell, themeStyles]);
-
-  const effectiveThemeShellBackground = useMemo(() => {
-    if (page.themeShell) return page.themeShell;
-    return themeShellBackground;
-  }, [page.themeShell, themeShellBackground]);
+  const effectiveThemeStyles = page.themeShell
+    ? buildBuilderThemeStyles(page.themeShell)
+    : themeStyles;
+  const effectiveThemeShellBackground = page.themeShell ?? themeShellBackground;
 
   return (
     <>
