@@ -43,6 +43,7 @@ import {
 import { BuilderAlignmentIconGroup, type BuilderModuleAlignment } from "./builder-alignment-icon-group";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderBackgroundControls } from "./builder-background-controls";
+import { BuilderButtonBackgroundPicker } from "./builder-button-background-picker";
 import { MerchModuleEditor } from "./builder-merch-module-editor";
 import { BuilderCodeEmbed } from "./builder-code-embed";
 import { BuilderFloatingImageModuleSettings } from "./builder-floating-image-module-settings";
@@ -2470,6 +2471,20 @@ function TableModuleEditor({
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
   }
 
+  function updateModuleBackground(background: BackgroundSettings) {
+    onUpdateModule((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        backgroundMode: background.mode,
+        backgroundColor: background.color,
+        backgroundColor2: background.color2,
+        backgroundImageUrl: background.imageUrl,
+        backgroundStyleKey: background.styleKey
+      }
+    }));
+  }
+
   function addColumn() {
     if (colCount >= 10) return;
     persist({ ...td, headers: [...td.headers, `Column ${colCount + 1}`] });
@@ -2537,6 +2552,14 @@ function TableModuleEditor({
 
   return (
     <>
+      <BuilderSettingRow label="Background">
+        <BuilderButtonBackgroundPicker
+          background={getModuleBackgroundSettings(module.settings)}
+          onChange={updateModuleBackground}
+          themeColors={themeColors}
+          dialogTitle="Table Background"
+        />
+      </BuilderSettingRow>
       <div className="builder-table-design-grid">
         <div className="builder-table-border-row">
           <BuilderInlineNumberSelect
@@ -3615,6 +3638,7 @@ export function BuilderModuleCard({
     const isStandardImage = module.type === "image" && !isVideoModule;
     const isFloatingImage = module.type === "floating-image";
     const isReminderModule = module.type === "reminder";
+    const isTableModule = module.type === "table";
     const isHeadingModule = module.type === "heading";
     const isCurrentPollModule = module.type === "current-poll";
     const isConfettiModule = module.type === "confetti";
@@ -3922,7 +3946,7 @@ export function BuilderModuleCard({
                   />
                 </BuilderSettingRow>
               </div>
-            ) : isPollCategoryListModule ? null : isReminderModule ? null : isFloatingImage ? (
+            ) : isPollCategoryListModule ? null : isReminderModule ? null : isTableModule ? null : isFloatingImage ? (
               <div className="builder-floating-image-module-chrome">
                 <BuilderBackgroundControls
                   background={getModuleBackgroundSettings(module.settings)}
