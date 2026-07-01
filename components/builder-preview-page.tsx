@@ -14,9 +14,9 @@ import type { BuilderThemeStyles, CrmThemePalette, ThemeShellBackgroundSource } 
 import {
   builderThemeToCrmPalette,
   buildBuilderThemeStyles,
-  getBuilderThemePageMarginStyle,
   mergeCrmThemePalette,
 } from "@/components/builder/builder-utils";
+import { BuilderViewportShellLayout } from "@/components/builder/builder-viewport-shell-layout";
 import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 
 type PreviewDraft = {
@@ -238,7 +238,6 @@ export function BuilderPreviewPage() {
   }, []);
 
   const effectiveThemeStyles = themeStyles ?? draft?.themeStyles;
-  const pageMarginStyle = getBuilderThemePageMarginStyle(effectiveThemeStyles);
 
   return (
     <main className="admin-page">
@@ -298,7 +297,11 @@ export function BuilderPreviewPage() {
                 />
               </div>
             ) : (
-              <div className="builder-theme-page-margin-layout" style={pageMarginStyle}>
+              <BuilderViewportShellLayout
+                pageBackground={draft.pageBackground}
+                themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
+                themeStyles={effectiveThemeStyles}
+              >
                 <BuilderTemplatePreview
                   layoutSections={draft.layoutSections}
                   pageBackground={draft.pageBackground}
@@ -309,8 +312,9 @@ export function BuilderPreviewPage() {
                   previewMode
                   showShell={false}
                   applyThemePageMargins={false}
+                  suppressShellBackground
                 />
-              </div>
+              </BuilderViewportShellLayout>
             )}
           </div>
         ) : loaded ? (
