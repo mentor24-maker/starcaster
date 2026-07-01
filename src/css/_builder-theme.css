@@ -131,6 +131,28 @@
   min-height: 100vh;
 }
 
+/* Drop editor chrome padding/background when a theme shell background is active.
+   Do not use padding shorthand here when theme margin tokens are also present —
+   it would override --bx-theme-padding-* from .has-builder-theme-styles. */
+.builder-react-root.builder-public-site .builder-preview-shell.has-resolved-shell-background:not(.has-builder-theme-styles),
+.builder-react-root .builder-main.builder-workspace.has-resolved-shell-background:not(.has-builder-theme-styles) {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.builder-react-root.builder-public-site .builder-preview-shell.has-resolved-shell-background.has-builder-theme-styles,
+.builder-react-root .builder-main.builder-workspace.has-resolved-shell-background.has-builder-theme-styles {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.builder-react-root.builder-public-site .builder-preview-shell.has-resolved-shell-background {
+  min-height: 100vh;
+}
+
 .builder-react-root .builder-preview-shell.has-builder-theme-styles > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot) {
   border-radius: var(--lp-radius, 24px);
 }
