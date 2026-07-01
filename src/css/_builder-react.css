@@ -5333,9 +5333,9 @@
 
 .builder-react-root .builder-meta-grid-pages {
   grid-template-columns:
-    minmax(0, 1.2fr)
-    minmax(0, 1fr)
-    minmax(0, 1.1fr)
+    minmax(0, 240px)
+    minmax(0, 180px)
+    minmax(0, 200px)
     minmax(96px, 118px)
     minmax(132px, 188px)
     112px;
