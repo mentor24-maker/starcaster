@@ -4,9 +4,11 @@ import { useId, useState } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
 import {
   BACKGROUND_STYLE_PRESETS,
+  getBuilderBackgroundLayerOpacity,
   getBuilderBackgroundStyle,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
+import { clampBuilderOpacity } from "@/lib/builder-hex-color";
 import { BuilderEditorPopup } from "./builder-editor-popup";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeColorPickerContent } from "./builder-theme-color-picker-content";
@@ -39,10 +41,13 @@ export function BuilderButtonBackgroundPicker({
   const [isOpen, setIsOpen] = useState(false);
   const activeMode: ButtonBackgroundMode =
     background.mode === "none" ? "color" : (background.mode as ButtonBackgroundMode);
-  const swatchStyle =
+  const opacity = clampBuilderOpacity(background.opacity);
+  const swatchBaseStyle =
     getBuilderBackgroundStyle(background) ?? {
       background: background.color || "#214c71"
     };
+  const layerOpacity = getBuilderBackgroundLayerOpacity(background);
+  const swatchStyle = layerOpacity < 1 ? { ...swatchBaseStyle, opacity: layerOpacity } : swatchBaseStyle;
 
   function updateBackground(updater: (current: BackgroundSettings) => BackgroundSettings) {
     onChange(updater(background));
@@ -59,7 +64,8 @@ export function BuilderButtonBackgroundPicker({
         color: background.color || "#214c71",
         color2: background.color2 || "#eaf4ff",
         imageUrl: "",
-        styleKey: ""
+        styleKey: "",
+        opacity
       });
       return;
     }
@@ -70,7 +76,8 @@ export function BuilderButtonBackgroundPicker({
         color: background.color || "#214c71",
         color2: background.color2 || "#eaf4ff",
         imageUrl: "",
-        styleKey: ""
+        styleKey: "",
+        opacity
       });
       return;
     }
@@ -81,7 +88,8 @@ export function BuilderButtonBackgroundPicker({
         color: background.color || "#214c71",
         color2: background.color2 || "#eaf4ff",
         imageUrl: background.imageUrl,
-        styleKey: ""
+        styleKey: "",
+        opacity
       });
       return;
     }
@@ -91,7 +99,8 @@ export function BuilderButtonBackgroundPicker({
       color: background.color || "#214c71",
       color2: background.color2 || "#eaf4ff",
       imageUrl: "",
-      styleKey: background.styleKey || ""
+      styleKey: background.styleKey || "",
+      opacity
     });
   }
 
@@ -224,6 +233,25 @@ export function BuilderButtonBackgroundPicker({
               </BuilderSettingRow>
             ) : null}
 
+            <BuilderSettingRow label="Opacity" fullWidth>
+              <span className="builder-background-opacity-row">
+                <input
+                  max={100}
+                  min={0}
+                  onChange={(event) =>
+                    updateBackground((current) => ({
+                      ...current,
+                      opacity: clampBuilderOpacity(event.target.value)
+                    }))
+                  }
+                  step={1}
+                  type="range"
+                  value={opacity}
+                />
+                <span className="builder-background-opacity-value">{opacity}%</span>
+              </span>
+            </BuilderSettingRow>
+
             <BuilderSettingRow label="Reset">
               <button
                 className="secondary-button"
@@ -233,7 +261,8 @@ export function BuilderButtonBackgroundPicker({
                     color: "#214c71",
                     color2: "#eaf4ff",
                     imageUrl: "",
-                    styleKey: ""
+                    styleKey: "",
+                    opacity: 100
                   })
                 }
                 type="button"

@@ -18,6 +18,7 @@ import {
 import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
+  getBuilderBackgroundLayerOpacity,
   getBuilderBackgroundStyle,
   normalizeBackgroundMode,
   normalizeBackgroundSettings,
@@ -934,7 +935,32 @@ export function getShellPageBackgroundStyle(
   pageBackground: BackgroundSettings | undefined,
   theme: ThemeShellBackgroundSource
 ): CSSProperties | undefined {
-  return getBuilderBackgroundStyle(resolveShellPageBackground(pageBackground, theme));
+  const background = resolveShellPageBackground(pageBackground, theme);
+  const style = getBuilderBackgroundStyle(background);
+  if (!style) return undefined;
+  if (getBuilderBackgroundLayerOpacity(background) < 1) {
+    return undefined;
+  }
+  return style;
+}
+
+export type ShellBackgroundLayers = {
+  inlineBackground?: CSSProperties;
+  backdrop?: { style: CSSProperties; opacity: number };
+};
+
+export function getShellBackgroundLayers(
+  pageBackground: BackgroundSettings | undefined,
+  theme: ThemeShellBackgroundSource
+): ShellBackgroundLayers {
+  const background = resolveShellPageBackground(pageBackground, theme);
+  const style = getBuilderBackgroundStyle(background);
+  if (!style) return {};
+  const layerOpacity = getBuilderBackgroundLayerOpacity(background);
+  if (layerOpacity < 1) {
+    return { backdrop: { style, opacity: layerOpacity } };
+  }
+  return { inlineBackground: style };
 }
 
 /**

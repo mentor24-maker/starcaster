@@ -9063,6 +9063,40 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-editor-popup-body .builder-theme-swatches {
   margin-bottom: 2px;
 }
+.builder-react-root .builder-background-opacity-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.builder-react-root .builder-background-opacity-row input[type=range] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.builder-react-root .builder-background-opacity-value {
+  min-width: 3ch;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #44627e;
+  text-align: right;
+  white-space: nowrap;
+}
+.builder-react-root .builder-preview-shell-backdrop,
+.builder-react-root .builder-shell-background-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.builder-react-root .builder-preview-shell.has-shell-background-backdrop,
+.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop {
+  position: relative;
+}
+.builder-react-root .builder-preview-shell.has-shell-background-backdrop > :not(.builder-preview-shell-backdrop),
+.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop > :not(.builder-shell-background-backdrop) {
+  position: relative;
+  z-index: 1;
+}
 .builder-react-root .builder-button-drop-shadow-settings {
   display: grid;
   gap: 12px;

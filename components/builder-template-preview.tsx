@@ -48,7 +48,7 @@ import {
   getBuilderThemeStyleVars,
   getThemeRootVars,
   type BuilderThemeStyles,
-  resolveShellPageBackground,
+  getShellBackgroundLayers,
   type ThemeShellBackgroundSource,
   columnHasOnlySectionScopedOverlayModules,
   getOverlayFlowCollapsedColumnStyle,
@@ -1152,14 +1152,14 @@ export function BuilderTemplatePreview({
   previewMode = false,
   projectId = ""
 }: BuilderTemplatePreviewProps) {
-  const pageStyle = getBuilderBackgroundStyle(resolveShellPageBackground(pageBackground, themeShellBackground));
+  const shellBackground = getShellBackgroundLayers(pageBackground, themeShellBackground);
   // Theme tokens go first so the page background (and any per-module inline
   // styles further down) still win where they overlap.
   const rootStyle = {
     ...getThemeRootVars(theme),
     ...getCrmThemePaletteVars(themePalette),
     ...getBuilderThemeStyleVars(themeStyles),
-    ...pageStyle
+    ...shellBackground.inlineBackground
   };
   const sitePlayerRegistered = useSitePlayerRegistration();
 
@@ -1178,7 +1178,7 @@ export function BuilderTemplatePreview({
 
   /** Live and builder previews need the shell so overlay-flow rows stack above the game wash. */
   const shellClassName = !emailPreview
-    ? `builder-preview-shell${themeStyles ? " has-builder-theme-styles" : ""}`
+    ? `builder-preview-shell${themeStyles ? " has-builder-theme-styles" : ""}${shellBackground.backdrop ? " has-shell-background-backdrop" : ""}`
     : undefined;
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
 
@@ -1194,6 +1194,13 @@ export function BuilderTemplatePreview({
       onClickCapture={shellClassName ? handleAdminLogoutLinkClick : undefined}
       style={rootStyle}
     >
+      {shellBackground.backdrop ? (
+        <div
+          aria-hidden
+          className="builder-preview-shell-backdrop"
+          style={{ ...shellBackground.backdrop.style, opacity: shellBackground.backdrop.opacity }}
+        />
+      ) : null}
       {pageOverlaySections.length > 0 ? (
         <div className="builder-preview-overlay-layer" aria-hidden={false}>
           {pageOverlaySections.map((section) => (
