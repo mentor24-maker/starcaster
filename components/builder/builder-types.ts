@@ -888,6 +888,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: {}
+  },
+  {
+    id: "admin-nav-link",
+    type: "admin-nav-link",
+    group: "admin",
+    label: "Admin Nav Link",
+    icon: "🔗",
+    description: "Conditional link that only appears once an admin is signed in (admin nav cookie is set). Drop it in the header to give admins a discreet way back into the admin area.",
+    name: "",
+    text: "",
+    settings: {}
   }
 ];
 
