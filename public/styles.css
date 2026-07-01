@@ -13434,12 +13434,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 .builder-react-root .builder-preview-shell.has-builder-theme-styles,
 .builder-react-root .builder-main.builder-workspace.has-builder-theme-styles {
+  filter: var(--lp-filter, none);
+  box-sizing: border-box;
+}
+.builder-react-root .builder-preview-shell-content {
+  display: grid;
+  gap: 18px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+.builder-react-root .builder-preview-shell-content > .builder-preview-section:not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot) {
+  position: relative;
+  z-index: 1;
+}
+.builder-react-root .builder-preview-shell-content.has-builder-theme-margins,
+.builder-react-root .builder-main.builder-workspace.has-builder-theme-styles {
   padding-top: var(--bx-theme-padding-top, 0);
   padding-bottom: var(--bx-theme-padding-bottom, 0);
   padding-left: var(--bx-theme-padding-inline, 0);
   padding-right: var(--bx-theme-padding-inline, 0);
-  filter: var(--lp-filter, none);
-  box-sizing: border-box;
 }
 .builder-react-root.builder-public-site .builder-preview-shell.has-builder-theme-styles {
   border: none;
@@ -13462,6 +13477,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root.builder-public-site .builder-preview-shell.has-resolved-shell-background {
   min-height: 100vh;
 }
+.builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-shell-content > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot),
 .builder-react-root .builder-preview-shell.has-builder-theme-styles > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot) {
   border-radius: var(--lp-radius, 24px);
 }
