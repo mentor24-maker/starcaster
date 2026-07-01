@@ -33,6 +33,9 @@ html = html.replace(/(\.(js|css))\?v=[^"'\s>]*/g, `$1?v=${label}`);
 html = html.replace(/(src|href)="(\/[^"]+\.(js|css))(?!\?v=)"/g, `$1="$2?v=${label}"`);
 fs.writeFileSync(layoutPath, html, 'utf8');
 console.log(`✓ Force-stamped all ?v= to v=${label} in src/layout.html`);
-console.log('  Run npm run build:html to restore automatic content-hash stamping.');
+
+const { pinAssetVersions } = require('./pin_asset_versions.cjs');
+pinAssetVersions();
+console.log('✓ Re-pinned all public/*.html and src/layout.html from file content hashes');
 
 require('./build_html');

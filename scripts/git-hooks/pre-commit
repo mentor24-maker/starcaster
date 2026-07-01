@@ -1,0 +1,6 @@
+#!/bin/sh
+# Auto-pin ?v= content hashes on all HTML shells before every commit.
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+node scripts/pin_asset_versions.cjs --stage
