@@ -660,6 +660,40 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
   };
 }
 
+/**
+ * Promote mode from "none" when background fields were configured without a mode
+ * (e.g. color picked before mode was committed in the picker UI).
+ */
+export function finalizeBackgroundSettings(background: BackgroundSettings | unknown): BackgroundSettings {
+  const normalized = normalizeBackgroundSettings(background);
+  if (normalized.mode !== "none") {
+    return normalized;
+  }
+
+  if (normalized.styleKey) {
+    return { ...normalized, mode: "style" };
+  }
+
+  if (normalized.imageUrl) {
+    return { ...normalized, mode: "image" };
+  }
+
+  const defaults = createDefaultBackgroundSettings();
+  const colorChanged = normalized.color !== defaults.color;
+  const color2Changed = normalized.color2 !== defaults.color2;
+  const opacityChanged = clampBuilderOpacity(normalized.opacity) !== clampBuilderOpacity(defaults.opacity);
+
+  if (colorChanged && color2Changed) {
+    return { ...normalized, mode: "gradient" };
+  }
+
+  if (colorChanged || opacityChanged) {
+    return { ...normalized, mode: "color" };
+  }
+
+  return normalized;
+}
+
 /** Image/style backgrounds need an isolated backdrop layer when opacity is below 100%. */
 export function getBuilderBackgroundLayerOpacity(background: BackgroundSettings | undefined): number {
   if (!background || background.mode === "none") {

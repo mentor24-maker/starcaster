@@ -49,8 +49,15 @@ export function BuilderButtonBackgroundPicker({
   const layerOpacity = getBuilderBackgroundLayerOpacity(background);
   const swatchStyle = layerOpacity < 1 ? { ...swatchBaseStyle, opacity: layerOpacity } : swatchBaseStyle;
 
-  function updateBackground(updater: (current: BackgroundSettings) => BackgroundSettings) {
-    onChange(updater(background));
+  function commitBackground(patch: Partial<BackgroundSettings>) {
+    const nextMode =
+      patch.mode ??
+      (background.mode === "none" ? activeMode : background.mode);
+    onChange({
+      ...background,
+      ...patch,
+      mode: nextMode
+    });
   }
 
   function setMode(mode: ButtonBackgroundMode) {
@@ -148,7 +155,7 @@ export function BuilderButtonBackgroundPicker({
                 fallback="#214c71"
                 themeColors={themeColors}
                 value={background.color}
-                onChange={(color) => updateBackground((current) => ({ ...current, color }))}
+                onChange={(color) => commitBackground({ color, mode: "color" })}
               />
             ) : null}
 
@@ -159,7 +166,7 @@ export function BuilderButtonBackgroundPicker({
                     fallback="#214c71"
                     themeColors={themeColors}
                     value={background.color}
-                    onChange={(color) => updateBackground((current) => ({ ...current, color }))}
+                    onChange={(color) => commitBackground({ color, mode: "gradient" })}
                   />
                 </BuilderSettingRow>
                 <BuilderSettingRow label="Color 2" fullWidth>
@@ -167,7 +174,7 @@ export function BuilderButtonBackgroundPicker({
                     fallback="#eaf4ff"
                     themeColors={themeColors}
                     value={background.color2}
-                    onChange={(color2) => updateBackground((current) => ({ ...current, color2 }))}
+                    onChange={(color2) => commitBackground({ color2, mode: "gradient" })}
                   />
                 </BuilderSettingRow>
               </>
@@ -180,10 +187,10 @@ export function BuilderButtonBackgroundPicker({
                     type="text"
                     value={background.imageUrl}
                     onChange={(event) =>
-                      updateBackground((current) => ({
-                        ...current,
-                        imageUrl: normalizeBuilderAssetUrl(event.target.value)
-                      }))
+                      commitBackground({
+                        imageUrl: normalizeBuilderAssetUrl(event.target.value),
+                        mode: "image"
+                      })
                     }
                     placeholder="https://... or /api/admin/media-file/..."
                   />
@@ -217,10 +224,10 @@ export function BuilderButtonBackgroundPicker({
                 <select
                   value={background.styleKey}
                   onChange={(event) =>
-                    updateBackground((current) => ({
-                      ...current,
-                      styleKey: event.target.value as BackgroundSettings["styleKey"]
-                    }))
+                    commitBackground({
+                      styleKey: event.target.value as BackgroundSettings["styleKey"],
+                      mode: "style"
+                    })
                   }
                 >
                   <option value="">Choose a style</option>
@@ -239,10 +246,10 @@ export function BuilderButtonBackgroundPicker({
                   max={100}
                   min={0}
                   onChange={(event) =>
-                    updateBackground((current) => ({
-                      ...current,
-                      opacity: clampBuilderOpacity(event.target.value)
-                    }))
+                    commitBackground({
+                      opacity: clampBuilderOpacity(event.target.value),
+                      mode: background.mode === "none" ? activeMode : background.mode
+                    })
                   }
                   step={1}
                   type="range"
@@ -251,6 +258,12 @@ export function BuilderButtonBackgroundPicker({
                 <span className="builder-background-opacity-value">{opacity}%</span>
               </span>
             </BuilderSettingRow>
+
+            <div className="builder-button-background-popup-actions">
+              <button className="submit-button" onClick={() => setIsOpen(false)} type="button">
+                Done
+              </button>
+            </div>
 
             <BuilderSettingRow label="Reset">
               <button
