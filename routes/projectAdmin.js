@@ -24,6 +24,10 @@ const PROJECTS_TABLE = 'app_projects';
 const ADMIN_SESSION_COOKIE_NAME = 'app_admin_session';
 const ADMIN_NAV_COOKIE_NAME = 'app_admin_nav';
 const ADMIN_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+// Just a "this browser has been an admin before" marker, not a proof of an active session —
+// give it the longest lifetime browsers actually honor (Chrome caps Set-Cookie Max-Age at
+// 400 days) rather than tying it to the session length, so it outlives logouts and session expiry.
+const ADMIN_NAV_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 
 function isSecureRequest(req) {
   const host = String(req.headers.host || '');
@@ -69,18 +73,14 @@ function buildAdminSessionCookieHeader(token, req, { clear = false } = {}) {
   return parts.join('; ');
 }
 
-function buildAdminNavCookieHeader(req, { clear = false } = {}) {
+function buildAdminNavCookieHeader(req) {
   const secure = isSecureRequest(req);
   const parts = [
-    `${ADMIN_NAV_COOKIE_NAME}=${clear ? '' : '1'}`,
+    `${ADMIN_NAV_COOKIE_NAME}=1`,
     'Path=/',
+    `Max-Age=${ADMIN_NAV_COOKIE_MAX_AGE_SECONDS}`,
+    `Expires=${new Date(Date.now() + ADMIN_NAV_COOKIE_MAX_AGE_SECONDS * 1000).toUTCString()}`,
   ];
-  if (clear) {
-    parts.push('Max-Age=0');
-  } else {
-    parts.push(`Max-Age=${ADMIN_SESSION_MAX_AGE_SECONDS}`);
-    parts.push(`Expires=${new Date(Date.now() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000).toUTCString()}`);
-  }
   if (secure) {
     parts.push('SameSite=None', 'Secure');
   } else {
@@ -96,10 +96,13 @@ function setAdminSessionCookie(res, token, req) {
   ]);
 }
 
+// Clears the auth-of-record session cookie only. The nav cookie is intentionally left in
+// place on logout — it's a "this browser has been an admin before" signal used to decide
+// whether to show the admin-nav-link module, not a proof of an active session, so it should
+// persist until manually cleared (e.g. by the visitor clearing cookies).
 function clearAdminSessionCookie(res, req) {
   res.setHeader('Set-Cookie', [
     buildAdminSessionCookieHeader('', req, { clear: true }),
-    buildAdminNavCookieHeader(req, { clear: true }),
   ]);
 }
 
