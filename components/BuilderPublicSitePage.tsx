@@ -5,6 +5,7 @@ import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   builderThemeToCrmPalette,
   buildBuilderThemeStyles,
+  coerceThemeShellBackgroundSource,
   getBuilderThemePageMarginStyle,
   mergeCrmThemePalette,
   type BuilderThemeStyles,
@@ -246,9 +247,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     const embeddedShell = page.themeShell ?? null;
 
     if (embeddedShell) {
-      setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(embeddedShell)));
-      setThemeStyles(buildBuilderThemeStyles(embeddedShell));
-      setThemeShellBackground(embeddedShell);
+      const shell = coerceThemeShellBackgroundSource(embeddedShell) ?? embeddedShell;
+      setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(shell)));
+      setThemeStyles(buildBuilderThemeStyles(shell));
+      setThemeShellBackground(shell);
       return;
     }
 
@@ -278,11 +280,12 @@ export function BuilderPublicSitePage({ projectId }: Props) {
       .then((data: Record<string, unknown> | null) => {
         const themes = (unwrapEnvelope<Array<Record<string, unknown>>>(data ?? {}, "themes") ?? []);
         const match = themeId
-          ? themes.find((theme) => String(theme.id || "") === themeId) || null
+          ? themes.find((theme) => String(theme.id || "") === themeId) || themes[0] || null
           : themes[0] || null;
-        setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(match)));
-        setThemeStyles(buildBuilderThemeStyles(match));
-        setThemeShellBackground(match);
+        const shell = coerceThemeShellBackgroundSource(match) ?? match;
+        setThemePalette(mergeCrmThemePalette(fromPage, builderThemeToCrmPalette(shell)));
+        setThemeStyles(buildBuilderThemeStyles(shell));
+        setThemeShellBackground(shell);
       })
       .catch(() => {
         setThemePalette(fromPage);
@@ -323,7 +326,9 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   const effectiveThemeStyles = page.themeShell
     ? buildBuilderThemeStyles(page.themeShell)
     : themeStyles;
-  const effectiveThemeShellBackground = page.themeShell ?? themeShellBackground;
+  const effectiveThemeShellBackground = coerceThemeShellBackgroundSource(
+    page.themeShell ?? themeShellBackground
+  );
   const pageMarginStyle = getBuilderThemePageMarginStyle(effectiveThemeStyles);
 
   return (

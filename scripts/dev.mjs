@@ -31,6 +31,7 @@ const watchers = [
   ['npx', ['esbuild', 'react-entry.js', '--bundle', '--outfile=public/bundle.js', '--loader:.js=jsx', '--watch']],
   ['node', ['scripts/build_builder_bundle.mjs', '--watch']],
   ['npx', ['esbuild', 'src/css/main.css', '--bundle', '--outfile=public/styles.css', '--watch']],
+  ['node', ['scripts/pin_asset_versions.cjs', '--watch']],
 ];
 
 for (const [cmd, args] of watchers) {
