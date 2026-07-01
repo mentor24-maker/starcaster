@@ -909,13 +909,15 @@ export type ThemeShellBackgroundSource = {
   backgroundColor?: string;
 } | null | undefined;
 
-/** Saved theme website background from Styles → Background only (not palette Background). */
-export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
-  const saved = coerceThemeShellBackgroundSource(theme)?.pageBackground;
-  if (saved && typeof saved === "object" && saved.mode !== "none") {
-    return saved;
-  }
-  return createDefaultBackgroundSettings();
+/** Default palette Background when no theme palette value is saved. */
+export const DEFAULT_THEME_PALETTE_BACKGROUND = "#f5fbff";
+
+function shellBackgroundFromColor(color: string): BackgroundSettings {
+  return {
+    ...createDefaultBackgroundSettings(),
+    mode: "color",
+    color: normalizeBuilderHexColor(color, DEFAULT_THEME_PALETTE_BACKGROUND),
+  };
 }
 
 /** Normalize a theme record before shell resolution (promotes mode when color was saved without mode). */
@@ -928,7 +930,24 @@ export function coerceThemeShellBackgroundSource(
   return { ...theme, pageBackground: finalizeBackgroundSettings(raw) };
 }
 
-/** Page background wins when set; otherwise theme Styles → Background; palette is not used for the shell. */
+/**
+ * Theme shell background: Styles → Page Background, then palette Background,
+ * then the default palette background color.
+ */
+export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
+  const coerced = coerceThemeShellBackgroundSource(theme);
+  const saved = coerced?.pageBackground;
+  if (saved && typeof saved === "object" && saved.mode !== "none") {
+    return saved;
+  }
+  const paletteColor = String(coerced?.backgroundColor ?? "").trim();
+  if (paletteColor) {
+    return shellBackgroundFromColor(paletteColor);
+  }
+  return shellBackgroundFromColor(DEFAULT_THEME_PALETTE_BACKGROUND);
+}
+
+/** Page background wins when set; otherwise theme Styles → Page Background → palette → default. */
 export function resolveShellPageBackground(
   pageBackground: BackgroundSettings | undefined,
   theme: ThemeShellBackgroundSource
@@ -937,16 +956,20 @@ export function resolveShellPageBackground(
   if (page.mode !== "none") {
     return page;
   }
-  return resolveThemePageBackground(coerceThemeShellBackgroundSource(theme));
+  return resolveThemePageBackground(theme);
 }
 
-/** Primary color seed for background pickers — from theme Styles shell, not palette Background. */
+/** Color seed for page-level background pickers: Styles page background, then palette Background. */
 export function getThemeShellBackgroundSeedColor(theme: ThemeShellBackgroundSource): string {
-  const shell = resolveThemePageBackground(theme);
-  if (shell.mode === "color" || shell.mode === "gradient") {
-    return String(shell.color || "").trim();
+  const coerced = coerceThemeShellBackgroundSource(theme);
+  const styles = coerced?.pageBackground;
+  if (styles && typeof styles === "object" && styles.mode !== "none") {
+    if (styles.mode === "color" || styles.mode === "gradient") {
+      const color = String(styles.color || "").trim();
+      if (color) return color;
+    }
   }
-  return "";
+  return String(coerced?.backgroundColor ?? "").trim();
 }
 
 export function getShellPageBackgroundStyle(

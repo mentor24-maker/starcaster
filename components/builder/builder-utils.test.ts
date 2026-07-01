@@ -512,7 +512,25 @@ describe("resolveThemePageBackground", () => {
       backgroundColor: "#f5fbff",
     });
 
-    expect(resolved.mode).toBe("none");
+    expect(resolved.mode).toBe("color");
+    expect(resolved.color).toBe("#f5fbff");
+  });
+
+  it("falls back to default palette background when Styles and palette are unset", () => {
+    const resolved = resolveThemePageBackground({
+      pageBackground: {
+        mode: "none",
+        color: "#ffffff",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      backgroundColor: "",
+    });
+
+    expect(resolved.mode).toBe("color");
+    expect(resolved.color).toBe("#f5fbff");
   });
 });
 
@@ -601,13 +619,40 @@ describe("resolveShellPageBackground", () => {
       {
         pageBackground: {
           mode: "none",
-          color: "#fff5db",
+          color: "#ceedf8",
           color2: "#eaf4ff",
           imageUrl: "",
           styleKey: "",
           opacity: 100,
         },
-        backgroundColor: "#f5fbff",
+        backgroundColor: "#fff5db",
+      }
+    );
+
+    expect(resolved.mode).toBe("color");
+    expect(resolved.color).toBe("#ceedf8");
+  });
+
+  it("falls back to palette Background when page and Styles backgrounds are unset", () => {
+    const resolved = resolveShellPageBackground(
+      {
+        mode: "none",
+        color: "#ffffff",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      {
+        pageBackground: {
+          mode: "none",
+          color: "#ffffff",
+          color2: "#eaf4ff",
+          imageUrl: "",
+          styleKey: "",
+          opacity: 100,
+        },
+        backgroundColor: "#fff5db",
       }
     );
 
@@ -626,12 +671,12 @@ describe("getThemeShellBackgroundSeedColor", () => {
     ).toBe("#2244aa");
   });
 
-  it("returns empty when theme Styles background is unset", () => {
+  it("returns palette Background when Styles Page Background is unset", () => {
     expect(
       getThemeShellBackgroundSeedColor({
         pageBackground: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "", opacity: 100 },
         backgroundColor: "#f5fbff",
       })
-    ).toBe("");
+    ).toBe("#f5fbff");
   });
 });

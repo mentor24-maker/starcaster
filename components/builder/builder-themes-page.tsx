@@ -335,12 +335,13 @@ export function BuilderThemesPage() {
 
           <div className="builder-themes-col">
             <h3 className="builder-themes-col-heading">Styles</h3>
-            <BuilderSettingRow label="Background">
+            <BuilderSettingRow label="Page Background">
               <BuilderButtonBackgroundPicker
                 background={draft.pageBackground}
                 onChange={(pageBackground) => updateDraft({ pageBackground })}
                 onChooseImage={() => setIsBackgroundGalleryOpen(true)}
                 themeColors={themeColors}
+                dialogTitle="Page Background"
               />
             </BuilderSettingRow>
             <SliderRow
