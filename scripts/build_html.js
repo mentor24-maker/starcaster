@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+const { pinHtmlAssetVersions } = require('./pin_asset_versions.cjs');
 
 const layoutPath = path.join(__dirname, '../src/layout.html');
 const pagesDir = path.join(__dirname, '../src/pages');
@@ -22,23 +22,9 @@ function processIncludes(content, baseDir) {
   });
 }
 
-// Replace every ?v=... on <script src> and <link href> tags pointing to local
-// JS/CSS files with a short content hash of that file. Files that don't exist
-// on disk (CDN URLs, etc.) are left unchanged.
+// Content-hash cache busting for local JS/CSS (see scripts/pin_asset_versions.cjs).
 function injectContentHashes(html) {
-  return html.replace(
-    /((?:src|href)=")(\/[^"]+\.(?:js|css))(?:\?v=[^"]*)?(")/g,
-    (match, attrOpen, urlPath, attrClose) => {
-      const localFile = path.join(publicDir, urlPath);
-      if (!fs.existsSync(localFile)) return match;
-      const hash = crypto
-        .createHash('md5')
-        .update(fs.readFileSync(localFile))
-        .digest('hex')
-        .slice(0, 8);
-      return `${attrOpen}${urlPath}?v=${hash}${attrClose}`;
-    }
-  );
+  return pinHtmlAssetVersions(html, publicDir);
 }
 
 let layout = fs.readFileSync(layoutPath, 'utf8');
