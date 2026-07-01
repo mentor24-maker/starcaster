@@ -3097,6 +3097,15 @@ function NavModuleEditor({
                 </select>
               </BuilderModuleField>
             </BuilderModuleFieldStrip>
+            <div className="builder-nav-items-header builder-nav-item-row">
+              <div className="builder-nav-item-fields">
+                <span>Parent Page</span>
+                <span>Page Name</span>
+                <span>Slug</span>
+                {module.settings.navItemSizing === "custom" && <span className="builder-nav-item-width-wrap">Width</span>}
+              </div>
+              <span className="builder-nav-items-header-action">Action</span>
+            </div>
             <div className="builder-nav-items">
               {items.map((item, index) => {
                 const isCustomSizing = module.settings.navItemSizing === "custom";
