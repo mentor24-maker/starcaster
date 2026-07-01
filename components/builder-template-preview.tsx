@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   formatRichTextContent,
@@ -4652,6 +4652,12 @@ function NavigationModulePreview({
 }) {
   const pathname = usePathname();
   const activePath = normalizeNavPath(pathname || "/");
+  const menuId = useId();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   let navItems: { href: string; label: string; id?: string; parentId?: string; width?: string }[] = [];
   try {
@@ -4685,7 +4691,7 @@ function NavigationModulePreview({
 
   return (
     <nav
-      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}`}
+      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}`}
       aria-label="Main navigation"
       style={
         {
@@ -4704,6 +4710,21 @@ function NavigationModulePreview({
         } as CSSProperties
       }
     >
+      {!isVertical && topLevelItems.length > 0 && (
+        <button
+          type="button"
+          className="site-nav-toggle"
+          aria-expanded={mobileOpen}
+          aria-controls={menuId}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          onClick={() => setMobileOpen((open) => !open)}
+        >
+          <span className="site-nav-toggle-bar" aria-hidden="true" />
+          <span className="site-nav-toggle-bar" aria-hidden="true" />
+          <span className="site-nav-toggle-bar" aria-hidden="true" />
+        </button>
+      )}
+      <div className="site-nav-items" id={menuId}>
       {topLevelItems.map((item) => {
         const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
         const isActive = normalizeNavPath(item.href || "#") === activePath;
@@ -4721,6 +4742,7 @@ function NavigationModulePreview({
               className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
               href={href}
               key={itemId}
+              onClick={() => setMobileOpen(false)}
               style={itemWidth ? { flex: `0 0 ${itemWidth}`, width: itemWidth } : undefined}
             >
               {item.label}
@@ -4738,6 +4760,7 @@ function NavigationModulePreview({
               aria-current={isActive ? "page" : undefined}
               className={`site-nav-link site-nav-dropdown-trigger${isActive ? " site-nav-link-active" : ""}`}
               href={href}
+              onClick={() => setMobileOpen(false)}
             >
               {item.label}
               {!isVertical && <span className="site-nav-dropdown-arrow" aria-hidden>▾</span>}
@@ -4752,6 +4775,7 @@ function NavigationModulePreview({
                     href={childHref}
                     aria-current={childActive ? "page" : undefined}
                     className={`site-nav-link site-nav-dropdown-item${childActive ? " site-nav-link-active" : ""}`}
+                    onClick={() => setMobileOpen(false)}
                   >
                     {child.label}
                   </Link>
@@ -4761,6 +4785,7 @@ function NavigationModulePreview({
           </div>
         );
       })}
+      </div>
     </nav>
   );
 }
