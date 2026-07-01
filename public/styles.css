@@ -13363,6 +13363,26 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: #fff;
   text-decoration: none;
 }
+.builder-admin-nav-link {
+  display: inline-block;
+  padding: 3px 9px;
+  background: rgba(15, 79, 143, 0.88);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: sans-serif;
+  letter-spacing: 0.04em;
+  border-radius: 5px;
+  text-decoration: none;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.builder-admin-nav-link:hover {
+  background: rgba(10, 55, 100, 0.96);
+  color: #fff;
+  text-decoration: none;
+}
 
 /* src/css/_builder-theme.css */
 .builder-react-root .builder-preview-shell {

@@ -22,6 +22,7 @@ import {
   ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
   isAdminLogoutHref,
+  isAdminNavCookieSet,
   readApiErrorMessage,
   redirectAfterAdminLogout,
   setAdminSessionToken,
@@ -44,6 +45,7 @@ import {
 import {
   getAlignmentClass,
   getButtonModuleStyle,
+  getButtonModuleOuterSpacingStyle,
   getHeadingModuleStyle,
   getBuilderThemeStyleVars,
   getBuilderThemePageMarginStyle,
@@ -70,7 +72,6 @@ import {
   getModuleBackgroundSettings,
   getSectionMarginStyle,
   getModuleMarginStyle,
-  getModuleOuterSpacingStyle,
   getVerticalMarginStyle,
   getVideoEmbedSource,
   isVideoMedia
@@ -1408,7 +1409,7 @@ function BuilderSectionPreview({
                       : module.type === "heading"
                         ? getModuleMarginStyle(module.settings)
                         : module.type === "button"
-                          ? getModuleOuterSpacingStyle(module.settings)
+                          ? getButtonModuleOuterSpacingStyle(module.settings)
                           : getVerticalMarginStyle(module.settings.verticalMargin)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
@@ -1773,6 +1774,10 @@ function BuilderModulePreview({
 
   if (module.type === "admin-login") {
     return <AdminLoginPreview settings={module.settings} projectId={projectId} />;
+  }
+
+  if (module.type === "admin-nav-link") {
+    return <AdminNavLinkPreview settings={module.settings} />;
   }
 
   return null;
@@ -2729,6 +2734,12 @@ function MessagingTopicListPreview({ settings }: { settings: Record<string, stri
   const filterParam = (settings.filterParam || "topic").trim();
   const justifyMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
 
+  const moduleBorderWidth = parseInt(settings.moduleBorderWidth || "0", 10) || 0;
+  const moduleBorderColor = settings.moduleBorderColor || "#000000";
+  const wrapperStyle: CSSProperties = moduleBorderWidth > 0
+    ? { border: `${moduleBorderWidth}px solid ${moduleBorderColor}` }
+    : {};
+
   const currentParam = new URLSearchParams(window.location.search).get(filterParam) ?? "";
 
   function makeHref(slug: string) {
@@ -2750,61 +2761,65 @@ function MessagingTopicListPreview({ settings }: { settings: Record<string, stri
     );
   }
 
-  if (layout === "dropdown") {
+  function renderContent() {
+    if (layout === "dropdown") {
+      return (
+        <div style={{ textAlign: alignment as "left" | "center" | "right" }}>
+          <select
+            style={{ padding: "0.5rem 0.75rem", borderRadius: borderRadius / 2, border: "1px solid #d1d5db", fontSize, color: inactiveColor, background: inactiveBg, cursor: "pointer" }}
+            onChange={(e) => { window.location.href = makeHref(e.target.value); }}
+          >
+            {items.map((item) => <option key={item.id} value={item.slug}>{item.topic}</option>)}
+          </select>
+        </div>
+      );
+    }
+
+    if (layout === "list") {
+      return (
+        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: gap / 2 }}>
+          {items.map((item) => {
+            const isActive = item.slug === "" ? !currentParam : currentParam === item.slug;
+            return (
+              <li key={item.id}>
+                <a href={makeHref(item.slug)} style={{ fontSize, color: isActive ? activeBg : inactiveColor, fontWeight: isActive ? 700 : 400, textDecoration: "none", display: "block", padding: "0.25rem 0" }}>
+                  {item.topic}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      );
+    }
+
     return (
-      <div style={{ textAlign: alignment as "left" | "center" | "right" }}>
-        <select
-          style={{ padding: "0.5rem 0.75rem", borderRadius: borderRadius / 2, border: "1px solid #d1d5db", fontSize, color: inactiveColor, background: inactiveBg, cursor: "pointer" }}
-          onChange={(e) => { window.location.href = makeHref(e.target.value); }}
-        >
-          {items.map((item) => <option key={item.id} value={item.slug}>{item.topic}</option>)}
-        </select>
+      <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[alignment] || "flex-start" }}>
+        {items.map((item) => {
+          const isActive = item.slug === "" ? !currentParam : currentParam === item.slug;
+          return (
+            <a
+              key={item.id}
+              href={makeHref(item.slug)}
+              style={{
+                padding: `0.3rem ${borderRadius > 12 ? "0.85rem" : "0.65rem"}`,
+                borderRadius,
+                background: isActive ? activeBg : inactiveBg,
+                color: isActive ? "#fff" : inactiveColor,
+                fontSize,
+                fontWeight: isActive ? 600 : 400,
+                textDecoration: "none",
+                display: "inline-block",
+              }}
+            >
+              {item.topic}
+            </a>
+          );
+        })}
       </div>
     );
   }
 
-  if (layout === "list") {
-    return (
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: gap / 2 }}>
-        {items.map((item) => {
-          const isActive = item.slug === "" ? !currentParam : currentParam === item.slug;
-          return (
-            <li key={item.id}>
-              <a href={makeHref(item.slug)} style={{ fontSize, color: isActive ? activeBg : inactiveColor, fontWeight: isActive ? 700 : 400, textDecoration: "none", display: "block", padding: "0.25rem 0" }}>
-                {item.topic}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[alignment] || "flex-start" }}>
-      {items.map((item) => {
-        const isActive = item.slug === "" ? !currentParam : currentParam === item.slug;
-        return (
-          <a
-            key={item.id}
-            href={makeHref(item.slug)}
-            style={{
-              padding: `0.3rem ${borderRadius > 12 ? "0.85rem" : "0.65rem"}`,
-              borderRadius,
-              background: isActive ? activeBg : inactiveBg,
-              color: isActive ? "#fff" : inactiveColor,
-              fontSize,
-              fontWeight: isActive ? 600 : 400,
-              textDecoration: "none",
-              display: "inline-block",
-            }}
-          >
-            {item.topic}
-          </a>
-        );
-      })}
-    </div>
-  );
+  return <div style={wrapperStyle}>{renderContent()}</div>;
 }
 
 function MessagingTagListPreview({ settings }: { settings: Record<string, string> }) {
@@ -5535,6 +5550,30 @@ function AdminLoginPreview({
         </div>
       )}
     </div>
+  );
+}
+
+// ── Admin Nav Link ────────────────────────────────────────────────────────────
+
+/** Conditional header/nav link — only renders once the admin nav cookie is set (i.e. an admin is signed in). */
+function AdminNavLinkPreview({ settings }: { settings: Record<string, string> }) {
+  const linkText = settings.linkText || "Admin";
+  const linkHref = settings.linkHref || "/admin-login";
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  const [visible, setVisible] = useState(isPreview);
+
+  useEffect(() => {
+    if (isPreview) return;
+    setVisible(isAdminNavCookieSet());
+  }, [isPreview]);
+
+  if (!visible) return null;
+
+  return (
+    <a href={linkHref} className="builder-admin-nav-link">
+      {linkText}
+    </a>
   );
 }
 
