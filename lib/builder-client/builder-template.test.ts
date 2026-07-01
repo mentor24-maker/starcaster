@@ -288,7 +288,6 @@ describe("finalizeBackgroundSettings", () => {
   it("promotes mode to color when a custom color was saved without mode", () => {
     expect(
       finalizeBackgroundSettings({
-        mode: "none",
         color: "#0b82d4",
         color2: "#eaf4ff",
         imageUrl: "",
@@ -308,5 +307,18 @@ describe("finalizeBackgroundSettings", () => {
         opacity: 100
       }).mode
     ).toBe("none");
+  });
+
+  it("keeps explicit none when a stale custom color remains", () => {
+    const cleared = finalizeBackgroundSettings({
+      mode: "none",
+      color: "#0b82d4",
+      color2: "#eaf4ff",
+      imageUrl: "",
+      styleKey: "",
+      opacity: 100
+    });
+    expect(cleared.mode).toBe("none");
+    expect(cleared.color).toBe("#ffffff");
   });
 });

@@ -663,11 +663,21 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
 /**
  * Promote mode from "none" when background fields were configured without a mode
  * (e.g. color picked before mode was committed in the picker UI).
+ * Explicit mode "none" always wins — stale color/image values are discarded.
  */
 export function finalizeBackgroundSettings(background: BackgroundSettings | unknown): BackgroundSettings {
   const normalized = normalizeBackgroundSettings(background);
   if (normalized.mode !== "none") {
     return normalized;
+  }
+
+  const raw =
+    background && typeof background === "object" && !Array.isArray(background)
+      ? (background as Record<string, unknown>)
+      : null;
+  const rawMode = safeText(raw?.mode, 20).toLowerCase();
+  if (rawMode === "none") {
+    return createDefaultBackgroundSettings();
   }
 
   if (normalized.styleKey) {

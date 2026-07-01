@@ -538,7 +538,6 @@ describe("coerceThemeShellBackgroundSource", () => {
   it("promotes theme Styles color saved without mode", () => {
     const coerced = coerceThemeShellBackgroundSource({
       pageBackground: {
-        mode: "none",
         color: "#fff5db",
         color2: "#eaf4ff",
         imageUrl: "",
@@ -606,6 +605,32 @@ describe("resolveShellPageBackground", () => {
     expect(resolved.color).toBe("#ff0000");
   });
 
+  it("treats explicit page none as cleared even when a stale color remains in storage", () => {
+    const resolved = resolveShellPageBackground(
+      {
+        mode: "none",
+        color: "#0b82d4",
+        color2: "#eaf4ff",
+        imageUrl: "",
+        styleKey: "",
+        opacity: 100,
+      },
+      {
+        pageBackground: {
+          mode: "color",
+          color: "#ceedf8",
+          color2: "#eaf4ff",
+          imageUrl: "",
+          styleKey: "",
+          opacity: 100,
+        },
+        backgroundColor: "#fff5db",
+      }
+    );
+
+    expect(resolved.color).toBe("#ceedf8");
+  });
+
   it("inherits theme Styles color when page is none and theme mode was not committed", () => {
     const resolved = resolveShellPageBackground(
       {
@@ -618,7 +643,6 @@ describe("resolveShellPageBackground", () => {
       },
       {
         pageBackground: {
-          mode: "none",
           color: "#ceedf8",
           color2: "#eaf4ff",
           imageUrl: "",
