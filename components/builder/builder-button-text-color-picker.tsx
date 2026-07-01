@@ -2,8 +2,7 @@
 
 import { useId, useState } from "react";
 import { BuilderEditorPopup } from "./builder-editor-popup";
-import { BuilderSettingRow } from "./builder-setting-row";
-import { BuilderThemeColorField } from "./builder-theme-color-field";
+import { BuilderThemeColorPickerContent } from "./builder-theme-color-picker-content";
 
 export type ButtonTextColorSettings = {
   color: string;
@@ -54,6 +53,7 @@ export function BuilderButtonTextColorPicker({
       {isOpen ? (
         <BuilderEditorPopup
           ariaLabel="Button text color"
+          className="builder-theme-color-popup"
           id={popupId}
           onClose={() => setIsOpen(false)}
           title="Text Color"
@@ -78,27 +78,26 @@ export function BuilderButtonTextColorPicker({
           </div>
           <div className="builder-button-background-popup-body">
             {activeTab === "color" ? (
-              <BuilderSettingRow label="Color" fullWidth>
-                <BuilderThemeColorField
-                  dialogLabel="Button text color"
-                  fallback="#ffffff"
-                  themeColors={themeColors}
-                  value={colors.color}
-                  onChange={(color) => onChange({ ...colors, color })}
-                />
-              </BuilderSettingRow>
+              <BuilderThemeColorPickerContent
+                fallback="#ffffff"
+                themeColors={themeColors}
+                value={colors.color}
+                onChange={(color) => onChange({ ...colors, color })}
+              />
             ) : null}
             {activeTab === "hover" ? (
-              <BuilderSettingRow label="Hover" fullWidth>
-                <BuilderThemeColorField
-                  dialogLabel="Button text hover color"
-                  fallback="#ffffff"
-                  themeColors={themeColors}
-                  value={colors.hoverColor}
-                  onChange={(hoverColor) => onChange({ ...colors, hoverColor })}
-                />
-              </BuilderSettingRow>
+              <BuilderThemeColorPickerContent
+                fallback="#ffffff"
+                themeColors={themeColors}
+                value={colors.hoverColor}
+                onChange={(hoverColor) => onChange({ ...colors, hoverColor })}
+              />
             ) : null}
+            <div className="builder-button-background-popup-actions">
+              <button className="submit-button" onClick={() => setIsOpen(false)} type="button">
+                Done
+              </button>
+            </div>
           </div>
         </BuilderEditorPopup>
       ) : null}

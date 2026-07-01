@@ -705,6 +705,9 @@ export function getButtonModuleStyle(settings: Record<string, string>): CSSPrope
   const borderWidth = Number.parseInt(settings.borderWidth ?? "2", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "0", 10);
   const resolvedBorderWidth = borderStyle === "none" ? 0 : Math.max(Number.isFinite(borderWidth) ? borderWidth : 2, 0);
+  const resolvedBorderColor = borderStyle === "none" || settings.borderColor === "transparent"
+    ? "transparent"
+    : settings.borderColor || "#214c71";
   const buttonBackground = getButtonBackgroundSettings(settings);
   const buttonFillStyle = getBuilderBackgroundStyle(buttonBackground);
 
@@ -715,12 +718,12 @@ export function getButtonModuleStyle(settings: Record<string, string>): CSSPrope
     "--btn-color": textColor,
     "--btn-color-hover": settings.textHoverColor || "#ffffff",
     "--btn-text-shadow": textShadow,
-    "--btn-border": settings.borderColor || "#214c71",
+    "--btn-border": resolvedBorderColor,
     color: textColor,
     textShadow,
     padding: `${settings.paddingY || "12"}px ${settings.paddingX || "24"}px`,
     borderStyle,
-    borderColor: borderStyle === "none" ? "transparent" : settings.borderColor || "#214c71",
+    borderColor: resolvedBorderColor,
     borderWidth: `${resolvedBorderWidth}px`,
     borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 0, 0)}px`,
     ...(Number.isFinite(fontSize) && fontSize >= 10 ? { fontSize: `${fontSize}px` } : {}),
