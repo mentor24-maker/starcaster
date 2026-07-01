@@ -169,20 +169,35 @@ App.assetCategories = (function () {
 
   function buildCategoryTreeRows(items) {
     const lookup = categoriesById();
+    const presentIds = new Set();
+    items.forEach((item) => {
+      const id = Number(item?.id || 0);
+      if (id > 0) presentIds.add(id);
+    });
     const byParent = new Map();
     items.forEach((item) => {
-      const parentId = Number(item.parentCategoryId || 0) || 0;
+      const id = Number(item?.id || 0);
+      let parentId = Number(item.parentCategoryId || 0) || 0;
+      // Treat missing/self parents as top level so the row still renders.
+      if (parentId === id || !presentIds.has(parentId)) parentId = 0;
       if (!byParent.has(parentId)) byParent.set(parentId, []);
       byParent.get(parentId).push(item);
     });
     byParent.forEach((children) => children.sort(compareCategories));
 
     const rows = [];
+    const visited = new Set();
     const walk = (parentId, depth) => {
       const children = byParent.get(parentId) || [];
       children.forEach((item) => {
         const id = Number(item.id || 0);
-        const childCount = (byParent.get(id) || []).length;
+        if (id > 0) {
+          if (visited.has(id)) return;
+          visited.add(id);
+        }
+        // id 0 = unsaved placeholder from assets; it can never have children,
+        // and recursing on it would re-walk the root forever.
+        const childCount = id > 0 ? (byParent.get(id) || []).length : 0;
         rows.push({ item, depth, childCount, lookup });
         if (childCount && !collapsedCategoryIds.has(id)) {
           walk(id, depth + 1);
@@ -190,6 +205,14 @@ App.assetCategories = (function () {
       });
     };
     walk(0, 0);
+    // Parent-link cycles are unreachable from the root; surface them as top-level rows.
+    items.forEach((item) => {
+      const id = Number(item?.id || 0);
+      if (id > 0 && !visited.has(id)) {
+        visited.add(id);
+        rows.push({ item, depth: 0, childCount: 0, lookup });
+      }
+    });
     return rows;
   }
 
