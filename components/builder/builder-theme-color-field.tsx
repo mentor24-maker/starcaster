@@ -14,6 +14,9 @@ type BuilderThemeColorFieldProps = {
   fallback?: string;
   themeColors?: Array<{ label: string; hex: string }>;
   dialogLabel?: string;
+  opacity?: number;
+  onChangeOpacity?: (opacity: number) => void;
+  onClear?: () => void;
 };
 
 function resolveHexColor(value: string, fallback: string) {
@@ -26,7 +29,10 @@ export function BuilderThemeColorField({
   disabled = false,
   fallback = "#000000",
   themeColors = [],
-  dialogLabel = "Choose color"
+  dialogLabel = "Choose color",
+  opacity,
+  onChangeOpacity,
+  onClear
 }: BuilderThemeColorFieldProps) {
   const popupId = useId();
   const [isOpen, setIsOpen] = useState(false);
@@ -34,6 +40,11 @@ export function BuilderThemeColorField({
 
   function selectColor(hex: string) {
     onChange(hex);
+  }
+
+  function handleClear() {
+    onClear?.();
+    setIsOpen(false);
   }
 
   return (
@@ -63,6 +74,9 @@ export function BuilderThemeColorField({
               fallback={fallback}
               themeColors={themeColors}
               value={value}
+              opacity={opacity}
+              onChangeOpacity={onChangeOpacity}
+              onClear={onClear ? handleClear : undefined}
               onChange={selectColor}
             />
           </div>
