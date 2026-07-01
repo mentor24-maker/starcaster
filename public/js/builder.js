@@ -196,6 +196,14 @@ App.builder = (function () {
         size: 'medium',
         align: 'left',
         backgroundColor: '#0b82d4',
+        background: {
+          mode: 'color',
+          color: '#0b82d4',
+          color2: '#eaf4ff',
+          imageUrl: '',
+          imageAssetId: '',
+          styleKey: '',
+        },
         textColor: '#ffffff',
         borderRadius: 20,
         fullWidth: false,
@@ -207,7 +215,7 @@ App.builder = (function () {
         { key: 'style', label: 'Style', control: 'select', options: ['solid', 'outline', 'ghost', 'link'] },
         { key: 'size', label: 'Size', control: 'select', options: ['small', 'medium', 'large'] },
         { key: 'align', label: 'Alignment', control: 'select', options: ['left', 'center', 'right'] },
-        { key: 'backgroundColor', label: 'Background Color', control: 'color' },
+        { key: 'background', label: 'Background', control: 'modular-background' },
         { key: 'textColor', label: 'Text Color', control: 'color' },
         { key: 'borderRadius', label: 'Border Radius', control: 'number', min: 0, max: 40, step: 1 },
         { key: 'fullWidth', label: 'Full Width', control: 'checkbox' },
@@ -3478,10 +3486,14 @@ App.builder = (function () {
   }
 
   function getDevelopModuleSettingsFromForm(type) {
-    return getDevelopModuleSettingsFromHost(type, {
+    const settings = getDevelopModuleSettingsFromHost(type, {
       prefix: 'builderModuleField',
       hostElement: byId('builderModulesSettingsFields'),
     });
+    if (safeText(type) === 'button') {
+      return syncButtonModuleBackgroundKeys(settings);
+    }
+    return settings;
   }
 
   function getDevelopModulePayloadFromForm() {
@@ -3943,7 +3955,11 @@ App.builder = (function () {
     if (definition?.fields?.some((field) => field.control === 'modular-background')) {
       await ensureAssetsLoaded().catch(() => {});
     }
-    renderDevelopModuleSettingsFields(type, settings || {});
+    let resolvedSettings = settings || {};
+    if (safeText(type) === 'button' && settings && typeof settings === 'object') {
+      resolvedSettings = syncButtonModuleBackgroundKeys(settings);
+    }
+    renderDevelopModuleSettingsFields(type, resolvedSettings);
   }
 
   async function loadSavedEmailTemplates() {
@@ -5605,6 +5621,55 @@ App.builder = (function () {
     return {};
   }
 
+  function getButtonModuleBackgroundSettings(settings = {}) {
+    if (safeText(settings.buttonBackgroundMode)) {
+      return normalizeBackgroundSettings({
+        mode: settings.buttonBackgroundMode,
+        color: settings.buttonBackgroundColor || settings.buttonColor,
+        color2: settings.buttonBackgroundColor2,
+        imageUrl: settings.buttonBackgroundImageUrl,
+        styleKey: settings.buttonBackgroundStyleKey,
+        imageAssetId: settings.backgroundImageId,
+      });
+    }
+    return normalizeBackgroundSettings(settings.background, settings.backgroundColor, settings.backgroundImageId);
+  }
+
+  function resolveButtonAccentColor(background) {
+    const bg = normalizeBackgroundSettings(background);
+    if (bg.mode === 'none') return '#0b82d4';
+    if (bg.mode === 'transparent' || (bg.mode === 'color' && isTransparentBuilderColor(bg.color))) {
+      return '#0b82d4';
+    }
+    return safeText(bg.color) || '#0b82d4';
+  }
+
+  function syncButtonModuleBackgroundKeys(settings = {}) {
+    const bg = getButtonModuleBackgroundSettings(settings);
+    const normalized = normalizeBackgroundSettings(bg);
+    const next = {
+      ...settings,
+      background: normalized,
+      buttonBackgroundMode: normalized.mode,
+      buttonBackgroundColor: normalized.color,
+      buttonBackgroundColor2: normalized.color2,
+      buttonBackgroundImageUrl: normalized.imageUrl,
+      buttonBackgroundStyleKey: normalized.styleKey,
+    };
+    if (normalized.mode === 'color') {
+      next.backgroundColor = normalized.color;
+      next.buttonColor = normalized.color;
+    } else if (normalized.mode === 'transparent') {
+      next.backgroundColor = 'transparent';
+    } else {
+      next.backgroundColor = '';
+    }
+    if (normalized.mode === 'image' && normalized.imageAssetId) {
+      next.backgroundImageId = safeText(normalized.imageAssetId, 120);
+    }
+    return next;
+  }
+
   function readModularBackgroundFromPanel(panel, prefix) {
     const mode = normalizeBackgroundMode(panel.querySelector(`#${prefix}ModeSelect`)?.value);
     const background = createDefaultBackgroundSettings();
@@ -6325,21 +6390,24 @@ App.builder = (function () {
       return module?.settings || {};
     }
     if (type === 'button') {
-      const ctaText = safeText(module?.settings?.label)
-        || getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(module?.settings?.ctaId))?.content
-        || getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(module?.settings?.ctaId))?.label
+      const buttonSettings = module?.settings || {};
+      const buttonBackground = getButtonModuleBackgroundSettings(buttonSettings);
+      const ctaText = safeText(buttonSettings.label)
+        || getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(buttonSettings.ctaId))?.content
+        || getDevelopModuleContentSourceOptions('cta').find((item) => item.value === safeText(buttonSettings.ctaId))?.label
         || 'Learn More';
       return {
         label: ctaText,
-        linkUrl: safeText(module?.settings?.linkUrl),
-        style: safeText(module?.settings?.style) || 'solid',
-        size: safeText(module?.settings?.size) || 'md',
-        align: safeText(module?.settings?.align) || 'left',
-        backgroundColor: safeText(module?.settings?.backgroundColor) || '#0b82d4',
-        textColor: safeText(module?.settings?.textColor) || '#ffffff',
-        borderRadius: Number(module?.settings?.borderRadius) || 14,
-        fullWidth: Boolean(module?.settings?.fullWidth),
-        openInNewTab: Boolean(module?.settings?.openInNewTab),
+        linkUrl: safeText(buttonSettings.linkUrl),
+        style: safeText(buttonSettings.style) || 'solid',
+        size: safeText(buttonSettings.size) || 'md',
+        align: safeText(buttonSettings.align) || 'left',
+        background: buttonBackground,
+        backgroundColor: resolveButtonAccentColor(buttonBackground),
+        textColor: safeText(buttonSettings.textColor) || '#ffffff',
+        borderRadius: Number(buttonSettings.borderRadius) || 14,
+        fullWidth: Boolean(buttonSettings.fullWidth),
+        openInNewTab: Boolean(buttonSettings.openInNewTab),
       };
     }
     if (type === 'image' || type === 'logo-wide' || type === 'logo-square') {
@@ -6508,18 +6576,23 @@ App.builder = (function () {
               };
               const align = ['left', 'center', 'right'].includes(safeText(content?.align)) ? safeText(content.align) : 'left';
               const styleMode = safeText(content?.style) || 'solid';
-              const backgroundColor = safeText(content?.backgroundColor) || '#0b82d4';
+              const buttonBackground = getButtonModuleBackgroundSettings(content?.background
+                ? { background: content.background, backgroundColor: content.backgroundColor }
+                : module?.settings || {});
+              const accentColor = resolveButtonAccentColor(buttonBackground);
               const textColor = safeText(content?.textColor) || '#ffffff';
               const radius = Number(content?.borderRadius) || 14;
+              const fillStyle = styleObjectToCssText(getBuilderBackgroundCssStyle(buttonBackground));
               let buttonStyle = `${sizeMap[safeText(content?.size)] || sizeMap.medium}border-radius:${radius}px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;`;
               if (styleMode === 'outline') {
-                buttonStyle += `background:transparent;color:${textColor};border:2px solid ${backgroundColor};`;
+                buttonStyle += `background:transparent;color:${textColor};border:2px solid ${accentColor};`;
               } else if (styleMode === 'ghost') {
-                buttonStyle += `background:rgba(11,130,212,0.08);color:${backgroundColor};border:1px solid transparent;`;
+                buttonStyle += `background:rgba(11,130,212,0.08);color:${accentColor};border:1px solid transparent;`;
               } else if (styleMode === 'link') {
-                buttonStyle += `background:transparent;color:${backgroundColor};border:none;padding-left:0;padding-right:0;border-radius:0;`;
+                buttonStyle += `background:transparent;color:${accentColor};border:none;padding-left:0;padding-right:0;border-radius:0;`;
               } else {
-                buttonStyle += `background:${backgroundColor};color:${textColor};border:1px solid ${backgroundColor};`;
+                buttonStyle += fillStyle || `background:${accentColor};`;
+                buttonStyle += `color:${textColor};border:1px solid ${accentColor};`;
               }
               if (content?.fullWidth) buttonStyle += 'width:100%;';
               const href = safeText(content?.linkUrl) || '#';
