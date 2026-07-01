@@ -96,3 +96,30 @@ export function normalizeBuilderHexColor(value: unknown, fallback = DEFAULT_BUIL
 
   return fallback;
 }
+
+/** Background opacity is stored as 0–100 (percent). */
+export function clampBuilderOpacity(value: unknown, fallback = 100): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(num)));
+}
+
+/** Convert a builder hex color to rgba when opacity is below 100%. */
+export function applyBuilderColorOpacity(color: string, opacityPercent: number): string {
+  const opacity = clampBuilderOpacity(opacityPercent);
+  if (opacity >= 100) {
+    return normalizeBuilderHexColor(color);
+  }
+
+  if (isTransparentBuilderColor(color)) {
+    return "transparent";
+  }
+
+  const hex = normalizeBuilderHexColor(color).replace("#", "");
+  const expanded = hex.length === 3 ? hex.split("").map((char) => char + char).join("") : hex;
+  const value = Number.parseInt(expanded, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${opacity / 100})`;
+}

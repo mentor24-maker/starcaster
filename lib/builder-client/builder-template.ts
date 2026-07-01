@@ -8,7 +8,7 @@ import {
 } from "@/lib/builder-reminder-module";
 import { MODULE_GAME_AUDIENCE_SETTING_KEY, normalizeModuleGameAudience } from "@/lib/module-game-audience";
 import { normalizeModuleTrigger, MODULE_TRIGGER_SETTING_KEY } from "@/lib/module-trigger";
-import { isTransparentBuilderColor, normalizeBuilderHexColor } from "@/lib/builder-hex-color";
+import { applyBuilderColorOpacity, clampBuilderOpacity, isTransparentBuilderColor, normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
   HEADLINE_ROTATOR_DEFAULT_FONT_SIZE,
   HEADLINE_ROTATOR_DEFAULT_MIN_HEIGHT,
@@ -103,6 +103,8 @@ export type BackgroundSettings = {
   /** StarCaster: asset id behind imageUrl so the asset picker can round-trip. */
   imageAssetId?: string;
   styleKey: "" | BackgroundStylePreset;
+  /** 0–100. Color/gradient bake alpha into rgba; image/style use a backdrop layer. */
+  opacity?: number;
 };
 
 /** StarCaster: dimmer/tint screen layered over a section's background. */
@@ -635,7 +637,8 @@ export function createDefaultBackgroundSettings(): BackgroundSettings {
     color2: "#eaf4ff",
     imageUrl: "",
     imageAssetId: "",
-    styleKey: ""
+    styleKey: "",
+    opacity: 100
   };
 }
 
@@ -652,8 +655,23 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
     color2: normalizeBuilderHexColor(safeText(background.color2, 40), "#eaf4ff"),
     imageUrl: normalizeBuilderAssetUrl(background.imageUrl),
     imageAssetId: safeText(background.imageAssetId, 120),
-    styleKey: normalizeBackgroundStyleKey(background.styleKey)
+    styleKey: normalizeBackgroundStyleKey(background.styleKey),
+    opacity: clampBuilderOpacity(background.opacity)
   };
+}
+
+/** Image/style backgrounds need an isolated backdrop layer when opacity is below 100%. */
+export function getBuilderBackgroundLayerOpacity(background: BackgroundSettings | undefined): number {
+  if (!background || background.mode === "none") {
+    return 1;
+  }
+
+  const opacity = clampBuilderOpacity(background.opacity) / 100;
+  if (background.mode === "image" || background.mode === "style") {
+    return opacity;
+  }
+
+  return 1;
 }
 
 export function normalizeRowOverlayScreenSettings(value: unknown): RowOverlayScreenSettings {
@@ -844,6 +862,8 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
     return undefined;
   }
 
+  const opacity = clampBuilderOpacity(background.opacity);
+
   if (background.mode === "color") {
     if (isTransparentBuilderColor(background.color)) {
       return {
@@ -852,14 +872,18 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
       };
     }
 
+    const color = applyBuilderColorOpacity(background.color, opacity);
     return {
-      background: background.color
+      background: color,
+      backgroundColor: color
     };
   }
 
   if (background.mode === "gradient") {
+    const color = applyBuilderColorOpacity(background.color, opacity);
+    const color2 = applyBuilderColorOpacity(background.color2, opacity);
     return {
-      backgroundImage: `linear-gradient(135deg, ${background.color} 0%, ${background.color2} 100%)`
+      backgroundImage: `linear-gradient(135deg, ${color} 0%, ${color2} 100%)`
     };
   }
 
