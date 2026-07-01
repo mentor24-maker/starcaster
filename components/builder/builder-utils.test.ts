@@ -13,6 +13,7 @@ import {
   getSpeechBubbleModuleStyle,
   buildBuilderThemeStyles,
   getBuilderThemeStyleVars,
+  getBuilderThemePageMarginStyle,
   getThemeRootVars,
   isFloatingImageModule,
   isOverlayImageModule,
@@ -432,16 +433,37 @@ describe("getBuilderThemeStyleVars", () => {
     expect(vars["--bx-theme-padding-top"]).toBe("12px");
     expect(vars["--bx-theme-padding-bottom"]).toBe("24px");
     expect(vars["--bx-theme-padding-inline"]).toBe("80px");
-    expect(vars.paddingTop).toBe("12px");
-    expect(vars.paddingBottom).toBe("24px");
-    expect(vars.paddingLeft).toBe("80px");
-    expect(vars.paddingRight).toBe("80px");
     expect(vars["--lp-border-thickness"]).toBe("2px");
     expect(vars["--lp-radius"]).toBe("16px");
     expect(vars["--lp-blur"]).toBe("4px");
     expect(vars["--lp-filter"]).toBe("contrast(1.2)");
     expect(vars["--lp-accent"]).toBe("#1a4f81");
     expect(vars).not.toHaveProperty("--lp-background");
+    expect(vars).not.toHaveProperty("paddingTop");
+  });
+});
+
+describe("getBuilderThemePageMarginStyle", () => {
+  it("returns empty styles when theme styles are absent", () => {
+    expect(getBuilderThemePageMarginStyle(undefined)).toEqual({});
+  });
+
+  it("maps saved theme margins to content-wrapper padding", () => {
+    const style = getBuilderThemePageMarginStyle(
+      buildBuilderThemeStyles({
+        topMargin: 12,
+        bottomMargin: 24,
+        sideMargins: 80,
+      })
+    ) as Record<string, string>;
+
+    expect(style.paddingTop).toBe("12px");
+    expect(style.paddingBottom).toBe("24px");
+    expect(style.paddingLeft).toBe("80px");
+    expect(style.paddingRight).toBe("80px");
+    expect(style["--bx-theme-padding-top"]).toBe("12px");
+    expect(style["--bx-theme-padding-bottom"]).toBe("24px");
+    expect(style["--bx-theme-padding-inline"]).toBe("80px");
   });
 });
 

@@ -46,6 +46,7 @@ import {
   getButtonModuleStyle,
   getHeadingModuleStyle,
   getBuilderThemeStyleVars,
+  getBuilderThemePageMarginStyle,
   getThemeRootVars,
   type BuilderThemeStyles,
   getShellBackgroundLayers,
@@ -1156,6 +1157,7 @@ export function BuilderTemplatePreview({
   const hasResolvedShellBackground = Boolean(
     shellBackground.inlineBackground || shellBackground.backdrop
   );
+  const themeMarginStyle = getBuilderThemePageMarginStyle(themeStyles);
   // Theme tokens go first so the page background (and any per-module inline
   // styles further down) still win where they overlap.
   const rootStyle = {
@@ -1183,7 +1185,9 @@ export function BuilderTemplatePreview({
   const shellClassName = !emailPreview
     ? `builder-preview-shell${themeStyles ? " has-builder-theme-styles" : ""}${hasResolvedShellBackground ? " has-resolved-shell-background" : ""}${shellBackground.backdrop ? " has-shell-background-backdrop" : ""}`
     : undefined;
+  const contentClassName = themeStyles ? "builder-preview-shell-content has-builder-theme-margins" : undefined;
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
+  const mainSections = layoutSections.filter((section) => !sectionHasOnlyPageOverlayImageModules(section));
 
   return (
     <div
@@ -1220,9 +1224,22 @@ export function BuilderTemplatePreview({
           ))}
         </div>
       ) : null}
-      {layoutSections
-        .filter((section) => !sectionHasOnlyPageOverlayImageModules(section))
-        .map((section) => (
+      {contentClassName ? (
+        <div className={contentClassName} style={themeMarginStyle}>
+          {mainSections.map((section) => (
+            <BuilderSectionPreview
+              emailPreview={emailPreview}
+              key={section.id}
+              previewMode={previewMode}
+              section={section}
+              sitePlayerRegistered={sitePlayerRegistered}
+              theme={theme}
+              themePalette={themePalette}
+            />
+          ))}
+        </div>
+      ) : (
+        mainSections.map((section) => (
           <BuilderSectionPreview
             emailPreview={emailPreview}
             key={section.id}
@@ -1232,7 +1249,8 @@ export function BuilderTemplatePreview({
             theme={theme}
             themePalette={themePalette}
           />
-        ))}
+        ))
+      )}
       {shellClassName ? <GameModuleOverlayHosts /> : null}
       {shellClassName ? <BuilderReminderRuntime layoutSections={layoutSections} /> : null}
     </div>

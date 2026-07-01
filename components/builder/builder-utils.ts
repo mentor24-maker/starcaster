@@ -972,9 +972,33 @@ export function getShellBackgroundLayers(
   return { inlineBackground: style };
 }
 
+function readBuilderThemeMargins(styles: BuilderThemeStyles | undefined) {
+  return {
+    topMargin: Math.max(0, safeThemeNumber(styles?.topMargin, 0)),
+    bottomMargin: Math.max(0, safeThemeNumber(styles?.bottomMargin, 0)),
+    sideMargins: Math.max(0, safeThemeNumber(styles?.sideMargins, 0)),
+  };
+}
+
+/** Page margin tokens for the preview content wrapper (Themes → Styles). */
+export function getBuilderThemePageMarginStyle(styles: BuilderThemeStyles | undefined): CSSProperties {
+  if (!styles) return {};
+  const { topMargin, bottomMargin, sideMargins } = readBuilderThemeMargins(styles);
+  return {
+    paddingTop: `${topMargin}px`,
+    paddingBottom: `${bottomMargin}px`,
+    paddingLeft: `${sideMargins}px`,
+    paddingRight: `${sideMargins}px`,
+    "--bx-theme-padding-top": `${topMargin}px`,
+    "--bx-theme-padding-bottom": `${bottomMargin}px`,
+    "--bx-theme-padding-inline": `${sideMargins}px`,
+  } as CSSProperties;
+}
+
 /**
  * Emit saved theme palette + container style tokens for the preview shell root.
- * Margins map to shell padding; border radius, blur, and contrast cascade via --lp-* vars.
+ * Page margins apply on `.builder-preview-shell-content`; border radius, blur, and
+ * contrast cascade via --lp-* vars on the shell.
  */
 export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined): CSSProperties {
   const vars: Record<string, string> = {};
@@ -994,9 +1018,7 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   const borderRadius = Math.max(0, safeThemeNumber(styles.borderRadius, 12));
   const containerBlur = Math.max(0, safeThemeNumber(styles.containerBlur, 0));
   const contrastLevel = Math.max(0, Math.min(100, safeThemeNumber(styles.contrastLevel, 0)));
-  const topMargin = Math.max(0, safeThemeNumber(styles.topMargin, 0));
-  const bottomMargin = Math.max(0, safeThemeNumber(styles.bottomMargin, 0));
-  const sideMargins = Math.max(0, safeThemeNumber(styles.sideMargins, 0));
+  const { topMargin, bottomMargin, sideMargins } = readBuilderThemeMargins(styles);
 
   vars["--lp-border-thickness"] = `${borderThickness}px`;
   vars["--lp-radius"] = `${borderRadius}px`;
@@ -1006,13 +1028,7 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   vars["--bx-theme-padding-bottom"] = `${bottomMargin}px`;
   vars["--bx-theme-padding-inline"] = `${sideMargins}px`;
 
-  return {
-    ...vars,
-    paddingTop: `${topMargin}px`,
-    paddingBottom: `${bottomMargin}px`,
-    paddingLeft: `${sideMargins}px`,
-    paddingRight: `${sideMargins}px`,
-  } as CSSProperties;
+  return vars as CSSProperties;
 }
 
 /** Palette vars consumed by CRM form theme tokens on builder/public pages. */

@@ -43,6 +43,7 @@ import {
   createDraftFromTemplate,
   createDraftFromPage,
   getBuilderThemeStyleVars,
+  getBuilderThemePageMarginStyle,
   getShellBackgroundLayers,
   getModuleBackgroundSettings,
   getThemeRootVars
@@ -184,6 +185,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const workspaceShellStyle = useMemo(
     () => ({
       ...getBuilderThemeStyleVars(workspaceThemeStyles),
+      ...getBuilderThemePageMarginStyle(workspaceThemeStyles),
       ...workspaceShellLayers.inlineBackground,
     }),
     [workspaceThemeStyles, workspaceShellLayers.inlineBackground]
