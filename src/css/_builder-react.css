@@ -7132,12 +7132,14 @@
 }
 
 .builder-react-root .builder-preview-shell.has-shell-background-backdrop,
-.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop {
+.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop,
+.builder-react-root .builder-viewport-shell-layout.has-shell-background-backdrop {
   position: relative;
 }
 
 .builder-react-root .builder-preview-shell.has-shell-background-backdrop > :not(.builder-preview-shell-backdrop),
-.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop > :not(.builder-shell-background-backdrop) {
+.builder-react-root .builder-main.builder-workspace.has-shell-background-backdrop > :not(.builder-shell-background-backdrop),
+.builder-react-root .builder-viewport-shell-layout.has-shell-background-backdrop > :not(.builder-preview-shell-backdrop) {
   position: relative;
   z-index: 1;
 }

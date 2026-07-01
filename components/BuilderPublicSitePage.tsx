@@ -6,12 +6,12 @@ import {
   builderThemeToCrmPalette,
   buildBuilderThemeStyles,
   coerceThemeShellBackgroundSource,
-  getBuilderThemePageMarginStyle,
   mergeCrmThemePalette,
   type BuilderThemeStyles,
   type CrmThemePalette,
   type ThemeShellBackgroundSource,
 } from "@/components/builder/builder-utils";
+import { BuilderViewportShellLayout } from "@/components/builder/builder-viewport-shell-layout";
 import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
@@ -329,7 +329,6 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   const effectiveThemeShellBackground = coerceThemeShellBackgroundSource(
     page.themeShell ?? themeShellBackground
   );
-  const pageMarginStyle = getBuilderThemePageMarginStyle(effectiveThemeStyles);
 
   return (
     <>
@@ -343,7 +342,12 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           Admin
         </a>
       ) : null}
-      <div className="builder-public-site-layout builder-theme-page-margin-layout" style={pageMarginStyle}>
+      <BuilderViewportShellLayout
+        className="builder-public-site-layout"
+        pageBackground={page.pageBackground}
+        themeShellBackground={effectiveThemeShellBackground}
+        themeStyles={effectiveThemeStyles}
+      >
         <BuilderTemplatePreview
           layoutSections={sections}
           pageBackground={page.pageBackground}
@@ -352,9 +356,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           themeStyles={effectiveThemeStyles}
           themeShellBackground={effectiveThemeShellBackground}
           applyThemePageMargins={false}
+          suppressShellBackground
           projectId={projectId}
         />
-      </div>
+      </BuilderViewportShellLayout>
     </>
   );
 }
