@@ -34,7 +34,7 @@ const OVERLAY_ANCHOR_OPTIONS = [
   { value: "bottom-right", label: "Bottom Right" }
 ] as const;
 
-const SIZE_OPTIONS = ["10", "15", "25", "33", "50", "66", "75", "100"] as const;
+const SIZE_OPTIONS = ["10", "15", "25", "33", "50", "66", "75", "90", "100"] as const;
 
 const EFFECT_OPTIONS = [
   { value: "none", label: "None" },

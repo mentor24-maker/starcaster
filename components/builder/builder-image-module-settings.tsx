@@ -50,6 +50,7 @@ export function BuilderImageModuleSettings({
             <option value="50">50%</option>
             <option value="66">66%</option>
             <option value="75">75%</option>
+            <option value="90">90%</option>
             <option value="100">100%</option>
           </select>
         </label>
