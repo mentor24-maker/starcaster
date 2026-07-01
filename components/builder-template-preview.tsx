@@ -110,6 +110,8 @@ type BuilderTemplatePreviewProps = {
   previewMode?: boolean;
   /** Project ID for contact form submissions on live landing pages. */
   projectId?: string;
+  /** When false, page margins are applied by an outer public-site wrapper instead. */
+  applyThemePageMargins?: boolean;
 };
 
 type ContactFormField = {
@@ -1151,13 +1153,14 @@ export function BuilderTemplatePreview({
   showShell = true,
   emailPreview = false,
   previewMode = false,
-  projectId = ""
+  projectId = "",
+  applyThemePageMargins = true
 }: BuilderTemplatePreviewProps) {
   const shellBackground = getShellBackgroundLayers(pageBackground, themeShellBackground);
   const hasResolvedShellBackground = Boolean(
     shellBackground.inlineBackground || shellBackground.backdrop
   );
-  const themeMarginStyle = getBuilderThemePageMarginStyle(themeStyles);
+  const themeMarginStyle = applyThemePageMargins ? getBuilderThemePageMarginStyle(themeStyles) : {};
   // Theme tokens go first so the page background (and any per-module inline
   // styles further down) still win where they overlap.
   const rootStyle = {
@@ -1185,7 +1188,10 @@ export function BuilderTemplatePreview({
   const shellClassName = !emailPreview
     ? `builder-preview-shell${themeStyles ? " has-builder-theme-styles" : ""}${hasResolvedShellBackground ? " has-resolved-shell-background" : ""}${shellBackground.backdrop ? " has-shell-background-backdrop" : ""}`
     : undefined;
-  const contentClassName = themeStyles ? "builder-preview-shell-content has-builder-theme-margins" : undefined;
+  const contentClassName =
+    applyThemePageMargins && themeStyles
+      ? "builder-preview-shell-content has-builder-theme-margins"
+      : undefined;
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
   const mainSections = layoutSections.filter((section) => !sectionHasOnlyPageOverlayImageModules(section));
 

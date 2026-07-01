@@ -876,22 +876,31 @@ function accentBorderColor(accent: string): string {
   return `rgba(${r}, ${g}, ${b}, 0.24)`;
 }
 
+function readThemeMarginField(
+  theme: Record<string, unknown>,
+  camel: "topMargin" | "bottomMargin" | "sideMargins",
+  snake: string
+): number {
+  return safeThemeNumber(theme[camel] ?? theme[snake], 0);
+}
+
 export function buildBuilderThemeStyles(
   theme: BuilderThemeStyles | Record<string, unknown> | null | undefined
 ): BuilderThemeStyles | undefined {
   if (!theme || typeof theme !== "object") return undefined;
+  const row = theme as Record<string, unknown>;
   return {
-    primaryColor: String(theme.primaryColor ?? "").trim(),
-    secondaryColor: String(theme.secondaryColor ?? "").trim(),
-    backgroundColor: String(theme.backgroundColor ?? "").trim(),
-    accentColor: String(theme.accentColor ?? "").trim(),
-    borderThickness: safeThemeNumber(theme.borderThickness, 1),
-    borderRadius: safeThemeNumber(theme.borderRadius, 12),
-    containerBlur: safeThemeNumber(theme.containerBlur, 0),
-    contrastLevel: safeThemeNumber(theme.contrastLevel, 0),
-    topMargin: safeThemeNumber(theme.topMargin, 0),
-    bottomMargin: safeThemeNumber(theme.bottomMargin, 0),
-    sideMargins: safeThemeNumber(theme.sideMargins, 0),
+    primaryColor: String(row.primaryColor ?? row.primary_color ?? "").trim(),
+    secondaryColor: String(row.secondaryColor ?? row.secondary_color ?? "").trim(),
+    backgroundColor: String(row.backgroundColor ?? row.background_color ?? "").trim(),
+    accentColor: String(row.accentColor ?? row.accent_color ?? "").trim(),
+    borderThickness: safeThemeNumber(row.borderThickness ?? row.border_thickness, 1),
+    borderRadius: safeThemeNumber(row.borderRadius ?? row.border_radius, 12),
+    containerBlur: safeThemeNumber(row.containerBlur ?? row.container_blur, 0),
+    contrastLevel: safeThemeNumber(row.contrastLevel ?? row.contrast_level, 0),
+    topMargin: readThemeMarginField(row, "topMargin", "top_margin"),
+    bottomMargin: readThemeMarginField(row, "bottomMargin", "bottom_margin"),
+    sideMargins: readThemeMarginField(row, "sideMargins", "side_margins"),
   };
 }
 

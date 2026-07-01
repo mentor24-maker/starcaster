@@ -114,6 +114,12 @@
   font-weight: var(--bx-weight-h6, 800);
 }
 
+.builder-react-root.builder-public-site .builder-public-site-layout {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100vh;
+}
+
 /* Saved theme container styles (Builder: Themes → Styles) */
 .builder-react-root .builder-preview-shell.has-builder-theme-styles,
 .builder-react-root .builder-main.builder-workspace.has-builder-theme-styles {
