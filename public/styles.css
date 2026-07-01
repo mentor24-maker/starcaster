@@ -7551,7 +7551,7 @@ body.asset-associations-modal-open {
   align-items: end;
 }
 .builder-react-root .builder-meta-grid-pages {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(96px, 118px) minmax(132px, 188px) 112px;
+  grid-template-columns: minmax(0, 240px) minmax(0, 180px) minmax(0, 200px) minmax(96px, 118px) minmax(132px, 188px) 112px;
   align-items: end;
 }
 .builder-react-root .builder-meta-grid-pages .builder-meta-field-status select {
