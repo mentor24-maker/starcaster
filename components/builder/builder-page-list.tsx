@@ -2,7 +2,7 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary,
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
-import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars } from "./builder-utils";
+import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars, getThemeShellBackgroundSeedColor } from "./builder-utils";
 
 type SortField = "name" | "slug" | "template" | "visibility" | "updatedAt";
 type SortDir = "asc" | "desc";
@@ -927,7 +927,7 @@ export function BuilderPageList({
                 hideClear
                 showColorFieldLabel={false}
                 onChange={onUpdatePageBackground}
-                themeBackgroundColor={linkedTheme?.backgroundColor}
+                themeBackgroundColor={getThemeShellBackgroundSeedColor(linkedTheme) || undefined}
                 themeColors={themeColors}
                 themePrimaryColor={linkedTheme?.primaryColor}
               />

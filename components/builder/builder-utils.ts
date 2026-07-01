@@ -900,7 +900,7 @@ export type ThemeShellBackgroundSource = {
   backgroundColor?: string;
 } | null | undefined;
 
-/** Saved theme website background, with legacy fallback from palette Background. */
+/** Saved theme website background from Styles → Background only (not palette Background). */
 export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): BackgroundSettings {
   const saved = theme?.pageBackground;
   if (saved && typeof saved === "object") {
@@ -909,18 +909,10 @@ export function resolveThemePageBackground(theme: ThemeShellBackgroundSource): B
       return normalized;
     }
   }
-  const legacy = String(theme?.backgroundColor ?? "").trim();
-  if (legacy) {
-    return {
-      ...createDefaultBackgroundSettings(),
-      mode: "color",
-      color: legacy,
-    };
-  }
   return createDefaultBackgroundSettings();
 }
 
-/** Page background wins when set; otherwise use the linked theme default. */
+/** Page background wins when set; otherwise theme Styles → Background; palette is not used for the shell. */
 export function resolveShellPageBackground(
   pageBackground: BackgroundSettings | undefined,
   theme: ThemeShellBackgroundSource
@@ -930,6 +922,15 @@ export function resolveShellPageBackground(
     return page;
   }
   return resolveThemePageBackground(theme);
+}
+
+/** Primary color seed for background pickers — from theme Styles shell, not palette Background. */
+export function getThemeShellBackgroundSeedColor(theme: ThemeShellBackgroundSource): string {
+  const shell = resolveThemePageBackground(theme);
+  if (shell.mode === "color" || shell.mode === "gradient") {
+    return String(shell.color || "").trim();
+  }
+  return "";
 }
 
 export function getShellPageBackgroundStyle(
