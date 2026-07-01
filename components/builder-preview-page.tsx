@@ -14,9 +14,10 @@ import type { BuilderThemeStyles, CrmThemePalette, ThemeShellBackgroundSource } 
 import {
   builderThemeToCrmPalette,
   buildBuilderThemeStyles,
+  getBuilderThemePageMarginStyle,
   mergeCrmThemePalette,
 } from "@/components/builder/builder-utils";
-import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 
 type PreviewDraft = {
   name: string;
@@ -65,8 +66,8 @@ async function fetchBuilderTheme(themeId?: string): Promise<{
       headers: starcasterScopedHeaders(),
     });
     if (!res.ok) return {};
-    const data = await res.json() as { themes?: BuilderThemeRecord[] };
-    const themes = Array.isArray(data.themes) ? data.themes : [];
+    const data = await res.json() as Record<string, unknown>;
+    const themes = (unwrapEnvelope<BuilderThemeRecord[]>(data, "themes") ?? []) as BuilderThemeRecord[];
     const theme = themeId
       ? themes.find((entry) => String(entry.id || "") === themeId) || themes[0]
       : themes[0];
@@ -192,6 +193,8 @@ export function BuilderPreviewPage() {
         const storedPalette = parsed.themePalette;
         const storedStyles = parsed.themeStyles;
         const storedShellBackground = parsed.themeShellBackground;
+        const resolvedStyles =
+          buildBuilderThemeStyles(storedShellBackground) ?? storedStyles;
         const themeId = String(parsed.themeId || "").trim();
         setDraft({
           name: String(parsed.name ?? "").trim(),
@@ -199,19 +202,23 @@ export function BuilderPreviewPage() {
           theme: document.theme,
           layoutSections: document.layoutSections,
           themePalette: storedPalette,
-          themeStyles: storedStyles,
+          themeStyles: resolvedStyles,
           themeId,
           themeShellBackground: storedShellBackground,
         });
-        if (hasCrmPaletteColors(storedPalette) && storedStyles) {
+        if (hasCrmPaletteColors(storedPalette) && resolvedStyles) {
           setThemePalette(storedPalette);
-          setThemeStyles(storedStyles);
+          setThemeStyles(resolvedStyles);
           setThemeShellBackground(storedShellBackground ?? null);
           return;
         }
         fetchBuilderTheme(themeId).then((themeRecord) => {
           setThemePalette(mergeCrmThemePalette(storedPalette, themeRecord.palette));
-          setThemeStyles(storedStyles ?? themeRecord.styles);
+          setThemeStyles(
+            buildBuilderThemeStyles(storedShellBackground)
+              ?? themeRecord.styles
+              ?? resolvedStyles
+          );
           setThemeShellBackground(storedShellBackground ?? themeRecord.shellBackground ?? null);
         });
       } catch {
@@ -229,6 +236,9 @@ export function BuilderPreviewPage() {
       }
     }
   }, []);
+
+  const effectiveThemeStyles = themeStyles ?? draft?.themeStyles;
+  const pageMarginStyle = getBuilderThemePageMarginStyle(effectiveThemeStyles);
 
   return (
     <main className="admin-page">
@@ -288,16 +298,19 @@ export function BuilderPreviewPage() {
                 />
               </div>
             ) : (
-              <BuilderTemplatePreview
-                layoutSections={draft.layoutSections}
-                pageBackground={draft.pageBackground}
-                theme={draft.theme}
-                themePalette={themePalette}
-                themeStyles={themeStyles ?? draft.themeStyles}
-                themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
-                previewMode
-                showShell={false}
-              />
+              <div className="builder-theme-page-margin-layout" style={pageMarginStyle}>
+                <BuilderTemplatePreview
+                  layoutSections={draft.layoutSections}
+                  pageBackground={draft.pageBackground}
+                  theme={draft.theme}
+                  themePalette={themePalette}
+                  themeStyles={effectiveThemeStyles}
+                  themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
+                  previewMode
+                  showShell={false}
+                  applyThemePageMargins={false}
+                />
+              </div>
             )}
           </div>
         ) : loaded ? (

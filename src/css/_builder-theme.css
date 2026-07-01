@@ -114,10 +114,15 @@
   font-weight: var(--bx-weight-h6, 800);
 }
 
-.builder-react-root.builder-public-site .builder-public-site-layout {
+.builder-react-root.builder-public-site .builder-public-site-layout,
+.builder-react-root .builder-theme-page-margin-layout {
   box-sizing: border-box;
   width: 100%;
   min-height: 100vh;
+}
+
+.builder-react-root .builder-preview-device-frame .builder-theme-page-margin-layout {
+  min-height: 0;
 }
 
 /* Saved theme container styles (Builder: Themes → Styles) */
