@@ -13365,6 +13365,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 .builder-admin-nav-link {
   display: inline-block;
+  margin-top: -20px;
   padding: 3px 9px;
   background: rgba(15, 79, 143, 0.88);
   color: #fff;
