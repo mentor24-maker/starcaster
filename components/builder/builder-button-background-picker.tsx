@@ -28,6 +28,8 @@ type BuilderButtonBackgroundPickerProps = {
   onChooseImage?: () => void;
   onUploadImage?: (file: File | null) => void;
   themeColors?: Array<{ label: string; hex: string }>;
+  /** Popup title (e.g. "Page Background" in theme Styles). */
+  dialogTitle?: string;
 };
 
 export function BuilderButtonBackgroundPicker({
@@ -35,7 +37,8 @@ export function BuilderButtonBackgroundPicker({
   onChange,
   onChooseImage,
   onUploadImage,
-  themeColors = []
+  themeColors = [],
+  dialogTitle = "Background",
 }: BuilderButtonBackgroundPickerProps) {
   const popupId = useId();
   const [isOpen, setIsOpen] = useState(false);
@@ -129,9 +132,9 @@ export function BuilderButtonBackgroundPicker({
           className="builder-theme-color-popup"
           id={popupId}
           onClose={() => setIsOpen(false)}
-          title="Background"
+          title={dialogTitle}
         >
-          <div className="builder-button-background-mode-tabs" role="tablist" aria-label="Background type">
+          <div className="builder-button-background-mode-tabs" role="tablist" aria-label={`${dialogTitle} type`}>
             {buttonBackgroundModes.map((mode) => (
               <button
                 key={mode.value}
