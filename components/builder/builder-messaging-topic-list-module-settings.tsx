@@ -1,8 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { BuilderNumberSelectControl } from "./builder-inline-number-select";
+import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
+  BuilderThemeColorField,
   BuilderThemeColorSettingRow,
   type BuilderThemePalette
 } from "./builder-theme-color-field";
@@ -29,101 +32,110 @@ export function BuilderMessagingTopicListModuleSettings({
 
   return (
     <div className="builder-messaging-topic-list-settings">
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Layout">
-            <select value={s.layout ?? "pills"} onChange={(e) => set("layout", e.target.value)}>
-              <option value="pills">Pills</option>
-              <option value="list">List</option>
-              <option value="dropdown">Dropdown</option>
-            </select>
-          </BuilderSettingRow>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Layout" width="select-sm">
+          <select value={s.layout ?? "pills"} onChange={(e) => set("layout", e.target.value)}>
+            <option value="pills">Pills</option>
+            <option value="list">List</option>
+            <option value="dropdown">Dropdown</option>
+          </select>
+        </BuilderModuleField>
+        <BuilderModuleField label="Show 'All'" width="select-sm">
+          <select value={s.showAll ?? "true"} onChange={(e) => set("showAll", e.target.value)}>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </BuilderModuleField>
+        <BuilderModuleField label="Alignment" width="select-sm">
+          <select value={s.alignment ?? "left"} onChange={(e) => set("alignment", e.target.value)}>
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
 
-          <BuilderSettingRow label="Show 'All'">
-            <select value={s.showAll ?? "true"} onChange={(e) => set("showAll", e.target.value)}>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </BuilderSettingRow>
+      {(s.showAll ?? "true") === "true" ? (
+        <BuilderSettingRow label="'All' label" fullWidth>
+          <input
+            type="text"
+            value={s.allLabel ?? "All Topics"}
+            onChange={(e) => set("allLabel", e.target.value)}
+            placeholder="All Topics"
+          />
+        </BuilderSettingRow>
+      ) : null}
 
-          {(s.showAll ?? "true") === "true" ? (
-            <BuilderSettingRow label="'All' label">
-              <input
-                type="text"
-                value={s.allLabel ?? "All Topics"}
-                onChange={(e) => set("allLabel", e.target.value)}
-                placeholder="All Topics"
-              />
-            </BuilderSettingRow>
-          ) : null}
-
-          <BuilderSettingRow label="Alignment">
-            <select value={s.alignment ?? "left"} onChange={(e) => set("alignment", e.target.value)}>
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-
-        <div className="builder-button-setting-column">
-          <BuilderThemeColorSettingRow
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Active color" width="color">
+          <BuilderThemeColorField
+            dialogLabel="Active pill text color"
             fallback="#0f4f8f"
-            label="Active color"
             themeColors={themeColors}
             value={s.activeColor ?? "#0f4f8f"}
             onChange={(activeColor) => set("activeColor", activeColor)}
           />
-
-          <BuilderThemeColorSettingRow
+        </BuilderModuleField>
+        <BuilderModuleField label="Active bg" width="color">
+          <BuilderThemeColorField
+            dialogLabel="Active pill background"
             fallback="#0f4f8f"
-            label="Active bg"
             themeColors={themeColors}
             value={s.activeBg ?? "#0f4f8f"}
             onChange={(activeBg) => set("activeBg", activeBg)}
           />
-
-          <BuilderThemeColorSettingRow
+        </BuilderModuleField>
+        <BuilderModuleField label="Inactive color" width="color">
+          <BuilderThemeColorField
+            dialogLabel="Inactive pill text color"
             fallback="#587592"
-            label="Inactive color"
             themeColors={themeColors}
             value={s.inactiveColor ?? "#587592"}
             onChange={(inactiveColor) => set("inactiveColor", inactiveColor)}
           />
-
-          <BuilderThemeColorSettingRow
+        </BuilderModuleField>
+        <BuilderModuleField label="Inactive bg" width="color">
+          <BuilderThemeColorField
+            dialogLabel="Inactive pill background"
             fallback="#f0f4f8"
-            label="Inactive bg"
             themeColors={themeColors}
             value={s.inactiveBg ?? "#f0f4f8"}
             onChange={(inactiveBg) => set("inactiveBg", inactiveBg)}
           />
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
 
-          <BuilderSettingRow label="Border radius (px)">
-            <input
-              type="number" min={0} max={32} step={2}
-              value={s.borderRadius ?? "20"}
-              onChange={(e) => set("borderRadius", e.target.value)}
-            />
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Font size (px)">
-            <input
-              type="number" min={10} max={20} step={1}
-              value={s.fontSize ?? "13"}
-              onChange={(e) => set("fontSize", e.target.value)}
-            />
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Gap (px)">
-            <input
-              type="number" min={4} max={24} step={2}
-              value={s.gap ?? "8"}
-              onChange={(e) => set("gap", e.target.value)}
-            />
-          </BuilderSettingRow>
-        </div>
-      </div>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Radius" width="num">
+          <BuilderNumberSelectControl
+            value={s.borderRadius ?? "20"}
+            min={0}
+            max={32}
+            step={2}
+            fallback="20"
+            onChange={(borderRadius) => set("borderRadius", borderRadius)}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Font size" width="num">
+          <BuilderNumberSelectControl
+            value={s.fontSize ?? "13"}
+            min={10}
+            max={20}
+            fallback="13"
+            onChange={(fontSize) => set("fontSize", fontSize)}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Gap" width="num">
+          <BuilderNumberSelectControl
+            value={s.gap ?? "8"}
+            min={4}
+            max={24}
+            step={2}
+            fallback="8"
+            onChange={(gap) => set("gap", gap)}
+          />
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
 
       <BuilderSettingRow label="Post feed URL" fullWidth>
         <input
@@ -142,6 +154,29 @@ export function BuilderMessagingTopicListModuleSettings({
           placeholder="topic"
         />
       </BuilderSettingRow>
+
+      <details className="hanging-details">
+        <summary>Border</summary>
+        <div className="builder-module-form-row">
+          <BuilderThemeColorSettingRow
+            dialogLabel="Module border color"
+            fallback="#000000"
+            label="Color"
+            themeColors={themeColors}
+            value={s.moduleBorderColor || "#000000"}
+            onChange={(moduleBorderColor) => set("moduleBorderColor", moduleBorderColor)}
+          />
+          <BuilderSettingRow label="Width">
+            <BuilderNumberSelectControl
+              value={s.moduleBorderWidth ?? "0"}
+              min={0}
+              max={8}
+              fallback="0"
+              onChange={(moduleBorderWidth) => set("moduleBorderWidth", moduleBorderWidth)}
+            />
+          </BuilderSettingRow>
+        </div>
+      </details>
     </div>
   );
 }

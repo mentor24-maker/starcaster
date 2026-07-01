@@ -207,7 +207,7 @@ export function BuilderButtonDesignSettings({
             </BuilderSettingRow>
           </div>
           <div className="builder-button-setting-column">
-            <BuilderSettingRow label="V Padding">
+            <BuilderSettingRow label="Vertical Padding">
               <BuilderNumberSelectControl
                 value={settings.paddingY ?? "12"}
                 min={1}
@@ -216,7 +216,7 @@ export function BuilderButtonDesignSettings({
                 onChange={(value) => updateSetting("paddingY", value)}
               />
             </BuilderSettingRow>
-            <BuilderSettingRow label="H Padding">
+            <BuilderSettingRow label="Horizontal Padding">
               <BuilderNumberSelectControl
                 value={settings.paddingX ?? "24"}
                 min={1}
@@ -225,22 +225,40 @@ export function BuilderButtonDesignSettings({
                 onChange={(value) => updateSetting("paddingX", value)}
               />
             </BuilderSettingRow>
-            <BuilderSettingRow label="V Margin">
+            <BuilderSettingRow label="Top Margin">
               <BuilderNumberSelectControl
-                value={settings.verticalMargin ?? "0"}
+                value={settings.marginTop ?? settings.verticalMargin ?? "0"}
                 min={0}
                 max={160}
                 fallback="0"
-                onChange={(value) => updateSetting("verticalMargin", value)}
+                onChange={(value) => updateSetting("marginTop", value)}
               />
             </BuilderSettingRow>
-            <BuilderSettingRow label="H Margin">
+            <BuilderSettingRow label="Bottom Margin">
               <BuilderNumberSelectControl
-                value={settings.horizontalMargin ?? "0"}
+                value={settings.marginBottom ?? settings.verticalMargin ?? "0"}
                 min={0}
                 max={160}
                 fallback="0"
-                onChange={(value) => updateSetting("horizontalMargin", value)}
+                onChange={(value) => updateSetting("marginBottom", value)}
+              />
+            </BuilderSettingRow>
+            <BuilderSettingRow label="Left Margin">
+              <BuilderNumberSelectControl
+                value={settings.marginLeft ?? settings.horizontalMargin ?? "0"}
+                min={0}
+                max={160}
+                fallback="0"
+                onChange={(value) => updateSetting("marginLeft", value)}
+              />
+            </BuilderSettingRow>
+            <BuilderSettingRow label="Right Margin">
+              <BuilderNumberSelectControl
+                value={settings.marginRight ?? settings.horizontalMargin ?? "0"}
+                min={0}
+                max={160}
+                fallback="0"
+                onChange={(value) => updateSetting("marginRight", value)}
               />
             </BuilderSettingRow>
           </div>
