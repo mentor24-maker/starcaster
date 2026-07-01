@@ -844,6 +844,10 @@ export function getThemeRootVars(theme: BuilderTheme | undefined): CSSProperties
     if (lh) vars[`--bx-line-h${level}`] = String(lh);
     const fw = (scale as Record<string, number | undefined>)[`h${level}Fw`];
     if (fw) vars[`--bx-weight-h${level}`] = String(fw);
+    const mt = (scale as Record<string, number | undefined>)[`h${level}Mt`];
+    if (mt) vars[`--bx-margin-top-h${level}`] = `${mt}px`;
+    const mb = (scale as Record<string, number | undefined>)[`h${level}Mb`];
+    if (mb) vars[`--bx-margin-bottom-h${level}`] = `${mb}px`;
   }
 
   if (colors.linkUnderline === true) vars["--bx-link-decoration"] = "underline";
