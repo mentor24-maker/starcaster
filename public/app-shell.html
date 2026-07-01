@@ -2423,8 +2423,38 @@
                 <th><input id="assetsSelectAllVisible" class="assets-select-checkbox" type="checkbox" aria-label="Select all visible assets" /></th>
                 <th></th>
                 <th><input id="assetsFilterName" placeholder="Asset Name" /></th>
-                <th><input id="assetsFilterWidth" type="number" min="1" step="1" placeholder="Width" /></th>
-                <th><input id="assetsFilterHeight" type="number" min="1" step="1" placeholder="Height" /></th>
+                <th>
+                  <select id="assetsFilterWidth">
+                    <option value="">All Widths</option>
+                    <option value="3840">3840</option>
+                    <option value="2560">2560</option>
+                    <option value="1920">1920</option>
+                    <option value="1440">1440</option>
+                    <option value="1280">1280</option>
+                    <option value="960">960</option>
+                    <option value="720">720</option>
+                    <option value="480">480</option>
+                    <option value="240">240</option>
+                    <option value="other">Other</option>
+                    <option value="none">None</option>
+                  </select>
+                </th>
+                <th>
+                  <select id="assetsFilterHeight">
+                    <option value="">All Heights</option>
+                    <option value="2160">2160</option>
+                    <option value="1440">1440</option>
+                    <option value="1080">1080</option>
+                    <option value="960">960</option>
+                    <option value="720">720</option>
+                    <option value="640">640</option>
+                    <option value="480">480</option>
+                    <option value="320">320</option>
+                    <option value="160">160</option>
+                    <option value="other">Other</option>
+                    <option value="none">None</option>
+                  </select>
+                </th>
                 <th>
                 <select id="assetsFilterType">
                   <option value="">All Types</option>
@@ -10940,7 +10970,7 @@
   <script src="/js/assetFieldImport.js?v=d6664ab6"></script>
   <script src="/js/pageHeadingNav.js?v=5379875e"></script>
   <script src="/js/assetImageEditor.js?v=070701f6"></script>
-  <script src="/js/assets.js?v=aca94974"></script>
+  <script src="/js/assets.js?v=88495b46"></script>
   <script src="/js/assetsVideo.js?v=efbc3414"></script>
   <script src="/js/assetCategories.js?v=ca905f9f"></script>
   <script src="/js/channels.js?v=5f2bf879"></script>
