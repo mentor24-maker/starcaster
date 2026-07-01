@@ -1153,6 +1153,9 @@ export function BuilderTemplatePreview({
   projectId = ""
 }: BuilderTemplatePreviewProps) {
   const shellBackground = getShellBackgroundLayers(pageBackground, themeShellBackground);
+  const hasResolvedShellBackground = Boolean(
+    shellBackground.inlineBackground || shellBackground.backdrop
+  );
   // Theme tokens go first so the page background (and any per-module inline
   // styles further down) still win where they overlap.
   const rootStyle = {
@@ -1178,7 +1181,7 @@ export function BuilderTemplatePreview({
 
   /** Live and builder previews need the shell so overlay-flow rows stack above the game wash. */
   const shellClassName = !emailPreview
-    ? `builder-preview-shell${themeStyles ? " has-builder-theme-styles" : ""}${shellBackground.backdrop ? " has-shell-background-backdrop" : ""}`
+    ? `builder-preview-shell${themeStyles ? " has-builder-theme-styles" : ""}${hasResolvedShellBackground ? " has-resolved-shell-background" : ""}${shellBackground.backdrop ? " has-shell-background-backdrop" : ""}`
     : undefined;
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
 
