@@ -171,6 +171,10 @@ export type BuilderThemeTypography = {
     h1Lh?: number; h2Lh?: number; h3Lh?: number; h4Lh?: number; h5Lh?: number; h6Lh?: number;
     /** Per-heading font-weight overrides (0 = inherit; typical values 400–900). */
     h1Fw?: number; h2Fw?: number; h3Fw?: number; h4Fw?: number; h5Fw?: number; h6Fw?: number;
+    /** Per-heading top-margin overrides in px (0 = inherit baseline). */
+    h1Mt?: number; h2Mt?: number; h3Mt?: number; h4Mt?: number; h5Mt?: number; h6Mt?: number;
+    /** Per-heading bottom-margin overrides in px (0 = inherit baseline). */
+    h1Mb?: number; h2Mb?: number; h3Mb?: number; h4Mb?: number; h5Mb?: number; h6Mb?: number;
   };
   /** Semantic color roles wired to the palette, not raw hex at call sites. */
   colors: {
@@ -941,7 +945,19 @@ export function normalizeTheme(value: unknown): BuilderTheme {
         ...(normalizeThemeNumber(scale.h3Fw, 100, 900) ? { h3Fw: normalizeThemeNumber(scale.h3Fw, 100, 900) } : {}),
         ...(normalizeThemeNumber(scale.h4Fw, 100, 900) ? { h4Fw: normalizeThemeNumber(scale.h4Fw, 100, 900) } : {}),
         ...(normalizeThemeNumber(scale.h5Fw, 100, 900) ? { h5Fw: normalizeThemeNumber(scale.h5Fw, 100, 900) } : {}),
-        ...(normalizeThemeNumber(scale.h6Fw, 100, 900) ? { h6Fw: normalizeThemeNumber(scale.h6Fw, 100, 900) } : {})
+        ...(normalizeThemeNumber(scale.h6Fw, 100, 900) ? { h6Fw: normalizeThemeNumber(scale.h6Fw, 100, 900) } : {}),
+        ...(normalizeThemeNumber(scale.h1Mt, -400, 400) ? { h1Mt: normalizeThemeNumber(scale.h1Mt, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h2Mt, -400, 400) ? { h2Mt: normalizeThemeNumber(scale.h2Mt, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h3Mt, -400, 400) ? { h3Mt: normalizeThemeNumber(scale.h3Mt, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h4Mt, -400, 400) ? { h4Mt: normalizeThemeNumber(scale.h4Mt, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h5Mt, -400, 400) ? { h5Mt: normalizeThemeNumber(scale.h5Mt, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h6Mt, -400, 400) ? { h6Mt: normalizeThemeNumber(scale.h6Mt, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h1Mb, -400, 400) ? { h1Mb: normalizeThemeNumber(scale.h1Mb, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h2Mb, -400, 400) ? { h2Mb: normalizeThemeNumber(scale.h2Mb, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h3Mb, -400, 400) ? { h3Mb: normalizeThemeNumber(scale.h3Mb, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h4Mb, -400, 400) ? { h4Mb: normalizeThemeNumber(scale.h4Mb, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h5Mb, -400, 400) ? { h5Mb: normalizeThemeNumber(scale.h5Mb, -400, 400) } : {}),
+        ...(normalizeThemeNumber(scale.h6Mb, -400, 400) ? { h6Mb: normalizeThemeNumber(scale.h6Mb, -400, 400) } : {})
       },
       colors: {
         text: normalizeThemeColor(colors.text),

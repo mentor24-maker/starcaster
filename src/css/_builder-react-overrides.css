@@ -228,23 +228,24 @@
 
 .builder-react-root .builder-theme-scale-col-headers {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(30px, 0.5fr) repeat(5, minmax(0, 1fr));
+  gap: 6px;
   padding: 2px 6px;
 }
 
 .builder-react-root .builder-theme-scale-col-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
   color: #8aa0b4;
   text-align: left;
+  line-height: 1.2;
 }
 
 .builder-react-root .builder-theme-scale-dual-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(30px, 0.5fr) repeat(5, minmax(0, 1fr));
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .builder-react-root .builder-theme-scale-dual-row .builder-setting-label {

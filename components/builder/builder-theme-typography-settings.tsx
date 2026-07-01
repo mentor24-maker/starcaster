@@ -200,6 +200,8 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
           <span className="builder-theme-scale-col-label">Size (px)</span>
           <span className="builder-theme-scale-col-label">Line height</span>
           <span className="builder-theme-scale-col-label">Weight</span>
+          <span className="builder-theme-scale-col-label">Top margin (px)</span>
+          <span className="builder-theme-scale-col-label">Bottom margin (px)</span>
         </div>
         {(["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((h) => (
           <div key={h} className="builder-theme-scale-dual-row">
@@ -230,6 +232,24 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
               value={(scale as Record<string, number | undefined>)[`${h}Fw`] || ""}
               placeholder="800"
               onChange={(event) => updateScale(`${h}Fw`, Number.parseInt(event.target.value, 10) || 0)}
+            />
+            <input
+              type="number"
+              min={-400}
+              max={400}
+              step={1}
+              value={(scale as Record<string, number | undefined>)[`${h}Mt`] || ""}
+              placeholder="Auto"
+              onChange={(event) => updateScale(`${h}Mt`, Number.parseInt(event.target.value, 10) || 0)}
+            />
+            <input
+              type="number"
+              min={-400}
+              max={400}
+              step={1}
+              value={(scale as Record<string, number | undefined>)[`${h}Mb`] || ""}
+              placeholder="Auto"
+              onChange={(event) => updateScale(`${h}Mb`, Number.parseInt(event.target.value, 10) || 0)}
             />
           </div>
         ))}
