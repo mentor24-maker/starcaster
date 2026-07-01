@@ -467,6 +467,20 @@ describe("getBuilderThemePageMarginStyle", () => {
   });
 });
 
+describe("buildBuilderThemeStyles", () => {
+  it("reads margin fields from snake_case theme rows", () => {
+    const styles = buildBuilderThemeStyles({
+      top_margin: 12,
+      bottom_margin: 24,
+      side_margins: 80,
+    });
+
+    expect(styles?.topMargin).toBe(12);
+    expect(styles?.bottomMargin).toBe(24);
+    expect(styles?.sideMargins).toBe(80);
+  });
+});
+
 describe("resolveThemePageBackground", () => {
   it("uses theme Styles background instead of palette Background", () => {
     const resolved = resolveThemePageBackground({

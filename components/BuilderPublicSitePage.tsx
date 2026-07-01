@@ -5,6 +5,7 @@ import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   builderThemeToCrmPalette,
   buildBuilderThemeStyles,
+  getBuilderThemePageMarginStyle,
   mergeCrmThemePalette,
   type BuilderThemeStyles,
   type CrmThemePalette,
@@ -323,6 +324,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     ? buildBuilderThemeStyles(page.themeShell)
     : themeStyles;
   const effectiveThemeShellBackground = page.themeShell ?? themeShellBackground;
+  const pageMarginStyle = getBuilderThemePageMarginStyle(effectiveThemeStyles);
 
   return (
     <>
@@ -336,15 +338,18 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           Admin
         </a>
       ) : null}
-      <BuilderTemplatePreview
-        layoutSections={sections}
-        pageBackground={page.pageBackground}
-        theme={page.theme}
-        themePalette={themePalette ?? pageThemePalette(page)}
-        themeStyles={effectiveThemeStyles}
-        themeShellBackground={effectiveThemeShellBackground}
-        projectId={projectId}
-      />
+      <div className="builder-public-site-layout" style={pageMarginStyle}>
+        <BuilderTemplatePreview
+          layoutSections={sections}
+          pageBackground={page.pageBackground}
+          theme={page.theme}
+          themePalette={themePalette ?? pageThemePalette(page)}
+          themeStyles={effectiveThemeStyles}
+          themeShellBackground={effectiveThemeShellBackground}
+          applyThemePageMargins={false}
+          projectId={projectId}
+        />
+      </div>
     </>
   );
 }
