@@ -148,6 +148,18 @@ export function getModuleOuterSpacingStyle(settings: Record<string, string>): CS
   };
 }
 
+export function getButtonModuleOuterSpacingStyle(settings: Record<string, string>): CSSProperties {
+  const legacyVertical = settings.verticalMargin;
+  const legacyHorizontal = settings.horizontalMargin;
+
+  return {
+    marginTop: `${normalizeSpacingValue(settings.marginTop ?? legacyVertical, "0", 0, 160)}px`,
+    marginBottom: `${normalizeSpacingValue(settings.marginBottom ?? legacyVertical, "0", 0, 160)}px`,
+    marginLeft: `${normalizeSpacingValue(settings.marginLeft ?? legacyHorizontal, "0", 0, 160)}px`,
+    marginRight: `${normalizeSpacingValue(settings.marginRight ?? legacyHorizontal, "0", 0, 160)}px`
+  };
+}
+
 export function getSplitVerticalMarginStyle(top: unknown, bottom: unknown): CSSProperties {
   return {
     marginTop: `${normalizeSpacingValue(top, "0", 0, 160)}px`,
