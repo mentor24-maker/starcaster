@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   builderThemeToCrmPalette,
@@ -319,6 +319,16 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     ? page.layoutSections
     : filterPublicSections(page.layoutSections);
 
+  const effectiveThemeStyles = useMemo(() => {
+    if (page.themeShell) return buildBuilderThemeStyles(page.themeShell);
+    return themeStyles;
+  }, [page.themeShell, themeStyles]);
+
+  const effectiveThemeShellBackground = useMemo(() => {
+    if (page.themeShell) return page.themeShell;
+    return themeShellBackground;
+  }, [page.themeShell, themeShellBackground]);
+
   return (
     <>
       {isAdminNav ? (
@@ -336,8 +346,8 @@ export function BuilderPublicSitePage({ projectId }: Props) {
         pageBackground={page.pageBackground}
         theme={page.theme}
         themePalette={themePalette ?? pageThemePalette(page)}
-        themeStyles={themeStyles}
-        themeShellBackground={themeShellBackground}
+        themeStyles={effectiveThemeStyles}
+        themeShellBackground={effectiveThemeShellBackground}
         projectId={projectId}
       />
     </>
