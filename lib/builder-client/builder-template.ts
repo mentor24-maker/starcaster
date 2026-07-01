@@ -80,7 +80,8 @@ export type BuilderTemplateModuleType =
   | "messaging-tag-list"
   | "admin-team-users"
   | "admin-modules"
-  | "admin-login";
+  | "admin-login"
+  | "admin-nav-link";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -1191,7 +1192,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "messaging-tag-list" ||
     type === "admin-team-users" ||
     type === "admin-modules" ||
-    type === "admin-login"
+    type === "admin-login" ||
+    type === "admin-nav-link"
   ) {
     return type;
   }
@@ -1380,6 +1382,17 @@ export function normalizeBuilderModuleSettingsForType(
       : "none";
     settings.lineHeight = normalizeDecimalValue(settings.lineHeight, "1.2", 0.8, 3);
     settings.letterSpacing = normalizeDecimalValue(settings.letterSpacing, "0", -5, 20);
+  }
+
+  if (type === "button") {
+    const legacyVertical = settings.verticalMargin;
+    const legacyHorizontal = settings.horizontalMargin;
+    settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacyVertical, "0", 0, 160);
+    settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacyVertical, "0", 0, 160);
+    settings.marginLeft = normalizeSpacingValue(settings.marginLeft ?? legacyHorizontal, "0", 0, 160);
+    settings.marginRight = normalizeSpacingValue(settings.marginRight ?? legacyHorizontal, "0", 0, 160);
+    settings.paddingX = normalizeSpacingValue(settings.paddingX, "24", 1, 50);
+    settings.paddingY = normalizeSpacingValue(settings.paddingY, "12", 1, 50);
   }
 
   if (type === "current-poll") {
@@ -2223,6 +2236,11 @@ export function createEmptyModule(
                             buttonText: "Sign In",
                             showForgotPassword: "true",
                             successRedirect: "/admin-dashboard"
+                          }
+                      : type === "admin-nav-link"
+                        ? {
+                            linkText: "Admin",
+                            linkHref: "/admin-login"
                           }
           : {};
 

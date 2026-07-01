@@ -83,6 +83,7 @@ import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-ta
 import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-module-settings";
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
 import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
+import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -97,6 +98,7 @@ import {
   isPollCategoryListPanelTransparent,
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
+  getButtonModuleOuterSpacingStyle,
   getVerticalMarginStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
@@ -1931,6 +1933,31 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "admin-nav-link") {
+    const linkText = module.settings.linkText || "Admin";
+    return (
+      <div className="builder-module-preview-copy" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 14px",
+            borderRadius: 6,
+            background: "#0f4f8f",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "default"
+          }}
+        >
+          {linkText}
+        </span>
+        <span style={{ fontSize: 11, color: "#587592" }}>Visible only when the admin cookie is set</span>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
@@ -3617,6 +3644,7 @@ export function BuilderModuleCard({
     const isAdminTeamUsersModule = module.type === "admin-team-users";
     const isAdminModulesModule = module.type === "admin-modules";
     const isAdminLoginModule = module.type === "admin-login";
+    const isAdminNavLinkModule = module.type === "admin-nav-link";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3628,7 +3656,9 @@ export function BuilderModuleCard({
           : {}),
         ...(isHeadingModule
           ? getModuleMarginStyle(module.settings)
-          : module.type === "button" || isSocialModule
+          : module.type === "button"
+            ? getButtonModuleOuterSpacingStyle(module.settings)
+            : isSocialModule
             ? getModuleOuterSpacingStyle(module.settings)
             : isFloatingImage || isReminderModule
               ? {}
@@ -3857,6 +3887,8 @@ export function BuilderModuleCard({
               <BuilderAdminModulesModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminLoginModule ? (
               <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminNavLinkModule ? (
+              <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
@@ -4286,7 +4318,8 @@ export function BuilderModuleCard({
           module.type !== "reminder" &&
           module.type !== "button" &&
           module.type !== "heading" &&
-          module.type !== "blog-post-list" ? (
+          module.type !== "blog-post-list" &&
+          module.type !== "admin-nav-link" ? (
             <label className="field">
               <span>Content</span>
               {module.type === "text" ? (
