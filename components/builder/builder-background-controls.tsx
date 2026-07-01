@@ -46,6 +46,9 @@ export function BuilderBackgroundControls({
 
   function handleModeChange(newMode: BackgroundSettings["mode"]) {
     onChange((current) => {
+      if (newMode === "none") {
+        return createDefaultBackgroundSettings();
+      }
       const next = { ...current, mode: newMode };
       if (newMode === "color" && themeBackgroundColor) {
         next.color = themeBackgroundColor;
@@ -117,7 +120,7 @@ export function BuilderBackgroundControls({
               value={background.color}
               opacity={background.opacity}
               onChangeOpacity={(opacity) => onChange((current) => ({ ...current, opacity }))}
-              onClear={() => onChange((current) => ({ ...current, mode: "none" }))}
+              onClear={() => onChange(() => createDefaultBackgroundSettings())}
               onChange={(color) =>
                 onChange((current) => ({
                   ...current,
@@ -223,12 +226,17 @@ export function BuilderBackgroundControls({
           <span>{label}</span>
           <select
             value={background.mode}
-            onChange={(event) =>
+            onChange={(event) => {
+              const mode = event.target.value as BackgroundSettings["mode"];
+              if (mode === "none") {
+                onChange(() => createDefaultBackgroundSettings());
+                return;
+              }
               onChange((current) => ({
                 ...current,
-                mode: event.target.value as BackgroundSettings["mode"]
-              }))
-            }
+                mode
+              }));
+            }}
           >
             <option value="none">None</option>
             <option value="color">Color</option>
@@ -247,7 +255,7 @@ export function BuilderBackgroundControls({
               value={background.color}
               opacity={background.opacity}
               onChangeOpacity={(opacity) => onChange((current) => ({ ...current, opacity }))}
-              onClear={() => onChange((current) => ({ ...current, mode: "none" }))}
+              onClear={() => onChange(() => createDefaultBackgroundSettings())}
               onChange={(color) =>
                 onChange((current) => ({
                   ...current,
