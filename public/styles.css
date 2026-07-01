@@ -1077,13 +1077,13 @@ select:focus {
   border: 1px solid var(--border-light);
   border-radius: 10px;
 }
-table {
+table:not(.builder-module-preview-table):not(.builder-preview-table) {
   width: 100%;
   border-collapse: collapse;
   background: var(--bg-surface);
 }
-th,
-td {
+table:not(.builder-module-preview-table):not(.builder-preview-table) th,
+table:not(.builder-module-preview-table):not(.builder-preview-table) td {
   text-align: left;
   border-bottom: 1px solid var(--border-light);
   padding: 0.65rem 0.85rem;
@@ -1091,7 +1091,7 @@ td {
   color: var(--ink-primary);
   vertical-align: middle;
 }
-thead tr:not(.table-filter-row) th {
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th {
   background: #000;
   color: #fff;
   font-weight: 700;
@@ -1101,11 +1101,11 @@ thead tr:not(.table-filter-row) th {
   border-bottom: none;
   transition: background-color 0.15s, color 0.15s;
 }
-thead tr:not(.table-filter-row) th:hover {
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th:hover {
   background: #b8e0ff;
   color: #0b3d7a;
 }
-thead tr:not(.table-filter-row) th:last-child {
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th:last-child {
   text-align: center;
 }
 .table-filter-row th,
@@ -1114,10 +1114,10 @@ thead tr:not(.table-filter-row) th:last-child {
   border-bottom: 1px solid var(--border-light);
   cursor: default;
 }
-tbody tr {
+table:not(.builder-module-preview-table):not(.builder-preview-table) tbody tr {
   transition: background-color 0.15s ease;
 }
-tbody tr:hover {
+table:not(.builder-module-preview-table):not(.builder-preview-table) tbody tr:hover {
   background-color: var(--bg-page);
 }
 .stat-col-header {

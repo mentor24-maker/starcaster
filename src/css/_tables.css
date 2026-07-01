@@ -11,16 +11,21 @@
   border-radius: 10px;
 }
 
-/* --- Base table --- */
-table {
+/* --- Base table ---
+   :not(.builder-module-preview-table):not(.builder-preview-table) keeps
+   these admin CRUD styles off the Builder's public-facing "table" module,
+   which renders a plain <table> of its own (e.g. used as a flag/language
+   picker) and must not inherit admin hover/header chrome. Not scoped
+   positively to .table-wrap since several admin tables render without it. */
+table:not(.builder-module-preview-table):not(.builder-preview-table) {
   width: 100%;
   border-collapse: collapse;
   background: var(--bg-surface);
 }
 
 /* --- All cells --- */
-th,
-td {
+table:not(.builder-module-preview-table):not(.builder-preview-table) th,
+table:not(.builder-module-preview-table):not(.builder-preview-table) td {
   text-align: left;
   border-bottom: 1px solid var(--border-light);
   padding: 0.65rem 0.85rem;
@@ -33,7 +38,7 @@ td {
    Black background, bold white text, left-aligned.
    Clickable for sorting; cursor indicates interactivity.
    Hover: light-blue text on dark-blue background.           */
-thead tr:not(.table-filter-row) th {
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th {
   background: #000;
   color: #fff;
   font-weight: 700;
@@ -44,13 +49,13 @@ thead tr:not(.table-filter-row) th {
   transition: background-color 0.15s, color 0.15s;
 }
 
-thead tr:not(.table-filter-row) th:hover {
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th:hover {
   background: #b8e0ff;
   color: #0b3d7a;
 }
 
 /* Actions column header — centered */
-thead tr:not(.table-filter-row) th:last-child {
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th:last-child {
   text-align: center;
 }
 
@@ -64,11 +69,11 @@ thead tr:not(.table-filter-row) th:last-child {
 }
 
 /* --- Data rows --- */
-tbody tr {
+table:not(.builder-module-preview-table):not(.builder-preview-table) tbody tr {
   transition: background-color 0.15s ease;
 }
 
-tbody tr:hover {
+table:not(.builder-module-preview-table):not(.builder-preview-table) tbody tr:hover {
   background-color: var(--bg-page);
 }
 
