@@ -18,6 +18,7 @@ import {
   crmFormStylesToRenderStyles,
   publicFormFields
 } from "../lib/crmFormStyles.js";
+import { resolveCrmFormStyleSnapshot } from "./builder/builder-crm-form-module-settings";
 import {
   ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
@@ -72,6 +73,7 @@ import {
   getModuleBackgroundSettings,
   getSectionMarginStyle,
   getModuleMarginStyle,
+  getModuleOuterSpacingStyle,
   getVerticalMarginStyle,
   getVideoEmbedSource,
   isVideoMedia
@@ -405,7 +407,9 @@ function CrmFormPreview({
 
   const renderContext = buildCrmFormRenderContext(themePalette, theme?.typography);
   const themeContextStyle = getCrmFormThemeContextStyle(themePalette, theme);
-  const renderStyles = crmFormStylesToRenderStyles(form.styles, form.accentColor, renderContext);
+  const styleSnapshot = resolveCrmFormStyleSnapshot(settings);
+  const effectiveStyles = styleSnapshot ?? form.styles;
+  const renderStyles = crmFormStylesToRenderStyles(effectiveStyles, form.accentColor, renderContext);
   const visibleFields = publicFormFields(form.fields ?? []);
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
@@ -1410,7 +1414,9 @@ function BuilderSectionPreview({
                         ? getModuleMarginStyle(module.settings)
                         : module.type === "button"
                           ? getButtonModuleOuterSpacingStyle(module.settings)
-                          : getVerticalMarginStyle(module.settings.verticalMargin)),
+                          : module.type === "crm-form" || module.type === "social"
+                            ? getModuleOuterSpacingStyle(module.settings)
+                            : getVerticalMarginStyle(module.settings.verticalMargin)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize

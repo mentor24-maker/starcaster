@@ -4,7 +4,6 @@ import type { RichTextGalleryBinding } from "@/components/builder/builder-types"
 import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
-import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import type {
   BackgroundSettings,
@@ -81,6 +80,7 @@ import { BuilderBlogSearchResultsModuleSettings } from "./builder-blog-search-re
 import { BuilderMessagingTopicListModuleSettings } from "./builder-messaging-topic-list-module-settings";
 import { BuilderMessagingTagListModuleSettings } from "./builder-messaging-tag-list-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
+import { BuilderCrmFormModuleSettings } from "./builder-crm-form-module-settings";
 import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-module-settings";
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
 import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
@@ -3545,44 +3545,6 @@ function ModuleEditorWrapper({
   return <div className="builder-module-editor">{children}</div>;
 }
 
-function CrmFormModuleSettings({ crmFormId, onChange }: { crmFormId: string; onChange: (id: string) => void }) {
-  const [forms, setForms] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/crm/forms", { credentials: "include", headers: starcasterScopedHeaders() })
-      .then((r) => r.json())
-      .then((d) => {
-        const list = d?.forms ?? d?.data ?? [];
-        setForms(Array.isArray(list) ? list : []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div className="builder-contact-form-settings">
-      <label className="field">
-        <span>CRM Form</span>
-        {loading ? (
-          <select disabled><option>Loading forms…</option></select>
-        ) : forms.length === 0 ? (
-          <div className="builder-module-runtime-note" style={{ marginTop: 0 }}>
-            <p>No CRM forms found. Create one in <strong>Builder › CRM › Forms</strong>.</p>
-          </div>
-        ) : (
-          <select value={crmFormId} onChange={(e) => onChange(e.target.value)}>
-            <option value="">— Select a form —</option>
-            {forms.map((f) => (
-              <option key={f.id} value={f.id}>{f.name || f.id}</option>
-            ))}
-          </select>
-        )}
-      </label>
-    </div>
-  );
-}
-
 export function BuilderModuleCard({
   module,
   sectionId,
@@ -3665,6 +3627,7 @@ export function BuilderModuleCard({
     const isMessagingTopicListModule = module.type === "messaging-topic-list";
     const isMessagingTagListModule = module.type === "messaging-tag-list";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
+    const isCrmFormModule = module.type === "crm-form";
     const isAdminTeamUsersModule = module.type === "admin-team-users";
     const isAdminModulesModule = module.type === "admin-modules";
     const isAdminLoginModule = module.type === "admin-login";
@@ -3682,7 +3645,7 @@ export function BuilderModuleCard({
           ? getModuleMarginStyle(module.settings)
           : module.type === "button"
             ? getButtonModuleOuterSpacingStyle(module.settings)
-            : isSocialModule
+            : isSocialModule || isCrmFormModule
             ? getModuleOuterSpacingStyle(module.settings)
             : isFloatingImage || isReminderModule
               ? {}
@@ -3905,6 +3868,15 @@ export function BuilderModuleCard({
               <BuilderMessagingTagListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isCrmContactsTableModule ? (
               <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isCrmFormModule ? (
+              <BuilderCrmFormModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
             ) : isAdminTeamUsersModule ? (
               <BuilderAdminTeamUsersModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminModulesModule ? (
@@ -3946,7 +3918,7 @@ export function BuilderModuleCard({
                   />
                 </BuilderSettingRow>
               </div>
-            ) : isPollCategoryListModule ? null : isReminderModule ? null : isTableModule ? null : isFloatingImage ? (
+            ) : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
               <div className="builder-floating-image-module-chrome">
                 <BuilderBackgroundControls
                   background={getModuleBackgroundSettings(module.settings)}
@@ -4114,18 +4086,6 @@ export function BuilderModuleCard({
                 </div>
               ) : null}
             </div>
-          )}
-
-          {module.type === "crm-form" && (
-            <CrmFormModuleSettings
-              crmFormId={module.settings.crmFormId ?? ""}
-              onChange={(id) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, crmFormId: id }
-                }))
-              }
-            />
           )}
 
           {module.type === "player-portal" ? (
