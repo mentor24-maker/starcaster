@@ -634,7 +634,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   position: fixed;
   z-index: 9999;
   /* Fallback position used until JS calculates the language-icon location. */
-  bottom: 72px;
+  top: 10px;
   right: 12px;
   padding: 3px 9px;
   background: rgba(15, 79, 143, 0.88);

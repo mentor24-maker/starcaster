@@ -13343,7 +13343,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: block;
   position: fixed;
   z-index: 9999;
-  bottom: 72px;
+  top: 10px;
   right: 12px;
   padding: 3px 9px;
   background: rgba(15, 79, 143, 0.88);
