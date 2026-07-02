@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(vercel --version)",
+      "Bash(vercel logs *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/block_generated_edits.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking for generated-file edits"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/warn_stale_artifacts.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking for stale artifacts"
+          }
+        ]
+      }
+    ]
+  }
+}
