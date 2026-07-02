@@ -12,6 +12,7 @@ export type AdminMediaItem = {
   badge?: boolean;
   mediaCategory?: string;
   mediaType?: string;
+  topic?: string;
   aspect?: GalleryMediaAspect;
   createdAt?: string;
 };

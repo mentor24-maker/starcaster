@@ -23,6 +23,7 @@ type StarcasterAsset = {
   assetName?: string;
   assetType?: string;
   category?: string;
+  topic?: string;
   aspect?: string;
   location?: string;
   thumbnailUrl?: string;
@@ -57,6 +58,7 @@ export function assetToAdminMediaItem(asset: StarcasterAsset): AdminMediaItem | 
     extension,
     mediaCategory: String(asset.category ?? '').trim() || undefined,
     mediaType: String(asset.assetType ?? '').trim() || undefined,
+    topic: String(asset.topic ?? '').trim() || undefined,
     aspect: asset.aspect ? normalizeGalleryMediaAspect(asset.aspect) : undefined,
     createdAt: asset.createdAt || undefined
   };
@@ -88,6 +90,11 @@ function matchesFilters(item: AdminMediaItem, filters: GalleryMediaFilters, file
       negated: filters.not.mediaType,
       active: filters.mediaType.length > 0,
       matches: (item.mediaType ?? '').toLowerCase() === filters.mediaType.toLowerCase()
+    },
+    {
+      negated: filters.not.topic,
+      active: filters.topic.length > 0,
+      matches: (item.topic ?? '').toLowerCase() === filters.topic.toLowerCase()
     },
     {
       negated: filters.not.aspect,

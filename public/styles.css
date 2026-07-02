@@ -10460,7 +10460,7 @@ body.asset-associations-modal-open {
   z-index: 1000;
 }
 .builder-react-root .builder-gallery-modal {
-  width: min(1040px, 100%);
+  width: min(80vw, calc(100vw - 48px));
   max-height: min(85vh, calc(100dvh - 48px));
   overflow: hidden;
   border-radius: 28px;
@@ -10598,7 +10598,7 @@ body.asset-associations-modal-open {
 }
 .builder-react-root .builder-gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 16px;
 }
 .builder-react-root .admin-gallery-media-grid {

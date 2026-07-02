@@ -9,6 +9,7 @@ export type GalleryMediaFilterNegation = {
   kind: boolean;
   mediaCategory: boolean;
   mediaType: boolean;
+  topic: boolean;
   aspect: boolean;
 };
 
@@ -18,6 +19,7 @@ export const DEFAULT_GALLERY_MEDIA_FILTER_NEGATION: GalleryMediaFilterNegation =
   kind: false,
   mediaCategory: false,
   mediaType: false,
+  topic: false,
   aspect: false
 };
 
@@ -27,6 +29,7 @@ export type GalleryMediaFilters = {
   kind: GalleryMediaKindFilter;
   mediaCategory: string;
   mediaType: string;
+  topic: string;
   aspect: "" | GalleryMediaAspect;
   requirePoll: boolean;
   sort: GalleryMediaSort;
@@ -39,6 +42,7 @@ export const DEFAULT_GALLERY_MEDIA_FILTERS: GalleryMediaFilters = {
   kind: "",
   mediaCategory: "",
   mediaType: "",
+  topic: "",
   aspect: "",
   requirePoll: false,
   sort: "name_asc",
@@ -57,6 +61,8 @@ function filterValueActive(filters: GalleryMediaFilters, key: keyof GalleryMedia
       return filters.mediaCategory.length > 0;
     case "mediaType":
       return filters.mediaType.length > 0;
+    case "topic":
+      return filters.topic.length > 0;
     case "aspect":
       return filters.aspect.length > 0;
     default:
@@ -71,6 +77,7 @@ export function hasActiveGalleryMediaFilters(filters: GalleryMediaFilters): bool
     filters.kind.length > 0 ||
     filters.mediaCategory.length > 0 ||
     filters.mediaType.length > 0 ||
+    filters.topic.length > 0 ||
     filters.aspect.length > 0 ||
     filters.requirePoll ||
     filters.sort !== DEFAULT_GALLERY_MEDIA_FILTERS.sort ||
