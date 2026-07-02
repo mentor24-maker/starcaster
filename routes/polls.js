@@ -93,7 +93,7 @@ async function handle(req, res, pathname, method) {
     }
   }
 
-  // POST /api/polls/import/advanced — Normie scoring CSV (all columns)
+  // POST /api/polls/import/advanced — legacy WYR scoring CSV (all columns)
   if (pathname === '/api/polls/import/advanced' && method === 'POST') {
     try {
       const body = await parseJsonBody(req);

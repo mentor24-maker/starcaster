@@ -28,7 +28,7 @@ describe("sanitizeRichTextHtml", () => {
   });
 
   it("keeps gallery images with safe src", () => {
-    const clean = sanitizeRichTextHtml('<p>Hi</p><img src="/gallery/test.png" alt="Normie" />');
+    const clean = sanitizeRichTextHtml('<p>Hi</p><img src="/gallery/test.png" alt="Sample" />');
     expect(clean.toLowerCase()).toContain("<img");
     expect(clean).toContain("/gallery/test.png");
   });

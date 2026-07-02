@@ -2803,7 +2803,7 @@ function SocialShareModuleEditor({
             type="text"
             value={module.settings.shareHashtags ?? ""}
             onChange={(event) => updateSetting("shareHashtags", event.target.value)}
-            placeholder="Normie,WYR"
+            placeholder="Starcaster,WYR"
           />
         </label>
         <label className="field">
@@ -2812,7 +2812,7 @@ function SocialShareModuleEditor({
             type="text"
             value={module.settings.shareVia ?? ""}
             onChange={(event) => updateSetting("shareVia", event.target.value)}
-            placeholder="Normie765714"
+            placeholder="Starcaster"
           />
         </label>
         <BuilderInlineNumberSelectRow>
