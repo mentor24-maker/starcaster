@@ -1,6 +1,9 @@
 #!/bin/sh
-# Auto-pin ?v= content hashes on all HTML shells before every commit.
+# Auto-pin ?v= content hashes on all HTML shells, then run repo convention
+# checks (stale artifacts, public/js freeze, etc.) on the staged diff.
+# Bypass conventions only with SKIP_CONVENTIONS=1 and a stated reason.
 set -e
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 node scripts/pin_asset_versions.cjs --stage
+node scripts/check_conventions.cjs

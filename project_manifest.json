@@ -4,22 +4,22 @@
   "company": "Alphire",
   "repositoryPath": "/Users/mentor/WebApps/starcaster",
   "description": "StarCaster by Alphire — multi-tenant platform for influencers and creators to establish web presence, promote content, and engage organically across social channels (comments, likes, shares, posts, articles, video).",
-  "primaryStack": "Vanilla JS SPA + limited React island",
-  "backend": "Node.js (server.js local, Vercel serverless api/[...slug].js)",
-  "styling": "CSS3 (src/css/ → public/styles.css; no Tailwind)",
+  "primaryStack": "React/TypeScript (components/ + lib/builder-client) for new UI; frozen vanilla JS SPA (public/js) for legacy admin screens",
+  "backend": "Node.js (server.js local, Vercel serverless api/[...slug].js, shared dispatcher routes/index.js)",
+  "styling": "CSS3 (src/css/ → public/styles.css via esbuild; no Tailwind)",
   "database": "Supabase (PostgreSQL)",
   "keyDirectories": {
-    "public": "Built static assets, JS modules (window.App), React bundle for Campaigns",
-    "src": "HTML partials (pages/), CSS sources, layout.html — run npm run build:html",
+    "public": "Built static assets; public/js is the FROZEN legacy vanilla-JS admin app",
+    "src": "HTML partials (pages/), CSS sources, layout.html — sources for generated public/ files",
+    "components": "React/TypeScript UI — the default for all new admin/builder UI",
     "routes": "API route modules (shared dispatcher in routes/index.js)",
-    "lib": "Stores, Supabase access, config, project scoping, AI helpers",
-    "scripts": "Build, migrations, imports, maintenance",
-    "docs": "AI_AGENT_HANDOFF.md (canon), UI_STANDARDS.md, SQL setup files",
-    "ai-daemon": "Separate agent service — not the main app server"
+    "lib": "Stores, Supabase access, config, project scoping; lib/builder-client is TS builder source",
+    "scripts": "Build, migrations, imports, convention checks, agent hooks",
+    "docs": "FABLE_OVERHAUL_PLAN.md (roadmap), SQL setup files"
   },
-  "architecturalNotes": "Vanilla JS/HTML monolith is the default for new UI. Edit src/pages/*.html then npm run build:html — do not hand-edit public/index.html for structure. React is used only for Active Campaigns (react-entry.js → public/bundle.js). API keys: lib/config.js env vars for infrastructure; Settings UI for provider APIs. See docs/AI_AGENT_HANDOFF.md and .cursorrules.",
+  "architecturalNotes": "New UI defaults to React/TypeScript; public/js is end-of-life (bugfixes only). Generated files (app-shell.html, styles.css, bundles) are never hand-edited — see the table in CLAUDE.md. Enforcement: pre-commit runs scripts/check_conventions.cjs; Claude Code hooks block generated-file edits.",
   "agentEntryPoints": [
-    "docs/AI_AGENT_HANDOFF.md",
-    ".cursorrules"
+    "CLAUDE.md",
+    "docs/FABLE_OVERHAUL_PLAN.md"
   ]
 }
