@@ -1679,6 +1679,11 @@ App.assets = (function () {
         }
 
         state.assetsFilters.asset_type = selectedType;
+        // Category options are scoped to a type, so clearing the type must
+        // also clear category — otherwise the dropdown keeps re-selecting
+        // the stale category (it's the only non-placeholder option left)
+        // and the filter can never be fully released without a page reload.
+        if (!selectedType) state.assetsFilters.category = '';
         renderAssetFilterCategoryOptions(
           selectedType,
           String(state.assetsFilters.category || '').trim(),
@@ -1699,6 +1704,30 @@ App.assets = (function () {
         state.assetsFilters.image_width = String(els.assetsFilterWidth?.value || '');
         state.assetsFilters.image_height = String(els.assetsFilterHeight?.value || '');
         state.assetsFilters.tags = String(els.assetsFilterTags?.value || '');
+        renderAssets();
+      });
+    }
+
+    if (els.assetsClearFilterBtn) {
+      els.assetsClearFilterBtn.addEventListener('click', () => {
+        if (isBulkMode()) return;
+        state.assetsFilters.asset_name = '';
+        state.assetsFilters.caption = '';
+        state.assetsFilters.asset_type = '';
+        state.assetsFilters.category = '';
+        state.assetsFilters.aspect = '';
+        state.assetsFilters.image_width = '';
+        state.assetsFilters.image_height = '';
+        state.assetsFilters.tags = '';
+        state.assetsFilters.size = '';
+        if (els.assetsFilterName) els.assetsFilterName.value = '';
+        if (els.assetsFilterCaption) els.assetsFilterCaption.value = '';
+        if (els.assetsFilterType) els.assetsFilterType.value = '';
+        if (els.assetsFilterAspect) els.assetsFilterAspect.value = '';
+        if (els.assetsFilterWidth) els.assetsFilterWidth.value = '';
+        if (els.assetsFilterHeight) els.assetsFilterHeight.value = '';
+        if (els.assetsFilterTags) els.assetsFilterTags.value = '';
+        renderAssetFilterCategoryOptions('', '', { bulkMode: false });
         renderAssets();
       });
     }

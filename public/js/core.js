@@ -242,6 +242,7 @@ App.els = {
   assetsFilterHeight: document.getElementById('assetsFilterHeight'),
   assetsFilterTags: document.getElementById('assetsFilterTags'),
   assetsApplyFilterBtn: document.getElementById('assetsApplyFilterBtn'),
+  assetsClearFilterBtn: document.getElementById('assetsClearFilterBtn'),
   assetsFilterActionRow: document.getElementById('assetsFilterActionRow'),
   assetsBulkActionRow: document.getElementById('assetsBulkActionRow'),
   assetsSelectAllVisible: document.getElementById('assetsSelectAllVisible'),
