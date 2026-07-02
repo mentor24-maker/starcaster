@@ -28,15 +28,15 @@ describe("builder saved module palette", () => {
         updatedAt: ""
       },
       {
-        id: "normie-1",
-        name: "Bouncing Normie - Game",
+        id: "sample-1",
+        name: "Bouncing Logo - Game",
         moduleClass: "Special Effects",
         modules: [
           {
             id: "m2",
             type: "floating-image",
             column: "main",
-            name: "Bouncing Normie",
+            name: "Bouncing Logo",
             text: "",
             settings: { trigger: "game" }
           }
@@ -56,6 +56,6 @@ describe("builder saved module palette", () => {
 
     const specialEffects = getSavedModulesForPaletteGroup(cellModules, "special-effects");
 
-    expect(specialEffects.map((entry) => entry.id)).toEqual(["confetti-1", "normie-1"]);
+    expect(specialEffects.map((entry) => entry.id)).toEqual(["confetti-1", "sample-1"]);
   });
 });
