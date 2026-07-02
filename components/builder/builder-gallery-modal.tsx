@@ -7,6 +7,7 @@ import { CommunityAssetNav } from "@/components/builder/community-asset-nav";
 import { GalleryMediaFilterBar } from "@/components/gallery-media-filter-bar";
 import { getRichTextGalleryModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { buildGalleryMediaCategoryOptions } from "@/lib/gallery-media-category";
+import { buildGalleryMediaTopicOptions } from "@/lib/gallery-media-topic";
 import { getGalleryMediaThumbnailUrl } from "@/lib/gallery-media-thumbnail";
 import { useGalleryMediaLibrary, type GalleryMediaSource } from "@/lib/use-gallery-media-library";
 
@@ -52,6 +53,11 @@ export function BuilderGalleryModal({
 
   const categoryOptions = useMemo(
     () => buildGalleryMediaCategoryOptions(media.map((item) => item.mediaCategory ?? "")),
+    [media]
+  );
+
+  const topicOptions = useMemo(
+    () => buildGalleryMediaTopicOptions(media.map((item) => item.topic ?? "")),
     [media]
   );
 
@@ -189,6 +195,7 @@ export function BuilderGalleryModal({
           ) : (
             <GalleryMediaFilterBar
               categoryOptions={categoryOptions}
+              topicOptions={topicOptions}
               filters={filters}
               onChange={setFilters}
               onClear={clearFilters}
