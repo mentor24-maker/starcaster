@@ -142,7 +142,7 @@ export function SavedSectionEditorModal({
         color: current.settings?.backgroundColor ?? "",
         color2: current.settings?.backgroundColor2 ?? "",
         imageUrl: current.settings?.backgroundImageUrl ?? "",
-        styleKey: current.settings?.backgroundStyleKey ?? "",
+        styleKey: (current.settings?.backgroundStyleKey as BackgroundSettings["styleKey"]) ?? "",
       });
       const isClear = next.mode === "none";
       return {

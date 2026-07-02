@@ -1733,7 +1733,7 @@ function BuilderModulePreview({
   if (module.type === "blog-post-tags") {
     return <BlogPostTagsPreview settings={module.settings} />;
   }
-  if (module.type === "blog-post" || module.type === "blog-post-view") {
+  if (module.type === "blog-post") {
     return <BlogPostViewPreview settings={module.settings} />;
   }
   if (module.type === "blog-newsletter-subscribe") {

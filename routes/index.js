@@ -279,10 +279,11 @@ async function handleRequest(req, res) {
   }
 
   const hasPublicTenantReadAccess = isPublicTenantReadRoute && req.projectContext?.project?.id;
+  // Note: /api/debug-routes intentionally has NO bypass here — it leaks
+  // config/deployment details and requires a logged-in session.
   if (
     !isAuthRoute
     && !isAdminAuthRoute
-    && !isDebugRoute
     && !isWebhookRoute
     && !isCronAuthorized
     && !isFacebookOAuthCallback
