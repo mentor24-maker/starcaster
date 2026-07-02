@@ -22,9 +22,9 @@ describe("normalizeBuilderAssetUrl", () => {
     ).toBe("/gallery/wave-401685.png");
   });
 
-  it("keeps normie site gallery paths", () => {
-    expect(normalizeBuilderAssetUrl("https://www.normie.one/gallery/wave.png")).toBe("/gallery/wave.png");
-    expect(normalizeBuilderAssetUrl("https://normie.one/gallery/wave.png")).toBe("/gallery/wave.png");
+  it("keeps tenant site gallery paths", () => {
+    expect(normalizeBuilderAssetUrl("https://www.example.com/gallery/wave.png")).toBe("/gallery/wave.png");
+    expect(normalizeBuilderAssetUrl("https://example.com/gallery/wave.png")).toBe("/gallery/wave.png");
   });
 });
 
@@ -33,8 +33,8 @@ describe("resolvePublicBuilderAssetUrl", () => {
     expect(resolvePublicBuilderAssetUrl("/api/admin/media-file/gallery/social-x.svg")).toBe(
       "/gallery/social-x.svg"
     );
-    expect(resolvePublicBuilderAssetUrl("/api/admin/media-file/logo_normie_3_600x200.png")).toBe(
-      "/media/logo_normie_3_600x200.png"
+    expect(resolvePublicBuilderAssetUrl("/api/admin/media-file/logo_sample_3_600x200.png")).toBe(
+      "/media/logo_sample_3_600x200.png"
     );
   });
 });
