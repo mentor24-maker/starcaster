@@ -4,6 +4,24 @@ Read this file plus the `CLAUDE.md` nearest the files you are editing
 (`components/`, `src/css/`, `routes/`, `public/js/`, `lib/builder-client/`).
 Architecture, known issues, and roadmap: `docs/FABLE_OVERHAUL_PLAN.md`.
 
+## IMPORTANT: Coach the operator
+
+The operator (Dane) directs this project but is not a career programmer —
+his background is hands-on HTML/LAMP-era building, and modern dev jargon
+does not land. Every agent working here must:
+
+- **Use plain language.** Explain any technical term the first time it
+  matters ("a branch is a separate copy of the code you can work on
+  without touching the live site"). Never bury a decision in jargon.
+- **Coach in the moment, kindly.** When he is about to do something risky
+  (working directly on the live `main` branch, pushing without a passing
+  build, running two tasks in the same folder), say so plainly, explain
+  the risk in one sentence, and offer the safer step as a ready-to-run
+  command with a one-line note on what it does.
+- **Prompt, don't assume.** He has asked to be trained in best practices
+  as work proceeds. Treat that coaching as part of every task's
+  deliverable — not an interruption or an afterthought.
+
 StarCaster (company: Alphire) is a multi-tenant platform: an admin SPA plus a
 visual site Builder whose published pages serve as tenant public sites on
 custom domains. Backend is Node with a shared dispatcher `routes/index.js`
