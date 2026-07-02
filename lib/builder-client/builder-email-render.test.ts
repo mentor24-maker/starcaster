@@ -56,7 +56,7 @@ describe("renderBuilderEmailHtml", () => {
     expect(html).toContain("Reset your password");
     expect(html).toContain("Reset Password");
     expect(html).toContain("https://example.supabase.co/auth/v1/verify?token=abc&type=recovery");
-    expect(html).toContain("https://normie.one/api/brand/normie-logo");
+    expect(html).toContain("/api/brand/logo");
     expect(html).not.toContain("{{ .ConfirmationURL }}");
   });
 });

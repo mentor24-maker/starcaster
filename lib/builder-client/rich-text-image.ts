@@ -1,3 +1,5 @@
+import { sanitizeRichTextHtml } from "./sanitize-html";
+
 export const RICH_TEXT_IMAGE_CLASS = "rich-text-editor-image";
 
 function normalizeRichTextImagePath(value: string) {
@@ -132,10 +134,8 @@ export function appendRichTextImageToHtml(html: string, imagePath: string) {
 
   const next = empty ? `<p>${imgTag}</p>` : `${trimmed}<p>${imgTag}</p>`;
 
-  // Lazy-load DOMPurify so thumbnail/admin helpers can import path resolvers only.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- defer jsdom until append runs
-  const { sanitizeRichTextHtml } = require("./sanitize-html") as typeof import("./sanitize-html");
-
+  // sanitize-html defers its jsdom/DOMPurify load internally, so this
+  // top-level import stays lightweight for path-resolver-only consumers.
   return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(next), "storage");
 }
 

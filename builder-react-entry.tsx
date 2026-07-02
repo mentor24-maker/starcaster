@@ -63,9 +63,10 @@ export function mountBuilderPreview(host: HTMLElement | null) {
 
 export function mountPublicSite(host: HTMLElement | null, config?: { projectId?: string }) {
   if (!host) return false;
-  const projectId = config?.projectId
-    || (typeof window !== 'undefined' && (window as Record<string, unknown>).__SITE_CONFIG__ as { projectId?: string } | undefined)?.projectId
-    || '';
+  const siteConfig = typeof window !== 'undefined'
+    ? (window as unknown as { __SITE_CONFIG__?: { projectId?: string } }).__SITE_CONFIG__
+    : undefined;
+  const projectId = config?.projectId || siteConfig?.projectId || '';
   createRoot(host).render(
     <div className="builder-react-root builder-public-site">
       <BuilderPublicSitePage projectId={projectId} />

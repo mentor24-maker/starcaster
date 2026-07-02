@@ -59,6 +59,7 @@ function hasCrmPaletteColors(palette: CrmThemePalette | undefined): boolean {
 async function fetchBuilderTheme(themeId?: string): Promise<{
   palette?: CrmThemePalette;
   styles?: BuilderThemeStyles;
+  shellBackground?: ThemeShellBackgroundSource;
 }> {
   try {
     const res = await fetch("/api/builder/themes", {
@@ -74,7 +75,7 @@ async function fetchBuilderTheme(themeId?: string): Promise<{
     return {
       palette: builderThemeToCrmPalette(theme),
       styles: buildBuilderThemeStyles(theme),
-      shellBackground: theme,
+      shellBackground: theme as ThemeShellBackgroundSource,
     };
   } catch {
     return {};
