@@ -34,7 +34,7 @@ describe("renderBuilderEmailHtml", () => {
     const html = renderBuilderEmailHtml(template, {
       confirmationUrl: "https://example.supabase.co/auth/v1/verify?token=abc&type=signup",
       email: "player@example.com",
-      siteUrl: "https://normie.one"
+      siteUrl: "https://example.com"
     });
 
     expect(html).toContain("Confirm Your Email");
@@ -48,7 +48,7 @@ describe("renderBuilderEmailHtml", () => {
       {
         confirmationUrl: "https://example.supabase.co/auth/v1/verify?token=abc&type=recovery",
         email: "player@example.com",
-        siteUrl: "https://normie.one"
+        siteUrl: "https://example.com"
       },
       "password_reset"
     );
@@ -68,12 +68,12 @@ describe("applyAuthEmailMergeFields", () => {
       {
         confirmationUrl: "https://confirm.test/link",
         email: "player@example.com",
-        siteUrl: "https://normie.one"
+        siteUrl: "https://example.com"
       }
     );
 
     expect(html).toContain("https://confirm.test/link");
     expect(html).toContain("player@example.com");
-    expect(html).toContain("https://normie.one");
+    expect(html).toContain("https://example.com");
   });
 });

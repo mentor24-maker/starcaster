@@ -1,6 +1,6 @@
 /**
  * Starcaster shell wrapper around the full builder editor ported from
- * normie. Honors the mount contract used by public/js/builder.js
+ * the legacy builder. Honors the mount contract used by public/js/builder.js
  * (surface/editorMode/record/onClose/onSaved); the editor manages its own
  * record lists and selection, so record preselection props are accepted
  * for compatibility but selection happens inside the editor.
