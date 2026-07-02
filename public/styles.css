@@ -12863,6 +12863,637 @@ body.asset-associations-modal-open {
 .builder-react-root .builder-nav-add-link-button {
   margin-top: 4px;
 }
+.builder-react-root .builder-admin-data-table-module {
+  width: 100%;
+  font-family: inherit;
+  --admin-table-header-bg: var(--crm-theme-primary, #0b3d7a);
+  --admin-table-header-text: #fff;
+  --admin-table-filter-bg: var(--crm-theme-secondary, #b8e0ff);
+  --admin-table-ink: var(--bx-heading, #18324a);
+  --admin-table-muted: #587592;
+  --admin-table-border: #c9dcea;
+  --admin-table-accent: var(--crm-theme-accent, var(--crm-theme-primary, #0b4f8f));
+  --admin-table-btn-bg: color-mix(in srgb, var(--admin-table-filter-bg) 55%, #fff);
+  --admin-table-row-alt: color-mix(in srgb, var(--admin-table-filter-bg) 18%, #fff);
+  --admin-table-row-hover: color-mix(in srgb, var(--admin-table-filter-bg) 35%, #fff);
+}
+.builder-react-root .builder-admin-data-table-title {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--admin-table-ink);
+}
+.builder-react-root .builder-admin-data-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--admin-table-border);
+  border-radius: 10px;
+}
+.builder-react-root .builder-admin-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  color: var(--admin-table-ink);
+  table-layout: fixed;
+}
+.builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-filter-row th {
+  background: var(--admin-table-filter-bg);
+  border-bottom: 1px solid var(--admin-table-border);
+  padding: 8px 10px;
+  font-weight: 400;
+  cursor: default;
+  vertical-align: middle;
+}
+.builder-react-root .builder-admin-data-table-filter-row .builder-admin-data-table-filter-input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--admin-table-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  background: #fff;
+  color: var(--admin-table-ink);
+  box-sizing: border-box;
+}
+.builder-react-root .builder-admin-data-table-filter-row th.builder-admin-data-table-actions-col {
+  text-align: center;
+  width: 8.5rem;
+  min-width: 8.5rem;
+}
+.builder-react-root .builder-admin-data-table-filter-row .btn.tiny-btn {
+  white-space: nowrap;
+  width: fit-content;
+}
+.builder-react-root .builder-admin-data-table thead tr.builder-admin-data-table-header-row th,
+.builder-react-root .builder-admin-data-table thead tr:not(.builder-admin-data-table-filter-row) th {
+  background: var(--admin-table-header-bg);
+  color: var(--admin-table-header-text);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--admin-table-header-bg) 80%, #000);
+  white-space: nowrap;
+}
+.builder-react-root .builder-admin-data-table-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.builder-react-root .builder-admin-data-table-sortable:hover {
+  background: color-mix(in srgb, var(--admin-table-filter-bg) 65%, var(--admin-table-header-bg)) !important;
+  color: var(--admin-table-header-bg) !important;
+}
+.builder-react-root .builder-admin-data-table thead th.builder-admin-data-table-actions-col {
+  text-align: center;
+  width: 8.5rem;
+  min-width: 8.5rem;
+}
+.builder-react-root .builder-admin-data-table tbody tr:nth-child(even) {
+  background: var(--admin-table-row-alt);
+}
+.builder-react-root .builder-admin-data-table tbody tr:hover {
+  background: var(--admin-table-row-hover);
+}
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-cell {
+  padding: 8px 12px;
+  border-bottom: 1px solid #edf2f7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-date {
+  white-space: nowrap;
+  color: var(--admin-table-muted);
+  font-size: 0.8rem;
+}
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-empty {
+  padding: 24px;
+  text-align: center;
+  color: #7b8fa3;
+  font-size: 0.9rem;
+}
+.builder-react-root .builder-admin-data-table .builder-admin-data-table-actions {
+  padding: 6px 8px;
+  white-space: nowrap;
+  border-bottom: 1px solid #edf2f7;
+  text-align: center;
+  width: 8.5rem;
+  min-width: 8.5rem;
+}
+.builder-react-root .builder-admin-data-table-actions .table-actions-row {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+.builder-react-root .builder-admin-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--admin-table-border);
+  background: #fff;
+  color: var(--admin-table-ink);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(19, 44, 68, 0.08);
+}
+.builder-react-root .builder-admin-icon-btn-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.builder-react-root .builder-admin-icon-btn-glyph svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+.builder-react-root .builder-admin-icon-btn:hover,
+.builder-react-root .builder-admin-icon-btn:focus-visible {
+  background: color-mix(in srgb, var(--admin-table-filter-bg) 45%, #fff);
+  border-color: color-mix(in srgb, var(--admin-table-accent) 45%, var(--admin-table-border));
+  color: var(--admin-table-accent);
+}
+.builder-react-root .builder-admin-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.builder-react-root .builder-admin-icon-btn-danger {
+  color: #8f1f1f;
+  border-color: #e0c0c0;
+}
+.builder-react-root .builder-admin-icon-btn-danger:hover,
+.builder-react-root .builder-admin-icon-btn-danger:focus-visible {
+  background: #fff0f0;
+  border-color: #d8a0a0;
+  color: #8f1f1f;
+}
+.builder-react-root a.builder-admin-icon-btn {
+  text-decoration: none;
+  color: var(--admin-table-ink);
+}
+.builder-react-root .builder-blog-post-create-form {
+  width: 100%;
+  max-width: none;
+}
+.builder-react-root .builder-blog-post-manager-module {
+  width: 100%;
+}
+.builder-react-root .builder-blog-post-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.builder-react-root .builder-blog-post-manager-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf2f7;
+}
+.builder-react-root .builder-blog-post-manager-item:last-child {
+  border-bottom: none;
+}
+.builder-react-root .builder-blog-post-manager-item:nth-child(even) {
+  background: var(--admin-table-row-alt, #f7fbff);
+}
+.builder-react-root .builder-blog-post-manager-item:hover {
+  background: var(--admin-table-row-hover, #eef6fc);
+}
+.builder-react-root .builder-blog-post-manager-item-thumb {
+  flex: 0 0 auto;
+}
+.builder-react-root .builder-blog-post-manager-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.builder-react-root .builder-blog-post-manager-item-title {
+  font-weight: 600;
+  color: var(--admin-table-ink, #18324a);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.builder-react-root .builder-blog-post-manager-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--admin-table-muted, #587592);
+}
+.builder-react-root .builder-blog-post-manager-status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 2px 8px;
+  text-transform: lowercase;
+}
+.builder-react-root .builder-blog-post-manager-item-actions {
+  flex: 0 0 auto;
+}
+.builder-react-root .builder-blog-post-manager-stub {
+  padding: 2rem;
+  text-align: center;
+  color: #7b8fa3;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.builder-react-root .builder-blog-post-manager-thumb {
+  display: block;
+  width: 64px;
+  height: 48px;
+  max-width: 64px;
+  max-height: 48px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #f3f4f6;
+}
+.builder-react-root .builder-blog-post-manager-thumb-placeholder {
+  display: block;
+  width: 64px;
+  height: 48px;
+  max-width: 64px;
+  max-height: 48px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: #f3f4f6;
+  border: 1px dashed #d1d5db;
+}
+.builder-react-root .builder-blog-card-manager-module {
+  font-family: inherit;
+}
+.builder-react-root .bcm-controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: flex-end;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.builder-react-root .bcm-control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.builder-react-root .bcm-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.builder-react-root .bcm-unit {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+.builder-react-root .bcm-color-input {
+  padding: 2px;
+  width: 40px;
+  height: 28px;
+  border: 1px solid #cbd5e0;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+.builder-react-root .bcm-btn-group {
+  display: flex;
+  gap: 0;
+}
+.builder-react-root .bcm-toggle-btn,
+.builder-react-root .bcm-col-btn {
+  padding: 4px 10px;
+  border: 1px solid #cbd5e0;
+  border-right-width: 0;
+  background: #fff;
+  color: #4a5568;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.builder-react-root .bcm-toggle-btn:first-child,
+.builder-react-root .bcm-col-btn:first-child {
+  border-radius: 5px 0 0 5px;
+}
+.builder-react-root .bcm-toggle-btn:last-child,
+.builder-react-root .bcm-col-btn:last-child {
+  border-right-width: 1px;
+  border-radius: 0 5px 5px 0;
+}
+.builder-react-root .bcm-toggle-btn:only-child,
+.builder-react-root .bcm-col-btn:only-child {
+  border-right-width: 1px;
+  border-radius: 5px;
+}
+.builder-react-root .bcm-toggle-btn:hover:not(:disabled),
+.builder-react-root .bcm-col-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+.builder-react-root .bcm-toggle-btn.is-on,
+.builder-react-root .bcm-col-btn.is-on {
+  background: #0f4f8f;
+  border-color: #0f4f8f;
+  color: #fff;
+  font-weight: 600;
+}
+.builder-react-root .bcm-body {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+@media (max-width: 720px) {
+  .builder-react-root .bcm-body {
+    grid-template-columns: 1fr;
+  }
+}
+.builder-react-root .bcm-rows-panel,
+.builder-react-root .bcm-preview-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px;
+}
+.builder-react-root .bcm-preview-panel {
+  background: #f8fafc;
+}
+.builder-react-root .bcm-panel-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.builder-react-root .bcm-panel-hint {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.builder-react-root .bcm-row-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.builder-react-root .bcm-row-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+.builder-react-root .bcm-row-arrows {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.builder-react-root .bcm-arrow-btn {
+  padding: 2px 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.6rem;
+  cursor: pointer;
+  line-height: 1.5;
+  transition: background 0.1s;
+}
+.builder-react-root .bcm-arrow-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+.builder-react-root .bcm-arrow-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.builder-react-root .bcm-col-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.builder-react-root .bcm-row-slots {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.builder-react-root .bcm-slot-select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e0;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 0.78rem;
+  background: #fff;
+  cursor: pointer;
+}
+.builder-react-root .bcm-delete-icon-btn {
+  flex-shrink: 0;
+  padding: 4px 5px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.builder-react-root .bcm-delete-icon-btn:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+.builder-react-root .bcm-add-row-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 0;
+  border: 1px dashed #94a3b8;
+  border-radius: 5px;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s, border-color 0.1s;
+}
+.builder-react-root .bcm-add-row-btn:hover {
+  background: #f1f5f9;
+  border-color: #64748b;
+}
+.builder-react-root .bcm-preview-body {
+  display: flex;
+  justify-content: center;
+}
+.builder-react-root .bcm-save-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.builder-react-root .bcm-save-btn {
+  padding: 7px 18px;
+  border: none;
+  border-radius: 6px;
+  background: #0f4f8f;
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.builder-react-root .bcm-save-btn:hover:not(:disabled) {
+  background: #0d4278;
+}
+.builder-react-root .bcm-save-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.builder-react-root .bcm-save-msg {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.builder-react-root .bcm-save-msg.is-ok {
+  color: #16a34a;
+}
+.builder-react-root .bcm-save-msg.is-err {
+  color: #dc2626;
+}
+.builder-react-root .bcm-save-note {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-left: auto;
+}
+.builder-react-root .builder-blog-card-manager-settings {
+  padding: 8px 0;
+}
+.builder-react-root .builder-blog-card-manager-settings-note {
+  font-size: 0.8rem;
+  color: #718096;
+  line-height: 1.5;
+  margin: 0;
+}
+.builder-react-root .builder-admin-data-table-delete-copy {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--admin-table-ink);
+}
+.builder-react-root .crm-contacts-modal-btn-danger {
+  background: #8f1f1f;
+  border-color: #8f1f1f;
+  color: #fff;
+  font-weight: 600;
+}
+.builder-react-root .crm-contacts-modal-btn-danger:hover:not(:disabled) {
+  background: #761919;
+}
+.builder-react-root .builder-admin-data-table-role-badge {
+  display: inline-block;
+  text-transform: capitalize;
+  font-size: 0.8rem;
+  background: color-mix(in srgb, var(--admin-table-filter-bg) 40%, #fff);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--admin-table-ink);
+}
+.builder-react-root .builder-admin-action-btn {
+  padding: 3px 8px;
+  border: 1px solid #c9dcea;
+  border-radius: 5px;
+  background: #fff;
+  color: #18324a;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-right: 4px;
+}
+.builder-react-root .builder-admin-action-btn:hover {
+  background: #eef5fc;
+}
+.builder-react-root .builder-admin-action-btn-danger {
+  border-color: #e0c0c0;
+  color: #8f1f1f;
+}
+.builder-react-root .builder-admin-action-btn-danger:hover {
+  background: #fff0f0;
+}
+.builder-react-root .builder-admin-data-table-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.875rem;
+  color: #18324a;
+}
+.builder-react-root .builder-admin-data-table-pagination button {
+  padding: 4px 10px;
+  border: 1px solid #c9dcea;
+  border-radius: 6px;
+  background: #fff;
+  color: #18324a;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.builder-react-root .builder-admin-data-table-pagination button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.builder-react-root .builder-admin-data-table-count {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #7b8fa3;
+}
+.builder-react-root .builder-admin-data-table-stub {
+  padding: 16px 0;
+  font-size: 0.9rem;
+  color: #7b8fa3;
+}
+.builder-react-root .builder-admin-data-table-stub.is-error {
+  color: #8f1f1f;
+}
+.builder-react-root .builder-admin-data-table-inline-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #8f1f1f;
+}
 
 /* src/css/_builder-react-overrides.css */
 .builder-react-root .builder-editor-popup {
