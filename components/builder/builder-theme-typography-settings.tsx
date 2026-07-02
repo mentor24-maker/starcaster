@@ -114,7 +114,7 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             ["heading", "Headings"],
             ["link", "Links"],
             ["linkHover", "Link hover"]
-          ] as Array<[keyof typeof COLOR_PLACEHOLDERS, string]>
+          ] as Array<["text" | "heading" | "link" | "linkHover", string]>
         ).map(([role, label]) => (
           <BuilderSettingRow key={role} label={label}>
             <span className="builder-theme-color-control">

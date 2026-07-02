@@ -148,7 +148,7 @@ describe("floating-image module migration", () => {
       resolveBuilderModuleType("image", {
         positionMode: "overlay",
         variant: "image",
-        url: "/gallery/normie.png"
+        url: "/gallery/sample.png"
       })
     ).toBe("floating-image");
   });
