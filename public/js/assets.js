@@ -103,6 +103,7 @@ App.assets = (function () {
       ['assetsSortCaptionBtn', 'caption', 'Caption'],
       ['assetsSortTypeBtn', 'assetType', 'Asset Type'],
       ['assetsSortCategoryBtn', 'category', 'Category'],
+      ['assetsSortTopicBtn', 'topic', 'Topic'],
       ['assetsSortAspectBtn', 'aspect', 'Aspect'],
       ['assetsSortTagsBtn', 'tags', 'Tags'],
       ['assetsSortSizeBtn', 'size', 'Size'],
@@ -280,6 +281,7 @@ App.assets = (function () {
     const caption = String(filters.caption || '').trim().toLowerCase();
     const type = String(filters.asset_type || '').trim();
     const category = String(filters.category || '').trim().toLowerCase();
+    const topic = String(filters.topic || '').trim().toLowerCase();
     const aspect = normalizeAspect(filters.aspect);
     const tags = String(filters.tags || '').trim().toLowerCase();
     const size = String(filters.size || '').trim().toLowerCase();
@@ -291,6 +293,7 @@ App.assets = (function () {
       const assetCaption = String(asset.caption || '').toLowerCase();
       const assetType = String(asset.assetType || '');
       const assetCategory = String(asset.category || '').toLowerCase();
+      const assetTopic = String(asset.topic || '').toLowerCase();
       const assetAspect = resolvedAssetAspect(asset);
       const assetTags = Array.isArray(asset.tags) ? asset.tags.join(', ').toLowerCase() : '';
       const assetSizeRaw = String(Math.max(0, Number(asset.size || 0) || 0));
@@ -300,6 +303,7 @@ App.assets = (function () {
       if (caption && !assetCaption.includes(caption)) return false;
       if (type && assetType !== type) return false;
       if (category && assetCategory !== category) return false;
+      if (topic && assetTopic !== topic) return false;
       if (aspect && assetAspect !== aspect) return false;
       if (tags && !assetTags.includes(tags)) return false;
       if (size && !assetSizeRaw.includes(size) && !assetSizeFmt.includes(size)) return false;
@@ -653,6 +657,46 @@ App.assets = (function () {
     }
   }
 
+  async function renderAssetFilterTopicOptions(selectedTopic) {
+    const select = els.assetsFilterTopic;
+    if (!select) return;
+    const selected = String(selectedTopic || '').trim();
+    const topics = new Set();
+
+    try {
+      if (App.ui && typeof App.ui.ensureMessagingTopicsLoaded === 'function') {
+        const loaded = await App.ui.ensureMessagingTopicsLoaded();
+        (Array.isArray(loaded) ? loaded : []).forEach((topic) => {
+          const name = String(topic || '').trim();
+          if (name) topics.add(name);
+        });
+      }
+    } catch (_) {}
+
+    (Array.isArray(state.assets) ? state.assets : []).forEach((asset) => {
+      const name = String(asset?.topic || '').trim();
+      if (name) topics.add(name);
+    });
+
+    if (selected) topics.add(selected);
+
+    const options = Array.from(topics).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'All Topics';
+    select.appendChild(placeholder);
+
+    options.forEach((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+
+    select.value = selected && options.includes(selected) ? selected : '';
+  }
+
   function syncAssetsHeaderControls() {
     const bulkMode = isBulkMode();
     const visibleIds = getVisibleSelectableAssetIds();
@@ -673,19 +717,20 @@ App.assets = (function () {
 
     if (els.assetsFilterWidth) els.assetsFilterWidth.disabled = bulkMode;
     if (els.assetsFilterHeight) els.assetsFilterHeight.disabled = bulkMode;
+    if (els.assetsFilterTopic) els.assetsFilterTopic.disabled = bulkMode;
 
-    if (!els.assetsFilterName || !els.assetsFilterType || !els.assetsFilterTags) return;
+    if (!els.assetsFilterName || !els.assetsFilterType) return;
 
     if (bulkMode) {
       els.assetsFilterName.placeholder = 'Asset Name (leave unchanged)';
-      els.assetsFilterTags.placeholder = 'Tags (comma-separated, leave unchanged)';
+      if (els.assetsFilterTags) els.assetsFilterTags.placeholder = 'Tags (comma-separated, leave unchanged)';
       if (els.assetsFilterType.options[0]) els.assetsFilterType.options[0].textContent = 'Asset Type (leave unchanged)';
       if (els.assetsFilterAspect?.options?.[0]) els.assetsFilterAspect.options[0].textContent = 'Aspect (leave unchanged)';
 
       els.assetsFilterName.value = bulkDraft.asset_name;
       els.assetsFilterType.value = bulkDraft.asset_type;
       if (els.assetsFilterAspect) els.assetsFilterAspect.value = normalizeAspect(bulkDraft.aspect);
-      els.assetsFilterTags.value = bulkDraft.tags;
+      if (els.assetsFilterTags) els.assetsFilterTags.value = bulkDraft.tags;
 
       const categoryType = bulkDraft.asset_type || getBulkCommonAssetType();
       renderAssetFilterCategoryOptions(categoryType, bulkDraft.category, { bulkMode: true });
@@ -698,7 +743,7 @@ App.assets = (function () {
     }
 
     els.assetsFilterName.placeholder = 'Asset Name';
-    els.assetsFilterTags.placeholder = 'Tags';
+    if (els.assetsFilterTags) els.assetsFilterTags.placeholder = 'Tags';
     if (els.assetsFilterType.options[0]) els.assetsFilterType.options[0].textContent = 'All Types';
     if (els.assetsFilterAspect?.options?.[0]) els.assetsFilterAspect.options[0].textContent = 'All Aspects';
 
@@ -711,12 +756,13 @@ App.assets = (function () {
     if (els.assetsFilterAspect) els.assetsFilterAspect.value = normalizeAspect(state.assetsFilters?.aspect);
     if (els.assetsFilterWidth) els.assetsFilterWidth.value = String(state.assetsFilters?.image_width || '');
     if (els.assetsFilterHeight) els.assetsFilterHeight.value = String(state.assetsFilters?.image_height || '');
-    els.assetsFilterTags.value = String(state.assetsFilters?.tags || '');
+    if (els.assetsFilterTags) els.assetsFilterTags.value = String(state.assetsFilters?.tags || '');
     renderAssetFilterCategoryOptions(
       activeType,
       String(state.assetsFilters?.category || '').trim(),
       { bulkMode: false }
     );
+    renderAssetFilterTopicOptions(String(state.assetsFilters?.topic || '').trim());
 
     const createBtn = document.getElementById('openCreateVideoToolBtn');
     const inlineCreateBtn = document.getElementById('assetsInlineCreateVideoBtn');
@@ -900,6 +946,7 @@ App.assets = (function () {
 
       appendCell(tr, displayAssetType(asset.assetType));
       appendCell(tr, asset.category);
+      appendCell(tr, asset.topic);
       appendCell(tr, displayAspect(resolvedAssetAspect(asset)));
       const createdAt = String(asset.createdAt || '').trim();
       appendCell(tr, createdAt ? new Date(createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '-');
@@ -1346,6 +1393,7 @@ App.assets = (function () {
     bindSortButton('assetsSortHeightBtn', 'imageHeight', 'desc');
     bindSortButton('assetsSortTypeBtn', 'assetType', 'asc');
     bindSortButton('assetsSortCategoryBtn', 'category', 'asc');
+    bindSortButton('assetsSortTopicBtn', 'topic', 'asc');
     bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
     bindSortButton('assetsSortUpdatedBtn', 'createdAt', 'desc');
     bindSortButton('assetsSortSizeBtn', 'size', 'desc');
@@ -1659,6 +1707,7 @@ App.assets = (function () {
     bindHeaderField(els.assetsFilterName, 'asset_name');
     bindHeaderField(els.assetsFilterCaption, 'caption');
     bindHeaderField(els.assetsFilterCategory, 'category');
+    bindHeaderField(els.assetsFilterTopic, 'topic');
     bindHeaderField(els.assetsFilterAspect, 'aspect');
     bindHeaderField(els.assetsFilterWidth, 'image_width');
     bindHeaderField(els.assetsFilterHeight, 'image_height');
@@ -1700,6 +1749,7 @@ App.assets = (function () {
         state.assetsFilters.caption = String(els.assetsFilterCaption?.value || '');
         state.assetsFilters.asset_type = String(els.assetsFilterType?.value || '');
         state.assetsFilters.category = String(els.assetsFilterCategory?.value || '');
+        state.assetsFilters.topic = String(els.assetsFilterTopic?.value || '');
         state.assetsFilters.aspect = normalizeAspect(els.assetsFilterAspect?.value);
         state.assetsFilters.image_width = String(els.assetsFilterWidth?.value || '');
         state.assetsFilters.image_height = String(els.assetsFilterHeight?.value || '');
@@ -1715,6 +1765,7 @@ App.assets = (function () {
         state.assetsFilters.caption = '';
         state.assetsFilters.asset_type = '';
         state.assetsFilters.category = '';
+        state.assetsFilters.topic = '';
         state.assetsFilters.aspect = '';
         state.assetsFilters.image_width = '';
         state.assetsFilters.image_height = '';
@@ -1728,6 +1779,7 @@ App.assets = (function () {
         if (els.assetsFilterHeight) els.assetsFilterHeight.value = '';
         if (els.assetsFilterTags) els.assetsFilterTags.value = '';
         renderAssetFilterCategoryOptions('', '', { bulkMode: false });
+        renderAssetFilterTopicOptions('');
         renderAssets();
       });
     }
