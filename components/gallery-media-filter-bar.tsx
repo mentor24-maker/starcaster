@@ -24,6 +24,7 @@ import {
 type GalleryMediaFilterBarProps = {
   filters: GalleryMediaFilters;
   categoryOptions: string[];
+  topicOptions: string[];
   onChange: (updater: (current: GalleryMediaFilters) => GalleryMediaFilters) => void;
   onClear: () => void;
   bulkEditActive?: boolean;
@@ -131,6 +132,7 @@ function GalleryFilterField({
 export function GalleryMediaFilterBar({
   filters,
   categoryOptions,
+  topicOptions,
   onChange,
   onClear,
   bulkEditActive = false,
@@ -317,6 +319,27 @@ export function GalleryMediaFilterBar({
           {categoryOptions.map((category) => (
             <option key={category} value={category}>
               {category}
+            </option>
+          ))}
+        </select>
+      </GalleryFilterField>
+      <GalleryFilterField
+        bulkEditActive={bulkEditActive}
+        filters={filters}
+        label="Topic"
+        notKey="topic"
+        onChange={onChange}
+        showNot
+      >
+        <select
+          value={filters.topic}
+          disabled={bulkEditActive}
+          onChange={(event) => onChange((current) => ({ ...current, topic: event.target.value }))}
+        >
+          <option value="">All</option>
+          {topicOptions.map((topic) => (
+            <option key={topic} value={topic}>
+              {topic}
             </option>
           ))}
         </select>
