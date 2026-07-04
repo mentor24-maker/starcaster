@@ -2,7 +2,8 @@
 
 This directory is the ONLY place CSS is edited. `public/styles.css` is
 compiled from `main.css` by esbuild — after any edit here run
-`npm run build:css`, then commit both the partial and the rebuilt artifact.
+`npm run build:css` so your local app reflects it. Commit only the source
+partial: `public/styles.css` is gitignored (Vercel/CI rebuild it).
 Edits to `public/styles.css` directly are wiped on the next build; edits
 here are invisible until you rebuild.
 

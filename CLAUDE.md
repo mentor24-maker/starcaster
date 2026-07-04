@@ -29,11 +29,14 @@ custom domains. Backend is Node with a shared dispatcher `routes/index.js`
 Postgres. Admin UI is split between a frozen vanilla-JS app (`public/js/`)
 and the React/TypeScript builder (`components/` + `lib/builder-client/`).
 
-## Generated files — never hand-edit
+## Generated files — never hand-edit, never commit
 
-Edit the source, run the command, commit **both** source and artifact.
-A PreToolUse hook blocks direct edits to these; if you hit it, you were
-about to destroy work.
+These are **gitignored build artifacts**. Edit the source, run the rebuild
+command so your local app reflects the change — but do NOT commit them;
+Vercel and CI regenerate everything from source via `npm run build`.
+A PreToolUse hook blocks direct edits; the conventions checker blocks
+commits of them. After a fresh clone, run `npm run build` once to create
+them locally.
 
 | Artifact | Source | Rebuild |
 |---|---|---|
