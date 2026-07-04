@@ -108,8 +108,19 @@ function watchAssets() {
   console.log('[pin:assets] Watching public/{styles.css,builder-bundle.js,bundle.js}');
 }
 
+function isGitIgnored(filePath) {
+  try {
+    execFileSync('git', ['check-ignore', '-q', '--', filePath], { cwd: root, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function stageChangedFiles(results) {
-  const changed = results.filter((r) => r.changed);
+  // Generated HTML (app-shell, legal pages) is gitignored — pin it on disk
+  // but never stage it. Only hand-authored tracked files get staged.
+  const changed = results.filter((r) => r.changed && !isGitIgnored(r.filePath));
   if (!changed.length) return;
   for (const { filePath } of changed) {
     execFileSync('git', ['add', '--', filePath], { cwd: root, stdio: 'ignore' });

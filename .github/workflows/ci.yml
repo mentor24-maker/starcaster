@@ -30,11 +30,14 @@ jobs:
       - name: Unit tests (builder UI)
         run: npx vitest run
 
-      - name: Unit tests (builder server libs)
-        run: npm run test:builder
-
+      # Build BEFORE the server-lib tests: those tests exercise the
+      # generated lib/builder bundles, which are gitignored and only
+      # exist after a build.
       - name: Full production build
         run: npm run build
+
+      - name: Unit tests (builder server libs)
+        run: npm run test:builder
 
       - name: Convention checks (advisory)
         # Non-blocking until the 6 pre-existing button-in-<th> violations

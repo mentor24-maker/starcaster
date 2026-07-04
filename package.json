@@ -14,7 +14,7 @@
     "build:css": "npx esbuild src/css/main.css --bundle --outfile=public/styles.css && node scripts/pin_asset_versions.cjs",
     "typecheck": "tsc --noEmit",
     "test:builder-ui": "vitest run",
-    "build": "npm run build:html && npx esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx && npx esbuild src/css/main.css --bundle --outfile=public/styles.css && npm run build:builder && npm run pin:assets && npm run check:assets",
+    "build": "npm run build:richtext && npm run build:builder-template && npm run build:builder-email-render && npm run build:html && npx esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx && npx esbuild src/css/main.css --bundle --outfile=public/styles.css && npm run build:builder && npm run pin:assets && npm run check:assets",
     "dev": "node scripts/dev.mjs",
     "start": "npm run build:html && npm run build:builder && node server.js",
     "build:richtext": "node scripts/build_richtext_bundle.mjs",
