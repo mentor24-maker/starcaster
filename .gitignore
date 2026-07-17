@@ -36,3 +36,4 @@ lib/builder/email-render.js
 # Claude Code: settings.json is shared; everything else is personal
 .claude/*
 !.claude/settings.json
+docs/SQL/backups/

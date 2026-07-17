@@ -17,10 +17,17 @@
  *      (publishes the new pages, rewires the Criminal Law menu, retires the
  *       old Theft / Embezzelment / Fraud tabs)
  *
- * Usage:  node scripts/marinoff_punchlist_20260717.mjs [--phase 1|2]
+ * Usage:  node scripts/marinoff_punchlist_20260717.mjs [--phase 1|2] [--apply]
+ *         node scripts/marinoff_punchlist_20260717.mjs --restore <backup.json>
+ *
+ * --apply    Applies the phase's changes directly to the database (the generated
+ *            SQL file is too large for the Supabase SQL editor). A full JSON
+ *            backup of every page row is written locally BEFORE any write, and
+ *            the same validations run first; any failure aborts with no writes.
+ * --restore  Puts every page row back exactly as it was in the given backup.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -38,6 +45,11 @@ const STAMP = '20260717';
 const PHASE = process.argv.includes('--phase')
   ? Number(process.argv[process.argv.indexOf('--phase') + 1] || 1)
   : 1;
+const APPLY = process.argv.includes('--apply');
+const RESTORE_FILE = process.argv.includes('--restore')
+  ? process.argv[process.argv.indexOf('--restore') + 1]
+  : null;
+const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
 // ---------------------------------------------------------------- env / db --
 
@@ -605,13 +617,17 @@ const NEW_PAGES = [
 
 // ------------------------------------------------------------------- main ----
 
+let sb = null;
+
 async function main() {
   const env = loadEnv();
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
     console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_KEY in .env.local');
     process.exit(1);
   }
-  const sb = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
+  sb = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
+
+  if (RESTORE_FILE) return restore(RESTORE_FILE);
 
   const { data: rows, error } = await sb
     .from(TABLE)
@@ -627,8 +643,82 @@ async function main() {
     return { row, slug: row.slug || '', doc, dirty: false, newName: null, publish: null };
   });
 
+  if (APPLY) writeBackup(rows);
+
   if (PHASE === 2) return phase2(pages);
   return phase1(pages);
+}
+
+/** Full local backup of every page row, written before any write. */
+function writeBackup(rows) {
+  mkdirSync(BACKUP_DIR, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = path.join(BACKUP_DIR, `marinoff_pages_backup_${stamp}.json`);
+  writeFileSync(file, JSON.stringify(rows, null, 1));
+  console.log(`Backup of ${rows.length} page rows written to ${file}`);
+  console.log(`Undo everything with: node scripts/marinoff_punchlist_${STAMP}.mjs --restore ${file}`);
+  return file;
+}
+
+/** Restore every page row from a backup file (undoes an --apply). */
+async function restore(file) {
+  const rows = JSON.parse(readFileSync(file, 'utf8'));
+  console.log(`Restoring ${rows.length} page rows from ${file} ...`);
+  for (const row of rows) {
+    const { error } = await sb
+      .from(TABLE)
+      .update({
+        layout_sections: row.layout_sections,
+        name: row.name,
+        is_published: row.is_published,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id)
+      .eq('project_id', PROJECT_ID);
+    if (error) { console.error(`restore failed on id ${row.id}:`, error.message); process.exit(1); }
+  }
+  // Remove draft pages the apply step inserted (slugs not present in the backup).
+  const backupSlugs = new Set(rows.map((r) => r.slug));
+  for (const spec of NEW_PAGES) {
+    if (backupSlugs.has(spec.slug)) continue;
+    const { error } = await sb.from(TABLE).delete()
+      .eq('project_id', PROJECT_ID).eq('slug', spec.slug).eq('is_published', false);
+    if (error) console.error(`could not remove draft "${spec.slug}":`, error.message);
+  }
+  console.log('Restore complete.');
+}
+
+/** Write the phase's changes to the database via the API (same rows as the SQL). */
+async function applyChanges(changedPages, inserts) {
+  console.log(`\nApplying ${changedPages.length} page updates${inserts.length ? ` and ${inserts.length} draft inserts` : ''} to the live database ...`);
+  for (const page of changedPages) {
+    const patch = { layout_sections: page.doc, updated_at: new Date().toISOString() };
+    if (page.newName) patch.name = page.newName;
+    if (page.publish != null) patch.is_published = page.publish;
+    const { error } = await sb.from(TABLE).update(patch)
+      .eq('id', page.row.id).eq('project_id', PROJECT_ID);
+    if (error) { console.error(`update failed on ${page.slug || 'home'} (id ${page.row.id}):`, error.message); process.exit(1); }
+    console.log(`  updated ${page.slug || 'home'} (id ${page.row.id})`);
+  }
+  for (const { spec, doc, template } of inserts) {
+    const { data: existing } = await sb.from(TABLE).select('id')
+      .eq('project_id', PROJECT_ID).eq('slug', spec.slug).limit(1);
+    if (existing && existing.length) { console.log(`  draft ${spec.slug} already exists, skipping`); continue; }
+    const { error } = await sb.from(TABLE).insert({
+      project_id: PROJECT_ID,
+      name: spec.name,
+      slug: spec.slug,
+      template_kind: template.template_kind,
+      theme_id: template.theme_id,
+      owner_user_id: template.owner_user_id,
+      is_published: false,
+      is_private: false,
+      layout_sections: doc,
+    });
+    if (error) { console.error(`insert failed for ${spec.slug}:`, error.message); process.exit(1); }
+    console.log(`  inserted draft ${spec.slug} (unpublished)`);
+  }
+  console.log('Apply complete.');
 }
 
 function assertRule(page, rule, count) {
@@ -638,7 +728,7 @@ function assertRule(page, rule, count) {
   }
 }
 
-function phase1(pages) {
+async function phase1(pages) {
   const theftPage = pages.find((p) => p.slug === 'theft');
   if (!theftPage) { console.error('theft page not found'); process.exit(1); }
 
@@ -715,7 +805,7 @@ function phase1(pages) {
       ],
     };
     logChange(spec.slug, 'new-page-draft', '(none)', `${spec.name} - inserted UNPUBLISHED for review`);
-    return { spec, doc };
+    return { spec, doc, template: theftPage.row };
   });
 
   // Safety net: no forbidden string may survive on any page that stays published.
@@ -782,9 +872,11 @@ function phase1(pages) {
   writeReport(changed.length, inserts.length);
   console.log(`\nPhase 1: ${changed.length} pages updated, ${inserts.length} draft pages inserted.`);
   console.log(`SQL:    ${sqlPath}`);
+
+  if (APPLY) await applyChanges(changed, inserts);
 }
 
-function phase2(pages) {
+async function phase2(pages) {
   // Validate phase 1 ran: family law must already be gone from the live nav.
   const home = pages.find((p) => p.slug === '');
   const homeNav = JSON.stringify(home?.doc ?? {});
@@ -833,6 +925,8 @@ function phase2(pages) {
   writeReport(changed.length, 0, '_phase2');
   console.log(`\nPhase 2: ${changed.length} pages updated.`);
   console.log(`SQL:    ${sqlPath}`);
+
+  if (APPLY) await applyChanges(changed, []);
 }
 
 function writeReport(updatedCount, insertedCount, suffix = '') {
