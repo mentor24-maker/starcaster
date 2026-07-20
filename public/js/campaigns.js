@@ -310,6 +310,10 @@ App.campaigns = (function () {
       const option = document.createElement('option');
       option.value = String(item.value);
       option.textContent = item.label;
+      // Option labels are truncated for display; keep the untruncated copy so
+      // anything that publishes this selection uses the full text, not the label.
+      const fullText = safeText(item.searchText);
+      if (fullText && fullText !== item.label) option.dataset.fullText = fullText;
       select.appendChild(option);
     });
 
@@ -2081,7 +2085,7 @@ App.campaigns = (function () {
   function selectedOptionText(select) {
     if (!select) return '';
     const option = select.options[select.selectedIndex];
-    return safeText(option?.textContent);
+    return safeText(option?.dataset?.fullText) || safeText(option?.textContent);
   }
 
   function selectedOptionTextIfValue(select) {
