@@ -1209,8 +1209,16 @@ App.campaigns = (function () {
     modal.open();
   }
 
+  function channelDisplayPlatform(raw) {
+    const text = safeText(raw);
+    // Older channel rows were saved as plain "Facebook" before the Page/Personal
+    // split was named consistently — display them the same as new rows.
+    if (text.toLowerCase() === 'facebook') return 'Facebook Page';
+    return text;
+  }
+
   function channelLabel(channel) {
-    const platform = safeText(
+    const platform = channelDisplayPlatform(
       channel?.channel
       || channel?.name
     );

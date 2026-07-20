@@ -296,7 +296,7 @@ App.promoteSocial = (function () {
           const page = safeText(status.pageName) || 'connected Page';
           elDest.textContent = `Destination: ${label} — ${page}`;
         } else {
-          elDest.textContent = 'Destination: Facebook — no Page connected. Connect one in Settings → APIs → Meta before sending.';
+          elDest.textContent = `Destination: ${label} — no Page connected. Connect one in Settings → APIs → Meta before sending.`;
         }
       } catch (_) {
         if (token !== destinationRenderToken) return;

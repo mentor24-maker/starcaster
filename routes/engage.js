@@ -1023,6 +1023,30 @@ async function approveFacebookPersonalPost(post, req) {
     || jobData.result?.post_url
     || jobData.result?.url
   );
+  const agentStatus = safeText(jobData.status || jobData.result?.status).toLowerCase();
+  const agentNotes = safeText(jobData.notes || jobData.result?.notes);
+
+  // The OpenClaw call succeeding only means the agent *responded* — it does
+  // not mean it actually clicked Publish. Only trust a real post if the
+  // agent's own reply says so.
+  if (agentStatus !== 'published') {
+    const failed = await socialStore.updatePost(post.id, {
+      status: 'failed',
+      error: agentNotes || `OpenClaw did not confirm the post was published (agent reported: ${agentStatus || 'no status returned'})`,
+      diagnostics: {
+        ...(post.diagnostics && typeof post.diagnostics === 'object' ? post.diagnostics : {}),
+        checkedAt: new Date().toISOString(),
+        channel: 'facebook_personal',
+        publishMode: 'openclaw_browser',
+        openclawJobId: jobId,
+        failedStep: 'publish_not_confirmed',
+        execute: executed.execute || null,
+        jobStatus: executed.jobStatus || null,
+        jobStatusError: safeText(executed.jobStatusError),
+      },
+    }, scope);
+    return { ok: false, status: 502, error: failed?.error || 'OpenClaw did not confirm the post was published', post: failed };
+  }
 
   const published = await socialStore.updatePost(post.id, {
     status: 'published',
@@ -1486,7 +1510,7 @@ function sendRedirect(res, location) {
 }
 
 function settingsOAuthReturnUrl(origin, params = {}) {
-  const base = `${String(origin || '').replace(/\/+$/, '')}/#page=settingsPage`;
+  const base = `${String(origin || '').replace(/\/+$/, '')}/#page=settingsApisPage`;
   const query = new URLSearchParams();
   Object.entries(params || {}).forEach(([key, value]) => {
     const text = safeText(value);
