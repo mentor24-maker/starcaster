@@ -33,7 +33,7 @@ App.channels = (function () {
   const SOCIAL_PLATFORMS = [
     'Bluesky',
     'Discord',
-    'Facebook',
+    'Facebook Page',
     'Facebook Personal',
     'Instagram',
     'LinkedIn',
@@ -115,11 +115,10 @@ App.channels = (function () {
   function formatPlatformDisplayName(platformName) {
     const raw = safeText(platformName);
     if (!raw) return '-';
-    const match = SOCIAL_PLATFORMS.find(
-      (platform) =>
-        normalizePlatformKey(platform) === normalizePlatformKey(raw) || platformMatchesFilter(platform, raw)
-    );
-    return match || raw;
+    const exact = SOCIAL_PLATFORMS.find((platform) => normalizePlatformKey(platform) === normalizePlatformKey(raw));
+    if (exact) return exact;
+    const fuzzy = SOCIAL_PLATFORMS.find((platform) => platformMatchesFilter(platform, raw));
+    return fuzzy || raw;
   }
 
   function buildPlatformCell(platformName) {
