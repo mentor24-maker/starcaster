@@ -1014,7 +1014,10 @@ App.campaigns = (function () {
       safeText(taglineRow?.tagline || selectedOptionTextIfValue(byId('campaignTaglineSelect'))),
     ].filter(Boolean);
     const ctaText = appendCtaUrl(ctaRow?.cta || selectedOptionTextIfValue(byId('campaignCtaSelect')));
-    const shareUrl = campaignProjectUrl();
+    // A selected Post's own URL (e.g. a specific article/episode link) wins over the
+    // generic project Website URL; fall back to the project URL when the Post has none.
+    const postOwnUrl = usePost ? normalizeProjectUrl(postRow?.url) : '';
+    const shareUrl = postOwnUrl || campaignProjectUrl();
     const originalHashtags = selectedHashtagRows().map(hashtagText).filter(Boolean);
     let hashtags = originalHashtags.slice();
     let includeCta = !!ctaText;
@@ -2348,6 +2351,7 @@ App.campaigns = (function () {
             ebookLabel: selectedOptionText(ebookSelect),
             postId: safeText(postSelect?.value),
             postLabel: selectedOptionText(postSelect),
+            postUrl: safeText(selectedCampaignPostRow()?.url),
             descriptionId: safeText(descriptionSelect?.value),
             descriptionLabel: selectedOptionText(descriptionSelect),
             transcriptId: safeText(transcriptSelect?.value),

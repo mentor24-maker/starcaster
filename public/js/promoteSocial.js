@@ -197,7 +197,10 @@ App.promoteSocial = (function () {
       hidden.has('campaignTaglineSelect') ? '' : captionText(config.taglineLabel),
     ].filter(Boolean);
     const ctaText = hidden.has('campaignCtaSelect') ? '' : appendCtaUrl(captionText(config.ctaLabel));
-    const shareUrl = campaignProjectUrl();
+    // A selected Post's own URL (captured into config.postUrl) wins over the generic
+    // project Website URL; fall back to the project URL when the Post has none.
+    const postOwnUrl = usesPostCopy ? normalizeProjectUrl(config.postUrl) : '';
+    const shareUrl = postOwnUrl || campaignProjectUrl();
     const hashtagSource = captionText(config.hashtagsText || config.hashtagGroupLabel);
     const originalHashtags = hidden.has('campaignHashtagGroupSelect')
       ? []
