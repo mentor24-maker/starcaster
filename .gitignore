@@ -37,3 +37,7 @@ lib/builder/email-render.js
 .claude/*
 !.claude/settings.json
 docs/SQL/backups/
+
+# Supabase CLI local state — machine-specific, not project source
+supabase/.branches/
+supabase/.temp/

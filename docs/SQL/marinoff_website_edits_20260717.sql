@@ -1,4 +1,4 @@
--- Marinoff & Associates website punch-list, phase 1 (generated 2026-07-17T17:09:13.755Z)
+-- Marinoff & Associates website punch-list, phase 1 (generated 2026-07-17T19:46:53.091Z)
 -- Generator: scripts/marinoff_punchlist_20260717.mjs  (do not hand-edit; re-run the script)
 -- Review report: docs/SQL/marinoff_website_edits_20260717_report.md
 --
