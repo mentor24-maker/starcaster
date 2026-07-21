@@ -4,6 +4,10 @@ App.campaigns = (function () {
   const { state, els, api, notify } = App;
   const CHANNEL_RULES_STORAGE_KEY = 'campaignChannelRules.v2';
   const TWEET_CHARACTER_LIMIT = 280;
+  // X wraps every URL in a fixed-length t.co link (currently 23 chars) and counts
+  // it that way. Other channels count the real URL, so this only applies to X.
+  const TWEET_TCO_URL_LENGTH = 23;
+  const TWEET_URL_PATTERN = /(?:https?:\/\/|www\.)[^\s]+/gi;
   const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
   const CAMPAIGN_STATUSES = [
     { value: 'draft', label: 'Draft' },
@@ -660,8 +664,11 @@ App.campaigns = (function () {
     return !!row && row.style.display !== 'none' && !row.classList.contains('user-hidden');
   }
 
-  function characterCount(value) {
-    return Array.from(String(value || '')).length;
+  function characterCount(value, shortenUrls) {
+    const text = shortenUrls
+      ? String(value || '').replace(TWEET_URL_PATTERN, '_'.repeat(TWEET_TCO_URL_LENGTH))
+      : String(value || '');
+    return Array.from(text).length;
   }
 
   function normalizeProjectUrl(value) {
@@ -1033,21 +1040,22 @@ App.campaigns = (function () {
     };
 
     const textLimit = campaignSocialTextLimit();
+    const shortenUrls = channelPlatformKey(selectedCampaignChannel()) === 'x';
     let text = compose();
-    while (hashtags.length && characterCount(text) > textLimit) {
+    while (hashtags.length && characterCount(text, shortenUrls) > textLimit) {
       hashtags = hashtags.slice(0, -1);
       text = compose();
     }
-    if (includeCta && characterCount(text) > textLimit) {
+    if (includeCta && characterCount(text, shortenUrls) > textLimit) {
       includeCta = false;
       text = compose();
     }
-    if (includeLink && characterCount(text) > textLimit) {
+    if (includeLink && characterCount(text, shortenUrls) > textLimit) {
       includeLink = false;
       text = compose();
     }
 
-    const count = characterCount(text);
+    const count = characterCount(text, shortenUrls);
     return {
       text,
       count,

@@ -6392,6 +6392,61 @@ button.builder-inline-asset-status-btn:focus-visible {
   padding-bottom: 0.85rem;
 }
 
+/* Hashtag picker — multi-select chips for the tweet Hashtags field.
+   The modal body is white, so chips use explicit light-on-dark-safe colors
+   rather than the app's dark button tokens (which render invisibly here). */
+.messaging-hashtag-picker-modal.c-modal__dialog {
+  width: min(58vw, calc(80vh * 4 / 3));
+  max-width: 960px;
+  aspect-ratio: 4 / 3;
+  max-height: 88vh;
+}
+
+.messaging-hashtag-picker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-content: flex-start;
+}
+
+.messaging-hashtag-picker-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #c9d4e0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #1f2b3a;
+  cursor: pointer;
+  text-align: left;
+  white-space: normal;
+}
+
+.messaging-hashtag-picker-item:hover {
+  border-color: var(--accent);
+  background: #e6edf5;
+}
+
+.messaging-hashtag-picker-item.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.messaging-hashtag-picker-item-label {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.messaging-hashtag-picker-item-meta {
+  font-size: 0.78rem;
+  opacity: 0.78;
+}
+
 .builder-theme-picker-group-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
