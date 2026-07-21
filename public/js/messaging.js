@@ -996,6 +996,229 @@ App.messaging = (function () {
     return modal;
   }
 
+  // ---- Hashtag picker (sibling of the tweet image picker above) --------------
+  // A tweet can carry several hashtags, so these helpers treat the free-text
+  // Hashtags field as a de-duplicated set of tokens. The parse/normalize rules
+  // mirror formatHashtagsForTweetPreview: split on commas/whitespace, strip any
+  // leading #/commas, then re-prefix a single '#'.
+  function normalizeHashtagToken(value) {
+    const text = String(value || '').trim().replace(/^[#,\s]+/, '').trim();
+    if (!text) return '';
+    return `#${text}`;
+  }
+
+  function parseHashtagField(raw) {
+    const seen = new Set();
+    const tokens = [];
+    String(raw || '')
+      .split(/[,\s]+/)
+      .forEach((part) => {
+        const tag = normalizeHashtagToken(part);
+        if (!tag) return;
+        const key = tag.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        tokens.push(tag);
+      });
+    return tokens;
+  }
+
+  function serializeHashtagField(tokens) {
+    return (Array.isArray(tokens) ? tokens : []).join(' ');
+  }
+
+  function hashtagFieldSelectedKeys(input) {
+    const keys = new Set();
+    parseHashtagField(input ? input.value : '').forEach((tag) => keys.add(tag.toLowerCase()));
+    return keys;
+  }
+
+  // Toggle a hashtag in/out of the target input, keeping it de-duplicated, and
+  // fire input/change so the live tweet preview (bindTweetEditPreview) updates.
+  function toggleHashtagInField(input, hashtag) {
+    if (!input) return false;
+    const target = normalizeHashtagToken(hashtag);
+    if (!target) return false;
+    const key = target.toLowerCase();
+    const tokens = parseHashtagField(input.value);
+    const idx = tokens.findIndex((tag) => tag.toLowerCase() === key);
+    let selected;
+    if (idx >= 0) {
+      tokens.splice(idx, 1);
+      selected = false;
+    } else {
+      tokens.push(target);
+      selected = true;
+    }
+    input.value = serializeHashtagField(tokens);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return selected;
+  }
+
+  // Cache the hashtag library per project, mirroring the image options loader.
+  let hashtagPickerOptions = [];
+  let hashtagPickerOptionsProjectId = null;
+
+  async function loadHashtagPickerOptions(options) {
+    const force = !!(options && options.force);
+    const currentProjectId = cleanText(state.currentProjectId);
+    if (!force && hashtagPickerOptionsProjectId === currentProjectId && hashtagPickerOptions.length) {
+      return hashtagPickerOptions;
+    }
+    const res = await api('/api/messaging/hashtags?limit=5000');
+    const rows = Array.isArray(res && res.hashtags) ? res.hashtags : [];
+    hashtagPickerOptions = rows
+      .map((row) => ({
+        hashtag: normalizeHashtagToken(row && row.hashtag),
+        topic: cleanText(row && (row.topic != null ? row.topic : row.category)),
+        campaignId: row && row.campaign_id != null ? (Number(row.campaign_id) || null) : null,
+      }))
+      .filter((row) => row.hashtag);
+    hashtagPickerOptionsProjectId = currentProjectId;
+    return hashtagPickerOptions;
+  }
+
+  function hashtagCampaignName(campaignId) {
+    if (!campaignId) return '';
+    const campaigns = Array.isArray(state.campaigns) ? state.campaigns : [];
+    const match = campaigns.find((campaign) => (Number(campaign.id || 0) || 0) === Number(campaignId));
+    return match ? String(match.name || `Campaign ${campaignId}`) : `Campaign ${campaignId}`;
+  }
+
+  async function openHashtagPicker(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return false;
+    if (!App.components || typeof App.components.Modal !== 'function') return false;
+
+    try {
+      await loadHashtagPickerOptions({});
+    } catch (err) {
+      notify(`Could not load hashtags: ${err.message}`, true);
+      return false;
+    }
+
+    const rowsAll = hashtagPickerOptions.slice();
+
+    const body = document.createElement('div');
+    body.className = 'builder-theme-picker-body';
+    const toolbar = document.createElement('div');
+    toolbar.className = 'builder-theme-picker-toolbar';
+
+    const filterInput = document.createElement('input');
+    filterInput.type = 'search';
+    filterInput.placeholder = 'Search hashtags by name';
+
+    const topicFilter = document.createElement('select');
+    const topicValues = Array.from(new Set(rowsAll.map((row) => row.topic).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b));
+    topicFilter.innerHTML = '<option value="">All Topics</option>';
+    topicValues.forEach((topic) => {
+      const option = document.createElement('option');
+      option.value = topic;
+      option.textContent = topic;
+      topicFilter.appendChild(option);
+    });
+
+    const campaignFilter = document.createElement('select');
+    const campaignIds = Array.from(new Set(rowsAll.map((row) => row.campaignId).filter((id) => id != null)));
+    campaignFilter.innerHTML = '<option value="">All Campaigns</option>';
+    campaignIds
+      .map((id) => ({ id, name: hashtagCampaignName(id) }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((entry) => {
+        const option = document.createElement('option');
+        option.value = String(entry.id);
+        option.textContent = entry.name;
+        campaignFilter.appendChild(option);
+      });
+
+    const resultCount = document.createElement('div');
+    resultCount.className = 'builder-theme-picker-result-count';
+
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.textContent = 'Done';
+
+    toolbar.appendChild(filterInput);
+    toolbar.appendChild(topicFilter);
+    if (campaignIds.length) toolbar.appendChild(campaignFilter);
+    toolbar.appendChild(resultCount);
+    toolbar.appendChild(doneBtn);
+
+    const list = document.createElement('div');
+    list.className = 'builder-theme-picker-groups messaging-hashtag-picker-list';
+    body.appendChild(toolbar);
+    body.appendChild(list);
+
+    let modal = null;
+
+    function renderList() {
+      const search = String(filterInput.value || '').trim().toLowerCase();
+      const topic = String(topicFilter.value || '').trim();
+      const campaign = String(campaignFilter.value || '').trim();
+      const selectedKeys = hashtagFieldSelectedKeys(input);
+      const rows = rowsAll.filter((row) => {
+        if (topic && row.topic !== topic) return false;
+        if (campaign && String(row.campaignId || '') !== campaign) return false;
+        if (search && !row.hashtag.toLowerCase().includes(search)) return false;
+        return true;
+      });
+      resultCount.textContent = `${rows.length} hashtag${rows.length === 1 ? '' : 's'}`;
+      list.textContent = '';
+      if (!rows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = rowsAll.length
+          ? 'No hashtags match these filters.'
+          : 'No hashtags in the library yet.';
+        list.appendChild(empty);
+        return;
+      }
+      rows.forEach((row) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'messaging-hashtag-picker-item';
+        const isSelected = selectedKeys.has(row.hashtag.toLowerCase());
+        item.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        if (isSelected) item.classList.add('is-selected');
+
+        const label = document.createElement('span');
+        label.className = 'messaging-hashtag-picker-item-label';
+        label.textContent = row.hashtag;
+        item.appendChild(label);
+
+        const metaBits = [row.topic, hashtagCampaignName(row.campaignId)].filter(Boolean);
+        if (metaBits.length) {
+          const meta = document.createElement('span');
+          meta.className = 'messaging-hashtag-picker-item-meta';
+          meta.textContent = metaBits.join(' · ');
+          item.appendChild(meta);
+        }
+
+        item.addEventListener('click', () => {
+          toggleHashtagInField(input, row.hashtag);
+          renderList();
+        });
+        list.appendChild(item);
+      });
+    }
+
+    filterInput.addEventListener('input', renderList);
+    topicFilter.addEventListener('change', renderList);
+    campaignFilter.addEventListener('change', renderList);
+    doneBtn.addEventListener('click', () => { if (modal) modal.close(); });
+
+    modal = App.components.Modal({
+      title: 'Choose Hashtags',
+      body,
+      dialogClass: 'builder-theme-picker-modal messaging-hashtag-picker-modal',
+    });
+    renderList();
+    modal.open();
+    return modal;
+  }
+
   function renderThumbnailOptions(select) {
     if (!select) return;
     if (select.tagName !== 'SELECT') {
@@ -1473,8 +1696,19 @@ App.messaging = (function () {
     return document.getElementById('messagingTweetsEditPanel');
   }
 
+  // X wraps every URL in a fixed-length t.co link (currently 23 characters) no
+  // matter how long the real URL is, and counts it that way against the 280
+  // limit. So we replace each URL with a 23-char stand-in before counting code
+  // points — otherwise a long Substack link inflates the count for no reason.
+  const TWEET_TCO_URL_LENGTH = 23;
+  const TWEET_URL_PATTERN = /(?:https?:\/\/|www\.)[^\s]+/gi;
+
   function tweetCharacterCount(value) {
-    return Array.from(String(value || '')).length;
+    const normalized = String(value || '').replace(
+      TWEET_URL_PATTERN,
+      '_'.repeat(TWEET_TCO_URL_LENGTH),
+    );
+    return Array.from(normalized).length;
   }
 
   function formatHashtagsForTweetPreview(raw) {
@@ -10148,6 +10382,22 @@ App.messaging = (function () {
       });
     }
 
+    const tweetHashtagsPickerBtn = document.getElementById('messagingTweetHashtagsPickerBtn');
+    if (tweetHashtagsPickerBtn && tweetHashtagsPickerBtn.dataset.hashtagPickerBound !== 'true') {
+      tweetHashtagsPickerBtn.dataset.hashtagPickerBound = 'true';
+      tweetHashtagsPickerBtn.addEventListener('click', function () {
+        openHashtagPicker('messagingTweetHashtags');
+      });
+    }
+
+    const tweetEditHashtagsPickerBtn = document.getElementById('messagingTweetEditHashtagsPickerBtn');
+    if (tweetEditHashtagsPickerBtn && tweetEditHashtagsPickerBtn.dataset.hashtagPickerBound !== 'true') {
+      tweetEditHashtagsPickerBtn.dataset.hashtagPickerBound = 'true';
+      tweetEditHashtagsPickerBtn.addEventListener('click', function () {
+        openHashtagPicker('messagingTweetEditHashtags');
+      });
+    }
+
     bindTweetEditAssociations();
     bindHeadlineEditAssociations();
 
@@ -10321,6 +10571,7 @@ App.messaging = (function () {
       App.messagingPostsEditor?.closePostEditForm?.();
     },
     openImageAssetPicker: openTweetImageAssetPicker,
+    openHashtagPicker,
     renderImageAssetPickerDisplay: renderTweetImagePickerDisplay,
     imageAssetById,
     imageAssetLabel: tweetImageAssetLabel,

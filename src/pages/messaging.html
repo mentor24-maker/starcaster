@@ -430,7 +430,10 @@
               
               
                 <label for="messagingTweetHashtags"><strong>Hashtags:</strong></label>
-                <input id="messagingTweetHashtags" name="hashtags" />
+                <div class="field-stack">
+                  <input id="messagingTweetHashtags" name="hashtags" />
+                  <button id="messagingTweetHashtagsPickerBtn" type="button" class="btn">Choose Hashtags</button>
+                </div>
               
               
                 <label for="messagingTweetImagePickerBtn"><strong>Image:</strong></label>
@@ -520,7 +523,10 @@
               <input id="messagingTweetEditUrl" name="url" type="url" />
 
               <label for="messagingTweetEditHashtags">Hashtags</label>
-              <input id="messagingTweetEditHashtags" name="hashtags" placeholder="Comma-separated" />
+              <div class="field-stack">
+                <input id="messagingTweetEditHashtags" name="hashtags" placeholder="Comma-separated" />
+                <button id="messagingTweetEditHashtagsPickerBtn" type="button" class="btn">Choose Hashtags</button>
+              </div>
 
               <label for="messagingTweetEditImagePickerBtn">Image</label>
               <div class="field-stack">
