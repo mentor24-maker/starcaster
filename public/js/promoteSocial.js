@@ -3,6 +3,10 @@ window.App = window.App || {};
 App.promoteSocial = (function () {
   const { api, notify, state } = App;
   const SOCIAL_TEXT_LIMIT = 280;
+  // X wraps every URL in a fixed-length t.co link (currently 23 chars) and counts
+  // it that way. Other channels count the real URL, so this only applies to X.
+  const TWEET_TCO_URL_LENGTH = 23;
+  const TWEET_URL_PATTERN = /(?:https?:\/\/|www\.)[^\s]+/gi;
   const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
   const CAPTION_PLACEHOLDER_PATTERNS = [
     /^tweet(?:\s*\(.+\))?$/i,
@@ -106,15 +110,10 @@ App.promoteSocial = (function () {
     }
     const platform = normalizeDeliveryPlatform(selectedChannel);
     const account = channelAccount(selectedChannel);
-    if (platform === 'x' || platform === 'tiktok') {
-      return {
-        publisher: 'buffer',
-        starcasterChannelId: safeText(selectedChannel?.id || config.channelId),
-        targetPlatform: platform,
-        targetAccount: account,
-        openclawProfile: '',
-      };
-    }
+    // Buffer routing is disabled — every platform publishes directly through
+    // its own API. X uses the direct X API (default return below). TikTok has
+    // no direct client yet, so TikTok campaigns will fail at publish until one
+    // exists; that is intentional while the Buffer path is out of service.
     if (platform === 'facebook_personal') {
       return {
         publisher: 'facebook_personal',
@@ -133,8 +132,11 @@ App.promoteSocial = (function () {
     };
   }
 
-  function characterCount(value) {
-    return Array.from(String(value || '')).length;
+  function characterCount(value, shortenUrls) {
+    const text = shortenUrls
+      ? String(value || '').replace(TWEET_URL_PATTERN, '_'.repeat(TWEET_TCO_URL_LENGTH))
+      : String(value || '');
+    return Array.from(text).length;
   }
 
   function normalizeProjectUrl(value) {
@@ -187,6 +189,7 @@ App.promoteSocial = (function () {
     const textLimit = socialTextLimitForPublisher(delivery.publisher);
     const platform = safeText(delivery.targetPlatform).toLowerCase();
     const isFacebookChannel = platform === 'facebook' || platform === 'facebook_personal';
+    const shortenUrls = platform === 'x';
     const usesPostCopy = !hidden.has('campaignPostSelect')
       && (isFacebookChannel || hidden.has('campaignTweetSelect'));
     const primaryCopy = usesPostCopy
@@ -219,22 +222,22 @@ App.promoteSocial = (function () {
     };
 
     let text = compose();
-    while (hashtags.length && characterCount(text) > textLimit) {
+    while (hashtags.length && characterCount(text, shortenUrls) > textLimit) {
       hashtags = hashtags.slice(0, -1);
       text = compose();
     }
-    if (includeCta && characterCount(text) > textLimit) {
+    if (includeCta && characterCount(text, shortenUrls) > textLimit) {
       includeCta = false;
       text = compose();
     }
-    if (includeLink && characterCount(text) > textLimit) {
+    if (includeLink && characterCount(text, shortenUrls) > textLimit) {
       includeLink = false;
       text = compose();
     }
     const urlMissingFromText = Boolean(shareUrl) && !text.includes(shareUrl);
     return {
       text,
-      count: characterCount(text),
+      count: characterCount(text, shortenUrls),
       config,
       shareUrl,
       urlMissingFromText,
@@ -877,8 +880,9 @@ App.promoteSocial = (function () {
       throw new Error('Facebook Personal channel is missing OpenClaw Profile. Edit the channel under Channels and set the profile name.');
     }
     const textLimit = socialTextLimitForPublisher(delivery.publisher);
-    if (characterCount(text) > textLimit) {
-      throw new Error(`Post text is ${characterCount(text) - textLimit} characters over the limit for this channel.`);
+    const shortenUrls = safeText(delivery.targetPlatform).toLowerCase() === 'x';
+    if (characterCount(text, shortenUrls) > textLimit) {
+      throw new Error(`Post text is ${characterCount(text, shortenUrls) - textLimit} characters over the limit for this channel.`);
     }
     const publishNow = !!options?.publishNow;
     const payload = {
