@@ -1181,8 +1181,12 @@ App.settings = (function () {
     setApiFormVisible(false, 'Add API');
   }
 
-  function openApiSettingsForm(provider, values, title) {
+  function openApiSettingsForm(provider, values, title, diagnostics) {
     state.apiFormValues = values && typeof values === 'object' ? { ...values } : {};
+    // Per-field source metadata (which value is actually in effect) for the
+    // provider being edited. Tagged with its provider so we never show it
+    // against a different provider selected from the dropdown.
+    state.apiDiagnostics = (diagnostics && provider) ? { provider, ...diagnostics } : null;
     renderApiProviderOptions(provider || els.apiProviderSelect?.value || state.apiSchemas[0]?.provider);
     if (els.apiProviderSelect && provider) {
       els.apiProviderSelect.value = provider;
@@ -1306,6 +1310,35 @@ App.settings = (function () {
 
       row.appendChild(label);
       row.appendChild(control);
+
+      // Source note: which value is actually in effect for this field, so a
+      // saved Settings value quietly overridden (or backed) by an env var is
+      // never a mystery. Only shown for the provider the diagnostics belong to.
+      const diag = (state.apiDiagnostics && state.apiDiagnostics.provider === provider)
+        ? state.apiDiagnostics : null;
+      if (diag) {
+        const src = diag.sources && diag.sources[field.key];
+        const envName = diag.envKeys && diag.envKeys[field.key];
+        const envAlso = diag.envAvailable && diag.envAvailable[field.key];
+        let noteText = '';
+        if (src === 'env') {
+          noteText = `In effect from environment variable${envName ? ` ${envName}` : ''}. Save a value here to override it.`;
+        } else if (src === 'file' && envAlso) {
+          noteText = `Using your saved value (environment variable${envName ? ` ${envName}` : ''} is also set, but your saved value wins).`;
+        } else if (src === 'file') {
+          noteText = 'Using your saved value.';
+        }
+        if (noteText) {
+          const note = document.createElement('div');
+          note.className = 'api-field-source';
+          note.textContent = noteText;
+          note.style.fontSize = '0.8em';
+          note.style.marginTop = '4px';
+          note.style.opacity = '0.75';
+          row.appendChild(note);
+        }
+      }
+
       els.apiFieldsContainer.appendChild(row);
     });
     renderApiProviderHelp(provider);
@@ -1484,7 +1517,7 @@ App.settings = (function () {
 
   async function editApiConfig(provider) {
     const data = await api(`/api/settings/apis/${encodeURIComponent(provider)}`);
-    openApiSettingsForm(data.provider, data.values || {}, `Edit API: ${data.label || data.provider}`);
+    openApiSettingsForm(data.provider, data.values || {}, `Edit API: ${data.label || data.provider}`, data.diagnostics);
   }
 
   async function deleteApiConfig(provider) {
