@@ -110,15 +110,10 @@ App.promoteSocial = (function () {
     }
     const platform = normalizeDeliveryPlatform(selectedChannel);
     const account = channelAccount(selectedChannel);
-    if (platform === 'x' || platform === 'tiktok') {
-      return {
-        publisher: 'buffer',
-        starcasterChannelId: safeText(selectedChannel?.id || config.channelId),
-        targetPlatform: platform,
-        targetAccount: account,
-        openclawProfile: '',
-      };
-    }
+    // Buffer routing is disabled — every platform publishes directly through
+    // its own API. X uses the direct X API (default return below). TikTok has
+    // no direct client yet, so TikTok campaigns will fail at publish until one
+    // exists; that is intentional while the Buffer path is out of service.
     if (platform === 'facebook_personal') {
       return {
         publisher: 'facebook_personal',
