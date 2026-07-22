@@ -116,9 +116,12 @@ async function inspectFacebookToken(longToken, pagesSeen) {
       + 'missing, it was declined in the popup rather than never requested.';
   } else if (!pagesSeen.length) {
     diagnosis = 'The token carries the right permissions but can see zero Facebook Pages.';
-    fix = 'The Page is most likely owned by a Business portfolio where your user is not a direct '
-      + 'Page admin. Open the Page in Meta Business Suite -> Settings -> People and confirm your '
-      + 'account has a Page admin (not just Business) role, then generate a new token.';
+    fix = 'Two likely causes, cheapest first.\n'
+      + '    1. The Facebook popup never granted the Page. Its second screen lists your Pages\n'
+      + '       with checkboxes and grants NONE by default — clicking straight through produces\n'
+      + '       exactly this result. Regenerate the token and tick the Page explicitly.\n'
+      + '    2. The Page belongs to a Business portfolio. Add the business_management permission\n'
+      + '       in Graph API Explorer alongside the others, then generate a new token.';
   } else {
     diagnosis = `${pagesSeen.length} Page(s) are visible, but none has an Instagram professional `
       + 'account attached.';
