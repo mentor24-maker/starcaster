@@ -41,7 +41,7 @@ App.builderNavMenu = (function () {
     return {
       id: safeText(item.id, 120) || createNavMenuItemId(index + 1),
       label: safeText(item.label, 200),
-      href: safeText(item.href || item.url, 2000) || '#',
+      href: safeText(item.href || item.url, 2000),
       parentId: safeText(item.parentId || item.parent_id, 120),
       target: safeText(item.target) === '_blank' ? '_blank' : '_self',
       ...(width ? { width } : {}),
@@ -255,6 +255,16 @@ App.builderNavMenu = (function () {
       renderList();
     }
 
+    // Same save path as persist(), but skips the list rebuild. Structural
+    // changes (add/remove/reorder/parent) need renderList() to update
+    // sibling rows; per-keystroke field edits don't, and rebuilding the DOM
+    // on every keystroke was stealing focus from the input mid-type.
+    function persistFieldEdit(nextItems) {
+      items = nextItems.map((item, index) => normalizeNavMenuItem(item, index));
+      setValue(serializeNavMenuItems(items));
+      afterChange(items);
+    }
+
     function moveItem(id, direction) {
       const index = items.findIndex((item) => item.id === id);
       const target = index + direction;
@@ -338,7 +348,7 @@ App.builderNavMenu = (function () {
         labelInput.addEventListener('input', () => {
           item.label = labelInput.value;
           titleEl.textContent = safeText(item.label) || `Menu Item ${index + 1}`;
-          persist(items);
+          persistFieldEdit(items);
         });
         makeField('Navigation Label', labelInput);
 
@@ -349,7 +359,7 @@ App.builderNavMenu = (function () {
         urlInput.placeholder = '/path-or-url';
         urlInput.addEventListener('input', () => {
           item.href = urlInput.value;
-          persist(items);
+          persistFieldEdit(items);
         });
         makeField('URL', urlInput);
 
@@ -361,7 +371,7 @@ App.builderNavMenu = (function () {
         widthInput.disabled = Boolean(safeText(item.parentId));
         widthInput.addEventListener('input', () => {
           item.width = widthInput.value;
-          persist(items);
+          persistFieldEdit(items);
         });
         makeField('Width (Custom sizing)', widthInput);
 
