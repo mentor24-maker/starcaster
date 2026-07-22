@@ -3,23 +3,7 @@ window.App = window.App || {};
 App.promoteSocial = (function () {
   const { api, notify, state } = App;
   const SOCIAL_TEXT_LIMIT = 280;
-  // X wraps every URL in a fixed-length t.co link (currently 23 chars) and counts
-  // it that way. Other channels count the real URL, so this only applies to X.
-  const TWEET_TCO_URL_LENGTH = 23;
-  const TWEET_URL_PATTERN = /(?:https?:\/\/|www\.)[^\s]+/gi;
   const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
-  const CAPTION_PLACEHOLDER_PATTERNS = [
-    /^tweet(?:\s*\(.+\))?$/i,
-    /^post(?:\s*\(.+\))?$/i,
-    /^caption(?:\s*\(.+\))?$/i,
-    /^tagline(?:\s*\(.+\))?$/i,
-    /^cta(?:\s*\(.+\))?$/i,
-    /^hashtags?(?:\s*\(.+\))?$/i,
-    /^wyr\s+question(?:\s*\(.+\))?$/i,
-    /^would\s+you\s+rather\s+question(?:\s*\(.+\))?$/i,
-    /^primary\s+(?:image|video)(?:\s*\(.+\))?$/i,
-    /^(?:image|video)(?:\s*\(.+\))?$/i,
-  ];
 
   let campaigns = [];
   let posts = [];
@@ -32,12 +16,6 @@ App.promoteSocial = (function () {
 
   function safeText(value) {
     return String(value || '').trim();
-  }
-
-  function captionText(value) {
-    const text = safeText(value);
-    if (!text) return '';
-    return CAPTION_PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(text)) ? '' : text;
   }
 
   async function promoteSocialApi(path, options) {
@@ -132,13 +110,6 @@ App.promoteSocial = (function () {
     };
   }
 
-  function characterCount(value, shortenUrls) {
-    const text = shortenUrls
-      ? String(value || '').replace(TWEET_URL_PATTERN, '_'.repeat(TWEET_TCO_URL_LENGTH))
-      : String(value || '');
-    return Array.from(text).length;
-  }
-
   function normalizeProjectUrl(value) {
     const raw = safeText(value);
     if (!raw) return '';
@@ -161,14 +132,6 @@ App.promoteSocial = (function () {
     hint.textContent = `Date and time are interpreted in the active project timezone (${tz}). Change it under Settings → Projects → Schedule Timezone.`;
   }
 
-  function appendCtaUrl(ctaText) {
-    const text = safeText(ctaText);
-    if (!text) return '';
-    const url = campaignProjectUrl();
-    if (!url || text.includes(url)) return text;
-    return `${text} ${url}`;
-  }
-
   async function ensurePromoteSocialProjectContext() {
     try {
       const current = await api('/api/projects/current', { method: 'GET' });
@@ -184,63 +147,42 @@ App.promoteSocial = (function () {
 
   function buildSocialText(campaign) {
     const config = parseConfig(campaign);
-    const hidden = new Set(Array.isArray(config.hiddenContentFieldIds) ? config.hiddenContentFieldIds : []);
+    // composeExcludedFieldIds covers both user-deleted rows and rows the channel
+    // profile hides; older campaigns only recorded the user-deleted ones.
+    const excludedIds = Array.isArray(config.composeExcludedFieldIds)
+      ? config.composeExcludedFieldIds
+      : config.hiddenContentFieldIds;
+    const excluded = new Set(Array.isArray(excludedIds) ? excludedIds : []);
     const delivery = socialDeliveryForCampaign(campaign, config);
-    const textLimit = socialTextLimitForPublisher(delivery.publisher);
     const platform = safeText(delivery.targetPlatform).toLowerCase();
     const isFacebookChannel = platform === 'facebook' || platform === 'facebook_personal';
-    const shortenUrls = platform === 'x';
-    const usesPostCopy = !hidden.has('campaignPostSelect')
-      && (isFacebookChannel || hidden.has('campaignTweetSelect'));
+    const usesPostCopy = !excluded.has('campaignPostSelect')
+      && (isFacebookChannel || excluded.has('campaignTweetSelect'));
     const primaryCopy = usesPostCopy
-      ? captionText(config.postLabel)
-      : (hidden.has('campaignTweetSelect') ? '' : captionText(config.tweetLabel));
-    const baseParts = [
-      primaryCopy,
-      hidden.has('campaignTaglineSelect') ? '' : captionText(config.taglineLabel),
-    ].filter(Boolean);
-    const ctaText = hidden.has('campaignCtaSelect') ? '' : appendCtaUrl(captionText(config.ctaLabel));
+      ? config.postLabel
+      : (excluded.has('campaignTweetSelect') ? '' : config.tweetLabel);
     // A selected Post's own URL (captured into config.postUrl) wins over the generic
     // project Website URL; fall back to the project URL when the Post has none.
     const postOwnUrl = usesPostCopy ? normalizeProjectUrl(config.postUrl) : '';
-    const shareUrl = postOwnUrl || campaignProjectUrl();
-    const hashtagSource = captionText(config.hashtagsText || config.hashtagGroupLabel);
-    const originalHashtags = hidden.has('campaignHashtagGroupSelect')
-      ? []
-      : hashtagSource.split(/\s+/).filter(Boolean);
-    let hashtags = originalHashtags.slice();
-    let includeCta = !!ctaText;
-    let includeLink = Boolean(shareUrl);
-    const compose = () => {
-      const bodyParts = [...baseParts];
-      if (includeCta && ctaText) bodyParts.push(ctaText);
-      const bodyJoined = bodyParts.join('\n\n');
-      if (includeLink && shareUrl && !bodyJoined.includes(shareUrl)) bodyParts.push(shareUrl);
-      const withHashtags = [...bodyParts];
-      if (hashtags.length) withHashtags.push(hashtags.join(' '));
-      return withHashtags.filter(Boolean).join('\n\n');
-    };
-
-    let text = compose();
-    while (hashtags.length && characterCount(text, shortenUrls) > textLimit) {
-      hashtags = hashtags.slice(0, -1);
-      text = compose();
-    }
-    if (includeCta && characterCount(text, shortenUrls) > textLimit) {
-      includeCta = false;
-      text = compose();
-    }
-    if (includeLink && characterCount(text, shortenUrls) > textLimit) {
-      includeLink = false;
-      text = compose();
-    }
-    const urlMissingFromText = Boolean(shareUrl) && !text.includes(shareUrl);
+    const preview = App.composeXPost.composePost({
+      primaryCopy,
+      tagline: excluded.has('campaignTaglineSelect') ? '' : config.taglineLabel,
+      cta: excluded.has('campaignCtaSelect') ? '' : config.ctaLabel,
+      hashtags: excluded.has('campaignHashtagGroupSelect')
+        ? []
+        : (config.hashtagsText || config.hashtagGroupLabel),
+      shareUrl: postOwnUrl || campaignProjectUrl(),
+      projectUrl: campaignProjectUrl(),
+      limit: socialTextLimitForPublisher(delivery.publisher),
+      shortenUrls: platform === 'x',
+    });
     return {
-      text,
-      count: characterCount(text, shortenUrls),
+      text: preview.text,
+      count: preview.count,
+      limit: preview.limit,
       config,
-      shareUrl,
-      urlMissingFromText,
+      shareUrl: preview.shareUrl,
+      urlMissingFromText: Boolean(preview.shareUrl) && !preview.urlIncluded,
     };
   }
 
@@ -869,7 +811,9 @@ App.promoteSocial = (function () {
     const text = safeText(preview.text);
     if (!text) throw new Error('No post content could be assembled from this campaign.');
     if (preview.urlMissingFromText) {
-      throw new Error('Post text is over the current limit and the project URL could not be kept. Shorten copy, tagline, CTA, or hashtags, or use a shorter Website URL on the project or profile.');
+      // The URL itself is never the problem on X — every link counts as 23
+      // characters no matter how long it is.
+      throw new Error(`Post text is ${preview.count} of ${preview.limit} characters, so the project URL could not be kept. Shorten the copy, tagline, CTA, or hashtags.`);
     }
     const config = preview.config;
     const delivery = socialDeliveryForCampaign(campaign, config);
@@ -879,10 +823,8 @@ App.promoteSocial = (function () {
     if (delivery.publisher === 'facebook_personal' && !safeText(delivery.openclawProfile)) {
       throw new Error('Facebook Personal channel is missing OpenClaw Profile. Edit the channel under Channels and set the profile name.');
     }
-    const textLimit = socialTextLimitForPublisher(delivery.publisher);
-    const shortenUrls = safeText(delivery.targetPlatform).toLowerCase() === 'x';
-    if (characterCount(text, shortenUrls) > textLimit) {
-      throw new Error(`Post text is ${characterCount(text, shortenUrls) - textLimit} characters over the limit for this channel.`);
+    if (preview.count > preview.limit) {
+      throw new Error(`Post text is ${preview.count} of ${preview.limit} characters — ${preview.count - preview.limit} over the limit for this channel.`);
     }
     const publishNow = !!options?.publishNow;
     const payload = {
