@@ -80,6 +80,57 @@ function fail(message, hint) {
   process.exit(1);
 }
 
+/**
+ * Report what a Facebook token can actually see, so a failure names one cause
+ * instead of listing possibilities. Three different problems produce the same
+ * "no linked Instagram account" result and each needs a different fix:
+ * a missing permission, no visible Pages at all, or Pages with nothing attached.
+ */
+async function inspectFacebookToken(longToken, pagesSeen) {
+  const NEEDED = ['pages_show_list', 'instagram_basic', 'instagram_content_publish'];
+  const lines = [];
+
+  const me = await getJson(`${FB_BASE}/me?fields=name&access_token=${encodeURIComponent(longToken)}`);
+  if (me.ok && me.data?.name) lines.push(`Signed in as: ${me.data.name}`);
+
+  const perms = await getJson(`${FB_BASE}/me/permissions?access_token=${encodeURIComponent(longToken)}`);
+  const rows = perms.ok ? (perms.data?.data || []) : [];
+  const granted = rows.filter((r) => r.status === 'granted').map((r) => r.permission);
+  const declined = rows.filter((r) => r.status !== 'granted').map((r) => r.permission);
+  const missing = NEEDED.filter((name) => !granted.includes(name));
+
+  if (granted.length) lines.push(`Permissions granted: ${granted.join(', ')}`);
+  if (declined.length) lines.push(`Permissions DECLINED: ${declined.join(', ')}`);
+
+  lines.push(`Facebook Pages visible: ${pagesSeen.length}`);
+  pagesSeen.forEach((page) => {
+    lines.push(`  - ${page.name || '(unnamed)'} — no Instagram account attached`);
+  });
+
+  let diagnosis;
+  let fix;
+  if (missing.length) {
+    diagnosis = `This token is missing: ${missing.join(', ')}.`;
+    fix = 'In Graph API Explorer these must be ticked BEFORE clicking Generate Access Token, '
+      + 'and the Facebook popup must be allowed to finish. If a permission keeps coming back '
+      + 'missing, it was declined in the popup rather than never requested.';
+  } else if (!pagesSeen.length) {
+    diagnosis = 'The token carries the right permissions but can see zero Facebook Pages.';
+    fix = 'The Page is most likely owned by a Business portfolio where your user is not a direct '
+      + 'Page admin. Open the Page in Meta Business Suite -> Settings -> People and confirm your '
+      + 'account has a Page admin (not just Business) role, then generate a new token.';
+  } else {
+    diagnosis = `${pagesSeen.length} Page(s) are visible, but none has an Instagram professional `
+      + 'account attached.';
+    fix = 'Link it from the Page side rather than the phone: open the Facebook Page -> Settings -> '
+      + 'Linked accounts -> Instagram -> Connect account. Linking from the Instagram app often '
+      + 'connects the account to your personal profile instead of to the Page. Then generate a '
+      + 'new token.';
+  }
+
+  return { lines, diagnosis, fix };
+}
+
 /** Instagram Graph API path: FB Page -> linked IG Business account. */
 async function resolveViaFacebook(shortToken, appId, appSecret) {
   const exchanged = await getJson(
@@ -101,11 +152,12 @@ async function resolveViaFacebook(shortToken, appId, appSecret) {
 
   const linked = (pages.data?.data || []).filter((p) => p?.instagram_business_account?.id);
   if (!linked.length) {
+    // "No linked account" has three very different causes that need opposite
+    // fixes. Ask Facebook what this token can actually see and name the real one.
     return {
       ok: false,
       error: 'No Instagram Business account is linked to any Facebook Page on this token.',
-      hint: 'Either the IG account is still a personal account, or it is not linked to a Page, '
-        + 'or the token is missing the instagram_basic / pages_show_list permissions.',
+      detail: await inspectFacebookToken(longToken, pages.data?.data || []),
     };
   }
 
@@ -167,10 +219,21 @@ async function resolveViaInstagram(shortToken, appSecret) {
     const viaIg = await resolveViaInstagram(shortToken, appSecret);
     if (viaIg.ok) {
       result = viaIg;
+    } else if (result.detail) {
+      // The Facebook token was valid and we know exactly what it can see, so
+      // report that rather than the Instagram-side error, which is just the
+      // other API refusing a token that was never meant for it.
+      const { lines, diagnosis, fix } = result.detail;
+      console.error(`\n✖ ${firstError}\n`);
+      console.error('  What this token can actually see:\n');
+      lines.forEach((line) => console.error(`    ${line}`));
+      console.error(`\n  Diagnosis: ${diagnosis}`);
+      console.error(`\n  Fix: ${fix}\n`);
+      process.exit(1);
     } else {
       fail(
         `Could not resolve the token on either API.\n\n  Facebook Graph said:  ${firstError}\n  Instagram Login said: ${viaIg.error}`,
-        result.hint || 'Most often this means the token expired (they last about an hour) — generate a fresh one and retry.'
+        'Most often this means the token expired (they last about an hour) — generate a fresh one and retry.'
       );
     }
   }
