@@ -17,7 +17,13 @@ const MAIN = 'main';
 
 function git(args, fallback = '') {
   try {
-    return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    // stderr ignored: several probes below are expected to fail on refs that
+    // do not exist, and their noise would clutter the report.
+    return execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return fallback;
   }
@@ -62,13 +68,19 @@ const current = git(['rev-parse', '--abbrev-ref', 'HEAD'], 'unknown');
 const hasMain = !!git(['rev-parse', '--verify', '--quiet', MAIN], '');
 const onMain = current === MAIN;
 
+// Compare against origin/main when we have it — that is what a branch will
+// actually merge into, and the local copy of main may be out of date.
+const base = git(['rev-parse', '--verify', '--quiet', `origin/${MAIN}`], '')
+  ? `origin/${MAIN}`
+  : MAIN;
+
 out.push(heading('YOU ARE HERE'));
 if (onMain) {
   out.push(bullet(`${MAIN} — this is the live site. Do not edit files here;`));
   out.push(indent('ask me to start a new branch first.'));
 } else {
-  const ahead = hasMain ? count(['rev-list', '--count', `${MAIN}..HEAD`]) : 0;
-  const behind = hasMain ? count(['rev-list', '--count', `HEAD..${MAIN}`]) : 0;
+  const ahead = hasMain ? count(['rev-list', '--count', `${base}..HEAD`]) : 0;
+  const behind = hasMain ? count(['rev-list', '--count', `HEAD..${base}`]) : 0;
   out.push(bullet(`${current} — a separate copy, safe to work in.`));
   if (ahead) out.push(indent(`${plural(ahead, 'change')} here that the live site does not have yet.`));
   if (!ahead) out.push(indent('No committed changes yet on this branch.'));
@@ -90,8 +102,34 @@ if (!dirty.length) {
 
 // --- What is waiting to ship ------------------------------------------------
 
-const branches = lines(git(['for-each-ref', '--format=%(refname:short)', 'refs/heads/'], ''))
-  .filter((name) => name !== MAIN);
+/**
+ * Every branch anywhere — on this Mac, on GitHub, or both. A branch that
+ * lives only on GitHub is still unshipped work; listing local branches
+ * alone hides it.
+ */
+function branchInventory() {
+  const local = lines(git(['for-each-ref', '--format=%(refname:short)', 'refs/heads/'], ''));
+  // Full refnames, not short ones: the short name of refs/remotes/origin/HEAD
+  // is plain "origin", which would otherwise show up as a branch.
+  const remote = lines(git(['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/'], ''))
+    .map((ref) => ref.replace(/^refs\/remotes\/origin\//, ''))
+    .filter((name) => name && name !== 'HEAD');
+
+  const names = Array.from(new Set([...local, ...remote])).filter((name) => name !== MAIN);
+  return names.sort().map((name) => {
+    const onMac = local.includes(name);
+    const onGitHub = remote.includes(name);
+    return {
+      name,
+      onMac,
+      onGitHub,
+      ref: onMac ? name : `origin/${name}`,
+      where: onMac && onGitHub ? 'on your Mac and GitHub' : (onMac ? 'on your Mac only' : 'on GitHub only'),
+    };
+  });
+}
+
+const branches = hasMain ? branchInventory() : [];
 
 out.push(heading('OTHER WORK IN PROGRESS'));
 if (!hasMain) {
@@ -99,19 +137,38 @@ if (!hasMain) {
 } else if (!branches.length) {
   out.push(bullet('None — every branch has been shipped and cleaned up.'));
 } else {
-  branches.forEach((name) => {
-    const ahead = count(['rev-list', '--count', `${MAIN}..${name}`]);
-    const here = name === current ? '  <- you are here' : '';
-    if (!ahead) {
-      const note = name === current
+  branches.forEach((branch) => {
+    const here = branch.name === current ? '  <- you are here' : '';
+
+    // `git cherry` marks a commit "-" when the same change already exists on
+    // main under a different commit id. Those branches look unshipped to
+    // `--merged` but hold nothing new.
+    const cherry = lines(git(['cherry', base, branch.ref], ''));
+    const fresh = cherry.filter((line) => line.startsWith('+'));
+
+    if (!cherry.length) {
+      const note = branch.name === current
         ? 'nothing committed here yet.'
         : 'already shipped, safe to delete.';
-      out.push(bullet(`${name} — ${note}${here}`));
+      out.push(bullet(`${branch.name} — ${note}${here}`));
       return;
     }
-    out.push(bullet(`${name} — ${plural(ahead, 'unshipped change')}, last touched ${age(name)}.${here}`));
-    lines(git(['log', '--format=%s', `${MAIN}..${name}`], '')).slice(0, 3)
-      .forEach((line) => out.push(indent(`- ${line}`)));
+
+    if (!fresh.length) {
+      out.push(bullet(`${branch.name} — its work is already live, safe to delete (${branch.where}).${here}`));
+      out.push(indent('(Applied to main as a separate commit, so git still calls it unmerged.)'));
+      return;
+    }
+
+    out.push(bullet(
+      `${branch.name} — ${plural(fresh.length, 'unshipped change')}, `
+      + `last touched ${age(branch.ref)}, ${branch.where}.${here}`
+    ));
+    fresh.slice(0, 3).forEach((line) => {
+      const sha = line.slice(2).trim();
+      out.push(indent(`- ${subject(sha)}`));
+    });
+    if (fresh.length > 3) out.push(indent(`...and ${fresh.length - 3} more`));
   });
 }
 
