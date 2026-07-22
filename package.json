@@ -6,6 +6,8 @@
   "main": "server.js",
   "scripts": {
     "prepare": "node scripts/install_git_hooks.cjs",
+    "map": "node scripts/repo_map.cjs",
+    "check:passengers": "node scripts/check_branch_passengers.cjs",
     "build:html": "node scripts/build_html.js",
     "pin:assets": "node scripts/pin_asset_versions.cjs",
     "check:assets": "node scripts/check_asset_versions.cjs",
