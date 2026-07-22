@@ -1862,9 +1862,10 @@ async function handle(req, res, pathname, method) {
       isPrivate: body.isPrivate ?? body.is_private,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update saved section'), true;
-    // Propagate updated content to all canonical page instances (fire-and-forget).
-    propagateCanonicalSection(savedSectionMatch[1], result.data.section, scope).catch(() => {});
-    return sendOk(res, 200, result.data, { savedSection: result.data }), true;
+    // Awaited, not fire-and-forget: serverless freezes the function once the
+    // response is sent, which would cut propagation off partway down the pages.
+    const propagation = await propagateCanonicalSection(savedSectionMatch[1], result.data.section, scope);
+    return sendOk(res, 200, result.data, { savedSection: result.data }, { propagation }), true;
   }
   if (savedSectionMatch && requestMethod === 'DELETE') {
     const result = await deleteSavedSection(savedSectionMatch[1], scope);
