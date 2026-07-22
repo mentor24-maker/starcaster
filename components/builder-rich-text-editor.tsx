@@ -795,7 +795,13 @@ export function BuilderRichTextEditor({
         <textarea
           className="builder-rich-text-code-view"
           value={codeViewValue}
-          onChange={(e) => setCodeViewValue(e.target.value)}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setCodeViewValue(nextValue);
+            const storageHtml = prepareRichTextHtmlForStorage(nextValue);
+            lastEmittedStorageRef.current = storageHtml;
+            onChange(storageHtml);
+          }}
         />
       ) : (
         <EditorContent className="builder-rich-text-content" editor={editor} />
