@@ -4,10 +4,6 @@ App.campaigns = (function () {
   const { state, els, api, notify } = App;
   const CHANNEL_RULES_STORAGE_KEY = 'campaignChannelRules.v2';
   const TWEET_CHARACTER_LIMIT = 280;
-  // X wraps every URL in a fixed-length t.co link (currently 23 chars) and counts
-  // it that way. Other channels count the real URL, so this only applies to X.
-  const TWEET_TCO_URL_LENGTH = 23;
-  const TWEET_URL_PATTERN = /(?:https?:\/\/|www\.)[^\s]+/gi;
   const PROJECT_URL_FIELDS = ['website', 'projectUrl', 'project_url', 'siteUrl', 'site_url', 'url', 'domain', 'canonicalUrl', 'canonical_url'];
   const CAMPAIGN_STATUSES = [
     { value: 'draft', label: 'Draft' },
@@ -286,7 +282,10 @@ App.campaigns = (function () {
   }
 
   function campaignUsesPostCopy() {
-    return contentFieldIsActive('campaignPostSelect') && !contentFieldIsActive('campaignTweetSelect');
+    const platform = channelPlatformKey(selectedCampaignChannel());
+    const isFacebookChannel = platform === 'facebook' || platform === 'facebook_personal';
+    return contentFieldIsActive('campaignPostSelect')
+      && (isFacebookChannel || !contentFieldIsActive('campaignTweetSelect'));
   }
 
   function parseCampaignConfig(campaign) {
@@ -664,11 +663,19 @@ App.campaigns = (function () {
     return !!row && row.style.display !== 'none' && !row.classList.contains('user-hidden');
   }
 
-  function characterCount(value, shortenUrls) {
-    const text = shortenUrls
-      ? String(value || '').replace(TWEET_URL_PATTERN, '_'.repeat(TWEET_TCO_URL_LENGTH))
-      : String(value || '');
-    return Array.from(text).length;
+  /**
+   * Content fields that must NOT go into the composed post: user-deleted rows
+   * plus rows the channel profile hides. Only the first group lands in
+   * hiddenContentFieldIds, and channel-hidden rows keep their stale select
+   * values — so Promote needs this list to compose the same text the preview
+   * counted.
+   */
+  function excludedContentFieldIds() {
+    const rows = document.querySelectorAll('#campaignContentConditional .campaign-content-row');
+    return Array.from(rows)
+      .filter((row) => row.style.display === 'none' || row.classList.contains('user-hidden'))
+      .map((row) => safeText(row?.dataset?.fieldId))
+      .filter(Boolean);
   }
 
   function normalizeProjectUrl(value) {
@@ -708,14 +715,6 @@ App.campaigns = (function () {
       .map((field) => normalizeProjectUrl(project?.[field]))
       .find(Boolean);
     return projectUrl || '';
-  }
-
-  function appendCtaUrl(ctaText) {
-    const text = safeText(ctaText);
-    if (!text) return '';
-    const projectUrl = campaignProjectUrl();
-    if (!projectUrl || text.includes(projectUrl)) return text;
-    return `${text} ${projectUrl}`;
   }
 
   function hashtagTimestamp(row) {
@@ -1016,55 +1015,20 @@ App.campaigns = (function () {
     const primaryCopy = usePost
       ? safeText(postRow?.post || selectedOptionTextIfValue(byId('campaignPostSelect')))
       : safeText(tweetRow?.content || selectedOptionTextIfValue(byId('campaignTweetSelect')));
-    const baseParts = [
-      primaryCopy,
-      safeText(taglineRow?.tagline || selectedOptionTextIfValue(byId('campaignTaglineSelect'))),
-    ].filter(Boolean);
-    const ctaText = appendCtaUrl(ctaRow?.cta || selectedOptionTextIfValue(byId('campaignCtaSelect')));
     // A selected Post's own URL (e.g. a specific article/episode link) wins over the
     // generic project Website URL; fall back to the project URL when the Post has none.
     const postOwnUrl = usePost ? normalizeProjectUrl(postRow?.url) : '';
-    const shareUrl = postOwnUrl || campaignProjectUrl();
-    const originalHashtags = selectedHashtagRows().map(hashtagText).filter(Boolean);
-    let hashtags = originalHashtags.slice();
-    let includeCta = !!ctaText;
-    let includeLink = Boolean(shareUrl);
-    const compose = () => {
-      const bodyParts = [...baseParts];
-      if (includeCta && ctaText) bodyParts.push(ctaText);
-      const bodyJoined = bodyParts.join('\n\n');
-      if (includeLink && shareUrl && !bodyJoined.includes(shareUrl)) bodyParts.push(shareUrl);
-      const withHashtags = [...bodyParts];
-      if (hashtags.length) withHashtags.push(hashtags.join(' '));
-      return withHashtags.filter(Boolean).join('\n\n');
-    };
-
-    const textLimit = campaignSocialTextLimit();
-    const shortenUrls = channelPlatformKey(selectedCampaignChannel()) === 'x';
-    let text = compose();
-    while (hashtags.length && characterCount(text, shortenUrls) > textLimit) {
-      hashtags = hashtags.slice(0, -1);
-      text = compose();
-    }
-    if (includeCta && characterCount(text, shortenUrls) > textLimit) {
-      includeCta = false;
-      text = compose();
-    }
-    if (includeLink && characterCount(text, shortenUrls) > textLimit) {
-      includeLink = false;
-      text = compose();
-    }
-
-    const count = characterCount(text, shortenUrls);
-    return {
-      text,
-      count,
-      limit: textLimit,
-      delta: textLimit - count,
-      removedHashtagCount: originalHashtags.length - hashtags.length,
-      ctaDropped: !!ctaText && !includeCta,
-      urlMissingFromTweet: Boolean(shareUrl) && !text.includes(shareUrl),
-    };
+    const preview = App.composeXPost.composePost({
+      primaryCopy,
+      tagline: safeText(taglineRow?.tagline || selectedOptionTextIfValue(byId('campaignTaglineSelect'))),
+      cta: safeText(ctaRow?.cta || selectedOptionTextIfValue(byId('campaignCtaSelect'))),
+      hashtags: selectedHashtagRows().map(hashtagText).filter(Boolean),
+      shareUrl: postOwnUrl || campaignProjectUrl(),
+      projectUrl: campaignProjectUrl(),
+      limit: campaignSocialTextLimit(),
+      shortenUrls: channelPlatformKey(selectedCampaignChannel()) === 'x',
+    });
+    return { ...preview, urlMissingFromTweet: Boolean(preview.shareUrl) && !preview.urlIncluded };
   }
 
   function buildCampaignPreviewAsset() {
@@ -1178,7 +1142,7 @@ App.campaigns = (function () {
     const trimNotes = [
       preview.removedHashtagCount ? `${preview.removedHashtagCount} hashtag${preview.removedHashtagCount === 1 ? '' : 's'} removed` : '',
       preview.ctaDropped ? 'CTA dropped' : '',
-      preview.urlMissingFromTweet ? 'Project URL not in post - shorten copy or use a shorter Website URL' : '',
+      preview.urlMissingFromTweet ? 'Project URL not in post - shorten copy, tagline, CTA, or hashtags' : '',
     ].filter(Boolean).join(' · ');
     countEl.textContent = `${preview.count}/${preview.limit} characters · ${statusText}${trimNotes ? ` · ${trimNotes}` : ''}`;
     shell.appendChild(countEl);
@@ -2323,6 +2287,7 @@ App.campaigns = (function () {
             status: selectedStatus,
             statusLabel: campaignStatusLabel(selectedStatus),
             hiddenContentFieldIds: Array.from(hiddenCampaignContentFieldIds),
+            composeExcludedFieldIds: excludedContentFieldIds(),
             channelId: safeText(channelSelect?.value),
             channelLabel: selectedOptionText(channelSelect),
             topicId: safeText(topicSelect?.value),
