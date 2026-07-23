@@ -12,122 +12,72 @@ export type BuilderFloatingSaveAction = {
 type BuilderFloatingSaveRailProps = {
   actions: BuilderFloatingSaveAction[];
   isSaving: boolean;
+  /**
+   * The one element this rail shadows. While that element is on screen the
+   * rail hides, so the same button is never visible twice. Pass null for
+   * surfaces that have no in-page save button (the rail then just floats).
+   */
+  anchorSelector?: string | null;
 };
+
+/** Marks the single in-page button the pages-mode rail shadows. */
+export const BUILDER_SAVE_ANCHOR_ATTR = "data-builder-save-anchor";
+export const BUILDER_SAVE_ANCHOR_SELECTOR = `[${BUILDER_SAVE_ANCHOR_ATTR}]`;
+
+// Distance from the top/bottom viewport edge when the anchor is scrolled away.
+const EDGE_GAP = 24;
+const BUTTON_RESERVE = 74;
 
 const FALLBACK_POSITION: CSSProperties = {
   top: "50%",
-  right: "20px",
+  right: "60px",
   left: "auto",
   transform: "translateY(-50%)",
   visibility: "visible"
 };
 
-// After computing an ideal vertical center for the floating button, nudge it
-// to avoid landing directly over a section-header action-icon bar.
-function avoidSectionBars(idealTop: number, buttonHeight = 50): number {
-  const halfH = buttonHeight / 2;
+const HIDDEN_POSITION: CSSProperties = {
+  top: "-9999px",
+  left: "-9999px",
+  right: "auto",
+  transform: "none",
+  visibility: "hidden"
+};
 
-  const barRects = Array.from(
-    document.querySelectorAll<HTMLElement>(".builder-section-header")
-  )
-    .map(el => el.getBoundingClientRect())
-    .filter(r => r.height > 0 && r.bottom > 0 && r.top < window.innerHeight);
-
-  if (barRects.length === 0) return idealTop;
-
-  function overlapsAny(top: number): boolean {
-    const bTop = top - halfH;
-    const bBot = top + halfH;
-    return barRects.some(br => bBot > br.top + 4 && bTop < br.bottom - 4);
-  }
-
-  if (!overlapsAny(idealTop)) return idealTop;
-
-  const overlapping = barRects.filter(br => {
-    const bTop = idealTop - halfH;
-    const bBot = idealTop + halfH;
-    return bBot > br.top + 4 && bTop < br.bottom - 4;
-  });
-
-  const groupTop = Math.min(...overlapping.map(br => br.top));
-  const groupBottom = Math.max(...overlapping.map(br => br.bottom));
-
-  const MARGIN = 8;
-  const above = groupTop - halfH - MARGIN;
-  const below = groupBottom + halfH + MARGIN;
-
-  const clamp = (t: number) => Math.min(Math.max(t, 96), window.innerHeight - 96);
-  const aboveClamped = clamp(above);
-  const belowClamped = clamp(below);
-
-  const useAbove = Math.abs(above - idealTop) <= Math.abs(below - idealTop);
-  const candidate = useAbove ? aboveClamped : belowClamped;
-
-  if (overlapsAny(candidate)) {
-    const other = useAbove ? belowClamped : aboveClamped;
-    return overlapsAny(other) ? idealTop : other;
-  }
-
-  return candidate;
+function isOnScreen(rect: DOMRect): boolean {
+  return rect.bottom > 0 && rect.top < window.innerHeight;
 }
 
-function readShellAnchorPosition(): CSSProperties {
-  // If an edit panel was just opened, anchor the button at that header's level.
-  const focused = document.querySelector<HTMLElement>("[data-builder-focus]");
-  if (focused) {
-    const fr = focused.getBoundingClientRect();
-    const mid = (fr.top + fr.bottom) / 2;
-    if (mid > 40 && mid < window.innerHeight - 40) {
-      const top = avoidSectionBars(Math.min(Math.max(mid, 96), window.innerHeight - 96));
-      return {
-        top: `${top}px`,
-        right: "60px",
-        left: "auto",
-        transform: "translateY(-50%)",
-        visibility: "visible",
-      };
-    }
-  }
-
-  const shell =
-    document.querySelector<HTMLElement>(".builder-pages-details-shell") ??
-    document.querySelector<HTMLElement>(".builder-editor-layout-main") ??
-    document.querySelector<HTMLElement>(".builder-editor-section") ??
-    document.querySelector<HTMLElement>(".admin-page .admin-shell");
-
-  if (!shell) {
+function readAnchorPosition(anchorSelector: string | null): CSSProperties {
+  if (!anchorSelector) {
     return FALLBACK_POSITION;
   }
 
-  const rect = shell.getBoundingClientRect();
-  const gap = 20;
-  const buttonReserve = 200;
-  // Use the visible portion of the shell to compute mid — avoids clamping to
-  // 96px (top of screen) when the page is scrolled and rect.top is negative.
-  const clampedTop = Math.max(rect.top, 0);
-  const clampedBottom = Math.min(rect.bottom, window.innerHeight);
-  const anchorMid = clampedBottom > clampedTop
-    ? (clampedTop + clampedBottom) / 2
-    : window.innerHeight / 2;
-  const top = avoidSectionBars(Math.min(Math.max(anchorMid, 96), window.innerHeight - 96));
-  const preferredLeft = rect.right + gap;
-  const maxLeft = window.innerWidth - buttonReserve;
+  const anchor = Array.from(document.querySelectorAll<HTMLElement>(anchorSelector)).find(
+    el => el.getBoundingClientRect().height > 0
+  );
 
-  if (preferredLeft > maxLeft || rect.width >= window.innerWidth - 48) {
-    return {
-      top: `${top}px`,
-      right: "60px",
-      left: "auto",
-      transform: "translateY(-50%)",
-      visibility: "visible"
-    };
+  if (!anchor) {
+    return FALLBACK_POSITION;
   }
+
+  const rect = anchor.getBoundingClientRect();
+
+  // The real button is in view — show only that one.
+  if (isOnScreen(rect)) {
+    return HIDDEN_POSITION;
+  }
+
+  // Scrolled away: keep the rail in the anchor's column, pinned to whichever
+  // edge the anchor went past.
+  const right = Math.max(window.innerWidth - rect.right, 12);
+  const top = rect.bottom <= 0 ? EDGE_GAP : window.innerHeight - BUTTON_RESERVE;
 
   return {
     top: `${top}px`,
-    left: `${preferredLeft}px`,
-    right: "auto",
-    transform: "translateY(-50%)",
+    right: `${right}px`,
+    left: "auto",
+    transform: "none",
     visibility: "visible"
   };
 }
@@ -136,8 +86,12 @@ function positionSignature(style: CSSProperties) {
   return `${style.top ?? ""}|${style.left ?? ""}|${style.right ?? ""}|${style.transform ?? ""}|${style.visibility ?? ""}`;
 }
 
-export function BuilderFloatingSaveRail({ actions, isSaving }: BuilderFloatingSaveRailProps) {
-  const [position, setPosition] = useState<CSSProperties>(FALLBACK_POSITION);
+export function BuilderFloatingSaveRail({
+  actions,
+  isSaving,
+  anchorSelector = BUILDER_SAVE_ANCHOR_SELECTOR
+}: BuilderFloatingSaveRailProps) {
+  const [position, setPosition] = useState<CSSProperties>(HIDDEN_POSITION);
   const actionsRef = useRef(actions);
   const positionSignatureRef = useRef("");
   const actionKey = actions.length > 0 ? actions[0]?.label ?? "" : "";
@@ -153,7 +107,7 @@ export function BuilderFloatingSaveRail({ actions, isSaving }: BuilderFloatingSa
     let frameId = 0;
 
     function applyPosition() {
-      const next = readShellAnchorPosition();
+      const next = readAnchorPosition(anchorSelector);
       const signature = positionSignature(next);
 
       if (signature === positionSignatureRef.current) {
@@ -180,16 +134,22 @@ export function BuilderFloatingSaveRail({ actions, isSaving }: BuilderFloatingSa
     window.addEventListener("resize", schedulePositionUpdate);
     window.addEventListener("scroll", schedulePositionUpdate, true);
 
+    // The anchor can move without a scroll or resize — panels collapse, the
+    // page list re-renders — so watch the layout too.
+    const observer = new ResizeObserver(schedulePositionUpdate);
+    observer.observe(document.documentElement);
+
     return () => {
       if (frameId) {
         cancelAnimationFrame(frameId);
       }
 
+      observer.disconnect();
       window.removeEventListener("resize", schedulePositionUpdate);
       window.removeEventListener("scroll", schedulePositionUpdate, true);
       positionSignatureRef.current = "";
     };
-  }, [actionKey, actions.length]);
+  }, [actionKey, actions.length, anchorSelector]);
 
   if (actions.length === 0) {
     return null;

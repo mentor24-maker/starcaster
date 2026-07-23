@@ -843,6 +843,7 @@ export function BuilderPageList({
             </button>
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
+              data-builder-save-anchor="page"
               disabled={isSaving}
               onClick={onSavePage}
               type="button"

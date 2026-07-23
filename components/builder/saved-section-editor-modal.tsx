@@ -424,6 +424,7 @@ export function SavedSectionEditorModal({
 
       <BuilderFloatingSaveRail
         actions={[{ label: "Save Section", savingLabel: "Saving…", onSave: () => void handleSave() }]}
+        anchorSelector={null}
         isSaving={isSaving}
       />
 
