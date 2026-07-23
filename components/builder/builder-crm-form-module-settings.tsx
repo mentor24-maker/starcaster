@@ -63,13 +63,18 @@ function writeStyleSnapshot(
   onUpdateModule: Props["onUpdateModule"],
   styles: Record<string, string>
 ) {
-  onUpdateModule((current) => ({
-    ...current,
-    settings: {
-      ...current.settings,
-      [CRM_FORM_STYLE_SNAPSHOT_KEY]: JSON.stringify(styles)
-    }
-  }));
+  const serialized = JSON.stringify(styles);
+  onUpdateModule((current) =>
+    current.settings[CRM_FORM_STYLE_SNAPSHOT_KEY] === serialized
+      ? current
+      : {
+          ...current,
+          settings: {
+            ...current.settings,
+            [CRM_FORM_STYLE_SNAPSHOT_KEY]: serialized
+          }
+        }
+  );
 }
 
 export function BuilderCrmFormModuleSettings({
@@ -90,6 +95,14 @@ export function BuilderCrmFormModuleSettings({
   const [stylesLoading, setStylesLoading] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The parent passes a fresh arrow function on every render, so this callback
+  // can never be an effect dependency — the style-snapshot write below would
+  // re-trigger the fetch that produced it, looping once per round trip.
+  const onUpdateModuleRef = useRef(onUpdateModule);
+  useEffect(() => {
+    onUpdateModuleRef.current = onUpdateModule;
+  });
 
   useEffect(() => {
     fetch("/api/crm/forms", { credentials: "include", headers: starcasterScopedHeaders() })
@@ -122,11 +135,11 @@ export function BuilderCrmFormModuleSettings({
         }
         const normalized = normalizeCrmFormStyles(form.styles, form.accentColor) as Record<string, string>;
         setFormStyles(normalized);
-        writeStyleSnapshot(onUpdateModule, normalized);
+        writeStyleSnapshot(onUpdateModuleRef.current, normalized);
       })
       .catch(() => setFormStyles({}))
       .finally(() => setStylesLoading(false));
-  }, [crmFormId, onUpdateModule]);
+  }, [crmFormId]);
 
   function updateModuleSetting(key: string, value: string) {
     onUpdateModule((current) => ({

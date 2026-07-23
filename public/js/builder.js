@@ -696,7 +696,12 @@ App.builder = (function () {
   function mount(config) {
     if (!useReactIsland()) return false;
     const surface = safeText(config?.surface) || 'editor';
-    const editorMode = safeText(config?.editorMode) === 'page' ? 'page' : 'template';
+    const requestedMode = safeText(config?.editorMode);
+    const editorMode = requestedMode === 'page'
+      ? 'page'
+      : requestedMode === 'modules'
+        ? 'modules'
+        : 'template';
     const host = resolveBuilderHost(surface, editorMode);
     if (!host) {
       if (typeof App.notify === 'function') App.notify('Builder mount point is missing from the page markup', true);
@@ -730,6 +735,19 @@ App.builder = (function () {
 
   function openHub() {
     return mount({ surface: 'hub', editorMode: 'template', onClose: () => {} });
+  }
+
+  // The old vanilla builderModulesPage is retired: the React Builder's own
+  // Modules tab is the one true module/cell/section library (it edits cells and
+  // renders every module type, including crm-form, which this screen could not).
+  // Open the workspace straight onto that tab.
+  function openModulesLibrary() {
+    const mounted = mount({ surface: 'hub', editorMode: 'modules', onClose: () => {} });
+    if (mounted) {
+      App.setActivePage('builderBuilderWorkspacePage', { skipNormalize: true });
+      return true;
+    }
+    return false;
   }
 
   function isActive() {
@@ -14245,6 +14263,13 @@ App.builder = (function () {
     init,
     refresh,
     onPageActivated: async function onPageActivated(pageId) {
+      // Retired screen: bounce any route to the old Modules library (nav link,
+      // "Open Modules Library" button, or a stale deep link) onto the React
+      // Builder's Modules tab. Falls through to the old grids only if the React
+      // island is unavailable, so there is no redirect loop.
+      if (pageId === 'builderModulesPage' && useReactIsland() && openModulesLibrary()) {
+        return;
+      }
       try { await refresh(); } catch (_) {}
       if (pageId === 'builderPageArchivesPage') {
         loadPageArchives().then(() => renderPageArchivesTable()).catch(() => {});
@@ -14265,6 +14290,7 @@ App.builder = (function () {
     mount,
     unmount,
     openHub,
+    openModulesLibrary,
     isActive,
     useReactIsland,
     openThemesPage,

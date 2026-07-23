@@ -23,7 +23,14 @@ export default function BuilderWorkspace({ surface = 'hub', editorMode, record, 
   // template). Translate that mount contract into the editor's own mode +
   // preselection so it opens on the requested record instead of the default
   // (empty) Templates view.
-  const initialMode = editorMode === 'page' ? 'pages' : editorMode === 'template' ? 'templates' : undefined;
+  const initialMode =
+    editorMode === 'page'
+      ? 'pages'
+      : editorMode === 'modules'
+        ? 'modules'
+        : editorMode === 'template'
+          ? 'templates'
+          : undefined;
   const recordId = record?.id;
   const initialRecordId =
     recordId === undefined || recordId === null || recordId === '' ? undefined : String(recordId);
