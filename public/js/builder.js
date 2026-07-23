@@ -14238,6 +14238,36 @@ App.builder = (function () {
     loadDiagnostics('');
   }
 
+  /**
+   * Open a page in the Builder editor by its id, from outside this module —
+   * used by the Assets screen's "Used In" modal. Mirrors the Edit action on the
+   * Manage Pages table: modular pages go to the modular editor, everything else
+   * falls back to the visual editor.
+   */
+  async function openPageEditorById(pageId) {
+    const wanted = safeText(pageId);
+    if (!wanted) throw new Error('No page id was supplied');
+
+    let item = savedPages.find((page) => safeText(page?.id) === wanted);
+    if (!item) {
+      await loadSavedPages();
+      item = savedPages.find((page) => safeText(page?.id) === wanted);
+    }
+    if (!item) throw new Error('That page no longer exists');
+
+    const layoutSections = resolveModularLayoutSectionsForEditor(item);
+    if (normalizePageTemplateKind(item.templateKind) === 'modular' && layoutSections.length) {
+      openModularPageTemplateEditor({ ...item, layoutSections }, {
+        mode: 'page',
+        sourceTemplateId: safeText(item.templateId),
+        targetPage: 'builderPagesPage',
+      });
+    } else {
+      openLandingPageVisualEditor(item);
+    }
+    return item;
+  }
+
   function openBulkCreateFromManagePage() {
     if (!App.builder || typeof App.builder.useReactIsland !== 'function' || !App.builder.useReactIsland()) {
       App.setActivePage('builderPage');
@@ -14301,6 +14331,7 @@ App.builder = (function () {
     openModularPageTemplateEditor,
     buildModularPageTemplatePreviewMarkup,
     openBulkCreateFromManagePage,
+    openPageEditorById,
     openPopulateFromWebPage,
     refreshModuleClasses,
     openExtensionsManager,
