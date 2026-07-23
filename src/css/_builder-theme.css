@@ -47,6 +47,18 @@
   color: var(--bx-text, #214c71);
 }
 
+/* Single-spaced bullet / numbered lists (global Starcaster default).
+ * The rich-text editor (TipTap) wraps each list item's text in its own <p>,
+ * and that <p> inherits the 0.9rem bottom margin from body paragraphs
+ * (_builder-react.css). Stacked, those margins open a gap between bullets
+ * that reads as double-spacing. Zeroing the margin on paragraphs that are
+ * the direct child of a list item collapses bullets onto consecutive lines
+ * (line-height still keeps them legible) without affecting standalone
+ * paragraph spacing. */
+.builder-react-root .builder-preview-shell .builder-preview-text li > p {
+  margin: 0;
+}
+
 /* Links inside body content. */
 .builder-react-root .builder-preview-shell .builder-preview-text a {
   color: var(--bx-link, inherit);
