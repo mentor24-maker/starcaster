@@ -129,72 +129,130 @@ App.assets = (function () {
     return assetUsagePromise;
   }
 
-  function openAssetUsageModal(asset) {
-    const usage = getAssetUsage(asset);
-    const pages = Array.isArray(usage?.pages) ? usage.pages : [];
-    const assetName = String(asset?.assetName || 'this image');
+  /**
+   * Deep link that opens one Builder page in a fresh tab. The app reads both
+   * keys out of the hash on boot: which screen to show, and which page to open
+   * on it (see App.readHashParam / builder.js onPageActivated).
+   */
+  function builderPageHref(pageId) {
+    const id = String(pageId || '').trim();
+    if (!id) return '#page=builderManagePagesPage';
+    return `#page=builderManagePagesPage&builderPage=${encodeURIComponent(id)}`;
+  }
 
+  /**
+   * One row per page: the page name as a real link, then its slug, draft flag
+   * and the spots the image sits in — all on a single line, with the tail
+   * ellipsised rather than wrapped. Shared by the hover preview and the modal.
+   */
+  function buildUsagePageList(pages) {
+    const list = document.createElement('div');
+    list.className = 'asset-usage-list';
+
+    pages.forEach((page) => {
+      const row = document.createElement('div');
+      row.className = 'asset-usage-row';
+
+      const link = document.createElement('a');
+      link.className = 'asset-usage-page-link';
+      link.href = builderPageHref(page.pageId);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = page.pageName || page.slug || 'Untitled page';
+      link.title = `Open "${link.textContent}" in the Builder (new tab)`;
+      row.appendChild(link);
+
+      const bits = [];
+      if (page.slug) bits.push(`/${page.slug}`);
+      if (page.isPublished === false) bits.push('draft');
+      if (Array.isArray(page.places) && page.places.length) bits.push(page.places.join(' · '));
+
+      const meta = document.createElement('span');
+      meta.className = 'meta asset-usage-meta';
+      meta.textContent = bits.join(' — ');
+      meta.title = bits.join(' — ');
+      row.appendChild(meta);
+
+      list.appendChild(row);
+    });
+
+    return list;
+  }
+
+  function buildUsageBody(asset, { hint }) {
+    const pages = Array.isArray(getAssetUsage(asset)?.pages) ? getAssetUsage(asset).pages : [];
     const body = document.createElement('div');
+
     if (!pages.length) {
       body.textContent = 'This image is not used on any page.';
-    } else {
-      const intro = document.createElement('p');
-      intro.className = 'meta';
-      intro.style.marginTop = '0';
-      intro.textContent = `Used on ${pages.length} ${pages.length === 1 ? 'page' : 'pages'}. Click a page to open it in the Builder.`;
-      body.appendChild(intro);
-
-      const list = document.createElement('div');
-      list.className = 'asset-usage-list';
-      pages.forEach((page) => {
-        const row = document.createElement('div');
-        row.className = 'asset-usage-row';
-
-        const link = document.createElement('button');
-        link.type = 'button';
-        link.className = 'btn btn-ghost asset-usage-page-btn';
-        link.textContent = page.pageName || page.slug || 'Untitled page';
-        link.addEventListener('click', () => {
-          modal.close();
-          openPageInBuilder(page);
-        });
-        row.appendChild(link);
-
-        const meta = document.createElement('div');
-        meta.className = 'meta asset-usage-meta';
-        const bits = [];
-        if (page.slug) bits.push(`/${page.slug}`);
-        if (page.isPublished === false) bits.push('draft');
-        if (Array.isArray(page.places) && page.places.length) bits.push(page.places.join(' · '));
-        meta.textContent = bits.join(' — ');
-        row.appendChild(meta);
-
-        list.appendChild(row);
-      });
-      body.appendChild(list);
+      return body;
     }
 
+    const intro = document.createElement('p');
+    intro.className = 'meta asset-usage-intro';
+    intro.textContent = `Used on ${pages.length} ${pages.length === 1 ? 'page' : 'pages'}. ${hint}`;
+    body.appendChild(intro);
+    body.appendChild(buildUsagePageList(pages));
+    return body;
+  }
+
+  // ── Hover preview ────────────────────────────────────────────────────────
+  // Hovering the count shows a read-only peek; clicking promotes it to the real
+  // modal. The close is delayed so the pointer can travel from the number into
+  // the card without it vanishing en route.
+  let usageHoverEl = null;
+  let usageHoverTimer = null;
+
+  function hideUsageHover({ immediate = false } = {}) {
+    window.clearTimeout(usageHoverTimer);
+    const close = () => {
+      if (usageHoverEl) {
+        usageHoverEl.remove();
+        usageHoverEl = null;
+      }
+    };
+    if (immediate) close();
+    else usageHoverTimer = window.setTimeout(close, 180);
+  }
+
+  function showUsageHover(asset, anchor) {
+    window.clearTimeout(usageHoverTimer);
+    if (usageHoverEl?.dataset.assetId === String(asset?.id || '')) return;
+    hideUsageHover({ immediate: true });
+
+    const card = document.createElement('div');
+    card.className = 'asset-usage-hover';
+    card.dataset.assetId = String(asset?.id || '');
+    card.appendChild(buildUsageBody(asset, { hint: 'Click the number to keep this open.' }));
+    card.addEventListener('mouseenter', () => window.clearTimeout(usageHoverTimer));
+    card.addEventListener('mouseleave', () => hideUsageHover());
+    document.body.appendChild(card);
+
+    // Anchor below the count, flipping up or left when it would leave the
+    // viewport. Measured after insertion so the real size is known.
+    const rect = anchor.getBoundingClientRect();
+    const { width, height } = card.getBoundingClientRect();
+    const margin = 8;
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 6);
+    if (left + width > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - width - margin);
+    card.style.top = `${top}px`;
+    card.style.left = `${left}px`;
+
+    usageHoverEl = card;
+  }
+
+  function openAssetUsageModal(asset) {
+    hideUsageHover({ immediate: true });
+    const assetName = String(asset?.assetName || 'this image');
     const modal = App.components.Modal({
       title: `Used In — ${assetName}`,
-      body,
+      body: buildUsageBody(asset, { hint: 'Each page opens in a new tab.' }),
       dialogClass: 'asset-usage-modal',
       actions: [{ label: 'Close', primary: true, onClick: () => modal.close() }],
     });
     modal.open();
-  }
-
-  /** Jump to the Builder editor for a page found in the usage modal. */
-  function openPageInBuilder(page) {
-    const pageId = String(page?.pageId || '').trim();
-    if (pageId && App.builder?.openPageEditorById) {
-      App.builder.openPageEditorById(pageId).catch((err) => {
-        notify(err?.message || 'Could not open that page in the Builder', true);
-      });
-      return;
-    }
-    // Builder module unavailable (or too old to expose the helper) — at least
-    // land the user on the page list rather than doing nothing.
-    App.setActivePage('builderManagePagesPage');
   }
 
   function syncAssetCaptionFieldVisibility(assetType) {
@@ -1018,14 +1076,21 @@ App.assets = (function () {
     button.type = 'button';
     button.className = 'link-button asset-usage-count-btn';
     button.textContent = String(count);
-    button.title = `Used on ${count} ${count === 1 ? 'page' : 'pages'} — click for the list`;
+    button.title = `Used on ${count} ${count === 1 ? 'page' : 'pages'} — hover to peek, click to keep open`;
     button.addEventListener('click', () => openAssetUsageModal(asset));
+    button.addEventListener('mouseenter', () => showUsageHover(asset, button));
+    button.addEventListener('mouseleave', () => hideUsageHover());
+    // Keyboard users get the same peek when tabbing onto the count.
+    button.addEventListener('focus', () => showUsageHover(asset, button));
+    button.addEventListener('blur', () => hideUsageHover());
     td.appendChild(button);
     return td;
   }
 
   function renderAssets() {
     if (!els.assetsTable) return;
+    // The card is anchored to a row that is about to be destroyed.
+    hideUsageHover({ immediate: true });
     els.assetsTable.innerHTML = '';
     updateAssetSortButtons();
 
@@ -1555,6 +1620,10 @@ App.assets = (function () {
     bindSortButton('assetsSortTopicBtn', 'topic', 'asc');
     bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
     bindSortButton('assetsSortUsageBtn', 'usage', 'desc');
+
+    // The hover card is positioned against the viewport, so any scroll would
+    // leave it stranded away from the number it belongs to.
+    window.addEventListener('scroll', () => hideUsageHover({ immediate: true }), true);
     bindSortButton('assetsSortUpdatedBtn', 'createdAt', 'desc');
     bindSortButton('assetsSortSizeBtn', 'size', 'desc');
 

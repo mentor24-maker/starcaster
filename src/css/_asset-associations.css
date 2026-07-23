@@ -272,34 +272,64 @@ body.asset-associations-modal-open {
   background: var(--surface-hover, rgba(47, 111, 235, 0.12));
 }
 
-.asset-usage-modal .asset-usage-list {
+.asset-usage-intro {
+  margin: 0 0 0.5rem;
+}
+
+.asset-usage-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
   max-height: 55vh;
   overflow-y: auto;
 }
 
+/* One page per line: name first, then the details, tail ellipsised. */
 .asset-usage-row {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.5rem 0.25rem;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.25rem;
   border-bottom: 1px solid var(--border-light, #ddd);
+  white-space: nowrap;
 }
 
 .asset-usage-row:last-child {
   border-bottom: none;
 }
 
-.asset-usage-page-btn {
-  align-self: flex-start;
-  text-align: left;
-  padding: 0.15rem 0;
+/* The name takes exactly what it needs. When the row overflows the details
+   give ground first (higher flex-shrink), so the clickable name survives. */
+.asset-usage-page-link {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
 }
 
+/* min-width:0 is what actually lets a flex child ellipsise instead of
+   forcing the row wider than its container. */
 .asset-usage-meta {
+  flex: 1 3 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 0.8rem;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+}
+
+/* ── Hover preview card ─────────────────────────────────────────────────── */
+
+.asset-usage-hover {
+  position: fixed;
+  z-index: 1200;
+  max-width: min(680px, 92vw);
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-page, #fff);
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.asset-usage-hover .asset-usage-list {
+  max-height: 40vh;
 }
