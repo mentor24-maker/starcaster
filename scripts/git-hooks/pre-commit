@@ -5,7 +5,10 @@
 #    the previous hash — the new CSS deploys but returning visitors keep the
 #    cached old one. (That is exactly how PR #24 shipped a dead pin.)
 # 2. Auto-pin ?v= content hashes on all HTML shells.
-# 3. Run repo convention checks (stale artifacts, public/js freeze, etc.)
+# 3. Parse every hand-written browser JS file. Nothing else in the toolchain
+#    reads public/js/, so without this a syntax error is only discovered by a
+#    user's browser — and it kills the whole file, not just that line.
+# 4. Run repo convention checks (stale artifacts, public/js freeze, etc.)
 #    on the staged diff.
 #
 # Note: the rebuild uses your WORKING TREE source. If you are committing only
@@ -18,4 +21,5 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 node scripts/build_pinned_assets.mjs
 node scripts/pin_asset_versions.cjs --stage
+node scripts/check_syntax.cjs --quiet
 node scripts/check_conventions.cjs
