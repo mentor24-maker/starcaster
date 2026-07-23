@@ -8,12 +8,16 @@
  * similar, displayed in columns a few hundred pixels wide. For every oversized
  * image that is actually placed on a page, this script:
  *   1. downloads the original,
- *   2. resizes it to fit inside a 400x600 box, preserving aspect ratio and
- *      never enlarging (a 1254x1254 square becomes 400x400, a 1672x941 wide
- *      image becomes 400x225 — nothing is cropped or squashed),
+ *   2. resizes it to fit inside the --max box, preserving aspect ratio and
+ *      never enlarging (at 400x600, a 1254x1254 square becomes 400x400 and a
+ *      1672x941 wide image becomes 400x225 — nothing is cropped or squashed),
  *   3. uploads the result as a NEW asset named "<original>_<w>x<h>", and
  *   4. rewrites every reference on every Builder page from the old URL to the
  *      new one.
+ *
+ * Re-running at a different --max resizes from the ORIGINAL, not from whatever
+ * copy the pages currently point at, so raising the size after a run that came
+ * out too soft recovers the real detail instead of upscaling a small copy.
  *
  * The original asset row and file are left untouched, so reverting is a matter
  * of restoring the page rows from the backup this script writes.
@@ -36,7 +40,7 @@
  *
  * Usage:
  *   node scripts/shrink_page_images_20260723.mjs --batch=exact
- *   node scripts/shrink_page_images_20260723.mjs --batch=exact --apply
+ *   node scripts/shrink_page_images_20260723.mjs --batch=exact --max=600x900 --apply
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -55,11 +59,18 @@ if (!VALID_BATCHES.has(BATCH)) {
   process.exit(1);
 }
 
+const MAX_ARG = (process.argv.find((a) => a.startsWith('--max=')) || '--max=400x600').split('=')[1];
+const MAX_MATCH = String(MAX_ARG).match(/^(\d+)x(\d+)$/);
+if (!MAX_MATCH) {
+  console.error('--max must look like 400x600');
+  process.exit(1);
+}
+const MAX_W = Number(MAX_MATCH[1]);
+const MAX_H = Number(MAX_MATCH[2]);
+
 const PROJECT_ID = 'proj_1780601274760_97i84r'; // Marinoff & Associates
 const OWNER_USER_ID = 'usr_1773098194686_wp7vz5';
 const PAGES_TABLE = 'builder_landing_page';
-const MAX_W = 400;
-const MAX_H = 600;
 const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
 // ---------------------------------------------------------------- env / db --
@@ -226,30 +237,92 @@ for (const a of assets) {
 }
 const assetNames = new Set(assets.map((a) => String(a.asset_name || '')));
 
+// ---- resolve generated copies back to their original ------------------------
+
+/** Asset name with any trailing file extension removed. */
+const strippedName = (asset) => {
+  const name = String(asset?.asset_name || '');
+  const ext = name.match(/(\.[^.]+)$/);
+  return ext ? name.slice(0, -ext[1].length) : name;
+};
+
+// Generated copies drop the extension from the base ("Foo.png" -> "Foo_400x600"),
+// so parents must be looked up on the stripped name. Where several rows share a
+// stripped name, keep the largest — that is the one worth resizing from.
+const assetByStrippedName = new Map();
+for (const a of assets) {
+  const key = strippedName(a);
+  if (!key) continue;
+  const held = assetByStrippedName.get(key);
+  const area = (Number(a.image_width) || 0) * (Number(a.image_height) || 0);
+  const heldArea = held ? (Number(held.image_width) || 0) * (Number(held.image_height) || 0) : -1;
+  if (!held || area > heldArea) assetByStrippedName.set(key, a);
+}
+
+/**
+ * A previous run of this script names its output "<original>_<w>x<h>". If the
+ * page currently points at one of those copies, resizing IT again would upscale
+ * an already-downscaled image; walk back to the largest ancestor and resize
+ * from that instead. Only treated as a copy when the parent actually exists and
+ * is genuinely bigger, so an original that merely has dimensions in its name
+ * (e.g. "Testimonial_Anonymous_1024x1536") is left alone.
+ */
+function resolveOriginal(asset) {
+  let current = asset;
+  const seen = new Set([String(current.id)]);
+  for (let hop = 0; hop < 4; hop += 1) {
+    const match = strippedName(current).match(/^(.*)_(\d+)x(\d+)$/);
+    if (!match) break;
+    const parent = assetByStrippedName.get(match[1]);
+    if (!parent || seen.has(String(parent.id))) break;
+    const pw = Number(parent.image_width || 0) || 0;
+    const ph = Number(parent.image_height || 0) || 0;
+    const cw = Number(current.image_width || 0) || 0;
+    const ch = Number(current.image_height || 0) || 0;
+    if (!(pw > cw || ph > ch)) break;
+    seen.add(String(parent.id));
+    current = parent;
+  }
+  return current;
+}
+
+/** What sharp's fit:inside/withoutEnlargement will produce for these inputs. */
+function fittedSize(w, h) {
+  const scale = Math.min(MAX_W / w, MAX_H / h, 1);
+  return { width: Math.round(w * scale), height: Math.round(h * scale) };
+}
+
 // ---- classify ---------------------------------------------------------------
 
-function classify(asset, use) {
-  const w = Number(asset.image_width || 0) || 0;
-  const h = Number(asset.image_height || 0) || 0;
-  if (String(asset.asset_type || '') !== 'Image') return null;
+function classify(source, referenced, use) {
+  const w = Number(source.image_width || 0) || 0;
+  const h = Number(source.image_height || 0) || 0;
+  if (String(source.asset_type || '') !== 'Image') return null;
   if (!w || !h) return null;                        // unknown dimensions — leave alone
-  if (w <= MAX_W && h <= MAX_H) return null;        // already small enough
-  const variants = use.variants;
-  const isLogo = variants.has('logo')
-    || /logo/i.test(String(asset.asset_name || ''))
-    || /logo/i.test(String(asset.category || ''));
+  if (w <= MAX_W && h <= MAX_H) return null;        // original already fits the box
+
+  // Already serving exactly what this run would produce.
+  const want = fittedSize(w, h);
+  const refW = Number(referenced.image_width || 0) || 0;
+  const refH = Number(referenced.image_height || 0) || 0;
+  if (refW === want.width && refH === want.height) return null;
+
+  const isLogo = use.variants.has('logo')
+    || /logo/i.test(String(source.asset_name || ''))
+    || /logo/i.test(String(source.category || ''));
   if (isLogo) return 'logos';
   return (w === 1024 && h === 1536) ? 'exact' : 'rest';
 }
 
 const targets = [];
 for (const [key, use] of usage) {
-  const asset = assetByKey.get(key);
-  if (!asset) continue;
-  const batch = classify(asset, use);
+  const referenced = assetByKey.get(key);
+  if (!referenced) continue;
+  const source = resolveOriginal(referenced);
+  const batch = classify(source, referenced, use);
   if (!batch) continue;
   if (BATCH !== 'all' && batch !== BATCH) continue;
-  targets.push({ key, asset, use, batch });
+  targets.push({ key, asset: source, referenced, use, batch });
 }
 targets.sort((a, b) => b.use.pages.size - a.use.pages.size);
 
@@ -258,15 +331,21 @@ if (!targets.length) {
   process.exit(0);
 }
 
-const originalBytes = targets.reduce((sum, t) => sum + (Number(t.asset.size) || 0), 0);
-console.log(`Batch "${BATCH}": ${targets.length} image(s) across ${pageRows.length} pages, ${fmtMB(originalBytes)} of originals.\n`);
+// "Currently served" is what the pages point at today, which is not the source
+// file when an earlier run already swapped in a smaller copy.
+const currentBytes = targets.reduce((sum, t) => sum + (Number(t.referenced.size) || 0), 0);
+console.log(`Batch "${BATCH}" → fit inside ${MAX_W}x${MAX_H}: ${targets.length} image(s) across ${pageRows.length} pages, ${fmtMB(currentBytes)} currently served.\n`);
 for (const t of targets) {
+  const source = `${t.asset.image_width}x${t.asset.image_height}`;
+  const serving = `${t.referenced.image_width}x${t.referenced.image_height}`;
+  const want = fittedSize(Number(t.asset.image_width), Number(t.asset.image_height));
+  const from = serving === source ? source : `${serving} (from ${source})`;
   console.log(
-    `  ${String(t.asset.image_width)}x${String(t.asset.image_height)}`.padEnd(14),
-    fmtMB(Number(t.asset.size) || 0).padStart(9),
+    ` ${from} → ${want.width}x${want.height}`.padEnd(34),
+    fmtMB(Number(t.referenced.size) || 0).padStart(9),
     `${t.use.pages.size} page(s)`.padStart(11),
     ' ',
-    String(t.asset.asset_name || '').slice(0, 60)
+    String(t.asset.asset_name || '').slice(0, 52)
   );
 }
 
@@ -360,15 +439,18 @@ for (const t of targets) {
     assetNames.add(newAssetName);
     swapMap.set(t.key, created.location);
     newBytes += row.size;
-    const saved = 100 - Math.round((row.size / Math.max(1, Number(t.asset.size) || 1)) * 100);
-    console.log(`  ${label} ${small.width}x${small.height} ${fmtKB(row.size).padStart(8)} (-${saved}%)`);
+    // Raising --max after an earlier, smaller run legitimately grows the file,
+    // so report the delta with its own sign rather than always as a saving.
+    const delta = 100 - Math.round((row.size / Math.max(1, Number(t.referenced.size) || 1)) * 100);
+    const change = delta >= 0 ? `-${delta}%` : `+${-delta}%`;
+    console.log(`  ${label} ${small.width}x${small.height} ${fmtKB(row.size).padStart(8)} (${change} vs served)`);
   } catch (err) {
     console.log(`  ${label} ERROR: ${err.message}`);
   }
 }
 
 if (!swapMap.size) { console.log('\nNo new images were produced — nothing to swap.'); process.exit(1); }
-console.log(`\n${swapMap.size} image(s) resized: ${fmtMB(originalBytes)} → ${fmtMB(newBytes)}`);
+console.log(`\n${swapMap.size} image(s) resized: ${fmtMB(currentBytes)} → ${fmtMB(newBytes)}`);
 
 // ---- rewrite pages ----------------------------------------------------------
 
