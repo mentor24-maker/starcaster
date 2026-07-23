@@ -14301,6 +14301,22 @@ App.builder = (function () {
         return;
       }
       try { await refresh(); } catch (_) {}
+
+      // Deep link from elsewhere in the app (e.g. the Assets "Used In" popup
+      // opening a page in a new tab): "#page=builderManagePagesPage&builderPage=<id>".
+      // Consumed once, then stripped so a later visit to this screen does not
+      // reopen the editor unexpectedly.
+      if (pageId === 'builderManagePagesPage' && App.readHashParam) {
+        const deepLinkPageId = App.readHashParam('builderPage');
+        if (deepLinkPageId) {
+          App.clearHashParam?.('builderPage');
+          openPageEditorById(deepLinkPageId).catch((err) => {
+            notify(err?.message || 'Could not open that page in the Builder', true);
+          });
+          return;
+        }
+      }
+
       if (pageId === 'builderPageArchivesPage') {
         loadPageArchives().then(() => renderPageArchivesTable()).catch(() => {});
       } else if (pageId === 'builderThemesPage') mountThemesReact();

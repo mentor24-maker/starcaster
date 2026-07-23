@@ -494,6 +494,34 @@ function readPageFromHash() {
   return isValidPageId(decoded) ? decoded : '';
 }
 
+/**
+ * Read an extra key from the location hash, e.g. "builderPage" out of
+ * "#page=builderManagePagesPage&builderPage=1234". Lets a link opened in a new
+ * tab say not just which screen to show but which record to open on it.
+ */
+App.readHashParam = function readHashParam(name) {
+  const raw = String(window.location.hash || '').trim();
+  const bare = raw.startsWith('#') ? raw.slice(1) : raw;
+  const key = String(name || '').trim();
+  if (!bare || !key) return '';
+  const match = bare.match(new RegExp(`(?:^|&)${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^&]*)`));
+  if (!match) return '';
+  try { return decodeURIComponent(match[1] || ''); } catch (_) { return String(match[1] || ''); }
+};
+
+/** Drop a key from the hash without adding a history entry. */
+App.clearHashParam = function clearHashParam(name) {
+  const raw = String(window.location.hash || '').trim();
+  const bare = raw.startsWith('#') ? raw.slice(1) : raw;
+  const key = String(name || '').trim();
+  if (!bare || !key) return;
+  const next = bare
+    .split('&')
+    .filter((pair) => pair.split('=')[0] !== key)
+    .join('&');
+  try { window.history.replaceState(window.history.state, '', next ? `#${next}` : ' '); } catch (_) {}
+};
+
 function normalizeInitialPageId(pageId) {
   const id = String(pageId || '').trim();
   if (!id) return '';
