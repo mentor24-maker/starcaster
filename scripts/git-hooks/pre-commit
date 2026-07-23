@@ -1,9 +1,21 @@
 #!/bin/sh
-# Auto-pin ?v= content hashes on all HTML shells, then run repo convention
-# checks (stale artifacts, public/js freeze, etc.) on the staged diff.
+# 1. Rebuild the hash-pinned artifacts so ?v= pins are a function of the
+#    SOURCE, not of whatever stale bundle happens to be sitting in public/.
+#    Without this, editing src/css/* and committing without a rebuild pins
+#    the previous hash — the new CSS deploys but returning visitors keep the
+#    cached old one. (That is exactly how PR #24 shipped a dead pin.)
+# 2. Auto-pin ?v= content hashes on all HTML shells.
+# 3. Run repo convention checks (stale artifacts, public/js freeze, etc.)
+#    on the staged diff.
+#
+# Note: the rebuild uses your WORKING TREE source. If you are committing only
+# part of your edits, the pin reflects everything on disk — CI re-checks pins
+# against a clean build of the merged branch and will flag any mismatch.
+#
 # Bypass conventions only with SKIP_CONVENTIONS=1 and a stated reason.
 set -e
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+node scripts/build_pinned_assets.mjs
 node scripts/pin_asset_versions.cjs --stage
 node scripts/check_conventions.cjs

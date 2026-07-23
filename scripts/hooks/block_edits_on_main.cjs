@@ -10,6 +10,7 @@
  * CLAUDE.md's SKIP_CONVENTIONS convention).
  */
 
+const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
@@ -25,6 +26,17 @@ function currentBranch(cwd) {
   }
 }
 
+/** Nearest existing ancestor dir of a path (the file may not exist yet). */
+function nearestDir(target) {
+  let dir = target ? path.dirname(target) : '';
+  while (dir && !fs.existsSync(dir)) {
+    const parent = path.dirname(dir);
+    if (parent === dir) return '';
+    dir = parent;
+  }
+  return dir;
+}
+
 function main(input) {
   if (process.env.ALLOW_MAIN_EDITS === '1') process.exit(0);
 
@@ -37,14 +49,19 @@ function main(input) {
 
   const filePath = String(payload?.tool_input?.file_path || payload?.tool_input?.notebook_path || '');
   const root = String(process.env.CLAUDE_PROJECT_DIR || path.join(__dirname, '..', '..'));
+  const resolved = filePath ? path.resolve(filePath) : '';
 
   // Only guard edits inside this repo; ignore scratchpad/temp writes elsewhere.
-  if (filePath) {
-    const rel = path.relative(root, path.resolve(filePath));
+  if (resolved) {
+    const rel = path.relative(root, resolved);
     if (rel.startsWith('..') || path.isAbsolute(rel)) process.exit(0);
   }
 
-  if (currentBranch(root) !== 'main') process.exit(0);
+  // Ask the worktree that actually OWNS the file, not the main checkout.
+  // Linked worktrees (.claude/worktrees/*) carry their own HEAD; checking
+  // root's branch would block every edit in a correctly-branched worktree
+  // and push work back into the shared folder the worktrees exist to avoid.
+  if (currentBranch(nearestDir(resolved) || root) !== 'main') process.exit(0);
 
   process.stderr.write(
     `BLOCKED: you are on the "main" branch, which auto-deploys to production on push.\n` +
