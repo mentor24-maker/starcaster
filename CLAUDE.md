@@ -79,6 +79,15 @@ hashes pinned by `npm run pin:assets` — editing them is fine.
    one) or surfaces as "unrelated" modified HTML in someone else's commit.
    Pre-commit now runs `npm run build:assets` first, and CI fails if a clean
    build changes any committed HTML. Never hand-edit a `?v=` value.
+9. **`public/js/` is parsed by nothing but the browser.** It is excluded from
+   `tsconfig.json`, has no linter, and loads as plain `<script src>` tags
+   rather than being bundled — so unlike `components/` (bundled) and
+   `routes/`+`lib/` (required by the node tests), a syntax error there reaches
+   production. And a syntax error discards the WHOLE file, so every function
+   it defines goes silently dead. `npm run check:syntax` now gates this in
+   pre-commit and CI, but it catches syntax only: a typo like
+   `App.assset.foo()` still parses and fails at runtime. Open the app and
+   check the browser console after editing these files.
 
 ## One worktree per thread
 
@@ -109,6 +118,8 @@ Before reporting a task complete, run and state the results of:
 3. The rebuild command for every generated artifact your change affects
 4. `node scripts/check_conventions.cjs` (also runs at pre-commit;
    `SKIP_CONVENTIONS=1` bypasses — if you bypass, say so and why)
+5. `npm run check:syntax` if you touched `public/js/` or `public/shared/`
+   (also runs at pre-commit and gates CI)
 
 "It should work" is not done. Passing commands are done.
 

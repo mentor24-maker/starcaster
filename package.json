@@ -11,6 +11,7 @@
     "build:html": "node scripts/build_html.js",
     "pin:assets": "node scripts/pin_asset_versions.cjs",
     "check:assets": "node scripts/check_asset_versions.cjs",
+    "check:syntax": "node scripts/check_syntax.cjs",
     "bust": "node scripts/bump_cache.js",
     "build:builder": "node scripts/build_builder_bundle.mjs",
     "build:css": "npx esbuild src/css/main.css --bundle --outfile=public/styles.css && node scripts/pin_asset_versions.cjs",

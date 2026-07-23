@@ -24,6 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Nothing else parses public/js/: it is excluded from tsconfig, has no
+      # linter, and is loaded as plain <script src> tags rather than bundled.
+      # Without this step a syntax error ships, and a syntax error kills the
+      # whole file (see pageHeadingNav.js, dead on main for months). Runs first
+      # because it takes milliseconds.
+      - name: Syntax check (browser JS)
+        run: npm run check:syntax
+
       - name: Typecheck
         run: npm run typecheck
 
