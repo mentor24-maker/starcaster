@@ -36,6 +36,18 @@ jobs:
       - name: Full production build
         run: npm run build
 
+      # `npm run build` re-pins ?v= hashes from the artifacts it just built,
+      # so any change here means the COMMITTED HTML shells pinned a hash that
+      # this source does not actually build to. That ships a stale
+      # cache-buster: browsers keep serving the old CSS/JS to returning
+      # visitors even though the new file deployed fine.
+      - name: Asset pins match a clean build
+        run: |
+          if ! git diff --exit-code -- '*.html'; then
+            echo "::error::Committed ?v= asset pins are stale (see diff above). Fix: run 'npm run build' locally and commit the updated HTML shells."
+            exit 1
+          fi
+
       - name: Unit tests (builder server libs)
         run: npm run test:builder
 

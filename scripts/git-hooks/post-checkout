@@ -1,0 +1,22 @@
+#!/bin/sh
+# After switching branches, the build artifacts in public/ still belong to the
+# branch you just left. The next `npm run build:css` (or pre-commit) then pins
+# a hash from the wrong branch's bundle, which surfaces as a handful of
+# "unrelated" modified HTML files in the working tree.
+#
+# Rebuilding here keeps the artifacts matched to the branch you are now on.
+# Only artifacts (all gitignored) are written — no tracked file is touched, so
+# a checkout never leaves you with a surprise diff.
+#
+# Args: $1 = previous HEAD, $2 = new HEAD, $3 = 1 for a branch checkout.
+# Skip file checkouts ($3 = 0) and no-op switches to the same commit.
+[ "$3" = "1" ] || exit 0
+[ "$1" != "$2" ] || exit 0
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 0
+cd "$ROOT" || exit 0
+
+# Never block a checkout: it has already happened by the time this runs.
+node scripts/build_pinned_assets.mjs >/dev/null 2>&1 \
+  || echo "[post-checkout] Could not rebuild assets (run 'npm install' then 'npm run build:assets')."
+exit 0

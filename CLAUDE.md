@@ -72,6 +72,32 @@ hashes pinned by `npm run pin:assets` — editing them is fine.
 6. **Never write `data/*.json` from production code paths.** Vercel's
    filesystem is read-only; writes silently vanish. Use Supabase.
 7. **Never expose `SUPABASE_SERVICE_KEY` (or any secret) to the browser.**
+8. **`?v=` asset pins come from built files, not from source.**
+   `pin_asset_versions.cjs` hashes whatever sits in `public/`, so a stale or
+   other-branch bundle pins a hash nobody can reproduce — it either ships a
+   dead cache-buster (new CSS deploys, browsers keep serving the cached old
+   one) or surfaces as "unrelated" modified HTML in someone else's commit.
+   Pre-commit now runs `npm run build:assets` first, and CI fails if a clean
+   build changes any committed HTML. Never hand-edit a `?v=` value.
+
+## One worktree per thread
+
+Two sessions in one folder share a single working tree and a single HEAD: a
+branch switch in session A rewrites session B's files, and each one's
+uncommitted edits ride along in the other's commits. The symptom is
+"unrelated" modified files you never touched.
+
+Give every thread its own worktree — a separate folder with its own branch,
+sharing the same repo history:
+
+```
+git worktree add .claude/worktrees/<topic> -b <topic> origin/main
+cd .claude/worktrees/<topic> && npm ci
+```
+
+`git worktree list` shows every active thread; `git worktree remove
+.claude/worktrees/<topic>` cleans one up. Caveat: `.git/hooks` is **shared**
+across worktrees, so `npm install` in one reinstalls hooks for all of them.
 
 ## Definition of done
 
