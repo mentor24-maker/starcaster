@@ -333,6 +333,13 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 201, rowToAssociation(created), { association: rowToAssociation(created) }), true;
   }
 
+  if (normalizedPath === '/api/assets/usage' && requestMethod === 'GET') {
+    const { collectAssetUsage } = require('../lib/assetUsage');
+    const result = await collectAssetUsage(scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    return sendOk(res, 200, result.data, result.data), true;
+  }
+
   if (normalizedPath === '/api/assets/bulk-resize' && requestMethod === 'POST') {
     if (!isAssetStorageConfigured()) {
       return sendErr(res, 400, 'No asset storage backend is configured.', { code: 'ASSET_STORAGE_NOT_CONFIGURED' }), true;

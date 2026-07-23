@@ -240,6 +240,8 @@ App.els = {
   assetsFilterCategory: document.getElementById('assetsFilterCategory'),
   assetsFilterTopic: document.getElementById('assetsFilterTopic'),
   assetsFilterAspect: document.getElementById('assetsFilterAspect'),
+  assetsFilterUsage: document.getElementById('assetsFilterUsage'),
+  assetsSortUsageBtn: document.getElementById('assetsSortUsageBtn'),
   assetsFilterWidth: document.getElementById('assetsFilterWidth'),
   assetsFilterHeight: document.getElementById('assetsFilterHeight'),
   assetsFilterTags: document.getElementById('assetsFilterTags'),

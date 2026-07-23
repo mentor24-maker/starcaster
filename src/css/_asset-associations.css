@@ -243,3 +243,63 @@ body.asset-associations-modal-open {
     max-height: 40vh;
   }
 }
+
+/* ── Assets table: "Used In" column ──────────────────────────────────────── */
+
+.asset-usage-cell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.asset-usage-cell--unused {
+  color: var(--text-muted, #888);
+}
+
+.asset-usage-count-btn {
+  background: none;
+  border: none;
+  padding: 0.1rem 0.4rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--link-color, #2f6feb);
+  cursor: pointer;
+  text-decoration: underline;
+  border-radius: 4px;
+}
+
+.asset-usage-count-btn:hover,
+.asset-usage-count-btn:focus-visible {
+  background: var(--surface-hover, rgba(47, 111, 235, 0.12));
+}
+
+.asset-usage-modal .asset-usage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.asset-usage-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--border-light, #ddd);
+}
+
+.asset-usage-row:last-child {
+  border-bottom: none;
+}
+
+.asset-usage-page-btn {
+  align-self: flex-start;
+  text-align: left;
+  padding: 0.15rem 0;
+}
+
+.asset-usage-meta {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}

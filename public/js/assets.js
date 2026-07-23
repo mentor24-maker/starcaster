@@ -24,6 +24,15 @@ App.assets = (function () {
     },
   };
 
+  // "Used In" index from GET /api/assets/usage, keyed by asset id:
+  //   { count, pages: [{ pageId, pageName, slug, isPublished, places }] }
+  // Loaded after the table first paints so a slow scan never blocks the list;
+  // `assetUsageLoaded` keeps the column showing "…" until the answer arrives,
+  // so an unloaded index is never mistaken for a genuine zero.
+  let assetUsage = {};
+  let assetUsageLoaded = false;
+  let assetUsagePromise = null;
+
   function getAssetCategorySelect() {
     return els.assetCategoryInput || els.assetForm?.querySelector('select[name="category"]') || null;
   }
@@ -90,6 +99,104 @@ App.assets = (function () {
     return String(value == null ? '' : value).trim().toLowerCase();
   }
 
+  function getAssetUsage(asset) {
+    const id = Number(asset?.id || 0) || 0;
+    return (id && assetUsage[String(id)]) || null;
+  }
+
+  function getAssetUsageCount(asset) {
+    return Number(getAssetUsage(asset)?.count || 0) || 0;
+  }
+
+  /**
+   * Load the "used on which pages" index for the active project. Fire-and-forget
+   * from refresh(): the table renders immediately and repaints when this lands.
+   */
+  async function loadAssetUsage({ force = false } = {}) {
+    if (assetUsagePromise && !force) return assetUsagePromise;
+    assetUsagePromise = (async () => {
+      try {
+        const result = await api('/api/assets/usage');
+        assetUsage = result?.usage || result?.data?.usage || {};
+      } catch (_) {
+        // A failed scan must not break the Assets screen; the column shows "?".
+        assetUsage = {};
+      } finally {
+        assetUsageLoaded = true;
+      }
+      return assetUsage;
+    })();
+    return assetUsagePromise;
+  }
+
+  function openAssetUsageModal(asset) {
+    const usage = getAssetUsage(asset);
+    const pages = Array.isArray(usage?.pages) ? usage.pages : [];
+    const assetName = String(asset?.assetName || 'this image');
+
+    const body = document.createElement('div');
+    if (!pages.length) {
+      body.textContent = 'This image is not used on any page.';
+    } else {
+      const intro = document.createElement('p');
+      intro.className = 'meta';
+      intro.style.marginTop = '0';
+      intro.textContent = `Used on ${pages.length} ${pages.length === 1 ? 'page' : 'pages'}. Click a page to open it in the Builder.`;
+      body.appendChild(intro);
+
+      const list = document.createElement('div');
+      list.className = 'asset-usage-list';
+      pages.forEach((page) => {
+        const row = document.createElement('div');
+        row.className = 'asset-usage-row';
+
+        const link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'btn btn-ghost asset-usage-page-btn';
+        link.textContent = page.pageName || page.slug || 'Untitled page';
+        link.addEventListener('click', () => {
+          modal.close();
+          openPageInBuilder(page);
+        });
+        row.appendChild(link);
+
+        const meta = document.createElement('div');
+        meta.className = 'meta asset-usage-meta';
+        const bits = [];
+        if (page.slug) bits.push(`/${page.slug}`);
+        if (page.isPublished === false) bits.push('draft');
+        if (Array.isArray(page.places) && page.places.length) bits.push(page.places.join(' · '));
+        meta.textContent = bits.join(' — ');
+        row.appendChild(meta);
+
+        list.appendChild(row);
+      });
+      body.appendChild(list);
+    }
+
+    const modal = App.components.Modal({
+      title: `Used In — ${assetName}`,
+      body,
+      dialogClass: 'asset-usage-modal',
+      actions: [{ label: 'Close', primary: true, onClick: () => modal.close() }],
+    });
+    modal.open();
+  }
+
+  /** Jump to the Builder editor for a page found in the usage modal. */
+  function openPageInBuilder(page) {
+    const pageId = String(page?.pageId || '').trim();
+    if (pageId && App.builder?.openPageEditorById) {
+      App.builder.openPageEditorById(pageId).catch((err) => {
+        notify(err?.message || 'Could not open that page in the Builder', true);
+      });
+      return;
+    }
+    // Builder module unavailable (or too old to expose the helper) — at least
+    // land the user on the page list rather than doing nothing.
+    App.setActivePage('builderManagePagesPage');
+  }
+
   function syncAssetCaptionFieldVisibility(assetType) {
     const isImage = String(assetType || '').trim() === 'Image';
     document.querySelectorAll('.asset-caption-field').forEach((el) => {
@@ -105,6 +212,7 @@ App.assets = (function () {
       ['assetsSortCategoryBtn', 'category', 'Category'],
       ['assetsSortTopicBtn', 'topic', 'Topic'],
       ['assetsSortAspectBtn', 'aspect', 'Aspect'],
+      ['assetsSortUsageBtn', 'usage', 'Used In'],
       ['assetsSortTagsBtn', 'tags', 'Tags'],
       ['assetsSortSizeBtn', 'size', 'Size'],
     ];
@@ -121,6 +229,7 @@ App.assets = (function () {
 
   function getAssetSortValue(asset, key) {
     if (key === 'size') return Number(asset?.size || 0) || 0;
+    if (key === 'usage') return getAssetUsageCount(asset);
     if (key === 'aspect') return resolvedAssetAspect(asset);
     if (key === 'tags') {
       return Array.isArray(asset?.tags) ? asset.tags.join(', ') : '';
@@ -287,6 +396,7 @@ App.assets = (function () {
     const size = String(filters.size || '').trim().toLowerCase();
     const widthFilter = String(filters.image_width || '').trim().toLowerCase();
     const heightFilter = String(filters.image_height || '').trim().toLowerCase();
+    const usageFilter = String(filters.usage || '').trim().toLowerCase();
 
     const filtered = (state.assets || []).filter((asset) => {
       const assetName = String(asset.assetName || '').toLowerCase();
@@ -315,6 +425,13 @@ App.assets = (function () {
       if (heightFilter === 'none' && assetHeight) return false;
       else if (heightFilter === 'other' && (!assetHeight || STANDARD_ASSET_HEIGHTS.has(assetHeight))) return false;
       else if (heightFilter && heightFilter !== 'none' && heightFilter !== 'other' && assetHeight !== Number(heightFilter)) return false;
+      // Only filter on usage once the scan has landed — before that every asset
+      // would look unused and the list would go misleadingly empty.
+      if (usageFilter && assetUsageLoaded) {
+        const used = getAssetUsageCount(asset) > 0;
+        if (usageFilter === 'used' && !used) return false;
+        if (usageFilter === 'unused' && used) return false;
+      }
       return true;
     });
 
@@ -324,7 +441,7 @@ App.assets = (function () {
       const left = getAssetSortValue(a, key);
       const right = getAssetSortValue(b, key);
       let result = 0;
-      if (key === 'size') {
+      if (key === 'size' || key === 'usage') {
         if (left !== right) result = left < right ? -1 : 1;
       } else {
         const leftText = normalizeSortText(left);
@@ -718,6 +835,7 @@ App.assets = (function () {
     if (els.assetsFilterWidth) els.assetsFilterWidth.disabled = bulkMode;
     if (els.assetsFilterHeight) els.assetsFilterHeight.disabled = bulkMode;
     if (els.assetsFilterTopic) els.assetsFilterTopic.disabled = bulkMode;
+    if (els.assetsFilterUsage) els.assetsFilterUsage.disabled = bulkMode;
 
     if (!els.assetsFilterName || !els.assetsFilterType) return;
 
@@ -757,6 +875,7 @@ App.assets = (function () {
     if (els.assetsFilterWidth) els.assetsFilterWidth.value = String(state.assetsFilters?.image_width || '');
     if (els.assetsFilterHeight) els.assetsFilterHeight.value = String(state.assetsFilters?.image_height || '');
     if (els.assetsFilterTags) els.assetsFilterTags.value = String(state.assetsFilters?.tags || '');
+    if (els.assetsFilterUsage) els.assetsFilterUsage.value = String(state.assetsFilters?.usage || '');
     renderAssetFilterCategoryOptions(
       activeType,
       String(state.assetsFilters?.category || '').trim(),
@@ -873,6 +992,38 @@ App.assets = (function () {
     }
   }
 
+  /**
+   * "Used In" cell: a plain count, clickable when the image is actually placed
+   * somewhere. Shows "…" while the usage scan is still in flight so an
+   * unfinished load never reads as a confirmed zero.
+   */
+  function buildUsageCell(asset) {
+    const td = document.createElement('td');
+    td.className = 'asset-usage-cell';
+
+    if (!assetUsageLoaded) {
+      td.textContent = '…';
+      td.title = 'Checking which pages use this image…';
+      return td;
+    }
+
+    const count = getAssetUsageCount(asset);
+    if (!count) {
+      td.textContent = '0';
+      td.classList.add('asset-usage-cell--unused');
+      return td;
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'link-button asset-usage-count-btn';
+    button.textContent = String(count);
+    button.title = `Used on ${count} ${count === 1 ? 'page' : 'pages'} — click for the list`;
+    button.addEventListener('click', () => openAssetUsageModal(asset));
+    td.appendChild(button);
+    return td;
+  }
+
   function renderAssets() {
     if (!els.assetsTable) return;
     els.assetsTable.innerHTML = '';
@@ -948,6 +1099,8 @@ App.assets = (function () {
       appendCell(tr, asset.category);
       appendCell(tr, asset.topic);
       appendCell(tr, displayAspect(resolvedAssetAspect(asset)));
+      tr.appendChild(buildUsageCell(asset));
+
       const createdAt = String(asset.createdAt || '').trim();
       appendCell(tr, createdAt ? new Date(createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '-');
       appendCell(tr, formatBytes(asset.size));
@@ -1154,6 +1307,12 @@ App.assets = (function () {
 
     renderAssets();
     prefillUploadFormsFromActiveFilters();
+
+    // Scanning every Builder page is the slow part, so let the table paint
+    // first and fill the "Used In" column in when the answer arrives.
+    loadAssetUsage({ force: true }).then(() => {
+      if (els.assetsTable) renderAssets();
+    });
   }
 
   async function openAssetsLanding() {
@@ -1395,6 +1554,7 @@ App.assets = (function () {
     bindSortButton('assetsSortCategoryBtn', 'category', 'asc');
     bindSortButton('assetsSortTopicBtn', 'topic', 'asc');
     bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
+    bindSortButton('assetsSortUsageBtn', 'usage', 'desc');
     bindSortButton('assetsSortUpdatedBtn', 'createdAt', 'desc');
     bindSortButton('assetsSortSizeBtn', 'size', 'desc');
 
@@ -1713,6 +1873,16 @@ App.assets = (function () {
     bindHeaderField(els.assetsFilterHeight, 'image_height');
     bindHeaderField(els.assetsFilterTags, 'tags');
 
+    // The filter row doubles as the bulk-edit form, but "Used In" is derived
+    // data with nothing to edit — it only ever filters.
+    if (els.assetsFilterUsage) {
+      els.assetsFilterUsage.addEventListener('change', () => {
+        if (isBulkMode()) return;
+        state.assetsFilters.usage = String(els.assetsFilterUsage.value || '');
+        renderAssets();
+      });
+    }
+
     if (els.assetsFilterType) {
       els.assetsFilterType.addEventListener('change', () => {
         const selectedType = String(els.assetsFilterType.value || '').trim();
@@ -1754,6 +1924,7 @@ App.assets = (function () {
         state.assetsFilters.image_width = String(els.assetsFilterWidth?.value || '');
         state.assetsFilters.image_height = String(els.assetsFilterHeight?.value || '');
         state.assetsFilters.tags = String(els.assetsFilterTags?.value || '');
+        state.assetsFilters.usage = String(els.assetsFilterUsage?.value || '');
         renderAssets();
       });
     }
@@ -1771,6 +1942,8 @@ App.assets = (function () {
         state.assetsFilters.image_height = '';
         state.assetsFilters.tags = '';
         state.assetsFilters.size = '';
+        state.assetsFilters.usage = '';
+        if (els.assetsFilterUsage) els.assetsFilterUsage.value = '';
         if (els.assetsFilterName) els.assetsFilterName.value = '';
         if (els.assetsFilterCaption) els.assetsFilterCaption.value = '';
         if (els.assetsFilterType) els.assetsFilterType.value = '';
