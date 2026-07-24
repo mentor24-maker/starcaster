@@ -221,7 +221,13 @@ export function getImageModuleStyle(settings: Record<string, string>): CSSProper
     border: `${Math.max(Number.isFinite(borderThickness) ? borderThickness : 0, 0)}px solid ${
       settings.borderColor || "#0f4f8f"
     }`,
-    borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 18, 0)}px`
+    borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 18, 0)}px`,
+    // border-radius describes the OUTER edge, so the hole the image sits in is
+    // rounded at (radius - borderThickness). Giving the image the outer radius
+    // curves it away from that hole and exposes a crescent of background in
+    // each corner. Clipping here rounds the image to the inner curve exactly,
+    // and stays correct for any radius/thickness the operator picks later.
+    overflow: "hidden"
   };
 }
 
