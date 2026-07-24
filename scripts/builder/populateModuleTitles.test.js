@@ -130,3 +130,40 @@ test('a section with no titelable content produces no change', () => {
   const { changed } = populateTitlesInSections(sections, {});
   assert.equal(changed, false);
 });
+
+test('auto-generated "Content Block" placeholder titles are replaced in blanks-only mode', () => {
+  const sections = [
+    { id: 's1', title: 'Content Block 1', modules: [heading('Our Services', { column: 'left' })] },
+    { id: 's2', title: 'Content Block 2', modules: [heading('About Us', { column: 'left' })] },
+  ];
+  const { sections: out, changes } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Our Services', 'Content Block 1 replaced');
+  assert.equal(out[1].title, 'About Us', 'Content Block 2 replaced');
+  assert.ok(changes.some((c) => c.level === 'section' && c.from === 'Content Block 1' && c.to === 'Our Services'));
+});
+
+test('a real, operator-chosen title is left alone in blanks-only mode', () => {
+  // Module already named too, so nothing at all should change.
+  const named = { id: 'm1', type: 'heading', column: 'left', name: 'Heading Named', text: 'Different Heading', settings: { level: 'h2' } };
+  const sections = [{ id: 's1', title: 'Meet Our Attorneys', modules: [named] }];
+  const { sections: out, changed } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Meet Our Attorneys', 'real title untouched');
+  assert.equal(changed, false);
+});
+
+test('placeholder module names are replaced too', () => {
+  const sections = [{
+    id: 's1',
+    title: 'Kept',
+    modules: [{ id: 'm1', type: 'heading', column: 'left', name: 'Content Block 3', text: 'Contact Us', settings: { level: 'h2' } }],
+  }];
+  const { sections: out } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].modules[0].name, 'Contact Us', 'placeholder module name replaced');
+});
+
+test('a Content-Block placeholder with no derivable content keeps its old name (no blanking)', () => {
+  const sections = [{ id: 's1', title: 'Content Block 9', modules: [{ id: 'c', type: 'code', column: 'left', name: '', text: 'x', settings: {} }] }];
+  const { sections: out, changed } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Content Block 9', 'unchanged when nothing to derive');
+  assert.equal(changed, false);
+});
