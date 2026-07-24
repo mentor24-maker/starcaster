@@ -255,6 +255,120 @@ App.assets = (function () {
     modal.open();
   }
 
+  // ── Larger-image hover preview ──────────────────────────────────────────
+  // Hovering an image thumbnail or its name reveals a read-only card with a
+  // larger view of the image plus the key facts. Mirrors the "Used In"
+  // hover-card pattern above (delayed close so the pointer can travel from the
+  // row into the card — e.g. to click the "Open original" link — without it
+  // vanishing en route).
+  function buildAssetImageDetails(asset) {
+    const dl = document.createElement('dl');
+    dl.className = 'asset-image-details';
+
+    const addRow = (label, value) => {
+      if (value == null || value === '' || value === '-') return;
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      if (value instanceof Node) dd.appendChild(value);
+      else dd.textContent = String(value);
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    };
+
+    const width = Math.max(0, Number(asset?.imageWidth || 0) || 0);
+    const height = Math.max(0, Number(asset?.imageHeight || 0) || 0);
+    addRow('Dimensions', width > 0 && height > 0 ? `${width} × ${height}` : '');
+    addRow('Type', displayAssetType(asset?.assetType));
+    addRow('Category', asset?.category);
+    addRow('Topic', asset?.topic);
+    addRow('Aspect', displayAspect(resolvedAssetAspect(asset)));
+    const bytes = Math.max(0, Number(asset?.size || 0) || 0);
+    addRow('Size', bytes ? formatBytes(bytes) : '');
+    if (String(asset?.assetType || '').trim() === 'Image') addRow('Caption', asset?.caption);
+    const tags = Array.isArray(asset?.tags) ? asset.tags.join(', ') : '';
+    addRow('Tags', tags);
+    // The usage scan lands after the first paint; only show a count once known.
+    if (assetUsageLoaded) {
+      const count = getAssetUsageCount(asset);
+      addRow('Used In', `${count} ${count === 1 ? 'page' : 'pages'}`);
+    }
+
+    const location = String(asset?.location || '').trim();
+    if (isValidUrl(location)) {
+      const link = document.createElement('a');
+      link.href = location;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Open original';
+      addRow('Location', link);
+    }
+
+    return dl;
+  }
+
+  let assetImageHoverEl = null;
+  let assetImageHoverTimer = null;
+
+  function hideAssetImageHover({ immediate = false } = {}) {
+    window.clearTimeout(assetImageHoverTimer);
+    const close = () => {
+      if (assetImageHoverEl) {
+        assetImageHoverEl.remove();
+        assetImageHoverEl = null;
+      }
+    };
+    if (immediate) close();
+    else assetImageHoverTimer = window.setTimeout(close, 180);
+  }
+
+  function showAssetImageHover(asset, anchor) {
+    window.clearTimeout(assetImageHoverTimer);
+    const imageUrl = assetImageUrl(asset, { preferThumbnail: false });
+    if (!imageUrl) return;
+    if (assetImageHoverEl?.dataset.assetId === String(asset?.id || '')) return;
+    hideAssetImageHover({ immediate: true });
+
+    const card = document.createElement('div');
+    card.className = 'asset-image-hover';
+    card.dataset.assetId = String(asset?.id || '');
+
+    const stage = document.createElement('div');
+    stage.className = 'asset-image-hover-stage';
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.alt = String(asset?.assetName || 'Image');
+    stage.appendChild(img);
+    card.appendChild(stage);
+    card.appendChild(buildAssetImageDetails(asset));
+
+    card.addEventListener('mouseenter', () => window.clearTimeout(assetImageHoverTimer));
+    card.addEventListener('mouseleave', () => hideAssetImageHover());
+    document.body.appendChild(card);
+
+    // Anchor below the row, flipping up or left when it would leave the
+    // viewport. Measured after insertion so the real size is known.
+    const rect = anchor.getBoundingClientRect();
+    const { width, height } = card.getBoundingClientRect();
+    const margin = 8;
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 6);
+    if (left + width > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - width - margin);
+    card.style.top = `${top}px`;
+    card.style.left = `${left}px`;
+
+    assetImageHoverEl = card;
+  }
+
+  function bindAssetImageHover(el, asset) {
+    el.addEventListener('mouseenter', () => showAssetImageHover(asset, el));
+    el.addEventListener('mouseleave', () => hideAssetImageHover());
+    // Keyboard users get the same peek when tabbing onto the element.
+    el.addEventListener('focus', () => showAssetImageHover(asset, el));
+    el.addEventListener('blur', () => hideAssetImageHover());
+  }
+
   function syncAssetCaptionFieldVisibility(assetType) {
     const isImage = String(assetType || '').trim() === 'Image';
     document.querySelectorAll('.asset-caption-field').forEach((el) => {
@@ -1089,8 +1203,9 @@ App.assets = (function () {
 
   function renderAssets() {
     if (!els.assetsTable) return;
-    // The card is anchored to a row that is about to be destroyed.
+    // The cards are anchored to rows that are about to be destroyed.
     hideUsageHover({ immediate: true });
+    hideAssetImageHover({ immediate: true });
     els.assetsTable.innerHTML = '';
     updateAssetSortButtons();
 
@@ -1130,13 +1245,19 @@ App.assets = (function () {
       const assetTypeText = String(asset.assetType || '').trim();
       const location = String(asset.location || '').trim();
       const directImageUrl = assetImageUrl(asset);
-      if (assetTypeText === 'Image' && directImageUrl) {
+      // For images we can preview larger, hovering the thumbnail or the name
+      // reveals a card with the full-size image and its key details.
+      const canPreviewImage = assetTypeText === 'Image' && !!directImageUrl;
+      if (canPreviewImage) {
         const img = document.createElement('img');
         img.src = directImageUrl;
         img.alt = String(asset.assetName || 'Asset thumbnail');
         img.style.height = '50px';
         img.style.width = 'auto';
         img.style.display = 'block';
+        img.className = 'asset-thumb-preview';
+        img.title = `Hover to preview "${asset.assetName || 'image'}"`;
+        bindAssetImageHover(img, asset);
         thumbnailTd.appendChild(img);
       } else {
         thumbnailTd.textContent = '-';
@@ -1145,16 +1266,26 @@ App.assets = (function () {
 
       const nameTd = document.createElement('td');
       const nameText = String(asset.assetName || '-');
+      // Keep the click-through to the original file when there's a valid URL;
+      // the hover preview is layered on top of whichever element we render.
+      let nameEl = null;
       if (isValidUrl(location)) {
-        const link = document.createElement('a');
-        link.href = location;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = nameText;
-        nameTd.appendChild(link);
+        nameEl = document.createElement('a');
+        nameEl.href = location;
+        nameEl.target = '_blank';
+        nameEl.rel = 'noopener noreferrer';
+        nameEl.textContent = nameText;
+        nameTd.appendChild(nameEl);
+      } else if (canPreviewImage) {
+        nameEl = document.createElement('span');
+        nameEl.className = 'asset-name-hover';
+        nameEl.tabIndex = 0;
+        nameEl.textContent = nameText;
+        nameTd.appendChild(nameEl);
       } else {
         nameTd.textContent = nameText;
       }
+      if (canPreviewImage && nameEl) bindAssetImageHover(nameEl, asset);
       tr.appendChild(nameTd);
 
       appendCell(tr, asset.imageWidth > 0 ? String(asset.imageWidth) : '-');

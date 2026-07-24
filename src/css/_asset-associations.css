@@ -272,6 +272,80 @@ body.asset-associations-modal-open {
   background: var(--surface-hover, rgba(47, 111, 235, 0.12));
 }
 
+/* Thumbnail + name that reveal the larger-image hover preview. */
+.asset-thumb-preview {
+  cursor: zoom-in;
+  border-radius: 4px;
+}
+
+.asset-thumb-preview:hover,
+.asset-thumb-preview:focus-visible {
+  outline: 2px solid var(--link-color, #2f6feb);
+  outline-offset: 2px;
+}
+
+.asset-name-hover {
+  cursor: zoom-in;
+  border-radius: 4px;
+}
+
+.asset-name-hover:focus-visible {
+  outline: 2px solid var(--link-color, #2f6feb);
+  outline-offset: 2px;
+}
+
+/* Floating card shown on hover: a larger image plus key details. Mirrors
+   .asset-usage-hover above. */
+.asset-image-hover {
+  position: fixed;
+  z-index: 1200;
+  max-width: min(460px, 92vw);
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.6rem;
+  background: var(--bg-page, #fff);
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 40, 80, 0.22);
+}
+
+.asset-image-hover-stage {
+  display: grid;
+  place-items: center;
+  padding: 0.5rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fbfdff 0%, #eef6ff 100%);
+}
+
+.asset-image-hover-stage img {
+  max-width: 100%;
+  max-height: min(46vh, 340px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  border-radius: 8px;
+}
+
+/* Key-details list under the enlarged image in the hover preview. */
+.asset-image-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  color: #27445f;
+}
+
+.asset-image-details dt {
+  font-weight: 600;
+  color: #123d67;
+}
+
+.asset-image-details dd {
+  margin: 0;
+  word-break: break-word;
+}
+
 .asset-usage-intro {
   margin: 0 0 0.5rem;
 }
