@@ -4,7 +4,10 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 60rem;
+  /* Set an explicit base color: this React island renders inside a builder
+     page wrapper whose text color is white, so without this every label
+     inherits white and disappears on the light panels. */
+  color: var(--ink-primary);
 }
 
 .populate-titles-columns {
@@ -15,12 +18,12 @@
 }
 
 .populate-titles-panel {
-  flex: 1 1 20rem;
-  min-width: 18rem;
-  border: 1px solid var(--border-color, #d9e0e8);
-  border-radius: 8px;
+  flex: 1 1 18rem;
+  min-width: 16rem;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
   padding: 0.85rem 1rem 1rem;
-  background: var(--panel-bg, #fff);
+  background: var(--bg-surface);
 }
 
 .populate-titles-panel-head {
@@ -40,7 +43,6 @@
   list-style: none;
   margin: 0.5rem 0;
   padding: 0;
-  counter-reset: none;
 }
 
 .populate-titles-priority-row {
@@ -48,7 +50,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.3rem 0;
-  border-bottom: 1px solid var(--border-color, #eef1f5);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .populate-titles-priority-num {
@@ -57,7 +59,8 @@
   line-height: 1.4rem;
   text-align: center;
   border-radius: 50%;
-  background: var(--accent-soft, #eef2f7);
+  background: #eef2f7;
+  color: var(--ink-primary);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -73,7 +76,8 @@
   gap: 0.25rem;
 }
 
-.populate-titles-pages {
+.populate-titles-pages,
+.populate-titles-selected-list {
   list-style: none;
   margin: 0.5rem 0 0;
   padding: 0;
@@ -91,11 +95,43 @@
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  margin-top: 0.5rem;
 }
 
 .populate-titles-check input {
   flex: 0 0 auto;
+}
+
+/* The overwrite toggle sits on its own line — keep its label from wrapping. */
+.populate-titles-overwrite {
+  margin-top: 0.75rem;
+}
+
+.populate-titles-overwrite .populate-titles-check span {
+  white-space: nowrap;
+}
+
+.populate-titles-check-help {
+  margin: 0.2rem 0 0 1.6rem;
+}
+
+.populate-titles-selected-empty {
+  margin-top: 0.5rem;
+}
+
+.populate-titles-selected-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.9rem;
+}
+
+.populate-titles-selected-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .populate-titles-actions {
@@ -108,7 +144,8 @@
   font-size: 0.9rem;
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  background: var(--accent-soft, #eef7f0);
+  background: #eef7f0;
+  color: var(--ink-primary);
 }
 
 .populate-titles-status.is-error {
@@ -123,7 +160,7 @@
 }
 
 .populate-titles-report-page {
-  border: 1px solid var(--border-color, #e3e8ee);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   padding: 0.4rem 0.65rem;
 }
@@ -153,7 +190,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--muted, #6b7785);
+  color: var(--muted);
 }
 
 .populate-titles-skipped {
