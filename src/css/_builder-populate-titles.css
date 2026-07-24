@@ -95,6 +95,20 @@
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
+  /* Colour the label AND its text directly. A builder page ancestor colours
+     labels-in-lists white, and the span inherits from the label — so a color
+     on our container alone loses. Setting it on the element with the text
+     always wins over an inherited value. */
+  color: var(--ink-primary);
+  min-width: 0;
+}
+
+.populate-titles-check span {
+  color: var(--ink-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .populate-titles-check input {
