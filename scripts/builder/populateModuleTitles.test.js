@@ -142,6 +142,25 @@ test('auto-generated "Content Block" placeholder titles are replaced in blanks-o
   assert.ok(changes.some((c) => c.level === 'section' && c.from === 'Content Block 1' && c.to === 'Our Services'));
 });
 
+test('auto-generated "Section N" placeholder titles are replaced', () => {
+  const sections = [
+    { id: 's1', title: 'Section 1', modules: [heading('Our Services', { column: 'left' })] },
+    { id: 's2', title: 'Section 12', modules: [heading('About Us', { column: 'left' })] },
+  ];
+  const { sections: out } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Our Services', 'Section 1 replaced');
+  assert.equal(out[1].title, 'About Us', 'Section 12 replaced');
+});
+
+test('a deliberate title that merely contains "Section" is left alone', () => {
+  const sections = [
+    { id: 's1', title: 'Section 8 Housing', modules: [{ id: 'm', type: 'heading', column: 'left', name: 'Named', text: 'Other', settings: { level: 'h2' } }] },
+  ];
+  const { sections: out, changed } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Section 8 Housing', 'real title untouched');
+  assert.equal(changed, false);
+});
+
 test('a real, operator-chosen title is left alone in blanks-only mode', () => {
   // Module already named too, so nothing at all should change.
   const named = { id: 'm1', type: 'heading', column: 'left', name: 'Heading Named', text: 'Different Heading', settings: { level: 'h2' } };
