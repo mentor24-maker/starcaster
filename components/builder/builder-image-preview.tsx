@@ -69,12 +69,12 @@ export function BuilderImagePreview({
         isVideoMedia(mediaUrl) ? (
           <video className="builder-preview-video" controls preload="metadata" src={mediaUrl} />
         ) : linkUrl ? (
-          <a href={linkUrl} rel={opensInNewTab ? "noopener noreferrer" : undefined} target={opensInNewTab ? "_blank" : undefined} style={{ display: "block", borderRadius: "inherit" }}>
+          <a href={linkUrl} rel={opensInNewTab ? "noopener noreferrer" : undefined} target={opensInNewTab ? "_blank" : undefined} style={{ display: "block" }}>
             <img
               alt={module.settings.alt || module.text || ""}
               src={mediaUrl}
               suppressHydrationWarning
-              style={{ width: "100%", height: "auto", display: "block", borderRadius: "inherit" }}
+              style={{ width: "100%", height: "auto", display: "block" }}
             />
           </a>
         ) : (
@@ -82,7 +82,7 @@ export function BuilderImagePreview({
             alt={module.settings.alt || module.text || ""}
             src={mediaUrl}
             suppressHydrationWarning
-            style={{ width: "100%", height: "auto", display: "block", borderRadius: "inherit" } as CSSProperties}
+            style={{ width: "100%", height: "auto", display: "block" } as CSSProperties}
           />
         )
       ) : (
