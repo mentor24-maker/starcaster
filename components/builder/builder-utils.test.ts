@@ -11,6 +11,7 @@ import {
   getImageModuleShellStyle,
   getModuleWidthShellStyle,
   getModuleWidthStyle,
+  getTextModuleWidthStyle,
   getOverlayFlowCollapsedModuleStyle,
   getOverlayFlowCollapsedSectionStyle,
   getSpeechBubbleBodyStyle,
@@ -144,6 +145,32 @@ describe("getImageModuleShellStyle", () => {
     expect(style.transform).toContain("translate(-50%, -50%)");
     expect(style.transform).toContain("translate(0px, 0px)");
     expect(style.transform).toContain("translate(-6px, -10px)");
+  });
+});
+
+describe("getTextModuleWidthStyle", () => {
+  it("returns undefined at full width so text keeps normal block flow", () => {
+    expect(getTextModuleWidthStyle({})).toBeUndefined();
+    expect(getTextModuleWidthStyle({ size: "100" })).toBeUndefined();
+  });
+
+  it("narrows the box and centers it when narrowed with center alignment", () => {
+    const style = getTextModuleWidthStyle({ size: "50", alignment: "center" });
+
+    expect(style?.width).toBe("50%");
+    expect(style?.maxWidth).toBe("100%");
+    expect(style?.marginLeft).toBe("auto");
+    expect(style?.marginRight).toBe("auto");
+  });
+
+  it("pushes a narrowed box left for left alignment and right for right alignment", () => {
+    const left = getTextModuleWidthStyle({ size: "66", alignment: "left" });
+    expect(left?.marginLeft).toBeUndefined();
+    expect(left?.marginRight).toBe("auto");
+
+    const right = getTextModuleWidthStyle({ size: "66", alignment: "right" });
+    expect(right?.marginLeft).toBe("auto");
+    expect(right?.marginRight).toBeUndefined();
   });
 });
 

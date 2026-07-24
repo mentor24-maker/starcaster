@@ -212,6 +212,29 @@ export function getModuleWidthShellStyle(settings: Record<string, string>): CSSP
   };
 }
 
+/**
+ * Width constraint for a text block. The text container is a plain block (not a
+ * grid item), so it is narrowed with an explicit width and positioned inside
+ * its module via auto margins that follow the module's alignment. Returns
+ * undefined at full width so untouched text keeps normal block flow.
+ */
+export function getTextModuleWidthStyle(settings: Record<string, string>): CSSProperties | undefined {
+  const widthPercent = getModuleWidthPercent(settings);
+
+  if (widthPercent >= 100) {
+    return undefined;
+  }
+
+  const alignment = getModuleAlignment(settings);
+
+  return {
+    width: `${widthPercent}%`,
+    maxWidth: "100%",
+    marginLeft: alignment === "left" ? undefined : "auto",
+    marginRight: alignment === "right" ? undefined : "auto"
+  };
+}
+
 export function getImageModuleStyle(settings: Record<string, string>): CSSProperties {
   const borderThickness = Number.parseInt(settings.borderThickness ?? "0", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "18", 10);
