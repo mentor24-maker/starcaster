@@ -72,6 +72,7 @@ import {
   getModuleAlignment,
   getModuleBackgroundSettings,
   getSectionMarginStyle,
+  getSectionWidthStyle,
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
   getTextModuleWidthStyle,
@@ -1305,6 +1306,7 @@ function BuilderSectionPreview({
   const gridStyle: CSSProperties = {
     ...(isNavigationSection ? {} : sectionStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
+    ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionWidthStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
