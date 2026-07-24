@@ -84,6 +84,18 @@ describe("normalizeBuilderSection", () => {
     expect(section?.marginTop).toBe("10");
     expect(section?.marginBottom).toBe("30");
   });
+
+  it("defaults widthMode to contained and preserves full-width", () => {
+    const contained = normalizeBuilderSection({ id: "s1", title: "", layout: "single", modules: [] });
+    expect(contained?.widthMode).toBe("contained");
+
+    const full = normalizeBuilderSection({ id: "s2", title: "", layout: "single", widthMode: "full-width", modules: [] });
+    expect(full?.widthMode).toBe("full-width");
+
+    // Anything unrecognized falls back to contained rather than persisting junk.
+    const bogus = normalizeBuilderSection({ id: "s3", title: "", layout: "single", widthMode: "wide", modules: [] });
+    expect(bogus?.widthMode).toBe("contained");
+  });
 });
 
 describe("normalizeBuilderModule heading margins", () => {

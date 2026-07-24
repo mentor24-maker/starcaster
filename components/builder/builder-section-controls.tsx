@@ -87,6 +87,20 @@ export function BuilderSectionControls({
             ))}
           </select>
         </BuilderSettingRow>
+        <BuilderSettingRow label="Width">
+          <select
+            value={section.widthMode ?? "contained"}
+            onChange={(event) =>
+              onUpdateSection((current) => ({
+                ...current,
+                widthMode: event.target.value === "full-width" ? "full-width" : "contained"
+              }))
+            }
+          >
+            <option value="contained">Contained (within page margins)</option>
+            <option value="full-width">Full width (edge to edge)</option>
+          </select>
+        </BuilderSettingRow>
         <BuilderSettingRow label="Alignment">
           <select
             value={section.alignment}

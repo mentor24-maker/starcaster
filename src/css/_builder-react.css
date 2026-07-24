@@ -4490,6 +4490,24 @@
   overflow: visible;
 }
 
+/* Full-width section: escape the theme's inline page margin so the section —
+   background and content — spans edge to edge. The margin token inherits down
+   to the section (see .has-builder-theme-margins), so negating it lands each
+   edge exactly at the viewport, with no 100vw scrollbar overshoot, and it
+   self-corrects if the operator later changes the page side margin. */
+.builder-react-root .builder-preview-section-full-width {
+  margin-left: calc(-1 * var(--bx-theme-padding-inline, 0px));
+  margin-right: calc(-1 * var(--bx-theme-padding-inline, 0px));
+  border-radius: 0;
+}
+
+/* Two consecutive full-width sections read as one continuous band: swallow the
+   18px inter-section grid gap (see .builder-preview-shell-content) between them
+   so a shared flat background has no visible seam. */
+.builder-react-root .builder-preview-section-full-width + .builder-preview-section-full-width {
+  margin-top: -18px;
+}
+
 .builder-react-root .builder-preview-shell {
   position: relative;
   isolation: isolate;

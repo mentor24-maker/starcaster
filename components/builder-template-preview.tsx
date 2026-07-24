@@ -1328,7 +1328,9 @@ function BuilderSectionPreview({
         isNavigationSection ? "builder-preview-section-navigation" : ""
       }${isPageOverlayFlowSection ? " builder-preview-section-overlay-flow" : ""}${
         isSectionOverlaySlot ? " builder-preview-section-overlay-slot" : ""
-      }${hasPollModules ? " builder-preview-section-poll-row" : ""}`}
+      }${hasPollModules ? " builder-preview-section-poll-row" : ""}${
+        section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
+      }`}
       style={gridStyle}
     >
       {columnKeys.map((columnKey) => {
