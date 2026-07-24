@@ -6,6 +6,7 @@ import { BuilderThemesPage } from './components/builder/builder-themes-page';
 import { BuilderFormsPage } from './components/builder/builder-forms-page';
 import { BuilderModuleClassesPanel } from './components/builder/builder-module-classes-panel';
 import { BuilderExtensionsPage } from './components/builder/builder-extensions-page';
+import { BuilderPopulateTitlesPage } from './components/builder/builder-populate-titles-page';
 import { BuilderAgentsPage } from './components/builder/builder-agents-page';
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 
@@ -156,6 +157,22 @@ export function unmountExtensionsReact() {
   pendingExtensionItem = null;
 }
 
+let populateTitlesRoot: Root | null = null;
+
+export function mountPopulateTitlesReact(host: HTMLElement | null) {
+  if (!host) return;
+  if (populateTitlesRoot) return;
+  populateTitlesRoot = createRoot(host);
+  populateTitlesRoot.render(<BuilderPopulateTitlesPage />);
+}
+
+export function unmountPopulateTitlesReact() {
+  if (populateTitlesRoot) {
+    populateTitlesRoot.unmount();
+    populateTitlesRoot = null;
+  }
+}
+
 export function openExtensionItemReact(item: unknown) {
   if (extensionsOpenItemFn) {
     extensionsOpenItemFn(item);
@@ -255,6 +272,10 @@ declare global {
       unmount: typeof unmountExtensionsReact;
       openItem: typeof openExtensionItemReact;
     };
+    PopulateTitlesReact: {
+      mount: typeof mountPopulateTitlesReact;
+      unmount: typeof unmountPopulateTitlesReact;
+    };
     AgentsReact: {
       mount: typeof mountAgentsReact;
       unmount: typeof unmountAgentsReact;
@@ -292,6 +313,11 @@ window.ExtensionsReact = {
   mount: mountExtensionsReact,
   unmount: unmountExtensionsReact,
   openItem: openExtensionItemReact,
+};
+
+window.PopulateTitlesReact = {
+  mount: mountPopulateTitlesReact,
+  unmount: unmountPopulateTitlesReact,
 };
 
 window.AgentsReact = {
