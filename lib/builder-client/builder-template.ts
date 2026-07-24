@@ -244,6 +244,13 @@ export type BuilderTemplateSection = {
   /** When true, this instance stays in sync with the master saved section. */
   canonical?: boolean;
   layout: BuilderTemplateLayout;
+  /**
+   * "contained" (default) keeps the section within the theme's side margins;
+   * "full-width" lets its background and content span edge to edge of the
+   * viewport. Two adjacent full-width sections with the same flat background
+   * read as one continuous band.
+   */
+  widthMode: "contained" | "full-width";
   alignment: "left" | "center" | "right";
   marginTop: string;
   marginBottom: string;
@@ -1692,6 +1699,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
         title: safeText(normalizedSection.title, 255),
         layout,
+        widthMode: normalizedSection.widthMode === "full-width" ? "full-width" : "contained",
         locked: normalizedSection.locked === true,
         isPrivate: normalizedSection.isPrivate === true,
         alignment: normalizeAlignment(normalizedSection.alignment),
@@ -1747,6 +1755,7 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     locked: false,
     isPrivate: false,
     layout,
+    widthMode: "contained",
     alignment: "left",
     marginTop: "0",
     marginBottom: "0",

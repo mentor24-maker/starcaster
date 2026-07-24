@@ -223,8 +223,8 @@
   padding: 0;
 }
 
-.builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-shell-content > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot),
-.builder-react-root .builder-preview-shell.has-builder-theme-styles > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot) {
+.builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-shell-content > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot):not(.builder-preview-section-full-width),
+.builder-react-root .builder-preview-shell.has-builder-theme-styles > .builder-preview-section:not(.builder-preview-section-navigation):not(.builder-preview-section-overlay-flow):not(.builder-preview-section-overlay-slot):not(.builder-preview-section-full-width) {
   border-radius: var(--lp-radius, 24px);
 }
 
