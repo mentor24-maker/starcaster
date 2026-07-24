@@ -18,6 +18,15 @@ describe('crmFormStylesToRenderStyles', () => {
     expect(shell.width).not.toBe('100%');
   });
 
+  it('stretches the shell so a centered cell cannot collapse it to a pill', () => {
+    // The Marinoff contact form sat in a cell whose content alignment was
+    // "center", which renders the column as `display:flex; align-items:center`.
+    // With `width:auto` and no `align-self`, the form shrank to its (empty)
+    // content width. `stretch` overrides the cell's cross-axis alignment.
+    const { shell } = crmFormStylesToRenderStyles(styles, '#1DC3FF');
+    expect(shell.alignSelf).toBe('stretch');
+  });
+
   it('leaves grid track sizing to CSS so container queries can restack it', () => {
     const { form, button } = crmFormStylesToRenderStyles(styles, '#1DC3FF');
     // Inline styles beat stylesheets, so anything the @container rule needs to
