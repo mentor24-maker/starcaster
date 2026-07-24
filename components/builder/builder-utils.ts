@@ -180,6 +180,30 @@ export function getSectionMarginStyle(section: BuilderTemplateSection): CSSPrope
   return getSplitVerticalMarginStyle(section.marginTop, section.marginBottom);
 }
 
+/**
+ * Narrows a contained section to its widthPercent and centers it within the
+ * page. Returns {} for full-width sections (which escape the page margins
+ * entirely) and for the 100% default, so untouched sections keep full content
+ * width.
+ */
+export function getSectionWidthStyle(section: BuilderTemplateSection): CSSProperties {
+  if (section.widthMode === "full-width") {
+    return {};
+  }
+
+  const widthPercent = normalizeSpacingValue(section.widthPercent, "100", 25, 100);
+
+  if (widthPercent === "100") {
+    return {};
+  }
+
+  return {
+    maxWidth: `${widthPercent}%`,
+    marginLeft: "auto",
+    marginRight: "auto"
+  };
+}
+
 export function getSectionBackgroundStyle(section: BuilderTemplateSection): CSSProperties | undefined {
   return getBuilderBackgroundStyle(section.background);
 }
