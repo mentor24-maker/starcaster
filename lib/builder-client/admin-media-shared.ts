@@ -14,6 +14,8 @@ export type AdminMediaItem = {
   mediaType?: string;
   topic?: string;
   aspect?: GalleryMediaAspect;
+  imageWidth?: number;
+  imageHeight?: number;
   createdAt?: string;
 };
 

@@ -27,6 +27,8 @@ type StarcasterAsset = {
   aspect?: string;
   location?: string;
   thumbnailUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
   createdAt?: string;
 };
 
@@ -60,6 +62,8 @@ export function assetToAdminMediaItem(asset: StarcasterAsset): AdminMediaItem | 
     mediaType: String(asset.assetType ?? '').trim() || undefined,
     topic: String(asset.topic ?? '').trim() || undefined,
     aspect: asset.aspect ? normalizeGalleryMediaAspect(asset.aspect) : undefined,
+    imageWidth: Number(asset.imageWidth || 0) || undefined,
+    imageHeight: Number(asset.imageHeight || 0) || undefined,
     createdAt: asset.createdAt || undefined
   };
 }
@@ -136,6 +140,7 @@ export function useGalleryMediaLibrary(options?: {
   const enabled = options?.enabled ?? true;
   const source = options?.source ?? 'project';
   const [media, setMedia] = useState<AdminMediaItem[]>([]);
+  const [allMedia, setAllMedia] = useState<AdminMediaItem[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -160,6 +165,7 @@ export function useGalleryMediaLibrary(options?: {
           allItemsRef.current = assets
             .map(assetToAdminMediaItem)
             .filter((item): item is AdminMediaItem => Boolean(item));
+          setAllMedia(allItemsRef.current);
         }
 
         const querySource = options?.listQueryFilters ?? filters;
@@ -189,6 +195,7 @@ export function useGalleryMediaLibrary(options?: {
   useEffect(() => {
     allItemsRef.current = null;
     setMedia([]);
+    setAllMedia([]);
     setTotal(0);
   }, [source]);
 
@@ -216,6 +223,7 @@ export function useGalleryMediaLibrary(options?: {
 
   return {
     media,
+    allMedia,
     total,
     isLoading,
     filters,
