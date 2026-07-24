@@ -784,6 +784,13 @@ App.builder = (function () {
     mountFormsReact();
   }
 
+  function mountPopulateTitlesReact() {
+    const host = byId('builderReactRootPopulateTitles');
+    if (host && window.PopulateTitlesReact?.mount) {
+      window.PopulateTitlesReact.mount(host);
+    }
+  }
+
   function openAgentsPage() {
     const host = byId('builderReactRootAgents');
     window.AgentsReact?.mount(host, 'list');
@@ -14321,6 +14328,7 @@ App.builder = (function () {
         loadPageArchives().then(() => renderPageArchivesTable()).catch(() => {});
       } else if (pageId === 'builderThemesPage') mountThemesReact();
       else if (pageId === 'builderFormsPage') mountFormsReact();
+      else if (pageId === 'builderExtensionPopulateTitlesPage') mountPopulateTitlesReact();
       else if (pageId === 'builderBuilderWorkspacePage') {
         if (!builderActiveMount || builderActiveMount.surface !== 'hub') {
           mount({ surface: 'hub', editorMode: 'template', onClose: () => {} });
