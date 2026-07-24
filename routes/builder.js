@@ -89,6 +89,7 @@ const {
   propagateCanonicalSection,
   bulkSetPublished,
 } = require('../lib/builderPagesStore');
+const { populateTitlesInSections } = require('../lib/populateModuleTitles');
 const {
   listPageSnapshots,
   getPageSnapshot,
@@ -1387,6 +1388,69 @@ async function handle(req, res, pathname, method) {
     }
 
     const result = { populated, skipped, sourceUrl: run.source_url };
+    return sendOk(res, 200, result, result), true;
+  }
+
+  // POST /api/builder/landing-pages/populate-titles
+  // "Populate Module Titles" extension: fill the optional section.title and
+  // module.name fields on saved pages from their own content, using a
+  // configurable source priority. Fills blanks only unless overwrite is set.
+  if (pathname === '/api/builder/landing-pages/populate-titles' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const requestedIds = Array.isArray(body.pageIds)
+      ? body.pageIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
+    const priority = Array.isArray(body.priority) ? body.priority : undefined;
+    const overwrite = body.overwrite === true;
+    const dryRun = body.dryRun === true;
+
+    const pagesResult = await listPages(undefined, scope);
+    if (!pagesResult.ok) return sendErr(res, pagesResult.status || 500, 'Could not load Builder pages.'), true;
+    const allPages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
+    const idSet = new Set(requestedIds);
+    const targetPages = idSet.size
+      ? allPages.filter((p) => idSet.has(String(p.id)))
+      : allPages;
+
+    const updated = [];
+    const skipped = [];
+
+    for (const page of targetPages) {
+      const sections = Array.isArray(page.layoutSections) ? page.layoutSections : [];
+      const { sections: nextSections, changes, changed } = populateTitlesInSections(sections, { priority, overwrite });
+
+      if (!changed) {
+        skipped.push({ id: page.id, name: page.name, reason: 'no_blank_titles' });
+        continue;
+      }
+
+      const summary = {
+        id: page.id,
+        name: page.name,
+        slug: page.slug,
+        sectionsTitled: changes.filter((c) => c.level === 'section').length,
+        modulesTitled: changes.filter((c) => c.level === 'module').length,
+        changes,
+      };
+
+      if (dryRun) {
+        updated.push({ ...summary, applied: false });
+        continue;
+      }
+
+      const updateResult = await updatePage(
+        String(page.id),
+        { layoutSections: nextSections, pageBackground: page.pageBackground, theme: page.theme },
+        scope
+      );
+      if (updateResult.ok) {
+        updated.push({ ...summary, applied: true });
+      } else {
+        skipped.push({ id: page.id, name: page.name, reason: updateResult.error || 'update_failed' });
+      }
+    }
+
+    const result = { updated, skipped, dryRun, overwrite, totalPages: targetPages.length };
     return sendOk(res, 200, result, result), true;
   }
 

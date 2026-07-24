@@ -1,0 +1,161 @@
+/* Populate Module Titles extension screen. */
+
+.populate-titles-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 60rem;
+}
+
+.populate-titles-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.populate-titles-panel {
+  flex: 1 1 20rem;
+  min-width: 18rem;
+  border: 1px solid var(--border-color, #d9e0e8);
+  border-radius: 8px;
+  padding: 0.85rem 1rem 1rem;
+  background: var(--panel-bg, #fff);
+}
+
+.populate-titles-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.populate-titles-panel-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.populate-titles-priority {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  counter-reset: none;
+}
+
+.populate-titles-priority-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border-color, #eef1f5);
+}
+
+.populate-titles-priority-num {
+  flex: 0 0 1.4rem;
+  height: 1.4rem;
+  line-height: 1.4rem;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--accent-soft, #eef2f7);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.populate-titles-priority-label {
+  flex: 1 1 auto;
+  font-size: 0.9rem;
+}
+
+.populate-titles-priority-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.populate-titles-pages {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.populate-titles-pages li {
+  padding: 0.15rem 0;
+}
+
+.populate-titles-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+.populate-titles-check input {
+  flex: 0 0 auto;
+}
+
+.populate-titles-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.populate-titles-status {
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--accent-soft, #eef7f0);
+}
+
+.populate-titles-status.is-error {
+  background: #fdeceb;
+  color: #a12318;
+}
+
+.populate-titles-report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.populate-titles-report-page {
+  border: 1px solid var(--border-color, #e3e8ee);
+  border-radius: 6px;
+  padding: 0.4rem 0.65rem;
+}
+
+.populate-titles-report-page summary {
+  cursor: pointer;
+}
+
+.populate-titles-change-list {
+  list-style: none;
+  margin: 0.5rem 0 0.25rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.populate-titles-change-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+}
+
+.populate-titles-change-level {
+  flex: 0 0 4.5rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted, #6b7785);
+}
+
+.populate-titles-skipped {
+  margin-top: 0.25rem;
+}
