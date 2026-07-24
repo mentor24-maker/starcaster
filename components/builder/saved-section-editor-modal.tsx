@@ -55,7 +55,17 @@ export function SavedSectionEditorModal({
   const [error, setError] = useState<string | null>(null);
   const [builderThemes, setBuilderThemes] = useState<BuilderThemeSummary[]>([]);
 
-  const activeTheme = builderThemes[0] ?? null;
+  // A saved section isn't bound to a page, so there's no linked theme to read
+  // the palette from. Prefer the first theme that actually has colors set — a
+  // newly created blank theme sorts to the front by updated_at and would
+  // otherwise leave every swatch empty.
+  const activeTheme =
+    builderThemes.find(
+      (theme) =>
+        theme.primaryColor || theme.secondaryColor || theme.backgroundColor || theme.accentColor
+    ) ??
+    builderThemes[0] ??
+    null;
   const themeColors = buildBuilderThemePaletteColors(activeTheme);
 
   // Close when the user navigates to a different page in the SPA.
