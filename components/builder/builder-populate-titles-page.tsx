@@ -198,10 +198,11 @@ export function BuilderPopulateTitlesPage() {
   return (
     <div className="populate-titles-page">
       <p className="meta">
-        Fills the optional <strong>section titles</strong> and <strong>module titles</strong> on your
-        saved pages from the content already inside them. By default it only fills titles that are still
-        blank — it never overwrites titles you set by hand. Use <em>Preview</em> first to see what would
-        change without saving.
+        This tool reads what's inside each section and module on your saved pages and writes a short
+        title for anything that doesn't have one yet — using the section's biggest heading, an image's
+        description, a button label, and so on. It only fills titles that are <strong>empty</strong>, so
+        it never changes anything you've already named. Always run <em>Preview</em> first: it shows
+        exactly what it would write, without saving.
       </p>
 
       <div className="populate-titles-columns">
@@ -223,10 +224,15 @@ export function BuilderPopulateTitlesPage() {
               </li>
             ))}
           </ol>
-          <label className="populate-titles-check">
-            <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
-            <span>Overwrite titles I already set (off = fill blanks only)</span>
-          </label>
+          <div className="populate-titles-overwrite">
+            <label className="populate-titles-check">
+              <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
+              <span>Replace titles that already have text</span>
+            </label>
+            <p className="meta populate-titles-check-help">
+              Leave this off to fill only the empty ones and keep the titles you've written yourself.
+            </p>
+          </div>
         </section>
 
         <section className="populate-titles-panel">
@@ -251,6 +257,29 @@ export function BuilderPopulateTitlesPage() {
                     <input type="checkbox" checked={selectedIds.has(page.id)} onChange={() => togglePage(page.id)} />
                     <span>{page.name || page.slug || page.id}</span>
                   </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="populate-titles-panel">
+          <div className="populate-titles-panel-head">
+            <h3>Selected</h3>
+            {selectedIds.size > 0 && (
+              <button type="button" className="btn btn-sm" onClick={() => setSelectedIds(new Set())}>Clear</button>
+            )}
+          </div>
+          {selectedIds.size === 0 ? (
+            <p className="meta populate-titles-selected-empty">
+              Nothing selected — the tool will run on <strong>all {pages.length} page{pages.length === 1 ? "" : "s"}</strong>.
+            </p>
+          ) : (
+            <ul className="populate-titles-selected-list">
+              {pages.filter((p) => selectedIds.has(p.id)).map((page) => (
+                <li key={page.id} className="populate-titles-selected-row">
+                  <span className="populate-titles-selected-name">{page.name || page.slug || page.id}</span>
+                  <button type="button" className="btn btn-sm" aria-label={`Remove ${page.name || page.slug || page.id}`} onClick={() => togglePage(page.id)}>×</button>
                 </li>
               ))}
             </ul>
