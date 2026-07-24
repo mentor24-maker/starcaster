@@ -89,16 +89,32 @@ export function BuilderSectionControls({
         </BuilderSettingRow>
         <BuilderSettingRow label="Width">
           <select
-            value={section.widthMode ?? "contained"}
-            onChange={(event) =>
-              onUpdateSection((current) => ({
-                ...current,
-                widthMode: event.target.value === "full-width" ? "full-width" : "contained"
-              }))
+            value={
+              section.widthMode === "full-width"
+                ? "full-width"
+                : (section.widthPercent ?? "100") === "100"
+                  ? "contained"
+                  : section.widthPercent ?? "100"
             }
+            onChange={(event) => {
+              const value = event.target.value;
+              onUpdateSection((current) => {
+                if (value === "full-width") {
+                  return { ...current, widthMode: "full-width" };
+                }
+                if (value === "contained") {
+                  return { ...current, widthMode: "contained", widthPercent: "100" };
+                }
+                return { ...current, widthMode: "contained", widthPercent: value };
+              });
+            }}
           >
-            <option value="contained">Contained (within page margins)</option>
             <option value="full-width">Full width (edge to edge)</option>
+            <option value="contained">Contained (within page margins)</option>
+            <option value="90">90% (centered)</option>
+            <option value="75">75% (centered)</option>
+            <option value="66">66% (centered)</option>
+            <option value="50">50% (centered)</option>
           </select>
         </BuilderSettingRow>
         <BuilderSettingRow label="Alignment">
