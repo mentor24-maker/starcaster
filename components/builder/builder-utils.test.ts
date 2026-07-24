@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   promoteThemeStylesPageBackground,
   finalizeThemeStylesPageBackground,
+  type BuilderTemplateSection,
 } from "@/lib/builder-template";
 import {
   buildClonedPageCreatePayload,
@@ -12,6 +13,7 @@ import {
   getModuleWidthShellStyle,
   getModuleWidthStyle,
   getTextModuleWidthStyle,
+  getSectionWidthStyle,
   getOverlayFlowCollapsedModuleStyle,
   getOverlayFlowCollapsedSectionStyle,
   getSpeechBubbleBodyStyle,
@@ -171,6 +173,28 @@ describe("getTextModuleWidthStyle", () => {
     const right = getTextModuleWidthStyle({ size: "66", alignment: "right" });
     expect(right?.marginLeft).toBe("auto");
     expect(right?.marginRight).toBeUndefined();
+  });
+});
+
+describe("getSectionWidthStyle", () => {
+  const section = (over: Record<string, unknown>) =>
+    ({ widthMode: "contained", widthPercent: "100", ...over }) as unknown as BuilderTemplateSection;
+
+  it("returns no width constraint for a full-width contained-100 section", () => {
+    expect(getSectionWidthStyle(section({}))).toEqual({});
+    expect(getSectionWidthStyle(section({ widthMode: "full-width", widthPercent: "50" }))).toEqual({});
+  });
+
+  it("narrows and centers a contained section below 100%", () => {
+    const style = getSectionWidthStyle(section({ widthPercent: "75" }));
+    expect(style.maxWidth).toBe("75%");
+    expect(style.marginLeft).toBe("auto");
+    expect(style.marginRight).toBe("auto");
+  });
+
+  it("clamps out-of-range widthPercent into the 25–100 band", () => {
+    expect(getSectionWidthStyle(section({ widthPercent: "5" })).maxWidth).toBe("25%");
+    expect(getSectionWidthStyle(section({ widthPercent: "250" }))).toEqual({});
   });
 });
 

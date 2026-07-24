@@ -251,6 +251,12 @@ export type BuilderTemplateSection = {
    * read as one continuous band.
    */
   widthMode: "contained" | "full-width";
+  /**
+   * For contained sections, narrows the section to this percentage of the page
+   * content width and centers it (25–100; 100 = full content width). Ignored
+   * when widthMode is "full-width", which spans edge to edge.
+   */
+  widthPercent: string;
   alignment: "left" | "center" | "right";
   marginTop: string;
   marginBottom: string;
@@ -1700,6 +1706,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         title: safeText(normalizedSection.title, 255),
         layout,
         widthMode: normalizedSection.widthMode === "full-width" ? "full-width" : "contained",
+        widthPercent: normalizeSpacingValue(normalizedSection.widthPercent, "100", 25, 100),
         locked: normalizedSection.locked === true,
         isPrivate: normalizedSection.isPrivate === true,
         alignment: normalizeAlignment(normalizedSection.alignment),
@@ -1756,6 +1763,7 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     isPrivate: false,
     layout,
     widthMode: "contained",
+    widthPercent: "100",
     alignment: "left",
     marginTop: "0",
     marginBottom: "0",
