@@ -100,6 +100,7 @@ import {
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
   getButtonModuleOuterSpacingStyle,
+  getTextModuleWidthStyle,
   getVerticalMarginStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
@@ -1962,6 +1963,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
   return (
     <div
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
+      style={getTextModuleWidthStyle(module.settings)}
       dangerouslySetInnerHTML={{ __html: formatRichTextContent(module.text) || "<p>Text block</p>" }}
     />
   );
@@ -3945,31 +3947,68 @@ export function BuilderModuleCard({
                     themePrimaryColor={themePrimaryColor}
                   />
                 ) : null}
-                <BuilderSettingRow label="Alignment" fullWidth>
-                  <BuilderAlignmentIconGroup
-                    value={moduleAlignment}
-                    onChange={(alignment) =>
-                      onUpdateModule((current) => ({
-                        ...current,
-                        settings: { ...current.settings, alignment }
-                      }))
-                    }
-                  />
-                </BuilderSettingRow>
-                <BuilderSettingRow label="Vertical Margin" fullWidth>
-                  <BuilderNumberSelectControl
-                    fallback="0"
-                    max={160}
-                    min={0}
-                    value={module.settings.verticalMargin ?? "0"}
-                    onChange={(verticalMargin) =>
-                      onUpdateModule((current) => ({
-                        ...current,
-                        settings: { ...current.settings, verticalMargin }
-                      }))
-                    }
-                  />
-                </BuilderSettingRow>
+                <BuilderModuleFieldStrip>
+                  <BuilderModuleField label="Alignment" width="align">
+                    <BuilderAlignmentIconGroup
+                      value={moduleAlignment}
+                      onChange={(alignment) =>
+                        onUpdateModule((current) => ({
+                          ...current,
+                          settings: { ...current.settings, alignment }
+                        }))
+                      }
+                    />
+                  </BuilderModuleField>
+                  <BuilderModuleField label="H Margin" width="num">
+                    <BuilderNumberSelectControl
+                      fallback="0"
+                      max={160}
+                      min={0}
+                      value={module.settings.horizontalMargin ?? "0"}
+                      onChange={(horizontalMargin) =>
+                        onUpdateModule((current) => ({
+                          ...current,
+                          settings: { ...current.settings, horizontalMargin }
+                        }))
+                      }
+                    />
+                  </BuilderModuleField>
+                  <BuilderModuleField label="V Margin" width="num">
+                    <BuilderNumberSelectControl
+                      fallback="0"
+                      max={160}
+                      min={0}
+                      value={module.settings.verticalMargin ?? "0"}
+                      onChange={(verticalMargin) =>
+                        onUpdateModule((current) => ({
+                          ...current,
+                          settings: { ...current.settings, verticalMargin }
+                        }))
+                      }
+                    />
+                  </BuilderModuleField>
+                  {module.type === "text" ? (
+                    <BuilderModuleField label="Width" width="select-sm">
+                      <select
+                        value={module.settings.size ?? "100"}
+                        onChange={(event) =>
+                          onUpdateModule((current) => ({
+                            ...current,
+                            settings: { ...current.settings, size: event.target.value }
+                          }))
+                        }
+                      >
+                        <option value="25">25%</option>
+                        <option value="33">33%</option>
+                        <option value="50">50%</option>
+                        <option value="66">66%</option>
+                        <option value="75">75%</option>
+                        <option value="90">90%</option>
+                        <option value="100">100%</option>
+                      </select>
+                    </BuilderModuleField>
+                  ) : null}
+                </BuilderModuleFieldStrip>
               </div>
             )
           ) : null}

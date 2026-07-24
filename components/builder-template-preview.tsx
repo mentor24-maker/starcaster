@@ -74,6 +74,7 @@ import {
   getSectionMarginStyle,
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
+  getTextModuleWidthStyle,
   getVerticalMarginStyle,
   getVideoEmbedSource,
   isVideoMedia
@@ -1416,9 +1417,7 @@ function BuilderSectionPreview({
                         ? getModuleMarginStyle(module.settings)
                         : module.type === "button"
                           ? getButtonModuleOuterSpacingStyle(module.settings)
-                          : module.type === "crm-form" || module.type === "social"
-                            ? getModuleOuterSpacingStyle(module.settings)
-                            : getVerticalMarginStyle(module.settings.verticalMargin)),
+                          : getModuleOuterSpacingStyle(module.settings)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize
@@ -1496,6 +1495,7 @@ function BuilderModulePreview({
     return (
       <div
         className={`builder-preview-text builder-preview-text-${variant || "default"}`}
+        style={getTextModuleWidthStyle(module.settings)}
         dangerouslySetInnerHTML={{ __html: formatRichTextContent(module.text) || "" }}
       />
     );
