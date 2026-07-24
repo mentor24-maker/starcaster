@@ -38,9 +38,18 @@
  *    no-op once no page still points at the original.
  *  - Images with transparency stay PNG; everything else becomes JPEG.
  *
+ * SIZING
+ *   --max=WxH            fit every image inside one fixed box.
+ *   --long=L --short=S   orientation-aware: cap the long edge at L and the
+ *                        short edge at S, so portraits come out SxL and
+ *                        landscapes LxS. Use this for a mixed sweep — a fixed
+ *                        640x960 box shrinks a wide 1672x941 banner to 640x360.
+ *   --over=N             skip anything whose longest edge is already <= N.
+ *
  * Usage:
  *   node scripts/shrink_page_images_20260723.mjs --batch=exact
- *   node scripts/shrink_page_images_20260723.mjs --batch=exact --max=600x900 --apply
+ *   node scripts/shrink_page_images_20260723.mjs --batch=exact --max=640x960 --apply
+ *   node scripts/shrink_page_images_20260723.mjs --batch=all --long=960 --short=640 --over=1000 --apply
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -59,6 +68,28 @@ if (!VALID_BATCHES.has(BATCH)) {
   process.exit(1);
 }
 
+// Sizing comes in two flavours:
+//
+//   --max=WxH          a fixed box every image is fitted inside.
+//   --long=L --short=S an ORIENTATION-AWARE box: the long edge of the image is
+//                      capped at L and the short edge at S, so a portrait gets
+//                      SxL and a landscape LxS. A fixed box cannot do this — a
+//                      640x960 box shrinks a wide 1672x941 banner to 640x360,
+//                      because the width binds on the wrong edge.
+const LONG_ARG = process.argv.find((a) => a.startsWith('--long='));
+const SHORT_ARG = process.argv.find((a) => a.startsWith('--short='));
+const ORIENTED = Boolean(LONG_ARG || SHORT_ARG);
+if (ORIENTED && !(LONG_ARG && SHORT_ARG)) {
+  console.error('--long and --short must be given together');
+  process.exit(1);
+}
+const LONG_EDGE = Number(String(LONG_ARG || '').split('=')[1]) || 0;
+const SHORT_EDGE = Number(String(SHORT_ARG || '').split('=')[1]) || 0;
+if (ORIENTED && (!LONG_EDGE || !SHORT_EDGE || SHORT_EDGE > LONG_EDGE)) {
+  console.error('--long and --short must be positive, with --short no larger than --long');
+  process.exit(1);
+}
+
 const MAX_ARG = (process.argv.find((a) => a.startsWith('--max=')) || '--max=400x600').split('=')[1];
 const MAX_MATCH = String(MAX_ARG).match(/^(\d+)x(\d+)$/);
 if (!MAX_MATCH) {
@@ -67,6 +98,24 @@ if (!MAX_MATCH) {
 }
 const MAX_W = Number(MAX_MATCH[1]);
 const MAX_H = Number(MAX_MATCH[2]);
+
+// Only bother with images whose longest edge exceeds this. Keeps the sweep off
+// images that are already a sensible size for the web.
+const OVER = Number(String((process.argv.find((a) => a.startsWith('--over=')) || '--over=0')).split('=')[1]) || 0;
+
+/** The fit-inside box for one image, which depends on its shape when oriented. */
+function boxFor(width, height) {
+  if (!ORIENTED) return { w: MAX_W, h: MAX_H };
+  return width >= height
+    ? { w: LONG_EDGE, h: SHORT_EDGE }
+    : { w: SHORT_EDGE, h: LONG_EDGE };
+}
+
+function describeBox() {
+  return ORIENTED
+    ? `long edge ${LONG_EDGE}, short edge ${SHORT_EDGE}`
+    : `${MAX_W}x${MAX_H}`;
+}
 
 const PROJECT_ID = 'proj_1780601274760_97i84r'; // Marinoff & Associates
 const OWNER_USER_ID = 'usr_1773098194686_wp7vz5';
@@ -184,9 +233,15 @@ function rewrite(node, map, stats, depth = 0) {
 async function shrink(buffer) {
   const image = sharp(buffer, { failOn: 'none' }).rotate();
   const meta = await image.metadata();
+  // .rotate() applies EXIF orientation, so the box must be chosen from the
+  // dimensions as they will actually come out, not as stored.
+  const upright = (meta.orientation || 0) >= 5
+    ? { width: meta.height, height: meta.width }
+    : { width: meta.width, height: meta.height };
+  const box = boxFor(upright.width || 0, upright.height || 0);
   const pipeline = image.resize({
-    width: MAX_W,
-    height: MAX_H,
+    width: box.w,
+    height: box.h,
     fit: 'inside',
     withoutEnlargement: true,
   });
@@ -288,7 +343,8 @@ function resolveOriginal(asset) {
 
 /** What sharp's fit:inside/withoutEnlargement will produce for these inputs. */
 function fittedSize(w, h) {
-  const scale = Math.min(MAX_W / w, MAX_H / h, 1);
+  const box = boxFor(w, h);
+  const scale = Math.min(box.w / w, box.h / h, 1);
   return { width: Math.round(w * scale), height: Math.round(h * scale) };
 }
 
@@ -299,13 +355,19 @@ function classify(source, referenced, use) {
   const h = Number(source.image_height || 0) || 0;
   if (String(source.asset_type || '') !== 'Image') return null;
   if (!w || !h) return null;                        // unknown dimensions — leave alone
-  if (w <= MAX_W && h <= MAX_H) return null;        // original already fits the box
 
-  // Already serving exactly what this run would produce.
-  const want = fittedSize(w, h);
   const refW = Number(referenced.image_width || 0) || 0;
   const refH = Number(referenced.image_height || 0) || 0;
-  if (refW === want.width && refH === want.height) return null;
+
+  // The threshold is about page weight, so it applies to what the page ACTUALLY
+  // serves today. An oversized original whose pages already point at a small
+  // copy is costing nothing, and re-resizing it would only lose quality.
+  const servedLongEdge = Math.max(refW || w, refH || h);
+  if (OVER && servedLongEdge <= OVER) return null;
+
+  const want = fittedSize(w, h);
+  if (want.width === w && want.height === h) return null;  // nothing to shrink
+  if (refW === want.width && refH === want.height) return null;  // already serving this
 
   const isLogo = use.variants.has('logo')
     || /logo/i.test(String(source.asset_name || ''))
@@ -334,7 +396,7 @@ if (!targets.length) {
 // "Currently served" is what the pages point at today, which is not the source
 // file when an earlier run already swapped in a smaller copy.
 const currentBytes = targets.reduce((sum, t) => sum + (Number(t.referenced.size) || 0), 0);
-console.log(`Batch "${BATCH}" → fit inside ${MAX_W}x${MAX_H}: ${targets.length} image(s) across ${pageRows.length} pages, ${fmtMB(currentBytes)} currently served.\n`);
+console.log(`Batch "${BATCH}" → fit inside ${describeBox()}${OVER ? `, only images over ${OVER}px` : ''}: ${targets.length} image(s) across ${pageRows.length} pages, ${fmtMB(currentBytes)} currently served.\n`);
 for (const t of targets) {
   const source = `${t.asset.image_width}x${t.asset.image_height}`;
   const serving = `${t.referenced.image_width}x${t.referenced.image_height}`;
