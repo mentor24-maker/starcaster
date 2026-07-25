@@ -8998,6 +8998,36 @@
   vertical-align: middle;
 }
 
+.builder-react-root .builder-gallery-table-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.builder-react-root .builder-gallery-table-sortable:hover,
+.builder-react-root .builder-gallery-table-sortable:focus-visible {
+  color: var(--night);
+}
+
+.builder-react-root .builder-gallery-table-sortable.is-sorted {
+  color: var(--night);
+}
+
+.builder-react-root .builder-gallery-table-sort-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.builder-react-root .builder-gallery-table-sort-arrow {
+  font-size: 0.7em;
+  line-height: 1;
+}
+
+.builder-react-root .builder-gallery-table-date {
+  white-space: nowrap;
+  color: var(--muted);
+}
+
 .builder-react-root .builder-gallery-table tbody tr:hover {
   background: rgba(23, 153, 203, 0.07);
 }
