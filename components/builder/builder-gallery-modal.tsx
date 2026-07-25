@@ -50,6 +50,46 @@ function formatDimensions(width?: number, height?: number): string {
   return "—";
 }
 
+function formatCreateDate(value?: string): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+// Columns the List view can be sorted by, in click-a-header order.
+type ListSortKey = "name" | "fileName" | "category" | "type" | "dimensions" | "createdAt";
+type ListSortState = { key: ListSortKey; dir: "asc" | "desc" };
+
+function listSortValue(item: AdminMediaItem, key: ListSortKey): string | number {
+  switch (key) {
+    case "fileName":
+      return fileNameFromPath(item.path).toLowerCase();
+    case "category":
+      return (item.mediaCategory ?? "").toLowerCase();
+    case "type":
+      return (item.mediaType || item.kind).toLowerCase();
+    case "dimensions":
+      return (item.imageWidth ?? 0) * (item.imageHeight ?? 0);
+    case "createdAt":
+      return item.createdAt ?? "";
+    default:
+      return item.name.toLowerCase();
+  }
+}
+
+function compareMedia(a: AdminMediaItem, b: AdminMediaItem, sort: ListSortState): number {
+  const av = listSortValue(a, sort.key);
+  const bv = listSortValue(b, sort.key);
+  let result: number;
+  if (typeof av === "number" && typeof bv === "number") {
+    result = av - bv;
+  } else {
+    result = String(av).localeCompare(String(bv));
+  }
+  return sort.dir === "asc" ? result : -result;
+}
+
 function previewPanelStyle(rect: DOMRect): CSSProperties {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
@@ -78,6 +118,7 @@ export function BuilderGalleryModal({
   const [communityTopCat, setCommunityTopCat] = useState("");
   const [communitySubCat, setCommunitySubCat] = useState("");
   const [preview, setPreview] = useState<HoverPreview | null>(null);
+  const [listSort, setListSort] = useState<ListSortState | null>(null);
   const [measuredDimensions, setMeasuredDimensions] = useState<{ width: number; height: number } | null>(null);
   const isAnchored = anchor != null;
   const anchoredModalStyle = isAnchored && mounted ? getRichTextGalleryModalStyle() : undefined;
@@ -135,6 +176,48 @@ export function BuilderGalleryModal({
       return true;
     });
   }, [media, mediaSource, communityTopCat, communitySubCat]);
+
+  // List view can be re-sorted by clicking a column head. When no header is
+  // active we keep the order the filter bar / hook already produced.
+  const listMedia = useMemo(() => {
+    if (!listSort) return displayMedia;
+    return [...displayMedia].sort((a, b) => compareMedia(a, b, listSort));
+  }, [displayMedia, listSort]);
+
+  function toggleListSort(key: ListSortKey) {
+    setListSort((current) =>
+      current && current.key === key
+        ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" }
+    );
+  }
+
+  function renderSortHeader(key: ListSortKey, label: string, extraClass?: string) {
+    const active = listSort?.key === key;
+    const ariaSort = active ? (listSort?.dir === "asc" ? "ascending" : "descending") : "none";
+    return (
+      <th
+        aria-sort={ariaSort}
+        className={`builder-gallery-table-sortable${extraClass ? ` ${extraClass}` : ""}${active ? " is-sorted" : ""}`}
+        onClick={() => toggleListSort(key)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleListSort(key);
+          }
+        }}
+        scope="col"
+        tabIndex={0}
+      >
+        <span className="builder-gallery-table-sort-label">
+          {label}
+          <span aria-hidden="true" className="builder-gallery-table-sort-arrow">
+            {active ? (listSort?.dir === "asc" ? "▲" : "▼") : ""}
+          </span>
+        </span>
+      </th>
+    );
+  }
 
   const displayTotal = mediaSource === "community" ? displayMedia.length : total;
   const displayRangeStart = displayTotal === 0 ? 0 : 1;
@@ -301,18 +384,19 @@ export function BuilderGalleryModal({
                     <th className="builder-gallery-table-thumb-col" scope="col">
                       Preview
                     </th>
-                    <th scope="col">Title</th>
-                    <th scope="col">File Name</th>
-                    <th scope="col">Category</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Dimensions</th>
+                    {renderSortHeader("name", "Title")}
+                    {renderSortHeader("fileName", "File Name")}
+                    {renderSortHeader("category", "Category")}
+                    {renderSortHeader("type", "Type")}
+                    {renderSortHeader("dimensions", "Dimensions")}
+                    {renderSortHeader("createdAt", "Create Date")}
                     <th className="builder-gallery-table-select-col" scope="col">
                       Select
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayMedia.map((image) => (
+                  {listMedia.map((image) => (
                     <tr
                       key={image.path}
                       onMouseEnter={(event) => showPreview(image, event.currentTarget)}
@@ -337,6 +421,7 @@ export function BuilderGalleryModal({
                       <td>{image.mediaCategory || "—"}</td>
                       <td>{image.mediaType || image.kind}</td>
                       <td>{formatDimensions(image.imageWidth, image.imageHeight)}</td>
+                      <td className="builder-gallery-table-date">{formatCreateDate(image.createdAt)}</td>
                       <td className="builder-gallery-table-select-col">
                         <button
                           className="submit-button builder-gallery-table-select"
@@ -350,7 +435,7 @@ export function BuilderGalleryModal({
                   ))}
                 </tbody>
               </table>
-              {!isLoading && displayMedia.length === 0 ? (
+              {!isLoading && listMedia.length === 0 ? (
                 <div className="builder-gallery-empty">
                   {isUploading ? "Uploading..." : "No media found in the gallery."}
                 </div>
