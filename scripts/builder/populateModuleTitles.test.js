@@ -24,6 +24,34 @@ function textModule(text, { column = 'left' } = {}) {
   return { id: `txt`, type: 'text', column, name: '', text, settings: {} };
 }
 
+test('a heading embedded in a rich-text module is used over image alt text', () => {
+  // This mirrors the real Marinoff data: the heading lives inside a text
+  // module's HTML, and the image alt is SEO-keyword-stuffed.
+  const modules = [
+    image({ alt: 'Colorado criminal defense attorney', column: 'left' }),
+    textModule('<h1>Violent Crimes</h1><p>Body copy here.</p>', { column: 'left' }),
+  ];
+  assert.equal(deriveTitle(modules, DEFAULT_TITLE_PRIORITY), 'Violent Crimes');
+});
+
+test('largest embedded heading wins (h1 over h2 in the same text module)', () => {
+  const modules = [textModule('<h2>Subhead</h2><h1>Main Title</h1>', { column: 'left' })];
+  assert.equal(deriveTitle(modules, DEFAULT_TITLE_PRIORITY), 'Main Title');
+});
+
+test('embedded heading fills the section title verbatim', () => {
+  const sections = [{
+    id: 's1',
+    title: '',
+    modules: [
+      image({ alt: 'trial attorney colorado', column: 'left' }),
+      textModule('<h1>Traffic and DUI Charges</h1>', { column: 'left' }),
+    ],
+  }];
+  const { sections: out } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Traffic and DUI Charges');
+});
+
 test('left-most heading beats a right-side heading', () => {
   const modules = [
     heading('Left Column Title', { level: 'h2', column: 'left' }),
