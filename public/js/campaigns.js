@@ -46,9 +46,12 @@ App.campaigns = (function () {
     { id: 'campaignHashtagGroupSelect', label: 'Hashtags' },
     { id: 'campaignLeadMagnetSelect', label: 'PDF' },
   ];
+  // Hashtags and Primary Image are pickers (button + modal), not type-ahead
+  // comboboxes — they keep a hidden control as the value carrier instead.
+  const CAMPAIGN_CONTENT_PICKER_SELECT_IDS = ['campaignHashtagGroupSelect', 'campaignPrimaryImageSelect'];
   const CAMPAIGN_CONTENT_COMBOBOX_SELECT_IDS = CONTENT_RULE_FIELDS
     .map((field) => field.id)
-    .filter((id) => id !== 'campaignHashtagGroupSelect');
+    .filter((id) => !CAMPAIGN_CONTENT_PICKER_SELECT_IDS.includes(id));
   const SOCIAL_CONTENT_TEMPLATE_FIELDS = [
     'campaignTweetSelect',
     'campaignCtaSelect',
@@ -97,6 +100,9 @@ App.campaigns = (function () {
   };
 
   let builderTweets = [];
+  // Image assets offered by the Primary Image picker, kept in sync with the
+  // topic filter in renderBuilderSelects().
+  let campaignImageAssets = [];
   const campaignContentComboboxRegistry = new Map();
   let builderHashtags = [];
   let builderEmails = [];
@@ -994,6 +1000,86 @@ App.campaigns = (function () {
     searchInput.focus();
   }
 
+  // ---- Primary Image picker (sibling of the hashtag picker above) -----------
+  // The visible control is a button plus a thumbnail; the hidden native select
+  // still holds the chosen asset id, so save, load, and the live preview all
+  // keep reading `campaignPrimaryImageSelect.value` exactly as before.
+
+  function campaignImageAssetById(assetId) {
+    const id = safeText(assetId);
+    if (!id) return null;
+    return findById(campaignImageAssets, id)
+      || findById(Array.isArray(state.assets) ? state.assets : [], id);
+  }
+
+  function renderCampaignPrimaryImagePicker() {
+    const select = byId('campaignPrimaryImageSelect');
+    const button = byId('campaignPrimaryImagePickerBtn');
+    const preview = byId('campaignPrimaryImagePreview');
+    const asset = campaignImageAssetById(select?.value);
+    if (button) button.textContent = asset ? 'Change Image' : 'Choose Image';
+    if (!preview) return;
+    preview.textContent = '';
+    if (!asset) {
+      preview.textContent = 'No image selected';
+      return;
+    }
+    const imageUrl = assetPreviewUrl(asset);
+    if (imageUrl) {
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.alt = safeText(asset.assetName) || 'Selected image';
+      preview.appendChild(img);
+    }
+    const text = document.createElement('div');
+    text.className = 'builder-theme-asset-preview-text';
+    const strong = document.createElement('strong');
+    strong.textContent = safeText(asset.assetName) || `Image ${asset.id}`;
+    const span = document.createElement('span');
+    span.textContent = safeText(asset.category) || 'Image';
+    text.appendChild(strong);
+    text.appendChild(span);
+    preview.appendChild(text);
+  }
+
+  function setCampaignPrimaryImageId(assetId) {
+    const select = byId('campaignPrimaryImageSelect');
+    if (!select) return;
+    const desired = safeText(assetId);
+    // The picker can offer an image the topic filter left out of the select
+    // (e.g. the image already saved on the campaign) — carry it in so the
+    // option text that gets saved as primaryImageLabel still resolves.
+    if (desired && !Array.from(select.options).some((option) => String(option.value) === desired)) {
+      const asset = campaignImageAssetById(desired);
+      const option = document.createElement('option');
+      option.value = desired;
+      option.textContent = safeText(asset?.assetName) || `Image ${desired}`;
+      select.appendChild(option);
+    }
+    select.value = desired;
+    renderCampaignPrimaryImagePicker();
+    // Bubbles to #campaignContentConditional, which repaints glows and preview.
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function openCampaignPrimaryImagePicker() {
+    if (!App.assetPicker || typeof App.assetPicker.openImageGalleryPicker !== 'function') {
+      notify('Image picker is unavailable', true);
+      return;
+    }
+    const allAssets = Array.isArray(state.assets) ? state.assets : [];
+    const current = campaignImageAssetById(byId('campaignPrimaryImageSelect')?.value);
+    App.assetPicker.openImageGalleryPicker({
+      title: 'Primary Image',
+      getAssets: () => (campaignImageAssets.length ? campaignImageAssets : allAssets),
+      allAssets,
+      currentUrl: current ? App.assetPicker.logoUrlFromAsset(current) : '',
+      emptyMessage: 'No matching images — clear the topic filter above or upload image assets first.',
+      onSelect: (_url, asset) => setCampaignPrimaryImageId(asset?.id),
+      onClear: () => setCampaignPrimaryImageId(''),
+    });
+  }
+
   function campaignPreviewChannelKind() {
     if (campaignUsesPostCopy()) return 'post';
     const channelSelect = byId('campaignChannelSelect');
@@ -1646,15 +1732,17 @@ App.campaigns = (function () {
       currentValues.commentId
     );
 
-    setCampaignContentComboboxOptions(
-      'campaignPrimaryImageSelect',
+    campaignImageAssets = filteredImages;
+    setSelectOptions(
+      byId('campaignPrimaryImageSelect'),
       comboboxOptionsFromMappedRows(filteredImages, (asset) => {
         const label = safeText(asset.assetName) || `Image ${asset.id}`;
         return { label, searchText: label };
       }),
-      filteredImages.length ? '' : activeTopic ? 'No images for this topic' : 'Upload image assets first',
+      '',
       currentValues.primaryImageId
     );
+    renderCampaignPrimaryImagePicker();
 
     setCampaignContentComboboxOptions(
       'campaignPrimaryVideoSelect',
@@ -2039,6 +2127,7 @@ App.campaigns = (function () {
     applySelectValue(byId('campaignPrimaryImageSelect'), config.primaryImageId);
     applySelectValue(byId('campaignPrimaryVideoSelect'), config.primaryVideoId);
     setSelectedCampaignHashtagIds(campaignHashtagIdsFromConfig(config));
+    renderCampaignPrimaryImagePicker();
     applyCampaignChannelProfile(config.channelId);
     setHiddenCampaignContentFieldIds(config.hiddenContentFieldIds);
     setCampaignFormMode(!cloneMode);
@@ -2087,6 +2176,9 @@ App.campaigns = (function () {
     if (select) select.value = '';
     if (row.dataset.fieldId === 'campaignHashtagGroupSelect') {
       setSelectedCampaignHashtagIds([]);
+    }
+    if (row.dataset.fieldId === 'campaignPrimaryImageSelect') {
+      renderCampaignPrimaryImagePicker();
     }
     updateAddContentBtnVisibility();
     renderCampaignLivePreview();
@@ -2247,6 +2339,10 @@ App.campaigns = (function () {
       if (hashtagPickerBtn) {
         hashtagPickerBtn.addEventListener('click', openCampaignHashtagPicker);
       }
+      const primaryImagePickerBtn = byId('campaignPrimaryImagePickerBtn');
+      if (primaryImagePickerBtn) {
+        primaryImagePickerBtn.addEventListener('click', openCampaignPrimaryImagePicker);
+      }
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const channelSelect = byId('campaignChannelSelect');
@@ -2377,6 +2473,7 @@ App.campaigns = (function () {
           }
           form.reset();
           setSelectedCampaignHashtagIds([]);
+          renderCampaignPrimaryImagePicker();
           resetCampaignContentRows();
           editingCampaignId = '';
           const idInput = byId('campaignIdInput');
