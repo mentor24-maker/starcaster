@@ -1157,6 +1157,21 @@ button[type="submit"] {
   min-width: 0;
 }
 
+/* Primary Image row: gallery button + selected-image thumbnail. The native
+   select is kept (visually hidden) as the value carrier so save/load keep
+   reading one id from one place. */
+.campaign-asset-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.campaign-asset-picker .builder-theme-asset-preview {
+  min-width: 0;
+}
+
 .campaign-hashtag-summary {
   color: var(--muted, #667085);
   font-size: 0.88rem;

@@ -357,13 +357,13 @@
                   </div>
 
                   <div class="campaign-content-row" data-field-id="campaignPrimaryImageSelect">
-                    <label for="campaignPrimaryImageSearch"><strong>Primary Image:</strong></label>
-                    <div class="campaign-combobox">
+                    <label for="campaignPrimaryImagePickerBtn"><strong>Primary Image:</strong></label>
+                    <div class="campaign-asset-picker">
                       <select name="primaryImageId" id="campaignPrimaryImageSelect" class="campaign-combobox-native" tabindex="-1" aria-hidden="true">
                         <option value=""></option>
                       </select>
-                      <input type="text" id="campaignPrimaryImageSearch" autocomplete="off" aria-autocomplete="list" aria-controls="campaignPrimaryImageListbox" aria-expanded="false" />
-                      <div id="campaignPrimaryImageListbox" class="campaign-combobox-list hidden" role="listbox"></div>
+                      <button id="campaignPrimaryImagePickerBtn" type="button" class="btn">Choose Image</button>
+                      <div id="campaignPrimaryImagePreview" class="builder-theme-asset-preview">No image selected</div>
                     </div>
                   </div>
 
