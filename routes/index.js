@@ -60,6 +60,7 @@ const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const blog        = require('./blog');
 const admin       = require('./admin');
+const associations = require('./associations');
 const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
@@ -73,6 +74,7 @@ const ROUTE_MODULES = [
   acquire,
   promoLeads,
   assets,
+  associations,
   channels,
   contacts,
   engage,
