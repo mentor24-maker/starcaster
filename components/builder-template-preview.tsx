@@ -1786,6 +1786,10 @@ function BuilderModulePreview({
     return <AdminLoginPreview settings={module.settings} projectId={projectId} />;
   }
 
+  if (module.type === "admin-site-settings") {
+    return <AdminSiteSettingsPreview settings={module.settings} projectId={projectId} />;
+  }
+
   if (module.type === "admin-nav-link") {
     return <AdminNavLinkPreview settings={module.settings} />;
   }
@@ -5447,7 +5451,16 @@ function AdminLoginPreview({
   const [loading, setLoading]         = useState(false);
   const [showForgot, setShowForgot]   = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSent, setForgotSent]   = useState(false);
+  // "request" = ask for the email, "code" = enter the emailed code + new password,
+  // "done" = password changed. Replaces an earlier stub that only flipped a flag
+  // and never contacted the server, so no reset email was ever sent.
+  const [forgotStep, setForgotStep]       = useState<"request" | "code" | "done">("request");
+  const [forgotNotice, setForgotNotice]   = useState("");
+  const [forgotError, setForgotError]     = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [resetCode, setResetCode]         = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirm, setResetConfirm]   = useState("");
 
   const successRedirect = settings.successRedirect || "/admin-dashboard";
   const projectId = projectIdProp || getCrmProjectHeaders()["X-Project-ID"] || "";
@@ -5496,6 +5509,84 @@ function AdminLoginPreview({
     }
   }
 
+  function closeForgot() {
+    setShowForgot(false);
+    setForgotStep("request");
+    setForgotEmail("");
+    setForgotNotice("");
+    setForgotError("");
+    setResetCode("");
+    setResetPassword("");
+    setResetConfirm("");
+  }
+
+  async function handleForgotRequest(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError("");
+    setForgotNotice("");
+    setForgotLoading(true);
+    try {
+      const r = await fetch("/api/admin/auth/forgot-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, email: forgotEmail.trim().toLowerCase() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setForgotError(readApiErrorMessage(d, "Could not send the reset email. Please try again."));
+        return;
+      }
+      const payload = (d && typeof d === "object" ? d.data ?? d : {}) as Record<string, unknown>;
+      setForgotNotice(
+        String(d?.message || payload.message || "")
+        || "If that email has an admin account, a 6-digit reset code is on its way."
+      );
+      setForgotStep("code");
+    } catch {
+      setForgotError("Connection error. Please try again.");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
+  async function handleResetSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError("");
+    if (resetPassword !== resetConfirm) {
+      setForgotError("The two passwords do not match.");
+      return;
+    }
+    if (resetPassword.length < 8) {
+      setForgotError("Please choose a password of at least 8 characters.");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const r = await fetch("/api/admin/auth/reset-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          email: forgotEmail.trim().toLowerCase(),
+          code: resetCode.trim(),
+          password: resetPassword,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setForgotError(readApiErrorMessage(d, "That code is invalid or has expired."));
+        return;
+      }
+      setForgotStep("done");
+    } catch {
+      setForgotError("Connection error. Please try again.");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
   const cardStyle: React.CSSProperties = {
     maxWidth: 420, margin: "0 auto", background: "#fff",
     border: "1px solid #dde8f0", borderRadius: 12, padding: "36px 32px",
@@ -5517,26 +5608,123 @@ function AdminLoginPreview({
   }
 
   if (showForgot) {
+    const forgotBtnStyle: React.CSSProperties = {
+      ...btnStyle,
+      cursor: forgotLoading ? "not-allowed" : "pointer",
+      opacity: forgotLoading ? 0.7 : 1,
+    };
+    const noticeStyle: React.CSSProperties = {
+      marginTop: 14, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7,
+      padding: "12px 14px", fontSize: 13, color: "#15803d",
+    };
+    const errorStyle: React.CSSProperties = {
+      marginTop: 10, fontSize: 13, color: "#c0392b", background: "#fef2f2",
+      border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px",
+    };
+
     return (
       <div style={cardStyle}>
         <div style={{ fontWeight: 700, fontSize: 18, color: "#18324a", marginBottom: 4 }}>Reset Password</div>
-        <div style={{ fontSize: 13, color: "#587592", marginBottom: 18 }}>Enter your email and your administrator will be notified.</div>
-        {forgotSent ? (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7, padding: "12px 14px", fontSize: 13, color: "#15803d" }}>
-            Request sent. Your administrator will follow up with reset instructions.
-          </div>
+
+        {forgotStep === "done" ? (
+          <>
+            <div style={noticeStyle}>
+              Your password has been updated. You can sign in with it now.
+            </div>
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <button type="button" onClick={closeForgot} style={{ background: "none", border: "none", color: "#0f4f8f", fontSize: 13, cursor: "pointer" }}>
+                Go to sign in
+              </button>
+            </div>
+          </>
+        ) : forgotStep === "code" ? (
+          <>
+            <div style={{ fontSize: 13, color: "#587592", marginBottom: 4 }}>
+              Enter the 6-digit code we emailed you, then choose a new password.
+            </div>
+            {forgotNotice && <div style={noticeStyle}>{forgotNotice}</div>}
+            <form onSubmit={handleResetSubmit}>
+              <label style={labelStyle}>6-digit code</label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                style={inputStyle}
+                value={resetCode}
+                onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+              />
+              <label style={labelStyle}>New password</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                style={inputStyle}
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+              <label style={labelStyle}>Confirm new password</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                style={inputStyle}
+                value={resetConfirm}
+                onChange={(e) => setResetConfirm(e.target.value)}
+                placeholder="Re-type it"
+              />
+              {forgotError && <div style={errorStyle}>{forgotError}</div>}
+              <button type="submit" disabled={forgotLoading} style={forgotBtnStyle}>
+                {forgotLoading ? "Updating…" : "Set New Password"}
+              </button>
+            </form>
+            <div style={{ marginTop: 12, textAlign: "center" }}>
+              <button
+                type="button"
+                onClick={() => { setForgotStep("request"); setForgotError(""); setForgotNotice(""); }}
+                style={{ background: "none", border: "none", color: "#587592", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
+              >
+                Didn&rsquo;t get a code? Send it again
+              </button>
+            </div>
+          </>
         ) : (
-          <form onSubmit={(e) => { e.preventDefault(); setForgotSent(true); }}>
-            <label style={labelStyle}>Email address</label>
-            <input type="email" required style={inputStyle} value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" />
-            <button type="submit" style={btnStyle}>Send Request</button>
-          </form>
+          <>
+            <div style={{ fontSize: 13, color: "#587592", marginBottom: 4 }}>
+              Enter your email and we&rsquo;ll send you a 6-digit code to set a new password.
+            </div>
+            <form onSubmit={handleForgotRequest}>
+              <label style={labelStyle}>Email address</label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                style={inputStyle}
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+              {forgotError && <div style={errorStyle}>{forgotError}</div>}
+              <button type="submit" disabled={forgotLoading} style={forgotBtnStyle}>
+                {forgotLoading ? "Sending…" : "Email Me A Code"}
+              </button>
+            </form>
+          </>
         )}
-        <div style={{ marginTop: 16, textAlign: "center" }}>
-          <button onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(""); }} style={{ background: "none", border: "none", color: "#0f4f8f", fontSize: 13, cursor: "pointer" }}>
-            Back to sign in
-          </button>
-        </div>
+
+        {forgotStep !== "done" && (
+          <div style={{ marginTop: 16, textAlign: "center" }}>
+            <button type="button" onClick={closeForgot} style={{ background: "none", border: "none", color: "#0f4f8f", fontSize: 13, cursor: "pointer" }}>
+              Back to sign in
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -5591,6 +5779,147 @@ const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: st
   { key: "crm",  label: "CRM",  description: "Lead capture forms and contact table" },
   { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
 ];
+
+/**
+ * Settings panel for a tenant's own admin area (/admin-settings).
+ *
+ * Backed by GET/PATCH /api/admin/site-settings, which pins a project-admin
+ * session to its own project — so this reads and writes only the site the
+ * signed-in admin belongs to.
+ */
+function AdminSiteSettingsPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
+  const panelTitle = settings.panelTitle || "Site Settings";
+  const showTitle  = settings.showTitle !== "false";
+
+  const [contactAlertEmail, setContactAlertEmail] = useState("");
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+
+  const headers = getCrmProjectHeaders(projectIdProp);
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  useEffect(() => {
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/admin/site-settings${qs}`, { credentials: "include", headers })
+      .then(async (r) => {
+        if (r.status === 401 && !isPreview) {
+          window.location.href = "/admin-login";
+          return null;
+        }
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load settings (${r.status})`));
+        return d;
+      })
+      .then((d) => {
+        if (!d) return;
+        const s = d.siteSettings ?? d.data ?? d;
+        if (s && typeof s === "object") {
+          setContactAlertEmail(String((s as Record<string, unknown>).contactAlertEmail ?? ""));
+        }
+      })
+      .catch((e: Error) => setLoadError(e.message || "Failed to load settings."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaveError("");
+    setSavedNote("");
+    setSaving(true);
+    try {
+      const projectId = headers["X-Project-ID"] || "";
+      const r = await fetch("/api/admin/site-settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({
+          projectId,
+          settings: { contactAlertEmail: contactAlertEmail.trim().toLowerCase() },
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setSaveError(readApiErrorMessage(d, "Could not save settings."));
+        return;
+      }
+      // Show what the server actually stored, not what was typed — a save
+      // toast alone proves a write happened, not that it wrote the right value.
+      const s = (d.siteSettings ?? d.data ?? d) as Record<string, unknown>;
+      if (s && typeof s === "object" && s.contactAlertEmail !== undefined) {
+        setContactAlertEmail(String(s.contactAlertEmail ?? ""));
+      }
+      setSavedNote("Saved.");
+    } catch {
+      setSaveError("Connection error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
+      {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{panelTitle}</h3>}
+      {loading ? (
+        <p className="builder-module-runtime-note">Loading settings…</p>
+      ) : loadError ? (
+        <p className="builder-module-runtime-note" style={{ color: "var(--danger, #c00)" }}>{loadError}</p>
+      ) : (
+        <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 520 }}>
+          <div style={{ padding: "14px 16px", border: "1px solid var(--border, #e5e7eb)", borderRadius: 8 }}>
+            <label htmlFor="admin-contact-alert-email" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
+              Contact Alert Email
+            </label>
+            <p style={{ margin: "2px 0 8px", fontSize: 12, color: "var(--muted, #888)" }}>
+              Where we email you when someone submits a contact form on your site.
+              Leave it blank to turn these alerts off.
+            </p>
+            <input
+              id="admin-contact-alert-email"
+              type="email"
+              value={contactAlertEmail}
+              onChange={(e) => { setContactAlertEmail(e.target.value); setSavedNote(""); }}
+              placeholder="you@example.com"
+              style={{
+                width: "100%", maxWidth: 340, padding: "7px 10px", fontSize: 14,
+                border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",
+              }}
+            />
+          </div>
+          {saveError && (
+            <p className="builder-module-runtime-note" style={{ margin: 0, color: "var(--danger, #c00)" }}>{saveError}</p>
+          )}
+          {savedNote && (
+            <p className="builder-module-runtime-note" style={{ margin: 0, color: "#15803d" }}>{savedNote}</p>
+          )}
+          <div>
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                padding: "8px 18px", fontSize: 13, fontWeight: 600, borderRadius: 6,
+                border: "1px solid #0f4f8f", background: "#0f4f8f", color: "#fff",
+                cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
+                whiteSpace: "nowrap", width: "fit-content",
+              }}
+            >
+              {saving ? "Saving…" : "Save Settings"}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
 
 function AdminModulesPreview({
   settings,

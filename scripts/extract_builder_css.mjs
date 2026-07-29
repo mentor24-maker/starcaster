@@ -53,7 +53,8 @@ const KEEP_PATTERNS = [
   /\.success\b/,
   /\.sr-only/,
   /\.starcaster-effect/,
-  /\.blog-post/
+  /\.blog-post/,
+  /\.crm-/
 ];
 
 function keepSelector(selectorList) {
@@ -132,5 +133,54 @@ for (const rule of parseRules(css)) {
 
 const banner = `/*\n * Imported by scripts/extract_builder_css.mjs from: ${source}\n * Re-running this script will overwrite the file with a fresh import.\n */\n`;
 const vars = rootVars.length ? `.builder-react-root {\n${rootVars.join('\n')}\n}\n\n` : '';
-fs.writeFileSync(outfile, banner + vars + out.join('\n\n') + '\n');
+const nextCss = banner + vars + out.join('\n\n') + '\n';
+
+// This script REPLACES the whole file, so any rule hand-written in starcaster
+// but absent from the external source silently disappears. That is how the
+// .crm-contacts-modal-* dialog styles were lost in 2bd3018, which left the
+// Contacts delete-confirmation invisible on live tenant admin sites for a
+// month. Refuse to drop selectors unless the operator explicitly opts in.
+const ALLOW_DROP = process.argv.includes('--allow-drop');
+
+function selectorSet(cssText) {
+  const set = new Set();
+  const collect = (text) => {
+    for (const rule of parseRules(text)) {
+      if (rule.selector.startsWith('@media') || rule.selector.startsWith('@supports')) {
+        collect(rule.body);
+        continue;
+      }
+      if (rule.selector.startsWith('@')) continue;
+      for (const one of rule.selector.split(',')) {
+        const s = one.trim().replace(/\s+/g, ' ');
+        if (s) set.add(s);
+      }
+    }
+  };
+  collect(stripComments(cssText));
+  return set;
+}
+
+if (fs.existsSync(outfile)) {
+  const existing = selectorSet(fs.readFileSync(outfile, 'utf8'));
+  const incoming = selectorSet(nextCss);
+  const dropped = [...existing].filter((s) => !incoming.has(s));
+  if (dropped.length) {
+    console.error(
+      `\nRefusing to overwrite ${path.relative(root, outfile)}: `
+      + `${dropped.length} selector(s) present today are missing from the import.\n`
+      + 'These are starcaster-only rules that would be destroyed:\n'
+    );
+    for (const s of dropped.slice(0, 40)) console.error(`  ${s}`);
+    if (dropped.length > 40) console.error(`  … and ${dropped.length - 40} more`);
+    console.error(
+      '\nEither add them to the source globals.css, or re-run with --allow-drop '
+      + 'if you have confirmed every rule above is genuinely dead.\n'
+    );
+    if (!ALLOW_DROP) process.exit(1);
+    console.error('--allow-drop passed; overwriting anyway.\n');
+  }
+}
+
+fs.writeFileSync(outfile, nextCss);
 console.log(`Wrote ${path.relative(root, outfile)} (${out.length} rules, ${rootVars.length} :root blocks)`);

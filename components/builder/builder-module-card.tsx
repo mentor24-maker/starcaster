@@ -85,6 +85,7 @@ import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
 import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
 import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
+import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -1935,6 +1936,26 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "admin-site-settings") {
+    const showTitle = module.settings.showTitle !== "false";
+    const title     = module.settings.panelTitle || "Site Settings";
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ maxWidth: 380, padding: "12px 14px", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a" }}>Contact Alert Email</div>
+          <div style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 7px" }}>
+            Where we email you when someone submits a contact form.
+          </div>
+          <input type="email" disabled placeholder="you@example.com" style={{ width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea", borderRadius: 6, boxSizing: "border-box", background: "#fafcff" }} />
+        </div>
+        <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#0f4f8f", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "default" }}>
+          Save Settings
+        </div>
+      </div>
+    );
+  }
+
   if (module.type === "admin-nav-link") {
     const linkText = module.settings.linkText || "Admin";
     return (
@@ -3634,6 +3655,7 @@ export function BuilderModuleCard({
     const isAdminModulesModule = module.type === "admin-modules";
     const isAdminLoginModule = module.type === "admin-login";
     const isAdminNavLinkModule = module.type === "admin-nav-link";
+    const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3887,6 +3909,8 @@ export function BuilderModuleCard({
               <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminNavLinkModule ? (
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminSiteSettingsModule ? (
+              <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
