@@ -37,6 +37,77 @@ App.assetPicker = (function () {
     return w > 0 && h > 0 ? `${w} × ${h}` : '';
   }
 
+  // Gallery/List view state lives per grid container rather than per caller:
+  // every picker re-runs renderGroupedImageGrid on each filter keystroke, so
+  // the chosen view and sort have to survive a full re-render. A WeakMap keyed
+  // by the container releases the entry when the modal's DOM is discarded.
+  const VIEW_STATE = new WeakMap();
+
+  function viewStateFor(container) {
+    let state = VIEW_STATE.get(container);
+    if (!state) {
+      state = { view: 'grid', sort: null };
+      VIEW_STATE.set(container, state);
+    }
+    return state;
+  }
+
+  function fileNameFromLocation(value) {
+    const clean = safeText(value).split(/[?#]/)[0] || '';
+    const segment = clean.split('/').pop() || clean;
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment;
+    }
+  }
+
+  function formatCreateDate(value) {
+    const text = safeText(value);
+    if (!text) return '—';
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  // Columns the List view renders, in order. `sortKey` doubles as the id the
+  // header click handler reads back.
+  const LIST_COLUMNS = [
+    { key: 'name', label: 'Title' },
+    { key: 'fileName', label: 'File Name' },
+    { key: 'category', label: 'Category' },
+    { key: 'aspect', label: 'Aspect' },
+    { key: 'dimensions', label: 'Dimensions' },
+    { key: 'createdAt', label: 'Create Date' },
+  ];
+
+  function listSortValue(asset, key, assetLabel) {
+    switch (key) {
+      case 'fileName':
+        return fileNameFromLocation(asset?.location).toLowerCase();
+      case 'category':
+        return safeText(asset?.category).toLowerCase();
+      case 'aspect':
+        return String(Aspect.ASPECT_LABELS[Aspect.resolveAssetAspect(asset)] || '').toLowerCase();
+      case 'dimensions':
+        return (Number(asset?.imageWidth || 0) || 0) * (Number(asset?.imageHeight || 0) || 0);
+      case 'createdAt':
+        return safeText(asset?.createdAt);
+      default:
+        return String(assetLabel(asset) || '').toLowerCase();
+    }
+  }
+
+  function compareAssetsForList(a, b, sort, assetLabel) {
+    const av = listSortValue(a, sort.key, assetLabel);
+    const bv = listSortValue(b, sort.key, assetLabel);
+    const result =
+      typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv));
+    return sort.dir === 'asc' ? result : -result;
+  }
+
   function safeText(value) {
     return String(value || '').trim();
   }
@@ -330,7 +401,50 @@ App.assetPicker = (function () {
     return modal;
   }
 
+  // Public entry point, unchanged signature: every picker in the app calls this
+  // to paint its results. The Gallery/List toggle lives here rather than in the
+  // individual pickers so all of them (Campaigns, Settings, Messaging, Builder)
+  // get the same two views without touching their call sites.
   function renderGroupedImageGrid(container, options) {
+    const state = viewStateFor(container);
+    container.textContent = '';
+    container.appendChild(buildViewToggleBar(container, options, state));
+    if (state.view === 'list') {
+      renderImageList(container, options, state);
+    } else {
+      renderAspectGroups(container, options);
+    }
+  }
+
+  function buildViewToggleBar(container, options, state) {
+    const bar = document.createElement('div');
+    bar.className = 'builder-theme-picker-viewbar';
+
+    const group = document.createElement('div');
+    group.className = 'builder-theme-picker-view-toggle';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Gallery layout');
+
+    [['grid', 'Gallery'], ['list', 'List']].forEach(([mode, label]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      const active = state.view === mode;
+      if (active) btn.classList.add('is-active');
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.addEventListener('click', () => {
+        if (state.view === mode) return;
+        state.view = mode;
+        renderGroupedImageGrid(container, options);
+      });
+      group.appendChild(btn);
+    });
+
+    bar.appendChild(group);
+    return bar;
+  }
+
+  function renderImageList(container, options, state) {
     const {
       assets = [],
       getSelectedId = () => '',
@@ -341,7 +455,155 @@ App.assetPicker = (function () {
       emptyMessage = 'No matching images found.',
     } = options;
 
-    container.textContent = '';
+    if (!assets.length) {
+      const empty = document.createElement('div');
+      empty.className = 'meta';
+      empty.textContent = emptyMessage;
+      container.appendChild(empty);
+      return;
+    }
+
+    const rows = state.sort
+      ? assets.slice().sort((a, b) => compareAssetsForList(a, b, state.sort, assetLabel))
+      : assets.slice();
+
+    const table = document.createElement('table');
+    table.className = 'builder-theme-picker-table';
+
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+
+    const previewHead = document.createElement('th');
+    previewHead.scope = 'col';
+    previewHead.className = 'builder-theme-picker-table-thumb-col';
+    previewHead.textContent = 'Preview';
+    headRow.appendChild(previewHead);
+
+    LIST_COLUMNS.forEach((column) => {
+      // House style: the sort id rides on the <th> itself and JS appends the
+      // arrow to textContent — no <button>/<a> nested inside a header cell.
+      const th = document.createElement('th');
+      th.scope = 'col';
+      th.className = 'builder-theme-picker-table-sortable';
+      th.dataset.sortKey = column.key;
+      th.tabIndex = 0;
+      const active = state.sort && state.sort.key === column.key;
+      th.textContent = active ? `${column.label} ${state.sort.dir === 'asc' ? '▲' : '▼'}` : column.label;
+      th.setAttribute('aria-sort', active ? (state.sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      if (active) th.classList.add('is-sorted');
+
+      const toggleSort = () => {
+        state.sort =
+          state.sort && state.sort.key === column.key
+            ? { key: column.key, dir: state.sort.dir === 'asc' ? 'desc' : 'asc' }
+            : { key: column.key, dir: 'asc' };
+        renderGroupedImageGrid(container, options);
+      };
+
+      th.addEventListener('click', toggleSort);
+      th.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleSort();
+        }
+      });
+      headRow.appendChild(th);
+    });
+
+    const actionsHead = document.createElement('th');
+    actionsHead.scope = 'col';
+    actionsHead.className = 'actions-col';
+    actionsHead.textContent = 'Select';
+    headRow.appendChild(actionsHead);
+
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const selectedId = String(getSelectedId() || '');
+
+    rows.forEach((asset) => {
+      const tr = document.createElement('tr');
+      if (String(asset.id) === selectedId) tr.classList.add('is-selected');
+
+      const thumbTd = document.createElement('td');
+      thumbTd.className = 'builder-theme-picker-table-thumb-col';
+      const imageUrl = previewUrlFromAsset(asset, toDirectAssetUrl);
+      if (imageUrl) {
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.alt = String(assetLabel(asset) || 'Image');
+        img.loading = 'lazy';
+        img.className = 'builder-theme-picker-table-thumb';
+        thumbTd.appendChild(img);
+      } else {
+        const empty = document.createElement('div');
+        empty.className = 'builder-theme-table-thumb-empty';
+        empty.textContent = 'No Image';
+        thumbTd.appendChild(empty);
+      }
+      tr.appendChild(thumbTd);
+
+      const cells = [
+        String(assetLabel(asset) || ''),
+        fileNameFromLocation(asset?.location) || '—',
+        safeText(asset?.category) || '—',
+        Aspect.ASPECT_LABELS[Aspect.resolveAssetAspect(asset)] || '—',
+        dimensionLabel(asset) || '—',
+        formatCreateDate(asset?.createdAt),
+      ];
+      cells.forEach((text, index) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        if (LIST_COLUMNS[index].key === 'fileName') {
+          td.className = 'builder-theme-picker-table-filename';
+        }
+        tr.appendChild(td);
+      });
+
+      const actionsTd = document.createElement('td');
+      actionsTd.className = 'actions-col';
+      const actionsRow = document.createElement('div');
+      actionsRow.className = 'table-actions-row';
+
+      if (typeof onPreview === 'function') {
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'tiny-btn builder-theme-picker-preview-btn';
+        previewBtn.textContent = 'Preview';
+        previewBtn.addEventListener('click', () => onPreview(asset));
+        actionsRow.appendChild(previewBtn);
+      }
+
+      const selectBtn = document.createElement('button');
+      selectBtn.type = 'button';
+      selectBtn.className = 'tiny-btn builder-theme-picker-select-btn';
+      selectBtn.textContent = 'Select';
+      selectBtn.addEventListener('click', () => {
+        if (typeof onChoose === 'function') onChoose(asset);
+      });
+      actionsRow.appendChild(selectBtn);
+
+      actionsTd.appendChild(actionsRow);
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    container.appendChild(table);
+  }
+
+  function renderAspectGroups(container, options) {
+    const {
+      assets = [],
+      getSelectedId = () => '',
+      onChoose,
+      onPreview,
+      toDirectAssetUrl,
+      assetLabel = (asset) => String(asset?.assetName || asset?.id || 'Image'),
+      emptyMessage = 'No matching images found.',
+    } = options;
+
     const grouped = Aspect.groupAssetsByAspect(assets);
     let renderedSections = 0;
 
