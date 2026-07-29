@@ -7,6 +7,7 @@ import { BuilderFormsPage } from './components/builder/builder-forms-page';
 import { BuilderModuleClassesPanel } from './components/builder/builder-module-classes-panel';
 import { BuilderExtensionsPage } from './components/builder/builder-extensions-page';
 import { BuilderPopulateTitlesPage } from './components/builder/builder-populate-titles-page';
+import { BuilderSeoAltTextPage } from './components/builder/builder-seo-alt-text-page';
 import { BuilderAgentsPage } from './components/builder/builder-agents-page';
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 
@@ -173,6 +174,22 @@ export function unmountPopulateTitlesReact() {
   }
 }
 
+let seoAltTextRoot: Root | null = null;
+
+export function mountSeoAltTextReact(host: HTMLElement | null) {
+  if (!host) return;
+  if (seoAltTextRoot) return;
+  seoAltTextRoot = createRoot(host);
+  seoAltTextRoot.render(<BuilderSeoAltTextPage />);
+}
+
+export function unmountSeoAltTextReact() {
+  if (seoAltTextRoot) {
+    seoAltTextRoot.unmount();
+    seoAltTextRoot = null;
+  }
+}
+
 export function openExtensionItemReact(item: unknown) {
   if (extensionsOpenItemFn) {
     extensionsOpenItemFn(item);
@@ -276,6 +293,10 @@ declare global {
       mount: typeof mountPopulateTitlesReact;
       unmount: typeof unmountPopulateTitlesReact;
     };
+    SeoAltTextReact: {
+      mount: typeof mountSeoAltTextReact;
+      unmount: typeof unmountSeoAltTextReact;
+    };
     AgentsReact: {
       mount: typeof mountAgentsReact;
       unmount: typeof unmountAgentsReact;
@@ -318,6 +339,11 @@ window.ExtensionsReact = {
 window.PopulateTitlesReact = {
   mount: mountPopulateTitlesReact,
   unmount: unmountPopulateTitlesReact,
+};
+
+window.SeoAltTextReact = {
+  mount: mountSeoAltTextReact,
+  unmount: unmountSeoAltTextReact,
 };
 
 window.AgentsReact = {
