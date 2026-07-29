@@ -34,6 +34,12 @@ test('a heading embedded in a rich-text module is used over image alt text', () 
   assert.equal(deriveTitle(modules, DEFAULT_TITLE_PRIORITY), 'Violent Crimes');
 });
 
+test('trailing colon/period is trimmed, but abbreviation dots are kept', () => {
+  assert.equal(deriveTitle([textModule('<h2>How We Can Help:</h2>')], DEFAULT_TITLE_PRIORITY), 'How We Can Help');
+  assert.equal(deriveTitle([textModule('<h1>Our Story.</h1>')], DEFAULT_TITLE_PRIORITY), 'Our Story');
+  assert.equal(deriveTitle([textModule('<h1>Marinoff &amp; Associates P.C.</h1>')], DEFAULT_TITLE_PRIORITY), 'Marinoff & Associates P.C.');
+});
+
 test('largest embedded heading wins (h1 over h2 in the same text module)', () => {
   const modules = [textModule('<h2>Subhead</h2><h1>Main Title</h1>', { column: 'left' })];
   assert.equal(deriveTitle(modules, DEFAULT_TITLE_PRIORITY), 'Main Title');
@@ -100,7 +106,7 @@ test('button label and text first-line feed titles when configured', () => {
   assert.equal(deriveTitle([button('Get Started Today')], DEFAULT_TITLE_PRIORITY), 'Get Started Today');
   assert.equal(
     deriveTitle([textModule('<p>First paragraph line.</p><p>Second.</p>')], DEFAULT_TITLE_PRIORITY),
-    'First paragraph line.'
+    'First paragraph line'
   );
 });
 
