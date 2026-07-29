@@ -6138,6 +6138,21 @@
   color: #8f1f1f;
 }
 
+/* ── Forms fill their column even in a centered/right cell ───────────────────
+   When a cell's content alignment is anything but left/top, the column renders
+   as `display:flex` with `align-items:center|flex-end` (getCellContentAlignment
+   Style). A flex item with no fixed width then shrinks to its content width, so
+   the whole form module collapses and its empty inputs become tiny pills. This
+   was the Marinoff /contact "Request Your Consultation" bug. `align-self:
+   stretch` overrides the parent's cross-axis alignment for this one item and
+   fills the track — margin-safe (a stretched flex item's margin box fills the
+   column), and a no-op in the default grid column where it already stretches. */
+
+.builder-react-root .builder-preview-module:has(> .builder-crm-form-shell),
+.builder-react-root .builder-preview-module:has(> .builder-contact-form) {
+  align-self: stretch;
+}
+
 /* ── CRM form: size to its own column, not the viewport ──────────────────────
    A crm-form module is dropped into whatever column the operator picked — a
    330px sidebar as often as a full-width band — so the label/field split has
