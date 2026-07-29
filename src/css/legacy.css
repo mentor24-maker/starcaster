@@ -4133,7 +4133,7 @@ button[type="submit"] {
 }
 
 .builder-module-editor-modal__dialog.builder-module-editor-modal__dialog--expanded .builder-module-editor-modal__body .builder-theme-picker-grid--wide {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .builder-module-editor-modal__dialog.builder-module-editor-modal__dialog--expanded .builder-module-editor-modal__body .builder-theme-picker-grid--square,
@@ -4316,7 +4316,7 @@ button[type="submit"] {
 }
 
 .builder-module-editor-modal__body .builder-inline-image-picker-grid .builder-theme-picker-grid--wide {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .builder-module-editor-modal__body .builder-inline-image-picker-grid .builder-theme-picker-grid--square {
@@ -6514,8 +6514,11 @@ button.builder-inline-asset-status-btn:focus-visible {
   gap: 0.8rem;
 }
 
+/* Six across for every shape in the full-width picker modal. Wide images used
+   to get 2 columns against square's 6, which made a landscape-heavy gallery
+   read as a stack of billboards. */
 .builder-theme-picker-grid--wide {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .builder-theme-picker-grid--square {
@@ -6530,6 +6533,115 @@ button.builder-inline-asset-status-btn:focus-visible {
   max-height: none;
   overflow: visible;
   padding-right: 0;
+}
+
+/* Gallery/List switch. It sits inside the scrolling results container (that is
+   the only element the shared renderer owns), so it sticks to the top rather
+   than scrolling away with the images. Visual language matches the React
+   gallery modal's .builder-gallery-view-toggle. */
+.builder-theme-picker-viewbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0 0.6rem 0;
+  background: var(--bg-card, #fff);
+}
+
+.builder-theme-picker-view-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid rgba(9, 16, 24, 0.14);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.builder-theme-picker-view-toggle button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 7px 15px;
+  margin: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--muted, #667085);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.builder-theme-picker-view-toggle button + button {
+  border-left: 1px solid rgba(9, 16, 24, 0.12);
+}
+
+.builder-theme-picker-view-toggle button.is-active {
+  background: #e8f7fc;
+  color: #0f4f8f;
+}
+
+/* List view table */
+.builder-theme-picker-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  color: #27445f;
+}
+
+.builder-theme-picker-table th {
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted, #667085);
+  padding: 8px 12px;
+  border-bottom: 2px solid rgba(9, 16, 24, 0.1);
+  white-space: nowrap;
+}
+
+.builder-theme-picker-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(9, 16, 24, 0.07);
+  vertical-align: middle;
+}
+
+.builder-theme-picker-table-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.builder-theme-picker-table-sortable:hover,
+.builder-theme-picker-table-sortable:focus-visible,
+.builder-theme-picker-table-sortable.is-sorted {
+  color: #123d67;
+}
+
+.builder-theme-picker-table-filename {
+  word-break: break-all;
+}
+
+.builder-theme-picker-table tbody tr:hover {
+  background: rgba(23, 153, 203, 0.07);
+}
+
+.builder-theme-picker-table tbody tr.is-selected {
+  background: rgba(11, 130, 212, 0.12);
+}
+
+.builder-theme-picker-table-thumb-col {
+  width: 64px;
+}
+
+.builder-theme-picker-table-thumb {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: linear-gradient(180deg, #eef4f9 0%, #e7eef5 100%);
 }
 
 .builder-theme-picker-card {
@@ -6664,7 +6776,7 @@ button.builder-inline-asset-status-btn:focus-visible {
   }
 
   .builder-theme-picker-grid--wide {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .builder-theme-picker-grid--square {
