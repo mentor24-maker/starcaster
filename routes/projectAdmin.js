@@ -18,8 +18,50 @@ const {
   updateAdminUser,
   deleteAdminUser,
 } = require('../lib/projectAdminStore');
+const {
+  createPasswordResetCode,
+  consumePasswordResetCode,
+} = require('../lib/projectAdminPasswordReset');
+const { getSiteSettings, updateSiteSettings } = require('../lib/projectSiteSettingsStore');
 const { sbQuery, isConfigured: isSupabaseConfigured } = require('../lib/supabase');
+const { assertProjectIdAllowedOnHost } = require('../lib/publicSiteHostBinding');
+const { getPublicProjectById } = require('../lib/projectsStore');
+const { sendEmail } = require('../lib/mailer');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
 const PROJECTS_TABLE = 'app_projects';
+
+// Shown for both "code sent" and "no such account" so the public
+// forgot-password endpoint cannot be used to enumerate admin emails.
+const SENT_MESSAGE = 'If that email has an admin account, a 6-digit reset code is on its way. It expires in 15 minutes.';
+
+/**
+ * Which project a /api/admin/site-settings call acts on.
+ *
+ * A project-admin session always wins: routes/index.js sets projectContext
+ * from the session row, so a tenant admin can only ever read or write their
+ * own project no matter what x-project-id says. The header/query fallbacks
+ * exist for platform users, whose admin-route requests get no projectContext.
+ */
+function resolveSettingsProjectId(req) {
+  if (req.authUser?.isProjectAdmin) {
+    return String(req.projectContext?.project?.id || '').trim();
+  }
+  return String(
+    req.projectContext?.project?.id
+    || req.headers['x-project-id']
+    || getUrlObj(req).searchParams?.get('projectId')
+    || ''
+  ).trim();
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 const ADMIN_SESSION_COOKIE_NAME = 'app_admin_session';
 const ADMIN_NAV_COOKIE_NAME = 'app_admin_nav';
@@ -152,6 +194,110 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { loggedOut: true }, { loggedOut: true }), true;
   }
 
+  // POST /api/admin/auth/forgot-password — PUBLIC (unauthenticated).
+  //
+  // Reachable without a session because routes/index.js exempts every
+  // /api/admin/auth path. Two safeguards stand in for the missing session:
+  //   1. assertProjectIdAllowedOnHost — the projectId must belong to the
+  //      requesting host, so brandonmarinoff.com cannot request codes for
+  //      another tenant.
+  //   2. The response is identical whether or not the account exists, so this
+  //      cannot be used to discover which emails have admin accounts.
+  if (pathname === '/api/admin/auth/forgot-password' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'admin.passwordReset')) return true;
+
+    const body = await parseJsonBody(req);
+    const projectIdInput = String(body.projectId || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
+
+    if (!projectIdInput || !email) {
+      return sendErr(res, 400, 'projectId and email are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const bind = await assertProjectIdAllowedOnHost(req, projectIdInput);
+    if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
+    const projectId = bind.projectId || projectIdInput;
+
+    const issued = await createPasswordResetCode({ projectId, email });
+    if (!issued.ok) {
+      return sendErr(res, issued.status || 500, issued.error || 'Unable to start password reset', { code: 'RESET_FAILED' }), true;
+    }
+
+    // No such admin account. Report success anyway (see note above) — but skip
+    // sending mail, and say nothing that distinguishes this from the real path.
+    if (!issued.data) {
+      return sendOk(res, 200, { emailSent: true }, { message: SENT_MESSAGE }), true;
+    }
+
+    const projectResult = await getPublicProjectById(projectId);
+    const siteName = String(projectResult?.data?.name || '').trim() || 'your site';
+    const { code, ttlMinutes } = issued.data;
+
+    const mail = await sendEmail({
+      to: email,
+      fromName: siteName,
+      subject: `Your ${siteName} admin password reset code`,
+      text: `A password reset was requested for the ${siteName} admin area.\n\n`
+        + `Your code is ${code}\n\n`
+        + `It expires in ${ttlMinutes} minutes and can be used once. `
+        + `If you did not request this, you can ignore this email — your password has not changed.`,
+      html: `
+        <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18324a;">
+          <h2 style="margin: 0 0 12px;">Admin password reset</h2>
+          <p style="margin: 0 0 16px;">A password reset was requested for the <strong>${escapeHtml(siteName)}</strong> admin area.</p>
+          <div style="margin: 24px 0; padding: 20px; background: #f3f6f9; border-radius: 8px; text-align: center;">
+            <div style="font-size: 34px; letter-spacing: 6px; font-weight: 700;">${code}</div>
+          </div>
+          <p style="margin: 0 0 8px;">This code expires in ${ttlMinutes} minutes and can be used once.</p>
+          <p style="margin: 0; color: #587592; font-size: 13px;">If you did not request this, you can ignore this email — your password has not changed.</p>
+        </div>
+      `,
+    });
+
+    // A delivery failure IS reported. Silently swallowing it is what made the
+    // old stub form look like it worked while sending nothing.
+    if (!mail.ok) {
+      return sendErr(res, mail.status || 500, mail.error || 'Unable to send the reset email', { code: 'EMAIL_FAILED' }), true;
+    }
+
+    return sendOk(res, 200, { emailSent: true }, { message: SENT_MESSAGE }), true;
+  }
+
+  // POST /api/admin/auth/reset-password — PUBLIC (unauthenticated).
+  // Holding a valid emailed code is the authentication. Same host binding and
+  // rate limit as the request step.
+  if (pathname === '/api/admin/auth/reset-password' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'admin.passwordReset')) return true;
+
+    const body = await parseJsonBody(req);
+    const projectIdInput = String(body.projectId || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
+    const code = String(body.code || '').trim();
+    const password = String(body.password || '');
+
+    if (!projectIdInput || !email || !code) {
+      return sendErr(res, 400, 'projectId, email and code are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (password.length < 8) {
+      return sendErr(res, 400, 'Password must be at least 8 characters', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const bind = await assertProjectIdAllowedOnHost(req, projectIdInput);
+    if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
+
+    const result = await consumePasswordResetCode({
+      projectId: bind.projectId || projectIdInput,
+      email,
+      code,
+      newPassword: password,
+    });
+    if (!result.ok) {
+      return sendErr(res, result.status || 400, result.error || 'Unable to reset password', { code: 'RESET_INVALID' }), true;
+    }
+
+    return sendOk(res, 200, { reset: true }, { message: 'Password updated. You can now sign in.' }), true;
+  }
+
   // POST /api/admin/users — platform-owner creates admin user credentials
   // Requires a valid platform session (req.authUser set by routes/index.js).
   if (pathname === '/api/admin/users' && method === 'POST') {
@@ -265,6 +411,46 @@ async function handle(req, res, pathname, method) {
     });
     if (!patchResult.ok) return sendErr(res, patchResult.status || 500, 'Failed to update enabled modules'), true;
     return sendOk(res, 200, updated, { enabledModules: updated }), true;
+  }
+
+  // ── Tenant site settings ──────────────────────────────────────────────────
+  // Backs the Settings page inside a tenant's own admin area. Requires a
+  // session (project-admin sessions are accepted for /api/admin/site-settings
+  // via lib/projectAdminApiAuth.js). A project admin is pinned to their own
+  // project: req.projectContext.project.id comes from their session and is
+  // checked first, so the x-project-id header cannot redirect them elsewhere.
+
+  // GET /api/admin/site-settings
+  if (pathname === '/api/admin/site-settings' && method === 'GET') {
+    if (!req.authUser) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+
+    const projectId = resolveSettingsProjectId(req);
+    if (!projectId) return sendErr(res, 400, 'Project ID is required', { code: 'PROJECT_REQUIRED' }), true;
+
+    const result = await getSiteSettings(projectId);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Failed to read site settings'), true;
+    }
+    return sendOk(res, 200, result.data, { siteSettings: result.data }), true;
+  }
+
+  // PATCH /api/admin/site-settings
+  if (pathname === '/api/admin/site-settings' && method === 'PATCH') {
+    if (!req.authUser) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+
+    const projectId = resolveSettingsProjectId(req);
+    if (!projectId) return sendErr(res, 400, 'Project ID is required', { code: 'PROJECT_REQUIRED' }), true;
+
+    const body = await parseJsonBody(req);
+    const patch = (body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings))
+      ? body.settings
+      : body;
+
+    const result = await updateSiteSettings(projectId, patch);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Failed to save site settings', { code: 'SETTINGS_INVALID' }), true;
+    }
+    return sendOk(res, 200, result.data, { siteSettings: result.data }), true;
   }
 
   // GET /api/admin/clusters — list all platform-level clusters

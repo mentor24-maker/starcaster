@@ -12362,6 +12362,151 @@
   color: var(--admin-table-ink);
 }
 
+/* CRM/admin table modals — view, edit, add and delete-confirm dialogs.
+ * These render through BuilderBodyPortal into <body> under a
+ * .builder-react-root wrapper, so every rule must stay scoped to that class.
+ * Without the overlay's position:fixed the dialog lays out inline at the
+ * bottom of the page and reads as "nothing happened" when a button is
+ * clicked. (Lost in 2bd3018 when _builder-react.css was regenerated from an
+ * external globals.css; restored 2026-07-29.) */
+.builder-react-root .crm-contacts-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 16, 24, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  padding: 16px;
+}
+
+.builder-react-root .crm-contacts-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(9, 16, 24, 0.2);
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.builder-react-root .crm-contacts-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e4ecf2;
+  font-size: 1rem;
+}
+
+.builder-react-root .crm-contacts-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #7b8fa3;
+  line-height: 1;
+  padding: 0;
+}
+
+.builder-react-root .crm-contacts-modal-close:hover {
+  color: #18324a;
+}
+
+.builder-react-root .crm-contacts-modal-body {
+  padding: 14px 18px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.builder-react-root .crm-contacts-modal-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+  align-items: start;
+  font-size: 0.9rem;
+}
+
+.builder-react-root .crm-contacts-modal-row-edit {
+  grid-template-columns: 120px 1fr;
+}
+
+.builder-react-root .crm-contacts-modal-label {
+  font-weight: 600;
+  color: #587592;
+  font-size: 0.82rem;
+  padding-top: 3px;
+}
+
+.builder-react-root .crm-contacts-modal-value {
+  color: #18324a;
+  word-break: break-word;
+}
+
+.builder-react-root .crm-contacts-modal-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #c9dcea;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 0.88rem;
+  color: #18324a;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.builder-react-root .crm-contacts-modal-input:focus {
+  outline: none;
+  border-color: #1dc3ff;
+  box-shadow: 0 0 0 2px rgba(29, 195, 255, 0.18);
+}
+
+.builder-react-root textarea.crm-contacts-modal-input {
+  resize: vertical;
+}
+
+.builder-react-root .crm-contacts-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid #e4ecf2;
+}
+
+.builder-react-root .crm-contacts-modal-btn {
+  padding: 7px 16px;
+  border: 1px solid #c9dcea;
+  border-radius: 8px;
+  background: #fff;
+  color: #18324a;
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  white-space: nowrap;
+  width: fit-content;
+}
+
+.builder-react-root .crm-contacts-modal-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.builder-react-root .crm-contacts-modal-btn-primary {
+  background: #0b4f8f;
+  border-color: #0b4f8f;
+  color: #fff;
+  font-weight: 600;
+}
+
+.builder-react-root .crm-contacts-modal-btn-primary:hover:not(:disabled) {
+  background: #0d3f72;
+}
+
 .builder-react-root .crm-contacts-modal-btn-danger {
   background: #8f1f1f;
   border-color: #8f1f1f;
@@ -12371,6 +12516,20 @@
 
 .builder-react-root .crm-contacts-modal-btn-danger:hover:not(:disabled) {
   background: #761919;
+}
+
+/* Settings panels inside the module card (editor sidebar, not canvas) */
+.builder-react-root .builder-crm-contacts-table-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.builder-react-root .builder-contact-form-settings {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .builder-react-root .builder-admin-data-table-role-badge {
