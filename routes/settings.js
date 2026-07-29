@@ -12,7 +12,7 @@ const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const {
   listApiSchemas, listApiConfigsMasked, upsertApiConfig,
-  getApiConfig, testApiProviderConfig, deleteApiConfig, getProviderValues,
+  getApiConfig, deleteApiConfig, getProviderValues,
   listArchiveApiRestorePreview, restoreApiConfigsFromArchive
 } = require('../lib/apiSettings');
 const { relayOpenClaw }            = require('../lib/openclawGateway');
@@ -244,14 +244,6 @@ async function handle(req, res, pathname, method) {
     const result = await getConnectionOps(connectionOpsMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { connectionOps: result.data }), true;
-  }
-
-  // GET /api/settings/apis/:provider
-  const apiProviderTestMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/test$/);
-  if (apiProviderTestMatch && method === 'GET') {
-    const result = testApiProviderConfig(apiProviderTestMatch[1]);
-    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    return sendOk(res, 200, result.data, result.data), true;
   }
 
   // GET /api/settings/apis/:provider
