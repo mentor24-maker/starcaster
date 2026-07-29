@@ -50,6 +50,7 @@ const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
 const builder     = require('./builder');
+const seoAltText  = require('./seoAltText');
 const communityAssets = require('./communityAssets');
 const observe     = require('./observe');
 const roger       = require('./devAgent');
@@ -79,6 +80,7 @@ const ROUTE_MODULES = [
   contacts,
   engage,
   builder,
+  seoAltText,
   communityAssets,
   messaging,
   activityLog,

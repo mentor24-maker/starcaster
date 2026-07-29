@@ -10,6 +10,7 @@ import {
 } from '../gallery-media-filters';
 import type { AdminMediaItem, AdminMediaKind } from '../admin-media-shared';
 import { getMediaKind } from '../admin-media-shared';
+import { sortGalleryMediaList, type GalleryMediaListSort } from '../gallery-media-list-sort';
 import { normalizeGalleryMediaAspect } from '../gallery-media-aspect';
 import { starcasterApi, unwrapEnvelope } from './starcaster-app';
 import { registerGalleryMediaThumbnail } from './gallery-media-thumbnail';
@@ -136,9 +137,18 @@ export function useGalleryMediaLibrary(options?: {
   syncOnFirstLoad?: boolean;
   listQueryFilters?: GalleryMediaFilters | null;
   source?: GalleryMediaSource;
+  /**
+   * List-view column sort. Applied to every matching item before paging, so the
+   * first page really is the top of the sort — not just the loaded page reshuffled.
+   */
+  listSort?: GalleryMediaListSort | null;
 }) {
   const enabled = options?.enabled ?? true;
   const source = options?.source ?? 'project';
+  // Depend on the primitives, not the object, so a caller passing a fresh
+  // object literal each render doesn't re-run the load loop forever.
+  const listSortKey = options?.listSort?.key ?? null;
+  const listSortDir = options?.listSort?.dir ?? null;
   const [media, setMedia] = useState<AdminMediaItem[]>([]);
   const [allMedia, setAllMedia] = useState<AdminMediaItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -170,10 +180,14 @@ export function useGalleryMediaLibrary(options?: {
 
         const querySource = options?.listQueryFilters ?? filters;
         const activeFilename = options?.listQueryFilters ? querySource.filename : debouncedFilename;
-        const matching = sortItems(
-          allItemsRef.current.filter((item) => matchesFilters(item, { ...querySource, not: querySource.not }, activeFilename)),
-          querySource.sort
+        const filtered = allItemsRef.current.filter((item) =>
+          matchesFilters(item, { ...querySource, not: querySource.not }, activeFilename)
         );
+        // A clicked column head wins over the filter bar's Sort dropdown.
+        const matching =
+          listSortKey && listSortDir
+            ? sortGalleryMediaList(filtered, { key: listSortKey, dir: listSortDir })
+            : sortItems(filtered, querySource.sort);
 
         const offset = loadOptions?.append ? mediaRef.current.length : 0;
         const page = source === 'community' ? matching : matching.slice(0, offset + PAGE_SIZE);
@@ -189,7 +203,7 @@ export function useGalleryMediaLibrary(options?: {
         setIsLoading(false);
       }
     },
-    [debouncedFilename, enabled, filters, options?.listQueryFilters, source]
+    [debouncedFilename, enabled, filters, listSortDir, listSortKey, options?.listQueryFilters, source]
   );
 
   useEffect(() => {
