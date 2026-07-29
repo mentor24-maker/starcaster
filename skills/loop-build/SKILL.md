@@ -50,7 +50,16 @@ Each run of this skill builds **one** task into **one** PR. When run under
    stop. Do not force a broken build through, and do not expand scope to chase
    an unrelated failure.
 
-5. **Commit and open the PR.**
+5. **Add a plain-English work-log entry.** Prepend one dated entry to
+   `docs/WORK-LOG.md` (newest first) describing this task the way you would
+   explain it to a non-programmer: what changed and why it mattered, plus the
+   `(#PR)` number once known. Keep it to a short paragraph. This entry is part
+   of the task's own PR, so the log lands on `main` at the same moment the work
+   does — never edit `docs/WORK-LOG.md` directly on `main`. If a parallel task
+   causes a merge conflict here, it is trivial (two entries at the top); resolve
+   by keeping both.
+
+6. **Commit and open the PR.**
    - Inspect `git diff --cached` before committing (staging is whole-file; make
      sure no stray edits ride along). Never commit generated artifacts.
    - Commit message ends with the Co-Authored-By trailer from CLAUDE.md.
@@ -59,12 +68,12 @@ Each run of this skill builds **one** task into **one** PR. When run under
      "How to test" steps, and a note that a Vercel preview will be attached.
      End with the Generated-with trailer.
 
-6. **Hand off to review.** Set the task status to `review` and add the PR URL
+7. **Hand off to review.** Set the task status to `review` and add the PR URL
    as a ClickUp comment. **Do NOT merge** — `main` is PR-protected (the
    "verify" check must go green) and merges happen only on the operator's
    explicit say-so. The `loop-review` skill takes it from here.
 
-7. **Report** which task you built and the PR number, then finish (the `/loop`
+8. **Report** which task you built and the PR number, then finish (the `/loop`
    wrapper will re-invoke you for the next task).
 
 ## Guardrails
