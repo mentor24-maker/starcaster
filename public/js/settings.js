@@ -1901,6 +1901,43 @@ App.settings = (function () {
     return { authOk, error: errText, payload, raw: res };
   }
 
+  /**
+   * X publishes down two paths that can drift apart: a logged-in "Send Now"
+   * (Settings values win, env vars fall back) and the Vercel cron that sends
+   * scheduled posts (env vars only). When they disagree, Send Now succeeds
+   * while every scheduled post fails 401 — so the auth test alone is not
+   * enough. Failure here is non-fatal; the auth test result still stands.
+   */
+  async function fetchXSchedulerCheck() {
+    try {
+      const raw = await api('/api/promote/social/scheduler-diagnostics');
+      const diag = raw?.schedulerDiagnostics || raw?.data?.schedulerDiagnostics || raw?.data || raw || {};
+      const sessionOk = Boolean(diag?.xAuth?.session?.ok);
+      const cronOk = Boolean(diag?.xAuth?.cron?.ok);
+      const mismatch = Boolean(diag?.xCredentials?.tokenMismatch);
+      let verdict = '';
+      if (sessionOk && !cronOk) {
+        verdict = 'scheduled posts would fail: the cron publish path cannot authenticate. '
+          + 'Check the X_* environment variables on Vercel Production, then redeploy — '
+          + 'env var edits do not reach the running deployment until you do.';
+      } else if (!sessionOk && cronOk) {
+        verdict = 'Send Now would fail while scheduled posts succeed: the saved Settings values are bad, but the env vars are good.';
+      } else if (mismatch) {
+        verdict = 'both paths authenticate, but they are using different tokens, so Send Now and scheduled posts may reach different accounts.';
+      }
+      return {
+        ok: sessionOk && cronOk && !mismatch,
+        sendNowAuthenticates: sessionOk,
+        scheduledCronAuthenticates: cronOk,
+        usingDifferentTokens: mismatch,
+        duePostCount: Number(diag?.queue?.dueCount || 0) || 0,
+        verdict,
+      };
+    } catch (err) {
+      return { ok: null, error: err.message || String(err), verdict: '' };
+    }
+  }
+
   async function runConnectionOpsTest() {
     const platform = String(connectionOpsState.platform || '').trim().toLowerCase();
     if (!platform) return;
@@ -1921,7 +1958,13 @@ App.settings = (function () {
       const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/x/auth-test'));
       testOk = parsed.authOk;
       summary = testOk ? 'X auth test passed' : `X auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
+      const scheduler = await fetchXSchedulerCheck();
+      details = JSON.stringify({ authTest: parsed.raw || {}, scheduledPublishing: scheduler }, null, 2);
+      // A passing auth test only proves the logged-in path works. Scheduled posts
+      // publish from cron with env-only credentials, so flag that separately.
+      if (testOk && scheduler && scheduler.verdict && !scheduler.ok) {
+        summary = `${summary} — but ${scheduler.verdict}`;
+      }
       blockerCode = testOk ? '' : 'X_AUTH_FAILED';
     } else if (platform === 'facebook') {
       const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/facebook/auth-test'));
