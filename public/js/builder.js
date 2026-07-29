@@ -791,6 +791,13 @@ App.builder = (function () {
     }
   }
 
+  function mountSeoAltTextReact() {
+    const host = byId('builderReactRootSeoAltText');
+    if (host && window.SeoAltTextReact?.mount) {
+      window.SeoAltTextReact.mount(host);
+    }
+  }
+
   function openAgentsPage() {
     const host = byId('builderReactRootAgents');
     window.AgentsReact?.mount(host, 'list');
@@ -14329,6 +14336,7 @@ App.builder = (function () {
       } else if (pageId === 'builderThemesPage') mountThemesReact();
       else if (pageId === 'builderFormsPage') mountFormsReact();
       else if (pageId === 'builderExtensionPopulateTitlesPage') mountPopulateTitlesReact();
+      else if (pageId === 'builderExtensionSeoAltTextPage') mountSeoAltTextReact();
       else if (pageId === 'builderBuilderWorkspacePage') {
         if (!builderActiveMount || builderActiveMount.surface !== 'hub') {
           mount({ surface: 'hub', editorMode: 'template', onClose: () => {} });
