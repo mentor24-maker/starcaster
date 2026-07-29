@@ -1,0 +1,134 @@
+/* Associations panel (React island) — components/associations/associations-panel.tsx
+   Lives in the right-hand column of the Tweet and Post edit screens, so it
+   deliberately matches the metrics of .messaging-tweet-edit-assoc-* next door. */
+
+.assoc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  font-size: 0.88rem;
+}
+
+.assoc-panel-hint {
+  margin: 0;
+  color: var(--muted, #536471);
+}
+
+.assoc-panel-error {
+  margin: 0;
+  color: var(--danger, #b42318);
+}
+
+.assoc-panel-linked {
+  max-height: min(38vh, 380px);
+  overflow-y: auto;
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: var(--radius, 6px);
+  background: var(--bg-page, #fafafa);
+  padding: 0.5rem 0.65rem;
+}
+
+.assoc-panel-group {
+  margin: 0 0 0.75rem;
+}
+
+.assoc-panel-group:last-child {
+  margin-bottom: 0;
+}
+
+.assoc-panel-group h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted, #536471);
+}
+
+.assoc-panel-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.assoc-panel-items li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.assoc-panel-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-primary, #111);
+}
+
+.assoc-panel-add-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.assoc-panel-add-controls label {
+  font-weight: 600;
+  color: var(--ink-primary, #111);
+  white-space: nowrap;
+}
+
+.assoc-panel-add-controls input[type="text"] {
+  flex: 1 1 8rem;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.assoc-panel-candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  max-height: min(30vh, 280px);
+  overflow-y: auto;
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: var(--radius, 6px);
+}
+
+.assoc-panel-candidate {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0.3rem 0.25rem;
+  cursor: pointer;
+  color: var(--ink-primary, #111);
+  border-radius: var(--radius, 6px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assoc-panel-candidate:hover:not(:disabled),
+.assoc-panel-candidate:focus-visible {
+  background: var(--btn-bg, #eef2f6);
+}
+
+.assoc-panel-candidate:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (max-width: 1100px) {
+  .assoc-panel-linked,
+  .assoc-panel-candidates {
+    max-height: none;
+  }
+}

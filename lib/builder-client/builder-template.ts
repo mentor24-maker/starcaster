@@ -251,6 +251,12 @@ export type BuilderTemplateSection = {
    * read as one continuous band.
    */
   widthMode: "contained" | "full-width";
+  /**
+   * For contained sections, narrows the section to this percentage of the page
+   * content width and centers it (25–100; 100 = full content width). Ignored
+   * when widthMode is "full-width", which spans edge to edge.
+   */
+  widthPercent: string;
   alignment: "left" | "center" | "right";
   marginTop: string;
   marginBottom: string;
@@ -400,8 +406,28 @@ export function prepareRichTextHtmlForEditor(value: unknown) {
   return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(html), "editor");
 }
 
+// A trailing empty block (an otherwise-empty <p> or heading whose only
+// contents are whitespace, non-breaking spaces, or <br>). The editor keeps
+// an empty line at the end for a comfortable typing cursor, but we do not
+// want that saved as extra markup — spacing under headings is a style
+// concern, not a content one.
+const TRAILING_EMPTY_BLOCK = /(?:<(p|h[1-6])(?:\s[^>]*)?>(?:\s|&nbsp;|<br\s*\/?>)*<\/\1>)\s*$/i;
+
+function stripTrailingEmptyBlocks(html: string) {
+  let result = html;
+  let previous: string;
+
+  do {
+    previous = result;
+    result = result.replace(TRAILING_EMPTY_BLOCK, "").replace(/\s+$/, "");
+  } while (result !== previous);
+
+  return result;
+}
+
 export function prepareRichTextHtmlForStorage(html: string) {
-  return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(html), "storage");
+  const sanitized = stripTrailingEmptyBlocks(sanitizeRichTextHtml(html));
+  return rewriteRichTextImageSrcInHtml(sanitized, "storage");
 }
 
 export function createLocalId(prefix: string) {
@@ -1700,6 +1726,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         title: safeText(normalizedSection.title, 255),
         layout,
         widthMode: normalizedSection.widthMode === "full-width" ? "full-width" : "contained",
+        widthPercent: normalizeSpacingValue(normalizedSection.widthPercent, "100", 25, 100),
         locked: normalizedSection.locked === true,
         isPrivate: normalizedSection.isPrivate === true,
         alignment: normalizeAlignment(normalizedSection.alignment),
@@ -1756,6 +1783,7 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     isPrivate: false,
     layout,
     widthMode: "contained",
+    widthPercent: "100",
     alignment: "left",
     marginTop: "0",
     marginBottom: "0",

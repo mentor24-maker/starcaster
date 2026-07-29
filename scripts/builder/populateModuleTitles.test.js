@@ -24,6 +24,40 @@ function textModule(text, { column = 'left' } = {}) {
   return { id: `txt`, type: 'text', column, name: '', text, settings: {} };
 }
 
+test('a heading embedded in a rich-text module is used over image alt text', () => {
+  // This mirrors the real Marinoff data: the heading lives inside a text
+  // module's HTML, and the image alt is SEO-keyword-stuffed.
+  const modules = [
+    image({ alt: 'Colorado criminal defense attorney', column: 'left' }),
+    textModule('<h1>Violent Crimes</h1><p>Body copy here.</p>', { column: 'left' }),
+  ];
+  assert.equal(deriveTitle(modules, DEFAULT_TITLE_PRIORITY), 'Violent Crimes');
+});
+
+test('trailing colon/period is trimmed, but abbreviation dots are kept', () => {
+  assert.equal(deriveTitle([textModule('<h2>How We Can Help:</h2>')], DEFAULT_TITLE_PRIORITY), 'How We Can Help');
+  assert.equal(deriveTitle([textModule('<h1>Our Story.</h1>')], DEFAULT_TITLE_PRIORITY), 'Our Story');
+  assert.equal(deriveTitle([textModule('<h1>Marinoff &amp; Associates P.C.</h1>')], DEFAULT_TITLE_PRIORITY), 'Marinoff & Associates P.C.');
+});
+
+test('largest embedded heading wins (h1 over h2 in the same text module)', () => {
+  const modules = [textModule('<h2>Subhead</h2><h1>Main Title</h1>', { column: 'left' })];
+  assert.equal(deriveTitle(modules, DEFAULT_TITLE_PRIORITY), 'Main Title');
+});
+
+test('embedded heading fills the section title verbatim', () => {
+  const sections = [{
+    id: 's1',
+    title: '',
+    modules: [
+      image({ alt: 'trial attorney colorado', column: 'left' }),
+      textModule('<h1>Traffic and DUI Charges</h1>', { column: 'left' }),
+    ],
+  }];
+  const { sections: out } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Traffic and DUI Charges');
+});
+
 test('left-most heading beats a right-side heading', () => {
   const modules = [
     heading('Left Column Title', { level: 'h2', column: 'left' }),
@@ -72,7 +106,7 @@ test('button label and text first-line feed titles when configured', () => {
   assert.equal(deriveTitle([button('Get Started Today')], DEFAULT_TITLE_PRIORITY), 'Get Started Today');
   assert.equal(
     deriveTitle([textModule('<p>First paragraph line.</p><p>Second.</p>')], DEFAULT_TITLE_PRIORITY),
-    'First paragraph line.'
+    'First paragraph line'
   );
 });
 
@@ -140,6 +174,25 @@ test('auto-generated "Content Block" placeholder titles are replaced in blanks-o
   assert.equal(out[0].title, 'Our Services', 'Content Block 1 replaced');
   assert.equal(out[1].title, 'About Us', 'Content Block 2 replaced');
   assert.ok(changes.some((c) => c.level === 'section' && c.from === 'Content Block 1' && c.to === 'Our Services'));
+});
+
+test('auto-generated "Section N" placeholder titles are replaced', () => {
+  const sections = [
+    { id: 's1', title: 'Section 1', modules: [heading('Our Services', { column: 'left' })] },
+    { id: 's2', title: 'Section 12', modules: [heading('About Us', { column: 'left' })] },
+  ];
+  const { sections: out } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Our Services', 'Section 1 replaced');
+  assert.equal(out[1].title, 'About Us', 'Section 12 replaced');
+});
+
+test('a deliberate title that merely contains "Section" is left alone', () => {
+  const sections = [
+    { id: 's1', title: 'Section 8 Housing', modules: [{ id: 'm', type: 'heading', column: 'left', name: 'Named', text: 'Other', settings: { level: 'h2' } }] },
+  ];
+  const { sections: out, changed } = populateTitlesInSections(sections, {});
+  assert.equal(out[0].title, 'Section 8 Housing', 'real title untouched');
+  assert.equal(changed, false);
 });
 
 test('a real, operator-chosen title is left alone in blanks-only mode', () => {

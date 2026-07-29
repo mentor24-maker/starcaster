@@ -5,6 +5,7 @@ import {
   promoteThemeStylesPageBackground,
   finalizeThemeStylesPageBackground,
   formatRichTextContent,
+  prepareRichTextHtmlForStorage,
   normalizeBuilderAssetUrl,
   normalizeBuilderDocument,
   normalizeBuilderModuleSettingsForType,
@@ -54,6 +55,28 @@ describe("formatRichTextContent", () => {
     const html = formatRichTextContent("<p>Safe</p><img src=x onerror=alert(1) />");
     expect(html).toContain("Safe");
     expect(html.toLowerCase()).not.toContain("onerror");
+  });
+});
+
+describe("prepareRichTextHtmlForStorage", () => {
+  it("drops a trailing empty paragraph after a heading", () => {
+    expect(prepareRichTextHtmlForStorage("<h1>Title</h1><p></p>")).toBe("<h1>Title</h1>");
+  });
+
+  it("drops trailing paragraphs that contain only a line break", () => {
+    expect(prepareRichTextHtmlForStorage("<h2>Title</h2><p><br></p>")).toBe("<h2>Title</h2>");
+  });
+
+  it("drops multiple stacked trailing empty blocks", () => {
+    expect(prepareRichTextHtmlForStorage("<h1>Title</h1><p></p><p>&nbsp;</p>")).toBe("<h1>Title</h1>");
+  });
+
+  it("keeps empty paragraphs that sit between real content", () => {
+    expect(prepareRichTextHtmlForStorage("<p>One</p><p></p><p>Two</p>")).toBe("<p>One</p><p></p><p>Two</p>");
+  });
+
+  it("keeps a trailing paragraph that still has text", () => {
+    expect(prepareRichTextHtmlForStorage("<h1>Title</h1><p>Body</p>")).toBe("<h1>Title</h1><p>Body</p>");
   });
 });
 
