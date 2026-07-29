@@ -38,8 +38,8 @@ export default defineConfig({
   test: {
     include: [
       'lib/builder-client/**/*.test.ts',
-      'components/builder/**/*.test.ts',
-      'components/builder/**/*.test.tsx',
+      'components/**/*.test.ts',
+      'components/**/*.test.tsx',
     ],
     environment: 'node',
     passWithNoTests: true,

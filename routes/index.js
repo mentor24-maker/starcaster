@@ -50,6 +50,7 @@ const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
 const builder     = require('./builder');
+const seoAltText  = require('./seoAltText');
 const communityAssets = require('./communityAssets');
 const observe     = require('./observe');
 const roger       = require('./devAgent');
@@ -60,6 +61,7 @@ const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const blog        = require('./blog');
 const admin       = require('./admin');
+const associations = require('./associations');
 const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
@@ -73,10 +75,12 @@ const ROUTE_MODULES = [
   acquire,
   promoLeads,
   assets,
+  associations,
   channels,
   contacts,
   engage,
   builder,
+  seoAltText,
   communityAssets,
   messaging,
   activityLog,

@@ -6,10 +6,6 @@
   const postTableState = { sortColumn: 'created_at', sortDirection: 'desc' };
   let currentPosts = [];
   let currentPostSuggestions = [];
-  let postEditAssocFilter = '';
-  let postEditAssocChecked = new Set();
-  let postEditAssocAssets = [];
-  let postEditAssocBound = false;
   let postPreviewAccount = { name: 'Your account', handle: '@account' };
   let taggingContacts = [];
   let taggingContactsLoaded = false;
@@ -337,120 +333,18 @@
     });
   }
 
-  function resetPostEditAssociationsUi() {
-    postEditAssocFilter = '';
-    postEditAssocChecked.clear();
-    const search = document.getElementById('messagingPostEditAssocSearch');
-    const list = document.getElementById('messagingPostEditAssocList');
-    if (search) search.value = '';
-    if (list) list.innerHTML = '';
-  }
-
-  function filteredPostEditAssocAssets() {
-    const query = cleanText(postEditAssocFilter).toLowerCase();
-    const list = Array.isArray(postEditAssocAssets) ? postEditAssocAssets : [];
-    if (!query) return list;
-    return list.filter((asset) => String(asset.assetName || '').toLowerCase().includes(query));
-  }
-
-  function renderPostEditAssociationList() {
-    const mount = document.getElementById('messagingPostEditAssocList');
-    if (!mount) return;
-    mount.innerHTML = '';
-    const assets = filteredPostEditAssocAssets();
-    if (!assets.length) {
-      mount.textContent = 'No assets found.';
-      return;
-    }
-    const grouped = new Map();
-    assets.forEach((asset) => {
-      const type = cleanText(asset.assetType) || 'Other';
-      if (!grouped.has(type)) grouped.set(type, []);
-      grouped.get(type).push(asset);
-    });
-    POST_EDIT_ASSOC_TYPE_ORDER.concat(Array.from(grouped.keys())).filter((type, index, arr) => arr.indexOf(type) === index).forEach((type) => {
-      const items = grouped.get(type) || [];
-      if (!items.length) return;
-      const section = document.createElement('section');
-      section.className = 'messaging-tweet-edit-assoc-group';
-      const title = document.createElement('h4');
-      title.textContent = type;
-      section.appendChild(title);
-      const ul = document.createElement('ul');
-      ul.className = 'messaging-tweet-edit-assoc-items';
-      items.forEach((asset) => {
-        const assetId = Number(asset.id || 0) || 0;
-        if (!assetId) return;
-        const li = document.createElement('li');
-        const label = document.createElement('label');
-        label.className = 'messaging-tweet-edit-assoc-row';
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = postEditAssocChecked.has(assetId);
-        checkbox.addEventListener('change', function () {
-          if (checkbox.checked) postEditAssocChecked.add(assetId);
-          else postEditAssocChecked.delete(assetId);
-        });
-        label.appendChild(checkbox);
-        label.append(` ${cleanText(asset.assetName) || `Asset ${assetId}`}`);
-        li.appendChild(label);
-        ul.appendChild(li);
-      });
-      section.appendChild(ul);
-      mount.appendChild(section);
-    });
-  }
-
-  async function loadPostEditAssociationAssets() {
-    try {
-      const res = await api('/api/assets?limit=5000');
-      postEditAssocAssets = Array.isArray(res.assets) ? res.assets : (Array.isArray(res.data) ? res.data : []);
-    } catch {
-      postEditAssocAssets = [];
-    }
-    renderPostEditAssociationList();
-  }
-
-  function bindPostEditAssociations() {
-    if (postEditAssocBound) return;
-    postEditAssocBound = true;
-    const search = document.getElementById('messagingPostEditAssocSearch');
-    const applyBtn = document.getElementById('messagingPostEditAssocApplyBtn');
-    if (search) {
-      search.addEventListener('input', function () {
-        postEditAssocFilter = search.value;
-        renderPostEditAssociationList();
-      });
-    }
-    if (applyBtn) {
-      applyBtn.addEventListener('click', async function () {
-        const editForm = document.getElementById('messagingPostsEditForm');
-        const postId = cleanText(editForm?.elements?.id?.value);
-        if (!postId) {
-          notify('Post id is missing. Reload the post and try again.', true);
-          return;
-        }
-        const assetIds = Array.from(postEditAssocChecked);
-        if (!assetIds.length) {
-          notify('Select at least one asset to associate.', true);
-          return;
-        }
-        const postLabel = cleanText(editForm?.elements?.post?.value).slice(0, 100) || 'Post';
-        for (const assetId of assetIds) {
-          await api(`/api/assets/${encodeURIComponent(assetId)}/associations`, {
-            method: 'POST',
-            body: JSON.stringify({
-              targetType: 'messaging_posts',
-              targetId: postId,
-              targetLabel: `Post: ${postLabel}`,
-            }),
-          });
-        }
-        notify(assetIds.length === 1 ? 'Asset associated' : `${assetIds.length} assets associated`);
-        postEditAssocChecked.clear();
-        renderPostEditAssociationList();
-      });
-    }
+  // The Associations panel is a React island
+  // (components/associations/associations-panel.tsx). This side only has to
+  // name the post that is open; the panel owns loading, adding, and removing.
+  function setPostEditAssociationsTarget(postId, postText) {
+    const id = cleanText(postId);
+    const label = cleanText(postText).slice(0, 100);
+    document.dispatchEvent(new CustomEvent('starcaster:associations-target', {
+      detail: {
+        host: 'messagingPostAssociationsRoot',
+        self: id ? { type: 'messaging_posts', id, label } : null,
+      },
+    }));
   }
 
   function openPostEditForm(post) {
@@ -479,10 +373,9 @@
     if (workspace) workspace.classList.add('hidden');
     if (addBtn) addBtn.textContent = 'Add Post';
     bindPostEditPreview(editForm);
-    bindPostEditAssociations();
+    setPostEditAssociationsTarget(post.id, post.post);
     App.pageHeadingNav?.bindBackLinks?.(panel || editForm);
     renderPostEditPreview(editForm);
-    loadPostEditAssociationAssets();
     (panel || editForm).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -491,7 +384,7 @@
     const panel = postEditPanelEl();
     if (editForm) editForm.reset();
     App.messaging?.renderImageAssetPickerDisplay?.('messagingPostEditImageSelect');
-    resetPostEditAssociationsUi();
+    setPostEditAssociationsTarget('', '');
     if (panel) panel.classList.add('hidden');
     App.pageHeadingNav?.setParentHeadingVisible?.(document.getElementById('messagingPostsPageHeading'), true);
   }
@@ -890,8 +783,6 @@
         App.messaging?.openImageAssetPicker?.('messagingPostEditImageSelect');
       });
     }
-
-    bindPostEditAssociations();
 
     if (form) {
       form.addEventListener('submit', async function (e) {
