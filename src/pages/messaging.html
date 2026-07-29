@@ -558,22 +558,11 @@
               <div id="messagingTweetEditPreviewMount" class="messaging-tweet-edit-preview-mount"></div>
             </aside>
 
-            <aside class="messaging-tweet-edit-associations-column" aria-label="Asset associations">
+            <aside class="messaging-tweet-edit-associations-column" aria-label="Associations">
               <h3 class="messaging-tweet-edit-associations-title">Associations</h3>
-              <div class="messaging-tweet-edit-assoc-search">
-                <label for="messagingTweetEditAssocSearch">Search</label>
-                <input
-                  id="messagingTweetEditAssocSearch"
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="false"
-                  placeholder="Filter by asset name"
-                />
-              </div>
-              <div id="messagingTweetEditAssocList" class="messaging-tweet-edit-assoc-list" aria-live="polite"></div>
-              <div class="messaging-tweet-edit-assoc-actions">
-                <button id="messagingTweetEditAssocApplyBtn" type="button" class="btn btn-primary">Associate Checked</button>
-              </div>
+              <!-- Rendered by components/associations/associations-panel.tsx via
+                   react-entry.js; messaging.js names the open tweet. -->
+              <div id="messagingTweetAssociationsRoot" aria-live="polite"></div>
             </aside>
           </div>
         </section>
@@ -747,22 +736,11 @@
               <p class="messaging-tweet-edit-preview-note">Live preview for Facebook, Bluesky, Reddit, and similar channels. Platform limits vary at publish time.</p>
               <div id="messagingPostEditPreviewMount" class="messaging-tweet-edit-preview-mount"></div>
             </aside>
-            <aside class="messaging-tweet-edit-associations-column" aria-label="Asset associations">
+            <aside class="messaging-tweet-edit-associations-column" aria-label="Associations">
               <h3 class="messaging-tweet-edit-associations-title">Associations</h3>
-              <div class="messaging-tweet-edit-assoc-search">
-                <label for="messagingPostEditAssocSearch">Search</label>
-                <input
-                  id="messagingPostEditAssocSearch"
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="false"
-                  placeholder="Filter by asset name"
-                />
-              </div>
-              <div id="messagingPostEditAssocList" class="messaging-tweet-edit-assoc-list" aria-live="polite"></div>
-              <div class="messaging-tweet-edit-assoc-actions">
-                <button id="messagingPostEditAssocApplyBtn" type="button" class="btn btn-primary">Associate Checked</button>
-              </div>
+              <!-- Rendered by components/associations/associations-panel.tsx via
+                   react-entry.js; messagingPostsEditor.js names the open post. -->
+              <div id="messagingPostAssociationsRoot" aria-live="polite"></div>
             </aside>
           </div>
         </section>
