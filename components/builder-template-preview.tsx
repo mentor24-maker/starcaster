@@ -1790,6 +1790,10 @@ function BuilderModulePreview({
     return <AdminSiteSettingsPreview settings={module.settings} projectId={projectId} />;
   }
 
+  if (module.type === "admin-support-form") {
+    return <AdminSupportFormPreview settings={module.settings} projectId={projectId} />;
+  }
+
   if (module.type === "admin-nav-link") {
     return <AdminNavLinkPreview settings={module.settings} />;
   }
@@ -5916,6 +5920,345 @@ function AdminSiteSettingsPreview({
             </button>
           </div>
         </form>
+      )}
+    </div>
+  );
+}
+
+// ── Support request form ────────────────────────────────────────────────────
+
+/** Mirrors PRIORITIES in lib/projectSupportRequestsStore.js and the SQL CHECK. */
+const SUPPORT_PRIORITIES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "low", label: "Low — whenever you get to it" },
+  { value: "normal", label: "Normal — needs attention soon" },
+  { value: "high", label: "High — something is broken" },
+  { value: "urgent", label: "Urgent — the site is down" },
+];
+
+/** Same ceiling as routes/projectSupport.js, checked here to fail fast. */
+const MAX_SCREENSHOT_BASE64_CHARS = 9_000_000;
+
+type SupportRequestRecord = {
+  id: string;
+  priority: string;
+  title: string;
+  description: string;
+  screenshotUrl: string;
+  status: string;
+  createdAt: string | null;
+};
+
+function supportPriorityLabel(value: string): string {
+  switch (value) {
+    case "low": return "Low";
+    case "high": return "High";
+    case "urgent": return "Urgent";
+    default: return "Normal";
+  }
+}
+
+function supportStatusLabel(value: string): string {
+  switch (value) {
+    case "in_progress": return "In progress";
+    case "resolved": return "Resolved";
+    case "closed": return "Closed";
+    default: return "Open";
+  }
+}
+
+function formatSupportDate(value: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** Strip the `data:image/png;base64,` prefix a FileReader result carries. */
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("That file could not be read."));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Support request form for a tenant's own admin area (/admin-support).
+ *
+ * Backed by POST/GET /api/support/requests, which pins a project-admin session
+ * to its own project — an admin can only ever file against, and read back,
+ * the site they belong to.
+ */
+function AdminSupportFormPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
+  const formTitle      = settings.formTitle || "Request Support";
+  const showTitle      = settings.showTitle !== "false";
+  const buttonText     = settings.buttonText || "Send Request";
+  const showScreenshot = settings.showScreenshot !== "false";
+  const showHistory    = settings.showHistory !== "false";
+  const historyTitle   = settings.historyTitle || "Your Recent Requests";
+  const defaultPriority = SUPPORT_PRIORITIES.some((p) => p.value === settings.defaultPriority)
+    ? settings.defaultPriority
+    : "normal";
+
+  const [priority, setPriority]       = useState(defaultPriority);
+  const [title, setTitle]             = useState("");
+  const [description, setDescription] = useState("");
+  const [file, setFile]               = useState<File | null>(null);
+  const [fileError, setFileError]     = useState("");
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [successNote, setSuccessNote] = useState("");
+  const [warningNote, setWarningNote] = useState("");
+
+  const [history, setHistory] = useState<SupportRequestRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(showHistory);
+
+  const headers = getCrmProjectHeaders(projectIdProp);
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  function loadHistory() {
+    if (!showHistory) return;
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/support/requests${qs}`, { credentials: "include", headers })
+      .then(async (r) => {
+        if (r.status === 401 && !isPreview) {
+          window.location.href = "/admin-login";
+          return null;
+        }
+        if (!r.ok) return null;
+        return r.json().catch(() => null);
+      })
+      .then((d) => {
+        if (!d) return;
+        const rows = d.supportRequests ?? d.data ?? [];
+        if (Array.isArray(rows)) setHistory(rows as SupportRequestRecord[]);
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }
+
+  useEffect(loadHistory, []);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setFileError("");
+    const picked = e.target.files?.[0] || null;
+    if (picked && !picked.type.startsWith("image/")) {
+      setFile(null);
+      setFileError("Please choose an image file (PNG, JPG or GIF).");
+      return;
+    }
+    setFile(picked);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitError("");
+    setSuccessNote("");
+    setWarningNote("");
+
+    if (!title.trim()) {
+      setSubmitError("Please give the issue a short title.");
+      return;
+    }
+    setSubmitting(true);
+
+    try {
+      let screenshot: { fileName: string; mimeType: string; fileBase64: string } | undefined;
+      if (file) {
+        const fileBase64 = await readFileAsBase64(file);
+        if (fileBase64.length > MAX_SCREENSHOT_BASE64_CHARS) {
+          setSubmitError("That screenshot is too large. Please use an image under about 6MB.");
+          return;
+        }
+        screenshot = { fileName: file.name, mimeType: file.type, fileBase64 };
+      }
+
+      const projectId = headers["X-Project-ID"] || "";
+      const r = await fetch("/api/support/requests", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({
+          projectId,
+          priority,
+          title: title.trim(),
+          description: description.trim(),
+          ...(screenshot ? { screenshot } : {}),
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setSubmitError(readApiErrorMessage(d, "Could not send your request."));
+        return;
+      }
+
+      // Say what actually happened. The request is saved either way, but if the
+      // notification email did not go out, claiming "we have been notified"
+      // would be a lie.
+      setSuccessNote(d.emailSent
+        ? "Thanks — your request has been sent. We'll be in touch."
+        : "Your request has been saved, but the notification email could not be sent. Please follow up using the contact details on this page.");
+      if (d.screenshotWarning) setWarningNote(String(d.screenshotWarning));
+
+      setTitle("");
+      setDescription("");
+      setPriority(defaultPriority);
+      setFile(null);
+      const created = d.supportRequest ?? d.data;
+      if (created && typeof created === "object") {
+        setHistory((prev) => [created as SupportRequestRecord, ...prev]);
+      }
+    } catch {
+      setSubmitError("Connection error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    width: "100%", padding: "7px 10px", fontSize: 14,
+    border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = { display: "block", fontSize: 14, fontWeight: 600, marginBottom: 4 };
+
+  return (
+    <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
+      {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{formTitle}</h3>}
+
+      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, maxWidth: 560 }}>
+        <div>
+          <label htmlFor="admin-support-priority" style={labelStyle}>Priority</label>
+          <select
+            id="admin-support-priority"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            style={fieldStyle}
+          >
+            {SUPPORT_PRIORITIES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="admin-support-title" style={labelStyle}>Issue title</label>
+          <input
+            id="admin-support-title"
+            type="text"
+            required
+            maxLength={200}
+            value={title}
+            onChange={(e) => { setTitle(e.target.value); setSuccessNote(""); }}
+            placeholder="Short summary of the problem"
+            style={fieldStyle}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="admin-support-description" style={labelStyle}>Issue description</label>
+          <textarea
+            id="admin-support-description"
+            rows={6}
+            maxLength={5000}
+            value={description}
+            onChange={(e) => { setDescription(e.target.value); setSuccessNote(""); }}
+            placeholder="What happened, what were you doing at the time, and what did you expect instead?"
+            style={{ ...fieldStyle, resize: "vertical" }}
+          />
+        </div>
+
+        {showScreenshot && (
+          <div>
+            <label htmlFor="admin-support-screenshot" style={labelStyle}>Screenshot (optional)</label>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--muted, #888)" }}>
+              A picture of what you are seeing helps a lot. Images up to about 6MB.
+            </p>
+            <input
+              id="admin-support-screenshot"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={{ fontSize: 13 }}
+            />
+            {file && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--muted, #888)" }}>
+                Attached: {file.name}
+              </p>
+            )}
+            {fileError && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--danger, #c00)" }}>{fileError}</p>
+            )}
+          </div>
+        )}
+
+        {submitError && (
+          <p className="builder-module-runtime-note" style={{ margin: 0, color: "var(--danger, #c00)" }}>{submitError}</p>
+        )}
+        {successNote && (
+          <p className="builder-module-runtime-note" style={{ margin: 0, color: "#15803d" }}>{successNote}</p>
+        )}
+        {warningNote && (
+          <p className="builder-module-runtime-note" style={{ margin: 0, color: "#b45309" }}>{warningNote}</p>
+        )}
+
+        <div>
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: "8px 18px", fontSize: 13, fontWeight: 600, borderRadius: 6,
+              border: "1px solid #0f4f8f", background: "#0f4f8f", color: "#fff",
+              cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.7 : 1,
+              whiteSpace: "nowrap", width: "fit-content",
+            }}
+          >
+            {submitting ? "Sending…" : buttonText}
+          </button>
+        </div>
+      </form>
+
+      {showHistory && (
+        <div style={{ marginTop: 28, maxWidth: 560 }}>
+          <h4 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700 }}>{historyTitle}</h4>
+          {historyLoading ? (
+            <p className="builder-module-runtime-note">Loading your requests…</p>
+          ) : history.length === 0 ? (
+            <p className="builder-module-runtime-note">You haven&rsquo;t sent any support requests yet.</p>
+          ) : (
+            <div style={{ display: "grid", gap: 8 }}>
+              {history.map((r) => (
+                <div
+                  key={r.id}
+                  style={{ padding: "10px 14px", border: "1px solid var(--border, #e5e7eb)", borderRadius: 8 }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                    <strong style={{ fontSize: 14 }}>{r.title}</strong>
+                    <span style={{ fontSize: 12, color: "var(--muted, #888)", whiteSpace: "nowrap" }}>
+                      {formatSupportDate(r.createdAt)}
+                    </span>
+                  </div>
+                  <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--muted, #888)" }}>
+                    {supportPriorityLabel(r.priority)} priority &middot; {supportStatusLabel(r.status)}
+                    {r.screenshotUrl ? " · screenshot attached" : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

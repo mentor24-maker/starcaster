@@ -910,6 +910,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: {}
+  },
+  {
+    id: "admin-support-form",
+    type: "admin-support-form",
+    group: "admin",
+    label: "Support Request Form",
+    icon: "🛟",
+    description: "Lets a signed-in site admin report a problem: priority, title, description and an optional screenshot. Saves the request and emails the Support Alert Email set in StarCaster under Settings > Projects > Edit. Can also list the admin's own recent requests.",
+    name: "",
+    text: "",
+    settings: {}
   }
 ];
 
