@@ -906,7 +906,7 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     group: "admin",
     label: "Site Settings",
     icon: "⚙️",
-    description: "Settings panel for the tenant's own admin area. Currently one field: the Contact Alert Email notified whenever a public contact form is submitted.",
+    description: "Settings panel for the tenant's own admin area. Currently one field: the Contact Alert Email recipients notified whenever a public contact form is submitted — one address or several.",
     name: "",
     text: "",
     settings: {}
