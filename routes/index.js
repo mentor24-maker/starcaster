@@ -38,6 +38,7 @@ const {
 
 const auth        = require('./auth');
 const projectAdmin = require('./projectAdmin');
+const projectSupport = require('./projectSupport');
 const projects    = require('./projects');
 const settings    = require('./settings');
 const acquire     = require('./acquire');
@@ -70,6 +71,7 @@ const ROUTE_MODULES = [
   admin,
   auth,
   projectAdmin,
+  projectSupport,
   projects,
   settings,
   acquire,
