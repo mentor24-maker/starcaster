@@ -32,6 +32,7 @@ public/js/richtext-vendor.js
 lib/builder/template.js
 lib/builder/email-template.js
 lib/builder/email-render.js
+lib/build-stamp.json
 
 # Claude Code: settings.json is shared; everything else is personal
 .claude/*

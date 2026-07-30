@@ -1557,12 +1557,25 @@ App.settings = (function () {
         line = String(result.message || 'Verification failed.');
       }
 
+      // A pass can still deserve a warning: the account may have changed under
+      // you, which matters more than the pass itself.
+      const driftMessage = String(result.identityDrift?.message || '').trim();
+      // On a failure, say whether the value in Vercel is simply not live yet —
+      // "wrong value" and "right value, not deployed" look identical otherwise.
+      const stalenessMessage = String(result.envStaleness?.message || '').trim();
+
       if (out) {
-        out.textContent = line;
-        // Green only for a real pass. "Cannot check" is not a pass.
-        out.style.color = result.ok ? '#1d6f42' : (notCheckable ? '' : '#8a1d2b');
+        out.textContent = [line, driftMessage, stalenessMessage].filter(Boolean).join(' ');
+        // Green only for a clean pass. A pass with identity drift is not clean,
+        // and "cannot check" is not a pass at all.
+        out.style.color = (result.ok && !driftMessage)
+          ? '#1d6f42'
+          : (result.ok ? '#8a5a00' : (notCheckable ? '' : '#8a1d2b'));
       }
-      notify(result.ok ? (identity ? `Verified as ${identity}` : 'Credentials verified') : line, !result.ok);
+      const toast = result.ok
+        ? (driftMessage || (identity ? `Verified as ${identity}` : 'Credentials verified'))
+        : [line, stalenessMessage].filter(Boolean).join(' ');
+      notify(toast, !result.ok || Boolean(driftMessage));
     } catch (err) {
       if (out) {
         out.textContent = `Could not run the check: ${err.message || err}`;

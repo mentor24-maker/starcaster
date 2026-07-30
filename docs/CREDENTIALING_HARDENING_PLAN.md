@@ -240,11 +240,43 @@ not-checkable until someone configures them.
 *Risk: medium — touches every client. Do it client-by-client, each with its own
 commit, so a regression is one revert.*
 
-### Phase 3 — Make the invisible visible
+### Phase 3 — Make the invisible visible — **DONE**
 
-**Note:** item 8 landed early, in Phase 2 — every verifier already reports the
-connected identity. What remains here is *remembering* it between checks so a
-change can be flagged, plus the deployment-staleness work.
+Delivered on branch `credential-staleness` in two slices. Item 8 had already
+landed in Phase 2 (every verifier reports the connected identity), so the work
+here was *remembering* it plus the deployment-staleness half.
+
+**Slice 1 — the running build is now named.** Vercel exposes the commit at
+runtime but no build timestamp, so `scripts/write_build_stamp.mjs` records one as
+the first step of `npm run build` (the command Vercel runs) into a gitignored
+`lib/build-stamp.json`. The redeploy warning went from "if you changed it
+recently" — which invites a guess — to naming the deployment: *"This deployment
+was built 2026-07-29T21:14:02Z (3 days ago), commit 0a83d71."* Also on
+`/diagnostics` as `deployment`, so build age is visible without a failure.
+
+**Slice 2 — two annotations, both inert until switched on.** Setup:
+`docs/CREDENTIAL_CHECKS_SETUP.md`.
+
+- *Identity drift* (`lib/credentialIdentityStore.js`, needs
+  `docs/SQL/credential_identities.sql` applied) remembers the last verified
+  account per project+provider and flags a change. Compares on account id where
+  available so a renamed Page is not mistaken for a different account. Stores no
+  secret material.
+- *Env staleness* (`lib/vercelEnvAudit.js`, needs `VERCEL_API_TOKEN`) asks the
+  Vercel API when each variable was last edited and names any edited after the
+  build. That is the difference between "the value is wrong" and "the value is
+  right but not deployed" — indistinguishable from outside, and the actual cause
+  of the incident that started this plan. Reads names and timestamps only.
+
+The design constraint that mattered most: **degrade honestly.** Both ship before
+their prerequisites exist, so a missing table or token yields no annotation
+rather than a false negative — `changed: false` is never reported from a check
+that was not tracked. Both annotators swallow their own failures, because a
+credential test that broke over a missing bookkeeping table would be worse than
+the bug it prevents. And a missing token reports *why*, with hints for the 403
+and 404 cases, so it is diagnosable rather than silent.
+
+#### Original plan for this phase
 
 8. **Report the connected identity everywhere.** Every `verify()` returns "as
    whom." Store the last verified identity per project per provider; when it
