@@ -83,6 +83,7 @@ App.state = {
   apiSchemas: [],
   apiConfigs: [],
   apiFormValues: {},
+  apiFormHasValue: {},
   profile: {},
   projects: [],
   currentProjectId: '',
