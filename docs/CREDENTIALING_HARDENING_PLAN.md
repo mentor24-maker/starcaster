@@ -179,7 +179,48 @@ than before.
 
 *Risk: low. No behaviour change to publishing, only to message text.*
 
-### Phase 2 — One verification path for every provider
+### Phase 2 — One verification path for every provider — **DONE**
+
+Delivered in three slices on branch `credential-verify`. Verifiable providers
+went from 8 to 17; the ten live integrations that could not be checked at all
+now can. Identity reporting arrived here rather than in Phase 3, because a
+verifier that already has the account name in its response should not throw it
+away. What actually shipped, and what it cost:
+
+- `lib/credentialVerify.js` — provider → verifier registry, one result shape.
+- `GET /api/settings/apis/:provider/diagnostics` (all 30 providers) and
+  `GET /api/settings/apis/:provider/verify` (rate limited, 20/min).
+- A working Test Connection button on the Settings > APIs form, reaching every
+  provider in the dropdown.
+- Telegram's check now contacts Telegram. It previously only confirmed the
+  fields were filled in, so it passed with a bogus token.
+- `NOT_VERIFIABLE` is a third outcome, never shown as a pass or a rejection.
+
+Three bugs found by running the registry against live providers rather than
+reading the code — worth remembering as a method, not just as fixes:
+
+1. `400 → MISSING` was right for our clients' pre-flight guard and wrong for a
+   provider's response. YouTube answers an invalid key with 400, so an expired
+   key read as "not configured".
+2. Facebook was verified against global env values though its credentials are
+   per-project, so a working Page reported as broken.
+3. The rate-limit guard was inverted, which left the new endpoint dead on
+   arrival, answering nothing at all.
+
+Also fixed on the way: `lib/rateLimiter.js` held a bare `setInterval` that kept
+the Node event loop alive forever, so any test touching a route hung. Now
+`.unref()`'d.
+
+**Live finding for the operator: the YouTube API key is expired** — "API key
+expired. Please renew the API key." It reports as configured and fails on use.
+
+Remaining gap: `exa, linkedin, meta, discord, substack, medium, tiktok,
+mastodon, pinterest, slack, whatsapp_business, google_business_profile,
+google_custom_search, transcriptapi` still have no verifier. None currently has
+credentials set, so nothing is silently broken; they report honestly as
+not-checkable until someone configures them.
+
+#### Original plan for this phase
 
 5. **Expose the generic diagnostics** at `GET /api/settings/apis/:provider/diagnostics`
    for all 30 providers, backed by the existing `getProviderCredentialDiagnostics`.
@@ -200,6 +241,10 @@ than before.
 commit, so a regression is one revert.*
 
 ### Phase 3 — Make the invisible visible
+
+**Note:** item 8 landed early, in Phase 2 — every verifier already reports the
+connected identity. What remains here is *remembering* it between checks so a
+change can be flagged, plus the deployment-staleness work.
 
 8. **Report the connected identity everywhere.** Every `verify()` returns "as
    whom." Store the last verified identity per project per provider; when it

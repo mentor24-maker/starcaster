@@ -13,8 +13,10 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const {
   listApiSchemas, listApiConfigsMasked, upsertApiConfig,
   getApiConfig, deleteApiConfig, getProviderValues,
+  getProviderCredentialDiagnostics,
   listArchiveApiRestorePreview, restoreApiConfigsFromArchive
 } = require('../lib/apiSettings');
+const { verifyProvider, isVerifiable } = require('../lib/credentialVerify');
 const { relayOpenClaw }            = require('../lib/openclawGateway');
 const { upsertMirroredAcquireJob } = require('../lib/acquireMirror');
 const {
@@ -244,6 +246,33 @@ async function handle(req, res, pathname, method) {
     const result = await getConnectionOps(connectionOpsMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { connectionOps: result.data }), true;
+  }
+
+  // GET /api/settings/apis/:provider/diagnostics
+  // Where each credential value is coming from (env var vs Settings) and which
+  // are unset — masked previews and env var NAMES only, never secret values.
+  // Works for every provider in API_SCHEMAS, not just the ones with a live test.
+  const apiDiagnosticsMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/diagnostics$/);
+  if (apiDiagnosticsMatch && method === 'GET') {
+    const diag = getProviderCredentialDiagnostics(apiDiagnosticsMatch[1]);
+    if (!diag.ok) return sendErr(res, 400, diag.error || 'Unsupported provider'), true;
+    const payload = { ...diag, verifiable: isVerifiable(apiDiagnosticsMatch[1]) };
+    return sendOk(res, 200, payload, { diagnostics: payload }), true;
+  }
+
+  // GET /api/settings/apis/:provider/verify
+  // Live authenticated call to the provider: does it work, and as whom?
+  const apiVerifyMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/verify$/);
+  if (apiVerifyMatch && method === 'GET') {
+    // Each check is a real request to an outside API — rate limited so repeated
+    // clicking cannot trip the provider's own limits and look like a failure.
+    // Returns true when it has already sent a 429; that is the repo convention.
+    if (checkEndpointLimit(req, res, 'settings.verifyCredentials')) return true;
+    const scope = requestProjectScope(req);
+    const result = await verifyProvider(apiVerifyMatch[1], { projectId: scope?.projectId });
+    // A failed check is a successful request that reports bad news — 200 with
+    // ok:false inside, so the UI can render the detail instead of an error toast.
+    return sendOk(res, 200, result, { verification: result }), true;
   }
 
   // GET /api/settings/apis/:provider
