@@ -17,6 +17,11 @@
  * 2. Sets showContact / contactHeading / contactIntro on the
  *    admin-support-form module so the generated block reads the way the text
  *    module used to.
+ * 3. Drops the orphaned `supportAlertEmail` key from every project's
+ *    site_settings. That setting was a third support address that duplicated
+ *    contactAlertEmail; it has been removed from the code, and support
+ *    requests are now delivered to supportEmail instead. Leaving the value in
+ *    the blob would be a lie about where mail goes.
  *
  * The page is NOT a canonical saved section, so there is no master to keep in
  * step — this touches one page only.
@@ -178,14 +183,33 @@ const nextSections = sections.map((section) => {
   return { ...section, modules: withForm };
 });
 
+// ---------------------------------------------------------------------------
+// Orphaned supportAlertEmail values
+// ---------------------------------------------------------------------------
+
+const { data: projectRows, error: projectErr } = await sb
+  .from('app_projects')
+  .select('id,name,site_settings')
+  .not('site_settings', 'is', null);
+if (projectErr) { console.error('Failed to read projects:', projectErr); process.exit(1); }
+
+const staleProjects = (projectRows || []).filter((r) => (
+  r.site_settings && typeof r.site_settings === 'object'
+  && Object.prototype.hasOwnProperty.call(r.site_settings, 'supportAlertEmail')
+));
+
 console.log('── Plan ─────────────────────────────────────────────────────────');
 console.log(`  Remove placeholder text module: ${removedText ? 'yes' : (skippedText ? 'NO (edited)' : 'already gone')}`);
 console.log(`  Set contact settings on the form module: ${updatedForm ? 'yes' : 'already correct'}`);
 console.log(`    heading: "${CONTACT_HEADING}"`);
 console.log(`    intro:   "${CONTACT_INTRO}"`);
 console.log('  Email + phone are read live from Settings > Projects > Edit.');
+console.log(`  Drop orphaned supportAlertEmail: ${staleProjects.length} project(s)`);
+for (const r of staleProjects) {
+  console.log(`    ${r.name}: "${r.site_settings.supportAlertEmail}" -> removed`);
+}
 
-if (!removedText && !updatedForm) {
+if (!removedText && !updatedForm && !staleProjects.length) {
   console.log('\nNothing to do.');
   process.exit(0);
 }
@@ -196,11 +220,22 @@ if (!APPLY) {
 }
 
 console.log('\nApplying…');
-const { error: writeErr } = await sb.from(PAGES_TABLE)
-  .update({ layout_sections: { ...doc, sections: nextSections } })
-  .eq('id', page.id);
-if (writeErr) { console.error('  FAILED:', writeErr); process.exit(1); }
-console.log(`  Updated ${SLUG} (id ${page.id})`);
+if (removedText || updatedForm) {
+  const { error: writeErr } = await sb.from(PAGES_TABLE)
+    .update({ layout_sections: { ...doc, sections: nextSections } })
+    .eq('id', page.id);
+  if (writeErr) { console.error('  FAILED:', writeErr); process.exit(1); }
+  console.log(`  Updated ${SLUG} (id ${page.id})`);
+}
+
+for (const r of staleProjects) {
+  const { supportAlertEmail, ...rest } = r.site_settings;
+  const { error: sErr } = await sb.from('app_projects')
+    .update({ site_settings: rest })
+    .eq('id', r.id);
+  if (sErr) { console.error(`  FAILED to clean ${r.name}:`, sErr); process.exit(1); }
+  console.log(`  Cleaned supportAlertEmail from ${r.name}`);
+}
 
 // Verify — re-read, never trust the write.
 console.log('\nVerifying by re-reading the row…');
@@ -228,6 +263,21 @@ if (!form) {
 } else {
   console.log(`    showContact=${form.settings?.showContact} heading="${form.settings?.contactHeading}"`);
   if (form.settings?.showContact !== 'true') problems += 1;
+}
+
+const { data: projectsAfter } = await sb
+  .from('app_projects')
+  .select('id,name,site_settings')
+  .not('site_settings', 'is', null);
+const stillStale = (projectsAfter || []).filter((r) => (
+  r.site_settings && Object.prototype.hasOwnProperty.call(r.site_settings, 'supportAlertEmail')
+));
+console.log(`  projects still carrying supportAlertEmail: ${stillStale.length ? stillStale.map((r) => r.name).join(', ') : 'none'}`);
+if (stillStale.length) problems += 1;
+
+const marinoff = (projectsAfter || []).find((r) => r.id === PROJECT_ID);
+if (marinoff) {
+  console.log(`  Marinoff site_settings now: ${JSON.stringify(marinoff.site_settings)}`);
 }
 
 console.log(problems

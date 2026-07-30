@@ -173,47 +173,42 @@ test('listing without a project id is refused', async () => {
   }
 });
 
-// ── Support alert email setting ──────────────────────────────────────────────
+// ── Support contact settings ─────────────────────────────────────────────────
 
-test('supportAlertEmail is platform-only, NOT tenant-writable', () => {
+test('the support contact details are platform-only, NOT tenant-writable', () => {
   const { KNOWN_SETTINGS, PLATFORM_SETTINGS } = require('../../lib/projectSiteSettingsStore.js');
-  // The whole point of moving this to Settings > Projects: a client must not be
-  // able to redirect their own support requests away from Alphire.
-  assert.equal(KNOWN_SETTINGS.supportAlertEmail, undefined,
-    'supportAlertEmail in KNOWN_SETTINGS would let a tenant admin PATCH it via /api/admin/site-settings');
-  const spec = PLATFORM_SETTINGS.supportAlertEmail;
-  assert.ok(spec, 'supportAlertEmail must be in PLATFORM_SETTINGS or the platform PATCH drops it');
+  // These are Alphire's own contact details. A client must not be able to
+  // rewrite the address and phone number their staff are told to use.
+  for (const key of ['supportEmail', 'supportPhone']) {
+    assert.equal(KNOWN_SETTINGS[key], undefined,
+      `${key} in KNOWN_SETTINGS would let a tenant admin PATCH it via /api/admin/site-settings`);
+    assert.ok(PLATFORM_SETTINGS[key], `${key} must be in PLATFORM_SETTINGS or the platform PATCH drops it`);
+  }
+  // supportAlertEmail was a third address that duplicated contactAlertEmail.
+  // It is gone; support requests are delivered to supportEmail instead.
+  assert.equal(PLATFORM_SETTINGS.supportAlertEmail, undefined);
+  assert.equal(KNOWN_SETTINGS.supportAlertEmail, undefined);
+
+  const spec = PLATFORM_SETTINGS.supportEmail;
   assert.equal(spec.validate(spec.normalize('Help@Alphire.com')), null);
   assert.equal(spec.validate(spec.normalize('')), null, 'blank means "use the platform default"');
   assert.ok(spec.validate(spec.normalize('not-an-email')));
 });
 
-test('a tenant PATCH cannot set supportAlertEmail', async () => {
-  const { mod, calls, restore } = loadWithRecorder(settingsStorePath, {
-    rows: [{ id: 'proj_1', site_settings: { contactAlertEmail: 'owner@site.com', supportAlertEmail: 'help@alphire.com' } }],
-  });
-  try {
-    const result = await mod.updateSiteSettings('proj_1', {
-      contactAlertEmail: 'new@site.com',
-      supportAlertEmail: 'attacker@evil.com',
-    });
-    assert.equal(result.ok, true);
-    const patch = calls.find((c) => c.method === 'PATCH');
-    assert.equal(patch.body.site_settings.contactAlertEmail, 'new@site.com');
-    // The tenant's write must neither change nor erase the platform key.
-    assert.equal(patch.body.site_settings.supportAlertEmail, 'help@alphire.com');
-  } finally {
-    restore();
-  }
+test('contactAlertEmail stays the tenant\'s own, in the tenant\'s own hands', () => {
+  const { KNOWN_SETTINGS } = require('../../lib/projectSiteSettingsStore.js');
+  // Enquiries from the client's public website go to an address the CLIENT
+  // sets on their own admin Settings page. That is a different direction from
+  // the support details above and must not migrate to Project Settings.
+  assert.ok(KNOWN_SETTINGS.contactAlertEmail, 'the client must still be able to set their own alert address');
 });
 
-test('the tenant-facing read exposes display details but never the intake inbox', async () => {
+test('the tenant-facing read exposes the support contact details', async () => {
   const { mod, restore } = loadWithRecorder(settingsStorePath, {
     rows: [{
       id: 'proj_1',
       site_settings: {
         contactAlertEmail: 'owner@site.com',
-        supportAlertEmail: 'intake@alphire.com',
         supportEmail: 'support@alphire.com',
         supportPhone: '(303) 555-0142',
       },
@@ -226,16 +221,12 @@ test('the tenant-facing read exposes display details but never the intake inbox'
     // The Support page renders these, so the tenant must be able to read them.
     assert.equal(result.data.supportEmail, 'support@alphire.com');
     assert.equal(result.data.supportPhone, '(303) 555-0142');
-    // But never the intake inbox: showing it invites clients to email it
-    // directly, bypassing the form and the record it creates.
-    assert.equal(result.data.supportAlertEmail, undefined,
-      'GET /api/admin/site-settings is tenant-reachable; it must not leak the intake inbox');
   } finally {
     restore();
   }
 });
 
-test('a tenant cannot WRITE the display details they can read', async () => {
+test('a tenant cannot WRITE the support details they can read', async () => {
   const { mod, calls, restore } = loadWithRecorder(settingsStorePath, {
     rows: [{ id: 'proj_1', site_settings: { supportEmail: 'support@alphire.com', supportPhone: '(303) 555-0142' } }],
   });
@@ -246,8 +237,7 @@ test('a tenant cannot WRITE the display details they can read', async () => {
       supportPhone: '000',
     });
     const patch = calls.find((c) => c.method === 'PATCH');
-    // Readable is not writable — a client must not be able to change the
-    // number they tell their own staff to call.
+    // Readable is not writable.
     assert.equal(patch.body.site_settings.supportEmail, 'support@alphire.com');
     assert.equal(patch.body.site_settings.supportPhone, '(303) 555-0142');
     assert.equal(patch.body.site_settings.contactAlertEmail, 'owner@site.com');
@@ -286,44 +276,43 @@ test('the platform merge keeps the tenant\'s own settings', () => {
   // the client's contact alert address.
   const merged = mergePlatformSiteSettings(
     { contactAlertEmail: 'owner@site.com' },
-    { supportAlertEmail: 'Help@Alphire.com' }
+    { supportEmail: 'Help@Alphire.com' }
   );
   assert.equal(merged.ok, true);
   assert.equal(merged.data.contactAlertEmail, 'owner@site.com');
-  assert.equal(merged.data.supportAlertEmail, 'help@alphire.com');
+  assert.equal(merged.data.supportEmail, 'help@alphire.com');
 });
 
 test('the platform merge rejects a malformed address', () => {
   const { mergePlatformSiteSettings } = require('../../lib/projectSiteSettingsStore.js');
-  const merged = mergePlatformSiteSettings({}, { supportAlertEmail: 'nope' });
+  const merged = mergePlatformSiteSettings({}, { supportEmail: 'nope' });
   assert.equal(merged.ok, false);
   assert.equal(merged.status, 400);
 });
 
-test('the project model exposes supportAlertEmail to the platform Projects screen', () => {
+test('the project model exposes the support details to the Projects screen', () => {
   const { readPlatformSettingsFromRow } = require('../../lib/projectSiteSettingsStore.js');
-  assert.equal(
-    readPlatformSettingsFromRow({ site_settings: { supportAlertEmail: 'help@alphire.com' } }).supportAlertEmail,
-    'help@alphire.com'
-  );
-  assert.equal(readPlatformSettingsFromRow({}).supportAlertEmail, '');
+  const row = { site_settings: { supportEmail: 'help@alphire.com', supportPhone: '(303) 555-0142' } };
+  assert.equal(readPlatformSettingsFromRow(row).supportEmail, 'help@alphire.com');
+  assert.equal(readPlatformSettingsFromRow(row).supportPhone, '(303) 555-0142');
+  assert.equal(readPlatformSettingsFromRow({}).supportEmail, '');
 });
 
 test('/api/projects is denied to tenant-admin sessions', () => {
   const { acceptsProjectAdminSession } = require('../../lib/projectAdminApiAuth.js');
   // This is what stops a client reaching the platform route that DOES write
-  // supportAlertEmail.
+  // the support details.
   assert.equal(acceptsProjectAdminSession('/api/projects/proj_1', { method: 'PATCH' }), false);
 });
 
-test('resolveSupportAlertEmail prefers the project setting over the env default', async () => {
+test('support requests are delivered to the project Support Email', async () => {
   const { mod, restore } = loadWithRecorder(settingsStorePath, {
-    rows: [{ id: 'proj_1', site_settings: { supportAlertEmail: 'perproject@alphire.com' } }],
+    rows: [{ id: 'proj_1', site_settings: { supportEmail: 'perproject@alphire.com' } }],
   });
   const previous = process.env.SUPPORT_ALERT_EMAIL;
   process.env.SUPPORT_ALERT_EMAIL = 'fallback@alphire.com';
   try {
-    assert.equal(await mod.resolveSupportAlertEmail('proj_1'), 'perproject@alphire.com');
+    assert.equal(await mod.resolveSupportDeliveryEmail('proj_1'), 'perproject@alphire.com');
   } finally {
     if (previous === undefined) delete process.env.SUPPORT_ALERT_EMAIL;
     else process.env.SUPPORT_ALERT_EMAIL = previous;
@@ -331,14 +320,14 @@ test('resolveSupportAlertEmail prefers the project setting over the env default'
   }
 });
 
-test('resolveSupportAlertEmail falls back to the env default when unset', async () => {
+test('delivery falls back to the env default when no Support Email is set', async () => {
   const { mod, restore } = loadWithRecorder(settingsStorePath, {
     rows: [{ id: 'proj_1', site_settings: {} }],
   });
   const previous = process.env.SUPPORT_ALERT_EMAIL;
   process.env.SUPPORT_ALERT_EMAIL = 'fallback@alphire.com';
   try {
-    assert.equal(await mod.resolveSupportAlertEmail('proj_1'), 'fallback@alphire.com');
+    assert.equal(await mod.resolveSupportDeliveryEmail('proj_1'), 'fallback@alphire.com');
   } finally {
     if (previous === undefined) delete process.env.SUPPORT_ALERT_EMAIL;
     else process.env.SUPPORT_ALERT_EMAIL = previous;

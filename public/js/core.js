@@ -383,7 +383,6 @@ App.els = {
   settingsProjectDetailsDescription: document.getElementById('settingsProjectDetailsDescription'),
   settingsProjectDefaultUrlInput: document.getElementById('settingsProjectDefaultUrlInput'),
   settingsProjectTimezoneSelect: document.getElementById('settingsProjectTimezoneSelect'),
-  settingsProjectSupportAlertEmail: document.getElementById('settingsProjectSupportAlertEmail'),
   settingsProjectSupportEmail: document.getElementById('settingsProjectSupportEmail'),
   settingsProjectSupportPhone: document.getElementById('settingsProjectSupportPhone'),
   settingsProjectLogoChooseBtn: document.getElementById('settingsProjectLogoChooseBtn'),
