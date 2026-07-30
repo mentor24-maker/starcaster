@@ -20,9 +20,38 @@ export function BuilderAdminSupportFormModuleSettings({ module, onUpdateModule }
 
   const showTitle = (s.showTitle ?? "true") === "true";
   const showHistory = (s.showHistory ?? "true") === "true";
+  const showContact = (s.showContact ?? "true") === "true";
 
   return (
     <div className="builder-crm-contacts-table-settings">
+      <BuilderSettingRow label="Contact details">
+        <select value={s.showContact ?? "true"} onChange={(e) => set("showContact", e.target.value)}>
+          <option value="true">Show</option>
+          <option value="false">Hide</option>
+        </select>
+      </BuilderSettingRow>
+
+      {showContact && (
+        <>
+          <BuilderSettingRow label="Contact heading" fullWidth>
+            <input
+              type="text"
+              value={s.contactHeading ?? "Need a hand with your website?"}
+              onChange={(e) => set("contactHeading", e.target.value)}
+              placeholder="Need a hand with your website?"
+            />
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Contact intro" fullWidth>
+            <input
+              type="text"
+              value={s.contactIntro ?? ""}
+              onChange={(e) => set("contactIntro", e.target.value)}
+              placeholder="Optional line above the email and phone"
+            />
+          </BuilderSettingRow>
+        </>
+      )}
+
       <BuilderSettingRow label="Show title">
         <select value={s.showTitle ?? "true"} onChange={(e) => set("showTitle", e.target.value)}>
           <option value="true">Show</option>

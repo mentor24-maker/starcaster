@@ -6007,6 +6007,9 @@ function AdminSupportFormPreview({
   const showScreenshot = settings.showScreenshot !== "false";
   const showHistory    = settings.showHistory !== "false";
   const historyTitle   = settings.historyTitle || "Your Recent Requests";
+  const showContact    = settings.showContact !== "false";
+  const contactHeading = settings.contactHeading ?? "Need a hand with your website?";
+  const contactIntro   = settings.contactIntro ?? "";
   const defaultPriority = SUPPORT_PRIORITIES.some((p) => p.value === settings.defaultPriority)
     ? settings.defaultPriority
     : "normal";
@@ -6025,8 +6028,33 @@ function AdminSupportFormPreview({
   const [history, setHistory] = useState<SupportRequestRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(showHistory);
 
+  // Support contact details come from StarCaster > Settings > Projects > Edit.
+  // They are platform-only settings that a tenant may READ but not write, so
+  // the client cannot change the number they are told to call.
+  const [supportEmail, setSupportEmail] = useState("");
+  const [supportPhone, setSupportPhone] = useState("");
+
   const headers = getCrmProjectHeaders(projectIdProp);
   const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  useEffect(() => {
+    if (!showContact) return;
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/admin/site-settings${qs}`, { credentials: "include", headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const s = (d.siteSettings ?? d.data ?? d) as Record<string, unknown>;
+        if (s && typeof s === "object") {
+          setSupportEmail(String(s.supportEmail ?? ""));
+          setSupportPhone(String(s.supportPhone ?? ""));
+        }
+      })
+      // Contact details are a nicety; failing to load them must not stop the
+      // admin filing a request, so this stays silent.
+      .catch(() => {});
+  }, []);
 
   function loadHistory() {
     if (!showHistory) return;
@@ -6136,6 +6164,31 @@ function AdminSupportFormPreview({
 
   return (
     <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
+      {showContact && (contactHeading || contactIntro || supportEmail || supportPhone) ? (
+        <div style={{ marginBottom: 22, maxWidth: 560 }}>
+          {contactHeading ? (
+            <h3 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700 }}>{contactHeading}</h3>
+          ) : null}
+          {contactIntro ? (
+            <p style={{ margin: "0 0 10px", fontSize: 14, lineHeight: 1.5 }}>{contactIntro}</p>
+          ) : null}
+          {supportEmail || supportPhone ? (
+            <div style={{ display: "grid", gap: 4, fontSize: 14 }}>
+              {supportEmail ? (
+                <div><strong>Email:</strong>{" "}
+                  <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
+                </div>
+              ) : null}
+              {supportPhone ? (
+                <div><strong>Phone:</strong>{" "}
+                  <a href={`tel:${supportPhone.replace(/[^\d+]/g, "")}`}>{supportPhone}</a>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{formTitle}</h3>}
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, maxWidth: 560 }}>

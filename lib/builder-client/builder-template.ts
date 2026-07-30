@@ -2312,7 +2312,10 @@ export function createEmptyModule(
                             showScreenshot: "true",
                             buttonText: "Send Request",
                             showHistory: "true",
-                            historyTitle: "Your Recent Requests"
+                            historyTitle: "Your Recent Requests",
+                            showContact: "true",
+                            contactHeading: "Need a hand with your website?",
+                            contactIntro: "Use the form below and it comes straight to us, along with anything you attach. For anything urgent, reach out directly:"
                           }
           : {};
 

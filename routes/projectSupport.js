@@ -18,7 +18,7 @@ const {
   listSupportRequests,
   MAX_TITLE_CHARS,
 } = require('../lib/projectSupportRequestsStore');
-const { resolveSupportAlertEmail } = require('../lib/projectSiteSettingsStore');
+const { resolveSupportDeliveryEmail } = require('../lib/projectSiteSettingsStore');
 const { uploadAssetFile, isConfigured: isAssetStorageConfigured } = require('../lib/assetStorage');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
@@ -113,9 +113,9 @@ async function uploadScreenshot(screenshot) {
  * problem must not show the admin an error. Returns whether mail went out so
  * the response can say so honestly.
  */
-async function notifySupportAlertEmail({ projectId, request }) {
+async function notifySupportEmail({ projectId, request }) {
   try {
-    const to = await resolveSupportAlertEmail(projectId);
+    const to = await resolveSupportDeliveryEmail(projectId);
     if (!to) return { sent: false, reason: 'no_address' };
 
     const projectResult = await getPublicProjectById(projectId);
@@ -211,7 +211,7 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, created.status || 500, created.error || 'Failed to save the support request'), true;
     }
 
-    const notified = await notifySupportAlertEmail({ projectId, request: created.data });
+    const notified = await notifySupportEmail({ projectId, request: created.data });
 
     const payload = {
       supportRequest: created.data,
