@@ -32,11 +32,12 @@ test('the verifiable list is sorted and non-empty', () => {
 test('isVerifiable is case- and whitespace-insensitive', () => {
   assert.equal(isVerifiable('  X  '), true);
   assert.equal(isVerifiable('X'), true);
-  assert.equal(isVerifiable('resend'), false);
+  // 'linkedin' is defined in API_SCHEMAS but has no verifier.
+  assert.equal(isVerifiable('linkedin'), false);
 });
 
 test('an unverifiable provider is NOT reported as a credential failure', async () => {
-  const res = await verifyProvider('resend');
+  const res = await verifyProvider('linkedin');
   assert.equal(res.ok, false);
   assert.equal(res.code, NOT_VERIFIABLE);
   // The distinction that matters: nothing was tested, so it must not claim the
@@ -46,7 +47,7 @@ test('an unverifiable provider is NOT reported as a credential failure', async (
 });
 
 test('an unverifiable provider says presence was checked, not validity', async () => {
-  const res = await verifyProvider('resend');
+  const res = await verifyProvider('linkedin');
   assert.match(res.message, /Presence of the values was checked, not validity/i);
 });
 
@@ -76,18 +77,20 @@ test('a verifier that throws is reported, not propagated', async () => {
 });
 
 test('every result carries the uniform shape', async () => {
-  const res = await verifyProvider('resend');
+  const res = await verifyProvider('linkedin');
   for (const key of ['provider', 'ok', 'code', 'identity', 'detail', 'message', 'checkedAt']) {
     assert.ok(key in res, `missing ${key}`);
   }
   assert.doesNotThrow(() => new Date(res.checkedAt).toISOString());
 });
 
-test('unconfigured providers report MISSING, not REJECTED', async () => {
-  // A client's own 400 guard fires before any network request. Calling that
-  // "rejected" sends the operator to a developer portal to re-check
-  // credentials they never entered in the first place.
-  assert.equal(codeFromHttpStatus(400), CODES.MISSING);
+test('an external 400 is NOT translated to MISSING', () => {
+  // YouTube answers an invalid API key with 400. Reporting that as "not
+  // configured" sends the operator hunting for a value that is already set —
+  // caught by running the registry against the live API. The MISSING
+  // translation applies only to our own clients' pre-flight 400, in
+  // fromLegacyResult.
+  assert.notEqual(codeFromHttpStatus(400), CODES.MISSING);
 });
 
 test('the registry covers every platform the old UI chain hand-coded', () => {
@@ -99,4 +102,15 @@ test('the registry covers every platform the old UI chain hand-coded', () => {
 
 test('Buffer is verifiable — it had a client check but no UI path', () => {
   assert.equal(isVerifiable('buffer'), true);
+});
+
+test('the ten previously unverifiable live integrations are covered', () => {
+  // Measured against origin/main before this work: these had credentials set
+  // but no way to check them short of triggering the feature.
+  for (const provider of [
+    'supabase', 'anthropic', 'brave', 'openai', 'gemini',
+    'openclaw', 'youtube', 'buffer', 'google_drive', 'resend',
+  ]) {
+    assert.equal(isVerifiable(provider), true, `${provider} must be verifiable`);
+  }
 });
