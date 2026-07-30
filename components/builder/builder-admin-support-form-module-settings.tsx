@@ -52,6 +52,13 @@ export function BuilderAdminSupportFormModuleSettings({ module, onUpdateModule }
         </>
       )}
 
+      <BuilderSettingRow label="Layout">
+        <select value={s.layout ?? "two-column"} onChange={(e) => set("layout", e.target.value)}>
+          <option value="two-column">Two columns</option>
+          <option value="stacked">One column</option>
+        </select>
+      </BuilderSettingRow>
+
       <BuilderSettingRow label="Show title">
         <select value={s.showTitle ?? "true"} onChange={(e) => set("showTitle", e.target.value)}>
           <option value="true">Show</option>

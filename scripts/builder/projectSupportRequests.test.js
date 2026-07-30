@@ -67,6 +67,23 @@ test('createEmptyModule gives admin-support-form usable defaults', () => {
   assert.equal(mod.settings.defaultPriority, 'normal');
   assert.equal(mod.settings.showScreenshot, 'true');
   assert.equal(mod.settings.buttonText, 'Send Request');
+  assert.equal(mod.settings.layout, 'two-column');
+});
+
+test('an existing module with no layout setting still renders two columns', () => {
+  const { normalizeBuilderModules } = require('../../lib/builder/template.js');
+  // The live Marinoff page was created before this setting existed, so its
+  // stored settings have no `layout` key. The renderer defaults an absent key
+  // to two-column, which is what lets the layout change reach that page with
+  // no database write. Normalization must not invent a different value here.
+  const [mod] = normalizeBuilderModules([{
+    id: 'm1',
+    type: 'admin-support-form',
+    column: 'main',
+    settings: { formTitle: 'Request Support', showTitle: 'true' },
+  }], 'single');
+  assert.equal(mod.type, 'admin-support-form', 'must not be coerced to "text"');
+  assert.equal(mod.settings.layout, undefined, 'absent stays absent; the renderer supplies the default');
 });
 
 // ── Store ────────────────────────────────────────────────────────────────────

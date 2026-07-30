@@ -6092,6 +6092,9 @@ function AdminSupportFormPreview({
   const showContact    = settings.showContact !== "false";
   const contactHeading = settings.contactHeading ?? "Need a hand with your website?";
   const contactIntro   = settings.contactIntro ?? "";
+  // Two columns by default: the form and the request history read better side
+  // by side than stacked. Falls back to one column on narrow screens.
+  const twoColumn      = (settings.layout ?? "two-column") !== "stacked";
   const defaultPriority = SUPPORT_PRIORITIES.some((p) => p.value === settings.defaultPriority)
     ? settings.defaultPriority
     : "normal";
@@ -6271,6 +6274,20 @@ function AdminSupportFormPreview({
         </div>
       ) : null}
 
+      <div
+        style={twoColumn
+          // auto-fit + minmax gives two columns when there is room for two
+          // and one when there is not, with no media query — which matters
+          // because these are inline styles and cannot carry one.
+          ? {
+              display: "grid",
+              gap: 32,
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+              alignItems: "start",
+            }
+          : { display: "grid", gap: 28 }}
+      >
+        <div>
       {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{formTitle}</h3>}
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, maxWidth: 560 }}>
@@ -6364,9 +6381,10 @@ function AdminSupportFormPreview({
           </button>
         </div>
       </form>
+        </div>
 
       {showHistory && (
-        <div style={{ marginTop: 28, maxWidth: 560 }}>
+        <div style={{ maxWidth: 560 }}>
           <h4 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700 }}>{historyTitle}</h4>
           {historyLoading ? (
             <p className="builder-module-runtime-note">Loading your requests…</p>
@@ -6395,6 +6413,7 @@ function AdminSupportFormPreview({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
