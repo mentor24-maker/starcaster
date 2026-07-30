@@ -17,6 +17,7 @@ const {
   listArchiveApiRestorePreview, restoreApiConfigsFromArchive
 } = require('../lib/apiSettings');
 const { verifyProvider, isVerifiable } = require('../lib/credentialVerify');
+const { getBuildInfo }             = require('../lib/buildInfo');
 const { relayOpenClaw }            = require('../lib/openclawGateway');
 const { upsertMirroredAcquireJob } = require('../lib/acquireMirror');
 const {
@@ -256,7 +257,13 @@ async function handle(req, res, pathname, method) {
   if (apiDiagnosticsMatch && method === 'GET') {
     const diag = getProviderCredentialDiagnostics(apiDiagnosticsMatch[1]);
     if (!diag.ok) return sendErr(res, 400, diag.error || 'Unsupported provider'), true;
-    const payload = { ...diag, verifiable: isVerifiable(apiDiagnosticsMatch[1]) };
+    const payload = {
+      ...diag,
+      verifiable: isVerifiable(apiDiagnosticsMatch[1]),
+      // When the running deployment was built. Any env-sourced value changed
+      // after this timestamp is not live yet, no matter what Vercel shows.
+      deployment: getBuildInfo(),
+    };
     return sendOk(res, 200, payload, { diagnostics: payload }), true;
   }
 
