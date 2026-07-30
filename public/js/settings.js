@@ -1184,8 +1184,11 @@ App.settings = (function () {
     setApiFormVisible(false, 'Add API');
   }
 
-  function openApiSettingsForm(provider, values, title, diagnostics) {
+  function openApiSettingsForm(provider, values, title, diagnostics, hasValue) {
     state.apiFormValues = values && typeof values === 'object' ? { ...values } : {};
+    // Which secrets already have a stored value, so the form can offer Reveal
+    // and treat a blank field as "keep what is there".
+    state.apiFormHasValue = (hasValue && typeof hasValue === 'object') ? { ...hasValue } : {};
     // Per-field source metadata (which value is actually in effect) for the
     // provider being edited. Tagged with its provider so we never show it
     // against a different provider selected from the dropdown.
@@ -1279,11 +1282,55 @@ App.settings = (function () {
         input.rows = Number(field.rows || 6) || 6;
       }
       if (field.required) input.required = true;
-      input.value = String(state.apiFormValues[field.key] || '');
+
+      // Secrets are no longer prefilled — the server sends a mask, not the
+      // value. A blank secret field means "leave this one as it is", so the
+      // placeholder has to say so or it reads as "not set".
+      const alreadySet = Boolean(state.apiFormHasValue[field.key]);
+      if (field.secret) {
+        input.value = '';
+        if (alreadySet) {
+          input.placeholder = 'Saved — leave blank to keep, or paste a new value';
+          // A required field that already has a stored value must not block the
+          // form just because it is intentionally blank.
+          input.required = false;
+        }
+      } else {
+        input.value = String(state.apiFormValues[field.key] || '');
+      }
 
       const control = document.createElement('div');
       control.className = 'api-field-control';
       control.appendChild(input);
+
+      // Reveal fetches this one field, on an explicit click that is logged.
+      if (field.secret && alreadySet) {
+        const revealBtn = document.createElement('button');
+        revealBtn.type = 'button';
+        revealBtn.className = 'btn btn-ghost api-field-toggle';
+        revealBtn.textContent = 'Reveal';
+        revealBtn.setAttribute('aria-label', `Reveal ${field.label}`);
+        revealBtn.addEventListener('click', async () => {
+          revealBtn.disabled = true;
+          const previous = revealBtn.textContent;
+          revealBtn.textContent = '...';
+          try {
+            const res = await api(
+              `/api/settings/apis/${encodeURIComponent(provider)}/reveal/${encodeURIComponent(field.key)}`
+            );
+            const value = String(res?.data?.value || res?.value || '');
+            if (!value) throw new Error('No value returned');
+            input.value = value;
+            input.type = 'text';
+            revealBtn.textContent = 'Revealed';
+          } catch (err) {
+            revealBtn.textContent = previous;
+            revealBtn.disabled = false;
+            notify(err.message || 'Could not reveal this value', true);
+          }
+        });
+        control.appendChild(revealBtn);
+      }
 
       if (field.secret && !isMultiline) {
         const toggleBtn = document.createElement('button');
@@ -1513,6 +1560,7 @@ App.settings = (function () {
 
   function clearApiSettingsForm() {
     state.apiFormValues = {};
+    state.apiFormHasValue = {};
     if (els.apiSettingsForm) els.apiSettingsForm.reset();
     renderApiProviderOptions(state.apiSchemas[0]?.provider);
     renderApiFieldInputs();
@@ -1592,7 +1640,7 @@ App.settings = (function () {
 
   async function editApiConfig(provider) {
     const data = await api(`/api/settings/apis/${encodeURIComponent(provider)}`);
-    openApiSettingsForm(data.provider, data.values || {}, `Edit API: ${data.label || data.provider}`, data.diagnostics);
+    openApiSettingsForm(data.provider, data.values || {}, `Edit API: ${data.label || data.provider}`, data.diagnostics, data.hasValue || {});
   }
 
   async function deleteApiConfig(provider) {
@@ -2839,8 +2887,16 @@ App.settings = (function () {
           values[input.name] = String(input.value || '').trim();
         });
         try {
-          await api('/api/settings/apis', { method: 'POST', body: JSON.stringify({ provider, values }) });
-          notify('API credentials saved');
+          const saved = await api('/api/settings/apis', { method: 'POST', body: JSON.stringify({ provider, values }) });
+          // A save can succeed and still be worth a second look — an unfamiliar
+          // key prefix, or whitespace that was trimmed here but would survive in
+          // the Vercel dashboard. These are heuristics, so they never block.
+          const savedWarnings = (saved?.data?.warnings || saved?.warnings || []);
+          if (Array.isArray(savedWarnings) && savedWarnings.length) {
+            notify(`Saved, but check this: ${savedWarnings[0].message}`, true);
+          } else {
+            notify('API credentials saved');
+          }
           const channelMode = Boolean(activeChannelLabel);
           await refreshApiSettings();
           if (!channelMode) closeApiSettingsForm();

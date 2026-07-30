@@ -290,7 +290,27 @@ and 404 cases, so it is diagnosable rather than silent.
 *Risk: low-medium. Additive. Needs a Vercel API token with read scope — the
 operator provisions it; agents don't handle live secrets.*
 
-### Phase 4 — Catch bad values at save time
+### Phase 4 — Catch bad values at save time — **DONE**
+
+`lib/credentialShape.js` inspects a value for the paste mistakes that actually
+happen. Two severities, and the split is the point: **errors** are unambiguous
+(a line break in a secret, a value wrapped in .env quotes, a `...` preview, a
+masked placeholder, an app-only Bearer token in the X access-token field) and
+block the save; **warnings** are heuristics ("Anthropic keys usually start with
+`sk-ant-`") and never block, because a provider changing its format must not
+lock the operator out of saving a valid key.
+
+The Bearer-token rule is the one the old X error message asserted on *every*
+failure regardless of cause. It is now checked at the one place it can be true.
+
+Strict whitespace rules apply to **secret fields only** — Reddit's `user_agent`
+legitimately contains spaces, as do Drive folder names and display names.
+
+Also applied to *resolved* values in `getProviderCredentialDiagnostics` as
+`shapeProblems`, which is the half that reaches production: an env var set in
+the Vercel dashboard never passes through the save path.
+
+#### Original plan for this phase
 
 10. **Validate shape on save**: trim, reject embedded whitespace and wrapping
     quotes, flag wrong-token-type patterns (`AAAA…` in an OAuth 1.0a token
@@ -300,7 +320,24 @@ operator provisions it; agents don't handle live secrets.*
     `scripts/diagnose_credentials.js <provider>`, driven by the same registry.
     The operator runs it; it prints no secret values, only shapes and verdicts.
 
-### Phase 5 — Decide the secret-exposure question (needs a human decision)
+### Phase 5 — Secret exposure — **DONE** (decision: reveal on demand)
+
+Operator chose reveal-on-demand over both alternatives (leave as-is / never
+send secrets), keeping the ability to read a value back while getting secrets
+out of the page by default.
+
+`getApiConfig` now masks secrets and reports `hasValue` per field. The real
+value comes from `GET /api/settings/apis/:provider/reveal/:field` — one field
+per call, rate limited to 10/minute, and written to the activity log as
+`settings.api_secret_revealed`. It is the only endpoint that returns a
+plaintext secret.
+
+This forced a change to save semantics: a blank secret field now means "keep
+what is stored" rather than "clear it", since the form no longer round-trips
+values. Without that, saving one changed field would wipe every other secret.
+Use DELETE on the provider to clear credentials deliberately.
+
+#### Original plan for this phase
 
 12. Stop returning raw secrets from `getApiConfig` (finding 8). Prefill the form
     with masked placeholders and treat a submitted placeholder as "unchanged."

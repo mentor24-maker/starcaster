@@ -12,7 +12,7 @@ const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const {
   listApiSchemas, listApiConfigsMasked, upsertApiConfig,
-  getApiConfig, deleteApiConfig, getProviderValues,
+  getApiConfig, deleteApiConfig, getProviderValues, revealApiProviderField,
   getProviderCredentialDiagnostics,
   listArchiveApiRestorePreview, restoreApiConfigsFromArchive
 } = require('../lib/apiSettings');
@@ -363,6 +363,26 @@ async function handle(req, res, pathname, method) {
     // A failed check is a successful request that reports bad news — 200 with
     // ok:false inside, so the UI can render the detail instead of an error toast.
     return sendOk(res, 200, result, { verification: result }), true;
+  }
+
+  // GET /api/settings/apis/:provider/reveal/:field
+  // The real value of one secret, for an explicit "Reveal" click in the form.
+  // The list and edit endpoints return masked values; this is the only way to
+  // get a plaintext secret out of the API, it hands over one field at a time,
+  // and every use is written to the activity log.
+  const apiRevealMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/reveal\/([^/]+)$/);
+  if (apiRevealMatch && method === 'GET') {
+    if (checkEndpointLimit(req, res, 'settings.revealCredential')) return true;
+    const result = revealApiProviderField(apiRevealMatch[1], apiRevealMatch[2]);
+    if (!result.ok) return sendErr(res, result.status || 400, result.error), true;
+    logActivity({
+      action: 'settings.api_secret_revealed',
+      entityType: 'settings',
+      entityId: result.data.provider,
+      summary: `Revealed ${result.data.label} for ${result.data.provider}`,
+      meta: { provider: result.data.provider, field: result.data.field },
+    });
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   // GET /api/settings/apis/:provider
