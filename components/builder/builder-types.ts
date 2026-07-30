@@ -906,7 +906,18 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     group: "admin",
     label: "Site Settings",
     icon: "⚙️",
-    description: "Settings panel for the tenant's own admin area. Currently one field: the Contact Alert Email notified whenever a public contact form is submitted.",
+    description: "Settings panel for the tenant's own admin area. Two fields: the Contact Alert Email notified whenever a public contact form is submitted, and the Support Alert Email that receives support requests.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "admin-support-form",
+    type: "admin-support-form",
+    group: "admin",
+    label: "Support Request Form",
+    icon: "🛟",
+    description: "Lets a signed-in site admin report a problem: priority, title, description and an optional screenshot. Saves the request and emails the Support Alert Email set on the Settings page. Can also list the admin's own recent requests.",
     name: "",
     text: "",
     settings: {}
