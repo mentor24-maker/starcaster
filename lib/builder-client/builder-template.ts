@@ -82,7 +82,8 @@ export type BuilderTemplateModuleType =
   | "admin-modules"
   | "admin-login"
   | "admin-nav-link"
-  | "admin-site-settings";
+  | "admin-site-settings"
+  | "admin-support-form";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -1244,7 +1245,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-modules" ||
     type === "admin-login" ||
     type === "admin-nav-link" ||
-    type === "admin-site-settings"
+    type === "admin-site-settings" ||
+    type === "admin-support-form"
   ) {
     return type;
   }
@@ -2301,6 +2303,16 @@ export function createEmptyModule(
                         ? {
                             panelTitle: "Site Settings",
                             showTitle: "true"
+                          }
+                      : type === "admin-support-form"
+                        ? {
+                            formTitle: "Request Support",
+                            showTitle: "true",
+                            defaultPriority: "normal",
+                            showScreenshot: "true",
+                            buttonText: "Send Request",
+                            showHistory: "true",
+                            historyTitle: "Your Recent Requests"
                           }
           : {};
 

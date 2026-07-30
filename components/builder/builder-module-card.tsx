@@ -86,6 +86,7 @@ import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-modul
 import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
 import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
 import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
+import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -1956,6 +1957,55 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "admin-support-form") {
+    const showTitle      = module.settings.showTitle !== "false";
+    const title          = module.settings.formTitle || "Request Support";
+    const buttonText     = module.settings.buttonText || "Send Request";
+    const showScreenshot = module.settings.showScreenshot !== "false";
+    const showHistory    = module.settings.showHistory !== "false";
+    const historyTitle   = module.settings.historyTitle || "Your Recent Requests";
+    const fieldStyle = {
+      width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea",
+      borderRadius: 6, boxSizing: "border-box" as const, background: "#fafcff",
+    };
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ maxWidth: 380, padding: "12px 14px", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff", display: "grid", gap: 9 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Priority</div>
+            <select disabled style={fieldStyle}><option>Normal</option></select>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Issue title</div>
+            <input type="text" disabled placeholder="Short summary of the problem" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Issue description</div>
+            <textarea disabled rows={3} placeholder="What happened, and what were you doing?" style={{ ...fieldStyle, resize: "none" }} />
+          </div>
+          {showScreenshot && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Screenshot</div>
+              <div style={{ ...fieldStyle, color: "#8ba9be", borderStyle: "dashed" }}>Choose an image…</div>
+            </div>
+          )}
+        </div>
+        <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#0f4f8f", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "default" }}>
+          {buttonText}
+        </div>
+        {showHistory && (
+          <div style={{ marginTop: 14, maxWidth: 380 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#18324a", marginBottom: 6 }}>{historyTitle}</div>
+            <div style={{ fontSize: 11, color: "#8ba9be", border: "1px solid #e3edf5", borderRadius: 6, padding: "8px 10px" }}>
+              Past requests appear here on the live page.
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (module.type === "admin-nav-link") {
     const linkText = module.settings.linkText || "Admin";
     return (
@@ -3656,6 +3706,7 @@ export function BuilderModuleCard({
     const isAdminLoginModule = module.type === "admin-login";
     const isAdminNavLinkModule = module.type === "admin-nav-link";
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
+    const isAdminSupportFormModule = module.type === "admin-support-form";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
   return (
@@ -3911,6 +3962,8 @@ export function BuilderModuleCard({
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSiteSettingsModule ? (
               <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminSupportFormModule ? (
+              <BuilderAdminSupportFormModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
