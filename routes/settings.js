@@ -266,7 +266,8 @@ async function handle(req, res, pathname, method) {
   if (apiVerifyMatch && method === 'GET') {
     // Each check is a real request to an outside API — rate limited so repeated
     // clicking cannot trip the provider's own limits and look like a failure.
-    if (!checkEndpointLimit(req, res, 'settings.verifyCredentials')) return true;
+    // Returns true when it has already sent a 429; that is the repo convention.
+    if (checkEndpointLimit(req, res, 'settings.verifyCredentials')) return true;
     const scope = requestProjectScope(req);
     const result = await verifyProvider(apiVerifyMatch[1], { projectId: scope?.projectId });
     // A failed check is a successful request that reports bad news — 200 with

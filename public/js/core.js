@@ -365,6 +365,8 @@ App.els = {
   apiSettingsForm: document.getElementById('apiSettingsForm'),
   apiProviderSelect: document.getElementById('apiProviderSelect'),
   apiFieldsContainer: document.getElementById('apiFieldsContainer'),
+  apiVerifyBtn: document.getElementById('apiVerifyBtn'),
+  apiVerifyResult: document.getElementById('apiVerifyResult'),
   apiConfigsTable: document.getElementById('apiConfigsTable'),
   settingsProjectSelector: document.getElementById('settingsProjectSelector'),
   settingsProjectsList: document.getElementById('settingsProjectsList'),
