@@ -12,9 +12,14 @@ const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const {
   listApiSchemas, listApiConfigsMasked, upsertApiConfig,
-  getApiConfig, testApiProviderConfig, deleteApiConfig, getProviderValues,
+  getApiConfig, deleteApiConfig, getProviderValues,
+  getProviderCredentialDiagnostics,
   listArchiveApiRestorePreview, restoreApiConfigsFromArchive
 } = require('../lib/apiSettings');
+const { verifyProvider, isVerifiable } = require('../lib/credentialVerify');
+const { getBuildInfo }             = require('../lib/buildInfo');
+const { recordVerifiedIdentity, describeIdentityChange } = require('../lib/credentialIdentityStore');
+const { findStaleEnvVars, describeStaleEnvVars }         = require('../lib/vercelEnvAudit');
 const { relayOpenClaw }            = require('../lib/openclawGateway');
 const { upsertMirroredAcquireJob } = require('../lib/acquireMirror');
 const {
@@ -64,6 +69,76 @@ function senderLabel(name, email) {
   const e = safeText(email);
   if (n && e) return `${n} (${e})`;
   return e || n || '';
+}
+
+/**
+ * Did the account behind these credentials change since the last check?
+ *
+ * Only meaningful after a passing check that named an account. Returns null when
+ * the feature is unavailable (migration not applied, no project scope, provider
+ * reports no identity) so the response simply omits it — an absent annotation is
+ * honest, whereas `changed: false` from an untracked check would be a claim we
+ * cannot support.
+ */
+async function annotateIdentityDrift(provider, result, projectId) {
+  if (!result || result.ok !== true) return null;
+  const identity = result.identity || null;
+  if (!identity || (!identity.label && !identity.id)) return null;
+  try {
+    const record = await recordVerifiedIdentity({ projectId, provider, identity });
+    if (!record.tracked) return null;
+    const message = describeIdentityChange(record, identity.label);
+    return {
+      tracked: true,
+      changed: Boolean(record.changed),
+      previous: record.previous ? { label: record.previous.label, id: record.previous.id } : null,
+      message,
+    };
+  } catch (_) {
+    // Bookkeeping must never break the check it decorates.
+    return null;
+  }
+}
+
+/**
+ * Were any of this provider's environment variables edited after the running
+ * deployment was built? That is the difference between "the value in Vercel is
+ * wrong" and "the value in Vercel is right but not live yet" — indistinguishable
+ * from the outside, and the cause of the 2026-07-29 misdiagnosis.
+ *
+ * Needs VERCEL_API_TOKEN; returns a `checked: false` note with the reason
+ * otherwise, so the UI can say why rather than staying silent.
+ */
+async function annotateEnvStaleness(provider, result) {
+  // Only worth the API call when something is actually wrong and at least one
+  // value came from an environment variable.
+  if (!result || result.ok === true) return null;
+  let envNames = [];
+  try {
+    const diag = getProviderCredentialDiagnostics(provider);
+    if (!diag || !diag.ok) return null;
+    envNames = Object.entries(diag.sources || {})
+      .filter(([, source]) => source === 'env')
+      .map(([field]) => (diag.envKeys || {})[field])
+      .filter(Boolean);
+  } catch (_) {
+    return null;
+  }
+  if (!envNames.length) return null;
+
+  try {
+    const staleness = await findStaleEnvVars(envNames);
+    const message = describeStaleEnvVars(staleness);
+    return {
+      checked: Boolean(staleness.checked),
+      reason: staleness.reason || '',
+      stale: staleness.stale || [],
+      envVarsChecked: envNames,
+      message,
+    };
+  } catch (_) {
+    return null;
+  }
 }
 
 async function handle(req, res, pathname, method) {
@@ -246,12 +321,48 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { connectionOps: result.data }), true;
   }
 
-  // GET /api/settings/apis/:provider
-  const apiProviderTestMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/test$/);
-  if (apiProviderTestMatch && method === 'GET') {
-    const result = testApiProviderConfig(apiProviderTestMatch[1]);
-    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
-    return sendOk(res, 200, result.data, result.data), true;
+  // GET /api/settings/apis/:provider/diagnostics
+  // Where each credential value is coming from (env var vs Settings) and which
+  // are unset — masked previews and env var NAMES only, never secret values.
+  // Works for every provider in API_SCHEMAS, not just the ones with a live test.
+  const apiDiagnosticsMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/diagnostics$/);
+  if (apiDiagnosticsMatch && method === 'GET') {
+    const diag = getProviderCredentialDiagnostics(apiDiagnosticsMatch[1]);
+    if (!diag.ok) return sendErr(res, 400, diag.error || 'Unsupported provider'), true;
+    const payload = {
+      ...diag,
+      verifiable: isVerifiable(apiDiagnosticsMatch[1]),
+      // When the running deployment was built. Any env-sourced value changed
+      // after this timestamp is not live yet, no matter what Vercel shows.
+      deployment: getBuildInfo(),
+    };
+    return sendOk(res, 200, payload, { diagnostics: payload }), true;
+  }
+
+  // GET /api/settings/apis/:provider/verify
+  // Live authenticated call to the provider: does it work, and as whom?
+  const apiVerifyMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/verify$/);
+  if (apiVerifyMatch && method === 'GET') {
+    // Each check is a real request to an outside API — rate limited so repeated
+    // clicking cannot trip the provider's own limits and look like a failure.
+    // Returns true when it has already sent a 429; that is the repo convention.
+    if (checkEndpointLimit(req, res, 'settings.verifyCredentials')) return true;
+    const scope = requestProjectScope(req);
+    const provider = apiVerifyMatch[1];
+    const result = await verifyProvider(provider, { projectId: scope?.projectId });
+
+    // Two decorations, both optional and both silent when unavailable. Neither
+    // may break the verification it annotates.
+    const [drift, staleness] = await Promise.all([
+      annotateIdentityDrift(provider, result, scope?.projectId),
+      annotateEnvStaleness(provider, result),
+    ]);
+    if (drift) result.identityDrift = drift;
+    if (staleness) result.envStaleness = staleness;
+
+    // A failed check is a successful request that reports bad news — 200 with
+    // ok:false inside, so the UI can render the detail instead of an error toast.
+    return sendOk(res, 200, result, { verification: result }), true;
   }
 
   // GET /api/settings/apis/:provider

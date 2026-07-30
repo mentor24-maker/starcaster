@@ -1515,6 +1515,78 @@ App.settings = (function () {
     renderApiFieldInputs();
   }
 
+  /**
+   * Live credential check for whichever provider the form is showing.
+   *
+   * This is the control the old GET /api/settings/apis/:provider/test was
+   * reaching for — that route called a function that did not exist, so it threw
+   * a 500 on every request and nothing ever called it. It now works, and it
+   * covers every provider the registry knows rather than the handful the
+   * Connection Ops page happens to list.
+   *
+   * Three outcomes, deliberately distinguished: verified (and as whom),
+   * failed (with the reason), and not checkable at all. The third must never
+   * look like either of the first two.
+   */
+  async function runApiProviderVerify() {
+    const provider = String(els.apiProviderSelect?.value || '').trim();
+    const out = els.apiVerifyResult;
+    if (!provider) {
+      notify('Pick a provider first', true);
+      return;
+    }
+    if (out) {
+      out.classList.remove('hidden');
+      out.textContent = `Checking ${provider}...`;
+    }
+    if (els.apiVerifyBtn) els.apiVerifyBtn.disabled = true;
+    try {
+      const raw = await api(`/api/settings/apis/${encodeURIComponent(provider)}/verify`);
+      const result = raw?.verification || raw?.data || raw || {};
+      const identity = result.identity && result.identity.label ? String(result.identity.label) : '';
+      const notCheckable = String(result.code || '') === 'not_verifiable';
+
+      let line;
+      if (result.ok) {
+        line = identity
+          ? `Verified — authenticated as ${identity}.`
+          : 'Verified — the provider accepted these credentials.';
+      } else if (notCheckable) {
+        line = String(result.message || 'No live check exists for this provider yet.');
+      } else {
+        line = String(result.message || 'Verification failed.');
+      }
+
+      // A pass can still deserve a warning: the account may have changed under
+      // you, which matters more than the pass itself.
+      const driftMessage = String(result.identityDrift?.message || '').trim();
+      // On a failure, say whether the value in Vercel is simply not live yet —
+      // "wrong value" and "right value, not deployed" look identical otherwise.
+      const stalenessMessage = String(result.envStaleness?.message || '').trim();
+
+      if (out) {
+        out.textContent = [line, driftMessage, stalenessMessage].filter(Boolean).join(' ');
+        // Green only for a clean pass. A pass with identity drift is not clean,
+        // and "cannot check" is not a pass at all.
+        out.style.color = (result.ok && !driftMessage)
+          ? '#1d6f42'
+          : (result.ok ? '#8a5a00' : (notCheckable ? '' : '#8a1d2b'));
+      }
+      const toast = result.ok
+        ? (driftMessage || (identity ? `Verified as ${identity}` : 'Credentials verified'))
+        : [line, stalenessMessage].filter(Boolean).join(' ');
+      notify(toast, !result.ok || Boolean(driftMessage));
+    } catch (err) {
+      if (out) {
+        out.textContent = `Could not run the check: ${err.message || err}`;
+        out.style.color = '#8a1d2b';
+      }
+      notify(err.message || 'Verification request failed', true);
+    } finally {
+      if (els.apiVerifyBtn) els.apiVerifyBtn.disabled = false;
+    }
+  }
+
   async function editApiConfig(provider) {
     const data = await api(`/api/settings/apis/${encodeURIComponent(provider)}`);
     openApiSettingsForm(data.provider, data.values || {}, `Edit API: ${data.label || data.provider}`, data.diagnostics);
@@ -1901,43 +1973,6 @@ App.settings = (function () {
     return { authOk, error: errText, payload, raw: res };
   }
 
-  /**
-   * X publishes down two paths that can drift apart: a logged-in "Send Now"
-   * (Settings values win, env vars fall back) and the Vercel cron that sends
-   * scheduled posts (env vars only). When they disagree, Send Now succeeds
-   * while every scheduled post fails 401 — so the auth test alone is not
-   * enough. Failure here is non-fatal; the auth test result still stands.
-   */
-  async function fetchXSchedulerCheck() {
-    try {
-      const raw = await api('/api/promote/social/scheduler-diagnostics');
-      const diag = raw?.schedulerDiagnostics || raw?.data?.schedulerDiagnostics || raw?.data || raw || {};
-      const sessionOk = Boolean(diag?.xAuth?.session?.ok);
-      const cronOk = Boolean(diag?.xAuth?.cron?.ok);
-      const mismatch = Boolean(diag?.xCredentials?.tokenMismatch);
-      let verdict = '';
-      if (sessionOk && !cronOk) {
-        verdict = 'scheduled posts would fail: the cron publish path cannot authenticate. '
-          + 'Check the X_* environment variables on Vercel Production, then redeploy — '
-          + 'env var edits do not reach the running deployment until you do.';
-      } else if (!sessionOk && cronOk) {
-        verdict = 'Send Now would fail while scheduled posts succeed: the saved Settings values are bad, but the env vars are good.';
-      } else if (mismatch) {
-        verdict = 'both paths authenticate, but they are using different tokens, so Send Now and scheduled posts may reach different accounts.';
-      }
-      return {
-        ok: sessionOk && cronOk && !mismatch,
-        sendNowAuthenticates: sessionOk,
-        scheduledCronAuthenticates: cronOk,
-        usingDifferentTokens: mismatch,
-        duePostCount: Number(diag?.queue?.dueCount || 0) || 0,
-        verdict,
-      };
-    } catch (err) {
-      return { ok: null, error: err.message || String(err), verdict: '' };
-    }
-  }
-
   async function runConnectionOpsTest() {
     const platform = String(connectionOpsState.platform || '').trim().toLowerCase();
     if (!platform) return;
@@ -1947,32 +1982,14 @@ App.settings = (function () {
     let summary = '';
     let details = '';
     let blockerCode = '';
+    let verifiedIdentity = '';
+    // "We cannot check this" must never be shown as a pass or as a rejection.
+    let notVerifiable = false;
 
-    if (platform === 'bluesky') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/bluesky/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Bluesky auth test passed' : `Bluesky auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'BLUESKY_401';
-    } else if (platform === 'x') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/x/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'X auth test passed' : `X auth test failed: ${parsed.error || 'unknown error'}`;
-      const scheduler = await fetchXSchedulerCheck();
-      details = JSON.stringify({ authTest: parsed.raw || {}, scheduledPublishing: scheduler }, null, 2);
-      // A passing auth test only proves the logged-in path works. Scheduled posts
-      // publish from cron with env-only credentials, so flag that separately.
-      if (testOk && scheduler && scheduler.verdict && !scheduler.ok) {
-        summary = `${summary} — but ${scheduler.verdict}`;
-      }
-      blockerCode = testOk ? '' : 'X_AUTH_FAILED';
-    } else if (platform === 'facebook') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/facebook/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Facebook auth test passed' : `Facebook auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'FACEBOOK_401';
-    } else if (platform === 'facebook_personal') {
+    // facebook_personal is not a credential check — it probes the OpenClaw
+    // browser gateway, so there is nothing for the credential registry to
+    // verify. Every other platform goes through the one generic path below.
+    if (platform === 'facebook_personal') {
       const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/facebook-personal/auth-test'));
       testOk = parsed.authOk;
       summary = testOk
@@ -1980,32 +1997,24 @@ App.settings = (function () {
         : `OpenClaw gateway test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'OPENCLAW_AUTH_FAILED';
-    } else if (platform === 'instagram') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/instagram/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Instagram auth test passed' : `Instagram auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'INSTAGRAM_401';
-    } else if (platform === 'threads') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/threads/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Threads auth test passed' : `Threads auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'THREADS_401';
-    } else if (platform === 'telegram') {
-      const res = await api('/api/promote/social/telegram/status');
-      testOk = res?.configured === true;
-      summary = testOk ? 'Telegram config test passed' : 'Telegram config test failed (missing bot token/chat id)';
-      details = JSON.stringify(res || {}, null, 2);
-      blockerCode = testOk ? '' : 'CHAT_ID_NOT_FOUND';
-    } else if (platform === 'reddit') {
-      const res = await api('/api/engage/reddit/status');
-      testOk = res?.authOk === true;
-      summary = testOk ? 'Reddit auth test passed' : `Reddit auth test failed: ${String(res?.auth?.error || 'unknown error')}`;
-      details = JSON.stringify(res || {}, null, 2);
-      blockerCode = testOk ? '' : 'REDDIT_401';
     } else {
-      throw new Error('No test handler for this platform yet');
+      // One path for every provider in lib/credentialVerify.js. This replaced
+      // eight near-identical branches, and the reason it matters is what the
+      // chain did when a platform was not listed: it threw "No test handler for
+      // this platform yet". Buffer and YouTube were both configured and live,
+      // and neither had a branch — so neither could be tested at all.
+      const raw = await api(`/api/settings/apis/${encodeURIComponent(platform)}/verify`);
+      const result = raw?.verification || raw?.data || raw || {};
+      testOk = result.ok === true;
+      const identity = result.identity && result.identity.label ? String(result.identity.label) : '';
+      summary = testOk
+        ? `${platform} credentials verified${identity ? ` as ${identity}` : ''}`
+        : String(result.message || `${platform} verification failed`);
+      details = JSON.stringify(result, null, 2);
+      // Free-text on the attempts record; the code is what the operator acts on.
+      blockerCode = testOk ? '' : `${platform.toUpperCase()}_${String(result.code || 'FAILED').toUpperCase()}`;
+      verifiedIdentity = identity;
+      notVerifiable = String(result.code || '') === 'not_verifiable';
     }
 
     await api(`/api/settings/connection-ops/${encodeURIComponent(platform)}/attempts`, {
@@ -2018,8 +2027,16 @@ App.settings = (function () {
       }),
     });
     await refreshConnectionOps(platform);
-    setConnectionOpsStatus(testOk ? `${platform} test passed.` : `${platform} test failed. Check latest attempt.`);
-    notify(testOk ? 'Connection test passed' : summary || 'Connection test failed', !testOk);
+    // Say which account passed. "Authenticated" without "as whom" is half an
+    // answer when every project posts as a different identity.
+    const passLine = verifiedIdentity
+      ? `${platform} verified as ${verifiedIdentity}.`
+      : `${platform} test passed.`;
+    const failLine = notVerifiable
+      ? `${platform} could not be checked — no live test exists for it yet.`
+      : `${platform} test failed. Check latest attempt.`;
+    setConnectionOpsStatus(testOk ? passLine : failLine);
+    notify(testOk ? passLine : (summary || 'Connection test failed'), !testOk);
   }
 
   function renderConnectionOpsSetupLinks(data) {
@@ -2797,6 +2814,12 @@ App.settings = (function () {
         refreshSettingsApisHeadingFromUi();
         const table = document.getElementById('apiChannelsTableBody');
         if (table) table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+
+    if (els.apiVerifyBtn) {
+      els.apiVerifyBtn.addEventListener('click', async () => {
+        await runApiProviderVerify();
       });
     }
 

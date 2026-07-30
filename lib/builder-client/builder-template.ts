@@ -81,7 +81,8 @@ export type BuilderTemplateModuleType =
   | "admin-team-users"
   | "admin-modules"
   | "admin-login"
-  | "admin-nav-link";
+  | "admin-nav-link"
+  | "admin-site-settings";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -1242,7 +1243,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-team-users" ||
     type === "admin-modules" ||
     type === "admin-login" ||
-    type === "admin-nav-link"
+    type === "admin-nav-link" ||
+    type === "admin-site-settings"
   ) {
     return type;
   }
@@ -2294,6 +2296,11 @@ export function createEmptyModule(
                         ? {
                             linkText: "Admin",
                             linkHref: "/admin-login"
+                          }
+                      : type === "admin-site-settings"
+                        ? {
+                            panelTitle: "Site Settings",
+                            showTitle: "true"
                           }
           : {};
 
