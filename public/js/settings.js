@@ -916,6 +916,12 @@ App.settings = (function () {
     if (els.settingsProjectSupportAlertEmail) {
       els.settingsProjectSupportAlertEmail.value = String(active?.supportAlertEmail || '');
     }
+    if (els.settingsProjectSupportEmail) {
+      els.settingsProjectSupportEmail.value = String(active?.supportEmail || '');
+    }
+    if (els.settingsProjectSupportPhone) {
+      els.settingsProjectSupportPhone.value = String(active?.supportPhone || '');
+    }
     syncProjectTimezoneSelectValue(active);
     const logoDataUrl = getProjectLogoDataUrl(active);
     if (els.settingsProjectLogoPreview) {
@@ -2502,11 +2508,16 @@ App.settings = (function () {
         const projectUrl = normalizeProjectDefaultUrl(els.settingsProjectDefaultUrlInput?.value);
         const timezone = String(els.settingsProjectTimezoneSelect?.value || '').trim() || 'UTC';
         const supportAlertEmail = String(els.settingsProjectSupportAlertEmail?.value || '').trim().toLowerCase();
+        const supportEmail = String(els.settingsProjectSupportEmail?.value || '').trim().toLowerCase();
+        const supportPhone = String(els.settingsProjectSupportPhone?.value || '').trim();
         if (!name) return notify('Project name is required', true);
         if (!slug) return notify('Project slug is required', true);
         if (!projectUrl) return notify('Default URL is required', true);
         if (supportAlertEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportAlertEmail)) {
           return notify('Support Alert Email must be a valid email address (or blank)', true);
+        }
+        if (supportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportEmail)) {
+          return notify('Support Email must be a valid email address (or blank)', true);
         }
         if (domain && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
           return notify('Custom domain must be a valid hostname (e.g. benvin.org)', true);
@@ -2528,7 +2539,10 @@ App.settings = (function () {
           }
           const res = await api(`/api/projects/${encodeURIComponent(activeId)}`, {
             method: 'PATCH',
-            body: JSON.stringify({ name, slug, domain, description, projectUrl, timezone, supportAlertEmail }),
+            body: JSON.stringify({
+              name, slug, domain, description, projectUrl, timezone,
+              supportAlertEmail, supportEmail, supportPhone,
+            }),
           });
           mergeSavedProjectIntoState(res.project || res.data);
           await refreshProjectContext();

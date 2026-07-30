@@ -1964,12 +1964,24 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const showScreenshot = module.settings.showScreenshot !== "false";
     const showHistory    = module.settings.showHistory !== "false";
     const historyTitle   = module.settings.historyTitle || "Your Recent Requests";
+    const showContact    = module.settings.showContact !== "false";
+    const contactHeading = module.settings.contactHeading ?? "Need a hand with your website?";
     const fieldStyle = {
       width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea",
       borderRadius: 6, boxSizing: "border-box" as const, background: "#fafcff",
     };
     return (
       <div className="builder-module-preview-copy">
+        {showContact && (
+          <div style={{ marginBottom: 12, maxWidth: 380 }}>
+            {contactHeading ? (
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 4 }}>{contactHeading}</div>
+            ) : null}
+            <div style={{ fontSize: 11, color: "#8ba9be" }}>
+              Email and phone come from Settings &rsaquo; Projects &rsaquo; Edit.
+            </div>
+          </div>
+        )}
         {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
         <div style={{ maxWidth: 380, padding: "12px 14px", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff", display: "grid", gap: 9 }}>
           <div>

@@ -207,18 +207,76 @@ test('a tenant PATCH cannot set supportAlertEmail', async () => {
   }
 });
 
-test('the tenant-facing read does not expose supportAlertEmail', async () => {
+test('the tenant-facing read exposes display details but never the intake inbox', async () => {
   const { mod, restore } = loadWithRecorder(settingsStorePath, {
-    rows: [{ id: 'proj_1', site_settings: { contactAlertEmail: 'owner@site.com', supportAlertEmail: 'help@alphire.com' } }],
+    rows: [{
+      id: 'proj_1',
+      site_settings: {
+        contactAlertEmail: 'owner@site.com',
+        supportAlertEmail: 'intake@alphire.com',
+        supportEmail: 'support@alphire.com',
+        supportPhone: '(303) 555-0142',
+      },
+    }],
   });
   try {
     const result = await mod.getSiteSettings('proj_1');
     assert.equal(result.ok, true);
     assert.equal(result.data.contactAlertEmail, 'owner@site.com');
+    // The Support page renders these, so the tenant must be able to read them.
+    assert.equal(result.data.supportEmail, 'support@alphire.com');
+    assert.equal(result.data.supportPhone, '(303) 555-0142');
+    // But never the intake inbox: showing it invites clients to email it
+    // directly, bypassing the form and the record it creates.
     assert.equal(result.data.supportAlertEmail, undefined,
-      'GET /api/admin/site-settings is tenant-reachable; it must not leak where support mail goes');
+      'GET /api/admin/site-settings is tenant-reachable; it must not leak the intake inbox');
   } finally {
     restore();
+  }
+});
+
+test('a tenant cannot WRITE the display details they can read', async () => {
+  const { mod, calls, restore } = loadWithRecorder(settingsStorePath, {
+    rows: [{ id: 'proj_1', site_settings: { supportEmail: 'support@alphire.com', supportPhone: '(303) 555-0142' } }],
+  });
+  try {
+    await mod.updateSiteSettings('proj_1', {
+      contactAlertEmail: 'owner@site.com',
+      supportEmail: 'attacker@evil.com',
+      supportPhone: '000',
+    });
+    const patch = calls.find((c) => c.method === 'PATCH');
+    // Readable is not writable — a client must not be able to change the
+    // number they tell their own staff to call.
+    assert.equal(patch.body.site_settings.supportEmail, 'support@alphire.com');
+    assert.equal(patch.body.site_settings.supportPhone, '(303) 555-0142');
+    assert.equal(patch.body.site_settings.contactAlertEmail, 'owner@site.com');
+  } finally {
+    restore();
+  }
+});
+
+test('supportPhone accepts real-world formatting', () => {
+  const { PLATFORM_SETTINGS } = require('../../lib/projectSiteSettingsStore.js');
+  const spec = PLATFORM_SETTINGS.supportPhone;
+  // Free text on purpose: extensions, country codes and punctuation defeat
+  // any format check worth having.
+  for (const value of ['(303) 555-0142', '+44 20 7946 0958', '303-555-0142 x2', '']) {
+    assert.equal(spec.validate(spec.normalize(value)), null, `should accept ${JSON.stringify(value)}`);
+  }
+});
+
+test('the platform write path handles every PLATFORM_SETTINGS key', () => {
+  const { mergePlatformSiteSettings, PLATFORM_SETTINGS } = require('../../lib/projectSiteSettingsStore.js');
+  const patch = {};
+  for (const key of Object.keys(PLATFORM_SETTINGS)) {
+    patch[key] = key === 'supportPhone' ? '(303) 555-0142' : 'x@alphire.com';
+  }
+  const merged = mergePlatformSiteSettings({ contactAlertEmail: 'owner@site.com' }, patch);
+  assert.equal(merged.ok, true);
+  assert.equal(merged.data.contactAlertEmail, 'owner@site.com');
+  for (const key of Object.keys(PLATFORM_SETTINGS)) {
+    assert.ok(merged.data[key], `${key} should have been written`);
   }
 });
 
