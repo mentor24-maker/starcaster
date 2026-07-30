@@ -5802,7 +5802,6 @@ function AdminSiteSettingsPreview({
   const showTitle  = settings.showTitle !== "false";
 
   const [contactAlertEmail, setContactAlertEmail] = useState("");
-  const [supportAlertEmail, setSupportAlertEmail] = useState("");
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -5830,7 +5829,6 @@ function AdminSiteSettingsPreview({
         const s = d.siteSettings ?? d.data ?? d;
         if (s && typeof s === "object") {
           setContactAlertEmail(String((s as Record<string, unknown>).contactAlertEmail ?? ""));
-          setSupportAlertEmail(String((s as Record<string, unknown>).supportAlertEmail ?? ""));
         }
       })
       .catch((e: Error) => setLoadError(e.message || "Failed to load settings."))
@@ -5850,10 +5848,7 @@ function AdminSiteSettingsPreview({
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
           projectId,
-          settings: {
-            contactAlertEmail: contactAlertEmail.trim().toLowerCase(),
-            supportAlertEmail: supportAlertEmail.trim().toLowerCase(),
-          },
+          settings: { contactAlertEmail: contactAlertEmail.trim().toLowerCase() },
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -5866,9 +5861,6 @@ function AdminSiteSettingsPreview({
       const s = (d.siteSettings ?? d.data ?? d) as Record<string, unknown>;
       if (s && typeof s === "object" && s.contactAlertEmail !== undefined) {
         setContactAlertEmail(String(s.contactAlertEmail ?? ""));
-      }
-      if (s && typeof s === "object" && s.supportAlertEmail !== undefined) {
-        setSupportAlertEmail(String(s.supportAlertEmail ?? ""));
       }
       setSavedNote("Saved.");
     } catch {
@@ -5901,27 +5893,6 @@ function AdminSiteSettingsPreview({
               value={contactAlertEmail}
               onChange={(e) => { setContactAlertEmail(e.target.value); setSavedNote(""); }}
               placeholder="you@example.com"
-              style={{
-                width: "100%", maxWidth: 340, padding: "7px 10px", fontSize: 14,
-                border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ padding: "14px 16px", border: "1px solid var(--border, #e5e7eb)", borderRadius: 8 }}>
-            <label htmlFor="admin-support-alert-email" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
-              Support Alert Email
-            </label>
-            <p style={{ margin: "2px 0 8px", fontSize: 12, color: "var(--muted, #888)" }}>
-              Where support requests from this admin area are sent — the people who
-              look after this website, not your own enquiries inbox above.
-              Leave it blank to use the platform default.
-            </p>
-            <input
-              id="admin-support-alert-email"
-              type="email"
-              value={supportAlertEmail}
-              onChange={(e) => { setSupportAlertEmail(e.target.value); setSavedNote(""); }}
-              placeholder="support@example.com"
               style={{
                 width: "100%", maxWidth: 340, padding: "7px 10px", fontSize: 14,
                 border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",

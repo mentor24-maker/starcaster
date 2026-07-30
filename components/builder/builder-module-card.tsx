@@ -1949,11 +1949,6 @@ function renderModulePreview(module: BuilderTemplateModule) {
             Where we email you when someone submits a contact form.
           </div>
           <input type="email" disabled placeholder="you@example.com" style={{ width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea", borderRadius: 6, boxSizing: "border-box", background: "#fafcff" }} />
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginTop: 12 }}>Support Alert Email</div>
-          <div style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 7px" }}>
-            Where support requests from this admin area are sent.
-          </div>
-          <input type="email" disabled placeholder="support@example.com" style={{ width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea", borderRadius: 6, boxSizing: "border-box", background: "#fafcff" }} />
         </div>
         <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#0f4f8f", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "default" }}>
           Save Settings
