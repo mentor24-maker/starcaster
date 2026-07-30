@@ -2832,8 +2832,16 @@ App.settings = (function () {
           values[input.name] = String(input.value || '').trim();
         });
         try {
-          await api('/api/settings/apis', { method: 'POST', body: JSON.stringify({ provider, values }) });
-          notify('API credentials saved');
+          const saved = await api('/api/settings/apis', { method: 'POST', body: JSON.stringify({ provider, values }) });
+          // A save can succeed and still be worth a second look — an unfamiliar
+          // key prefix, or whitespace that was trimmed here but would survive in
+          // the Vercel dashboard. These are heuristics, so they never block.
+          const savedWarnings = (saved?.data?.warnings || saved?.warnings || []);
+          if (Array.isArray(savedWarnings) && savedWarnings.length) {
+            notify(`Saved, but check this: ${savedWarnings[0].message}`, true);
+          } else {
+            notify('API credentials saved');
+          }
           const channelMode = Boolean(activeChannelLabel);
           await refreshApiSettings();
           if (!channelMode) closeApiSettingsForm();
