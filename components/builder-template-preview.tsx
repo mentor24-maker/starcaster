@@ -5784,6 +5784,24 @@ const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: st
   { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
 ];
 
+/** Mirrors MAX_CONTACT_ALERT_RECIPIENTS in lib/projectSiteSettingsStore.js. */
+const MAX_CONTACT_ALERT_RECIPIENTS = 10;
+
+/**
+ * Read the stored Contact Alert value into editable rows.
+ *
+ * Handles both shapes: an array (current) and a bare string (older project
+ * rows, from before this setting took more than one address). Always returns
+ * at least one row so the field is visible when nothing is set yet.
+ */
+function readEmailList(value: unknown): string[] {
+  const list = Array.isArray(value)
+    ? value.map((v) => String(v ?? ""))
+    : String(value ?? "").split(/[,;\n]/);
+  const cleaned = list.map((v) => v.trim()).filter(Boolean);
+  return cleaned.length ? cleaned : [""];
+}
+
 /**
  * Settings panel for a tenant's own admin area (/admin-settings).
  *
@@ -5801,7 +5819,8 @@ function AdminSiteSettingsPreview({
   const panelTitle = settings.panelTitle || "Site Settings";
   const showTitle  = settings.showTitle !== "false";
 
-  const [contactAlertEmail, setContactAlertEmail] = useState("");
+  // Always at least one row, so the field is visible when nothing is set yet.
+  const [contactAlertEmails, setContactAlertEmails] = useState<string[]>([""]);
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -5828,12 +5847,29 @@ function AdminSiteSettingsPreview({
         if (!d) return;
         const s = d.siteSettings ?? d.data ?? d;
         if (s && typeof s === "object") {
-          setContactAlertEmail(String((s as Record<string, unknown>).contactAlertEmail ?? ""));
+          setContactAlertEmails(readEmailList((s as Record<string, unknown>).contactAlertEmail));
         }
       })
       .catch((e: Error) => setLoadError(e.message || "Failed to load settings."))
       .finally(() => setLoading(false));
   }, []);
+
+  function updateRecipient(index: number, value: string) {
+    setContactAlertEmails((prev) => prev.map((v, i) => (i === index ? value : v)));
+    setSavedNote("");
+  }
+
+  function addRecipient() {
+    setContactAlertEmails((prev) => [...prev, ""]);
+    setSavedNote("");
+  }
+
+  function removeRecipient(index: number) {
+    // Never drop to zero rows — an empty list is expressed by leaving the one
+    // remaining box blank, which is clearer than the field vanishing.
+    setContactAlertEmails((prev) => (prev.length <= 1 ? [""] : prev.filter((_, i) => i !== index)));
+    setSavedNote("");
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -5848,7 +5884,13 @@ function AdminSiteSettingsPreview({
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({
           projectId,
-          settings: { contactAlertEmail: contactAlertEmail.trim().toLowerCase() },
+          // Blank rows are dropped rather than rejected, so an empty box the
+          // user never filled in does not block the save.
+          settings: {
+            contactAlertEmail: contactAlertEmails
+              .map((v) => v.trim().toLowerCase())
+              .filter(Boolean),
+          },
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -5860,7 +5902,7 @@ function AdminSiteSettingsPreview({
       // toast alone proves a write happened, not that it wrote the right value.
       const s = (d.siteSettings ?? d.data ?? d) as Record<string, unknown>;
       if (s && typeof s === "object" && s.contactAlertEmail !== undefined) {
-        setContactAlertEmail(String(s.contactAlertEmail ?? ""));
+        setContactAlertEmails(readEmailList(s.contactAlertEmail));
       }
       setSavedNote("Saved.");
     } catch {
@@ -5880,24 +5922,64 @@ function AdminSiteSettingsPreview({
       ) : (
         <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 520 }}>
           <div style={{ padding: "14px 16px", border: "1px solid var(--border, #e5e7eb)", borderRadius: 8 }}>
-            <label htmlFor="admin-contact-alert-email" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
+            <label htmlFor="admin-contact-alert-email-0" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
               Contact Alert Email
             </label>
             <p style={{ margin: "2px 0 8px", fontSize: 12, color: "var(--muted, #888)" }}>
               Where we email you when someone submits a contact form on your site.
-              Leave it blank to turn these alerts off.
+              Add as many recipients as you like &mdash; they all receive the same
+              message. Leave them blank to turn these alerts off.
             </p>
-            <input
-              id="admin-contact-alert-email"
-              type="email"
-              value={contactAlertEmail}
-              onChange={(e) => { setContactAlertEmail(e.target.value); setSavedNote(""); }}
-              placeholder="you@example.com"
-              style={{
-                width: "100%", maxWidth: 340, padding: "7px 10px", fontSize: 14,
-                border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",
-              }}
-            />
+            <div style={{ display: "grid", gap: 8 }}>
+              {contactAlertEmails.map((value, index) => (
+                <div key={index} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    id={`admin-contact-alert-email-${index}`}
+                    type="email"
+                    value={value}
+                    onChange={(e) => updateRecipient(index, e.target.value)}
+                    placeholder="you@example.com"
+                    aria-label={`Contact alert recipient ${index + 1}`}
+                    style={{
+                      width: "100%", maxWidth: 340, padding: "7px 10px", fontSize: 14,
+                      border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",
+                    }}
+                  />
+                  {contactAlertEmails.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeRecipient(index)}
+                      aria-label={`Remove recipient ${index + 1}`}
+                      title="Remove this recipient"
+                      style={{
+                        border: "none", background: "none", cursor: "pointer",
+                        fontSize: 18, lineHeight: 1, padding: "0 4px",
+                        color: "var(--muted, #888)",
+                      }}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {contactAlertEmails.length < MAX_CONTACT_ALERT_RECIPIENTS ? (
+              <button
+                type="button"
+                onClick={addRecipient}
+                style={{
+                  marginTop: 10, border: "none", background: "none", padding: 0,
+                  color: "#0f4f8f", fontSize: 13, fontWeight: 600,
+                  cursor: "pointer", textDecoration: "underline",
+                }}
+              >
+                + Add Recipient
+              </button>
+            ) : (
+              <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--muted, #888)" }}>
+                That&rsquo;s the maximum of {MAX_CONTACT_ALERT_RECIPIENTS} recipients.
+              </p>
+            )}
           </div>
           {saveError && (
             <p className="builder-module-runtime-note" style={{ margin: 0, color: "var(--danger, #c00)" }}>{saveError}</p>

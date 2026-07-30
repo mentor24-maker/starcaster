@@ -6,7 +6,7 @@ const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = req
 const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
 const { listForms, getForm, createForm, updateForm, deleteForm, getLastFormStoreError } = require('../lib/crmFormsStore');
 const { logActivity } = require('../lib/activityLog');
-const { getContactAlertEmail } = require('../lib/projectSiteSettingsStore');
+const { getContactAlertEmails } = require('../lib/projectSiteSettingsStore');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
 
@@ -35,8 +35,12 @@ function humanizeFieldKey(key) {
 }
 
 /**
- * Email the project's internal Contact Alert Email about a public form
- * submission. Set on the tenant admin Settings page; blank means no alerts.
+ * Email the project's Contact Alert recipients about a public form
+ * submission. Set on the tenant admin Settings page; an empty list means no
+ * alerts.
+ *
+ * All recipients go on one message rather than one message each, so a reply
+ * keeps the whole team on the thread.
  *
  * Swallows every failure by design: the contact row is already saved, and the
  * visitor must not see an error because the site owner's mail provider is
@@ -44,8 +48,8 @@ function humanizeFieldKey(key) {
  */
 async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) {
   try {
-    const alertTo = await getContactAlertEmail(projectId);
-    if (!alertTo) return;
+    const alertTo = await getContactAlertEmails(projectId);
+    if (!alertTo.length) return;
 
     const projectResult = await getPublicProjectById(projectId);
     const siteName = String(projectResult?.data?.name || '').trim() || 'your site';

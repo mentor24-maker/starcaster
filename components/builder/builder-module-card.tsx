@@ -1949,6 +1949,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
             Where we email you when someone submits a contact form.
           </div>
           <input type="email" disabled placeholder="you@example.com" style={{ width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea", borderRadius: 6, boxSizing: "border-box", background: "#fafcff" }} />
+          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: "#0f4f8f", textDecoration: "underline" }}>
+            + Add Recipient
+          </div>
         </div>
         <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#0f4f8f", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "default" }}>
           Save Settings

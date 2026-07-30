@@ -217,7 +217,7 @@ test('the tenant-facing read exposes the support contact details', async () => {
   try {
     const result = await mod.getSiteSettings('proj_1');
     assert.equal(result.ok, true);
-    assert.equal(result.data.contactAlertEmail, 'owner@site.com');
+    assert.deepEqual(result.data.contactAlertEmail, ['owner@site.com']);
     // The Support page renders these, so the tenant must be able to read them.
     assert.equal(result.data.supportEmail, 'support@alphire.com');
     assert.equal(result.data.supportPhone, '(303) 555-0142');
@@ -240,7 +240,111 @@ test('a tenant cannot WRITE the support details they can read', async () => {
     // Readable is not writable.
     assert.equal(patch.body.site_settings.supportEmail, 'support@alphire.com');
     assert.equal(patch.body.site_settings.supportPhone, '(303) 555-0142');
-    assert.equal(patch.body.site_settings.contactAlertEmail, 'owner@site.com');
+    assert.deepEqual(patch.body.site_settings.contactAlertEmail, ['owner@site.com']);
+  } finally {
+    restore();
+  }
+});
+
+// ── Contact alert recipients (multiple) ──────────────────────────────────────
+
+test('a legacy single-string contactAlertEmail still reads as a list', async () => {
+  const { mod, restore } = loadWithRecorder(settingsStorePath, {
+    // How every project row looked before multiple recipients. There is no
+    // migration, so this shape must keep working forever.
+    rows: [{ id: 'proj_1', site_settings: { contactAlertEmail: 'owner@site.com' } }],
+  });
+  try {
+    const result = await mod.getSiteSettings('proj_1');
+    assert.deepEqual(result.data.contactAlertEmail, ['owner@site.com']);
+    assert.deepEqual(await mod.getContactAlertEmails('proj_1'), ['owner@site.com']);
+  } finally {
+    restore();
+  }
+});
+
+test('several recipients are stored and returned in order', async () => {
+  const { mod, calls, restore } = loadWithRecorder(settingsStorePath, {
+    rows: [{ id: 'proj_1', site_settings: {} }],
+  });
+  try {
+    await mod.updateSiteSettings('proj_1', {
+      contactAlertEmail: ['First@Site.com', 'second@site.com', 'third@site.com'],
+    });
+    const patch = calls.find((c) => c.method === 'PATCH');
+    assert.deepEqual(patch.body.site_settings.contactAlertEmail,
+      ['first@site.com', 'second@site.com', 'third@site.com']);
+  } finally {
+    restore();
+  }
+});
+
+test('blank rows are dropped and duplicates collapsed', () => {
+  const { normalizeEmailList } = require('../../lib/projectSiteSettingsStore.js');
+  // An empty box the user never filled in must not block the save, and adding
+  // the same address twice should not double the mail.
+  assert.deepEqual(
+    normalizeEmailList(['a@site.com', '', '  ', 'A@Site.com', 'b@site.com']),
+    ['a@site.com', 'b@site.com']
+  );
+});
+
+test('a pasted comma-separated list is split into recipients', () => {
+  const { normalizeEmailList } = require('../../lib/projectSiteSettingsStore.js');
+  assert.deepEqual(
+    normalizeEmailList('a@site.com, b@site.com; c@site.com'),
+    ['a@site.com', 'b@site.com', 'c@site.com']
+  );
+});
+
+test('an empty list is allowed and means alerts are off', async () => {
+  const { mod, calls, restore } = loadWithRecorder(settingsStorePath, {
+    rows: [{ id: 'proj_1', site_settings: { contactAlertEmail: ['a@site.com'] } }],
+  });
+  try {
+    const result = await mod.updateSiteSettings('proj_1', { contactAlertEmail: [] });
+    assert.equal(result.ok, true, 'clearing every recipient must be allowed');
+    assert.deepEqual(calls.find((c) => c.method === 'PATCH').body.site_settings.contactAlertEmail, []);
+  } finally {
+    restore();
+  }
+});
+
+test('one bad address is named in the error rather than failing vaguely', async () => {
+  const { mod, calls, restore } = loadWithRecorder(settingsStorePath, {
+    rows: [{ id: 'proj_1', site_settings: {} }],
+  });
+  try {
+    const result = await mod.updateSiteSettings('proj_1', {
+      contactAlertEmail: ['good@site.com', 'not-an-email'],
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 400);
+    assert.match(result.error, /not-an-email/, 'the message must say WHICH address is wrong');
+    assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0, 'nothing should have been written');
+  } finally {
+    restore();
+  }
+});
+
+test('the recipient count is capped', async () => {
+  const { mod, restore } = loadWithRecorder(settingsStorePath, { rows: [{ id: 'proj_1', site_settings: {} }] });
+  try {
+    const tooMany = Array.from({ length: mod.MAX_CONTACT_ALERT_RECIPIENTS + 1 }, (_, i) => `a${i}@site.com`);
+    const result = await mod.updateSiteSettings('proj_1', { contactAlertEmail: tooMany });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 400);
+  } finally {
+    restore();
+  }
+});
+
+test('getContactAlertEmails returns [] when nothing is set, so alerts stay off', async () => {
+  const { mod, restore } = loadWithRecorder(settingsStorePath, {
+    rows: [{ id: 'proj_1', site_settings: {} }],
+  });
+  try {
+    assert.deepEqual(await mod.getContactAlertEmails('proj_1'), []);
   } finally {
     restore();
   }
