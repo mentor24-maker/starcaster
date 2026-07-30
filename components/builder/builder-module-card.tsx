@@ -1969,6 +1969,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const historyTitle   = module.settings.historyTitle || "Your Recent Requests";
     const showContact    = module.settings.showContact !== "false";
     const contactHeading = module.settings.contactHeading ?? "Need a hand with your website?";
+    const twoColumn      = (module.settings.layout ?? "two-column") !== "stacked";
     const fieldStyle = {
       width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea",
       borderRadius: 6, boxSizing: "border-box" as const, background: "#fafcff",
@@ -1985,6 +1986,11 @@ function renderModulePreview(module: BuilderTemplateModule) {
             </div>
           </div>
         )}
+        <div style={twoColumn
+          ? { display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", alignItems: "start" }
+          : undefined}
+        >
+          <div>
         {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
         <div style={{ maxWidth: 380, padding: "12px 14px", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff", display: "grid", gap: 9 }}>
           <div>
@@ -2009,14 +2015,16 @@ function renderModulePreview(module: BuilderTemplateModule) {
         <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#0f4f8f", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "default" }}>
           {buttonText}
         </div>
+          </div>
         {showHistory && (
-          <div style={{ marginTop: 14, maxWidth: 380 }}>
+          <div style={{ marginTop: twoColumn ? 0 : 14, maxWidth: 380 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#18324a", marginBottom: 6 }}>{historyTitle}</div>
             <div style={{ fontSize: 11, color: "#8ba9be", border: "1px solid #e3edf5", borderRadius: 6, padding: "8px 10px" }}>
               Past requests appear here on the live page.
             </div>
           </div>
         )}
+        </div>
       </div>
     );
   }

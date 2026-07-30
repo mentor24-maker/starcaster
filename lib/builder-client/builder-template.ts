@@ -2308,6 +2308,7 @@ export function createEmptyModule(
                         ? {
                             formTitle: "Request Support",
                             showTitle: "true",
+                            layout: "two-column",
                             defaultPriority: "normal",
                             showScreenshot: "true",
                             buttonText: "Send Request",
