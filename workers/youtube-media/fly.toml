@@ -1,0 +1,35 @@
+# Fly.io config for the YouTube media worker.
+#
+# This file exists so nobody has to answer the `fly launch` wizard. With it
+# committed, deploying is `fly apps create` once, then `fly deploy` forever.
+#
+# Change `app` if that name is already taken — Fly app names are global.
+
+app = "starcaster-yt-media"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Never scale to zero. A stopped machine drops in-flight downloads, and jobs
+  # are held in memory — a restart loses them.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "20s"
+
+[[vm]]
+  # ffmpeg needs room to transcode, and a 1080p download needs disk headroom.
+  # 1GB/1 shared CPU handles two concurrent jobs; size up if you raise
+  # MAX_CONCURRENT_JOBS.
+  size = "shared-cpu-1x"
+  memory = "1gb"

@@ -46,34 +46,74 @@ Every route except `/health` requires `Authorization: Bearer <shared secret>`.
 | `YTDLP_COOKIES_FILE` | no | Path to a cookies file. See below — you will probably need this. |
 | `JOB_TTL_MS` | no | How long finished jobs stay readable. Default 6 hours. |
 
-## Deploying it
+## Deploying it — the short version
 
-The Dockerfile is self-contained. On Fly.io:
+Seven commands, start to finish. `fly.toml` is committed, so there is no setup
+wizard to answer. Run these from this folder.
+
+**1. Install the Fly command-line tool** (once per machine):
 
 ```bash
-cd workers/youtube-media
-fly launch --no-deploy            # creates the app; accept the Dockerfile
-fly secrets set WORKER_SHARED_SECRET="$(openssl rand -hex 32)"
-fly secrets set BLOB_READ_WRITE_TOKEN="<your Vercel Blob token>"
+brew install flyctl
+```
+
+**2. Sign in** — opens a browser; create the account there if you don't have one:
+
+```bash
+fly auth login
+```
+
+**3. Create the app.** The name must be globally unique, so if this one is
+taken, pick another and change `app =` at the top of `fly.toml` to match:
+
+```bash
+fly apps create starcaster-yt-media
+```
+
+**4. Make up a password for the worker and save it where you keep passwords.**
+This is how StarCaster proves it's allowed to use the worker. Print one:
+
+```bash
+openssl rand -hex 32
+```
+
+**5. Give the worker its two secrets**, pasting the password from step 4 and
+your Vercel Blob token (Vercel dashboard → Storage → your Blob store → Tokens):
+
+```bash
+fly secrets set WORKER_SHARED_SECRET="paste-step-4-here"
+fly secrets set BLOB_READ_WRITE_TOKEN="paste-blob-token-here"
+```
+
+**6. Deploy.** First run takes a few minutes — it's building the image:
+
+```bash
 fly deploy
 ```
 
-Railway, Render, or any VPS with Docker work the same way. Give it at least
-1GB RAM and a few GB of disk — ffmpeg needs room to work.
-
-Then point StarCaster at it under **Settings → APIs → YouTube Media Worker
-(yt-dlp)**: the worker's URL, and the same shared secret. Or set
-`YOUTUBE_MEDIA_WORKER_URL` and `YOUTUBE_MEDIA_WORKER_TOKEN` as environment
-variables in Vercel — note that changing an env var there needs a redeploy
-before the running app sees it.
-
-Check it came up:
+**7. Check it's alive:**
 
 ```bash
-curl https://<your-worker>/health
+curl https://starcaster-yt-media.fly.dev/health
 ```
 
-You want `"ok": true` with version strings for both `ytdlp` and `ffmpeg`.
+You want `"ok": true` and version numbers next to `ytdlp` and `ffmpeg`. If
+either is empty, the image built wrong — run `fly deploy --no-cache`.
+
+**Last step, in StarCaster:** Settings → APIs → **YouTube Media Worker
+(yt-dlp)**. Worker URL is `https://starcaster-yt-media.fly.dev`, Shared Secret
+is the password from step 4. Save, then acquire a short video with "Download
+.mp4 and .mp3 files" ticked.
+
+### If you'd rather not use Fly
+
+Any host that runs a Docker container works — Railway, Render, a VPS. Give it
+at least 1GB RAM and a few GB of disk, set the same two environment variables,
+and point StarCaster at its URL.
+
+You can also set `YOUTUBE_MEDIA_WORKER_URL` and `YOUTUBE_MEDIA_WORKER_TOKEN` as
+environment variables in Vercel instead of using the Settings screen — but
+changing an env var there does nothing until you redeploy.
 
 ## About the cookies file
 
