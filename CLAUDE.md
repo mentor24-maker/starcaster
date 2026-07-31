@@ -3,6 +3,9 @@
 Read this file plus the `CLAUDE.md` nearest the files you are editing
 (`components/`, `src/css/`, `routes/`, `public/js/`, `lib/builder-client/`).
 Architecture, known issues, and roadmap: `docs/FABLE_OVERHAUL_PLAN.md`.
+**Hard-won rules, each with the incident that produced it: `docs/DOCTRINE.md`.**
+Read it before diagnosing a "it worked yesterday" failure, writing an error
+message, or adding a check that could silently not run.
 
 ## IMPORTANT: Coach the operator
 
@@ -89,6 +92,15 @@ hashes pinned by `npm run pin:assets` — editing them is fine.
    pre-commit and CI, but it catches syntax only: a typo like
    `App.assset.foo()` still parses and fails at runtime. Open the app and
    check the browser console after editing these files.
+10. **Vercel bakes env vars in at build time.** Editing one in the dashboard
+    does NOT reach the deployment already serving traffic — it takes a redeploy.
+    So "the value is wrong" and "the value is right but not live" look
+    identical. This cost an hour on 2026-07-29; before suspecting a credential,
+    compare the build time (`lib/buildInfo.js`) with when the variable changed.
+11. **`checkEndpointLimit` returns `true` when it has ALREADY sent a 429.**
+    `if (checkEndpointLimit(...)) return true;` is correct. The inverted form
+    bails out of every normal request and writes nothing at all — status 0,
+    empty body, a completely dead endpoint that still looks fine in review.
 
 ## One worktree per thread
 
