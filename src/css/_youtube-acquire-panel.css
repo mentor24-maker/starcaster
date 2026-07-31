@@ -1,0 +1,113 @@
+/* "YouTube Video" acquire panel — the React island at #youtubeVideoAcquireRoot
+   on Acquire: YouTube. It deliberately reuses the page's existing hero classes
+   (.acquire-youtube-hero-row, .acquire-youtube-hero-input, .hanging-details) so
+   it sits level with the Keywords form beside it; only the parts that have no
+   vanilla equivalent are styled here. */
+
+#acquireYoutubePage .yt-acquire-panel {
+  /* Mirrors .acquire-youtube-hero-shell — the React form is its own shell. */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#acquireYoutubePage .yt-acquire-row {
+  width: min(100%, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#acquireYoutubePage .yt-acquire-row label {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+#acquireYoutubePage .yt-acquire-input[aria-invalid='true'] {
+  border-color: var(--danger, #c0392b);
+}
+
+#acquireYoutubePage .yt-acquire-advanced-grid {
+  margin-top: 1rem;
+}
+
+#acquireYoutubePage .yt-acquire-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#acquireYoutubePage .yt-acquire-checks .checkbox-row {
+  text-align: left;
+  font-weight: normal;
+}
+
+#acquireYoutubePage .yt-acquire-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted, #6b7280);
+  text-align: center;
+}
+
+#acquireYoutubePage .yt-acquire-hint-warn {
+  color: var(--danger, #c0392b);
+}
+
+#acquireYoutubePage .yt-acquire-error {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--danger, #c0392b);
+  text-align: center;
+}
+
+/* Result summary: what came back, before the operator scrolls to Extract. */
+#acquireYoutubePage .yt-acquire-result {
+  width: min(100%, 720px);
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+#acquireYoutubePage .yt-acquire-result-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+#acquireYoutubePage .yt-acquire-result-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+#acquireYoutubePage .yt-acquire-media {
+  width: min(100%, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+#acquireYoutubePage .yt-acquire-media-links {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* The comment miner moved out of the hero pair, so it no longer inherits the
+   pair's flex sizing and needs its own centering. Both classes are named to
+   outrank legacy.css's `.acquire-youtube-hero-form { margin: 0 }`, which is
+   imported after this file and would otherwise win. */
+#acquireYoutubePage .acquire-youtube-hero-form.acquire-youtube-miner-form {
+  margin: 0 auto 1.5rem;
+}

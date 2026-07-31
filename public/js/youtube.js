@@ -5335,52 +5335,35 @@ App.youtube = (function () {
       });
     }
 
-    if (els.youtubeAcquireForm) {
-      els.youtubeAcquireForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        try {
-          var formData = new FormData(els.youtubeAcquireForm);
-          var action = String(e.submitter && e.submitter.dataset && e.submitter.dataset.acquireAction ? e.submitter.dataset.acquireAction : 'details').toLowerCase();
-          var selectedTopic = String(formData.get('topic') || '').trim();
-          var payload = {
-            capture_contact: formData.get('capture_contact') === 'on',
-            video_url: String(formData.get('video_url') || '').trim(),
-            topic: selectedTopic
-          };
-          if (action === 'comments') {
-            var res = await api('/api/acquire/youtube-comments', { method: 'POST', body: JSON.stringify(payload) });
-            currentDetailsRun = { video_url: payload.video_url, topic: selectedTopic };
-            rememberActiveVideo({ video_url: payload.video_url });
-            renderYoutubeCommentsResult(res.result || {});
-            var total = Number(res.result && res.result.stats ? res.result.stats.total_comments : 0) || 0;
-            notify('YouTube comments acquire complete (' + total + ' comments)');
-            await refreshCommentRuns();
-          } else {
-            var dres = await api('/api/acquire/youtube', { method: 'POST', body: JSON.stringify(payload) });
-            currentDetailsRun = dres.run || { video_url: payload.video_url, topic: selectedTopic };
-            rememberActiveVideo({
-              video_url: safeText(currentDetailsRun && currentDetailsRun.video_url),
-              title: safeText(currentDetailsRun && currentDetailsRun.title),
-              channel_name: safeText(currentDetailsRun && currentDetailsRun.channel_name),
-              channel_url: safeText(currentDetailsRun && currentDetailsRun.channel_url),
-            });
-            state.youtubeAcquireResult = dres.result || null;
-            renderTopicControls();
-            renderYoutubeAcquireResult();
-            await refreshYoutubeRuns();
-            var capture = dres.contactCapture || null;
-            if (capture) {
-              var mode = String(capture.mode || 'updated');
-              if (mode === 'created')       notify('YouTube acquire complete. Contact created.');
-              else if (mode === 'existing') notify('YouTube acquire complete. Contact already existed.');
-              else                          notify('YouTube acquire complete. Contact updated.');
-            } else {
-              notify('YouTube acquire complete');
-            }
-          }
-        } catch (err) { notify(err.message, true); }
+    // The single-video acquire form is now the React panel mounted at
+    // #youtubeVideoAcquireRoot (components/acquire/youtube-video-acquire-panel).
+    // It owns the request; this page still owns the Video Details panel and the
+    // Extract tables, so the panel hands the finished run over on this event.
+    //
+    // The markup this block used to bind to (#youtubeAcquireForm) was removed
+    // from src/pages/acquire.html in an earlier redesign, which left every
+    // reference to els.youtubeAcquireForm null and the whole acquire path dead.
+    document.addEventListener('starcaster:youtube-acquired', function(e) {
+      var detail = (e && e.detail) || {};
+      var run = detail.run || null;
+      var result = detail.result || null;
+      if (!result) return;
+
+      currentDetailsRun = run || { video_url: safeText(result.video && result.video.url) };
+      rememberActiveVideo({
+        video_url: safeText(currentDetailsRun && currentDetailsRun.video_url),
+        title: safeText(currentDetailsRun && currentDetailsRun.title),
+        channel_name: safeText(currentDetailsRun && currentDetailsRun.channel_name),
+        channel_url: safeText(currentDetailsRun && currentDetailsRun.channel_url),
       });
-    }
+      state.youtubeAcquireResult = result;
+      renderTopicControls();
+      renderYoutubeAcquireResult();
+      scrollToYoutubeDetails();
+      refreshYoutubeRuns().catch(function(err) {
+        notify(err.message || 'Could not refresh the YouTube repository', true);
+      });
+    });
 
     var youtubeResearchForm = document.getElementById('youtubeResearchForm');
     var youtubeResearchSubmitBtn = document.getElementById('youtubeResearchSubmitBtn');

@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import ActiveCampaignsList from './components/campaigns/ActiveCampaignsList';
 import AssociationsPanelHost from './components/associations/associations-panel';
+import YoutubeVideoAcquirePanel from './components/acquire/youtube-video-acquire-panel';
 
 // Host ids that should receive an Associations panel. The vanilla screen names
 // the open object by dispatching starcaster:associations-target at the panel.
@@ -24,4 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!host) return;
     createRoot(host).render(<AssociationsPanelHost hostId={hostId} />);
   });
+
+  const youtubeAcquireHost = document.getElementById('youtubeVideoAcquireRoot');
+  if (youtubeAcquireHost) {
+    createRoot(youtubeAcquireHost).render(<YoutubeVideoAcquirePanel />);
+  }
 });

@@ -739,6 +739,10 @@
         </div>
 
         <div class="acquire-youtube-hero-row-pair">
+        <!-- React island: paste one YouTube URL, acquire the whole video.
+             Mounted from react-entry.js; see components/acquire/. -->
+        <div id="youtubeVideoAcquireRoot" class="acquire-youtube-hero-form"></div>
+
         <form id="youtubeResearchForm" class="acquire-youtube-hero-form">
           <div class="acquire-youtube-hero-shell">
             <div class="acquire-youtube-hero-row">
@@ -783,11 +787,18 @@
           </div>
         </form>
 
-        <form id="youtubeCommentMinerForm" class="acquire-youtube-hero-form">
+        </div>
+
+        <!-- Comment miner. Its target has always been a YouTube video/channel,
+             never a website — the old "Project Website" label was wrong, and
+             keeping it next to the new YouTube Video field would read as a
+             duplicate. Moved out of the hero pair so the two heroes above are
+             the YouTube Video field and Keywords. -->
+        <form id="youtubeCommentMinerForm" class="acquire-youtube-hero-form acquire-youtube-miner-form">
           <div class="acquire-youtube-hero-shell">
             <div class="acquire-youtube-hero-row">
-              <label for="youtubeMinerTargets">Project Website</label>
-              <input id="youtubeMinerTargets" name="targets" type="text" class="hero-action-input acquire-youtube-hero-input" aria-label="Project Website" />
+              <label for="youtubeMinerTargets">Comment Miner Targets</label>
+              <input id="youtubeMinerTargets" name="targets" type="text" class="hero-action-input acquire-youtube-hero-input" aria-label="Comment Miner Targets" placeholder="YouTube video or channel URLs, comma separated" />
             </div>
             <div class="acquire-web-hero-options-row">
               <details id="youtubeMinerExtractionAdvancedPanel" class="hanging-details acquire-web-advanced-details youtube-miner-compact-advanced-details">
@@ -825,7 +836,6 @@
             <button type="submit" id="youtubeCommentMinerSubmitBtn" class="btn btn-primary acquire-web-acquire-btn">Acquire Content</button>
           </div>
         </form>
-        </div>
 
         <section class="youtube-miner-panel">
           <section class="youtube-miner-collapsible">

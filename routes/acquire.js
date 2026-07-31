@@ -65,6 +65,11 @@ const {
 } = require('../lib/acquire/YoutubeDetailsStore');
 const { captureYoutubeContact } = require('../lib/acquire/YoutubeContactCapture');
 const {
+  isConfigured: isMediaWorkerConfigured,
+  startMediaJob,
+  getMediaJob,
+} = require('../lib/acquire/YoutubeMediaWorker');
+const {
   createCommentRun,
   listCommentRuns,
   getCommentRun,
@@ -83,6 +88,7 @@ const {
   getYoutubeVideo,
   updateYoutubeVideo,
   deleteYoutubeVideo,
+  makeVideoRecordId,
 } = require('../lib/acquire/YoutubeVideosStore');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const { scopedListQuery, scopedIdQuery } = require('../lib/projectScope');
@@ -1665,6 +1671,124 @@ async function handle(req, res, pathname, method) {
       });
     }
     const payload = { result, run: summary, contactCapture };
+
+    // Media is opt-in and always best-effort. It runs on a separate worker that
+    // may be unconfigured or down, and that must never cost the caller the
+    // title/description/transcript it already paid for — so a failure here is
+    // reported inside the payload rather than thrown.
+    if (body?.include_media === true) {
+      const started = await startMediaJob({
+        videoUrl: summary.video_url || body.video_url,
+        videoId: result?.video?.id,
+        title: summary.title,
+      });
+      payload.media = {
+        job_id: started.job_id || '',
+        status: started.status,
+        error: started.error || '',
+      };
+      if (started.ok) {
+        const recordId = makeVideoRecordId(result?.video?.id, summary.video_url || body.video_url);
+        if (recordId) {
+          await updateYoutubeVideo(
+            recordId,
+            { media_status: 'queued', media_job_id: started.job_id, media_error: '' },
+            scope
+          ).catch(() => null);
+        }
+      }
+    }
+
+    return sendOk(res, 200, payload, payload), true;
+  }
+
+  // POST /api/acquire/youtube-media — queue an .mp4/.mp3 download on the worker
+  if (pathname === '/api/acquire/youtube-media' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'acquire.youtube')) return true;
+
+    const body = await parseJsonBody(req);
+    const scope = requestProjectScope(req);
+    const videoUrl = safeText(body?.video_url);
+    if (!videoUrl) return sendErr(res, 400, 'video_url is required'), true;
+
+    if (!isMediaWorkerConfigured()) {
+      return sendErr(
+        res,
+        503,
+        'The YouTube media worker is not configured. Add its URL and shared secret under Settings > APIs.'
+      ), true;
+    }
+
+    const started = await startMediaJob({
+      videoUrl,
+      videoId: safeText(body?.video_id),
+      title: safeText(body?.title),
+      formats: Array.isArray(body?.formats) ? body.formats : ['mp4', 'mp3'],
+    });
+    if (!started.ok) {
+      return sendErr(res, 502, started.error || `Media worker unavailable (${started.status})`), true;
+    }
+
+    const recordId = makeVideoRecordId(safeText(body?.video_id), videoUrl);
+    if (recordId) {
+      await updateYoutubeVideo(
+        recordId,
+        { media_status: 'queued', media_job_id: started.job_id, media_error: '' },
+        scope
+      ).catch(() => null);
+    }
+
+    logActivity({
+      action: 'acquire.youtube_media_queued',
+      entityType: 'acquire',
+      entityId: started.job_id,
+      summary: `YouTube media queued: ${safeText(body?.title) || videoUrl}`,
+      meta: { video_url: videoUrl, job_id: started.job_id },
+    });
+
+    const payload = { job_id: started.job_id, status: started.status, video_record_id: recordId };
+    return sendOk(res, 202, payload, payload), true;
+  }
+
+  // GET /api/acquire/youtube-media/:jobId — poll one download, persist when done
+  const youtubeMediaJobMatch = pathname.match(/^\/api\/acquire\/youtube-media\/([^/]+)$/);
+  if (youtubeMediaJobMatch && method === 'GET') {
+    const jobId = decodeURIComponent(youtubeMediaJobMatch[1]);
+    const scope = requestProjectScope(req);
+    const urlObj = getUrlObj(req);
+    const videoUrl = safeText(urlObj.searchParams.get('video_url'));
+    const videoId = safeText(urlObj.searchParams.get('video_id'));
+
+    const job = await getMediaJob(jobId);
+    if (!job.ok) {
+      return sendErr(res, 502, job.error || `Media worker unavailable (${job.status})`), true;
+    }
+
+    // Write the outcome back to the video the moment it is known, so the files
+    // survive the operator closing the tab mid-download.
+    const recordId = videoUrl ? makeVideoRecordId(videoId, videoUrl) : '';
+    if (recordId && (job.status === 'done' || job.status === 'failed')) {
+      await updateYoutubeVideo(
+        recordId,
+        {
+          media_status: job.status,
+          media_job_id: jobId,
+          media_mp4_url: safeText(job.mp4?.url),
+          media_mp3_url: safeText(job.mp3?.url),
+          media_error: job.error || '',
+        },
+        scope
+      ).catch(() => null);
+    }
+
+    const payload = {
+      job_id: jobId,
+      status: job.status,
+      progress: job.progress || 0,
+      mp4: job.mp4,
+      mp3: job.mp3,
+      error: job.error || '',
+    };
     return sendOk(res, 200, payload, payload), true;
   }
 
