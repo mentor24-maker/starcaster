@@ -6376,6 +6376,55 @@ button.builder-inline-asset-status-btn:focus-visible {
   flex-wrap: wrap;
 }
 
+/* Picker action buttons.
+   _buttons.css sets `button { color: var(--btn-text) }` (white) and the
+   `button` reset later in this file strips the background back to
+   transparent, so a button carrying no visual class of its own paints white
+   text on the white modal and disappears. `.tiny-btn` only sets padding and
+   font-size, so it does not rescue them. Every picker action button needs an
+   explicit face. */
+.builder-theme-picker-toolbar > button,
+.builder-theme-picker-upload button,
+.builder-theme-picker-preview-btn,
+.builder-theme-picker-select-btn {
+  border: 1px solid rgba(15, 79, 143, 0.24);
+  border-radius: 8px;
+  background: #fff;
+  color: #123d67;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.85rem;
+  white-space: nowrap;
+}
+
+.builder-theme-picker-toolbar > button:hover,
+.builder-theme-picker-upload button:hover,
+.builder-theme-picker-preview-btn:hover,
+.builder-theme-picker-select-btn:hover {
+  background: #e8f7fc;
+  border-color: rgba(15, 79, 143, 0.42);
+  opacity: 1;
+}
+
+.builder-theme-picker-select-btn {
+  background: #0f4f8f;
+  border-color: #0f4f8f;
+  color: #fff;
+}
+
+.builder-theme-picker-select-btn:hover {
+  background: #123d67;
+  border-color: #123d67;
+  color: #fff;
+}
+
+/* The gallery cards hide Preview with the `hidden` attribute when the caller
+   passes no onPreview; `[hidden]` loses to `button { display: inline-flex }`,
+   so say it here or an empty button holds open half the action row. */
+.builder-theme-picker-card-actions button[hidden] {
+  display: none;
+}
+
 .builder-theme-picker-grid {
   display: grid;
   gap: 0.8rem;
