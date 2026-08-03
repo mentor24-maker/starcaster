@@ -10,7 +10,7 @@
  *   node scripts/sync_env_to_vercel.js [--targets production,preview,development] [--dry-run]
  *
  * Prerequisites in .env.local:
- *   VERCEL_TOKEN      — personal access token from vercel.com/account/settings/tokens
+ *   VERCEL_API_TOKEN  — personal access token from vercel.com/account/settings/tokens
  *   VERCEL_PROJECT_ID — (optional) falls back to .vercel/repo.json
  *   VERCEL_TEAM_ID    — (optional) falls back to .vercel/repo.json
  */
@@ -38,7 +38,7 @@ function loadVercelRepo() {
 }
 
 const repo      = loadVercelRepo();
-const TOKEN      = process.env.VERCEL_TOKEN;
+const TOKEN      = process.env.VERCEL_API_TOKEN;
 const PROJECT_ID = process.env.VERCEL_PROJECT_ID || repo.projectId;
 const TEAM_ID    = process.env.VERCEL_TEAM_ID    || repo.teamId;
 
@@ -64,7 +64,7 @@ const SYNC_KEYS = [
 ];
 
 // Keys intentionally excluded (Vercel manages or are local-only):
-//   PORT, NODE_ENV, VERCEL_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID
+//   PORT, NODE_ENV, VERCEL_API_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -139,7 +139,7 @@ async function main() {
   console.log(`Dry run : ${DRY_RUN}`);
   console.log('');
 
-  if (!TOKEN)      { console.error('ERROR: VERCEL_TOKEN is not set in .env.local'); process.exit(1); }
+  if (!TOKEN)      { console.error('ERROR: VERCEL_API_TOKEN is not set in .env.local'); process.exit(1); }
   if (!PROJECT_ID) { console.error('ERROR: VERCEL_PROJECT_ID not found'); process.exit(1); }
 
   // Collect local values
