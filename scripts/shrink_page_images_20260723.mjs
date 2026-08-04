@@ -132,15 +132,14 @@ function loadEnv() {
 }
 loadEnv();
 
-// The live Marinoff data is in the cloud project; .env.local's active
-// SUPABASE_URL points at the local dev stack. Repoint before loading any lib
-// that reads these at require time.
-if (!process.env.NEW_SUPABASE_URL || !process.env.NEW_SUPABASE_SERVICE_KEY) {
-  console.error('Missing NEW_SUPABASE_URL / NEW_SUPABASE_SERVICE_KEY in .env.local');
+// Live cloud credentials come from Doppler prd at run time (doppler run sets
+// process.env before loadEnv, so they win over .env.local's local-stack values).
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY ||
+    /127\.0\.0\.1|localhost/.test(process.env.SUPABASE_URL)) {
+  console.error('This script edits live cloud data. Run it with production credentials:');
+  console.error('  doppler run --config prd -- node scripts/shrink_page_images_20260723.mjs');
   process.exit(1);
 }
-process.env.SUPABASE_URL = process.env.NEW_SUPABASE_URL;
-process.env.SUPABASE_SERVICE_KEY = process.env.NEW_SUPABASE_SERVICE_KEY;
 
 const sharp = require('sharp');
 const { createClient } = require('@supabase/supabase-js');

@@ -63,7 +63,14 @@ function loadEnv() {
 }
 
 const env = loadEnv();
-const sb = createClient(env.NEW_SUPABASE_URL, env.NEW_SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
+const SB_URL = process.env.SUPABASE_URL || env.SUPABASE_URL || '';
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY || env.SUPABASE_SERVICE_KEY || '';
+if (!SB_URL || !SB_KEY || /127\.0\.0\.1|localhost/.test(SB_URL)) {
+  console.error('This script edits live cloud data. Run it with production credentials:');
+  console.error('  doppler run --config prd -- node ' + process.argv[1]);
+  process.exit(1);
+}
+const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
 const { data: rows, error } = await sb
   .from(PAGES_TABLE).select('id,slug,layout_sections')
