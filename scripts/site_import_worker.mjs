@@ -271,7 +271,9 @@ async function runCaptureStage(job, opts) {
       log(`capture [${pageIdx}] ${item.url} (depth ${item.depth})`);
       const started = Date.now();
       try {
-        const entry = { url: item.url, slug, depth: item.depth, viewports: {} };
+        // screenshots map feeds the status UI's page gallery directly —
+        // full-page shot URLs without having to download the capture JSON.
+        const entry = { url: item.url, slug, depth: item.depth, viewports: {}, screenshots: {} };
         for (const label of ['desktop', 'tablet', 'mobile']) {
           const raw = await provider.capture(item.url, {
             viewport: VIEWPORTS[label],
@@ -304,6 +306,7 @@ async function runCaptureStage(job, opts) {
             elementScreenshots,
           };
           entry.viewports[label] = await uploadJson(job.id, `capture/${slug}.${label}.json`, captureResult);
+          entry.screenshots[label] = fullPageScreenshot;
 
           if (label === 'desktop') {
             for (const ref of raw.assetUrls) {

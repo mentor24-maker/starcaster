@@ -63,6 +63,7 @@ const crm         = require('./crm');
 const blog        = require('./blog');
 const admin       = require('./admin');
 const associations = require('./associations');
+const siteImport  = require('./siteImport');
 const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
@@ -82,6 +83,7 @@ const ROUTE_MODULES = [
   contacts,
   engage,
   builder,
+  siteImport,
   seoAltText,
   communityAssets,
   messaging,

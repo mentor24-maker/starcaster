@@ -1,0 +1,246 @@
+/* Site Import (staff-only) — components/builder/site-import-page.tsx.
+   Compiled into public/styles.css by `npm run build:css`. */
+
+.site-import-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.site-import-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.site-import-url-input {
+  flex: 1;
+  max-width: 520px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.site-import-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--success-color, #047857);
+}
+
+.site-import-status.is-error {
+  color: var(--danger-color, #b91c1c);
+}
+
+.site-import-columns {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.site-import-job-list {
+  flex: 0 0 300px;
+}
+
+.site-import-job-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.site-import-job-link {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+
+.site-import-job-link:hover {
+  background: var(--hover-bg, #f3f4f6);
+}
+
+.site-import-job-link.is-active {
+  border-color: var(--border-color, #d1d5db);
+  background: var(--hover-bg, #f3f4f6);
+}
+
+.site-import-job-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-import-detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-import-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.site-import-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.site-import-badge.status-complete { background: #d1fae5; color: #065f46; }
+.site-import-badge.status-failed { background: #fee2e2; color: #991b1b; }
+.site-import-badge.status-capturing,
+.site-import-badge.status-normalizing,
+.site-import-badge.status-extracting { background: #dbeafe; color: #1e40af; }
+
+.site-import-stages {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.site-import-stage {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px dashed var(--border-color, #d1d5db);
+  color: #6b7280;
+}
+
+.site-import-stage.is-done {
+  border-style: solid;
+  color: #065f46;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
+.site-import-stage em {
+  font-style: normal;
+  color: #6b7280;
+}
+
+/* Non-empty dropped is a bug (spec §1c) — make it impossible to miss. */
+.site-import-dropped-alert {
+  padding: 12px 14px;
+  border: 2px solid #b91c1c;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #7f1d1d;
+  font-weight: 600;
+}
+
+.site-import-coverage {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.site-import-coverage th,
+.site-import-coverage td {
+  padding: 4px 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  text-align: right;
+}
+
+.site-import-coverage th:first-child,
+.site-import-coverage td:first-child {
+  text-align: left;
+}
+
+.site-import-coverage tr.is-dropped td {
+  background: #fee2e2;
+  color: #7f1d1d;
+  font-weight: 600;
+}
+
+.site-import-shots {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.site-import-shots figure {
+  margin: 0;
+  width: 200px;
+  font-size: 11px;
+}
+
+.site-import-shots img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 6px;
+}
+
+.site-import-shots figcaption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #6b7280;
+}
+
+.is-error-text {
+  color: var(--danger-color, #b91c1c);
+}
+
+.site-import-failures {
+  font-size: 12px;
+  color: #7f1d1d;
+}
+
+.site-import-failure-url {
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.site-import-assets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.site-import-assets img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 6px;
+}
+
+.site-import-ir-json {
+  max-height: 480px;
+  overflow: auto;
+  padding: 12px;
+  background: #111827;
+  color: #d1fae5;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .site-import-columns {
+    flex-direction: column;
+  }
+  .site-import-job-list {
+    flex: none;
+    width: 100%;
+  }
+}

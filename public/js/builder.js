@@ -810,6 +810,14 @@ App.builder = (function () {
     App.setActivePage('builderAgentsPage');
   }
 
+  // Site Import (staff-only React screen) — mount wiring only; the page
+  // itself lives in components/builder/site-import-page.tsx.
+  function openSiteImportPage() {
+    const host = byId('builderReactRootSiteImport');
+    window.SiteImportReact?.mount(host);
+    App.setActivePage('builderSiteImportPage');
+  }
+
   function slugify(value) {
     return safeText(value)
       .toLowerCase()
@@ -14360,6 +14368,7 @@ App.builder = (function () {
     openFormsPage,
     openAgentsPage,
     openAgentsCreate,
+    openSiteImportPage,
     openModularPageTemplateEditor,
     buildModularPageTemplatePreviewMarkup,
     openBulkCreateFromManagePage,
