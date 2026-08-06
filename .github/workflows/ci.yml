@@ -59,6 +59,11 @@ jobs:
       - name: Unit tests (builder server libs)
         run: npm run test:builder
 
+      - name: Unit tests (site import engine)
+        # Runs after the full build so lib/builder/template.js exists for
+        # the mapper's round-trip proof.
+        run: npm run test:site-import
+
       - name: Convention checks (advisory)
         # Non-blocking until the 6 pre-existing button-in-<th> violations
         # are cleaned up; then drop continue-on-error to make it a gate.

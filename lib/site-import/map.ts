@@ -1,0 +1,556 @@
+/**
+ * Site Import — mapping engine: SiteIR → Builder draft page documents.
+ * Spec: docs/site-import/02-mapping.md (ratified 2026-08-06).
+ *
+ * Pure, no I/O. The runner (scripts/site_import_map.mjs) supplies context
+ * (project id, existing slugs, prior run state) and performs every write.
+ * COMPLETENESS OVER FIDELITY carries over from Phase 1: every ElementIR
+ * must end in exactly one disposition — mapped, placeholder, navConsumed,
+ * or skipped-with-reason — and the report must reconcile
+ * (total === mapped + placeholder + navConsumed + humanModified + skipped)
+ * before the runner will ever --apply. humanModified is the runner's
+ * bucket (it owns the section-hash clobber guard); the engine emits 0.
+ *
+ * Dispositions (ratified decisions 1–3):
+ *   heading/text/link  → merged rich-text `text` modules, split ≤ 9,500
+ *                        chars (oversize ladder: element boundaries →
+ *                        top-level children → whitespace → placeholder)
+ *   link matching a nav item → navConsumed (mapped only by --nav)
+ *   image              → `image` module
+ *   button             → `button` module
+ *   video (direct src) → `video` module; otherwise placeholder
+ *   form/table/embed/other → placeholder: `code` module carrying the
+ *                        element's screenshot crop; source HTML in
+ *                        settings.importSourceHtml (overflow → runner
+ *                        uploads to Blob and sets importSourceHtmlUrl)
+ */
+
+import * as cheerio from "cheerio";
+import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
+
+/** Keep merged text modules comfortably under the hard 10k normalizer cap. */
+export const TEXT_MODULE_CHAR_BUDGET = 9500;
+/** settings values (other than content keys) cap at 10k — stay under it. */
+export const SOURCE_HTML_INLINE_BUDGET = 9000;
+
+/* ---------------------------------------------------------------------------
+ * Output shapes
+ * ------------------------------------------------------------------------ */
+
+export type MappedModule = {
+  id: string;
+  type: string;
+  column: "main";
+  name: string;
+  text: string;
+  settings: Record<string, string>;
+};
+
+/** Minimal section shape — createPage's document serializer fills every
+ *  other BuilderTemplateSection field with defaults. */
+export type MappedSection = {
+  id: string;
+  title: string;
+  layout: "single";
+  widthMode: "contained";
+  background: { mode: "none" | "color"; color: string; color2: string; imageUrl: string; styleKey: "" };
+  modules: MappedModule[];
+  /** Engine bookkeeping for the runner (stripped before write): */
+  sourceElementIds: string[];
+  /** How this section's elements were disposed — the runner moves these
+   *  to humanModified when the hash guard protects the section. */
+  dispositions: { mapped: number; placeholder: number };
+};
+
+export type MappedPage = {
+  irPath: string;
+  name: string;
+  slug: string;
+  sections: MappedSection[];
+};
+
+export type CropCopy = { sourceId: string; fromUrl: string; moduleId: string };
+export type AssetPromotion = {
+  assetId: string;
+  fromUrl: string;
+  originalUrl: string;
+  altText: string;
+  mimeType: string;
+};
+export type SourceOverflow = { sourceId: string; moduleId: string; html: string };
+
+export type MapReport = {
+  elements: {
+    total: number;
+    mapped: number;
+    placeholder: number;
+    navConsumed: number;
+    humanModified: number;
+    skipped: number;
+  };
+  skipped: { sourceId: string; class: string; reason: string }[];
+  pages: {
+    path: string;
+    slug: string;
+    modules: number;
+    placeholders: number;
+    builderPageId: string | null;
+  }[];
+  assets: { promoted: number; cropsCopied: number; leftInNamespace: number };
+};
+
+export type MapOutput = {
+  pages: MappedPage[];
+  /** Header nav for --nav, in navigation-module navItems shape. */
+  navItems: { id: string; label: string; href: string; parentId: string; target: string }[];
+  copyPlan: {
+    crops: CropCopy[];
+    assets: AssetPromotion[];
+    sourceOverflows: SourceOverflow[];
+  };
+  report: MapReport;
+};
+
+export type MapOptions = {
+  /** Slugs already taken by pages the import does NOT own. */
+  existingSlugs: string[];
+};
+
+/* ---------------------------------------------------------------------------
+ * Slug normalization (decision 4 — verified platform facts)
+ * ------------------------------------------------------------------------ */
+
+/** Slugs the platform treats as auto-private or reserved — an import must
+ *  never emit them (lib/builder-client/public-site-page-slugs.js). */
+const RESERVED_SLUG_RE = /^(admin|admin-.*|blog-post-edit|blog-create-post|blog-post-manager|blog-category-manager|crm|home)$/;
+
+/** Builder slugs are single-segment (middleware rewrites /{slug}) and
+ *  lowercase. Flatten path separators, ascii-fold, strip the rest. */
+export function normalizeImportSlug(irPath: string): string {
+  const path = String(irPath || "").trim();
+  if (path === "" || path === "/") return "imported-home";
+  const flattened = path
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "") // strip diacritics after NFKD
+    .replace(/[/\s_]+/g, "-")
+    .replace(/[^a-z0-9-]+/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!flattened) return "imported-page";
+  // Reserved/auto-private slugs get the imported- prefix so pages cannot
+  // silently vanish from the public list or shadow platform screens.
+  if (RESERVED_SLUG_RE.test(flattened)) return `imported-${flattened}`;
+  return flattened;
+}
+
+function uniqueSlug(base: string, taken: Set<string>): string {
+  if (!taken.has(base)) {
+    taken.add(base);
+    return base;
+  }
+  let candidate = `${base}-imported`;
+  let n = 2;
+  while (taken.has(candidate)) candidate = `${base}-imported-${n++}`;
+  taken.add(candidate);
+  return candidate;
+}
+
+/* ---------------------------------------------------------------------------
+ * Oversize prose splitting (decision 2's ladder)
+ * ------------------------------------------------------------------------ */
+
+type DomNode = {
+  type: string;
+  name?: string;
+  data?: string;
+  children?: DomNode[];
+};
+
+/**
+ * Split one HTML fragment into pieces each ≤ budget:
+ * 1. at its top-level child boundaries, recursively;
+ * 2. an atomic text run hard-splits at the nearest whitespace (a seam may
+ *    break inline formatting — recorded in the spec as acceptable);
+ * 3. returns null only when there is no split point at all (caller
+ *    demotes to placeholder).
+ */
+export function splitOversizeHtml(html: string, budget: number): string[] | null {
+  const value = String(html || "");
+  if (value.length <= budget) return [value];
+
+  const $ = cheerio.load(value, null, false); // fragment mode
+  const rootChildren = ($.root()[0] as unknown as DomNode).children || [];
+  const pieces: string[] = [];
+  if (rootChildren.length > 1) {
+    for (const child of rootChildren) {
+      const childHtml = $.html(child as never) || "";
+      if (!childHtml) continue;
+      const sub = splitOversizeHtml(childHtml, budget);
+      if (sub === null) return null;
+      pieces.push(...sub);
+    }
+    return pieces;
+  }
+
+  const only = rootChildren[0];
+  if (!only) return null;
+  if (only.type === "text") {
+    return hardSplitText(only.data || "", budget);
+  }
+  const inner = only.children || [];
+  if (inner.length === 0) return null; // one huge unsplittable atom
+  // Recurse into the single element's children; its own tag is dropped at
+  // the seam (a <div> wrapper contributes no content).
+  const innerHtml = inner.map((c) => $.html(c as never) || "").join("");
+  return splitOversizeHtml(innerHtml, budget);
+}
+
+function hardSplitText(text: string, budget: number): string[] | null {
+  if (!/\s/.test(text.trim())) return null;
+  const out: string[] = [];
+  let rest = text;
+  while (rest.length > budget) {
+    let cut = rest.lastIndexOf(" ", budget);
+    if (cut <= 0) cut = rest.indexOf(" ", budget);
+    if (cut <= 0) return null;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut + 1);
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Helpers
+ * ------------------------------------------------------------------------ */
+
+function attrFromHtml(html: string, attr: string): string {
+  const m = new RegExp(`${attr}\\s*=\\s*"([^"]*)"`, "i").exec(String(html || ""));
+  return m ? m[1] : "";
+}
+
+function normalizeHref(href: string): string {
+  return String(href || "").trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function collapse(s: string): string {
+  return String(s || "").replace(/\s+/g, " ").trim();
+}
+
+function escapeHtml(s: string): string {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+const PLACEHOLDER_CLASSES = new Set(["form", "table", "embed", "other"]);
+const PROSE_CLASSES = new Set(["heading", "text", "link"]);
+const DIRECT_MEDIA_RE = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
+
+/* ---------------------------------------------------------------------------
+ * The engine
+ * ------------------------------------------------------------------------ */
+
+export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
+  const takenSlugs = new Set((opts.existingSlugs || []).map((s) => String(s).toLowerCase()));
+  const assetsById = new Map<string, AssetRef>((ir.assets || []).map((a) => [a.id, a]));
+
+  // Nav lookup: label+href pairs from every extracted nav tree; matching
+  // standalone link elements are navConsumed (decision 6: default runs
+  // leave nav alone; --nav maps the tree itself).
+  const navPairs = new Set<string>();
+  const collectNav = (items: NavItem[]) => {
+    for (const item of items || []) {
+      navPairs.add(`${collapse(item.label).toLowerCase()}|${normalizeHref(item.href)}`);
+      collectNav(item.children || []);
+    }
+  };
+  for (const nav of ir.taxonomy?.navs || []) collectNav(nav.items);
+
+  const report: MapReport = {
+    elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, humanModified: 0, skipped: 0 },
+    skipped: [],
+    pages: [],
+    assets: { promoted: 0, cropsCopied: 0, leftInNamespace: 0 },
+  };
+  const crops: CropCopy[] = [];
+  const promotions = new Map<string, AssetPromotion>();
+  const sourceOverflows: SourceOverflow[] = [];
+  const pages: MappedPage[] = [];
+
+  let moduleSeq = 0;
+  const nextModuleId = (sourceId: string) =>
+    `impm_${String(sourceId).replace(/[^a-zA-Z0-9]+/g, "")}_${moduleSeq++}`;
+
+  const promoteAsset = (assetId: string): AssetRef | null => {
+    const asset = assetsById.get(assetId);
+    if (!asset) return null;
+    if (!promotions.has(assetId)) {
+      promotions.set(assetId, {
+        assetId,
+        fromUrl: asset.storageUrl || asset.originalUrl,
+        originalUrl: asset.originalUrl,
+        altText: asset.altText || "",
+        mimeType: asset.mimeType || "",
+      });
+    }
+    return asset;
+  };
+
+  for (const page of ir.pages || []) {
+    const mappedSections: MappedSection[] = [];
+    let pageModules = 0;
+    let pagePlaceholders = 0;
+
+    for (const section of page.sections || []) {
+      const modules: MappedModule[] = [];
+      const sourceElementIds: string[] = [];
+      const dispositions = { mapped: 0, placeholder: 0 };
+      let prose: { html: string; sourceIds: string[] } = { html: "", sourceIds: [] };
+      let firstHeading = "";
+
+      const flushProse = () => {
+        if (!prose.html.trim()) {
+          prose = { html: "", sourceIds: [] };
+          return;
+        }
+        modules.push({
+          id: nextModuleId(prose.sourceIds[0] || section.sourceId),
+          type: "text",
+          column: "main",
+          name: "Imported text",
+          text: prose.html,
+          settings: { importSourceIds: prose.sourceIds.join(",") },
+        });
+        prose = { html: "", sourceIds: [] };
+      };
+
+      const pushPlaceholder = (el: ElementIR, reasonNote?: string) => {
+        const moduleId = nextModuleId(el.sourceId);
+        const caption = reasonNote || `Imported ${el.class} — rebuild with a real module.`;
+        const cropImg = el.screenshot
+          ? `<img src="${el.screenshot}" alt="Screenshot of imported ${el.class}" style="max-width:100%" />`
+          : `<p><em>(No screenshot was captured for this element.)</em></p>`;
+        const settings: Record<string, string> = {
+          snippetMode: "html",
+          label: `Imported ${el.class}`,
+          importClass: el.class,
+          importSourceId: el.sourceId,
+        };
+        if (el.html.length <= SOURCE_HTML_INLINE_BUDGET) {
+          settings.importSourceHtml = el.html;
+        } else {
+          // Runner uploads the full source to Blob and sets
+          // settings.importSourceHtmlUrl on this module.
+          sourceOverflows.push({ sourceId: el.sourceId, moduleId, html: el.html });
+        }
+        modules.push({
+          id: moduleId,
+          type: "code",
+          column: "main",
+          name: `Imported ${el.class}`,
+          text: `${cropImg}<p><em>${escapeHtml(caption)}</em></p>`,
+          settings,
+        });
+        if (el.screenshot) crops.push({ sourceId: el.sourceId, fromUrl: el.screenshot, moduleId });
+        report.elements.placeholder += 1;
+        dispositions.placeholder += 1;
+        pagePlaceholders += 1;
+      };
+
+      for (const el of section.elements || []) {
+        report.elements.total += 1;
+        sourceElementIds.push(el.sourceId);
+        if (el.class === "heading" && !firstHeading) firstHeading = collapse(el.textContent);
+
+        if (PROSE_CLASSES.has(el.class)) {
+          if (el.class === "link") {
+            const pair = `${collapse(el.textContent).toLowerCase()}|${normalizeHref(attrFromHtml(el.html, "href"))}`;
+            if (navPairs.has(pair)) {
+              report.elements.navConsumed += 1;
+              continue;
+            }
+          }
+          // Oversize ladder before merging.
+          if (el.html.length > TEXT_MODULE_CHAR_BUDGET) {
+            flushProse();
+            const split = splitOversizeHtml(el.html, TEXT_MODULE_CHAR_BUDGET);
+            if (split === null) {
+              pushPlaceholder(el, `Imported ${el.class} too large to split — rebuild manually.`);
+              continue;
+            }
+            for (const piece of split) {
+              modules.push({
+                id: nextModuleId(el.sourceId),
+                type: "text",
+                column: "main",
+                name: "Imported text",
+                text: piece,
+                settings: { importSourceIds: el.sourceId },
+              });
+            }
+            report.elements.mapped += 1;
+            dispositions.mapped += 1;
+            continue;
+          }
+          if (prose.html.length + el.html.length > TEXT_MODULE_CHAR_BUDGET) flushProse();
+          prose.html += el.html;
+          prose.sourceIds.push(el.sourceId);
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+
+        if (el.class === "image") {
+          flushProse();
+          const asset = el.assetRefs[0] ? promoteAsset(el.assetRefs[0]) : null;
+          const url = asset?.storageUrl || asset?.originalUrl || attrFromHtml(el.html, "src");
+          modules.push({
+            id: nextModuleId(el.sourceId),
+            type: "image",
+            column: "main",
+            name: "Imported image",
+            text: "",
+            settings: {
+              url,
+              alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
+              importSourceIds: el.sourceId,
+            },
+          });
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+
+        if (el.class === "button") {
+          flushProse();
+          modules.push({
+            id: nextModuleId(el.sourceId),
+            type: "button",
+            column: "main",
+            name: "Imported button",
+            text: collapse(el.textContent) || "Imported button",
+            settings: {
+              href: attrFromHtml(el.html, "href"),
+              importSourceIds: el.sourceId,
+            },
+          });
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+
+        if (el.class === "video") {
+          flushProse();
+          const src = attrFromHtml(el.html, "src");
+          if (DIRECT_MEDIA_RE.test(src)) {
+            modules.push({
+              id: nextModuleId(el.sourceId),
+              type: "video",
+              column: "main",
+              name: "Imported video",
+              text: "",
+              settings: { url: src, importSourceIds: el.sourceId },
+            });
+            report.elements.mapped += 1;
+            dispositions.mapped += 1;
+          } else {
+            pushPlaceholder(el);
+          }
+          continue;
+        }
+
+        if (PLACEHOLDER_CLASSES.has(el.class)) {
+          flushProse();
+          pushPlaceholder(el);
+          continue;
+        }
+
+        // Unreachable by the IR's closed class set — but completeness over
+        // fidelity says account for it rather than trust the assumption.
+        report.elements.skipped += 1;
+        report.skipped.push({
+          sourceId: el.sourceId,
+          class: el.class,
+          reason: `unknown element class "${el.class}"`,
+        });
+      }
+      flushProse();
+
+      if (!modules.length) continue; // nothing mappable (e.g. nav-only section)
+      // The first module of every import-owned section carries the section
+      // source marker (spec: idempotency + provenance).
+      modules[0].settings.importSectionSourceId = section.sourceId;
+      mappedSections.push({
+        id: `imps_${String(section.sourceId).replace(/[^a-zA-Z0-9]+/g, "")}`,
+        title: `Imported: ${firstHeading.slice(0, 60) || "section"}`,
+        layout: "single",
+        widthMode: "contained",
+        background: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "" },
+        modules,
+        sourceElementIds,
+        dispositions,
+      });
+      pageModules += modules.length;
+    }
+
+    const slug = uniqueSlug(normalizeImportSlug(page.path), takenSlugs);
+    pages.push({
+      irPath: page.path,
+      name: collapse(page.title) || slug,
+      slug,
+      sections: mappedSections,
+    });
+    report.pages.push({
+      path: page.path,
+      slug,
+      modules: pageModules,
+      placeholders: pagePlaceholders,
+      builderPageId: null,
+    });
+  }
+
+  // Nav tree → navigation-module items (header tree preferred).
+  const headerNav =
+    (ir.taxonomy?.navs || []).find((n) => n.location === "header") ||
+    (ir.taxonomy?.navs || [])[0] ||
+    null;
+  const navItems: MapOutput["navItems"] = [];
+  if (headerNav) {
+    let navSeq = 0;
+    const push = (items: NavItem[], parentId: string) => {
+      for (const item of items || []) {
+        const id = `impnav_${navSeq++}`;
+        navItems.push({
+          id,
+          label: collapse(item.label),
+          href: item.href || "#",
+          parentId,
+          target: "",
+        });
+        push(item.children || [], id);
+      }
+    };
+    push(headerNav.items, "");
+  }
+
+  report.assets.promoted = promotions.size;
+  report.assets.cropsCopied = crops.length;
+  report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size);
+
+  return {
+    pages,
+    navItems,
+    copyPlan: { crops, assets: Array.from(promotions.values()), sourceOverflows },
+    report,
+  };
+}
+
+/** The reconciliation rule (spec: refuse --apply unless this holds). */
+export function reportReconciles(report: MapReport): boolean {
+  const e = report.elements;
+  return (
+    e.total === e.mapped + e.placeholder + e.navConsumed + e.humanModified + e.skipped &&
+    report.skipped.length === e.skipped &&
+    report.skipped.every((s) => Boolean(s.reason))
+  );
+}
