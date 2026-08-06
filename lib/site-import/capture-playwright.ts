@@ -42,13 +42,16 @@ const CROPPED_TAGS = ["form", "video", "table", "iframe", "embed", "object", "sv
 const MAX_SECTION_CROPS = 30;
 const MAX_ELEMENT_CROPS = 40;
 
-type Rect = { x: number; y: number; width: number; height: number };
-
 type PageScanResult = {
   html: string;
   styles: Record<string, Record<string, string>>;
-  sectionRects: { index: number; rect: Rect }[];
-  elementCropRects: { domPath: string; rect: Rect }[];
+  /** Crop targets by their data-scim stamp — the provider screenshots them
+   *  via locator('[data-scim=…]'), which scrolls each into view. A clip
+   *  rect would NOT work: page.screenshot({clip}) only sees the current
+   *  viewport, so anything below the fold fails (found the hard way on
+   *  delraytennis.com — every table sat below 900px). */
+  sectionTargets: { index: number; scim: string }[];
+  elementCropTargets: { domPath: string; scim: string }[];
   assetUrls: AssetUrlRef[];
   fontFamilies: { value: string; count: number }[];
   meta: {
@@ -156,16 +159,6 @@ function pageScan(args: PageScanArgs): PageScanResult {
     return "body/" + segments.join("/");
   }
 
-  function pageRect(el: Element): Rect {
-    const r = el.getBoundingClientRect();
-    return {
-      x: r.left + window.scrollX,
-      y: r.top + window.scrollY,
-      width: r.width,
-      height: r.height,
-    };
-  }
-
   // --- Stamp + styles + fonts (desktop only) ------------------------------
   if (args.fullCapture) {
     let stamp = 0;
@@ -248,8 +241,8 @@ function pageScan(args: PageScanArgs): PageScanResult {
 
   // --- Section candidates + element crops (desktop only) ------------------
   // SYNC POINT: mirrors computeSectionCandidates() in normalize.ts.
-  const sectionRects: { index: number; rect: Rect }[] = [];
-  const elementCropRects: { domPath: string; rect: Rect }[] = [];
+  const sectionTargets: { index: number; scim: string }[] = [];
+  const elementCropTargets: { domPath: string; scim: string }[] = [];
   if (args.fullCapture) {
     let root: Element = body;
     for (;;) {
@@ -275,13 +268,14 @@ function pageScan(args: PageScanArgs): PageScanResult {
       }
     };
     expand(root);
-    for (let i = 0; i < candidates.length && sectionRects.length < args.maxSectionCrops; i++) {
+    for (let i = 0; i < candidates.length && sectionTargets.length < args.maxSectionCrops; i++) {
       if (!isVisible(candidates[i])) continue;
-      sectionRects.push({ index: i, rect: pageRect(candidates[i]) });
+      const scim = candidates[i].getAttribute("data-scim");
+      if (scim !== null) sectionTargets.push({ index: i, scim });
     }
 
     const cropTargets = document.querySelectorAll(args.croppedTags.join(","));
-    for (let i = 0; i < cropTargets.length && elementCropRects.length < args.maxElementCrops; i++) {
+    for (let i = 0; i < cropTargets.length && elementCropTargets.length < args.maxElementCrops; i++) {
       const el = cropTargets[i];
       if (!isVisible(el)) continue;
       // Skip elements nested inside an atom the countable walk never
@@ -297,8 +291,9 @@ function pageScan(args: PageScanArgs): PageScanResult {
       }
       if (swallowed) continue;
       const path = domPath(el);
-      if (!path) continue;
-      elementCropRects.push({ domPath: path, rect: pageRect(el) });
+      const scim = el.getAttribute("data-scim");
+      if (!path || scim === null) continue;
+      elementCropTargets.push({ domPath: path, scim });
     }
   }
 
@@ -321,8 +316,8 @@ function pageScan(args: PageScanArgs): PageScanResult {
   return {
     html: document.documentElement.outerHTML,
     styles,
-    sectionRects,
-    elementCropRects,
+    sectionTargets,
+    elementCropTargets,
     assetUrls,
     fontFamilies,
     meta: {
@@ -383,35 +378,31 @@ export class PlaywrightCaptureProvider implements CaptureProvider {
 
       const fullPage = await page.screenshot({ fullPage: true, type: "png" });
 
-      const clampRect = (rect: Rect): Rect | null => {
-        const x = Math.max(0, Math.floor(rect.x));
-        const y = Math.max(0, Math.floor(rect.y));
-        const width = Math.floor(rect.width);
-        const height = Math.floor(rect.height);
-        if (width < 4 || height < 4) return null; // sub-pixel slivers
-        return { x, y, width, height };
+      // Element screenshots via the data-scim stamps — locator.screenshot()
+      // scrolls the target into view, which a clip rect cannot do
+      // (page.screenshot({clip}) only sees the current viewport, so
+      // below-the-fold crops come back "outside the resulting image").
+      const shoot = async (scim: string): Promise<Uint8Array | null> => {
+        try {
+          return await page
+            .locator(`[data-scim="${scim}"]`)
+            .screenshot({ type: "png", timeout: 5000, animations: "disabled" });
+        } catch {
+          // A crop that fails (element vanished, zero-size at shoot time)
+          // is just a missing thumbnail — never fail the page for it.
+          return null;
+        }
       };
 
       const sections: RawCapture["screenshots"]["sections"] = [];
-      for (const { index, rect } of scan.sectionRects) {
-        const clip = clampRect(rect);
-        if (!clip) continue;
-        try {
-          sections.push({ index, png: await page.screenshot({ clip, type: "png" }) });
-        } catch {
-          /* a crop that fails (e.g. element vanished mid-capture) is just
-             a missing thumbnail — never fail the page for it */
-        }
+      for (const { index, scim } of scan.sectionTargets) {
+        const png = await shoot(scim);
+        if (png) sections.push({ index, png });
       }
       const elements: RawCapture["screenshots"]["elements"] = [];
-      for (const { domPath, rect } of scan.elementCropRects) {
-        const clip = clampRect(rect);
-        if (!clip) continue;
-        try {
-          elements.push({ domPath, png: await page.screenshot({ clip, type: "png" }) });
-        } catch {
-          /* same: missing crop beats failed capture */
-        }
+      for (const { domPath, scim } of scan.elementCropTargets) {
+        const png = await shoot(scim);
+        if (png) elements.push({ domPath, png });
       }
 
       return {

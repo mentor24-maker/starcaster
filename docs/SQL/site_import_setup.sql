@@ -58,6 +58,12 @@ create table if not exists public.app_site_import_jobs (
   finished_at          timestamptz
 );
 
+-- Per-job cap overrides (spec §1a "all configurable per job"): merged over
+-- the worker's defaults, shape = DEFAULT_CAPS in lib/siteImportStore.js.
+-- Added in the worker slice — the whole file is idempotent, re-run it.
+alter table public.app_site_import_jobs
+  add column if not exists caps jsonb not null default '{}'::jsonb;
+
 -- A job stopped cleanly by a cap (max pages, byte budget, …) still ends
 -- 'complete' — the partiality is recorded in coverage.caps. 'failed' is
 -- reserved for jobs that produced no usable result.
