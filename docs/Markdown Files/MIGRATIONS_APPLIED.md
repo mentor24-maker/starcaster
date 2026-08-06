@@ -39,6 +39,7 @@ Record **packs** or individual files after you run them. Oldest first.
 | 2026-05-18 | `supabase_connection_ops_setup.sql` | ✓ | | | Item 3 — Connection Ops smoke tests passed |
 | 2026-05-18 | `013_file_stores_supabase.sql` | ✓ | ✓ | ✓ | acquire_job_mirror, orchestrator_runs, develop_icons; SQL run in Supabase **ISITAS** (prod); preview uses same DB as prod on Vercel |
 | 2026-05-27 | `SQL/team_invitations_setup.sql` | | | | Phase 1 team invites: `team_invitations`, `contacts.auth_user_id` |
+| 2026-08-05 | `site_import_setup.sql` | | | ✓ | Site Import Phase 1: `app_site_import_jobs`, `app_site_import_assets` (operator ran in Supabase SQL editor) |
 | | | | | | |
 
 *Add rows above as you apply scripts. Do not delete history—strike through superseded entries if needed.*

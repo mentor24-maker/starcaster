@@ -50,6 +50,7 @@ const GENERATED = [
   'lib/builder/template.js',
   'lib/builder/email-template.js',
   'lib/builder/email-render.js',
+  'lib/site-import/dist/normalize.js',
 ];
 
 function checkNoArtifactsStaged(files) {

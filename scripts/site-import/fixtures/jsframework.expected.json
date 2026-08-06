@@ -1,0 +1,349 @@
+{
+  "ir": {
+    "irVersion": "1.0",
+    "jobId": "job-fixture-jsx",
+    "sourceUrl": "https://example-app.com/",
+    "capturedAt": "2026-08-05T12:00:00.000Z",
+    "pages": [
+      {
+        "url": "https://example-app.com/",
+        "path": "/",
+        "title": "Acme — Ship faster",
+        "metaDescription": "The deployment platform for modern teams.",
+        "ogTags": {
+          "og:title": "Acme",
+          "og:image": "https://cdn.example-app.com/hero-bg.webp"
+        },
+        "canonicalUrl": "https://example-app.com/",
+        "lang": "en",
+        "sections": [
+          {
+            "sourceId": "0-08c2bf26",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s0.png",
+            "elements": [
+              {
+                "sourceId": "0-ad7d87b9",
+                "class": "link",
+                "html": "<a class=\"brand\" href=\"/\">Acme</a>",
+                "textContent": "Acme",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 0,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-e98024c4",
+                "class": "link",
+                "html": "<a href=\"/pricing\">Pricing</a>",
+                "textContent": "Pricing",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 1,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-e97968ff",
+                "class": "link",
+                "html": "<a href=\"/docs\">Docs</a>",
+                "textContent": "Docs",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 2,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-a2555773",
+                "class": "button",
+                "html": "<button class=\"signin\">Sign in</button>",
+                "textContent": "Sign in",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 3,
+                "depth": 4,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "0-04c07a43",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s1.png",
+            "elements": [
+              {
+                "sourceId": "0-664c1b9b",
+                "class": "heading",
+                "html": "<h2>Ship faster with Acme</h2>",
+                "textContent": "Ship faster with Acme",
+                "textLength": 21,
+                "computedStyles": {
+                  "color": "rgb(255, 255, 255)",
+                  "font-family": "Inter, sans-serif",
+                  "font-size": "56px",
+                  "font-weight": "800",
+                  "letter-spacing": "-1.4px"
+                },
+                "documentPosition": 4,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-398d085c",
+                "class": "text",
+                "html": "The deployment platform for modern teams.",
+                "textContent": "The deployment platform for modern teams.",
+                "textLength": 41,
+                "computedStyles": {
+                  "color": "rgb(148, 163, 184)",
+                  "font-family": "Inter, sans-serif",
+                  "font-size": "20px",
+                  "line-height": "32px"
+                },
+                "documentPosition": 5,
+                "depth": 5,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-d212f824",
+                "class": "button",
+                "html": "<div role=\"button\" tabindex=\"0\" class=\"cta\">Get started free</div>",
+                "textContent": "Get started free",
+                "textLength": 16,
+                "computedStyles": {
+                  "color": "rgb(15, 23, 42)",
+                  "background-color": "rgb(52, 211, 153)",
+                  "font-size": "18px",
+                  "font-weight": "700",
+                  "border-radius": "9999px",
+                  "padding-top": "14px",
+                  "padding-bottom": "14px",
+                  "padding-left": "28px",
+                  "padding-right": "28px",
+                  "display": "inline-flex",
+                  "justify-content": "center",
+                  "align-items": "center"
+                },
+                "documentPosition": 6,
+                "depth": 4,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "0-04c8c908",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s2.png",
+            "elements": [
+              {
+                "sourceId": "0-4cccc51c",
+                "class": "other",
+                "html": "<svg viewBox=\"0 0 24 24\"><path d=\"M12 2L2 22h20z\"></path></svg>",
+                "textContent": "",
+                "textLength": 0,
+                "computedStyles": {},
+                "documentPosition": 7,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-210abbc3",
+                "class": "embed",
+                "html": "<iframe src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\" title=\"Demo video\"></iframe>",
+                "textContent": "",
+                "textLength": 0,
+                "computedStyles": {},
+                "documentPosition": 8,
+                "depth": 4,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "0-48c5627d",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s3.png",
+            "elements": [
+              {
+                "sourceId": "0-7f0b98ee",
+                "class": "heading",
+                "html": "<h3>Fast</h3>",
+                "textContent": "Fast",
+                "textLength": 4,
+                "computedStyles": {
+                  "color": "rgb(15, 23, 42)",
+                  "font-family": "Inter, sans-serif",
+                  "font-size": "24px",
+                  "font-weight": "700"
+                },
+                "documentPosition": 9,
+                "depth": 5,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-939c7e94",
+                "class": "text",
+                "html": "Deploy in seconds, not hours.",
+                "textContent": "Deploy in seconds, not hours.",
+                "textLength": 29,
+                "computedStyles": {
+                  "color": "rgb(71, 85, 105)",
+                  "font-family": "Inter, sans-serif",
+                  "font-size": "16px",
+                  "line-height": "24px"
+                },
+                "documentPosition": 10,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-16a4060f",
+                "class": "heading",
+                "html": "<h3>Safe</h3>",
+                "textContent": "Safe",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 11,
+                "depth": 5,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-3fbb000d",
+                "class": "text",
+                "html": "SOC2-ready out of the box.",
+                "textContent": "SOC2-ready out of the box.",
+                "textLength": 26,
+                "computedStyles": {},
+                "documentPosition": 12,
+                "depth": 6,
+                "assetRefs": []
+              }
+            ]
+          }
+        ],
+        "screenshots": {
+          "desktop": "SiteImport/job-fixture-jsx/shots/home.desktop.full.png",
+          "tablet": "",
+          "mobile": ""
+        }
+      }
+    ],
+    "assets": [
+      {
+        "id": "b1",
+        "originalUrl": "https://cdn.example-app.com/hero-bg.webp",
+        "storageUrl": "SiteImport/job-fixture-jsx/assets/cccc3333.webp",
+        "contentHash": "cccc3333",
+        "mimeType": "image/webp",
+        "byteSize": 91000,
+        "width": 2400,
+        "height": 1200,
+        "altText": "",
+        "referencedBy": [],
+        "status": "downloaded",
+        "error": ""
+      }
+    ],
+    "taxonomy": {
+      "navs": [],
+      "pageOrder": [
+        "/"
+      ]
+    },
+    "rawTokens": {
+      "colors": [
+        {
+          "value": "rgb(15, 23, 42)",
+          "count": 3
+        },
+        {
+          "value": "rgb(148, 163, 184)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        },
+        {
+          "value": "rgb(52, 211, 153)",
+          "count": 1
+        },
+        {
+          "value": "rgb(71, 85, 105)",
+          "count": 1
+        }
+      ],
+      "fontSizes": [
+        {
+          "value": "16px",
+          "count": 1
+        },
+        {
+          "value": "18px",
+          "count": 1
+        },
+        {
+          "value": "20px",
+          "count": 1
+        },
+        {
+          "value": "24px",
+          "count": 1
+        },
+        {
+          "value": "56px",
+          "count": 1
+        }
+      ],
+      "fontFamilies": [
+        {
+          "value": "Inter, sans-serif",
+          "count": 24
+        }
+      ],
+      "spacing": [
+        {
+          "value": "14px",
+          "count": 2
+        },
+        {
+          "value": "28px",
+          "count": 2
+        },
+        {
+          "value": "96px",
+          "count": 2
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "captured": {
+      "link": 3,
+      "button": 2,
+      "heading": 3,
+      "text": 3,
+      "other": 1,
+      "embed": 1
+    },
+    "emitted": {
+      "link": 3,
+      "button": 2,
+      "heading": 3,
+      "text": 3,
+      "other": 1,
+      "embed": 1
+    },
+    "dropped": {},
+    "pages": {
+      "discovered": 1,
+      "captured": 1,
+      "failed": 0
+    },
+    "caps": {
+      "hit": []
+    }
+  }
+}

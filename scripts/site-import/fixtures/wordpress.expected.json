@@ -1,0 +1,663 @@
+{
+  "ir": {
+    "irVersion": "1.0",
+    "jobId": "job-fixture-wp",
+    "sourceUrl": "https://example-wp.com/",
+    "capturedAt": "2026-08-05T12:00:00.000Z",
+    "pages": [
+      {
+        "url": "https://example-wp.com/",
+        "path": "/",
+        "title": "Delray Padel Club",
+        "metaDescription": "Padel courts in Delray Beach, Florida.",
+        "ogTags": {
+          "og:title": "Delray Padel Club",
+          "og:type": "website"
+        },
+        "canonicalUrl": "https://example-wp.com/",
+        "lang": "en",
+        "sections": [
+          {
+            "sourceId": "0-08c2bf26",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/home.desktop.s0.png",
+            "elements": [
+              {
+                "sourceId": "0-698a674b",
+                "class": "link",
+                "html": "<a href=\"/\"><img src=\"https://example-wp.com/wp-content/uploads/logo.png\" alt=\"Delray Padel Club\"></a>",
+                "textContent": "",
+                "textLength": 0,
+                "computedStyles": {},
+                "documentPosition": 0,
+                "depth": 4,
+                "assetRefs": [
+                  "a1"
+                ]
+              },
+              {
+                "sourceId": "0-730eea08",
+                "class": "link",
+                "html": "<a href=\"/\">Home</a>",
+                "textContent": "Home",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 1,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-e130ee33",
+                "class": "link",
+                "html": "<a href=\"/about/\">About</a>",
+                "textContent": "About",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 2,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-bea01d32",
+                "class": "link",
+                "html": "<a href=\"/about/team/\">Our Team</a>",
+                "textContent": "Our Team",
+                "textLength": 8,
+                "computedStyles": {},
+                "documentPosition": 3,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-763eebae",
+                "class": "link",
+                "html": "<a href=\"/contact/\">Contact</a>",
+                "textContent": "Contact",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 4,
+                "depth": 6,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "0-04c07a43",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/home.desktop.s1.png",
+            "elements": [
+              {
+                "sourceId": "0-6f617254",
+                "class": "heading",
+                "html": "<h1>Play Padel in Delray Beach</h1>",
+                "textContent": "Play Padel in Delray Beach",
+                "textLength": 26,
+                "computedStyles": {
+                  "color": "rgb(17, 24, 39)",
+                  "font-family": "'Merriweather', serif",
+                  "font-size": "48px",
+                  "font-weight": "700",
+                  "margin-bottom": "16px"
+                },
+                "documentPosition": 5,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-4778fbbe",
+                "class": "text",
+                "html": "<p>Six championship courts, open to the public seven days a week.</p>",
+                "textContent": "Six championship courts, open to the public seven days a week.",
+                "textLength": 62,
+                "computedStyles": {
+                  "color": "rgb(55, 65, 81)",
+                  "font-family": "'Open Sans', sans-serif",
+                  "font-size": "18px",
+                  "line-height": "28px"
+                },
+                "documentPosition": 6,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-409a06a8",
+                "class": "button",
+                "html": "<a class=\"btn\" role=\"button\" href=\"/membership/\">Join Now</a>",
+                "textContent": "Join Now",
+                "textLength": 8,
+                "computedStyles": {
+                  "color": "rgb(255, 255, 255)",
+                  "background-color": "rgb(13, 148, 136)",
+                  "font-size": "16px",
+                  "border-radius": "6px",
+                  "padding-top": "12px",
+                  "padding-bottom": "12px",
+                  "padding-left": "24px",
+                  "padding-right": "24px",
+                  "display": "inline-block"
+                },
+                "documentPosition": 7,
+                "depth": 4,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "0-04c8c908",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/home.desktop.s2.png",
+            "elements": [
+              {
+                "sourceId": "0-049ea242",
+                "class": "heading",
+                "html": "<h2>Why Members Love Us</h2>",
+                "textContent": "Why Members Love Us",
+                "textLength": 19,
+                "computedStyles": {
+                  "color": "rgb(17, 24, 39)",
+                  "font-family": "'Merriweather', serif",
+                  "font-size": "32px",
+                  "font-weight": "700"
+                },
+                "documentPosition": 8,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-d01f3c29",
+                "class": "text",
+                "html": "<p>From <a href=\"/coaching/\">professional coaching</a> to social leagues, there is something for every player.</p>",
+                "textContent": "From professional coaching to social leagues, there is something for every player.",
+                "textLength": 82,
+                "computedStyles": {
+                  "color": "rgb(55, 65, 81)",
+                  "font-family": "'Open Sans', sans-serif",
+                  "font-size": "18px",
+                  "line-height": "28px"
+                },
+                "documentPosition": 9,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-e24d099f",
+                "class": "image",
+                "html": "<img src=\"/wp-content/uploads/courts.jpg\" srcset=\"/wp-content/uploads/courts-480.jpg 480w, /wp-content/uploads/courts-1024.jpg 1024w\" alt=\"Courts at sunset\">",
+                "textContent": "",
+                "textLength": 0,
+                "computedStyles": {},
+                "documentPosition": 10,
+                "depth": 4,
+                "assetRefs": [
+                  "a2"
+                ]
+              }
+            ]
+          },
+          {
+            "sourceId": "0-48c5627d",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/home.desktop.s3.png",
+            "elements": [
+              {
+                "sourceId": "0-ec044355",
+                "class": "heading",
+                "html": "<h2>Book a Court</h2>",
+                "textContent": "Book a Court",
+                "textLength": 12,
+                "computedStyles": {},
+                "documentPosition": 11,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-895a7258",
+                "class": "form",
+                "html": "<form action=\"/book\" method=\"post\"><label>Email <input type=\"email\" name=\"email\"></label><input type=\"submit\" value=\"Book\"></form>",
+                "textContent": "Email",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 12,
+                "depth": 4,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "0-08b9c4ca",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/home.desktop.s4.png",
+            "elements": [
+              {
+                "sourceId": "0-13e597d7",
+                "class": "link",
+                "html": "<a href=\"/privacy/\">Privacy</a>",
+                "textContent": "Privacy",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 13,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-c6cc02ac",
+                "class": "link",
+                "html": "<a href=\"/terms/\">Terms</a>",
+                "textContent": "Terms",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 14,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-8b23b8ab",
+                "class": "text",
+                "html": "<p>© 2026 Delray Padel Club</p>",
+                "textContent": "© 2026 Delray Padel Club",
+                "textLength": 24,
+                "computedStyles": {
+                  "color": "rgb(107, 114, 128)",
+                  "font-size": "14px",
+                  "font-family": "'Open Sans', sans-serif"
+                },
+                "documentPosition": 15,
+                "depth": 3,
+                "assetRefs": []
+              }
+            ]
+          }
+        ],
+        "screenshots": {
+          "desktop": "SiteImport/job-fixture-wp/shots/home.desktop.full.png",
+          "tablet": "",
+          "mobile": "SiteImport/job-fixture-wp/shots/home.mobile.full.png"
+        }
+      },
+      {
+        "url": "https://example-wp.com/about/",
+        "path": "/about/",
+        "title": "About - Delray Padel Club",
+        "metaDescription": "The story of Delray Padel Club.",
+        "ogTags": {
+          "og:title": "About - Delray Padel Club"
+        },
+        "canonicalUrl": "https://example-wp.com/about/",
+        "lang": "en",
+        "sections": [
+          {
+            "sourceId": "1-08c2bf26",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/about.desktop.s0.png",
+            "elements": [
+              {
+                "sourceId": "1-f4042edf",
+                "class": "link",
+                "html": "<a href=\"/\">Home</a>",
+                "textContent": "Home",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 0,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-c7831ed4",
+                "class": "link",
+                "html": "<a href=\"/about/\">About</a>",
+                "textContent": "About",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 1,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-63cb7725",
+                "class": "link",
+                "html": "<a href=\"/about/team/\">Our Team</a>",
+                "textContent": "Our Team",
+                "textLength": 8,
+                "computedStyles": {},
+                "documentPosition": 2,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-e3c8d97d",
+                "class": "link",
+                "html": "<a href=\"/contact/\">Contact</a>",
+                "textContent": "Contact",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 3,
+                "depth": 6,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "1-04c07a43",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/about.desktop.s1.png",
+            "elements": [
+              {
+                "sourceId": "1-492e2317",
+                "class": "heading",
+                "html": "<h1>About Us</h1>",
+                "textContent": "About Us",
+                "textLength": 8,
+                "computedStyles": {
+                  "color": "rgb(17, 24, 39)",
+                  "font-family": "'Merriweather', serif",
+                  "font-size": "40px",
+                  "font-weight": "700"
+                },
+                "documentPosition": 4,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-d8b87737",
+                "class": "text",
+                "html": "<p>Founded in 2020, Delray Padel Club brought the fastest-growing sport in the world to South Florida.</p>",
+                "textContent": "Founded in 2020, Delray Padel Club brought the fastest-growing sport in the world to South Florida.",
+                "textLength": 99,
+                "computedStyles": {
+                  "color": "rgb(55, 65, 81)",
+                  "font-family": "'Open Sans', sans-serif",
+                  "font-size": "18px",
+                  "line-height": "28px"
+                },
+                "documentPosition": 5,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-bc0bdde1",
+                "class": "text",
+                "html": "<blockquote>The best courts I have played on anywhere in the state.</blockquote>",
+                "textContent": "The best courts I have played on anywhere in the state.",
+                "textLength": 55,
+                "computedStyles": {
+                  "color": "rgb(13, 148, 136)",
+                  "font-style": "italic",
+                  "font-size": "22px",
+                  "font-family": "'Merriweather', serif"
+                },
+                "documentPosition": 6,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-1cbd5f71",
+                "class": "text",
+                "html": "<p>Come see for yourself — your first session is free.</p>",
+                "textContent": "Come see for yourself — your first session is free.",
+                "textLength": 51,
+                "computedStyles": {
+                  "color": "rgb(55, 65, 81)",
+                  "font-family": "'Open Sans', sans-serif",
+                  "font-size": "18px",
+                  "line-height": "28px"
+                },
+                "documentPosition": 7,
+                "depth": 4,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "1-04c8c908",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-wp/shots/about.desktop.s2.png",
+            "elements": [
+              {
+                "sourceId": "1-13e597d7",
+                "class": "link",
+                "html": "<a href=\"/privacy/\">Privacy</a>",
+                "textContent": "Privacy",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 8,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-c6cc02ac",
+                "class": "link",
+                "html": "<a href=\"/terms/\">Terms</a>",
+                "textContent": "Terms",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 9,
+                "depth": 6,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "1-8b23b8ab",
+                "class": "text",
+                "html": "<p>© 2026 Delray Padel Club</p>",
+                "textContent": "© 2026 Delray Padel Club",
+                "textLength": 24,
+                "computedStyles": {},
+                "documentPosition": 10,
+                "depth": 3,
+                "assetRefs": []
+              }
+            ]
+          }
+        ],
+        "screenshots": {
+          "desktop": "SiteImport/job-fixture-wp/shots/about.desktop.full.png",
+          "tablet": "",
+          "mobile": ""
+        }
+      }
+    ],
+    "assets": [
+      {
+        "id": "a1",
+        "originalUrl": "https://example-wp.com/wp-content/uploads/logo.png",
+        "storageUrl": "SiteImport/job-fixture-wp/assets/aaaa1111.png",
+        "contentHash": "aaaa1111",
+        "mimeType": "image/png",
+        "byteSize": 4210,
+        "width": 200,
+        "height": 60,
+        "altText": "Delray Padel Club",
+        "referencedBy": [
+          {
+            "pageUrl": "https://example-wp.com/",
+            "sourceId": "0-698a674b"
+          }
+        ],
+        "status": "downloaded",
+        "error": ""
+      },
+      {
+        "id": "a2",
+        "originalUrl": "https://example-wp.com/wp-content/uploads/courts.jpg",
+        "storageUrl": "SiteImport/job-fixture-wp/assets/bbbb2222.jpg",
+        "contentHash": "bbbb2222",
+        "mimeType": "image/jpeg",
+        "byteSize": 183000,
+        "width": 1600,
+        "height": 900,
+        "altText": "Courts at sunset",
+        "referencedBy": [
+          {
+            "pageUrl": "https://example-wp.com/",
+            "sourceId": "0-e24d099f"
+          }
+        ],
+        "status": "downloaded",
+        "error": ""
+      }
+    ],
+    "taxonomy": {
+      "navs": [
+        {
+          "location": "header",
+          "pageUrl": "https://example-wp.com/",
+          "items": [
+            {
+              "label": "Home",
+              "href": "/",
+              "children": []
+            },
+            {
+              "label": "About",
+              "href": "/about/",
+              "children": [
+                {
+                  "label": "Our Team",
+                  "href": "/about/team/",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "Contact",
+              "href": "/contact/",
+              "children": []
+            }
+          ]
+        },
+        {
+          "location": "footer",
+          "pageUrl": "https://example-wp.com/",
+          "items": [
+            {
+              "label": "Privacy",
+              "href": "/privacy/",
+              "children": []
+            },
+            {
+              "label": "Terms",
+              "href": "/terms/",
+              "children": []
+            }
+          ]
+        }
+      ],
+      "pageOrder": [
+        "/",
+        "/about/"
+      ]
+    },
+    "rawTokens": {
+      "colors": [
+        {
+          "value": "rgb(55, 65, 81)",
+          "count": 4
+        },
+        {
+          "value": "rgb(17, 24, 39)",
+          "count": 3
+        },
+        {
+          "value": "rgb(13, 148, 136)",
+          "count": 2
+        },
+        {
+          "value": "rgb(107, 114, 128)",
+          "count": 1
+        },
+        {
+          "value": "rgb(240, 253, 250)",
+          "count": 1
+        },
+        {
+          "value": "rgb(255, 255, 255)",
+          "count": 1
+        }
+      ],
+      "fontSizes": [
+        {
+          "value": "18px",
+          "count": 4
+        },
+        {
+          "value": "14px",
+          "count": 1
+        },
+        {
+          "value": "16px",
+          "count": 1
+        },
+        {
+          "value": "22px",
+          "count": 1
+        },
+        {
+          "value": "32px",
+          "count": 1
+        },
+        {
+          "value": "40px",
+          "count": 1
+        },
+        {
+          "value": "48px",
+          "count": 1
+        }
+      ],
+      "fontFamilies": [
+        {
+          "value": "'Open Sans', sans-serif",
+          "count": 49
+        },
+        {
+          "value": "'Merriweather', serif",
+          "count": 7
+        }
+      ],
+      "spacing": [
+        {
+          "value": "12px",
+          "count": 2
+        },
+        {
+          "value": "24px",
+          "count": 2
+        },
+        {
+          "value": "64px",
+          "count": 2
+        },
+        {
+          "value": "16px",
+          "count": 1
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "captured": {
+      "link": 13,
+      "heading": 4,
+      "text": 7,
+      "button": 1,
+      "image": 1,
+      "form": 1
+    },
+    "emitted": {
+      "link": 13,
+      "heading": 4,
+      "text": 7,
+      "button": 1,
+      "image": 1,
+      "form": 1
+    },
+    "dropped": {},
+    "pages": {
+      "discovered": 2,
+      "captured": 2,
+      "failed": 0
+    },
+    "caps": {
+      "hit": []
+    }
+  }
+}

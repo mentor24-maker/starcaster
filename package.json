@@ -50,6 +50,8 @@
     "migrate:email-templates:dry-run": "node scripts/migrate_email_templates_to_page_templates.mjs",
     "migrate:email-templates:apply": "node scripts/migrate_email_templates_to_page_templates.mjs --apply",
     "test:builder": "node --test scripts/builder/*.test.js",
+    "build:site-import": "node scripts/build_site_import_bundle.mjs",
+    "test:site-import": "npm run build:site-import && node --test scripts/site-import/*.test.js",
     "build:builder-template": "node scripts/build_template_bundle.mjs",
     "build:builder-email-render": "node scripts/build_email_render_bundle.mjs",
     "extract:builder-css": "node scripts/extract_builder_css.mjs"
