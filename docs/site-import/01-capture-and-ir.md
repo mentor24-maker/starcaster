@@ -450,6 +450,24 @@ Recorded now so the mapping phase inherits them verbatim:
   esbuild pattern; any generated bundle is gitignored and registered in
   the CLAUDE.md generated-files table with its rebuild command.
 
+## Implementation deviations (running log, per DoD item 6)
+
+- **`CaptureProvider.capture()` returns `RawCapture`, not `CaptureResult`**
+  (foundation + capture PRs). The provider knows neither the job's Blob
+  namespace nor the page index that sourceIds embed, so it returns
+  screenshot binaries — element crops keyed by domPath. The worker uploads
+  the PNGs, re-keys crops via `computeSourceId(pageIdx, domPath)`, and
+  persists the `CaptureResult` shape exactly as specified. Downstream
+  contracts unchanged.
+- **Counting methodology refinements** (foundation PR, encoded in
+  `ir.ts`): `<li>` is a container rather than a text atom so nav links
+  count as links; bare text runs directly inside descended containers
+  count as `text` (the completeness fallback); a layout `<table>` is one
+  atomic element even when it wraps a whole 90s-era page.
+- **Sub-sitemap handling** (capture PR): `lib/directAcquire.js` fetches
+  only the first sub-sitemap of a sitemap index; the Site Import crawler
+  fetches all of them up to the page cap.
+
 ## Definition of done for Phase 1
 
 1. `npm run typecheck` passes (IR types included).

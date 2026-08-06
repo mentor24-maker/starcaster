@@ -25,6 +25,8 @@ const GENERATED = [
   { file: 'lib/builder/email-template.js', source: 'lib/builder-client/builder-email-template.ts', cmd: 'npm run build:builder-template' },
   { file: 'lib/builder/email-render.js', source: 'lib/builder-client (email render entry)', cmd: 'npm run build:builder-email-render' },
   { file: 'lib/site-import/dist/normalize.js', source: 'lib/site-import/*.ts', cmd: 'npm run build:site-import' },
+  { file: 'lib/site-import/dist/crawl.js', source: 'lib/site-import/*.ts', cmd: 'npm run build:site-import' },
+  { file: 'lib/site-import/dist/capture-playwright.js', source: 'lib/site-import/*.ts', cmd: 'npm run build:site-import' },
 ];
 
 function main(input) {
