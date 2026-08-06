@@ -8123,9 +8123,27 @@ App.builder = (function () {
       });
   }
 
+  /** Standalone preview URL for a SAVED page (builder-preview fetches it
+   *  fresh by id — no localStorage involved, safe to refresh/share). */
+  function landingPagePreviewUrl(record) {
+    const ref = safeText(record?.id) || safeText(record?.slug);
+    return window.location.origin + '/builder-preview.html?slug=' + encodeURIComponent(ref);
+  }
+
   function openLandingPagePreview(record, options = {}) {
     if (!record) return;
     if (normalizePageTemplateKind(record.templateKind) === 'modular') {
+      // Saved pages open as a dedicated standalone tab that fetches the
+      // page FRESH by id (?slug= matches slug or id in builder-preview).
+      // The old localStorage stash meant every preview tab showed whatever
+      // was stashed last and refreshes served stale content.
+      const savedRef = safeText(record.id) || safeText(record.slug);
+      if (savedRef) {
+        window.open(landingPagePreviewUrl(record), '_blank');
+        return;
+      }
+      // Unsaved in-memory drafts still preview via the stash — they have
+      // no id for the preview page to fetch.
       try {
         window.localStorage.setItem('normie_builder_preview_draft', JSON.stringify({
           name: record.name,
@@ -8473,10 +8491,25 @@ App.builder = (function () {
 
       const slugTd = document.createElement('td');
       slugTd.className = 'builder-pages-col-slug';
-      const slugCode = document.createElement('code');
       const slugText = safeText(item.slug);
+      const slugLink = document.createElement('a');
+      slugLink.className = 'builder-pages-slug-link';
+      slugLink.href = normalizePageTemplateKind(item.templateKind) === 'modular'
+        ? landingPagePreviewUrl(item)
+        : '#';
+      slugLink.target = '_blank';
+      slugLink.rel = 'noopener';
+      slugLink.title = slugText ? `/${slugText}` : '/';
+      slugLink.addEventListener('click', (e) => {
+        if (slugLink.getAttribute('href') === '#') {
+          e.preventDefault();
+          openLandingPagePreview(item);
+        }
+      });
+      const slugCode = document.createElement('code');
       slugCode.textContent = slugText ? `/${slugText}` : '/';
-      slugTd.appendChild(slugCode);
+      slugLink.appendChild(slugCode);
+      slugTd.appendChild(slugLink);
       row.appendChild(slugTd);
 
       const visibilityTd = document.createElement('td');

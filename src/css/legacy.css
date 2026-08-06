@@ -7107,6 +7107,22 @@ button.builder-inline-asset-status-btn:focus-visible {
 
 #builderManagePagesPage .builder-pages-col-slug {
   min-width: 7rem;
+  /* Imported pages carry very long slugs — truncate so the table fits the
+     screen; the full slug lives in the link's title tooltip. */
+  max-width: 16rem;
+}
+
+#builderManagePagesPage .builder-pages-slug-link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+#builderManagePagesPage .builder-pages-slug-link:hover code {
+  text-decoration: underline;
 }
 
 #builderManagePagesPage .builder-pages-col-visibility {
