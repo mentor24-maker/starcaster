@@ -1,0 +1,129 @@
+{
+  "__comment": "Synthetic CaptureResult fixture — WordPress-style server-rendered site (archetype 1 of 3, spec §Testing). Hand-built for the normalizer's foundation PR; will be REPLACED by a real capture of delraytennis.com once the capture layer lands. Shape = NormalizeInput (lib/site-import/ir.ts + normalize.ts).",
+  "jobId": "job-fixture-wp",
+  "sourceUrl": "https://example-wp.com/",
+  "capturedAt": "2026-08-05T12:00:00.000Z",
+  "assets": [
+    {
+      "id": "a1",
+      "originalUrl": "https://example-wp.com/wp-content/uploads/logo.png",
+      "storageUrl": "SiteImport/job-fixture-wp/assets/aaaa1111.png",
+      "contentHash": "aaaa1111",
+      "mimeType": "image/png",
+      "byteSize": 4210,
+      "width": 200,
+      "height": 60,
+      "altText": "Delray Padel Club",
+      "referencedBy": [],
+      "status": "downloaded",
+      "error": ""
+    },
+    {
+      "id": "a2",
+      "originalUrl": "https://example-wp.com/wp-content/uploads/courts.jpg",
+      "storageUrl": "SiteImport/job-fixture-wp/assets/bbbb2222.jpg",
+      "contentHash": "bbbb2222",
+      "mimeType": "image/jpeg",
+      "byteSize": 183000,
+      "width": 1600,
+      "height": 900,
+      "altText": "Courts at sunset",
+      "referencedBy": [],
+      "status": "downloaded",
+      "error": ""
+    }
+  ],
+  "pageStats": { "discovered": 2, "captured": 2, "failed": 0 },
+  "capsHit": [],
+  "pages": [
+    {
+      "desktop": {
+        "url": "https://example-wp.com/",
+        "finalUrl": "https://example-wp.com/",
+        "viewport": "desktop",
+        "html": "<!DOCTYPE html><html lang='en'><head><title>Delray Padel Club</title></head><body><div id='page' data-scim='1'><header data-scim='2'><div class='site-branding' data-scim='3'><a href='/' data-scim='4'><img src='https://example-wp.com/wp-content/uploads/logo.png' alt='Delray Padel Club' data-scim='5'></a></div><nav class='main-navigation' data-scim='6'><ul><li><a href='/'>Home</a></li><li><a href='/about/'>About</a><ul><li><a href='/about/team/'>Our Team</a></li></ul></li><li><a href='/contact/'>Contact</a></li></ul></nav></header><main data-scim='7'><section class='hero' data-scim='8'><h1 data-scim='9'>Play Padel in Delray Beach</h1><p data-scim='10'>Six championship courts, open to the public seven days a week.</p><a class='btn' role='button' href='/membership/' data-scim='11'>Join Now</a></section><section class='features' data-scim='12'><h2 data-scim='13'>Why Members Love Us</h2><p data-scim='14'>From <a href='/coaching/'>professional coaching</a> to social leagues, there is something for every player.</p><img src='/wp-content/uploads/courts.jpg' srcset='/wp-content/uploads/courts-480.jpg 480w, /wp-content/uploads/courts-1024.jpg 1024w' alt='Courts at sunset' data-scim='15'></section><section class='signup' data-scim='16'><h2 data-scim='17'>Book a Court</h2><form action='/book' method='post' data-scim='18'><label>Email <input type='email' name='email'></label><input type='submit' value='Book'></form></section></main><footer data-scim='19'><nav data-scim='20'><ul><li><a href='/privacy/'>Privacy</a></li><li><a href='/terms/'>Terms</a></li></ul></nav><p data-scim='21'>© 2026 Delray Padel Club</p></footer></div></body></html>",
+        "styles": {
+          "9": { "color": "rgb(17, 24, 39)", "font-family": "'Merriweather', serif", "font-size": "48px", "font-weight": "700", "margin-top": "0px", "text-align": "start", "margin-bottom": "16px" },
+          "10": { "color": "rgb(55, 65, 81)", "font-family": "'Open Sans', sans-serif", "font-size": "18px", "line-height": "28px", "font-weight": "400" },
+          "11": { "color": "rgb(255, 255, 255)", "background-color": "rgb(13, 148, 136)", "font-size": "16px", "border-radius": "6px", "padding-top": "12px", "padding-bottom": "12px", "padding-left": "24px", "padding-right": "24px", "display": "inline-block" },
+          "13": { "color": "rgb(17, 24, 39)", "font-family": "'Merriweather', serif", "font-size": "32px", "font-weight": "700" },
+          "14": { "color": "rgb(55, 65, 81)", "font-family": "'Open Sans', sans-serif", "font-size": "18px", "line-height": "28px" },
+          "8": { "background-color": "rgb(240, 253, 250)", "padding-top": "64px", "padding-bottom": "64px", "text-align": "center" },
+          "21": { "color": "rgb(107, 114, 128)", "font-size": "14px", "font-family": "'Open Sans', sans-serif" }
+        },
+        "fullPageScreenshot": "SiteImport/job-fixture-wp/shots/home.desktop.full.png",
+        "sectionScreenshots": {
+          "0": "SiteImport/job-fixture-wp/shots/home.desktop.s0.png",
+          "1": "SiteImport/job-fixture-wp/shots/home.desktop.s1.png",
+          "2": "SiteImport/job-fixture-wp/shots/home.desktop.s2.png",
+          "3": "SiteImport/job-fixture-wp/shots/home.desktop.s3.png",
+          "4": "SiteImport/job-fixture-wp/shots/home.desktop.s4.png"
+        },
+        "elementScreenshots": {},
+        "assetUrls": [
+          { "url": "https://example-wp.com/wp-content/uploads/logo.png", "via": "img", "alt": "Delray Padel Club" },
+          { "url": "https://example-wp.com/wp-content/uploads/courts.jpg", "via": "img", "alt": "Courts at sunset" },
+          { "url": "https://example-wp.com/wp-content/uploads/courts-480.jpg", "via": "srcset" },
+          { "url": "https://example-wp.com/wp-content/uploads/courts-1024.jpg", "via": "srcset" }
+        ],
+        "fontFamilies": [
+          { "value": "'Open Sans', sans-serif", "count": 31 },
+          { "value": "'Merriweather', serif", "count": 4 }
+        ],
+        "meta": {
+          "title": "Delray Padel Club",
+          "metaDescription": "Padel courts in Delray Beach, Florida.",
+          "ogTags": { "og:title": "Delray Padel Club", "og:type": "website" },
+          "canonicalUrl": "https://example-wp.com/",
+          "lang": "en"
+        }
+      },
+      "mobile": {
+        "url": "https://example-wp.com/",
+        "finalUrl": "https://example-wp.com/",
+        "viewport": "mobile",
+        "html": "<!DOCTYPE html><html lang='en'><head><title>Delray Padel Club</title></head><body><div id='page'>mobile render omitted in fixture</div></body></html>",
+        "styles": {},
+        "fullPageScreenshot": "SiteImport/job-fixture-wp/shots/home.mobile.full.png",
+        "sectionScreenshots": {},
+        "elementScreenshots": {},
+        "assetUrls": [],
+        "fontFamilies": [],
+        "meta": { "title": "Delray Padel Club", "metaDescription": "", "ogTags": {}, "canonicalUrl": "", "lang": "en" }
+      }
+    },
+    {
+      "desktop": {
+        "url": "https://example-wp.com/about/",
+        "finalUrl": "https://example-wp.com/about/",
+        "viewport": "desktop",
+        "html": "<!DOCTYPE html><html lang='en'><head><title>About - Delray Padel Club</title></head><body><div id='page' data-scim='1'><header data-scim='2'><nav class='main-navigation' data-scim='3'><ul><li><a href='/'>Home</a></li><li><a href='/about/'>About</a><ul><li><a href='/about/team/'>Our Team</a></li></ul></li><li><a href='/contact/'>Contact</a></li></ul></nav></header><main data-scim='4'><article data-scim='5'><h1 data-scim='6'>About Us</h1><p data-scim='7'>Founded in 2020, Delray Padel Club brought the fastest-growing sport in the world to South Florida.</p><blockquote data-scim='8'>The best courts I have played on anywhere in the state.</blockquote><p data-scim='9'>Come see for yourself — your first session is free.</p></article></main><footer data-scim='10'><nav data-scim='11'><ul><li><a href='/privacy/'>Privacy</a></li><li><a href='/terms/'>Terms</a></li></ul></nav><p data-scim='12'>© 2026 Delray Padel Club</p></footer></div></body></html>",
+        "styles": {
+          "6": { "color": "rgb(17, 24, 39)", "font-family": "'Merriweather', serif", "font-size": "40px", "font-weight": "700" },
+          "7": { "color": "rgb(55, 65, 81)", "font-family": "'Open Sans', sans-serif", "font-size": "18px", "line-height": "28px" },
+          "8": { "color": "rgb(13, 148, 136)", "font-style": "italic", "font-size": "22px", "font-family": "'Merriweather', serif" },
+          "9": { "color": "rgb(55, 65, 81)", "font-family": "'Open Sans', sans-serif", "font-size": "18px", "line-height": "28px" }
+        },
+        "fullPageScreenshot": "SiteImport/job-fixture-wp/shots/about.desktop.full.png",
+        "sectionScreenshots": {
+          "0": "SiteImport/job-fixture-wp/shots/about.desktop.s0.png",
+          "1": "SiteImport/job-fixture-wp/shots/about.desktop.s1.png",
+          "2": "SiteImport/job-fixture-wp/shots/about.desktop.s2.png"
+        },
+        "elementScreenshots": {},
+        "assetUrls": [],
+        "fontFamilies": [
+          { "value": "'Open Sans', sans-serif", "count": 18 },
+          { "value": "'Merriweather', serif", "count": 3 }
+        ],
+        "meta": {
+          "title": "About - Delray Padel Club",
+          "metaDescription": "The story of Delray Padel Club.",
+          "ogTags": { "og:title": "About - Delray Padel Club" },
+          "canonicalUrl": "https://example-wp.com/about/",
+          "lang": "en"
+        }
+      }
+    }
+  ]
+}

@@ -47,6 +47,7 @@
   "include": [
     "builder-react-entry.tsx",
     "lib/builder-client/**/*.ts",
+    "lib/site-import/**/*.ts",
     "components/**/*.ts",
     "components/**/*.tsx"
   ],

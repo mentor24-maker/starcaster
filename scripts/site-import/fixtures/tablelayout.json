@@ -1,0 +1,38 @@
+{
+  "__comment": "Synthetic CaptureResult fixture — late-90s table/float layout site (archetype 3 of 3, spec §Testing). Exercises the table atom swallowing an entire layout table (counted as ONE table element with everything preserved verbatim inside it — completeness over fidelity), font tags degrading to text runs, and content sitting directly under <center>. Will be replaced by a real capture once the capture layer lands.",
+  "jobId": "job-fixture-tbl",
+  "sourceUrl": "http://example-plumber.com/",
+  "capturedAt": "2026-08-05T12:00:00.000Z",
+  "assets": [],
+  "pageStats": { "discovered": 1, "captured": 1, "failed": 0 },
+  "capsHit": [],
+  "pages": [
+    {
+      "desktop": {
+        "url": "http://example-plumber.com/",
+        "finalUrl": "http://example-plumber.com/",
+        "viewport": "desktop",
+        "html": "<html><head><title>Smith &amp; Sons Plumbing</title></head><body bgcolor='#ffffff' data-scim='1'><center data-scim='2'><table width='800' border='0' cellpadding='4' data-scim='3'><tr><td colspan='2' align='center'><img src='banner.gif' width='760' height='90' alt='Smith and Sons Plumbing'></td></tr><tr><td width='180' valign='top' bgcolor='#003366'><a href='index.html'><font color='#ffffff'>Home</font></a><br><a href='services.html'><font color='#ffffff'>Services</font></a><br><a href='contact.html'><font color='#ffffff'>Contact</font></a></td><td valign='top'><font face='Times New Roman' size='4'>Serving the Delray area since 1974. No job too small!</font><table border='1'><tr><td>Emergency</td><td>24 hours</td></tr><tr><td>Office</td><td>Mon–Fri 8–5</td></tr></table></td></tr></table><font size='2' data-scim='4'>Call us: 555-0100</font><hr><marquee data-scim='5'>Family owned and operated for 50 years!</marquee></center></body></html>",
+        "styles": {
+          "4": { "color": "rgb(0, 0, 0)", "font-family": "'Times New Roman', serif", "font-size": "13px" }
+        },
+        "fullPageScreenshot": "SiteImport/job-fixture-tbl/shots/home.desktop.full.png",
+        "sectionScreenshots": {
+          "0": "SiteImport/job-fixture-tbl/shots/home.desktop.s0.png"
+        },
+        "elementScreenshots": {},
+        "assetUrls": [
+          { "url": "http://example-plumber.com/banner.gif", "via": "img", "alt": "Smith and Sons Plumbing" }
+        ],
+        "fontFamilies": [{ "value": "'Times New Roman', serif", "count": 9 }],
+        "meta": {
+          "title": "Smith & Sons Plumbing",
+          "metaDescription": "",
+          "ogTags": {},
+          "canonicalUrl": "",
+          "lang": ""
+        }
+      }
+    }
+  ]
+}
