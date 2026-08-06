@@ -18,6 +18,7 @@ const bundles = [
   { entry: 'normalize.ts', outfile: 'normalize.js' },
   { entry: 'crawl.ts', outfile: 'crawl.js' },
   { entry: 'capture-playwright.ts', outfile: 'capture-playwright.js' },
+  { entry: 'map.ts', outfile: 'map.js' },
 ];
 
 for (const { entry, outfile } of bundles) {
