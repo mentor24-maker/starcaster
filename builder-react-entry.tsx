@@ -9,6 +9,7 @@ import { BuilderExtensionsPage } from './components/builder/builder-extensions-p
 import { BuilderPopulateTitlesPage } from './components/builder/builder-populate-titles-page';
 import { BuilderSeoAltTextPage } from './components/builder/builder-seo-alt-text-page';
 import { BuilderAgentsPage } from './components/builder/builder-agents-page';
+import SiteImportPage from './components/builder/site-import-page';
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 
 let activeRoot: Root | null = null;
@@ -85,6 +86,7 @@ let extensionsRoot: Root | null = null;
 let extensionsOpenItemFn: ((item: unknown) => void) | null = null;
 let pendingExtensionItem: unknown = null;
 let agentsRoot: Root | null = null;
+let siteImportRoot: Root | null = null;
 let agentsSetViewFn: ((view: "list" | "builder") => void) | null = null;
 
 export function mountThemesReact(host: HTMLElement | null) {
@@ -221,6 +223,21 @@ export function unmountAgentsReact() {
   agentsSetViewFn = null;
 }
 
+// --- Site Import (staff-only) ---
+
+export function mountSiteImportReact(host: HTMLElement | null) {
+  if (!host || siteImportRoot) return;
+  siteImportRoot = createRoot(host);
+  siteImportRoot.render(<SiteImportPage />);
+}
+
+export function unmountSiteImportReact() {
+  if (siteImportRoot) {
+    siteImportRoot.unmount();
+    siteImportRoot = null;
+  }
+}
+
 // --- Saved Section Editor ---
 
 let savedSectionEditorRoot: Root | null = null;
@@ -305,6 +322,10 @@ declare global {
       mount: typeof mountSavedSectionEditor;
       unmount: typeof unmountSavedSectionEditor;
     };
+    SiteImportReact: {
+      mount: typeof mountSiteImportReact;
+      unmount: typeof unmountSiteImportReact;
+    };
   }
 }
 
@@ -354,4 +375,9 @@ window.AgentsReact = {
 window.SavedSectionEditorReact = {
   mount: mountSavedSectionEditor,
   unmount: unmountSavedSectionEditor,
+};
+
+window.SiteImportReact = {
+  mount: mountSiteImportReact,
+  unmount: unmountSiteImportReact,
 };
