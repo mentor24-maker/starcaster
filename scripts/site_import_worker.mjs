@@ -127,16 +127,16 @@ if (!process.env.BLOB_READ_WRITE_TOKEN) {
 }
 
 // Required after env so lib/supabase.js sees the credentials.
-const store = require('../lib/siteImportStore.js');
-const { uploadBufferToBlobAtPath } = require('../lib/blobStorage.js');
-const { normalizeSite, computeSourceId } = require('../lib/site-import/dist/normalize.js');
+const store = require('./lib/siteImportStore.js');
+const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
+const { normalizeSite, computeSourceId } = require('./lib/site-import/dist/normalize.js');
 const {
   parseRobots, robotsVerdict, fetchSitemapUrls, extractLinks,
   normalizeCrawlUrl, CrawlQueue, looksLikeHtmlUrl,
-} = require('../lib/site-import/dist/crawl.js');
+} = require('./lib/site-import/dist/crawl.js');
 const {
   PlaywrightCaptureProvider, VIEWPORTS, DEFAULT_USER_AGENT,
-} = require('../lib/site-import/dist/capture-playwright.js');
+} = require('./lib/site-import/dist/capture-playwright.js');
 
 const CLAIMED_BY = `${os.hostname()}:${process.pid}`;
 const POLITENESS_DELAY_MS = 750;
