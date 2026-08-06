@@ -607,7 +607,10 @@ async function runJob(jobId, opts) {
         }), 'mark cancelled');
         return false;
       }
-      job = must(await store.updateJob(job.id, { status: stage.status }), `enter ${stage.name}`);
+      // applyCapsOverride again: updateJob's response re-normalizes caps
+      // from the row, which silently discarded --caps overrides (found on
+      // the 2026-08-06 scratch run: --caps maxPages=8 captured 42 pages).
+      job = applyCapsOverride(must(await store.updateJob(job.id, { status: stage.status }), `enter ${stage.name}`), opts);
       log(`job ${job.id}: stage ${stage.name}`);
       job = await stage.run(job, opts);
     }
