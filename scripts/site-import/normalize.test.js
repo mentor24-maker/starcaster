@@ -45,50 +45,52 @@ for (const name of FIXTURES) {
   });
 }
 
-test('wordpress fixture: structural spot-checks behind the snapshot', () => {
+test('wordpress fixture (real delraytennis.com capture): structural spot-checks', () => {
+  // This fixture is a REAL capture (capture_fixture.mjs) of the launch
+  // client's site — assertions pin what the committed file contains, not
+  // what the live site currently serves.
   const { ir, coverage } = normalizeSite(loadJson('wordpress.json'));
 
   assert.equal(ir.irVersion, '1.0');
   assert.equal(ir.pages.length, 2);
-  assert.deepEqual(ir.taxonomy.pageOrder, ['/', '/about/']);
-
-  // Header/footer navs found once each — the identical trees on the about
-  // page dedupe away.
-  assert.deepEqual(ir.taxonomy.navs.map((n) => n.location), ['header', 'footer']);
-  const header = ir.taxonomy.navs[0];
-  assert.deepEqual(header.items.map((i) => i.label), ['Home', 'About', 'Contact']);
-  assert.deepEqual(header.items[1].children.map((i) => i.label), ['Our Team']);
-
-  // Home page: 5 top-level sections (header, hero, features, signup,
-  // footer), each with its capture crop joined by candidate index.
   const home = ir.pages[0];
-  assert.equal(home.sections.length, 5);
-  assert.equal(home.sections[1].screenshot, 'SiteImport/job-fixture-wp/shots/home.desktop.s1.png');
+  assert.equal(home.path, '/');
+  assert.ok(home.title.includes('Delray Beach Tennis'));
+  assert.equal(home.lang, 'en-US');
+  assert.equal(home.canonicalUrl, 'https://www.delraytennis.com/');
+
+  const elements = home.sections.flatMap((s) => s.elements);
+  assert.ok(elements.length > 100, `home should be content-rich, got ${elements.length}`);
   assert.equal(home.sections.every((s) => s.type === 'unknown'), true);
 
-  // The relative-src <img> resolved against the page URL and matched
-  // asset a2; the normalizer wrote the back-reference onto the manifest.
-  const img = home.sections
-    .flatMap((s) => s.elements)
-    .find((e) => e.class === 'image');
-  assert.deepEqual(img.assetRefs, ['a2']);
-  const a2 = ir.assets.find((a) => a.id === 'a2');
-  assert.deepEqual(a2.referencedBy, [{ pageUrl: 'https://example-wp.com/', sourceId: img.sourceId }]);
+  // The site's schedule/pricing tables are sanitizer-stripped atoms, so
+  // each must carry its screenshot crop, joined by sourceId.
+  const tables = elements.filter((e) => e.class === 'table');
+  assert.ok(tables.length >= 10, `expected the table-heavy home page, got ${tables.length}`);
+  assert.ok(
+    tables.every((t) => t.screenshot && t.screenshot.startsWith('fixture://')),
+    'every table crop joined via computeSourceId across serialize/re-parse'
+  );
 
-  // Style compaction kept the real values and dropped browser defaults.
-  const h1 = home.sections[1].elements.find((e) => e.class === 'heading');
-  assert.equal(h1.computedStyles['font-size'], '48px');
-  assert.equal(h1.computedStyles['margin-top'], undefined); // 0px default
-  assert.equal(h1.computedStyles['text-align'], undefined); // "start" default
+  // Real images matched to the asset manifest, back-references written.
+  const img = elements.find((e) => e.class === 'image' && e.assetRefs.length);
+  assert.ok(img, 'at least one image resolved to an asset');
+  const asset = ir.assets.find((a) => a.id === img.assetRefs[0]);
+  assert.ok(asset.referencedBy.some((r) => r.sourceId === img.sourceId));
 
-  // Verbatim HTML with the capture markers stripped.
-  assert.ok(h1.html.includes('Play Padel in Delray Beach'));
-  assert.ok(!h1.html.includes('data-scim'));
+  // Computed styles rode along from the real browser.
+  const styled = elements.find((e) => e.computedStyles['font-family']);
+  assert.ok(styled, 'computed styles joined via data-scim');
+  assert.ok(!elements.some((e) => e.html.includes('data-scim')), 'markers stripped');
 
-  // Nothing dropped, and both sides agree.
+  // Raw design tokens extracted from the live styles.
+  assert.ok(ir.rawTokens.colors.length > 5);
+  assert.ok(ir.rawTokens.fontFamilies.some((f) => /verdana/i.test(f.value)));
+
+  // Nothing dropped on a real site, and both counters agree.
   assert.deepEqual(coverage.dropped, {});
   assert.deepEqual(coverage.captured, coverage.emitted);
-  assert.deepEqual(coverage.pages, { discovered: 2, captured: 2, failed: 0 });
+  assert.equal(coverage.pages.captured, 2);
 });
 
 test('element screenshot crops join by sourceId', () => {
