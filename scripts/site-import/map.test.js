@@ -92,8 +92,10 @@ function completenessIr() {
               el({ sourceId: '0-p1', class: 'text', html: '<p>Intro prose.</p>', textContent: 'Intro prose.' }),
               // Matches the header nav → navConsumed.
               el({ sourceId: '0-navlink', class: 'link', html: '<a href="/about">About</a>', textContent: 'About' }),
-              // Standalone link → mapped into prose.
+              // Standalone link → mapped into prose (external — must NOT localize).
               el({ sourceId: '0-freelink', class: 'link', html: '<a href="/menu.pdf">Menu</a>', textContent: 'Menu' }),
+              // Link to another imported page → must localize to its slug.
+              el({ sourceId: '0-intlink', class: 'link', html: '<a href="/about/team">Meet the team</a>', textContent: 'Meet the team' }),
               el({ sourceId: '0-img', class: 'image', html: '<img src="https://map.test/hero.jpg" alt="Hero">', textContent: '', assetRefs: ['a1'] }),
               el({ sourceId: '0-btn', class: 'button', html: '<a role="button" href="/join">Join Now</a>', textContent: 'Join Now' }),
               el({ sourceId: '0-vid', class: 'video', html: '<video src="https://map.test/clip.mp4"></video>', textContent: '' }),
@@ -164,7 +166,7 @@ test('completeness fixture: every disposition, reconciled', () => {
   const r = out.report.elements;
 
   assert.ok(reportReconciles(out.report), JSON.stringify(out.report, null, 2));
-  assert.equal(r.total, 16);
+  assert.equal(r.total, 17);
   assert.equal(r.navConsumed, 1); // the About link
   // Placeholders: form, table, embed, svg, no-src video, unsplittable atom.
   assert.equal(r.placeholder, 6);
@@ -215,6 +217,14 @@ test('completeness fixture: every disposition, reconciled', () => {
   assert.equal(out.navItems.length, 3);
   const team = out.navItems.find((n) => n.label === 'Team');
   assert.equal(out.navItems.find((n) => n.id === team.parentId).label, 'About');
+
+  // Link localization: nav + in-content links to IMPORTED pages point at
+  // the imported slugs; external links untouched.
+  assert.equal(team.href, '/about-team-imported'); // /about/team collided → suffixed slug
+  assert.equal(out.navItems.find((n) => n.label === 'Home').href, '/imported-home');
+  const proseHtml = allModules.filter((m) => m.type === 'text').map((m) => m.text).join('');
+  assert.ok(proseHtml.includes('href="/about-team-imported"'), 'internal link localized');
+  assert.ok(proseHtml.includes('href="/menu.pdf"'), 'external link untouched');
 });
 
 test('round-trip proof: serialized documents are stable through the normalizer', () => {

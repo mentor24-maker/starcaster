@@ -533,6 +533,62 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     push(headerNav.items, "");
   }
 
+  // --- Localize links between imported pages (nav + in-content) ----------
+  // A link that points at a page we ALSO imported should navigate the
+  // imported site, not the client's live one. Exact href-attribute
+  // matching only: substring URL replacement would corrupt asset URLs
+  // that share the site root as a prefix.
+  const localHrefBySource = new Map<string, string>();
+  for (const irPage of ir.pages || []) {
+    const mapped = pages.find((p) => p.irPath === irPage.path);
+    if (!mapped) continue;
+    const local = `/${mapped.slug}`;
+    const variants = new Set<string>();
+    const abs = String(irPage.url || "").trim();
+    if (abs) {
+      variants.add(abs);
+      variants.add(abs.endsWith("/") ? abs.slice(0, -1) : `${abs}/`);
+    }
+    const irPath = String(irPage.path || "").trim();
+    if (irPath) {
+      variants.add(irPath);
+      variants.add(irPath.endsWith("/") ? irPath.slice(0, -1) : `${irPath}/`);
+    }
+    for (const v of variants) if (v) localHrefBySource.set(v, local);
+  }
+  const localizeHtml = (html: string): string => {
+    let out = html;
+    for (const [from, to] of localHrefBySource) {
+      out = out.split(`href="${from}"`).join(`href="${to}"`);
+    }
+    return out;
+  };
+  for (const page of pages) {
+    for (const section of page.sections) {
+      for (const module of section.modules) {
+        if (module.type === "text" && module.text.includes("href=")) {
+          module.text = localizeHtml(module.text);
+        }
+        if (module.type === "button" && module.settings.href) {
+          const localized =
+            localHrefBySource.get(module.settings.href) ||
+            localHrefBySource.get(
+              module.settings.href.endsWith("/")
+                ? module.settings.href.slice(0, -1)
+                : `${module.settings.href}/`
+            );
+          if (localized) module.settings.href = localized;
+        }
+      }
+    }
+  }
+  for (const item of navItems) {
+    const localized =
+      localHrefBySource.get(item.href) ||
+      localHrefBySource.get(item.href.endsWith("/") ? item.href.slice(0, -1) : `${item.href}/`);
+    if (localized) item.href = localized;
+  }
+
   report.assets.promoted = promotions.size;
   report.assets.cropsCopied = crops.length;
   report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size);

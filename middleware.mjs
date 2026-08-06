@@ -9,7 +9,9 @@
 
 import { rewrite } from '@vercel/functions';
 
-const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.vercel\.app|starcaster\.pro|.*\.starcaster\.pro)$/;
+// Apex only (www. is normalized away): other starcaster.pro subdomains are
+// tenant staging hosts. Keep in sync with lib/publicSiteHosts.js.
+const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.vercel\.app|starcaster\.pro)$/;
 
 function normalizeHost(value) {
   const text = String(value || '').split(',')[0].trim();
