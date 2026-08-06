@@ -467,6 +467,37 @@ Recorded now so the mapping phase inherits them verbatim:
 - **Sub-sitemap handling** (capture PR): `lib/directAcquire.js` fetches
   only the first sub-sitemap of a sitemap index; the Site Import crawler
   fetches all of them up to the page cap.
+- **Element crops use locator screenshots, not clip rects** (worker PR):
+  `page.screenshot({clip})` only sees the current viewport, so every
+  below-the-fold crop failed on the real site. Crops now shoot via
+  `locator('[data-scim=…]').screenshot()`, which scrolls into view.
+- **srcset parsing is comma-with-whitespace aware** (post-DoD fix):
+  image URLs may legally contain commas (WP/Jetpack `?resize=993,994`);
+  naive comma-splitting fabricated 20 phantom asset 404s on the DoD run.
+- **Worker `--caps k=v,…` flag** (post-DoD): per-run cap overrides — the
+  standard way to re-import a site a budget cut short (queue a fresh job,
+  run with e.g. `--caps maxBrowserSeconds=3600,maxPages=120`). Overrides
+  are run-scoped; nothing is written back to the job row.
+
+## Phase 1 DoD run — 2026-08-06 (COMPLETE)
+
+Job `simp_1786001475378_r3uy8w`, `https://www.delraytennis.com/` (the
+bare domain has a TLS certificate mismatch — always import the `www.`
+URL), queued from the Builder → Site Import UI and run by the operator
+via `doppler run --config prd -- node scripts/site_import_worker.mjs
+--watch`:
+
+- 120 sitemap URLs discovered; **43 pages captured** at 3 viewports
+  before the `maxBrowserSeconds` (900 s) budget stopped the crawl
+  cleanly — recorded in `coverage.caps`, job still `complete`.
+- **440 / 463 assets downloaded** (~93 MB); the 23 recorded failures
+  were 20 phantom srcset fragments (bug, fixed above) + 3 genuinely
+  dead image URLs.
+- **`coverage.dropped = {}`** — captured and emitted counts agreed
+  exactly for every element class. Coverage report, page screenshots,
+  asset gallery + failure ledger, and the raw IR all render in the UI.
+
+Every numbered item of the definition of done below is met.
 
 ## Definition of done for Phase 1
 

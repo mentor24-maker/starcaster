@@ -34,6 +34,12 @@
  *   --client-authorized <ref> proceed past robots.txt; <ref> (client name or
  *                             deal reference) is stamped on the job row so
  *                             every override is attributable. Value REQUIRED.
+ *   --caps k=v[,k=v...]       raise/lower this run's budgets, e.g.
+ *                             --caps maxBrowserSeconds=3600,maxPages=120
+ *                             (keys = DEFAULT_CAPS in lib/siteImportStore.js).
+ *                             The standard way to re-import a site that a
+ *                             budget cut short: queue a fresh job, run with
+ *                             bigger caps.
  *   --allow-local             permit a localhost database (local testing only)
  *
  * SAFETY
@@ -561,8 +567,15 @@ const STAGES = [
   { name: 'normalize', status: 'normalizing', run: runNormalizeStage },
 ];
 
+// CLI cap overrides win over the job row's caps for this run only —
+// nothing is written back, so a later plain re-run uses the row's caps.
+function applyCapsOverride(job, opts) {
+  if (!opts.capsOverride || !Object.keys(opts.capsOverride).length) return job;
+  return { ...job, caps: { ...job.caps, ...opts.capsOverride } };
+}
+
 async function runJob(jobId, opts) {
-  let job = must(await store.getJob(jobId), 'load job');
+  let job = applyCapsOverride(must(await store.getJob(jobId), 'load job'), opts);
   if (!opts.stageOnly) {
     if (!opts.alreadyClaimed) {
       const claimed = await store.claimJob(jobId, CLAIMED_BY);
@@ -584,7 +597,7 @@ async function runJob(jobId, opts) {
 
   try {
     for (const stage of stages) {
-      job = must(await store.getJob(job.id), 'refresh job');
+      job = applyCapsOverride(must(await store.getJob(job.id), 'refresh job'), opts);
       if (cancellationRequested(job)) {
         log(`job ${job.id}: cancellation requested — stopping before ${stage.name}`);
         must(await store.updateJob(job.id, {
@@ -630,9 +643,25 @@ async function main() {
     return;
   }
 
+  const capsOverride = {};
+  const capsFlag = flagValue('--caps');
+  if (capsFlag) {
+    for (const pair of capsFlag.split(',')) {
+      const [key, value] = pair.split('=');
+      if (key && Number.isFinite(Number(value)) && Number(value) > 0) {
+        capsOverride[key.trim()] = Math.floor(Number(value));
+      } else {
+        console.error(`--caps: cannot read "${pair}" — use k=v, e.g. maxBrowserSeconds=3600`);
+        process.exit(1);
+      }
+    }
+    log('caps override:', JSON.stringify(capsOverride));
+  }
+
   const opts = {
     clientAuthorized: flagValue('--client-authorized'),
     stageOnly: flagValue('--stage'),
+    capsOverride,
   };
   const jobId = flagValue('--job');
 

@@ -18,6 +18,7 @@ const path = require('node:path');
 const {
   normalizeSite,
   computeSourceId,
+  splitSrcsetCandidates,
 } = require('../../lib/site-import/dist/normalize.js');
 
 const FIXTURES = ['wordpress', 'jsframework', 'tablelayout'];
@@ -91,6 +92,25 @@ test('wordpress fixture (real delraytennis.com capture): structural spot-checks'
   assert.deepEqual(coverage.dropped, {});
   assert.deepEqual(coverage.captured, coverage.emitted);
   assert.equal(coverage.pages.captured, 2);
+});
+
+test('srcset splitting survives commas inside URLs (Jetpack resize params)', () => {
+  // The delraytennis DoD run: naive comma-splitting turned ?resize=993,994
+  // into a phantom "/994" download that 404'd. Twenty of the run's 23
+  // "failed assets" were this.
+  assert.deepEqual(
+    splitSrcsetCandidates(
+      'https://x.test/i.jpg?resize=993,994 993w, https://x.test/i.jpg?resize=768,769 768w'
+    ),
+    ['https://x.test/i.jpg?resize=993,994', 'https://x.test/i.jpg?resize=768,769']
+  );
+  assert.deepEqual(
+    splitSrcsetCandidates('/a-300x75.jpeg 300w, /a-150x38.jpeg 150w'),
+    ['/a-300x75.jpeg', '/a-150x38.jpeg']
+  );
+  // Bare number fragments never become URLs.
+  assert.deepEqual(splitSrcsetCandidates('993, 1024w'), []);
+  assert.deepEqual(splitSrcsetCandidates(''), []);
 });
 
 test('element screenshot crops join by sourceId', () => {

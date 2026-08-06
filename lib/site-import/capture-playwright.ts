@@ -190,23 +190,34 @@ function pageScan(args: PageScanArgs): PageScanResult {
   }
 
   // --- Asset URL manifest -------------------------------------------------
+  // SYNC POINT: mirrors splitSrcsetCandidates() in normalize.ts — split on
+  // comma-followed-by-whitespace only, because image URLs may legally
+  // contain commas (WP/Jetpack `?resize=993,994`), and drop bare-number
+  // fragments. Naive comma-splitting fabricated 20 phantom 404s on the
+  // delraytennis.com DoD run.
+  function srcsetCandidates(value: string): string[] {
+    const out: string[] = [];
+    for (const part of String(value || "").split(/,\s+/)) {
+      const candidate = part.trim().split(/\s+/)[0];
+      if (candidate && !/^\d+w?$/.test(candidate)) out.push(candidate);
+    }
+    return out;
+  }
+
   const imgs = document.querySelectorAll("img");
   for (let i = 0; i < imgs.length; i++) {
     const img = imgs[i] as HTMLImageElement;
     pushAsset(img.currentSrc || img.src, "img", img.alt || undefined);
-    const srcset = img.getAttribute("srcset") || "";
-    for (const part of srcset.split(",")) {
-      const candidate = part.trim().split(/\s+/)[0];
-      if (candidate) pushAsset(candidate, "srcset");
+    for (const candidate of srcsetCandidates(img.getAttribute("srcset") || "")) {
+      pushAsset(candidate, "srcset");
     }
   }
   const sources = document.querySelectorAll("source");
   for (let i = 0; i < sources.length; i++) {
     const s = sources[i];
     const srcset = s.getAttribute("srcset") || s.getAttribute("src") || "";
-    for (const part of srcset.split(",")) {
-      const candidate = part.trim().split(/\s+/)[0];
-      if (candidate) pushAsset(candidate, "srcset");
+    for (const candidate of srcsetCandidates(srcset)) {
+      pushAsset(candidate, "srcset");
     }
   }
   const videos = document.querySelectorAll("video");

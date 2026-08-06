@@ -412,6 +412,24 @@ function buildAssetLookup(assets: AssetRef[]): AssetLookup {
   return lookup;
 }
 
+/**
+ * Split a srcset value into its candidate URLs. NOT a naive comma split:
+ * WordPress/Jetpack image URLs legally contain commas (`?resize=993,994`),
+ * and splitting on every comma fabricates phantom URLs out of the numbers —
+ * the delraytennis.com DoD run "failed" 20 downloads that were really just
+ * resize dimensions. Entries are split on comma-followed-by-whitespace
+ * (how real srcsets are written), and bare-number candidates are dropped.
+ * The capture layer's in-page script mirrors this logic — SYNC POINT.
+ */
+export function splitSrcsetCandidates(value: string): string[] {
+  const out: string[] = [];
+  for (const part of String(value || "").split(/,\s+/)) {
+    const url = part.trim().split(/\s+/)[0];
+    if (url && !/^\d+w?$/.test(url)) out.push(url);
+  }
+  return out;
+}
+
 /** Pull candidate URLs out of an element's verbatim HTML + styles. Regex on
  *  serialized HTML is deliberate: it is approximate matching for cross-
  *  referencing, not parsing — a miss costs a link in assetRefs, never data. */
@@ -422,10 +440,7 @@ function extractUrlCandidates(html: string, styles: CapturedStyles): string[] {
   while ((m = attrRe.exec(html))) out.push(m[1]);
   const srcsetRe = /srcset\s*=\s*"([^"]+)"/gi;
   while ((m = srcsetRe.exec(html))) {
-    for (const part of m[1].split(",")) {
-      const url = part.trim().split(/\s+/)[0];
-      if (url) out.push(url);
-    }
+    for (const url of splitSrcsetCandidates(m[1])) out.push(url);
   }
   const urlRe = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
   while ((m = urlRe.exec(html))) out.push(m[1]);
