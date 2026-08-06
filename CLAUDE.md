@@ -51,7 +51,7 @@ them locally.
 | `public/js/richtext-vendor.js` | `public/js/richtext-vendor-entry.js` | `npm run build:richtext` |
 | `lib/builder/template.js`, `lib/builder/email-template.js` | `lib/builder-client/builder-template.ts`, `builder-email-template.ts` | `npm run build:builder-template` |
 | `lib/builder/email-render.js` | builder-client sources | `npm run build:builder-email-render` |
-| `lib/site-import/dist/normalize.js` | `lib/site-import/*.ts` | `npm run build:site-import` |
+| `lib/site-import/dist/*.js` | `lib/site-import/*.ts` | `npm run build:site-import` |
 | `lib/build-stamp.json` | `scripts/write_build_stamp.mjs` (records build time) | `npm run build:stamp` |
 
 `public/about.html` and `public/site.html` are hand-authored but get asset

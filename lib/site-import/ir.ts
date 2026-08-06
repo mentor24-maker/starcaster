@@ -35,11 +35,37 @@ export type CaptureOptions = {
  * One interface; all downstream code sees only this. Phase 1 ships a local
  * Playwright implementation (capture-playwright.ts). A hosted browser
  * provider slots in later by implementing the same interface.
+ *
+ * The provider returns a RawCapture — screenshot BINARIES, with element
+ * crops keyed by domPath — because the provider knows neither the job's
+ * Blob namespace nor the page index that sourceIds embed. The worker
+ * uploads the PNGs, re-keys element crops via computeSourceId(pageIdx,
+ * domPath), and persists the result as the CaptureResult below. (Spec §1b
+ * shows capture() returning CaptureResult directly; this split is the
+ * implementation-discovered refinement noted in the spec's deviations.)
  */
 export interface CaptureProvider {
-  capture(url: string, opts: CaptureOptions): Promise<CaptureResult>;
+  capture(url: string, opts: CaptureOptions): Promise<RawCapture>;
   close(): Promise<void>;
 }
+
+export type RawScreenshots = {
+  fullPage: Uint8Array;
+  /** Per-top-level-section crops, by candidate index in document order. */
+  sections: { index: number; png: Uint8Array }[];
+  /** Per-element crops for sanitizer-stripped tags, keyed by the element's
+   *  domPath (tag/index path from body — see computeSourceId). */
+  elements: { domPath: string; png: Uint8Array }[];
+};
+
+/** What CaptureProvider.capture() returns: everything in CaptureResult
+ *  except the Blob paths, plus the raw screenshot binaries. */
+export type RawCapture = Omit<
+  CaptureResult,
+  "fullPageScreenshot" | "sectionScreenshots" | "elementScreenshots"
+> & {
+  screenshots: RawScreenshots;
+};
 
 /**
  * Computed styles for one element, as captured. Property names are CSS
