@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
+import { Component, useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { appApi, unwrapEnvelope, type StarcasterEnvelope } from "@/lib/adapters/starcaster-app";
 
 /**
  * Site Import (staff-only) — queue a site-capture job and review its
@@ -55,6 +56,63 @@ type CaptureIndexPage = {
 const POLL_MS = 5000;
 const ACTIVE_STATUSES = new Set(["queued", "capturing", "normalizing", "extracting"]);
 
+/**
+ * Envelope readers. The API responds `{ ok: true, data: { jobs: [...] } }` —
+ * unwrapEnvelope returns the `data` OBJECT, and the payload sits under a key
+ * inside it. Treating that object as the array itself is exactly the crash
+ * that blanked this screen on 2026-08-06 (jobs.map is not a function → React
+ * unmounts the whole root on an uncaught render error), so these helpers are
+ * the only way this file reads responses, and they are unit-tested against
+ * the real sendOk shape. Exported for those tests.
+ */
+export function readEnvelopeList<T>(body: StarcasterEnvelope, key: string): T[] {
+  const direct = body?.[key];
+  if (Array.isArray(direct)) return direct as T[];
+  const data = unwrapEnvelope<Record<string, unknown>>(body);
+  const nested = data && typeof data === "object" ? data[key] : undefined;
+  return Array.isArray(nested) ? (nested as T[]) : [];
+}
+
+export function readEnvelopeObject<T>(body: StarcasterEnvelope, key: string): T | null {
+  const direct = body?.[key];
+  if (direct && typeof direct === "object") return direct as T;
+  const data = unwrapEnvelope<Record<string, unknown>>(body);
+  const nested = data && typeof data === "object" ? data[key] : undefined;
+  return nested && typeof nested === "object" ? (nested as T) : null;
+}
+
+/**
+ * A render error must degrade to a visible message with a retry button —
+ * never a silently blank screen (the React root unmounting on an uncaught
+ * error is indistinguishable from "the page is broken" to the operator).
+ */
+export class SiteImportErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="site-import-page">
+          <p className="site-import-status is-error">
+            Site Import hit an error: {this.state.error.message}
+          </p>
+          <button type="button" className="btn" onClick={() => this.setState({ error: null })}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function formatBytes(n: number): string {
   if (!n) return "0 B";
   if (n < 1024) return `${n} B`;
@@ -83,7 +141,7 @@ export default function SiteImportPage() {
   const loadJobs = useCallback(async () => {
     try {
       const body = await appApi("/api/site-import/jobs");
-      setJobs(unwrapEnvelope<{ jobs: Job[] }>(body, "jobs") as unknown as Job[] ?? []);
+      setJobs(readEnvelopeList<Job>(body, "jobs"));
     } catch (err) {
       setStatus({ message: (err as Error).message, isError: true });
     }
@@ -92,7 +150,8 @@ export default function SiteImportPage() {
   const loadJobDetail = useCallback(async (id: string) => {
     try {
       const body = await appApi(`/api/site-import/jobs/${encodeURIComponent(id)}`);
-      const fresh = unwrapEnvelope<{ job: Job }>(body, "job") as unknown as Job;
+      const fresh = readEnvelopeObject<Job>(body, "job");
+      if (!fresh) return;
       setJob(fresh);
       // Once a run has capture output, fetch the page list (screenshots)
       // and — after normalize — assets + IR, one time per job.
@@ -107,7 +166,7 @@ export default function SiteImportPage() {
         }
         try {
           const assetsBody = await appApi(`/api/site-import/jobs/${encodeURIComponent(id)}/assets`);
-          setAssets((unwrapEnvelope<{ assets: Asset[] }>(assetsBody, "assets") as unknown as Asset[]) ?? []);
+          setAssets(readEnvelopeList<Asset>(assetsBody, "assets"));
         } catch {
           setAssets([]);
         }
@@ -160,14 +219,14 @@ export default function SiteImportPage() {
         method: "POST",
         body: JSON.stringify({ sourceUrl }),
       });
-      const created = unwrapEnvelope<{ job: Job }>(body, "job") as unknown as Job;
+      const created = readEnvelopeObject<Job>(body, "job");
       setSourceUrl("");
       setStatus({
-        message: `Job ${created.id} queued. It starts when the worker runs on the operator's machine.`,
+        message: `Job ${created?.id ?? ""} queued. It starts when the worker runs on the operator's machine.`,
         isError: false,
       });
       await loadJobs();
-      setSelectedId(created.id);
+      if (created) setSelectedId(created.id);
     } catch (err) {
       setStatus({ message: (err as Error).message, isError: true });
     } finally {

@@ -810,11 +810,10 @@ App.builder = (function () {
     App.setActivePage('builderAgentsPage');
   }
 
-  // Site Import (staff-only React screen) — mount wiring only; the page
-  // itself lives in components/builder/site-import-page.tsx.
+  // Site Import (staff-only React screen). Mounting happens in
+  // onPageActivated so refreshes and deep links render too — this helper
+  // only navigates.
   function openSiteImportPage() {
-    const host = byId('builderReactRootSiteImport');
-    window.SiteImportReact?.mount(host);
     App.setActivePage('builderSiteImportPage');
   }
 
@@ -14341,6 +14340,10 @@ App.builder = (function () {
 
       if (pageId === 'builderPageArchivesPage') {
         loadPageArchives().then(() => renderPageArchivesTable()).catch(() => {});
+      } else if (pageId === 'builderSiteImportPage') {
+        // Mount on activation (not just the nav link's onclick) so landing
+        // here from a browser refresh or a #page= deep link still renders.
+        window.SiteImportReact?.mount(byId('builderReactRootSiteImport'));
       } else if (pageId === 'builderThemesPage') mountThemesReact();
       else if (pageId === 'builderFormsPage') mountFormsReact();
       else if (pageId === 'builderExtensionPopulateTitlesPage') mountPopulateTitlesReact();

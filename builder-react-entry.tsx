@@ -9,7 +9,7 @@ import { BuilderExtensionsPage } from './components/builder/builder-extensions-p
 import { BuilderPopulateTitlesPage } from './components/builder/builder-populate-titles-page';
 import { BuilderSeoAltTextPage } from './components/builder/builder-seo-alt-text-page';
 import { BuilderAgentsPage } from './components/builder/builder-agents-page';
-import SiteImportPage from './components/builder/site-import-page';
+import SiteImportPage, { SiteImportErrorBoundary } from './components/builder/site-import-page';
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 
 let activeRoot: Root | null = null;
@@ -226,9 +226,21 @@ export function unmountAgentsReact() {
 // --- Site Import (staff-only) ---
 
 export function mountSiteImportReact(host: HTMLElement | null) {
-  if (!host || siteImportRoot) return;
+  if (!host) return;
+  // Always rebuild the root: a keep-existing-mount guard turned one render
+  // crash into a permanently blank screen (the root survived the crash, so
+  // remount attempts were no-ops). A fresh mount per open also means the
+  // screen always shows current data.
+  if (siteImportRoot) {
+    siteImportRoot.unmount();
+    siteImportRoot = null;
+  }
   siteImportRoot = createRoot(host);
-  siteImportRoot.render(<SiteImportPage />);
+  siteImportRoot.render(
+    <SiteImportErrorBoundary>
+      <SiteImportPage />
+    </SiteImportErrorBoundary>
+  );
 }
 
 export function unmountSiteImportReact() {
