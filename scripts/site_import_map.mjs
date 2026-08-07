@@ -149,7 +149,7 @@ async function main() {
     console.error('Usage: doppler run --config prd -- node scripts/site_import_map.mjs --job <id> [--apply] [--nav]');
     process.exit(1);
   }
-  const job = must(await store.getJob(JOB_ID), 'load job');
+  let job = must(await store.getJob(JOB_ID), 'load job');
   const scope = { projectId: job.projectId, userId: job.ownerUserId || '' };
   log(`Mode:    ${APPLY ? 'APPLY (writes drafts)' : 'DRY RUN (no writes)'}${NAV ? ' + NAV' : ''}`);
   log(`Job:     ${job.id} (${job.sourceUrl})`);
