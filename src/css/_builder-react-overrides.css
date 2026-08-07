@@ -680,3 +680,71 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: #fff;
   text-decoration: none;
 }
+
+/* --- Card Slider: desktop layout ------------------------------------------
+   The slider module's layout rules (flex row, card sizing, positioned image
+   frame) existed ONLY inside @media (max-width: 900px) in
+   _builder-react.css, so above 900px the cards had no styling and each
+   `fill` image escaped its card to span the page — the module effectively
+   showed one giant photo instead of a scrollable row. Found 2026-08-06
+   comparing the imported Delray slider against the new slideshow module.
+   Card width/gap still come from the module's inline settings; these rules
+   only supply the structure the mobile block always assumed. -------------- */
+
+.builder-react-root .builder-preview-slider-wrap {
+  position: relative;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-preview-slider {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.builder-react-root .builder-preview-slider-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  scroll-snap-align: start;
+}
+
+.builder-react-root .builder-preview-slider-image {
+  position: relative;
+  width: 100%;
+  min-height: 180px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.builder-react-root .builder-preview-slider-image img {
+  object-fit: cover;
+}
+
+/* The scroll arrows had no styling at all — they rendered as bare buttons
+   in the text flow instead of overlaying the strip. */
+.builder-react-root .builder-preview-slider-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-light, #d1d5db);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink-primary, #18324a);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.builder-react-root .builder-preview-slider-arrow-left { left: 6px; }
+.builder-react-root .builder-preview-slider-arrow-right { right: 6px; }
