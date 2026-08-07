@@ -113,6 +113,8 @@ const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
 const FORCED_SECTIONS = new Set(flagValues('--force-section'));
+const NO_SLIDESHOW_PATHS = flagValues('--no-slideshow');
+const NO_SLIDESHOW_ALL = flag('--no-slideshow') && NO_SLIDESHOW_PATHS.length === 0;
 const JOB_ID = flagValue('--job');
 const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
@@ -167,7 +169,11 @@ async function main() {
   const importOwnedIds = new Set(Object.values(priorPageIds));
   const existingSlugs = existingPages.filter((p) => !importOwnedIds.has(String(p.id))).map((p) => p.slug).filter(Boolean);
 
-  const out = mapSite(ir, { existingSlugs });
+  const out = mapSite(ir, {
+    existingSlugs,
+    skipAllSlideshows: NO_SLIDESHOW_ALL,
+    skipSlideshowPaths: NO_SLIDESHOW_PATHS,
+  });
 
   // ---- Clobber guard (dry run computes it too, so reports are identical) --
   const protectedSections = [];
@@ -200,6 +206,19 @@ async function main() {
   if (protectedIds.size) {
     log(`Hash guard: ${protectedIds.size} section(s) human-modified — will be left untouched:`);
     for (const { page, section } of protectedSections) log(`  ${page.slug} :: ${section.id} (${section.title})`);
+  }
+  if (NO_SLIDESHOW_ALL) {
+    log('Slideshows: vetoed for this run (--no-slideshow) — image runs stay as images.');
+  } else if (NO_SLIDESHOW_PATHS.length) {
+    log(`Slideshows: vetoed on ${NO_SLIDESHOW_PATHS.join(', ')}`);
+  }
+  if (out.slideshows.length) {
+    log('\nWill consolidate image runs into slideshows (an intent guess — veto below):');
+    for (const plan of out.slideshows) {
+      log(`  ${plan.pagePath || '/'}  →  ${plan.slideCount} slides, absorbs ${plan.absorbedIds.length} image element(s)`);
+      log(`     keep them as images with: --no-slideshow ${plan.pagePath || '/'}`);
+    }
+    log('  (already applied? scripts/site_import_revert_slideshow.mjs restores the images)\n');
   }
   log(`Assets: promote ${out.report.assets.promoted}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
 
