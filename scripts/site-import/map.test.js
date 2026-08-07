@@ -103,6 +103,17 @@ function completenessIr() {
             ],
           },
           {
+            sourceId: '0-secshow', type: 'unknown', screenshot: '',
+            elements: [
+              el({ sourceId: '0-sh1', class: 'image', html: '<img src="https://map.test/hero.jpg" alt="Hero">', textContent: '', assetRefs: ['a1'] }),
+              el({ sourceId: '0-sh2', class: 'image', html: '<img src="https://map.test/s2.jpg" alt="S2">', textContent: '' }),
+              el({ sourceId: '0-sh3', class: 'image', html: '<img src="https://map.test/s3.jpg" alt="S3">', textContent: '' }),
+              el({ sourceId: '0-sh4', class: 'image', html: '<img src="https://map.test/s4.jpg" alt="S4">', textContent: '' }),
+              // Clone of slide 1 — the looping-slider signal.
+              el({ sourceId: '0-sh5', class: 'image', html: '<img src="https://map.test/hero.jpg" alt="Hero">', textContent: '', assetRefs: ['a1'] }),
+            ],
+          },
+          {
             sourceId: '0-sec2', type: 'unknown', screenshot: '',
             elements: [
               el({ sourceId: '0-form', class: 'form', html: '<form><input type="email"></form>', textContent: '', screenshot: 'https://blob.test/shots/form.png' }),
@@ -121,7 +132,15 @@ function completenessIr() {
         screenshots: { desktop: '', tablet: '', mobile: '' },
         sections: [{
           sourceId: '1-sec1', type: 'unknown', screenshot: '',
-          elements: [el({ sourceId: '1-p', class: 'text', html: '<p>Our team.</p>', textContent: 'Our team.' })],
+          elements: [
+            el({ sourceId: '1-p', class: 'text', html: '<p>Our team.</p>', textContent: 'Our team.' }),
+            // Same run, no clones — qualifies via the cross-page fingerprint
+            // (2 of 3 pages >= 60%) and lands in the deduped bucket.
+            el({ sourceId: '1-sh1', class: 'image', html: '<img src="https://map.test/hero.jpg" alt="Hero">', textContent: '', assetRefs: ['a1'] }),
+            el({ sourceId: '1-sh2', class: 'image', html: '<img src="https://map.test/s2.jpg" alt="S2">', textContent: '' }),
+            el({ sourceId: '1-sh3', class: 'image', html: '<img src="https://map.test/s3.jpg" alt="S3">', textContent: '' }),
+            el({ sourceId: '1-sh4', class: 'image', html: '<img src="https://map.test/s4.jpg" alt="S4">', textContent: '' }),
+          ],
         }],
       },
       {
@@ -166,12 +185,15 @@ test('completeness fixture: every disposition, reconciled', () => {
   const r = out.report.elements;
 
   assert.ok(reportReconciles(out.report), JSON.stringify(out.report, null, 2));
-  assert.equal(r.total, 17);
+  assert.equal(r.total, 26);
+  // Slideshow accounting: home run = 1 lead + 3 members mapped, 1 clone
+  // deduped; team-page fingerprint run = 4 deduped.
+  assert.equal(r.deduped, 5);
   assert.equal(r.navConsumed, 1); // the About link
   // Placeholders: form, table, embed, svg, no-src video, unsplittable atom.
   assert.equal(r.placeholder, 6);
   assert.equal(r.skipped, 0);
-  assert.equal(r.mapped, r.total - r.placeholder - r.navConsumed);
+  assert.equal(r.mapped, r.total - r.placeholder - r.navConsumed - r.deduped);
 
   // Slugs: home special-cased, collision suffixed, admin trap dodged.
   assert.deepEqual(out.pages.map((p) => p.slug),
@@ -181,6 +203,15 @@ test('completeness fixture: every disposition, reconciled', () => {
   const allModules = home.sections.flatMap((s) => s.modules);
   const byType = allModules.reduce((m, x) => ((m[x.type] = (m[x.type] || 0) + 1), m), {});
   assert.equal(byType.image, 1);
+  assert.equal(byType.slideshow, 1);
+  const show = allModules.find((m) => m.type === 'slideshow');
+  const slides = JSON.parse(show.settings.slides);
+  assert.equal(slides.length, 4);
+  assert.equal(slides[0].url, 'https://blob.test/SiteImport/job/assets/aa.jpg'); // promoted asset URL
+  assert.ok(show.settings.importSourceIds.split(',').length === 5); // whole run tracked
+  // Interior page gets NO slideshow (ratified homepage-only amendment).
+  const teamModules = out.pages[1].sections.flatMap((s) => s.modules);
+  assert.ok(!teamModules.some((m) => m.type === 'slideshow'));
   assert.equal(byType.button, 1);
   assert.equal(byType.video, 1);
   assert.ok(byType.code >= 5);
@@ -251,6 +282,18 @@ test('delraytennis IR maps with full reconciliation', () => {
   assert.equal(out.pages.length, 2);
   assert.equal(out.pages[0].slug, 'imported-home');
   assert.ok(out.navItems.length > 0);
+  // The homepage slider (15 unique images cloned to 30) becomes ONE
+  // slideshow module; clones land in deduped. (This 2-page fixture keeps
+  // the interior page's run as images: no clones there, and the cross-page
+  // fingerprint needs >=3 pages.)
+  const shows = out.pages.flatMap((p) => p.sections).flatMap((s) => s.modules).filter((m) => m.type === 'slideshow');
+  assert.equal(shows.length, 1);
+  // 13 unique slides (the 14-image run holds one clone); the page's other
+  // image run - 15 copies of one lazy-load placeholder - correctly does
+  // NOT become a slideshow (min 3 unique slides).
+  assert.equal(JSON.parse(shows[0].settings.slides).length, 13);
+  assert.equal(out.report.elements.deduped, 15);
+
   // The site's 16 tables all become crop-carrying placeholders.
   const placeholders = out.pages.flatMap((p) => p.sections)
     .flatMap((s) => s.modules).filter((m) => m.type === 'code');

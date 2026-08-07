@@ -59,7 +59,7 @@ export type MappedSection = {
   sourceElementIds: string[];
   /** How this section's elements were disposed — the runner moves these
    *  to humanModified when the hash guard protects the section. */
-  dispositions: { mapped: number; placeholder: number };
+  dispositions: { mapped: number; placeholder: number; deduped: number };
 };
 
 export type MappedPage = {
@@ -85,6 +85,9 @@ export type MapReport = {
     mapped: number;
     placeholder: number;
     navConsumed: number;
+    /** Slideshow clone-slides and interior-page chrome runs represented by
+     *  the homepage slideshow (ratified amendment, task 86bb9xt0y). */
+    deduped: number;
     humanModified: number;
     skipped: number;
   };
@@ -267,7 +270,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   for (const nav of ir.taxonomy?.navs || []) collectNav(nav.items);
 
   const report: MapReport = {
-    elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, humanModified: 0, skipped: 0 },
+    elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, deduped: 0, humanModified: 0, skipped: 0 },
     skipped: [],
     pages: [],
     assets: { promoted: 0, cropsCopied: 0, leftInNamespace: 0 },
@@ -296,6 +299,95 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     return asset;
   };
 
+  // --- Slideshow detection (ratified spec, task 86bb9xt0y) ---------------
+  // A consecutive same-depth run of >=4 images qualifies as a slideshow
+  // when it contains duplicate srcs (clone-for-looping signal) OR its
+  // deduplicated src-set recurs on >=60% of pages (chrome fingerprint).
+  // Ratified amendment: ONE slideshow module on the homepage; interior
+  // runs and clone-duplicates land in the `deduped` bucket.
+  type SlideshowRun = { pageIdx: number; elements: ElementIR[]; key: string; hasDupes: boolean; uniqueCount: number };
+  const slideshowRuns: SlideshowRun[] = [];
+  (ir.pages || []).forEach((irPage, pageIdx) => {
+    for (const section of irPage.sections || []) {
+      let current: ElementIR[] = [];
+      const flushRun = () => {
+        if (current.length >= 4) {
+          const srcs = current.map((e) => attrFromHtml(e.html, "src")).filter(Boolean);
+          const unique = Array.from(new Set(srcs));
+          slideshowRuns.push({
+            pageIdx,
+            elements: current,
+            key: unique.slice().sort().join("|"),
+            hasDupes: unique.length < srcs.length,
+            uniqueCount: unique.length,
+          });
+        }
+        current = [];
+      };
+      for (const el of section.elements || []) {
+        if (el.class === "image") {
+          if (current.length && current[current.length - 1].depth !== el.depth) flushRun();
+          current.push(el);
+        } else {
+          flushRun();
+        }
+      }
+      flushRun();
+    }
+  });
+  const totalPages = (ir.pages || []).length;
+  const pagesByKey = new Map<string, Set<number>>();
+  for (const run of slideshowRuns) {
+    const set = pagesByKey.get(run.key) || new Set<number>();
+    set.add(run.pageIdx);
+    pagesByKey.set(run.key, set);
+  }
+  // A show needs at least 3 distinct slides: a run of one repeated image
+  // is a lazy-load placeholder artifact (seen on delraytennis), not a
+  // slideshow — it stays as ordinary images.
+  const qualifies = (run: SlideshowRun) =>
+    run.uniqueCount >= 3 &&
+    (run.hasDupes ||
+      (totalPages >= 3 && (pagesByKey.get(run.key)?.size || 0) / totalPages >= 0.6));
+  const homeIdx = Math.max(0, (ir.pages || []).findIndex((p) => String(p.path || "").trim() === "/" || String(p.path || "").trim() === ""));
+  type SlideshowLead = { slides: { id: string; url: string; alt: string }[]; allIds: string[] };
+  const slideshowLeads = new Map<string, SlideshowLead>();
+  const slideshowConsumed = new Map<string, "member" | "dupe" | "interior">();
+  // A marquee-style source duplicates its whole strip as sibling tracks —
+  // same fingerprint, two runs. One module per distinct fingerprint; the
+  // duplicate track dedupes (found on the real delraytennis homepage).
+  const homeKeysDone = new Set<string>();
+  for (const run of slideshowRuns) {
+    if (!qualifies(run)) continue;
+    if (run.pageIdx !== homeIdx || homeKeysDone.has(run.key)) {
+      for (const el of run.elements) slideshowConsumed.set(el.sourceId, "interior");
+      continue;
+    }
+    homeKeysDone.add(run.key);
+    const seenSrcs = new Set<string>();
+    const slides: SlideshowLead["slides"] = [];
+    let lead: ElementIR | null = null;
+    for (const el of run.elements) {
+      const srcAttr = attrFromHtml(el.html, "src");
+      if (srcAttr && seenSrcs.has(srcAttr)) {
+        slideshowConsumed.set(el.sourceId, "dupe");
+        continue;
+      }
+      if (srcAttr) seenSrcs.add(srcAttr);
+      const asset = el.assetRefs[0] ? promoteAsset(el.assetRefs[0]) : null;
+      slides.push({
+        id: `slide-${slides.length + 1}`,
+        url: asset?.storageUrl || asset?.originalUrl || srcAttr,
+        alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
+      });
+      if (!lead) lead = el;
+      else slideshowConsumed.set(el.sourceId, "member");
+    }
+    if (lead) {
+      slideshowLeads.set(lead.sourceId, { slides, allIds: run.elements.map((e) => e.sourceId) });
+    }
+  }
+
   for (const page of ir.pages || []) {
     const mappedSections: MappedSection[] = [];
     let pageModules = 0;
@@ -304,7 +396,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     for (const section of page.sections || []) {
       const modules: MappedModule[] = [];
       const sourceElementIds: string[] = [];
-      const dispositions = { mapped: 0, placeholder: 0 };
+      const dispositions = { mapped: 0, placeholder: 0, deduped: 0 };
       let prose: { html: string; sourceIds: string[] } = { html: "", sourceIds: [] };
       let firstHeading = "";
 
@@ -361,6 +453,40 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         report.elements.total += 1;
         sourceElementIds.push(el.sourceId);
         if (el.class === "heading" && !firstHeading) firstHeading = collapse(el.textContent);
+
+        const slideshowLead = slideshowLeads.get(el.sourceId);
+        if (slideshowLead) {
+          flushProse();
+          modules.push({
+            id: nextModuleId(el.sourceId),
+            type: "slideshow",
+            column: "main",
+            name: "Imported slideshow",
+            text: "",
+            settings: {
+              slides: JSON.stringify(slideshowLead.slides),
+              intervalMs: "5000",
+              transition: "slide",
+              heightPx: "",
+              importSourceIds: slideshowLead.allIds.join(","),
+            },
+          });
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+        const slideshowRole = slideshowConsumed.get(el.sourceId);
+        if (slideshowRole === "member") {
+          // Represented by the homepage slideshow module it belongs to.
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+        if (slideshowRole) {
+          report.elements.deduped += 1;
+          dispositions.deduped += 1;
+          continue;
+        }
 
         if (PROSE_CLASSES.has(el.class)) {
           if (el.class === "link") {
@@ -605,7 +731,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
 export function reportReconciles(report: MapReport): boolean {
   const e = report.elements;
   return (
-    e.total === e.mapped + e.placeholder + e.navConsumed + e.humanModified + e.skipped &&
+    e.total === e.mapped + e.placeholder + e.navConsumed + e.deduped + e.humanModified + e.skipped &&
     report.skipped.length === e.skipped &&
     report.skipped.every((s) => Boolean(s.reason))
   );

@@ -620,6 +620,23 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "slideshow") {
+    const slides = parseSlideshowSlides(module.settings);
+    const first = slides[0];
+    return (
+      <div className="builder-module-preview-slideshow">
+        {first ? (
+          <img src={first.url} alt={first.alt || ""} loading="lazy" />
+        ) : (
+          <span className="builder-module-preview-slideshow-empty">Add slides in the editor</span>
+        )}
+        {slides.length > 1 ? (
+          <span className="builder-module-preview-slideshow-count">{slides.length} slides</span>
+        ) : null}
+      </div>
+    );
+  }
+
   if (module.type === "slider") {
     const items = parseSliderItems(module.settings);
     const gap = Number.parseInt(module.settings.sliderGap || "16", 10);
@@ -2130,6 +2147,25 @@ function renderCompactCellModulePreview(module: BuilderTemplateModule) {
   return <div className="builder-table-cell-module-preview">{renderModulePreview(module)}</div>;
 }
 
+type SlideshowSlide = { id: string; url: string; alt: string };
+
+function parseSlideshowSlides(settings: Record<string, string>): SlideshowSlide[] {
+  try {
+    const raw = JSON.parse(settings.slides || "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((entry, index) => ({
+        id: String((entry as SlideshowSlide)?.id || `slide-${index}`),
+        url: String((entry as SlideshowSlide)?.url || "").trim(),
+        alt: String((entry as SlideshowSlide)?.alt || "")
+      }));
+    // Empty-url slides stay: a just-added slide must survive until the
+    // operator picks its image. Renderers filter empties at display time.
+  } catch {
+    return [];
+  }
+}
+
 function parseSliderItems(settings: Record<string, string>): SliderItem[] {
   try {
     const items = JSON.parse(settings.sliderItems || "[]");
@@ -2757,6 +2793,100 @@ function TableModuleEditor({
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+function SlideshowModuleEditor({
+  module,
+  onUpdateModule
+}: {
+  module: BuilderTemplateModule;
+  onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+}) {
+  const slides = parseSlideshowSlides(module.settings);
+
+  function persist(next: SlideshowSlide[]) {
+    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, slides: JSON.stringify(next) } }));
+  }
+
+  function setSetting(key: string, value: string) {
+    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
+  }
+
+  function updateSlide(id: string, updates: Partial<SlideshowSlide>) {
+    persist(slides.map((slide) => (slide.id === id ? { ...slide, ...updates } : slide)));
+  }
+
+  function moveSlide(id: string, direction: -1 | 1) {
+    const index = slides.findIndex((slide) => slide.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= slides.length) return;
+    const next = [...slides];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    persist(next);
+  }
+
+  return (
+    <>
+      <div className="builder-slider-design-grid">
+        <BuilderInlineNumberSelectRow>
+          <BuilderInlineNumberSelect
+            label="Interval (ms)"
+            value={module.settings.intervalMs ?? "5000"}
+            min={1000}
+            max={20000}
+            step={500}
+            fallback="5000"
+            onChange={(value) => setSetting("intervalMs", value)}
+          />
+          <BuilderInlineNumberSelect
+            label="Height (px, 0 = auto)"
+            value={module.settings.heightPx || "0"}
+            min={0}
+            max={900}
+            step={20}
+            fallback="0"
+            onChange={(value) => setSetting("heightPx", value === "0" ? "" : value)}
+          />
+        </BuilderInlineNumberSelectRow>
+        <label className="field">
+          <span>Transition</span>
+          <select
+            value={module.settings.transition === "fade" ? "fade" : "slide"}
+            onChange={(e) => setSetting("transition", e.target.value)}
+          >
+            <option value="slide">Slide</option>
+            <option value="fade">Fade</option>
+          </select>
+        </label>
+      </div>
+      <div className="builder-slider-items">
+        {slides.map((slide, index) => (
+          <div key={slide.id} className="builder-slider-item-card">
+            <div className="builder-slider-item-header">
+              <strong>Slide {index + 1}</strong>
+              <div className="builder-section-actions">
+                <button type="button" className="builder-icon-button" onClick={() => moveSlide(slide.id, -1)} title="Move up">↑</button>
+                <button type="button" className="builder-icon-button" onClick={() => moveSlide(slide.id, 1)} title="Move down">↓</button>
+                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => persist(slides.filter((s) => s.id !== slide.id))} title="Delete slide">✕</button>
+              </div>
+            </div>
+            <div className="builder-slider-item-grid">
+              <label className="field builder-slider-item-grid-full"><span>Image</span><BuilderImagePickerField value={slide.url} onChange={(url) => updateSlide(slide.id, { url })} /></label>
+              <label className="field builder-slider-item-grid-full"><span>Alt text</span><input type="text" value={slide.alt} onChange={(e) => updateSlide(slide.id, { alt: e.target.value })} placeholder="Describe the image" /></label>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => persist([...slides, { id: `slide-${Date.now()}-${slides.length + 1}`, url: "", alt: "" }])}
+      >
+        Add Slide
+      </button>
     </>
   );
 }
@@ -4304,6 +4434,7 @@ export function BuilderModuleCard({
             <TableModuleEditor module={module} pages={pages} themeColors={themeColors} onUpdateModule={onUpdateModule} />
           )}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "slideshow" && <SlideshowModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "navigation" && (
             <NavModuleEditor
               module={module}

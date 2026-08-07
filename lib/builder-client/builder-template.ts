@@ -50,6 +50,7 @@ export type BuilderTemplateModuleType =
   | "player-portal"
   | "table"
   | "slider"
+  | "slideshow"
   | "social"
   | "social-share"
   | "previous-results"
@@ -1213,6 +1214,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "player-portal" ||
     type === "table" ||
     type === "slider" ||
+    type === "slideshow" ||
     type === "social" ||
     type === "social-share" ||
     type === "previous-results" ||
@@ -1269,6 +1271,8 @@ export function normalizeModuleSettings(value: unknown) {
           ? (normalizeBackgroundSettings(raw) as unknown as string)
           : normalizedKey === "url" || normalizedKey === "backgroundImageUrl"
             ? normalizeBuilderAssetUrl(raw)
+            : normalizedKey === "slides"
+              ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 200000))
             : normalizedKey === "navItems"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 500000))
               : normalizedKey === "tableData" || normalizedKey === "content" || normalizedKey === "tableContents"
@@ -1890,6 +1894,13 @@ export function createEmptyModule(
           productName: "",
           imageUrl: "",
           buttonLabel: "Buy on Redbubble"
+        }
+      : type === "slideshow"
+      ? {
+          slides: "[]",
+          intervalMs: "5000",
+          transition: "slide",
+          heightPx: ""
         }
       : type === "video"
       ? {
