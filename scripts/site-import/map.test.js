@@ -96,7 +96,10 @@ function completenessIr() {
               el({ sourceId: '0-freelink', class: 'link', html: '<a href="/menu.pdf">Menu</a>', textContent: 'Menu' }),
               // Link to another imported page → must localize to its slug.
               el({ sourceId: '0-intlink', class: 'link', html: '<a href="/about/team">Meet the team</a>', textContent: 'Meet the team' }),
+              // Same photo the slideshow carries → must dedupe away.
               el({ sourceId: '0-img', class: 'image', html: '<img src="https://map.test/hero.jpg" alt="Hero">', textContent: '', assetRefs: ['a1'] }),
+              // A photo the slideshow does NOT carry → stays an image module.
+              el({ sourceId: '0-imgsolo', class: 'image', html: '<img src="https://map.test/solo.jpg" alt="Solo">', textContent: '' }),
               el({ sourceId: '0-btn', class: 'button', html: '<a role="button" href="/join">Join Now</a>', textContent: 'Join Now' }),
               el({ sourceId: '0-vid', class: 'video', html: '<video src="https://map.test/clip.mp4"></video>', textContent: '' }),
               el({ sourceId: '0-vidx', class: 'video', html: '<video></video>', textContent: '', screenshot: 'https://blob.test/shots/vidx.png' }),
@@ -185,10 +188,12 @@ test('completeness fixture: every disposition, reconciled', () => {
   const r = out.report.elements;
 
   assert.ok(reportReconciles(out.report), JSON.stringify(out.report, null, 2));
-  assert.equal(r.total, 26);
+  assert.equal(r.total, 27);
   // Slideshow accounting: home run = 1 lead + 3 members mapped, 1 clone
   // deduped; team-page fingerprint run = 4 deduped.
-  assert.equal(r.deduped, 5);
+  // clone in the home run (1) + team-page fingerprint run (4) + the
+  // standalone hero image the slideshow already shows (1).
+  assert.equal(r.deduped, 6);
   assert.equal(r.navConsumed, 1); // the About link
   // Placeholders: form, table, embed, svg, no-src video, unsplittable atom.
   assert.equal(r.placeholder, 6);
@@ -219,7 +224,7 @@ test('completeness fixture: every disposition, reconciled', () => {
 
   // Image took the downloaded asset URL; promotion plan covers it only.
   const img = allModules.find((m) => m.type === 'image');
-  assert.equal(img.settings.url, 'https://blob.test/SiteImport/job/assets/aa.jpg');
+  assert.equal(img.settings.url, 'https://map.test/solo.jpg');
   assert.deepEqual(out.copyPlan.assets.map((a) => a.assetId), ['a1']);
   assert.equal(out.report.assets.leftInNamespace, 1);
 
@@ -292,7 +297,15 @@ test('delraytennis IR maps with full reconciliation', () => {
   // image run - 15 copies of one lazy-load placeholder - correctly does
   // NOT become a slideshow (min 3 unique slides).
   assert.equal(JSON.parse(shows[0].settings.slides).length, 13);
-  assert.equal(out.report.elements.deduped, 15);
+  // 1 clone inside the hero run + 14 for the interior page's own run +
+  // the 15-copy lazy-load run of a photo the slideshow already shows
+  // (operator-reported: slideshow followed by 15 identical pictures).
+  assert.equal(out.report.elements.deduped, 30);
+  const slideUrls = new Set(JSON.parse(shows[0].settings.slides).map((s) => s.url));
+  const redundant = out.pages[0].sections
+    .flatMap((s) => s.modules)
+    .filter((m) => m.type === 'image' && slideUrls.has(m.settings.url));
+  assert.equal(redundant.length, 0, 'no image module repeats a photo the slideshow already shows');
 
   // The site's 16 tables all become crop-carrying placeholders.
   const placeholders = out.pages.flatMap((p) => p.sections)
