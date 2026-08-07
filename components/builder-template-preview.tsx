@@ -1489,6 +1489,10 @@ function BuilderModulePreview({
     return <HeadlineRotatorPreview module={module} />;
   }
 
+  if (module.type === "slideshow") {
+    return <SlideshowPreview module={module} />;
+  }
+
   if (module.type === "poll-category-list") {
     return <PollCategoryListPreview module={module} />;
   }
@@ -4482,6 +4486,81 @@ function BlogModulePlaceholder({ type }: { type: string }) {
       }}
     >
       {labels[type] || type}
+    </div>
+  );
+}
+
+function SlideshowPreview({
+  module
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+}) {
+  const slides = useMemo(() => {
+    try {
+      const raw = JSON.parse(module.settings.slides || "[]");
+      if (!Array.isArray(raw)) return [] as { id: string; url: string; alt: string }[];
+      return raw
+        .map((entry, index) => ({
+          id: String((entry as { id?: string })?.id || `slide-${index}`),
+          url: String((entry as { url?: string })?.url || "").trim(),
+          alt: String((entry as { alt?: string })?.alt || "")
+        }))
+        .filter((slide) => slide.url);
+    } catch {
+      return [] as { id: string; url: string; alt: string }[];
+    }
+  }, [module.settings.slides]);
+  const intervalMs = Math.max(Number.parseInt(module.settings.intervalMs ?? "5000", 10) || 5000, 1000);
+  const transition = module.settings.transition === "fade" ? "fade" : "slide";
+  const heightPx = Number.parseInt(module.settings.heightPx ?? "", 10) || 0;
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (slides.length <= 1 || paused) return;
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % slides.length);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [slides.length, intervalMs, paused]);
+
+  useEffect(() => {
+    if (index >= slides.length) setIndex(0);
+  }, [slides.length, index]);
+
+  if (slides.length === 0) {
+    return <div className="builder-preview-slideshow builder-preview-slideshow-empty">Add slides in the editor</div>;
+  }
+
+  const frameStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
+  return (
+    <div
+      className={`builder-preview-slideshow builder-preview-slideshow-${transition}`}
+      style={frameStyle}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      {transition === "slide" ? (
+        <div
+          className="builder-preview-slideshow-track"
+          style={{ transform: `translateX(-${index * 100}%)` }}
+        >
+          {slides.map((slide) => (
+            <img key={slide.id} src={slide.url} alt={slide.alt} loading="lazy" />
+          ))}
+        </div>
+      ) : (
+        slides.map((slide, slideIndex) => (
+          <img
+            key={slide.id}
+            src={slide.url}
+            alt={slide.alt}
+            loading="lazy"
+            className="builder-preview-slideshow-fade-frame"
+            style={{ opacity: slideIndex === index ? 1 : 0 }}
+          />
+        ))
+      )}
     </div>
   );
 }

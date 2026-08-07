@@ -60,6 +60,7 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     module.type === "headline-rotator" ||
     module.type === "poll-category-list" ||
     module.type === "slider" ||
+    module.type === "slideshow" ||
     module.type === "social" ||
     module.type === "social-share" ||
     module.type === "table" ||
