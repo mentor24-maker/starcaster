@@ -26,6 +26,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
 
 /** Keep merged text modules comfortably under the hard 10k normalizer cap. */
@@ -100,6 +101,15 @@ export type MapReport = {
     builderPageId: string | null;
   }[];
   assets: { promoted: number; cropsCopied: number; leftInNamespace: number };
+  /**
+   * What the placeholders actually CONTAIN, grouped by structural
+   * signature and ranked. Placeholders are the importer admitting it has
+   * no rule for something; grouping them turns "look at the site and
+   * notice" into a repeatable signal. A large group with a simple shape
+   * (e.g. "table: 1 image, no text") is a mapping rule waiting to be
+   * written — that is exactly how image-only tables were found.
+   */
+  placeholderPatterns: { signature: string; count: number; sampleSourceId: string }[];
 };
 
 /** One consolidation the mapper performed — surfaced in the dry run so a
@@ -264,6 +274,67 @@ function escapeHtml(s: string): string {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/** Compact structural description of an element, for grouping the things
+ *  the importer had no rule for. */
+function structuralSignature(el: ElementIR): string {
+  try {
+    const $ = cheerio.load(el.html);
+    const imgs = $("img").length;
+    const links = $("a").length;
+    const cells = $("td,th").length;
+    const rows = $("tr").length;
+    const text = $.root().text().replace(/\s+/g, " ").trim();
+    const textBucket = text.length === 0 ? "no text" : text.length < 40 ? "short text" : "long text";
+    const parts = [`${el.class}:`];
+    if (imgs) parts.push(`${imgs} img`);
+    if (links) parts.push(`${links} link`);
+    if (rows) parts.push(`${rows} row`);
+    if (cells) parts.push(`${cells} cell`);
+    parts.push(textBucket);
+    return parts.join(" ");
+  } catch {
+    return `${el.class}: unparseable`;
+  }
+}
+
+/**
+ * Images inside a table that carries no real text — a layout table, not
+ * data. Sites built in page builders wrap single photos in tables
+ * constantly (13 of delraytennis.com's 16 "tables" are exactly this), and
+ * turning them into screenshot placeholders buries the actual picture and
+ * asks a human to rebuild something that was never a table.
+ *
+ * Returns the images to emit, or null when the element is a real table.
+ */
+function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href: string }[] | null {
+  if (el.class !== "table") return null;
+  let $: ReturnType<typeof cheerio.load>;
+  try {
+    $ = cheerio.load(el.html);
+  } catch {
+    return null;
+  }
+  const text = $.root().text().replace(/\s+/g, " ").trim();
+  if (text.length > 0) return null; // any real copy means it may be data
+  const out: { src: string; alt: string; href: string }[] = [];
+  const seen = new Set<string>();
+  $("img").each((_i, node) => {
+    const $img = $(node);
+    const src = String($img.attr("src") || "").trim();
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    // A link wrapping the image usually points at the full-size file
+    // (lightbox); that is not a destination worth keeping.
+    const href = String($img.closest("a").attr("href") || "").trim();
+    out.push({
+      src,
+      alt: String($img.attr("alt") || "").trim(),
+      href: href && href !== src ? href : "",
+    });
+  });
+  return out.length ? out : null;
+}
+
 const PLACEHOLDER_CLASSES = new Set(["form", "table", "embed", "other"]);
 const PROSE_CLASSES = new Set(["heading", "text", "link"]);
 const DIRECT_MEDIA_RE = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
@@ -293,7 +364,9 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     skipped: [],
     pages: [],
     assets: { promoted: 0, cropsCopied: 0, leftInNamespace: 0 },
+    placeholderPatterns: [],
   };
+  const patternTally = new Map<string, { count: number; sampleSourceId: string }>();
   const crops: CropCopy[] = [];
   const promotions = new Map<string, AssetPromotion>();
   const sourceOverflows: SourceOverflow[] = [];
@@ -515,6 +588,10 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
           settings,
         });
         if (el.screenshot) crops.push({ sourceId: el.sourceId, fromUrl: el.screenshot, moduleId });
+        const signature = structuralSignature(el);
+        const tallied = patternTally.get(signature) || { count: 0, sampleSourceId: el.sourceId };
+        tallied.count += 1;
+        patternTally.set(signature, tallied);
         report.elements.placeholder += 1;
         dispositions.placeholder += 1;
         pagePlaceholders += 1;
@@ -656,6 +733,37 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
           continue;
         }
 
+        const layoutTableImages = imagesFromLayoutTable(el);
+        if (layoutTableImages) {
+          flushProse();
+          for (const img of layoutTableImages) {
+            // The IR already resolved this element's assets; pick the one
+            // whose original URL is this image (srcset variants mean an
+            // element often carries several).
+            const match = el.assetRefs
+              .map((id) => assetsById.get(id))
+              .find((a) => a && a.originalUrl === img.src);
+            const asset = match ? promoteAsset(match.id) : null;
+            modules.push({
+              id: nextModuleId(el.sourceId),
+              type: "image",
+              column: "main",
+              name: "Imported image",
+              text: "",
+              settings: {
+                url: asset?.storageUrl || asset?.originalUrl || img.src,
+                alt: img.alt,
+                ...(img.href ? { linkUrl: img.href, newTab: "true" } : {}),
+                importSourceIds: el.sourceId,
+                importFromLayoutTable: "true",
+              },
+            });
+          }
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+
         if (PLACEHOLDER_CLASSES.has(el.class)) {
           flushProse();
           pushPlaceholder(el);
@@ -753,13 +861,37 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     }
     for (const v of variants) if (v) localHrefBySource.set(v, local);
   }
-  const localizeHtml = (html: string): string => {
-    let out = html;
-    for (const [from, to] of localHrefBySource) {
-      out = out.split(`href="${from}"`).join(`href="${to}"`);
+  /**
+   * Rewrite one href for the imported site.
+   *  - a page we imported  → its Builder slug
+   *  - any other page on the SAME site → the slug that page would get,
+   *    kept relative. An imported staging site must never send visitors
+   *    back to the client's live site; a dead internal link is a redesign
+   *    to-do, and it starts working by itself once that page exists.
+   *  - asset files (PDFs, images) and external links → untouched
+   */
+  const localizeHref = (href: string): string => {
+    const raw = String(href || "").trim();
+    if (!raw || raw.startsWith("#") || /^(mailto|tel|javascript):/i.test(raw)) return raw;
+    const direct =
+      localHrefBySource.get(raw) ||
+      localHrefBySource.get(raw.endsWith("/") ? raw.slice(0, -1) : `${raw}/`);
+    if (direct) return direct;
+    try {
+      const abs = new URL(raw, ir.sourceUrl);
+      if (!sameSite(abs.href, ir.sourceUrl)) return raw; // external
+      if (!looksLikeHtmlUrl(abs.href)) return raw; // an asset file, not a page
+      return `/${normalizeImportSlug(abs.pathname)}`;
+    } catch {
+      return raw;
     }
-    return out;
   };
+
+  const localizeHtml = (html: string): string =>
+    html.replace(/href="([^"]*)"/g, (whole, href) => {
+      const next = localizeHref(String(href));
+      return next === href ? whole : `href="${next}"`;
+    });
   for (const page of pages) {
     for (const section of page.sections) {
       for (const module of section.modules) {
@@ -767,25 +899,21 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
           module.text = localizeHtml(module.text);
         }
         if (module.type === "button" && module.settings.href) {
-          const localized =
-            localHrefBySource.get(module.settings.href) ||
-            localHrefBySource.get(
-              module.settings.href.endsWith("/")
-                ? module.settings.href.slice(0, -1)
-                : `${module.settings.href}/`
-            );
-          if (localized) module.settings.href = localized;
+          module.settings.href = localizeHref(module.settings.href);
+        }
+        if (module.type === "image" && module.settings.linkUrl) {
+          module.settings.linkUrl = localizeHref(module.settings.linkUrl);
         }
       }
     }
   }
   for (const item of navItems) {
-    const localized =
-      localHrefBySource.get(item.href) ||
-      localHrefBySource.get(item.href.endsWith("/") ? item.href.slice(0, -1) : `${item.href}/`);
-    if (localized) item.href = localized;
+    item.href = localizeHref(item.href);
   }
 
+  report.placeholderPatterns = Array.from(patternTally.entries())
+    .map(([signature, v]) => ({ signature, count: v.count, sampleSourceId: v.sampleSourceId }))
+    .sort((a, b) => b.count - a.count);
   report.assets.promoted = promotions.size;
   report.assets.cropsCopied = crops.length;
   report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size);
