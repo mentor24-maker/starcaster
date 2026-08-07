@@ -687,6 +687,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
             settings: {
               url,
               alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
+              size: "100",
               importSourceIds: el.sourceId,
             },
           });
@@ -753,6 +754,10 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
               settings: {
                 url: asset?.storageUrl || asset?.originalUrl || img.src,
                 alt: img.alt,
+                // Percent of the container, matching what a hand-created
+                // image module gets. Without it the module renders at the
+                // file's natural size — a 1103px flyer overflowed the page.
+                size: "100",
                 ...(img.href ? { linkUrl: img.href, newTab: "true" } : {}),
                 importSourceIds: el.sourceId,
                 importFromLayoutTable: "true",
