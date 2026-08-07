@@ -8123,10 +8123,28 @@ App.builder = (function () {
       });
   }
 
-  /** Standalone preview URL for a SAVED page (builder-preview fetches it
-   *  fresh by id — no localStorage involved, safe to refresh/share). */
+  /** Active project's custom/staging domain, '' when none is configured. */
+  function activeProjectDomain() {
+    const activeId = typeof App.projectContext?.getSessionProjectId === 'function'
+      ? String(App.projectContext.getSessionProjectId() || '')
+      : '';
+    const projects = Array.isArray(App.state?.projects) ? App.state.projects : [];
+    const active = projects.find((p) => String(p?.id || '') === activeId);
+    return String(active?.domain || '').trim();
+  }
+
+  /** Preview URL for a SAVED page. Projects with a domain (custom or
+   *  staging subdomain) link straight to the real site — the page as
+   *  visitors see it. Note: unpublished drafts are not served publicly,
+   *  so the public site falls back to home for them; the admin
+   *  builder-preview remains the fallback when no domain is set. */
   function landingPagePreviewUrl(record) {
-    const ref = safeText(record?.id) || safeText(record?.slug);
+    const domain = activeProjectDomain();
+    const slug = safeText(record?.slug);
+    if (domain) {
+      return 'https://' + domain + '/' + (slug === 'home' ? '' : encodeURIComponent(slug));
+    }
+    const ref = safeText(record?.id) || slug;
     return window.location.origin + '/builder-preview.html?slug=' + encodeURIComponent(ref);
   }
 
