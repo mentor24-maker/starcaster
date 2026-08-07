@@ -1149,3 +1149,126 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
+
+/* ---------------------------------------------------------------------
+   Module Library — bigger icons and cross-category search.
+   2026-08-07, at the operator's direction: the palette is heading for
+   dozens of categories over hundreds of modules, so the browse grid has
+   to read at a glance and search has to reach modules directly.
+   --------------------------------------------------------------------- */
+
+/* Doubled from 34px. The `!important` matches the existing radius rule in
+   this file — these override generated `_builder-react.css` declarations
+   of equal specificity that would otherwise win on source order. */
+.builder-react-root .builder-module-palette-modal .builder-module-item-icon,
+.builder-react-root .builder-module-palette-modal .builder-module-group-card-icon {
+  width: 68px !important;
+  height: 68px !important;
+  border-radius: 18px !important;
+  font-size: 1.5rem;
+}
+
+/* The icons are line SVGs on a 24x24 grid; size them off the chip so the
+   stroke weight stays even as the chip changes. */
+.builder-react-root .builder-module-palette-modal .builder-module-item-icon svg,
+.builder-react-root .builder-module-palette-modal .builder-module-group-card-icon svg {
+  width: 60%;
+  height: 60%;
+}
+
+.builder-react-root .builder-module-palette-modal .builder-module-group-card,
+.builder-react-root .builder-module-palette-modal .builder-module-item-card {
+  padding: 16px 12px;
+  gap: 10px;
+}
+
+/* Search ------------------------------------------------------------- */
+.builder-react-root .builder-module-palette-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 4px;
+}
+
+.builder-react-root .builder-module-palette-search-icon {
+  position: absolute;
+  left: 9px;
+  display: flex;
+  width: 15px;
+  height: 15px;
+  color: var(--ink-secondary, #5b6b7d);
+  pointer-events: none;
+}
+
+.builder-react-root .builder-module-palette-search-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.builder-react-root .builder-module-palette-search-input {
+  width: 220px;
+  height: 32px;
+  padding: 0 26px 0 30px;
+  border: 1px solid var(--border-light, #d1d5db);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink-primary, #18324a);
+  font-size: 0.86rem;
+}
+
+.builder-react-root .builder-module-palette-search-input:focus-visible {
+  outline: 2px solid var(--accent, #17b7ee);
+  outline-offset: 1px;
+}
+
+/* Safari draws its own clear affordance on type=search; ours is a real
+   button so screen readers can reach it. */
+.builder-react-root .builder-module-palette-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.builder-react-root .builder-module-palette-search-clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-secondary, #5b6b7d);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-module-palette-search-clear:hover {
+  color: var(--ink-primary, #18324a);
+}
+
+/* A search result has to say which category it came from, or the operator
+   learns nothing about where to find it next time. */
+.builder-react-root .builder-module-search-result {
+  position: relative;
+}
+
+.builder-react-root .builder-module-search-result-meta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-secondary, #5b6b7d);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .builder-react-root .builder-module-palette-search-input {
+    width: 140px;
+  }
+}
