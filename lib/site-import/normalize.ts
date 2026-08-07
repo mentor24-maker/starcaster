@@ -557,23 +557,106 @@ function candidateFor(
  * Navigation extraction
  * ------------------------------------------------------------------------ */
 
+/** Class-name signals for themes that use plain <div>s instead of the
+ *  <header>/<footer> tags. delraytennis.com nests its only menu in
+ *  div.site-container with no <header> anywhere, which classified the
+ *  site's primary menu as "other". */
+const HEADER_CLASS_RE = /(^|[\s_-])(site-)?(header|masthead|topbar|banner)([\s_-]|$)/i;
+const FOOTER_CLASS_RE = /(^|[\s_-])(site-)?footer([\s_-]|$)/i;
+const PRIMARY_NAV_CLASS_RE = /(nav-primary|primary-nav|main-nav|menu-primary|main-menu|nav-main)/i;
+
 function navLocation(node: DomNode): string {
   let cur: DomNode | null | undefined = node;
   while (cur) {
     const name = (cur.name || "").toLowerCase();
     if (name === "header") return "header";
     if (name === "footer") return "footer";
+    // Class heuristics are for REGION containers only. <body> and <html>
+    // wrap the whole document, so their classes describe the page, not the
+    // nav's position — WordPress themes routinely put "footer-widgets" on
+    // the body, which labelled delraytennis.com's header menu as a footer.
+    if (name !== "body" && name !== "html") {
+      const cls = (cur.attribs || {}).class || "";
+      if (FOOTER_CLASS_RE.test(cls)) return "footer";
+      if (HEADER_CLASS_RE.test(cls)) return "header";
+    }
     cur = cur.parent;
   }
+  // No structural signal at all: a nav that calls itself primary/main is
+  // the site's header menu.
+  if (PRIMARY_NAV_CLASS_RE.test((node.attribs || {}).class || "")) return "header";
   return "other";
 }
 
+/**
+ * The outermost lists inside a scope, descending THROUGH wrapper elements.
+ *
+ * Looking only at direct children (the original behaviour) meant a theme
+ * that wraps its menu — `nav > div > ul`, extremely common, and exactly
+ * what delraytennis.com does — matched no list and fell through to the
+ * flat link-scan below, silently discarding every submenu. That turned a
+ * 4-item menu with 3 submenus into 18 flat items.
+ */
+function findOutermostLists(scope: DomNode): DomNode[] {
+  const out: DomNode[] = [];
+  const walk = (node: DomNode): void => {
+    for (const child of elementChildren(node)) {
+      const name = (child.name || "").toLowerCase();
+      if (name === "ul" || name === "ol") {
+        out.push(child); // outermost on this branch — do not descend
+        continue;
+      }
+      walk(child);
+    }
+  };
+  walk(scope);
+  return out;
+}
+
+/** An <li>'s own link: the first anchor that is NOT inside its submenu. */
+function findItemLink(li: DomNode): DomNode | null {
+  let found: DomNode | null = null;
+  const walk = (node: DomNode): void => {
+    if (found) return;
+    for (const child of elementChildren(node)) {
+      if (found) return;
+      const name = (child.name || "").toLowerCase();
+      if (name === "ul" || name === "ol") continue; // belongs to the submenu
+      if (name === "a" && (child.attribs || {}).href !== undefined) {
+        found = child;
+        return;
+      }
+      walk(child);
+    }
+  };
+  walk(li);
+  return found;
+}
+
+/** An <li>'s own label text, excluding the submenu labels beneath it —
+ *  otherwise a parent item with no anchor absorbs all its children's text. */
+function ownText(li: DomNode): string {
+  let out = "";
+  const walk = (node: DomNode): void => {
+    for (const child of node.children || []) {
+      if (child.type === "text") {
+        out += child.data || "";
+        continue;
+      }
+      const name = (child.name || "").toLowerCase();
+      if (name === "ul" || name === "ol" || SKIP_TAGS.has(name)) continue;
+      walk(child);
+    }
+  };
+  walk(li);
+  return out;
+}
+
 function parseNavItems($: CheerioApi, scope: DomNode): NavItem[] {
-  const lists = elementChildren(scope).filter(
-    (c) => (c.name || "").toLowerCase() === "ul" || (c.name || "").toLowerCase() === "ol"
-  );
+  const lists = findOutermostLists(scope);
   if (lists.length === 0) {
-    // No list markup — fall back to direct links, one flat level.
+    // Genuine last resort: no list markup anywhere. A flat menu is the
+    // correct result here — there is no hierarchy to recover.
     const items: NavItem[] = [];
     const stack: DomNode[] = [scope];
     while (stack.length) {
@@ -597,20 +680,16 @@ function parseNavItems($: CheerioApi, scope: DomNode): NavItem[] {
     const items: NavItem[] = [];
     for (const li of elementChildren(list)) {
       if ((li.name || "").toLowerCase() !== "li") continue;
-      const kids = elementChildren(li);
-      const link = kids.find(
-        (k) => (k.name || "").toLowerCase() === "a" && (k.attribs || {}).href !== undefined
-      );
-      const sublist = kids.find((k) => {
-        const n = (k.name || "").toLowerCase();
-        return n === "ul" || n === "ol";
-      });
-      const label = collapseWhitespace(link ? getText(link) : getText(li));
-      if (!label && !sublist) continue;
+      // Both the item's link and its submenu may sit inside wrappers
+      // (li > div > a, li > div > ul), so descend for each.
+      const link = findItemLink(li);
+      const children = findOutermostLists(li).flatMap(fromList);
+      const label = collapseWhitespace(link ? getText(link) : ownText(li));
+      if (!label && !children.length) continue;
       items.push({
         label,
         href: link ? (link.attribs || {}).href || "" : "",
-        children: sublist ? fromList(sublist) : [],
+        children,
       });
     }
     return items;
