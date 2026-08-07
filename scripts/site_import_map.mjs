@@ -308,6 +308,8 @@ async function main() {
   //    bookkeeping, respect the hash guard, create or update.
   const pageIds = { ...priorPageIds };
   const sectionHashes = { ...priorHashes };
+  /** pageId -> section ids this run owns; hashed at the very end. */
+  const ownedSectionIds = new Map();
   for (const page of out.pages) {
     const sections = page.sections.map(({ sourceElementIds, dispositions, ...section }) => {
       const clean = rewriteUrls(section, urlMap);
@@ -348,12 +350,7 @@ async function main() {
     }
     pageIds[page.irPath] = String(saved.id);
 
-    // Hash exactly what was stored (post-normalization read-back).
-    const stored = must(await pagesStore.getPage(saved.id, scope), `read back ${page.slug}`);
-    for (const section of sections) {
-      const storedSection = (stored.layoutSections || []).find((s) => s.id === section.id);
-      if (storedSection && !protectedIds.has(section.id)) sectionHashes[section.id] = sha256(storedSection);
-    }
+    ownedSectionIds.set(String(saved.id), sections.map((s) => s.id).filter((id) => !protectedIds.has(id)));
     const reportPage = out.report.pages.find((p) => p.path === page.irPath);
     if (reportPage) reportPage.builderPageId = String(saved.id);
     log(`  wrote /${page.slug} (page ${saved.id}, draft)`);
@@ -382,6 +379,26 @@ async function main() {
 
   // Nav LAST: nothing may write pages after the master instances attach.
   if (NAV) await runNav(job, scope, out);
+
+  // Fingerprint the sections only NOW, once every write in this run has
+  // landed. Hashing them during the write loop recorded a state the nav
+  // step then changed (attaching the master re-serializes the whole page),
+  // so the next run saw a mismatch and the clobber guard protected the
+  // pages from the mapper itself — 150 elements reported human-modified
+  // on 2026-08-07 with nobody having touched them.
+  const settledHashes = { ...sectionHashes };
+  for (const [pageId, sectionIds] of ownedSectionIds) {
+    if (!sectionIds.length) continue;
+    const settled = await pagesStore.getPage(pageId, scope);
+    if (!settled.ok) continue;
+    for (const section of settled.data.layoutSections || []) {
+      if (sectionIds.includes(section.id)) settledHashes[section.id] = sha256(section);
+    }
+  }
+  must(await store.updateJob(job.id, {
+    checkpoints: { ...checkpoints, map: { ...checkpoints.map, sectionHashes: settledHashes } },
+  }), 'record settled section hashes');
+  log(`Clobber guard: fingerprinted ${Object.keys(settledHashes).length} import-owned section(s).`);
 }
 
 /** --nav: write the imported header tree into the Header saved-section
