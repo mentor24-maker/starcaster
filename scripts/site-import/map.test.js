@@ -263,6 +263,55 @@ test('completeness fixture: every disposition, reconciled', () => {
   assert.ok(proseHtml.includes('href="/menu.pdf"'), 'external link untouched');
 });
 
+test('layout tables become images; real tables stay placeholders', () => {
+  const base = completenessIr();
+  base.pages[0].sections[2].elements.push(
+    // A photo wrapped in a table with a lightbox link — the delraytennis
+    // pattern, 13 of its 16 "tables".
+    el({ sourceId: '0-tblimg', class: 'table',
+      html: '<table><tbody><tr><td><a href="https://map.test/full.jpg"><img src="https://map.test/hero.jpg" alt="Team"></a></td></tr></tbody></table>',
+      textContent: '', assetRefs: ['a1'], screenshot: 'https://blob.test/shots/tblimg.png' }),
+    // A table with actual copy stays a placeholder — it may be real data.
+    el({ sourceId: '0-tbldata', class: 'table',
+      html: '<table><tr><td>Monday</td><td>9am</td></tr></table>',
+      textContent: 'Monday 9am', screenshot: 'https://blob.test/shots/tbldata.png' }),
+  );
+  const out = mapSite(base, { existingSlugs: [] });
+  const mods = out.pages[0].sections.flatMap((s) => s.modules);
+
+  const recovered = mods.find((m) => m.settings.importFromLayoutTable === 'true');
+  assert.ok(recovered, 'the image inside the layout table became an image module');
+  assert.equal(recovered.type, 'image');
+  assert.equal(recovered.settings.url, 'https://blob.test/SiteImport/job/assets/aa.jpg', 'promoted asset URL');
+  assert.equal(recovered.settings.alt, 'Team');
+  assert.equal(recovered.settings.linkUrl, 'https://map.test/full.jpg');
+
+  const stillPlaceholder = mods.find((m) => m.settings.importSourceId === '0-tbldata');
+  assert.equal(stillPlaceholder.type, 'code', 'a table with copy is not assumed to be a photo');
+  assert.ok(out.report.placeholderPatterns.some((p) => /table/.test(p.signature)));
+});
+
+test('same-site links stay on the imported site; external links do not move', () => {
+  const base = completenessIr();
+  base.pages[0].sections[0].elements.push(
+    el({ sourceId: '0-uncaptured', class: 'link',
+      html: '<a href="https://map.test/course/fees/">Court Fees</a>', textContent: 'Court Fees' }),
+    el({ sourceId: '0-external', class: 'link',
+      html: '<a href="https://facebook.com/someclub">Facebook</a>', textContent: 'Facebook' }),
+    el({ sourceId: '0-pdf', class: 'link',
+      html: '<a href="https://map.test/files/menu.pdf">Menu PDF</a>', textContent: 'Menu PDF' }),
+  );
+  const out = mapSite(base, { existingSlugs: [] });
+  const html = out.pages[0].sections.flatMap((s) => s.modules)
+    .filter((m) => m.type === 'text').map((m) => m.text).join('');
+  // Page on the same site that was never captured → relative, not the live site.
+  assert.ok(html.includes('href="/course-fees"'), 'uncaptured same-site page link went relative');
+  assert.ok(!html.includes('map.test/course/fees'), 'no link back to the source site');
+  // External and asset links are left exactly as they were.
+  assert.ok(html.includes('href="https://facebook.com/someclub"'));
+  assert.ok(html.includes('href="https://map.test/files/menu.pdf"'));
+});
+
 test('slideshow veto: --no-slideshow keeps image runs as plain images', () => {
   const ir = completenessIr();
 
@@ -337,9 +386,15 @@ test('delraytennis IR maps with full reconciliation', () => {
     .filter((m) => m.type === 'image' && slideUrls.has(m.settings.url));
   assert.equal(redundant.length, 0, 'no image module repeats a photo the slideshow already shows');
 
-  // The site's 16 tables all become crop-carrying placeholders.
-  const placeholders = out.pages.flatMap((p) => p.sections)
-    .flatMap((s) => s.modules).filter((m) => m.type === 'code');
-  assert.ok(placeholders.length >= 16);
+  // 13 of the site's 16 "tables" are layout tables wrapping a photo — they
+  // become real image modules now; only genuine tables stay placeholders.
+  const allModules = out.pages.flatMap((p) => p.sections).flatMap((s) => s.modules);
+  const fromTables = allModules.filter((m) => m.settings.importFromLayoutTable === 'true');
+  assert.ok(fromTables.length >= 20, `expected images recovered from layout tables, got ${fromTables.length}`);
+  const placeholders = allModules.filter((m) => m.type === 'code');
+  assert.ok(placeholders.length <= 4, `only real tables should remain, got ${placeholders.length}`);
   assert.ok(placeholders.every((m) => m.settings.importSourceId));
+  // The report names what it could not map, so the next rule is obvious.
+  assert.ok(out.report.placeholderPatterns.length > 0);
+  assert.ok(out.report.placeholderPatterns.every((x) => x.signature && x.count > 0));
 });

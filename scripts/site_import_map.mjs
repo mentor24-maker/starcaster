@@ -220,6 +220,17 @@ async function main() {
     }
     log('  (already applied? scripts/site_import_revert_slideshow.mjs restores the images)\n');
   }
+  if (out.report.placeholderPatterns?.length) {
+    // Placeholders are the importer admitting it has no rule for
+    // something. Grouped and ranked, a big group with a simple shape is a
+    // mapping rule waiting to be written — that is how image-only tables
+    // were found (13 of delraytennis.com's 16 "tables").
+    log('\nPlaceholders by shape (each is content with no mapping rule yet):');
+    for (const pattern of out.report.placeholderPatterns.slice(0, 8)) {
+      log(`  ${String(pattern.count).padStart(3)}x  ${pattern.signature}`);
+    }
+    log('');
+  }
   log(`Assets: promote ${out.report.assets.promoted}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
 
   if (!reportReconciles(out.report)) {
