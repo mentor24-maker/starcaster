@@ -31,7 +31,9 @@ This pipeline is that groove, sized for module-scale projects.
    Scope changes after this point go back through spec.
 5. **Build** — own worktree, tests written with the code (fixtures for
    engines, snapshot tests for documents, vitest for UI). The CLAUDE.md
-   definition-of-done commands all pass locally.
+   definition-of-done commands all pass locally. **Module work is checked
+   against `docs/MODULE_STANDARDS.md` before the PR opens**; rules that
+   don't apply are stated and skipped, never silently ignored.
 6. **Verify** — live-fire against real data (the scratch project is the
    proving ground), operator eyeball required.
 7. **Merge & close** — PR merged on the operator's word; deviations
@@ -43,7 +45,10 @@ This pipeline is that groove, sized for module-scale projects.
   on the task ("skipped Discovery: trivial CSS fix").
 - **Module-type registration is dual** (landmine #1): any new module
   type needs `npm run build:builder-template` or the server silently
-  coerces it to `text`.
+  coerces it to `text`. Full quality bar: `docs/MODULE_STANDARDS.md`.
+- **Boy-scout rule**: a module touched for any reason is brought up to
+  the standards doc in the same PR, and the PR says which rules it now
+  meets. The palette predates the standard; this is how it converges.
 - **Imports and generators must reconcile** — tools that transform
   content carry coverage accounting; unexplained loss blocks merge.
 - **The scratch project is disposable by design** — verify there first
