@@ -748,3 +748,404 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-preview-slider-arrow-left { left: 6px; }
 .builder-react-root .builder-preview-slider-arrow-right { right: 6px; }
+
+/* ---------------------------------------------------------------------
+   Feature Cards module (type: feature-cards)
+   ClickUp 86bbaffu3 — built to docs/MODULE_STANDARDS.md 2026-08-07.
+
+   Standard 3: every structural rule (the grid, the card box, the
+   positioned media frame, the overhanging icon badge) is in THIS base
+   layer. The media queries at the bottom only REDUCE the column count —
+   they never introduce layout. The Card Slider shipped with its entire
+   layout inside `@media (max-width: 900px)` and rendered as one giant
+   image on desktop for its whole life; that is the mistake this ordering
+   exists to prevent.
+   --------------------------------------------------------------------- */
+.builder-react-root .builder-preview-feature-cards {
+  display: grid;
+  grid-template-columns: repeat(var(--feature-card-columns, 3), minmax(0, 1fr));
+  gap: var(--feature-card-gap, 12px);
+  align-items: stretch;
+  width: 100%;
+}
+
+.builder-react-root .builder-preview-feature-cards-empty {
+  display: block;
+  padding: 18px;
+  border: 1px dashed var(--border-light, #d1d5db);
+  border-radius: 12px;
+  color: var(--ink-secondary, #5b6b7d);
+  font-size: 14px;
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-feature-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--feature-card-bg, #ffffff);
+  border: 1px solid var(--feature-card-border, #e1e8f0);
+  border-radius: var(--feature-card-radius, 18px);
+  padding: 12px 12px 18px;
+  /* The icon badge deliberately overhangs the top edge. */
+  overflow: visible;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.builder-react-root .builder-preview-feature-cards-align-center .builder-preview-feature-card {
+  text-align: center;
+  align-items: center;
+}
+
+.builder-react-root .builder-preview-feature-cards-align-left .builder-preview-feature-card {
+  text-align: left;
+  align-items: flex-start;
+}
+
+.builder-react-root .builder-preview-feature-cards-shadow .builder-preview-feature-card {
+  box-shadow: 0 10px 24px rgba(3, 29, 62, 0.1);
+}
+
+.builder-react-root .builder-preview-feature-cards-lift .builder-preview-feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 40px rgba(3, 29, 62, 0.18);
+}
+
+/* Standard 3 corollary: the renderer uses a `fill` image, so the module
+   must supply the positioned, sized container itself. */
+.builder-react-root .builder-preview-feature-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--feature-card-aspect, 4 / 3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.builder-react-root .builder-preview-feature-card-media img {
+  object-fit: cover;
+}
+
+.builder-react-root .builder-preview-feature-card-badge {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  border: 4px solid #ffffff;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+}
+
+/* A badge overhangs the card, so a grid with badges needs headroom or the
+   first row is clipped by whatever sits above it. */
+.builder-react-root .builder-preview-feature-cards:has(.builder-preview-feature-card-badge) {
+  padding-top: 26px;
+}
+
+/* `flex: 1` on the copy block pushes every card's link to the bottom, so a
+   row of cards with uneven body lengths still has its links aligned —
+   without the source theme's brittle `min-height: 68px`. */
+.builder-react-root .builder-preview-feature-card-copy {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.builder-react-root .builder-preview-feature-card-title {
+  font-size: 1rem;
+  line-height: 1.15;
+  text-transform: uppercase;
+  margin: 18px 0 8px;
+  color: var(--ink-primary, #18324a);
+}
+
+.builder-react-root .builder-preview-feature-card-body {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-secondary, #43566d);
+  margin: 0 0 8px;
+}
+
+.builder-react-root .builder-preview-feature-card-list {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-secondary, #43566d);
+  margin: 0 0 8px;
+  padding-left: 1.1em;
+  text-align: left;
+}
+
+.builder-react-root .builder-preview-feature-card-link {
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--accent, #4f9c3a);
+  margin-top: auto;
+}
+
+.builder-react-root .builder-preview-feature-card-link:hover {
+  color: var(--ink-primary, #18324a);
+}
+
+/* Column count only. No structural rules below this line. */
+@media (max-width: 1100px) {
+  .builder-react-root .builder-preview-feature-cards {
+    grid-template-columns: repeat(min(var(--feature-card-columns, 3), 3), minmax(0, 1fr));
+    row-gap: 34px;
+  }
+}
+
+@media (max-width: 760px) {
+  .builder-react-root .builder-preview-feature-cards {
+    grid-template-columns: repeat(min(var(--feature-card-columns, 3), 2), minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .builder-react-root .builder-preview-feature-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The editor's device switcher simulates widths without changing the
+   viewport, so the same reductions must be keyed off its classes too. */
+.builder-react-root .builder-preview-device-tablet .builder-preview-feature-cards {
+  grid-template-columns: repeat(min(var(--feature-card-columns, 3), 2), minmax(0, 1fr));
+  row-gap: 34px;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-feature-cards {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 34px;
+}
+
+/* Feature Cards — canvas preview inside the editor's module card. */
+.builder-react-root .builder-module-preview-feature-cards {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.builder-react-root .builder-module-preview-feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border-light, #d1d5db);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.builder-react-root .builder-module-preview-feature-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+.builder-react-root .builder-module-preview-feature-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-module-preview-empty {
+  display: block;
+  padding: 10px;
+  color: var(--ink-secondary, #5b6b7d);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------
+   Mega menu — panel mode for the Navigation module (navDropdownStyle: mega)
+   ClickUp 86bbafg38, 2026-08-07.
+
+   Standard 3: all structural rules are in this base layer. The media query
+   at the bottom only converts the absolutely-positioned panel into an
+   in-flow accordion; it does not introduce the layout.
+   --------------------------------------------------------------------- */
+.builder-react-root .site-nav-mega {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.builder-react-root .site-nav-mega-trigger {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.builder-react-root .site-nav-mega-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.18s ease;
+}
+
+.builder-react-root .site-nav-mega-toggle:focus-visible {
+  outline: 2px solid var(--accent, #17b7ee);
+  outline-offset: 2px;
+}
+
+.builder-react-root .site-nav-mega--open .site-nav-mega-toggle {
+  transform: rotate(180deg);
+}
+
+.builder-react-root .site-nav-mega-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(var(--site-nav-mega-width, 1040px), 92vw);
+  padding: 26px;
+  border-radius: 0 0 18px 18px;
+  background: #ffffff;
+  color: var(--ink-primary, #18324a);
+  box-shadow: 0 24px 60px rgba(3, 29, 62, 0.22);
+}
+
+/* `hidden` is how the renderer closes the panel; without this the UA's
+   `display: block` from our own rule above would win and it would never
+   actually close. */
+.builder-react-root .site-nav-mega-panel[hidden] {
+  display: none;
+}
+
+.builder-react-root .site-nav-mega-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.builder-react-root .site-nav-mega-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.builder-react-root .site-nav-mega-heading {
+  margin: 0 0 10px;
+  color: var(--ink-primary, #163a5e);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.builder-react-root .site-nav-mega-link {
+  display: block;
+  padding: 5px 0;
+  color: var(--ink-secondary, #334861);
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
+.builder-react-root .site-nav-mega-link:hover,
+.builder-react-root .site-nav-mega-link:focus-visible {
+  color: var(--accent, #17b7ee);
+}
+
+.builder-react-root .site-nav-mega-feature {
+  display: block;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bg-subtle, #f1f6fb);
+  color: inherit;
+  text-decoration: none;
+}
+
+.builder-react-root .site-nav-mega-feature img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+/* Mobile: an accordion inside the hamburger drawer, NOT `display: none`.
+   The reference theme hides its mega panels outright below 900px, which
+   makes every sub-link unreachable on a phone — the links exist in the
+   markup and simply cannot be got at. */
+@media (max-width: 900px) {
+  .builder-react-root .site-nav-mega {
+    display: block;
+    width: 100%;
+  }
+
+  .builder-react-root .site-nav-mega-trigger {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .builder-react-root .site-nav-mega-toggle {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+
+  .builder-react-root .site-nav-mega-panel {
+    position: static;
+    transform: none;
+    width: 100%;
+    padding: 6px 0 12px 14px;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .builder-react-root .site-nav-mega-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+}
+
+/* The editor's device switcher changes a class, not the viewport, so the
+   accordion has to be reachable that way too. */
+.builder-react-root .builder-preview-device-mobile .site-nav-mega,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega {
+  display: block;
+  width: 100%;
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav-mega-panel,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega-panel {
+  position: static;
+  transform: none;
+  width: 100%;
+  padding: 6px 0 12px 14px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav-mega-grid,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}

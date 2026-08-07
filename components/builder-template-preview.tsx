@@ -12,6 +12,8 @@ import {
   getLayoutGridTemplate,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
+import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
+import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
   buildCrmFormRenderContext,
@@ -1491,6 +1493,10 @@ function BuilderModulePreview({
 
   if (module.type === "slideshow") {
     return <SlideshowPreview module={module} />;
+  }
+
+  if (module.type === "feature-cards") {
+    return <FeatureCardsModulePreview module={module} previewMode={previewMode} />;
   }
 
   if (module.type === "poll-category-list") {
@@ -4755,6 +4761,157 @@ function toPreviewHref(href: string): string {
   return `${withoutTrailingSlash}.html`;
 }
 
+type NavRenderItem = {
+  href: string;
+  label: string;
+  id?: string;
+  parentId?: string;
+  width?: string;
+  featureImage?: string;
+  featureHeading?: string;
+};
+
+/**
+ * One top-level item of a mega menu, plus its panel.
+ *
+ * ClickUp 86bbafg38. The reference implementation this was modelled on
+ * (blazefish.com) opens the panel purely with `:hover` / `:focus-within`,
+ * which means: no `aria-expanded` for screen readers, no way to dismiss it
+ * from the keyboard, and it flickers open whenever the pointer merely
+ * crosses the item. This version keeps the top-level link navigable and
+ * adds a real disclosure `<button>` beside it, so the panel is operable by
+ * mouse, touch, and keyboard alike.
+ */
+function NavMegaItem({
+  item,
+  columns,
+  isOpen,
+  onOpen,
+  onClose,
+  previewMode,
+  activePath
+}: {
+  item: NavRenderItem;
+  columns: NavMegaColumn<NavRenderItem>[];
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  previewMode: boolean;
+  activePath: string;
+}) {
+  const panelId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    };
+  }, []);
+
+  function clearHoverTimer() {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  }
+
+  // Hover intent: a panel that opens the instant the pointer grazes the
+  // label makes a nav bar feel like a minefield when you are aiming at the
+  // item next to it.
+  function handleMouseEnter() {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(onOpen, 120);
+  }
+
+  function handleMouseLeave() {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(onClose, 160);
+  }
+
+  const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
+  const isActive = normalizeNavPath(item.href || "#") === activePath;
+  const featureImage = item.featureImage ? resolvePublicBuilderAssetUrl(item.featureImage) : "";
+
+  return (
+    <div
+      className={`site-nav-mega${isOpen ? " site-nav-mega--open" : ""}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div className="site-nav-mega-trigger">
+        <Link
+          aria-current={isActive ? "page" : undefined}
+          className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
+          href={href}
+        >
+          {item.label}
+        </Link>
+        <button
+          type="button"
+          ref={toggleRef}
+          className="site-nav-mega-toggle"
+          aria-expanded={isOpen}
+          aria-controls={panelId}
+          aria-label={`${item.label} menu`}
+          onClick={() => {
+            clearHoverTimer();
+            if (isOpen) onClose();
+            else onOpen();
+          }}
+        >
+          <span aria-hidden="true">▾</span>
+        </button>
+      </div>
+
+      <div className="site-nav-mega-panel" id={panelId} hidden={!isOpen}>
+        <div className="site-nav-mega-grid">
+          {columns.map((column) => (
+            <div className="site-nav-mega-column" key={column.id}>
+              {column.heading ? (
+                column.heading.href ? (
+                  <Link
+                    className="site-nav-mega-heading"
+                    href={previewMode ? toPreviewHref(column.heading.href) : toPublicHref(column.heading.href)}
+                  >
+                    {column.heading.label}
+                  </Link>
+                ) : (
+                  <span className="site-nav-mega-heading">{column.heading.label}</span>
+                )
+              ) : null}
+              {column.links.map((link) => {
+                const linkHref = previewMode ? toPreviewHref(link.href || "#") : toPublicHref(link.href || "#");
+                const linkActive = normalizeNavPath(link.href || "#") === activePath;
+                return (
+                  <Link
+                    key={link.id ?? `${linkHref}-${link.label}`}
+                    className={`site-nav-mega-link${linkActive ? " site-nav-link-active" : ""}`}
+                    href={linkHref}
+                    aria-current={linkActive ? "page" : undefined}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+
+          {featureImage || item.featureHeading ? (
+            <Link className="site-nav-mega-feature" href={href}>
+              {featureImage ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={featureImage} alt="" loading="lazy" />
+              ) : null}
+              {item.featureHeading ? <strong>{item.featureHeading}</strong> : null}
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NavigationModulePreview({
   module,
   previewMode = false
@@ -4771,7 +4928,13 @@ function NavigationModulePreview({
     setMobileOpen(false);
   }, [pathname]);
 
-  let navItems: { href: string; label: string; id?: string; parentId?: string; width?: string }[] = [];
+  const [openMegaId, setOpenMegaId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOpenMegaId(null);
+  }, [pathname]);
+
+  let navItems: NavRenderItem[] = [];
   try {
     const parsed = JSON.parse(module.settings.navItems || "[]");
     navItems = Array.isArray(parsed)
@@ -4800,11 +4963,28 @@ function NavigationModulePreview({
   const itemSizing = module.settings.navItemSizing === "custom" || module.settings.navItemSizing === "equal"
     ? module.settings.navItemSizing
     : "auto";
+  // Backward compatibility is a hard requirement on this module (live tenant
+  // sites run it): anything other than an explicit "mega" keeps the exact
+  // dropdown markup that shipped before.
+  const isMega = module.settings.navDropdownStyle === "mega" && !isVertical;
+  const megaColumnCount = Math.min(5, Math.max(1, Number.parseInt(module.settings.navMegaColumns ?? "3", 10) || 3));
+  const megaWidth = Math.min(1600, Math.max(320, Number.parseInt(module.settings.navMegaWidth ?? "1040", 10) || 1040));
 
   return (
     <nav
-      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}`}
+      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}${isMega ? " site-nav--mega" : ""}`}
       aria-label="Main navigation"
+      onKeyDown={
+        isMega
+          ? (event) => {
+              // Escape closes the open panel — the reference implementation
+              // has no keyboard dismissal at all.
+              if (event.key === "Escape" && openMegaId) {
+                setOpenMegaId(null);
+              }
+            }
+          : undefined
+      }
       style={
         {
           ...moduleBackgroundStyle,
@@ -4818,7 +4998,8 @@ function NavigationModulePreview({
           ...(marginV ? { marginTop: marginV, marginBottom: marginV } : {}),
           "--site-nav-link-color": color,
           "--site-nav-link-hover-color": hoverColor,
-          "--site-nav-link-hover-bg": hoverBackground
+          "--site-nav-link-hover-bg": hoverBackground,
+          ...(isMega ? { "--site-nav-mega-width": `${megaWidth}px` } : {})
         } as CSSProperties
       }
     >
@@ -4859,6 +5040,21 @@ function NavigationModulePreview({
             >
               {item.label}
             </Link>
+          );
+        }
+
+        if (isMega) {
+          return (
+            <NavMegaItem
+              key={itemId}
+              item={item}
+              activePath={activePath}
+              previewMode={previewMode}
+              columns={buildMegaColumns(children, childrenOf, megaColumnCount)}
+              isOpen={openMegaId === itemId}
+              onOpen={() => setOpenMegaId(itemId)}
+              onClose={() => setOpenMegaId((current) => (current === itemId ? null : current))}
+            />
           );
         }
 
@@ -4971,31 +5167,146 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
   );
 }
 
-type SliderItem = {
-  id: string;
-  title: string;
-  body: string;
-  imageUrl: string;
-  linkUrl: string;
-};
+/**
+ * Slider and Feature Cards share one card model (`BuilderCardItem`) so an
+ * operator can move content between them — see lib/builder-client/
+ * builder-card-items.ts. Slider ignores the fields it has no use for.
+ */
+type SliderItem = import("@/lib/builder-card-items").BuilderCardItem;
 
 function parseSliderItems(settings: Record<string, string>): SliderItem[] {
-  try {
-    const items = JSON.parse(settings.sliderItems || "[]");
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      const raw = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-      return {
-        id: String(raw.id || `slide-${index + 1}`),
-        title: String(raw.title || ""),
-        body: String(raw.body || ""),
-        imageUrl: resolvePublicBuilderAssetUrl(raw.imageUrl),
-        linkUrl: String(raw.linkUrl || "")
-      };
-    });
-  } catch {
-    return [];
+  return parseBuilderCardItems(settings.sliderItems, "slide");
+}
+
+const FEATURE_CARD_ASPECTS: Record<string, string> = {
+  "4-3": "4 / 3",
+  "16-9": "16 / 9",
+  "3-2": "3 / 2",
+  "1-1": "1 / 1"
+};
+
+/**
+ * Feature Cards — a responsive grid of linked cards.
+ *
+ * Built to docs/MODULE_STANDARDS.md from the spec on ClickUp 86bbaffu3.
+ * All structural CSS lives in the BASE layer of
+ * `_builder-react-overrides.css` (standard 3); the media queries there only
+ * reduce the column count, they never introduce layout.
+ */
+function FeatureCardsModulePreview({
+  module,
+  previewMode = false
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+  previewMode?: boolean;
+}) {
+  const cards = parseBuilderCardItems(module.settings.cards, "card");
+
+  // Standard 5: an empty module is a designed state, not a blank box.
+  if (cards.length === 0) {
+    return (
+      <div className="builder-preview-feature-cards builder-preview-feature-cards-empty">
+        Add cards in the editor
+      </div>
+    );
   }
+
+  const columns = Math.min(6, Math.max(1, Number.parseInt(module.settings.cardColumns || "3", 10) || 3));
+  const gap = Math.min(48, Math.max(0, Number.parseInt(module.settings.cardGap || "12", 10) || 0));
+  const radius = Math.min(48, Math.max(0, Number.parseInt(module.settings.cardRadius || "18", 10) || 0));
+  const align = module.settings.cardAlign === "left" ? "left" : "center";
+  const aspect = FEATURE_CARD_ASPECTS[module.settings.imageAspect || "4-3"] || FEATURE_CARD_ASPECTS["4-3"];
+  const showIcons = module.settings.showIcons !== "false";
+  const alternateIcons = module.settings.iconAlternate !== "false";
+  const iconColor = module.settings.iconColor || "#0b2a4a";
+  const iconAltColor = module.settings.iconAltColor || "#4f9c3a";
+  const showArrow = module.settings.linkArrow !== "false";
+  const fallbackLinkLabel = module.settings.linkLabel ?? "Learn More";
+
+  const className = [
+    "builder-preview-feature-cards",
+    `builder-preview-feature-cards-align-${align}`,
+    module.settings.cardShadow === "false" ? "" : "builder-preview-feature-cards-shadow",
+    module.settings.cardHoverLift === "false" ? "" : "builder-preview-feature-cards-lift"
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div
+      className={className}
+      style={
+        {
+          "--feature-card-columns": String(columns),
+          "--feature-card-gap": `${gap}px`,
+          "--feature-card-radius": `${radius}px`,
+          "--feature-card-bg": module.settings.cardBackground || "#ffffff",
+          "--feature-card-border": module.settings.cardBorderColor || "#e1e8f0",
+          "--feature-card-aspect": aspect
+        } as CSSProperties
+      }
+    >
+      {cards.map((card, index) => {
+        const body = parseCardBody(card.body);
+        const href = card.linkUrl ? (previewMode ? toPreviewHref(card.linkUrl) : toPublicHref(card.linkUrl)) : "";
+        const linkLabel = card.linkLabel || fallbackLinkLabel;
+        const badgeColor = alternateIcons && index % 2 === 1 ? iconAltColor : iconColor;
+
+        return (
+          <article className="builder-preview-feature-card" key={card.id}>
+            {showIcons && card.icon ? (
+              <span
+                className="builder-preview-feature-card-badge"
+                style={{ background: badgeColor }}
+                aria-hidden="true"
+              >
+                {card.icon}
+              </span>
+            ) : null}
+
+            {card.imageUrl ? (
+              <div className="builder-preview-feature-card-media">
+                <Image
+                  alt={card.imageAlt}
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  src={card.imageUrl}
+                  unoptimized
+                />
+              </div>
+            ) : null}
+
+            <div className="builder-preview-feature-card-copy">
+              {card.title ? <h3 className="builder-preview-feature-card-title">{card.title}</h3> : null}
+
+              {body.lines.length > 0 ? (
+                body.kind === "list" ? (
+                  <ul className="builder-preview-feature-card-list">
+                    {body.lines.map((line, lineIndex) => (
+                      <li key={`${card.id}-line-${lineIndex}`}>{line}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  body.lines.map((line, lineIndex) => (
+                    <p className="builder-preview-feature-card-body" key={`${card.id}-line-${lineIndex}`}>
+                      {line}
+                    </p>
+                  ))
+                )
+              ) : null}
+            </div>
+
+            {href && linkLabel ? (
+              <Link className="builder-preview-feature-card-link" href={href}>
+                {linkLabel}
+                {showArrow ? <span aria-hidden="true"> →</span> : null}
+              </Link>
+            ) : null}
+          </article>
+        );
+      })}
+    </div>
+  );
 }
 
 function SliderModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
@@ -5043,7 +5354,7 @@ function SliderModulePreview({ module }: { module: import("@/lib/builder-templat
           <article key={item.id} className="builder-preview-slider-card" style={{ minWidth: `${cardWidth}px` }}>
             {item.imageUrl ? (
               <div className="builder-preview-slider-image">
-                <Image alt={item.title || "Slider item"} fill sizes="280px" src={item.imageUrl} unoptimized />
+                <Image alt={item.imageAlt || item.title || "Slider item"} fill sizes="280px" src={item.imageUrl} unoptimized />
               </div>
             ) : null}
             <div className="builder-preview-slider-copy">
