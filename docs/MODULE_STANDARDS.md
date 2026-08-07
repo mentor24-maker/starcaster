@@ -102,11 +102,43 @@ Rich-text and embed HTML passes through `lib/builder-client/sanitize-html.ts`.
 Never `dangerouslySetInnerHTML` with raw user content
 (`components/CLAUDE.md`).
 
-## 10. Settings editors follow the field-strip conventions
+## 10. Settings editors follow the field-strip layout standard
 
-`BuilderModuleFieldStrip` + `BuilderModuleField`, declared width tokens,
-labels that don't wrap, advanced groups inside `<details class="hanging-details">`,
-H/V margin offered together. Details in `components/CLAUDE.md`.
+**Reference implementation: `components/builder/builder-image-module-settings.tsx`.**
+Copy its shape when building or converting an editor.
+
+- Build from `BuilderModuleFieldStrip` + `BuilderModuleField`; never
+  hand-rolled `<label class="field">` grids. Every field declares a width
+  token (`label`, `select-sm`, `select-md`, `num`, `color`, `align`,
+  `check`, `text-md`, `full`).
+- **Strip order is content → layout → style → advanced**, so the controls
+  someone reaches for most are nearest the top:
+  1. *Content* — what the module shows (image + alt, text, items)
+  2. *Layout* — width, alignment, H **and** V margin (always both, adjacent)
+  3. *Style* — border, radius, colour, effect
+  4. *Advanced* — rarely-touched settings, inside
+     `<details class="hanging-details">`
+- Labels never wrap; shorten the text instead ("Border", not "Border
+  thickness in pixels").
+- Universal settings (vertical margin, mobile/desktop visibility) come
+  from the shared module chrome — do not duplicate them in a per-type
+  editor.
+
+## 13. Every setting must be honoured by the renderer — check the helpers
+
+A control that changes a setting nothing renders is a bug wearing a
+feature's clothes. When touching a module, walk each setting from the
+editor to the render path and confirm something consumes it.
+
+*Incident (2026-08-07):* auditing the Image module, a `grep` for
+`settings.borderThickness` across three component files found nothing,
+and the settings were reported dead. They were not — the renderer reads
+them through `getImageModuleStyle()` in `builder-utils.ts`, one level of
+indirection away. The opposite error was real too: `horizontalOffset` and
+`verticalOffset` genuinely were dead and have now been removed.
+**Trace the helpers, not just the literals** — and confirm both
+directions: settings with no renderer, and renderers reading settings no
+editor exposes.
 
 ## 11. Email render is a decision, not an oversight
 
@@ -131,6 +163,8 @@ task tracks the highest-traffic modules (`text`, `image`, `heading`,
 `navigation`, `button`, `slider`, `table`, `code`) for deliberate review
 rather than accidental discovery.
 
-Two known-weak spots already logged: modules whose CSS may be
+Three known-weak spots already logged: modules whose CSS may be
 breakpoint-only (rule 3 — the Card Slider was found this way; others are
-unaudited), and modules with no defined empty state (rule 5).
+unaudited), modules with no defined empty state (rule 5), and editors
+still using hand-rolled grids instead of field strips (rule 10 — Image
+is converted; the rest are not).
