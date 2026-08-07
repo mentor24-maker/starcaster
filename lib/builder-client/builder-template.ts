@@ -1862,8 +1862,10 @@ export function createEmptyModule(
           borderThickness: "0",
           borderColor: "#0f4f8f",
           borderRadius: "18",
-          horizontalOffset: "0",
-          verticalOffset: "0",
+          // horizontalOffset / verticalOffset removed 2026-08-07: nothing in
+          // the image render path ever read them (they are a
+          // floating-image concept). Existing pages keep the stale keys
+          // harmlessly; no renderer consults them.
           effect: "none"
         }
       : type === "floating-image"
