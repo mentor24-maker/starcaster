@@ -213,7 +213,12 @@ async function main() {
   }), 'upload report').location;
   log(`Report: ${reportUrl}`);
 
-  if (NAV) await runNav(job, scope, out);
+  // Dry-run nav preview only. On --apply the nav step runs LAST (below):
+  // it mutates pages (attaching the master instance), and any page write
+  // that follows from pre-fetched state would silently strip those
+  // attachments — which is exactly what happened on 2026-08-06 (the menu
+  // vanished from the public site after a combined --nav --apply run).
+  if (NAV && !APPLY) await runNav(job, scope, out);
 
   if (!APPLY) {
     log('\nDry run complete. Re-run with --apply to create the draft pages.');
@@ -284,7 +289,14 @@ async function main() {
     });
 
     const existingId = pageIds[page.irPath];
-    const current = existingId ? existingPages.find((p) => String(p.id) === String(existingId)) : null;
+    // Fetch the page's CURRENT state at write time — the startup listing
+    // is stale by now (this same run, or a human, may have changed the
+    // page since; merging against a stale copy silently reverts them).
+    let current = null;
+    if (existingId) {
+      const fresh = await pagesStore.getPage(existingId, scope);
+      current = fresh.ok ? fresh.data : null; // vanished page → recreate
+    }
     let saved;
     if (current) {
       const mappedById = new Map(sections.map((s) => [s.id, s]));
@@ -329,7 +341,7 @@ async function main() {
       appliedNamespace: applied,
     },
   };
-  must(await store.updateJob(job.id, { checkpoints }), 'record map checkpoint');
+  job = must(await store.updateJob(job.id, { checkpoints }), 'record map checkpoint');
   must(await uploadBufferToBlobAtPath({
     pathname: `SiteImport/${job.id}/map-report.json`,
     mimeType: 'application/json',
@@ -337,6 +349,9 @@ async function main() {
   }), 'update report');
   log(`\nAPPLY complete: ${out.pages.length} draft page(s). Nothing was published.`);
   log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
+
+  // Nav LAST: nothing may write pages after the master instances attach.
+  if (NAV) await runNav(job, scope, out);
 }
 
 /** --nav: write the imported header tree into the Header saved-section
