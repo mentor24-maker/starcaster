@@ -9022,7 +9022,7 @@
     "taxonomy": {
       "navs": [
         {
-          "location": "other",
+          "location": "header",
           "pageUrl": "https://www.delraytennis.com/",
           "items": [
             {
@@ -9033,87 +9033,90 @@
             {
               "label": "Tennis Center Info",
               "href": "https://www.delraytennis.com/course/",
-              "children": []
+              "children": [
+                {
+                  "label": "About Us",
+                  "href": "https://www.delraytennis.com/course/",
+                  "children": []
+                },
+                {
+                  "label": "Court Fees",
+                  "href": "https://www.delraytennis.com/course/fees/",
+                  "children": []
+                },
+                {
+                  "label": "Lesson Prices",
+                  "href": "https://www.delraytennis.com/course/lessons/",
+                  "children": []
+                },
+                {
+                  "label": "Blog",
+                  "href": "https://www.delraytennis.com/course/blog/",
+                  "children": []
+                },
+                {
+                  "label": "Photo Gallery",
+                  "href": "https://www.delraytennis.com/course/photo-gallery/",
+                  "children": []
+                },
+                {
+                  "label": "Managers & Instructional Staff",
+                  "href": "https://www.delraytennis.com/course/instruct-staff/",
+                  "children": []
+                },
+                {
+                  "label": "Job Opportunity",
+                  "href": "https://www.delraytennis.com/job-opportunity/",
+                  "children": []
+                }
+              ]
             },
             {
               "label": "Programs & Events",
               "href": "https://www.delraytennis.com/programs/",
-              "children": []
+              "children": [
+                {
+                  "label": "Program Schedule",
+                  "href": "https://www.delraytennis.com/events-calendar/",
+                  "children": []
+                },
+                {
+                  "label": "Women’s League Info",
+                  "href": "https://www.delraytennis.com/programs/league/",
+                  "children": []
+                },
+                {
+                  "label": "Adult Clinics",
+                  "href": "https://www.delraytennis.com/programs/adult-clinics/",
+                  "children": []
+                },
+                {
+                  "label": "Junior Programs",
+                  "href": "https://www.delraytennis.com/programs/junior/",
+                  "children": []
+                },
+                {
+                  "label": "Events",
+                  "href": "https://www.delraytennis.com/programs/special-events/",
+                  "children": []
+                },
+                {
+                  "label": "Pickleball",
+                  "href": "https://www.delraytennis.com/programs/pickleball/",
+                  "children": []
+                }
+              ]
             },
             {
               "label": "Contact Us",
               "href": "https://www.delraytennis.com/contact-us/",
-              "children": []
-            },
-            {
-              "label": "About Us",
-              "href": "https://www.delraytennis.com/course/",
-              "children": []
-            },
-            {
-              "label": "Court Fees",
-              "href": "https://www.delraytennis.com/course/fees/",
-              "children": []
-            },
-            {
-              "label": "Lesson Prices",
-              "href": "https://www.delraytennis.com/course/lessons/",
-              "children": []
-            },
-            {
-              "label": "Blog",
-              "href": "https://www.delraytennis.com/course/blog/",
-              "children": []
-            },
-            {
-              "label": "Photo Gallery",
-              "href": "https://www.delraytennis.com/course/photo-gallery/",
-              "children": []
-            },
-            {
-              "label": "Managers & Instructional Staff",
-              "href": "https://www.delraytennis.com/course/instruct-staff/",
-              "children": []
-            },
-            {
-              "label": "Job Opportunity",
-              "href": "https://www.delraytennis.com/job-opportunity/",
-              "children": []
-            },
-            {
-              "label": "Program Schedule",
-              "href": "https://www.delraytennis.com/events-calendar/",
-              "children": []
-            },
-            {
-              "label": "Women’s League Info",
-              "href": "https://www.delraytennis.com/programs/league/",
-              "children": []
-            },
-            {
-              "label": "Adult Clinics",
-              "href": "https://www.delraytennis.com/programs/adult-clinics/",
-              "children": []
-            },
-            {
-              "label": "Junior Programs",
-              "href": "https://www.delraytennis.com/programs/junior/",
-              "children": []
-            },
-            {
-              "label": "Events",
-              "href": "https://www.delraytennis.com/programs/special-events/",
-              "children": []
-            },
-            {
-              "label": "Pickleball",
-              "href": "https://www.delraytennis.com/programs/pickleball/",
-              "children": []
-            },
-            {
-              "label": "Directions & Hours",
-              "href": "https://www.delraytennis.com/contact-us/directions/",
-              "children": []
+              "children": [
+                {
+                  "label": "Directions & Hours",
+                  "href": "https://www.delraytennis.com/contact-us/directions/",
+                  "children": []
+                }
+              ]
             }
           ]
         }
