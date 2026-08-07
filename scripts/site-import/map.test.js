@@ -263,6 +263,36 @@ test('completeness fixture: every disposition, reconciled', () => {
   assert.ok(proseHtml.includes('href="/menu.pdf"'), 'external link untouched');
 });
 
+test('slideshow veto: --no-slideshow keeps image runs as plain images', () => {
+  const ir = completenessIr();
+
+  // Whole-run veto: no slideshow module anywhere, images survive, and the
+  // dedupe passes stand down too (they exist to serve the slideshow).
+  const off = mapSite(ir, { existingSlugs: [], skipAllSlideshows: true });
+  const offModules = off.pages.flatMap((p) => p.sections).flatMap((s) => s.modules);
+  assert.equal(offModules.filter((m) => m.type === 'slideshow').length, 0);
+  assert.equal(off.slideshows.length, 0);
+  assert.equal(off.report.elements.deduped, 0, 'nothing deduped when nothing consolidated');
+  assert.ok(offModules.filter((m) => m.type === 'image').length >= 6, 'every image kept');
+  assert.ok(reportReconciles(off.report), JSON.stringify(off.report.elements));
+
+  // Per-page veto: home stays images, and the plan list is empty because
+  // home is the only page that would have produced one.
+  const homeOff = mapSite(ir, { existingSlugs: [], skipSlideshowPaths: ['/'] });
+  const homeModules = homeOff.pages[0].sections.flatMap((s) => s.modules);
+  assert.equal(homeModules.filter((m) => m.type === 'slideshow').length, 0);
+  assert.equal(homeOff.slideshows.length, 0);
+  assert.ok(reportReconciles(homeOff.report));
+
+  // Default (no veto) still consolidates AND reports the plan for the dry
+  // run to show before anything is written.
+  const on = mapSite(ir, { existingSlugs: [] });
+  assert.equal(on.slideshows.length, 1);
+  assert.equal(on.slideshows[0].pagePath, '/');
+  assert.equal(on.slideshows[0].slideCount, 4);
+  assert.ok(on.slideshows[0].absorbedIds.length >= 5);
+});
+
 test('round-trip proof: serialized documents are stable through the normalizer', () => {
   const out = mapSite(completenessIr(), { existingSlugs: [] });
   for (const page of out.pages) {

@@ -102,8 +102,18 @@ export type MapReport = {
   assets: { promoted: number; cropsCopied: number; leftInNamespace: number };
 };
 
+/** One consolidation the mapper performed — surfaced in the dry run so a
+ *  wrong intent-guess is visible BEFORE anything is written. */
+export type SlideshowPlan = {
+  pagePath: string;
+  slideCount: number;
+  absorbedIds: string[];
+};
+
 export type MapOutput = {
   pages: MappedPage[];
+  /** Slideshows this run will create (empty when vetoed). */
+  slideshows: SlideshowPlan[];
   /** Header nav for --nav, in navigation-module navItems shape. */
   navItems: { id: string; label: string; href: string; parentId: string; target: string }[];
   copyPlan: {
@@ -117,6 +127,15 @@ export type MapOutput = {
 export type MapOptions = {
   /** Slugs already taken by pages the import does NOT own. */
   existingSlugs: string[];
+  /**
+   * Slideshow detection is an inference about INTENT — a run of images
+   * might be a slideshow, or a deliberate gallery. These vetoes let the
+   * operator keep the images as images (ratified 2026-08-06: automatic
+   * with vetoes, not opt-in).
+   */
+  skipAllSlideshows?: boolean;
+  /** IR page paths ("/", "/gallery/") to leave as plain images. */
+  skipSlideshowPaths?: string[];
 };
 
 /* ---------------------------------------------------------------------------
@@ -359,8 +378,17 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   // same fingerprint, two runs. One module per distinct fingerprint; the
   // duplicate track dedupes (found on the real delraytennis homepage).
   const homeKeysDone = new Set<string>();
+  const skipPaths = new Set((opts.skipSlideshowPaths || []).map((p) => String(p || "").trim()));
+  const pageSkipped = (pageIdx: number) => {
+    if (opts.skipAllSlideshows) return true;
+    if (!skipPaths.size) return false;
+    const path = String((ir.pages || [])[pageIdx]?.path || "").trim();
+    return skipPaths.has(path) || (path === "/" && skipPaths.has(""));
+  };
+  const slideshowPlans: SlideshowPlan[] = [];
   for (const run of slideshowRuns) {
     if (!qualifies(run)) continue;
+    if (pageSkipped(run.pageIdx)) continue; // vetoed: images stay images
     if (run.pageIdx !== homeIdx || homeKeysDone.has(run.key)) {
       for (const el of run.elements) slideshowConsumed.set(el.sourceId, "interior");
       continue;
@@ -390,6 +418,11 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       const absorbed = slideshowSrcByPage.get(run.pageIdx) || new Set<string>();
       for (const s of seenSrcs) absorbed.add(s);
       slideshowSrcByPage.set(run.pageIdx, absorbed);
+      slideshowPlans.push({
+        pagePath: String((ir.pages || [])[run.pageIdx]?.path || ""),
+        slideCount: slides.length,
+        absorbedIds: run.elements.map((e) => e.sourceId),
+      });
     }
   }
 
@@ -401,6 +434,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   // correctly and was then followed by fifteen identical pictures.
   for (const run of slideshowRuns) {
     if (run.uniqueCount !== 1 || run.elements.length < 2) continue;
+    if (pageSkipped(run.pageIdx)) continue;
     // Keep the first occurrence unless the slideshow already covers it.
     for (const [i, el] of run.elements.entries()) {
       if (slideshowLeads.has(el.sourceId) || slideshowConsumed.has(el.sourceId)) continue;
@@ -412,6 +446,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   // Any remaining standalone image already carried by this page's
   // slideshow is redundant too, wherever it sits on the page.
   (ir.pages || []).forEach((irPage, pageIdx) => {
+    if (pageSkipped(pageIdx)) return;
     const absorbed = slideshowSrcByPage.get(pageIdx);
     if (!absorbed || !absorbed.size) return;
     for (const section of irPage.sections || []) {
@@ -757,6 +792,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
 
   return {
     pages,
+    slideshows: slideshowPlans,
     navItems,
     copyPlan: { crops, assets: Array.from(promotions.values()), sourceOverflows },
     report,
