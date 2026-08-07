@@ -352,6 +352,8 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   const homeIdx = Math.max(0, (ir.pages || []).findIndex((p) => String(p.path || "").trim() === "/" || String(p.path || "").trim() === ""));
   type SlideshowLead = { slides: { id: string; url: string; alt: string }[]; allIds: string[] };
   const slideshowLeads = new Map<string, SlideshowLead>();
+  /** Per page: image srcs the page's slideshow now displays. */
+  const slideshowSrcByPage = new Map<number, Set<string>>();
   const slideshowConsumed = new Map<string, "member" | "dupe" | "interior">();
   // A marquee-style source duplicates its whole strip as sibling tracks —
   // same fingerprint, two runs. One module per distinct fingerprint; the
@@ -385,8 +387,42 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     }
     if (lead) {
       slideshowLeads.set(lead.sourceId, { slides, allIds: run.elements.map((e) => e.sourceId) });
+      const absorbed = slideshowSrcByPage.get(run.pageIdx) || new Set<string>();
+      for (const s of seenSrcs) absorbed.add(s);
+      slideshowSrcByPage.set(run.pageIdx, absorbed);
     }
   }
+
+  // Duplicate-image cleanup (2026-08-06, operator-reported): a photo the
+  // page's slideshow already shows must not ALSO appear as standalone
+  // image modules, and a run of the same image repeated over and over is
+  // a lazy-load artifact, not content. Delray's homepage carried 15 copies
+  // of one photo that was already slide 2 — the slideshow rendered
+  // correctly and was then followed by fifteen identical pictures.
+  for (const run of slideshowRuns) {
+    if (run.uniqueCount !== 1 || run.elements.length < 2) continue;
+    // Keep the first occurrence unless the slideshow already covers it.
+    for (const [i, el] of run.elements.entries()) {
+      if (slideshowLeads.has(el.sourceId) || slideshowConsumed.has(el.sourceId)) continue;
+      const src = attrFromHtml(el.html, "src");
+      const coveredBySlideshow = Boolean(src && slideshowSrcByPage.get(run.pageIdx)?.has(src));
+      if (i > 0 || coveredBySlideshow) slideshowConsumed.set(el.sourceId, "dupe");
+    }
+  }
+  // Any remaining standalone image already carried by this page's
+  // slideshow is redundant too, wherever it sits on the page.
+  (ir.pages || []).forEach((irPage, pageIdx) => {
+    const absorbed = slideshowSrcByPage.get(pageIdx);
+    if (!absorbed || !absorbed.size) return;
+    for (const section of irPage.sections || []) {
+      for (const el of section.elements || []) {
+        if (el.class !== "image") continue;
+        if (slideshowLeads.has(el.sourceId) || slideshowConsumed.has(el.sourceId)) continue;
+        const src = attrFromHtml(el.html, "src");
+        if (src && absorbed.has(src)) slideshowConsumed.set(el.sourceId, "dupe");
+      }
+    }
+  });
 
   for (const page of ir.pages || []) {
     const mappedSections: MappedSection[] = [];
