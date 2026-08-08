@@ -1272,3 +1272,25 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     width: 140px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Table module: the scroll container is BASE layout, not mobile-only.
+ *
+ * Doctrine 1b.R1. Until 2026-08-08 `.builder-preview-table-wrap` got its
+ * `overflow-x: auto` only inside `@media (max-width: 900px)` in the
+ * regenerated `_builder-react.css`, so on any desktop browser a wide table had
+ * no scroll container at all and the PAGE BODY scrolled sideways instead.
+ * Found by scripts/check_ui_doctrine.cjs on the day it was written — the same
+ * species of bug as the Card Slider that started the module-quality effort.
+ *
+ * No `width: 100%`: the wrapper is a block element and already fills its
+ * parent, and the renderer sets an inline max-width when the module has a
+ * configured table width (builder-template-preview.tsx). Forcing a width here
+ * would stretch tables that currently size to their content.
+ * ------------------------------------------------------------------------- */
+.builder-react-root .builder-preview-table-wrap,
+.builder-react-root .builder-module-preview-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

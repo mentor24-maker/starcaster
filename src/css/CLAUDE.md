@@ -19,7 +19,14 @@ here are invisible until you rebuild.
 - Avoid `!important` except icon-buttons inside grids and third-party
   overrides
 
-## UI standards (enforced in review)
+## UI standards → canonical copy: `docs/MODULE_UI_DOCTRINE.md` §2
+
+These were headed "enforced in review" for months. There was no review
+step; nothing enforced them. They now live in the doctrine doc with an
+honest enforcement tag on each one, and the mechanical ones run in
+`scripts/check_ui_doctrine.cjs`. The list below is kept here as a quick
+reference for anyone editing CSS — **if it disagrees with the doctrine,
+the doctrine wins.**
 
 - **Buttons:** utility classes only — `btn btn-primary`, `btn btn-ghost`,
   `btn btn-danger`, table micro-actions `btn tiny-btn icon-btn`. Labels in

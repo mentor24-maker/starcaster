@@ -102,27 +102,22 @@ Rich-text and embed HTML passes through `lib/builder-client/sanitize-html.ts`.
 Never `dangerouslySetInnerHTML` with raw user content
 (`components/CLAUDE.md`).
 
-## 10. Settings editors follow the field-strip layout standard
+## 10. UI follows the doctrine → `docs/MODULE_UI_DOCTRINE.md`
 
-**Reference implementation: `components/builder/builder-image-module-settings.tsx`.**
-Copy its shape when building or converting an editor.
+**All UI rules now live in one place: `docs/MODULE_UI_DOCTRINE.md`** — both
+the editor UI (settings panel) and the rendered UI (published page), plus
+the framework rules for admin screens.
 
-- Build from `BuilderModuleFieldStrip` + `BuilderModuleField`; never
-  hand-rolled `<label class="field">` grids. Every field declares a width
-  token (`label`, `select-sm`, `select-md`, `num`, `color`, `align`,
-  `check`, `text-md`, `full`).
-- **Strip order is content → layout → style → advanced**, so the controls
-  someone reaches for most are nearest the top:
-  1. *Content* — what the module shows (image + alt, text, items)
-  2. *Layout* — width, alignment, H **and** V margin (always both, adjacent)
-  3. *Style* — border, radius, colour, effect
-  4. *Advanced* — rarely-touched settings, inside
-     `<details class="hanging-details">`
-- Labels never wrap; shorten the text instead ("Border", not "Border
-  thickness in pixels").
-- Universal settings (vertical margin, mobile/desktop visibility) come
-  from the shared module chrome — do not duplicate them in a per-type
-  editor.
+This rule used to hold the field-strip standard inline. It was moved out
+on 2026-08-08 because the rules had spread across four documents and
+none of them were checked: measured against the palette, **5 of 37**
+settings editors actually followed this rule. The doctrine doc pairs
+every rule with how it is *enforced* (`[auto]`, `[type]`, `[test]`,
+`[eye]`), and the mechanical ones now run in `scripts/check_ui_doctrine.cjs`
+at pre-commit and as a blocking CI step.
+
+Two homes for the same rules is how they drift. This is a pointer, not a
+summary, on purpose.
 
 ## 13. Every setting must be honoured by the renderer — check the helpers
 
