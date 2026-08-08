@@ -5218,8 +5218,12 @@ function FeatureCardsModulePreview({
   const aspect = FEATURE_CARD_ASPECTS[module.settings.imageAspect || "4-3"] || FEATURE_CARD_ASPECTS["4-3"];
   const showIcons = module.settings.showIcons !== "false";
   const alternateIcons = module.settings.iconAlternate !== "false";
-  const iconColor = module.settings.iconColor || "#0b2a4a";
-  const iconAltColor = module.settings.iconAltColor || "#4f9c3a";
+  // Empty color settings follow the site theme; the --crm-theme-* vars are
+  // set on the preview root by getCrmThemePaletteVars on both the editor
+  // canvas and the public site, with the factory colors as the no-theme
+  // fallback.
+  const iconColor = module.settings.iconColor || "var(--crm-theme-accent, #0b2a4a)";
+  const iconAltColor = module.settings.iconAltColor || "var(--crm-theme-primary, #4f9c3a)";
   const showArrow = module.settings.linkArrow !== "false";
   const fallbackLinkLabel = module.settings.linkLabel ?? "Learn More";
 
@@ -5241,7 +5245,7 @@ function FeatureCardsModulePreview({
           "--feature-card-gap": `${gap}px`,
           "--feature-card-radius": `${radius}px`,
           "--feature-card-bg": module.settings.cardBackground || "#ffffff",
-          "--feature-card-border": module.settings.cardBorderColor || "#e1e8f0",
+          "--feature-card-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #e1e8f0)",
           "--feature-card-aspect": aspect
         } as CSSProperties
       }

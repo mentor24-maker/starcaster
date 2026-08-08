@@ -8,7 +8,7 @@ import {
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
-import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
+import { BuilderThemeColorControlWithDefault, type BuilderThemePalette } from "./builder-theme-color-field";
 
 type BuilderFeatureCardsModuleSettingsProps = {
   module: BuilderTemplateModule;
@@ -65,6 +65,14 @@ export function BuilderFeatureCardsModuleSettings({
   const addCard = () => persist([...cards, createBuilderCardItem(cards.length + 1)]);
 
   const showIcons = module.settings.showIcons !== "false";
+
+  // Empty color settings follow the site theme (the renderer resolves them
+  // to --crm-theme-* vars). The swatch previews the same theme color the
+  // renderer will use, falling back to the factory color on theme-less sites.
+  const themeHex = (label: string) => themeColors.find((color) => color.label === label)?.hex || "";
+  const borderDefault = themeHex("Secondary") || "#e1e8f0";
+  const iconDefault = themeHex("Accent") || "#0b2a4a";
+  const iconAltDefault = themeHex("Primary") || "#4f9c3a";
 
   return (
     <>
@@ -229,20 +237,22 @@ export function BuilderFeatureCardsModuleSettings({
           />
         </BuilderModuleField>
         <BuilderModuleField label="Card Color" width="color">
-          <BuilderThemeColorField
+          <BuilderThemeColorControlWithDefault
+            defaultColor="#ffffff"
             dialogLabel="Card background color"
-            fallback="#ffffff"
+            hint="theme"
             themeColors={themeColors}
-            value={module.settings.cardBackground ?? "#ffffff"}
+            value={module.settings.cardBackground ?? ""}
             onChange={(cardBackground) => set("cardBackground", cardBackground)}
           />
         </BuilderModuleField>
         <BuilderModuleField label="Border Color" width="color">
-          <BuilderThemeColorField
+          <BuilderThemeColorControlWithDefault
+            defaultColor={borderDefault}
             dialogLabel="Card border color"
-            fallback="#e1e8f0"
+            hint="theme"
             themeColors={themeColors}
-            value={module.settings.cardBorderColor ?? "#e1e8f0"}
+            value={module.settings.cardBorderColor ?? ""}
             onChange={(cardBorderColor) => set("cardBorderColor", cardBorderColor)}
           />
         </BuilderModuleField>
@@ -273,11 +283,12 @@ export function BuilderFeatureCardsModuleSettings({
         {showIcons ? (
           <>
             <BuilderModuleField label="Icon Color" width="color">
-              <BuilderThemeColorField
+              <BuilderThemeColorControlWithDefault
+                defaultColor={iconDefault}
                 dialogLabel="Icon badge color"
-                fallback="#0b2a4a"
+                hint="theme"
                 themeColors={themeColors}
-                value={module.settings.iconColor ?? "#0b2a4a"}
+                value={module.settings.iconColor ?? ""}
                 onChange={(iconColor) => set("iconColor", iconColor)}
               />
             </BuilderModuleField>
@@ -290,11 +301,12 @@ export function BuilderFeatureCardsModuleSettings({
             </BuilderModuleField>
             {module.settings.iconAlternate !== "false" ? (
               <BuilderModuleField label="2nd Color" width="color">
-                <BuilderThemeColorField
+                <BuilderThemeColorControlWithDefault
+                  defaultColor={iconAltDefault}
                   dialogLabel="Alternating icon badge color"
-                  fallback="#4f9c3a"
+                  hint="theme"
                   themeColors={themeColors}
-                  value={module.settings.iconAltColor ?? "#4f9c3a"}
+                  value={module.settings.iconAltColor ?? ""}
                   onChange={(iconAltColor) => set("iconAltColor", iconAltColor)}
                 />
               </BuilderModuleField>
