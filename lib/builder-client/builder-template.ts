@@ -1432,6 +1432,25 @@ export function normalizeBuilderModuleSettingsForType(
     }
   }
 
+  if (type === "feature-cards") {
+    // Empty color settings mean "follow the site theme". Modules created
+    // before 2026-08-08 were seeded with these literal factory colors, so a
+    // module still carrying the complete untouched set is one nobody ever
+    // recolored — convert it to theme-following. Changing any single color
+    // breaks the fingerprint and preserves the operator's choice.
+    if (
+      settings.cardBackground === "#ffffff" &&
+      settings.cardBorderColor === "#e1e8f0" &&
+      settings.iconColor === "#0b2a4a" &&
+      settings.iconAltColor === "#4f9c3a"
+    ) {
+      settings.cardBackground = "";
+      settings.cardBorderColor = "";
+      settings.iconColor = "";
+      settings.iconAltColor = "";
+    }
+  }
+
   if (type === "heading") {
     const legacy = settings.verticalMargin;
     settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacy, "0");
@@ -1920,14 +1939,17 @@ export function createEmptyModule(
           cardGap: "12",
           cardAlign: "center",
           cardRadius: "18",
-          cardBackground: "#ffffff",
-          cardBorderColor: "#e1e8f0",
+          // Empty color = follow the site theme (resolved to --crm-theme-*
+          // vars at render). A hex here would be stamped into every new
+          // module's data and pin it to that color forever.
+          cardBackground: "",
+          cardBorderColor: "",
           cardShadow: "true",
           cardHoverLift: "true",
           imageAspect: "4-3",
           showIcons: "true",
-          iconColor: "#0b2a4a",
-          iconAltColor: "#4f9c3a",
+          iconColor: "",
+          iconAltColor: "",
           iconAlternate: "true",
           linkLabel: "Learn More",
           linkArrow: "true"
