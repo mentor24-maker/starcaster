@@ -51,6 +51,7 @@ export type BuilderTemplateModuleType =
   | "table"
   | "slider"
   | "slideshow"
+  | "feature-cards"
   | "social"
   | "social-share"
   | "previous-results"
@@ -1215,6 +1216,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "table" ||
     type === "slider" ||
     type === "slideshow" ||
+    type === "feature-cards" ||
     type === "social" ||
     type === "social-share" ||
     type === "previous-results" ||
@@ -1272,6 +1274,13 @@ export function normalizeModuleSettings(value: unknown) {
           : normalizedKey === "url" || normalizedKey === "backgroundImageUrl"
             ? normalizeBuilderAssetUrl(raw)
             : normalizedKey === "slides"
+              ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 200000))
+            // Standard 6: collection keys must be exempted from the 10k cap
+            // or a long collection is truncated mid-JSON on save, parses as
+            // empty on the next load, and the content is gone with no error.
+            // `sliderItems` was missing here until 2026-08-07 — the Card
+            // Slider had been capped at 10k since it shipped.
+            : normalizedKey === "cards" || normalizedKey === "sliderItems"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 200000))
             : normalizedKey === "navItems"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 500000))
@@ -1903,6 +1912,25 @@ export function createEmptyModule(
           intervalMs: "5000",
           transition: "slide",
           heightPx: ""
+        }
+      : type === "feature-cards"
+      ? {
+          cards: "[]",
+          cardColumns: "3",
+          cardGap: "12",
+          cardAlign: "center",
+          cardRadius: "18",
+          cardBackground: "#ffffff",
+          cardBorderColor: "#e1e8f0",
+          cardShadow: "true",
+          cardHoverLift: "true",
+          imageAspect: "4-3",
+          showIcons: "true",
+          iconColor: "#0b2a4a",
+          iconAltColor: "#4f9c3a",
+          iconAlternate: "true",
+          linkLabel: "Learn More",
+          linkArrow: "true"
         }
       : type === "video"
       ? {

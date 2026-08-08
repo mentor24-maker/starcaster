@@ -104,6 +104,12 @@ export const modulePaletteGroups: Array<{
   { value: "table", label: "Tables", icon: "⊞", description: "Data tables with configurable columns and rows." },
   { value: "slider", label: "Sliders", icon: "⇆", description: "Horizontally scrollable bars of managed cards." },
   { value: "slideshow", label: "Slideshow", icon: "🖼", description: "Full-width auto-rotating image slideshow." },
+  {
+    value: "feature-cards",
+    label: "Feature Cards",
+    icon: "▦",
+    description: "A responsive grid of linked cards with images, icons, and short copy."
+  },
   { value: "breadcrumb", label: "Breadcrumb", icon: "›", description: "Horizontal trail showing the visitor's location in the site hierarchy." },
   { value: "blog", label: "Blog", icon: "✍", description: "Blog content modules — post feeds, filters, author bios, and more." },
   {
@@ -611,6 +617,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Slideshow",
     icon: "🖼",
     description: "A full-width auto-rotating slideshow of images.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "feature-cards-standard",
+    type: "feature-cards",
+    group: "feature-cards",
+    label: "Feature Cards",
+    icon: "▦",
+    description: "A row of linked tiles — image, title, short copy, and a link. Wraps to fewer columns on small screens.",
     name: "",
     text: "",
     settings: {}
