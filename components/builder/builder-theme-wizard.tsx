@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   createWizardClient,
@@ -80,8 +79,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     (async () => {
       try {
-        const body = await appApi("/api/builder/pages");
-        const list = unwrapEnvelope<PageRecord[]>(body, "pages") ?? [];
+        const list = (await client.loadPages()) as PageRecord[];
         setPages(list);
         if (list.length && !previewPageId) setPreviewPageId(String(list[0].id));
 
@@ -89,13 +87,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
         // other three starting points still work — so it does not surface as
         // an error, only as an empty picker that says so.
         try {
-          const assetBody = await appApi("/api/assets");
-          const assets = unwrapEnvelope<Array<Record<string, unknown>>>(assetBody, "assets") ?? [];
-          setImages(
-            assets
-              .filter((a) => String(a.assetType || "").toLowerCase().includes("image") && a.location)
-              .map((a) => ({ id: String(a.id), assetName: String(a.assetName || "") }))
-          );
+          setImages(await client.loadBrandImages());
         } catch {
           setImages([]);
         }
