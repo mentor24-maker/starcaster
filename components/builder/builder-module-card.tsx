@@ -5,6 +5,14 @@ import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-an
 import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
+import { BuilderFeatureCardsModuleSettings } from "./builder-feature-cards-module-settings";
+import {
+  createBuilderCardItem,
+  parseBuilderCardItems,
+  serializeBuilderCardItems,
+  type BuilderCardItem
+} from "@/lib/builder-card-items";
+import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
 import type {
   BackgroundSettings,
   BuilderPageRecord,
@@ -633,6 +641,29 @@ function renderModulePreview(module: BuilderTemplateModule) {
         {slides.length > 1 ? (
           <span className="builder-module-preview-slideshow-count">{slides.length} slides</span>
         ) : null}
+      </div>
+    );
+  }
+
+  if (module.type === "feature-cards") {
+    const cards = parseBuilderCardItems(module.settings.cards, "card");
+    const columns = Math.min(6, Math.max(1, Number.parseInt(module.settings.cardColumns || "3", 10) || 3));
+
+    if (cards.length === 0) {
+      return <span className="builder-module-preview-empty">Add cards in the editor</span>;
+    }
+
+    return (
+      <div
+        className="builder-module-preview-feature-cards"
+        style={{ gridTemplateColumns: `repeat(${Math.min(columns, cards.length)}, minmax(0, 1fr))` }}
+      >
+        {cards.slice(0, 6).map((card) => (
+          <article key={card.id} className="builder-module-preview-feature-card">
+            {card.imageUrl ? <img src={card.imageUrl} alt={card.imageAlt || ""} loading="lazy" /> : null}
+            <strong>{card.title || "Untitled card"}</strong>
+          </article>
+        ))}
       </div>
     );
   }
@@ -2086,13 +2117,8 @@ type ParsedTableData = {
   rowCount: number;
 };
 
-type SliderItem = {
-  id: string;
-  title: string;
-  body: string;
-  imageUrl: string;
-  linkUrl: string;
-};
+/** Shared with the Feature Cards module — see lib/builder-client/builder-card-items.ts */
+type SliderItem = BuilderCardItem;
 
 type SocialItem = {
   id: string;
@@ -2108,6 +2134,9 @@ type NavItem = {
   href: string;
   parentId?: string;
   width?: string;
+  /** Mega-panel feature tile — top-level items only. See ClickUp 86bbafg38. */
+  featureImage?: string;
+  featureHeading?: string;
 };
 
 type HeadlineItem = HeadlineRotatorEntry;
@@ -2131,7 +2160,9 @@ function parseNavItems(settings: Record<string, string>): NavItem[] {
         label: String(raw.label || ""),
         href: String(raw.href || raw.url || ""),
         ...(raw.parentId ? { parentId: String(raw.parentId) } : {}),
-        ...(raw.width ? { width: String(raw.width) } : {})
+        ...(raw.width ? { width: String(raw.width) } : {}),
+        ...(raw.featureImage ? { featureImage: normalizeBuilderAssetUrl(raw.featureImage) } : {}),
+        ...(raw.featureHeading ? { featureHeading: String(raw.featureHeading) } : {})
       };
     });
   } catch {
@@ -2167,26 +2198,11 @@ function parseSlideshowSlides(settings: Record<string, string>): SlideshowSlide[
 }
 
 function parseSliderItems(settings: Record<string, string>): SliderItem[] {
-  try {
-    const items = JSON.parse(settings.sliderItems || "[]");
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      const raw = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-      return {
-        id: String(raw.id || `slide-${index + 1}`),
-        title: String(raw.title || ""),
-        body: String(raw.body || ""),
-        imageUrl: normalizeBuilderAssetUrl(raw.imageUrl),
-        linkUrl: String(raw.linkUrl || "")
-      };
-    });
-  } catch {
-    return [];
-  }
+  return parseBuilderCardItems(settings.sliderItems, "slide", "storage");
 }
 
 function serializeSliderItems(items: SliderItem[]) {
-  return JSON.stringify(items);
+  return serializeBuilderCardItems(items);
 }
 
 function parseSocialItems(settings: Record<string, string>): SocialItem[] {
@@ -2921,7 +2937,7 @@ function SliderModuleEditor({
   function removeItem(id: string) { persist(items.filter((item) => item.id !== id)); }
 
   function addItem() {
-    persist([...items, { id: `slide-${Date.now()}-${items.length + 1}`, title: "", body: "", imageUrl: "", linkUrl: "" }]);
+    persist([...items, createBuilderCardItem(items.length + 1, "slide")]);
   }
 
   return (
@@ -3231,6 +3247,18 @@ function NavModuleEditor({
     updateSetting("navPadding", `${v}px ${h}px`);
   }
 
+  /**
+   * The parent picker used to offer only top-level items and disable itself
+   * on anything that already had children — so a three-level menu could not
+   * be built here at all, even though the "Levels" control offers 3 and the
+   * importer can produce three tiers. A mega panel needs that third level
+   * (level 2 = column headings, level 3 = the links in each column), so the
+   * rule is now a real depth check. Logic and tests live in
+   * lib/builder-client/builder-nav-mega.ts.
+   */
+  const depthOf = (item: NavItem) => navDepthOf(items, item);
+  const eligibleParents = (item: NavItem) => eligibleNavParents(items, item) as NavItem[];
+
   return (
     <>
       <div className="builder-cell-panel">
@@ -3273,6 +3301,38 @@ function NavModuleEditor({
                 />
               </BuilderModuleField>
             </BuilderModuleFieldStrip>
+
+            {module.settings.navDirection !== "vertical" && (
+              <BuilderModuleFieldStrip>
+                <BuilderModuleField label="Dropdown" width="select-md">
+                  <select
+                    value={module.settings.navDropdownStyle ?? "list"}
+                    onChange={(e) => updateSetting("navDropdownStyle", e.target.value)}
+                  >
+                    <option value="list">List</option>
+                    <option value="mega">Mega Panel</option>
+                  </select>
+                </BuilderModuleField>
+                {module.settings.navDropdownStyle === "mega" && (
+                  <>
+                    <BuilderModuleField label="Columns" width="num">
+                      <BuilderNumberSelectControl
+                        value={module.settings.navMegaColumns ?? "3"}
+                        min={1} max={5} fallback="3"
+                        onChange={(v) => updateSetting("navMegaColumns", v)}
+                      />
+                    </BuilderModuleField>
+                    <BuilderModuleField label="Panel Width" width="num">
+                      <BuilderNumberSelectControl
+                        value={module.settings.navMegaWidth ?? "1040"}
+                        min={320} max={1600} step={40} fallback="1040"
+                        onChange={(v) => updateSetting("navMegaWidth", v)}
+                      />
+                    </BuilderModuleField>
+                  </>
+                )}
+              </BuilderModuleFieldStrip>
+            )}
 
             <BuilderModuleFieldStrip>
               <BuilderModuleField label="Alignment" width="align">
@@ -3385,21 +3445,20 @@ function NavModuleEditor({
             <div className="builder-nav-items">
               {items.map((item, index) => {
                 const isCustomSizing = module.settings.navItemSizing === "custom";
-                const isParent = items.some((i) => i.parentId === item.id);
-                const topLevelItems = items.filter((i) => !i.parentId && i.id !== item.id);
+                const parentOptions = eligibleParents(item);
                 return (
                   <div key={item.id} className="builder-nav-item-row">
                     <div className="builder-nav-item-fields">
                       <select
                         className="builder-nav-item-parent-select"
                         value={item.parentId ?? ""}
-                        disabled={isParent}
-                        title={isParent ? "This item has sub-items and cannot itself be a sub-item" : undefined}
                         onChange={(e) => updateItem(item.id, { parentId: e.target.value || undefined })}
                       >
                         <option value="">Top level</option>
-                        {topLevelItems.map((parent) => (
-                          <option key={parent.id} value={parent.id}>{parent.label || `Link ${items.indexOf(parent) + 1}`}</option>
+                        {parentOptions.map((parent) => (
+                          <option key={parent.id} value={parent.id}>
+                            {`${"— ".repeat(depthOf(parent))}${parent.label || `Link ${items.indexOf(parent) + 1}`}`}
+                          </option>
                         ))}
                       </select>
                       <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
@@ -3427,6 +3486,30 @@ function NavModuleEditor({
                       <button type="button" className="builder-icon-button" aria-label="Move Down" onClick={() => moveItem(item.id, 1)}>↓</button>
                       <button type="button" className="builder-icon-button builder-icon-button-danger" aria-label="Delete" onClick={() => removeItem(item.id)}>✕</button>
                     </div>
+                    {module.settings.navDropdownStyle === "mega"
+                      && module.settings.navDirection !== "vertical"
+                      && !item.parentId
+                      && items.some((i) => i.parentId === item.id) && (
+                      <details className="hanging-details builder-nav-item-feature">
+                        <summary>Feature tile</summary>
+                        <BuilderModuleFieldStrip>
+                          <BuilderModuleField label="Image" width="full">
+                            <BuilderImagePickerField
+                              value={item.featureImage ?? ""}
+                              onChange={(featureImage) => updateItem(item.id, { featureImage })}
+                            />
+                          </BuilderModuleField>
+                          <BuilderModuleField label="Heading" width="text-md">
+                            <input
+                              type="text"
+                              value={item.featureHeading ?? ""}
+                              onChange={(e) => updateItem(item.id, { featureHeading: e.target.value })}
+                              placeholder="Visit Delray Tennis"
+                            />
+                          </BuilderModuleField>
+                        </BuilderModuleFieldStrip>
+                      </details>
+                    )}
                   </div>
                 );
               })}
@@ -4435,6 +4518,9 @@ export function BuilderModuleCard({
           )}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "slideshow" && <SlideshowModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "feature-cards" && (
+            <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          )}
           {module.type === "navigation" && (
             <NavModuleEditor
               module={module}
