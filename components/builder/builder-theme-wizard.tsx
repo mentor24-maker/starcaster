@@ -70,11 +70,21 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const [isBusy, setIsBusy] = useState(false);
   const [applyResult, setApplyResult] = useState<{ applied: number; failed: number } | null>(null);
   const [confirmingApply, setConfirmingApply] = useState<ThemeWizardCandidate | null>(null);
+  const [expanded, setExpanded] = useState<ThemeWizardCandidate | null>(null);
 
   // Cleared on unmount so a round in flight stops instead of billing three more
   // model calls against a screen that is gone.
   const aliveRef = useRef(true);
   useEffect(() => () => { aliveRef.current = false; }, []);
+
+  // Escape closes the full-size preview. An overlay with no keyboard exit is a
+  // trap for anyone not using a mouse.
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setExpanded(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
 
   useEffect(() => {
     (async () => {
@@ -265,21 +275,40 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
     }
   }
 
-  function renderPreview(candidate: ThemeWizardCandidate) {
+  /**
+   * A thumbnail is a real page at quarter scale. The inner content keeps
+   * pointer-events: none so a click cannot land on a link inside the page being
+   * previewed; the click belongs to the button wrapping it, which opens the
+   * full-size view (spec §8 screen 3).
+   */
+  function renderPreview(candidate: ThemeWizardCandidate, expandable = true) {
     if (!previewPage) return <div className="tw-preview-empty">No page to preview</div>;
     const { theme, themeStyles } = splitThemePatch(candidate.themePatch);
-    return (
-      <div className="tw-preview-frame">
-        <div className="tw-preview-scale">
-          <BuilderTemplatePreview
-            layoutSections={(previewPage.layoutSections ?? []) as never}
-            pageBackground={(previewPage.pageBackground ?? {}) as never}
-            theme={theme as never}
-            themeStyles={themeStyles as never}
-            previewMode
-          />
-        </div>
+    const content = (
+      <div className={expandable ? "tw-preview-scale" : "tw-preview-full"}>
+        <BuilderTemplatePreview
+          layoutSections={(previewPage.layoutSections ?? []) as never}
+          pageBackground={(previewPage.pageBackground ?? {}) as never}
+          theme={theme as never}
+          themeStyles={themeStyles as never}
+          previewMode
+        />
       </div>
+    );
+
+    if (!expandable) return content;
+
+    return (
+      <button
+        type="button"
+        className="tw-preview-frame"
+        onClick={() => setExpanded(candidate)}
+        title="See this one full size"
+        aria-label={`See "${candidate.direction}" full size`}
+      >
+        {content}
+        <span className="tw-preview-hint" aria-hidden="true">Click to enlarge</span>
+      </button>
     );
   }
 
@@ -505,6 +534,46 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
             {!winner ? <span className="tw-muted">Pick a favourite (rank 1) to continue.</span> : null}
           </div>
         </section>
+      ) : null}
+
+      {expanded ? (
+        <div
+          className="tw-expand"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${expanded.direction}, full size`}
+          onClick={(e) => { if (e.target === e.currentTarget) setExpanded(null); }}
+        >
+          <div className="tw-expand-bar">
+            <div>
+              <strong>{expanded.direction}</strong>
+              <span className="tw-muted">
+                {" "}on {previewPage?.name || previewPage?.slug || "this page"}
+              </span>
+            </div>
+            <div className="tw-actions">
+              {/* Ranking from here too — the full-size view is where the
+                  decision actually gets made, so making them close it first
+                  would be busywork. */}
+              <label className="tw-inline-field">
+                <span>Rank</span>
+                <select
+                  value={ranks[expanded.id] || ""}
+                  onChange={(e) => setRanks((prev) => ({ ...prev, [expanded.id]: Number(e.target.value) }))}
+                >
+                  <option value="">—</option>
+                  <option value="1">1 — favourite</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+              </label>
+              <button type="button" className="tw-secondary" onClick={() => setExpanded(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+          <div className="tw-expand-body">{renderPreview(expanded, false)}</div>
+        </div>
       ) : null}
 
       {confirmingApply ? (
