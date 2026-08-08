@@ -37,6 +37,7 @@ export type ThemeWizardSession = {
   styleBrief: Record<string, unknown>;
   lockedValues: Record<string, string>;
   roundCount: number;
+  tokensSpent: number;
   appliedCandidateId: string;
   applySnapshotId: string;
 };
@@ -113,6 +114,48 @@ function post(api: ApiFn, path: string, body?: unknown) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {})
   });
+}
+
+export type LockableValue = {
+  /** Dotted path into the theme patch — the key `lockedValues` is stored under. */
+  path: string;
+  label: string;
+  value: string;
+  kind: "colour" | "font";
+};
+
+const LOCKABLE: Array<{ path: string; label: string; kind: "colour" | "font" }> = [
+  { path: "primaryColor", label: "Primary", kind: "colour" },
+  { path: "secondaryColor", label: "Secondary", kind: "colour" },
+  { path: "backgroundColor", label: "Background", kind: "colour" },
+  { path: "accentColor", label: "Accent", kind: "colour" },
+  { path: "typography.fonts.heading", label: "Heading font", kind: "font" },
+  { path: "typography.fonts.body", label: "Body font", kind: "font" }
+];
+
+function readPath(source: Record<string, unknown>, path: string): unknown {
+  return path.split(".").reduce<unknown>((cursor, segment) => {
+    if (!cursor || typeof cursor !== "object") return undefined;
+    return (cursor as Record<string, unknown>)[segment];
+  }, source);
+}
+
+/**
+ * The values an operator can pin from a candidate (spec §6.4 — "keep this exact
+ * blue", "keep this heading font").
+ *
+ * Deliberately a short list rather than every field in the patch. A pin is a
+ * constraint on every future round, and a wall of forty toggles invites pinning
+ * so much that later rounds have nothing left to vary — which is the same as
+ * turning the wizard off.
+ */
+export function lockableValuesFrom(patch: Record<string, unknown> | null | undefined): LockableValue[] {
+  const source = patch && typeof patch === "object" ? patch : {};
+  return LOCKABLE.map((entry) => {
+    const raw = readPath(source, entry.path);
+    const value = typeof raw === "string" ? raw : "";
+    return value ? { ...entry, value } : null;
+  }).filter((entry): entry is LockableValue => entry !== null);
 }
 
 export function createWizardClient(api: ApiFn = defaultApi) {

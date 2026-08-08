@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 
-import { createWizardClient, splitThemePatch } from "./theme-wizard-client";
+import { createWizardClient, splitThemePatch, lockableValuesFrom } from "./theme-wizard-client";
 
 /**
  * The server does one model call per request and this client drives the loop.
@@ -144,6 +144,40 @@ describe("splitThemePatch", () => {
       expect(themeStyles).toEqual({});
       expect(theme.typography.scale.baseSize).toBe(0);
     }
+  });
+});
+
+describe("lockableValuesFrom", () => {
+  it("offers the palette and the two font slots, keyed by their patch path", () => {
+    const values = lockableValuesFrom({
+      primaryColor: "#1a4d8f",
+      accentColor: "#d08c34",
+      typography: { fonts: { heading: "lora", body: "inter" } }
+    });
+
+    expect(values.map((v) => v.path)).toEqual([
+      "primaryColor",
+      "accentColor",
+      "typography.fonts.heading",
+      "typography.fonts.body"
+    ]);
+    // The path is what lockedValues is keyed by, so it has to survive intact
+    // all the way to applyLockedValues on the server.
+    expect(values.find((v) => v.path === "typography.fonts.heading")?.value).toBe("lora");
+    expect(values.find((v) => v.path === "primaryColor")?.kind).toBe("colour");
+  });
+
+  it("omits values the candidate does not actually have", () => {
+    // A pin on an empty value would lock every future round to "inherit",
+    // which reads as the wizard quietly refusing to change anything.
+    const values = lockableValuesFrom({ primaryColor: "#111111" });
+    expect(values).toHaveLength(1);
+    expect(values[0].path).toBe("primaryColor");
+  });
+
+  it("survives a missing or malformed patch", () => {
+    expect(lockableValuesFrom(null)).toEqual([]);
+    expect(lockableValuesFrom({ typography: "not an object" } as never)).toEqual([]);
   });
 });
 

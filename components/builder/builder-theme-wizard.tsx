@@ -5,6 +5,7 @@ import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import {
   createWizardClient,
   splitThemePatch,
+  lockableValuesFrom,
   type ThemeWizardCandidate,
   type ThemeWizardProgress,
   type ThemeWizardSession
@@ -39,6 +40,16 @@ type PageRecord = {
 type Step = "start" | "generating" | "compare" | "applied";
 
 const client = createWizardClient();
+
+/** Patch paths read back to the operator in plain words. */
+const LOCK_LABELS: Record<string, string> = {
+  primaryColor: "the primary colour",
+  secondaryColor: "the secondary colour",
+  backgroundColor: "the background colour",
+  accentColor: "the accent colour",
+  "typography.fonts.heading": "the heading font",
+  "typography.fonts.body": "the body font"
+};
 
 export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const [step, setStep] = useState<Step>("start");
@@ -87,6 +98,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const currentRound = session?.roundCount || 0;
   const roundCandidates = candidates.filter((c) => c.round === (currentRound || 1));
   const winner = roundCandidates.find((c) => ranks[c.id] === 1) || null;
+  const lockedCount = Object.keys(session?.lockedValues || {}).length;
 
   const runRound = useCallback(async (sessionId: string, parentCandidateId = "", feedback = "") => {
     setIsBusy(true);
@@ -148,6 +160,33 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
       .filter(Boolean)
       .join("\n");
     await runRound(session.id, winner.id, combined);
+  }
+
+  /**
+   * Pin or unpin one value (spec §6.4). Saved immediately rather than on the
+   * next Generate: a pin is a statement about the whole session, and losing it
+   * because the operator closed the panel would be worse than the extra call.
+   */
+  async function clearLocks() {
+    if (!session) return;
+    try {
+      setSession(await client.setLocks(session.id, {}));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not clear the pins.");
+    }
+  }
+
+  async function toggleLock(path: string, value: string) {
+    if (!session) return;
+    const next = { ...(session.lockedValues || {}) };
+    if (next[path] === value) delete next[path];
+    else next[path] = value;
+    try {
+      const updated = await client.setLocks(session.id, next);
+      setSession(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that pin.");
+    }
   }
 
   async function handleApply(candidate: ThemeWizardCandidate) {
@@ -287,7 +326,26 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
           <p className="tw-muted">
             Round {currentRound}. Rank these, say what did and didn&apos;t work, then either
             make three more from your favourite or apply it.
+            {session?.tokensSpent
+              ? ` So far this session has used ${session.tokensSpent.toLocaleString()} tokens.`
+              : ""}
           </p>
+
+          {lockedCount ? (
+            <div className="tw-locked-summary">
+              <strong>{lockedCount} value{lockedCount === 1 ? "" : "s"} kept</strong>
+              {" — later rounds will not change "}
+              {Object.keys(session?.lockedValues || {}).map((path, i, all) => (
+                <span key={path}>
+                  {LOCK_LABELS[path] || path}{i < all.length - 1 ? ", " : ""}
+                </span>
+              ))}
+              {". "}
+              <button type="button" className="tw-link" onClick={() => clearLocks()}>
+                Clear all
+              </button>
+            </div>
+          ) : null}
           {warnings.length ? (
             <details className="tw-warnings">
               <summary>{warnings.length} value{warnings.length === 1 ? " was" : "s were"} adjusted</summary>
@@ -301,6 +359,33 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
                 <h3>{candidate.direction}</h3>
                 {renderPreview(candidate)}
                 <p className="tw-rationale">{candidate.rationale}</p>
+
+                <div className="tw-pins">
+                  <span className="tw-muted">Keep any of these in every later round:</span>
+                  <div className="tw-pin-row">
+                    {lockableValuesFrom(candidate.themePatch).map((item) => {
+                      const isPinned = (session?.lockedValues || {})[item.path] === item.value;
+                      return (
+                        <button
+                          key={item.path}
+                          type="button"
+                          className={`tw-pin${isPinned ? " is-pinned" : ""}`}
+                          onClick={() => toggleLock(item.path, item.value)}
+                          aria-pressed={isPinned}
+                          title={isPinned ? `Stop keeping this ${item.label.toLowerCase()}` : `Keep this ${item.label.toLowerCase()}`}
+                        >
+                          {item.kind === "colour" ? (
+                            <span className="tw-pin-swatch" style={{ background: item.value }} aria-hidden="true" />
+                          ) : null}
+                          <span>{item.label}</span>
+                          {item.kind === "font" ? <span className="tw-muted">{item.value}</span> : null}
+                          <span aria-hidden="true">{isPinned ? "📌" : "＋"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <label className="tw-field">
                   <span>Rank</span>
                   <select

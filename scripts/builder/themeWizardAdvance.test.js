@@ -54,7 +54,7 @@ function loadRoute(overrides = {}) {
   const sent = {};
   // The job row lives here so successive advance calls see the previous one's work.
   const job = { id: 'twjob_1', sessionId: 'twiz_1', status: 'queued', error: '', input: { round: 1, parentCandidateId: '', feedback: '', step: 'brief', directions: null, completedSlots: 0, warnings: [] } };
-  const session = { id: 'twiz_1', status: 'active', roundCount: 0, styleBrief: overrides.styleBrief || {}, lockedValues: overrides.lockedValues || {} };
+  const session = { id: 'twiz_1', status: 'active', roundCount: 0, tokensSpent: 0, styleBrief: overrides.styleBrief || {}, lockedValues: overrides.lockedValues || {} };
   const candidates = [];
 
   stub(httpPath, {
@@ -70,12 +70,14 @@ function loadRoute(overrides = {}) {
   });
   stub(themesPath, { createTheme: async () => ({ ok: true, data: {} }) });
 
+  const USAGE = { input_tokens: 100, output_tokens: 50 };
   stub(generatorPath, {
-    buildStyleBrief: async () => { calls.push('buildStyleBrief'); return { ok: true, data: { sector: 'test' } }; },
-    deriveDirections: async () => { calls.push('deriveDirections'); return { ok: true, data: { directions: DIRECTIONS } }; },
+    sumUsage: (usage) => (usage ? (usage.input_tokens || 0) + (usage.output_tokens || 0) : 0),
+    buildStyleBrief: async () => { calls.push('buildStyleBrief'); return { ok: true, data: { sector: 'test' }, usage: USAGE }; },
+    deriveDirections: async () => { calls.push('deriveDirections'); return { ok: true, data: { directions: DIRECTIONS }, usage: USAGE }; },
     generateCandidate: async () => {
       calls.push('generateCandidate');
-      return overrides.candidateResult || { ok: true, data: GOOD_CANDIDATE };
+      return overrides.candidateResult || { ok: true, data: GOOD_CANDIDATE, usage: USAGE };
     },
   });
 
@@ -201,6 +203,18 @@ test('pinned values survive a model that ignored them', async () => {
     await h.advance();
     assert.equal(h.candidates[0].themePatch.primaryColor, '#1a4d8f',
       'the model returned #1f2933; the lock is a guarantee, not a request');
+  } finally { h.restore(); }
+});
+
+test('every model call adds its tokens to the session tally', async () => {
+  // tokens_spent is what a future cost throttle will read (spec §9). A column
+  // that exists and is never written is worse than no column: it reads as
+  // "this session was free".
+  const h = loadRoute();
+  try {
+    for (let i = 0; i < 5; i += 1) await h.advance();
+    // Five steps, 150 tokens each: brief, directions, three candidates.
+    assert.equal(h.session.tokensSpent, 750);
   } finally { h.restore(); }
 });
 

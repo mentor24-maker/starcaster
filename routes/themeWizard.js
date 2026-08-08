@@ -24,7 +24,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listPages, updatePage } = require('../lib/builderPagesStore');
 const { createTheme } = require('../lib/builderThemesStore');
 const store = require('../lib/themeWizardStore');
-const { buildStyleBrief, deriveDirections, generateCandidate } = require('../lib/themeWizardGenerator');
+const { buildStyleBrief, deriveDirections, generateCandidate, sumUsage } = require('../lib/themeWizardGenerator');
 const { validateThemePatch, applyLockedValues } = require('../lib/themeWizardValidate');
 
 const PREFIX = '/api/builder/theme-wizard';
@@ -154,7 +154,12 @@ async function handleAdvance(req, res, jobId, scope) {
     const brief = await buildStyleBrief({ pages, projectName: scope.project?.name }, undefined);
     if (!brief.ok) return fail(brief.error || 'Could not read the site', brief.status);
 
-    await store.updateSession(job.sessionId, { styleBrief: brief.data }, scope);
+    await store.updateSession(job.sessionId, {
+      styleBrief: brief.data,
+      // Recorded from day one so the cost throttle that is deliberately
+      // deferred (spec §9) has real history to work from whenever it is built.
+      tokensSpent: session.tokensSpent + sumUsage(brief.usage),
+    }, scope);
     input.step = STEP_DIRECTIONS;
     const updated = await store.updateJob(jobId, { input }, scope);
     return sendOk(res, 200, { job: updated.ok ? updated.data : job, progress: describeProgress(input) }), true;
@@ -177,6 +182,9 @@ async function handleAdvance(req, res, jobId, scope) {
       return fail(`Expected ${TOTAL_SLOTS} directions, got ${directions.length}`);
     }
 
+    await store.updateSession(job.sessionId, {
+      tokensSpent: session.tokensSpent + sumUsage(chosen.usage),
+    }, scope);
     input.directions = directions;
     input.step = STEP_CANDIDATES;
     const updated = await store.updateJob(jobId, { input }, scope);
@@ -238,7 +246,10 @@ async function handleAdvance(req, res, jobId, scope) {
       status: finished ? 'succeeded' : 'running',
       finishedAt: finished ? new Date().toISOString() : undefined,
     }, scope);
-    if (finished) await store.updateSession(job.sessionId, { roundCount: input.round }, scope);
+    await store.updateSession(job.sessionId, {
+      tokensSpent: session.tokensSpent + sumUsage(generated.usage),
+      ...(finished ? { roundCount: input.round } : {}),
+    }, scope);
 
     return sendOk(res, 200, {
       job: updated.ok ? updated.data : job,
