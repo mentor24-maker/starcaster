@@ -122,10 +122,30 @@ raw material of the doctrine).
 
 ---
 
-## 5. The deliverable: `docs/MODULE_UI_DOCTRINE.md`
+## 5. The deliverable: `docs/MODULE_UI_DOCTRINE.md` — **WRITTEN 2026-08-08**
 
-**Proposed, not ratified.** Confirm the shape with the operator before
-writing it at length.
+**Status: ratified and shipped.** The operator chose the shape (one doc, two
+halves) and the sequencing (doctrine and checks together, before the module
+work). The doc exists; read it, don't re-derive it.
+
+What landed with it:
+
+- `scripts/check_ui_doctrine.cjs` — the mechanical half. Runs at pre-commit on
+  staged changes and as a **blocking** CI step (`npm run check:ui`). It is a
+  separate step from the older conventions check on purpose: that one is
+  `continue-on-error: true` because of 7 pre-existing `button`-in-`<th>`
+  violations, and folding the UI rules in would have made them advisory too.
+- `npm run check:ui:report` — standing whole-repo debt. At time of writing:
+  **5/37** field-strip adoption, **2** editors with unpaired H/V margin,
+  **0** breakpoint-only layout selectors.
+- `BuilderModuleField.width` is now a **required** prop, so "every field
+  declares a width token" is a compile error rather than an eyeball check.
+- One live bug fixed: `.builder-preview-table-wrap` had `overflow-x: auto`
+  only inside `@media (max-width: 900px)`, so wide tables scrolled the page
+  body on desktop. Found by the R1 checker on the day it was written.
+
+The measured state in §3 below is what motivated all of it. The original
+proposal is kept below for the reasoning; **the doc itself is now canonical.**
 
 A new doc, in `DOCTRINE.md` house style — every rule paired with the concrete
 thing that went wrong to produce it. Proposed structure:
