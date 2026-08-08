@@ -482,6 +482,24 @@ async function handle(req, res, pathname, method) {
     }), true;
   }
 
+  // DELETE /sessions/:id — retire a past run (the DB cascades to its
+  // candidates and jobs). An applied session is refused: its snapshot pointer
+  // is the one-click undo for a live site-wide change, and deleting that to
+  // tidy a list would be the Marinoff-menu shape again.
+  if (sessionMatch && method === 'DELETE') {
+    const sessionId = decodeURIComponent(sessionMatch[1] || '').trim();
+    const sessionResult = await store.getSession(sessionId, scope);
+    if (!sessionResult.ok) return sendErr(res, sessionResult.status || 404, sessionResult.error || 'Session not found'), true;
+    if (sessionResult.data.status === 'applied') {
+      return sendErr(res, 409,
+        'This run’s theme is applied to the site, and this run holds the undo for it. Undo the apply first, or keep the run.',
+        { code: 'SESSION_APPLIED' }), true;
+    }
+    const removed = await store.deleteSession(sessionId, scope);
+    if (!removed.ok) return sendErr(res, removed.status || 500, removed.error || 'Could not delete the run'), true;
+    return sendOk(res, 200, { deleted: true, id: sessionId }), true;
+  }
+
   if (generateMatch && method === 'POST') {
     return handleGenerate(req, res, decodeURIComponent(generateMatch[1] || '').trim(), scope);
   }

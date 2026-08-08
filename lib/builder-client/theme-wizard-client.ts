@@ -36,6 +36,7 @@ export type ThemeWizardSession = {
   id: string;
   status: "active" | "applied" | "abandoned";
   seedType: string;
+  seedPayload?: Record<string, string>;
   previewPageId: string;
   styleBrief: Record<string, unknown>;
   lockedValues: Record<string, string>;
@@ -43,6 +44,8 @@ export type ThemeWizardSession = {
   tokensSpent: number;
   appliedCandidateId: string;
   applySnapshotId: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ThemeWizardJob = {
@@ -201,6 +204,21 @@ export function createWizardClient(api: ApiFn = defaultApi) {
         seedPayload: input.seedPayload || {},
         previewPageId: input.previewPageId || ""
       })) as ThemeWizardSession;
+    },
+
+    /** Past runs for the active project, newest first. */
+    async listSessions() {
+      return (await api(`${BASE}/sessions`)) as ThemeWizardSession[];
+    },
+
+    /**
+     * Retire a past run. The server refuses while the run's theme is applied
+     * to the site — that run holds the one-click undo.
+     */
+    async deleteSession(sessionId: string) {
+      return (await api(`${BASE}/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "DELETE"
+      })) as { deleted: boolean; id: string };
     },
 
     async loadSession(sessionId: string) {

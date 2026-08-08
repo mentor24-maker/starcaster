@@ -278,3 +278,27 @@ describe("request shapes", () => {
     expect(api.mock.calls[0][0]).toBe("/api/builder/theme-wizard/sessions/twiz%2F..%2Fevil/revert");
   });
 });
+
+describe("past runs", () => {
+  it("lists sessions from the sessions endpoint", async () => {
+    const api = vi.fn(async () => [{ id: "twiz_1", status: "active" }]);
+    const client = createWizardClient(api);
+
+    const runs = await client.listSessions();
+
+    expect(runs).toEqual([{ id: "twiz_1", status: "active" }]);
+    expect(api.mock.calls[0][0]).toBe("/api/builder/theme-wizard/sessions");
+  });
+
+  it("deletes a run through an encoded id", async () => {
+    // Same rule as revert above: the id goes into the URL, so it must not be
+    // able to smuggle path segments.
+    const api = vi.fn(async () => ({ deleted: true, id: "twiz/../evil" }));
+    const client = createWizardClient(api);
+
+    await client.deleteSession("twiz/../evil");
+
+    expect(api.mock.calls[0][0]).toBe("/api/builder/theme-wizard/sessions/twiz%2F..%2Fevil");
+    expect(api.mock.calls[0][1]).toEqual({ method: "DELETE" });
+  });
+});
