@@ -163,6 +163,32 @@ export function lockableValuesFrom(patch: Record<string, unknown> | null | undef
 
 export function createWizardClient(api: ApiFn = defaultApi) {
   return {
+    /**
+     * The project's pages, for the preview picker.
+     *
+     * The endpoint is `/api/builder/landing-pages`, not `/api/builder/pages` —
+     * the latter does not exist and was assumed rather than checked, which cost
+     * a live round trip to find out. It lives here rather than inline in the
+     * component so the path is something a test can hold onto.
+     */
+    async loadPages() {
+      return (await api("/api/builder/landing-pages")) as Array<{
+        id: string;
+        name?: string;
+        slug?: string;
+        layoutSections?: unknown[];
+        pageBackground?: unknown;
+      }>;
+    },
+
+    /** Images from Assets, for the brand-kit starting point. */
+    async loadBrandImages() {
+      const assets = (await api("/api/assets")) as Array<Record<string, unknown>>;
+      return (Array.isArray(assets) ? assets : [])
+        .filter((a) => String(a.assetType || "").toLowerCase().includes("image") && a.location)
+        .map((a) => ({ id: String(a.id), assetName: String(a.assetName || "") }));
+    },
+
     async startSession(
       input: {
         previewPageId?: string;

@@ -181,6 +181,63 @@ describe("lockableValuesFrom", () => {
   });
 });
 
+describe("endpoint paths", () => {
+  // `/api/builder/pages` was assumed rather than looked up. It does not exist,
+  // and nothing caught it until a live round trip returned "API route not
+  // found" — because the call was inline in the component where no test could
+  // reach it. These assertions are the cheap version of that discovery.
+  it("reads pages from the endpoint that actually exists", async () => {
+    const api = vi.fn(async () => []);
+    await createWizardClient(api).loadPages();
+    expect(api).toHaveBeenCalledWith("/api/builder/landing-pages");
+  });
+
+  it("reads brand images from the assets endpoint", async () => {
+    const api = vi.fn(async () => []);
+    await createWizardClient(api).loadBrandImages();
+    expect(api).toHaveBeenCalledWith("/api/assets");
+  });
+
+  it("keeps only images that have a file behind them", async () => {
+    const api = vi.fn(async () => [
+      { id: 1, assetName: "Logo", assetType: "Image", location: "https://cdn/logo.png" },
+      { id: 2, assetName: "No file", assetType: "Image", location: "" },
+      { id: 3, assetName: "A PDF", assetType: "Document", location: "https://cdn/a.pdf" }
+    ]);
+    const images = await createWizardClient(api).loadBrandImages();
+    expect(images).toEqual([{ id: "1", assetName: "Logo" }]);
+  });
+
+  it("covers every wizard endpoint the server actually serves", async () => {
+    // One place listing every path this client can hit. If a route is renamed
+    // server-side, this is the test that should go red.
+    const api = vi.fn(async () => ({ job: { id: "j1" } }));
+    const client = createWizardClient(api);
+
+    await client.startSession();
+    await client.loadSession("s1");
+    await client.queueRound("s1");
+    await client.rank("s1", []);
+    await client.setLocks("s1", {});
+    await client.apply("c1");
+    await client.revert("s1");
+    await client.loadPages();
+    await client.loadBrandImages();
+
+    expect(api.mock.calls.map(([path]) => path)).toEqual([
+      "/api/builder/theme-wizard/sessions",
+      "/api/builder/theme-wizard/sessions/s1",
+      "/api/builder/theme-wizard/sessions/s1/generate",
+      "/api/builder/theme-wizard/sessions/s1/rank",
+      "/api/builder/theme-wizard/sessions/s1/locks",
+      "/api/builder/theme-wizard/candidates/c1/apply",
+      "/api/builder/theme-wizard/sessions/s1/revert",
+      "/api/builder/landing-pages",
+      "/api/assets"
+    ]);
+  });
+});
+
 describe("request shapes", () => {
   it("starts a session against the current site", async () => {
     const api = vi.fn(async () => ({ id: "twiz_1" }));
