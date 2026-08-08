@@ -398,3 +398,161 @@ test('delraytennis IR maps with full reconciliation', () => {
   assert.ok(out.report.placeholderPatterns.length > 0);
   assert.ok(out.report.placeholderPatterns.every((x) => x.signature && x.count > 0));
 });
+
+/* ---------------------------------------------------------------------------
+ * Card-grid detection (2026-08-08)
+ *
+ * The Feature Cards module existed for a while before the importer could
+ * emit it, so every imported site needed its card rows rebuilt by hand
+ * (MODULE_STANDARDS rule 12). These tests pin BOTH directions: the grid that
+ * must be found, and the shapes that must NOT be mistaken for one.
+ * ------------------------------------------------------------------------ */
+
+const { pickCardColumns } = require('../../lib/site-import/dist/map.js');
+
+/** One card's worth of elements: icon glyph, image, heading, body, link. */
+function cardGroup(n, opts = {}) {
+  const els = [];
+  if (opts.icon !== false) els.push(el({ sourceId: `c${n}-icon`, class: 'text', html: '<span>*</span>', textContent: '*' }));
+  if (opts.image !== false) {
+    els.push(el({
+      sourceId: `c${n}-img`, class: 'image',
+      html: `<img src="https://cards.test/${n}.jpg" alt="Card ${n} &amp; more">`,
+      textContent: '', assetRefs: [],
+    }));
+  }
+  els.push(el({ sourceId: `c${n}-h`, class: 'heading', html: `<h3>Card ${n}</h3>`, textContent: `Card ${n}` }));
+  els.push(el({ sourceId: `c${n}-p`, class: 'text', html: `<p>Body ${n}</p>`, textContent: `Body ${n}` }));
+  if (opts.link !== false) els.push(el({ sourceId: `c${n}-a`, class: 'link', html: '<a href="/more">Learn More</a>', textContent: 'Learn More' }));
+  return els;
+}
+
+function irWithElements(elements) {
+  return {
+    irVersion: '1.0', jobId: 'job-cards', sourceUrl: 'https://cards.test/',
+    capturedAt: '2026-08-08T00:00:00.000Z', assets: [], taxonomy: { navs: [] },
+    pages: [{
+      url: 'https://cards.test/', path: '/', title: 'Cards', metaDescription: '',
+      ogTags: {}, canonicalUrl: '', lang: 'en',
+      screenshots: { desktop: '', tablet: '', mobile: '' },
+      sections: [{ sourceId: 's0', type: 'unknown', screenshot: '', elements }],
+    }],
+  };
+}
+
+const featureCardsOf = (out) =>
+  out.pages.flatMap((p) => p.sections).flatMap((s) => s.modules).filter((m) => m.type === 'feature-cards');
+
+test('card grid: a repeating icon/image/heading/text/link run becomes ONE feature-cards module', () => {
+  const els = [...cardGroup(1), ...cardGroup(2), ...cardGroup(3)];
+  const out = mapSite(irWithElements(els), { existingSlugs: [] });
+
+  const mods = featureCardsOf(out);
+  assert.equal(mods.length, 1, 'exactly one module for the whole grid');
+
+  const cards = JSON.parse(mods[0].settings.cards);
+  assert.equal(cards.length, 3);
+  assert.deepEqual(cards.map((c) => c.title), ['Card 1', 'Card 2', 'Card 3']);
+  assert.deepEqual(cards.map((c) => c.body), ['Body 1', 'Body 2', 'Body 3']);
+  assert.equal(cards[0].icon, '*', 'a single-glyph text node is the icon, not the body');
+  assert.equal(cards[0].linkUrl, '/more');
+  assert.equal(cards[0].linkLabel, 'Learn More');
+
+  // Attribute values arrive entity-encoded; alt text must be DECODED or the
+  // page renders the literal string "Card 1 &amp; more".
+  assert.equal(cards[0].imageAlt, 'Card 1 & more');
+
+  // Every absorbed element is accounted for, and the run is traceable back
+  // to the source elements it replaced.
+  assert.equal(mods[0].settings.importSourceIds.split(',').length, els.length);
+  assert.ok(reportReconciles(out.report), 'coverage must reconcile');
+  assert.equal(out.report.elements.total, els.length);
+  assert.equal(out.report.elements.mapped, els.length);
+});
+
+test('card grid: the dry-run plan reports what it inferred, before anything is written', () => {
+  const out = mapSite(irWithElements([...cardGroup(1), ...cardGroup(2), ...cardGroup(3)]), { existingSlugs: [] });
+  assert.equal(out.cardGrids.length, 1);
+  assert.equal(out.cardGrids[0].cardCount, 3);
+  assert.equal(out.cardGrids[0].signature, 'text+image+heading+text+link');
+  assert.deepEqual(out.cardGrids[0].titles, ['Card 1', 'Card 2', 'Card 3']);
+  assert.equal(out.cardGrids[0].pagePath, '/');
+});
+
+test('card grid: a nav/mega-menu run is NOT mistaken for cards', () => {
+  // The exact false positive an earlier, looser rule produced against the
+  // real blazefish.com capture: link+link+link+heading+link, repeated per
+  // menu column. Turning a site's navigation into feature cards is far worse
+  // than declining to detect a grid, so a group with no image never counts.
+  const col = (n) => [
+    el({ sourceId: `n${n}-1`, class: 'link', html: '<a href="/a">A</a>', textContent: 'A' }),
+    el({ sourceId: `n${n}-2`, class: 'link', html: '<a href="/b">B</a>', textContent: 'B' }),
+    el({ sourceId: `n${n}-3`, class: 'link', html: '<a href="/c">C</a>', textContent: 'C' }),
+    el({ sourceId: `n${n}-h`, class: 'heading', html: `<h4>Menu ${n}</h4>`, textContent: `Menu ${n}` }),
+    el({ sourceId: `n${n}-4`, class: 'link', html: '<a href="/d">D</a>', textContent: 'D' }),
+  ];
+  const out = mapSite(irWithElements([...col(1), ...col(2), ...col(3), ...col(4)]), { existingSlugs: [] });
+  assert.equal(featureCardsOf(out).length, 0);
+  assert.equal(out.cardGrids.length, 0);
+  assert.ok(reportReconciles(out.report));
+});
+
+test('card grid: two repetitions are not enough, and a headless run is not a grid', () => {
+  const twoOnly = mapSite(irWithElements([...cardGroup(1), ...cardGroup(2)]), { existingSlugs: [] });
+  assert.equal(twoOnly.cardGrids.length, 0, 'a pair is ambiguous — needs 3+ repetitions');
+
+  const noHeading = [1, 2, 3].flatMap((n) => [
+    el({ sourceId: `x${n}-img`, class: 'image', html: `<img src="/${n}.jpg" alt="">`, textContent: '' }),
+    el({ sourceId: `x${n}-p`, class: 'text', html: `<p>Body ${n}</p>`, textContent: `Body ${n}` }),
+  ]);
+  const out = mapSite(irWithElements(noHeading), { existingSlugs: [] });
+  assert.equal(out.cardGrids.length, 0, 'no heading means no card title — not a card grid');
+  assert.ok(reportReconciles(out.report));
+});
+
+test('card grid: column count divides evenly so the last row is full', () => {
+  assert.equal(pickCardColumns(6), 3, '6 cards read as 3+3, never 4+2');
+  assert.equal(pickCardColumns(4), 4);
+  assert.equal(pickCardColumns(8), 4);
+  assert.equal(pickCardColumns(9), 3);
+  assert.equal(pickCardColumns(2), 2);
+  assert.equal(pickCardColumns(5), 3, 'primes fall back to the module default');
+  assert.equal(pickCardColumns(7), 3);
+});
+
+test('card grid: the real blazefish.com capture yields the six-tile grid', () => {
+  // Layer-1 fixture (a real site), matching this suite's two-layer rule.
+  const { normalizeSite } = require('../../lib/site-import/dist/normalize.js');
+  const capture = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'fixtures', 'blazefishcards.json'), 'utf8')
+  );
+  const out = mapSite(normalizeSite(capture).ir, { existingSlugs: [] });
+
+  assert.equal(out.cardGrids.length, 1, 'exactly one grid on the page — not the mega-menu too');
+  const cards = JSON.parse(featureCardsOf(out)[0].settings.cards);
+  assert.deepEqual(cards.map((c) => c.title), [
+    'Court Fees', 'Tennis Clinics', 'Pickleball',
+    'Ladies Teams & Leagues', 'Junior Tennis Programs', 'Directions & Hours',
+  ]);
+  assert.equal(cards[3].imageAlt, 'Ladies Teams & Leagues', 'entity-decoded alt');
+  assert.ok(cards.every((c) => c.imageUrl && c.body && c.icon), 'every card is fully populated');
+  assert.ok(reportReconciles(out.report), 'coverage reconciles on a real site');
+});
+
+test('card grid: --no-cards veto is honoured, and the blocks stay separate modules', () => {
+  const els = [...cardGroup(1), ...cardGroup(2), ...cardGroup(3)];
+
+  const vetoAll = mapSite(irWithElements(els), { existingSlugs: [], skipAllCardGrids: true });
+  assert.equal(vetoAll.cardGrids.length, 0);
+  assert.equal(featureCardsOf(vetoAll).length, 0);
+  assert.ok(reportReconciles(vetoAll.report), 'a veto must not lose content');
+  // The images must come back as real image modules, not vanish.
+  const imgs = vetoAll.pages.flatMap((p) => p.sections).flatMap((s) => s.modules).filter((m) => m.type === 'image');
+  assert.equal(imgs.length, 3, 'vetoed cards fall back to ordinary modules');
+
+  const vetoPath = mapSite(irWithElements(els), { existingSlugs: [], skipCardGridPaths: ['/'] });
+  assert.equal(vetoPath.cardGrids.length, 0, 'per-path veto matches the home path');
+
+  const vetoElsewhere = mapSite(irWithElements(els), { existingSlugs: [], skipCardGridPaths: ['/other/'] });
+  assert.equal(vetoElsewhere.cardGrids.length, 1, 'a veto on another path leaves this one alone');
+});
