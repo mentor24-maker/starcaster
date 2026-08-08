@@ -120,10 +120,45 @@ export type SlideshowPlan = {
   absorbedIds: string[];
 };
 
+/**
+ * The card shape the Feature Cards module stores under its `cards` setting.
+ *
+ * Field names mirror BuilderCardItem in lib/builder-client/builder-card-items.ts
+ * EXACTLY. They are re-declared rather than imported because that module is
+ * client-side only — it pulls in builder-asset-url, which is stubbed in the
+ * server bundle. Keep the two in step; a rename there is a silent data loss
+ * here (the parser drops unknown keys).
+ */
+export type BuilderCardSeed = {
+  id: string;
+  title: string;
+  body: string;
+  imageUrl: string;
+  imageAlt: string;
+  linkUrl: string;
+  linkLabel: string;
+  icon: string;
+};
+
+/** One card grid the mapper recognised — surfaced in the dry run for the
+ *  same reason as SlideshowPlan: a wrong intent-guess must be visible
+ *  BEFORE anything is written. */
+export type CardGridPlan = {
+  pagePath: string;
+  cardCount: number;
+  /** The repeating element-class signature that identified it, e.g.
+   *  "text+image+heading+text+link" — the evidence for the guess. */
+  signature: string;
+  titles: string[];
+  absorbedIds: string[];
+};
+
 export type MapOutput = {
   pages: MappedPage[];
   /** Slideshows this run will create (empty when vetoed). */
   slideshows: SlideshowPlan[];
+  /** Card grids this run will create (empty when none qualify). */
+  cardGrids: CardGridPlan[];
   /** Header nav for --nav, in navigation-module navItems shape. */
   navItems: { id: string; label: string; href: string; parentId: string; target: string }[];
   copyPlan: {
@@ -146,6 +181,14 @@ export type MapOptions = {
   skipAllSlideshows?: boolean;
   /** IR page paths ("/", "/gallery/") to leave as plain images. */
   skipSlideshowPaths?: string[];
+  /**
+   * Card-grid detection is the same kind of intent guess: a repeated block
+   * might be a feature-card row, or six things that merely look alike. Same
+   * veto shape as slideshows, for the same reason.
+   */
+  skipAllCardGrids?: boolean;
+  /** IR page paths to leave as separate modules. */
+  skipCardGridPaths?: string[];
 };
 
 /* ---------------------------------------------------------------------------
@@ -257,9 +300,45 @@ function hardSplitText(text: string, budget: number): string[] | null {
  * Helpers
  * ------------------------------------------------------------------------ */
 
+/**
+ * HTML attribute values are entity-encoded in the source markup, so a raw
+ * read hands downstream code the literal text "Ladies Teams &amp; Leagues".
+ * Element TEXT arrives already decoded (textContent), which is why this only
+ * ever bit attributes — alt text and query-string hrefs (`?a=1&amp;b=2`).
+ *
+ * Found 2026-08-08 while importing blazefish.com's card grid: two of the six
+ * cards carried "&amp;" in their alt text. The same read feeds slideshow alt
+ * text, so the fix belongs here rather than in the card path alone.
+ */
+function decodeEntities(value: string): string {
+  return String(value || "")
+    .replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (whole, code: string) => {
+      if (code[0] === "#") {
+        const cp =
+          code[1] === "x" || code[1] === "X"
+            ? parseInt(code.slice(2), 16)
+            : parseInt(code.slice(1), 10);
+        return Number.isFinite(cp) && cp > 0 ? String.fromCodePoint(cp) : whole;
+      }
+      const named: Record<string, string> = {
+        amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+      };
+      return Object.prototype.hasOwnProperty.call(named, code) ? named[code] : whole;
+    });
+}
+
+/** Column count for an imported card grid: the largest of 4/3/2 that divides
+ *  the card count evenly, else 3 (the Feature Cards module's own default). */
+export function pickCardColumns(cardCount: number): number {
+  for (const cols of [4, 3, 2]) {
+    if (cardCount >= cols && cardCount % cols === 0) return cols;
+  }
+  return 3;
+}
+
 function attrFromHtml(html: string, attr: string): string {
   const m = new RegExp(`${attr}\\s*=\\s*"([^"]*)"`, "i").exec(String(html || ""));
-  return m ? m[1] : "";
+  return m ? decodeEntities(m[1]) : "";
 }
 
 function normalizeHref(href: string): string {
@@ -499,6 +578,131 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     }
   }
 
+  // --- Card-grid detection (2026-08-08) ---------------------------------
+  // A "card grid" is a run of sibling blocks that repeat the SAME sequence
+  // of element classes — the shape every marketing site uses for a row of
+  // feature tiles. Before this, the Feature Cards module existed but the
+  // importer could not emit it, so every imported site needed its card rows
+  // reassembled by hand (MODULE_STANDARDS rule 12).
+  //
+  // The rule is deliberately strict, and the strictness is empirical. A
+  // first draft required only "a repeating sequence containing a heading or
+  // text, plus an image or link". Run against the real blazefish.com
+  // capture it matched the correct 6-card grid — and ALSO the mega-menu
+  // (link+link+link+heading+link x4) and a text-only list. Turning a site's
+  // navigation into feature cards is a far worse failure than declining to
+  // detect a card grid, so every group must now carry BOTH a heading and an
+  // image. With that added, the detector finds exactly one grid on
+  // blazefish and ZERO across all three existing fixtures (the real
+  // delraytennis WordPress site, jsframework, tablelayout) — no regression
+  // on any reference site.
+  //
+  // Anything not claimed here maps exactly as it did before, so a missed
+  // grid degrades to the old behaviour rather than to nothing (IR governing
+  // principle: completeness over fidelity).
+  const CARD_MIN_GROUPS = 3;
+  const CARD_MAX_GROUP_SIZE = 8;
+  type CardGridRun = { pageIdx: number; groups: ElementIR[][]; signature: string };
+
+  const findCardRun = (els: ElementIR[]): { start: number; size: number; reps: number } | null => {
+    let best: { start: number; size: number; reps: number } | null = null;
+    for (let size = 2; size <= CARD_MAX_GROUP_SIZE; size++) {
+      let i = 0;
+      while (i + size * CARD_MIN_GROUPS <= els.length) {
+        const sig = els.slice(i, i + size).map((e) => e.class);
+        let reps = 1;
+        let j = i + size;
+        while (
+          j + size <= els.length &&
+          els.slice(j, j + size).every((e, k) => e.class === sig[k])
+        ) {
+          reps++;
+          j += size;
+        }
+        const classes = new Set(sig);
+        if (reps >= CARD_MIN_GROUPS && classes.has("heading") && classes.has("image")) {
+          if (!best || reps * size > best.reps * best.size) best = { start: i, size, reps };
+          i = j;
+        } else {
+          i++;
+        }
+      }
+    }
+    return best;
+  };
+
+  const cardSkipPaths = new Set((opts.skipCardGridPaths || []).map((p) => String(p || "").trim()));
+  const cardsVetoed = (pageIdx: number) => {
+    if (opts.skipAllCardGrids) return true;
+    if (!cardSkipPaths.size) return false;
+    const path = String((ir.pages || [])[pageIdx]?.path || "").trim();
+    return cardSkipPaths.has(path) || (path === "/" && cardSkipPaths.has(""));
+  };
+
+  const cardGridRuns: CardGridRun[] = [];
+  (ir.pages || []).forEach((irPage, pageIdx) => {
+    if (cardsVetoed(pageIdx)) return; // vetoed: blocks stay as separate modules
+    for (const section of irPage.sections || []) {
+      const els = (section.elements || []).filter(
+        (e) => !slideshowConsumed.has(e.sourceId) && !slideshowLeads.has(e.sourceId)
+      );
+      const found = findCardRun(els);
+      if (!found) continue;
+      const groups: ElementIR[][] = [];
+      for (let g = 0; g < found.reps; g++) {
+        groups.push(els.slice(found.start + g * found.size, found.start + (g + 1) * found.size));
+      }
+      cardGridRuns.push({
+        pageIdx,
+        groups,
+        signature: groups[0].map((e) => e.class).join("+"),
+      });
+    }
+  });
+
+  type CardGridLead = { cards: BuilderCardSeed[]; allIds: string[] };
+  const cardGridLeads = new Map<string, CardGridLead>();
+  const cardGridConsumed = new Set<string>();
+  const cardGridPlans: CardGridPlan[] = [];
+
+  for (const run of cardGridRuns) {
+    const cards: BuilderCardSeed[] = [];
+    const allIds: string[] = [];
+    for (const [gi, group] of run.groups.entries()) {
+      for (const el of group) allIds.push(el.sourceId);
+      const imageEl = group.find((e) => e.class === "image") || null;
+      const headingEl = group.find((e) => e.class === "heading") || null;
+      const linkEl = group.find((e) => e.class === "link") || null;
+      const texts = group.filter((e) => e.class === "text");
+      // An "icon badge" is a text node holding a single glyph ("▦", "★").
+      // Anything longer is body copy.
+      const iconEl = texts.find((e) => collapse(e.textContent).length <= 3) || null;
+      const bodyEl = texts.find((e) => e !== iconEl) || null;
+      const asset = imageEl?.assetRefs[0] ? promoteAsset(imageEl.assetRefs[0]) : null;
+      const rawSrc = imageEl ? attrFromHtml(imageEl.html, "src") : "";
+      cards.push({
+        id: `card-${gi + 1}`,
+        title: headingEl ? collapse(headingEl.textContent) : "",
+        body: bodyEl ? collapse(bodyEl.textContent) : "",
+        imageUrl: asset?.storageUrl || asset?.originalUrl || rawSrc,
+        imageAlt: (imageEl ? attrFromHtml(imageEl.html, "alt") : "") || asset?.altText || "",
+        linkUrl: linkEl ? attrFromHtml(linkEl.html, "href") : "",
+        linkLabel: linkEl ? collapse(linkEl.textContent) : "",
+        icon: iconEl ? collapse(iconEl.textContent) : "",
+      });
+    }
+    const lead = run.groups[0][0];
+    cardGridLeads.set(lead.sourceId, { cards, allIds });
+    for (const id of allIds) if (id !== lead.sourceId) cardGridConsumed.add(id);
+    cardGridPlans.push({
+      pagePath: String((ir.pages || [])[run.pageIdx]?.path || ""),
+      cardCount: cards.length,
+      signature: run.signature,
+      titles: cards.map((c) => c.title),
+      absorbedIds: allIds,
+    });
+  }
+
   // Duplicate-image cleanup (2026-08-06, operator-reported): a photo the
   // page's slideshow already shows must not ALSO appear as standalone
   // image modules, and a run of the same image repeated over and over is
@@ -633,6 +837,35 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         if (slideshowRole) {
           report.elements.deduped += 1;
           dispositions.deduped += 1;
+          continue;
+        }
+
+        const cardGridLead = cardGridLeads.get(el.sourceId);
+        if (cardGridLead) {
+          flushProse();
+          modules.push({
+            id: nextModuleId(el.sourceId),
+            type: "feature-cards",
+            column: "main",
+            name: "Imported feature cards",
+            text: "",
+            settings: {
+              cards: JSON.stringify(cardGridLead.cards),
+              // Prefer a column count the cards divide into evenly, so the
+              // last row is full: 6 cards read as 3+3, not 4+2. Falls back to
+              // the module's own default of 3.
+              cardColumns: String(pickCardColumns(cardGridLead.cards.length)),
+              importSourceIds: cardGridLead.allIds.join(","),
+            },
+          });
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+        if (cardGridConsumed.has(el.sourceId)) {
+          // Represented by the feature-cards module its group belongs to.
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
           continue;
         }
 
@@ -926,6 +1159,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   return {
     pages,
     slideshows: slideshowPlans,
+    cardGrids: cardGridPlans,
     navItems,
     copyPlan: { crops, assets: Array.from(promotions.values()), sourceOverflows },
     report,
