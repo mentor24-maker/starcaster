@@ -761,13 +761,26 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * width override would not; the wrapper clips the overflow it creates.
  * ------------------------------------------------------------------------ */
 
-.tw-wizard { padding: 16px; }
+/* Explicit ground and ink. Without these the wizard inherits the surrounding
+ * builder chrome, which is dark — the header rendered as a black band with an
+ * invisible title the first time this was opened in a browser. */
+.tw-wizard {
+  padding: 16px;
+  background: #ffffff;
+  color: #18324a;
+}
 
 .tw-wizard-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+  background: transparent;
+}
+.tw-wizard-header h2 {
+  margin: 0;
+  color: #18324a;
+  font-size: 20px;
 }
 
 .tw-panel {

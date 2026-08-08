@@ -67,8 +67,17 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
         const list = unwrapEnvelope<PageRecord[]>(body, "pages") ?? [];
         setPages(list);
         if (list.length && !previewPageId) setPreviewPageId(String(list[0].id));
-      } catch {
-        setError("Could not load this project's pages.");
+      } catch (err) {
+        // Pass the server's own words through. "Could not load this project's
+        // pages" is true of every failure and useful for none — the actual
+        // message here is usually "Active project is required", which tells the
+        // operator exactly what to go and do.
+        const detail = err instanceof Error ? err.message : "";
+        setError(
+          detail
+            ? `Could not load this project's pages: ${detail}`
+            : "Could not load this project's pages."
+        );
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,17 +233,29 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
             and it makes three more from the winner. Nothing on the site changes until
             you choose to apply one.
           </p>
-          <label className="tw-field">
-            <span>Preview the looks on this page</span>
-            <select value={previewPageId} onChange={(e) => setPreviewPageId(e.target.value)}>
-              {pages.map((page) => (
-                <option key={page.id} value={page.id}>{page.name || page.slug || page.id}</option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="tw-primary" onClick={handleStart} disabled={isBusy || !pages.length}>
-            {isBusy ? "Starting…" : "Start"}
-          </button>
+          {pages.length ? (
+            <>
+              <label className="tw-field">
+                <span>Preview the looks on this page</span>
+                <select value={previewPageId} onChange={(e) => setPreviewPageId(e.target.value)}>
+                  {pages.map((page) => (
+                    <option key={page.id} value={page.id}>{page.name || page.slug || page.id}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="tw-primary" onClick={handleStart} disabled={isBusy}>
+                {isBusy ? "Starting…" : "Start"}
+              </button>
+            </>
+          ) : (
+            // A disabled button next to an empty dropdown tells the operator
+            // nothing about what to do next. Say it.
+            <p className="tw-muted">
+              No pages loaded, so there is nothing to preview a theme on yet. If this
+              project should have pages, check that a project is selected on the
+              Settings page — the wizard reads pages from whichever project is active.
+            </p>
+          )}
         </section>
       ) : null}
 
