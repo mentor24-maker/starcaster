@@ -1,0 +1,365 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+
+import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
+import { BuilderTemplatePreview } from "@/components/builder-template-preview";
+import {
+  createWizardClient,
+  splitThemePatch,
+  type ThemeWizardCandidate,
+  type ThemeWizardProgress,
+  type ThemeWizardSession
+} from "@/lib/theme-wizard-client";
+
+/**
+ * Theme Wizard — the operator-facing flow (spec §8).
+ *
+ * Screens run in order: start → generating → compare-and-rank → apply. The
+ * loop back for another round lives on the compare screen, because "generate
+ * another" and "apply this one" are the same decision made at the same moment.
+ *
+ * Two things here are deliberate rather than incidental:
+ *
+ *   * Options appear one at a time as they finish. A round is four model calls
+ *     and Fable 5 is not fast; showing the first option while the third is
+ *     still generating is the difference between a wizard that feels alive and
+ *     one that looks hung.
+ *   * The apply confirmation names the page count out loud and says undo
+ *     exists. Applying rewrites every page in the project (hazard 4.1), and a
+ *     button that quietly does that is how the Marinoff menu was lost.
+ */
+
+type PageRecord = {
+  id: string;
+  name: string;
+  slug?: string;
+  layoutSections?: unknown[];
+  pageBackground?: unknown;
+};
+
+type Step = "start" | "generating" | "compare" | "applied";
+
+const client = createWizardClient();
+
+export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
+  const [step, setStep] = useState<Step>("start");
+  const [pages, setPages] = useState<PageRecord[]>([]);
+  const [previewPageId, setPreviewPageId] = useState("");
+  const [session, setSession] = useState<ThemeWizardSession | null>(null);
+  const [candidates, setCandidates] = useState<ThemeWizardCandidate[]>([]);
+  const [progress, setProgress] = useState<ThemeWizardProgress | null>(null);
+  const [ranks, setRanks] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [isBusy, setIsBusy] = useState(false);
+  const [applyResult, setApplyResult] = useState<{ applied: number; failed: number } | null>(null);
+  const [confirmingApply, setConfirmingApply] = useState<ThemeWizardCandidate | null>(null);
+
+  // Cleared on unmount so a round in flight stops instead of billing three more
+  // model calls against a screen that is gone.
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const body = await appApi("/api/builder/pages");
+        const list = unwrapEnvelope<PageRecord[]>(body, "pages") ?? [];
+        setPages(list);
+        if (list.length && !previewPageId) setPreviewPageId(String(list[0].id));
+      } catch {
+        setError("Could not load this project's pages.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const previewPage = pages.find((p) => String(p.id) === previewPageId) || pages[0] || null;
+  const currentRound = session?.roundCount || 0;
+  const roundCandidates = candidates.filter((c) => c.round === (currentRound || 1));
+  const winner = roundCandidates.find((c) => ranks[c.id] === 1) || null;
+
+  const runRound = useCallback(async (sessionId: string, parentCandidateId = "", feedback = "") => {
+    setIsBusy(true);
+    setError("");
+    setWarnings([]);
+    setStep("generating");
+    try {
+      const queued = await client.queueRound(sessionId, { parentCandidateId, feedback });
+      setProgress(queued.progress);
+      const result = await client.advanceUntilDone(queued.job.id, {
+        onProgress: (p) => { if (aliveRef.current) setProgress(p); },
+        onCandidate: (c) => { if (aliveRef.current) setCandidates((prev) => [...prev, c]); },
+        shouldContinue: () => aliveRef.current
+      });
+      if (!aliveRef.current) return;
+      if (result.stopped) return;
+      setWarnings(result.warnings);
+      const fresh = await client.loadSession(sessionId);
+      setSession(fresh.session);
+      setCandidates(fresh.candidates);
+      setStep("compare");
+    } catch (err) {
+      if (!aliveRef.current) return;
+      setError(err instanceof Error ? err.message : "Generation failed.");
+      setStep(candidates.length ? "compare" : "start");
+    } finally {
+      if (aliveRef.current) setIsBusy(false);
+    }
+  }, [candidates.length]);
+
+  async function handleStart() {
+    setIsBusy(true);
+    setError("");
+    try {
+      const created = await client.startSession({ previewPageId });
+      setSession(created);
+      await runRound(created.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start.");
+      setIsBusy(false);
+    }
+  }
+
+  async function handleNextRound() {
+    if (!session || !winner) return;
+    // Ranking and notes are saved before the next round so the generator can
+    // actually use them — this is the whole mechanism behind rounds improving.
+    const rankings = roundCandidates
+      .filter((c) => ranks[c.id])
+      .map((c) => ({ candidateId: c.id, rank: ranks[c.id], feedback: notes[c.id] || "" }));
+    try {
+      if (rankings.length) await client.rank(session.id, rankings);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save your ranking.");
+      return;
+    }
+    const combined = roundCandidates
+      .map((c) => (notes[c.id] ? `About "${c.direction}": ${notes[c.id]}` : ""))
+      .filter(Boolean)
+      .join("\n");
+    await runRound(session.id, winner.id, combined);
+  }
+
+  async function handleApply(candidate: ThemeWizardCandidate) {
+    setIsBusy(true);
+    setError("");
+    try {
+      const result = await client.apply(candidate.id);
+      setApplyResult({ applied: result.applied, failed: result.failed });
+      if (result.failed > 0) {
+        setError(
+          `${result.failed} page${result.failed === 1 ? "" : "s"} did not update: `
+          + result.failures.map((f) => f.name || f.id).join(", ")
+          + ". You can undo the whole change below."
+        );
+      }
+      setStep("applied");
+      if (session) {
+        const fresh = await client.loadSession(session.id);
+        setSession(fresh.session);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not apply the theme.");
+    } finally {
+      setIsBusy(false);
+      setConfirmingApply(null);
+    }
+  }
+
+  async function handleUndo() {
+    if (!session) return;
+    setIsBusy(true);
+    setError("");
+    try {
+      const result = await client.revert(session.id);
+      if (result.failed > 0) {
+        setError(
+          `Undo restored ${result.restored} page${result.restored === 1 ? "" : "s"} but `
+          + `${result.failed} did not come back: ${result.failures.map((f) => f.name || f.id).join(", ")}. `
+          + "The site is part-way between the two themes — do not apply another until this is sorted."
+        );
+        return;
+      }
+      setApplyResult(null);
+      setStep("compare");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not undo.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  function renderPreview(candidate: ThemeWizardCandidate) {
+    if (!previewPage) return <div className="tw-preview-empty">No page to preview</div>;
+    const { theme, themeStyles } = splitThemePatch(candidate.themePatch);
+    return (
+      <div className="tw-preview-frame">
+        <div className="tw-preview-scale">
+          <BuilderTemplatePreview
+            layoutSections={(previewPage.layoutSections ?? []) as never}
+            pageBackground={(previewPage.pageBackground ?? {}) as never}
+            theme={theme as never}
+            themeStyles={themeStyles as never}
+            previewMode
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tw-wizard">
+      <header className="tw-wizard-header">
+        <h2>Theme Wizard</h2>
+        {onClose ? <button type="button" className="tw-link" onClick={onClose}>Close</button> : null}
+      </header>
+
+      {error ? <div className="tw-error" role="alert">{error}</div> : null}
+
+      {step === "start" ? (
+        <section className="tw-panel">
+          <p>
+            This proposes three complete looks for your site, you say which you like,
+            and it makes three more from the winner. Nothing on the site changes until
+            you choose to apply one.
+          </p>
+          <label className="tw-field">
+            <span>Preview the looks on this page</span>
+            <select value={previewPageId} onChange={(e) => setPreviewPageId(e.target.value)}>
+              {pages.map((page) => (
+                <option key={page.id} value={page.id}>{page.name || page.slug || page.id}</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="tw-primary" onClick={handleStart} disabled={isBusy || !pages.length}>
+            {isBusy ? "Starting…" : "Start"}
+          </button>
+        </section>
+      ) : null}
+
+      {step === "generating" ? (
+        <section className="tw-panel tw-generating">
+          <p className="tw-progress-label">{progress?.label || "Working…"}</p>
+          <div className="tw-progress-track">
+            <div
+              className="tw-progress-bar"
+              style={{ width: `${Math.round(((progress?.current ?? 0) / (progress?.total || 1)) * 100)}%` }}
+            />
+          </div>
+          <p className="tw-muted">
+            This takes a couple of minutes. Options appear below as they finish.
+          </p>
+          <div className="tw-candidate-grid">
+            {candidates.filter((c) => c.round === (session?.roundCount || 0) + 1).map((c) => (
+              <article key={c.id} className="tw-candidate">
+                <h3>{c.direction}</h3>
+                {renderPreview(c)}
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {step === "compare" ? (
+        <section className="tw-panel">
+          <p className="tw-muted">
+            Round {currentRound}. Rank these, say what did and didn&apos;t work, then either
+            make three more from your favourite or apply it.
+          </p>
+          {warnings.length ? (
+            <details className="tw-warnings">
+              <summary>{warnings.length} value{warnings.length === 1 ? " was" : "s were"} adjusted</summary>
+              <ul>{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+            </details>
+          ) : null}
+
+          <div className="tw-candidate-grid">
+            {roundCandidates.map((candidate) => (
+              <article key={candidate.id} className="tw-candidate">
+                <h3>{candidate.direction}</h3>
+                {renderPreview(candidate)}
+                <p className="tw-rationale">{candidate.rationale}</p>
+                <label className="tw-field">
+                  <span>Rank</span>
+                  <select
+                    value={ranks[candidate.id] || ""}
+                    onChange={(e) => setRanks((prev) => ({ ...prev, [candidate.id]: Number(e.target.value) }))}
+                  >
+                    <option value="">—</option>
+                    <option value="1">1 — favourite</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                  </select>
+                </label>
+                <label className="tw-field">
+                  <span>What worked, what didn&apos;t</span>
+                  <textarea
+                    rows={3}
+                    value={notes[candidate.id] || ""}
+                    onChange={(e) => setNotes((prev) => ({ ...prev, [candidate.id]: e.target.value }))}
+                  />
+                </label>
+              </article>
+            ))}
+          </div>
+
+          <div className="tw-actions">
+            <button type="button" className="tw-primary" onClick={handleNextRound} disabled={isBusy || !winner}>
+              Make three more from my favourite
+            </button>
+            <button
+              type="button"
+              className="tw-secondary"
+              onClick={() => winner && setConfirmingApply(winner)}
+              disabled={isBusy || !winner}
+            >
+              Apply my favourite to the site
+            </button>
+            {!winner ? <span className="tw-muted">Pick a favourite (rank 1) to continue.</span> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {confirmingApply ? (
+        <div className="tw-confirm" role="dialog" aria-label="Confirm applying this theme">
+          <div className="tw-confirm-body">
+            <h3>Apply &ldquo;{confirmingApply.direction}&rdquo;?</h3>
+            <p>
+              This changes the colours and type on <strong>all {pages.length} page
+              {pages.length === 1 ? "" : "s"}</strong> in this project.
+            </p>
+            <p>
+              A snapshot is taken first, so you can undo it in one click. If the snapshot
+              fails, nothing is changed at all.
+            </p>
+            <div className="tw-actions">
+              <button type="button" className="tw-primary" onClick={() => handleApply(confirmingApply)} disabled={isBusy}>
+                {isBusy ? "Applying…" : `Apply to all ${pages.length} pages`}
+              </button>
+              <button type="button" className="tw-link" onClick={() => setConfirmingApply(null)} disabled={isBusy}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {step === "applied" ? (
+        <section className="tw-panel">
+          <h3>Applied</h3>
+          <p>
+            {applyResult?.applied ?? 0} page{(applyResult?.applied ?? 0) === 1 ? "" : "s"} updated.
+            The theme is saved in Themes, so you can keep editing it there.
+          </p>
+          <div className="tw-actions">
+            <button type="button" className="tw-secondary" onClick={handleUndo} disabled={isBusy}>
+              {isBusy ? "Undoing…" : "Undo — put every page back"}
+            </button>
+            {onClose ? <button type="button" className="tw-link" onClick={onClose}>Done</button> : null}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
