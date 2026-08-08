@@ -861,12 +861,32 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    (--bx-*, set by getThemeRootVars on the preview root) so cards follow
    the site theme wherever one is active, and fall back to the admin ink
    tokens elsewhere. */
+/* Titles take the theme accent — on pale themes the heading color is
+   near-black and the border near-white, so without this the whole card
+   reads as an unstyled white box (the 2026-08-08 delraytennis report). */
 .builder-preview-feature-card-title {
   font-size: 1rem;
   line-height: 1.15;
   text-transform: uppercase;
   margin: 18px 0 8px;
-  color: var(--bx-heading, var(--ink-primary, #18324a));
+  color: var(--crm-theme-accent, var(--bx-heading, var(--ink-primary, #18324a)));
+}
+
+/* Short accent bar under the title; follows the icon color setting so a
+   recolored module stays cohesive. */
+.builder-preview-feature-card-title::after {
+  content: "";
+  display: block;
+  width: 44px;
+  height: 3px;
+  margin: 10px auto 0;
+  border-radius: 2px;
+  background: var(--feature-card-accent, var(--crm-theme-accent, #4f9c3a));
+}
+
+.builder-preview-feature-cards-align-left .builder-preview-feature-card-title::after {
+  margin-left: 0;
+  margin-right: auto;
 }
 
 .builder-preview-feature-card-body {

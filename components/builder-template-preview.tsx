@@ -5246,6 +5246,7 @@ function FeatureCardsModulePreview({
           "--feature-card-radius": `${radius}px`,
           "--feature-card-bg": module.settings.cardBackground || "#ffffff",
           "--feature-card-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #e1e8f0)",
+          "--feature-card-accent": iconColor,
           "--feature-card-aspect": aspect
         } as CSSProperties
       }
