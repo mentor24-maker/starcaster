@@ -1386,6 +1386,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: 4px;
 }
 
+.tw-runs-title { margin: 0 0 4px; font-size: 16px; color: var(--ink-primary); }
+.tw-runs { list-style: none; margin: 8px 0 0; padding: 0; }
+.tw-run-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+}
+.tw-run-row:first-child { border-top: 0; }
+.tw-run-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
 .tw-progress-track {
   height: 8px;
   border-radius: 5px;

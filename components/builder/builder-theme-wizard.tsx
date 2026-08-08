@@ -51,6 +51,30 @@ const LOCK_LABELS: Record<string, string> = {
   "typography.fonts.body": "the body font"
 };
 
+const SEED_LABELS: Record<string, string> = {
+  current_pages: "From this site",
+  external_url: "From another website",
+  brand_kit: "From a brand image",
+  brief: "From a typed description"
+};
+
+/** One line that tells past runs apart at a glance. */
+function describeRun(run: ThemeWizardSession) {
+  const when = run.createdAt ? new Date(run.createdAt) : null;
+  const date = when && !Number.isNaN(when.getTime())
+    ? when.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    : "";
+  const seed = run.seedType === "brief" && run.seedPayload?.text
+    ? `"${run.seedPayload.text.slice(0, 60)}${run.seedPayload.text.length > 60 ? "…" : ""}"`
+    : run.seedType === "external_url" && run.seedPayload?.url
+      ? `From ${run.seedPayload.url}`
+      : SEED_LABELS[run.seedType] || run.seedType;
+  const rounds = run.roundCount
+    ? `${run.roundCount} round${run.roundCount === 1 ? "" : "s"}`
+    : "never finished a round";
+  return { date, seed, rounds };
+}
+
 export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const [step, setStep] = useState<Step>("start");
   const [pages, setPages] = useState<PageRecord[]>([]);
@@ -71,6 +95,8 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const [applyResult, setApplyResult] = useState<{ applied: number; failed: number } | null>(null);
   const [confirmingApply, setConfirmingApply] = useState<ThemeWizardCandidate | null>(null);
   const [expanded, setExpanded] = useState<ThemeWizardCandidate | null>(null);
+  const [pastSessions, setPastSessions] = useState<ThemeWizardSession[]>([]);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState("");
 
   // Cleared on unmount so a round in flight stops instead of billing three more
   // model calls against a screen that is gone.
@@ -100,6 +126,13 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
           setImages(await client.loadBrandImages());
         } catch {
           setImages([]);
+        }
+
+        // Past runs. Same deal — the wizard is fully usable without the list.
+        try {
+          setPastSessions(await client.listSessions());
+        } catch {
+          setPastSessions([]);
         }
       } catch (err) {
         // Pass the server's own words through. "Could not load this project's
@@ -165,6 +198,70 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
       : seedType === "external_url" ? seedUrl.trim().length > 0
         : seedType === "brief" ? seedText.trim().length > 0
           : seedAssetId.length > 0;
+
+  /**
+   * Reopen a past run exactly where it left off. Everything a run produced is
+   * already on the server — this exists because a page refresh used to lose
+   * the screen state and look like the run itself was gone.
+   */
+  async function handleResume(sessionId: string) {
+    setIsBusy(true);
+    setError("");
+    setWarnings([]);
+    try {
+      const fresh = await client.loadSession(sessionId);
+      setSession(fresh.session);
+      setCandidates(fresh.candidates);
+      if (fresh.session.previewPageId && pages.some((p) => String(p.id) === fresh.session.previewPageId)) {
+        setPreviewPageId(fresh.session.previewPageId);
+      }
+      const savedRanks: Record<string, number> = {};
+      const savedNotes: Record<string, string> = {};
+      for (const c of fresh.candidates) {
+        if (c.rank) savedRanks[c.id] = c.rank;
+        if (c.feedback) savedNotes[c.id] = c.feedback;
+      }
+      setRanks(savedRanks);
+      setNotes(savedNotes);
+      setApplyResult(null);
+      if (fresh.session.status === "applied") {
+        setStep("applied");
+      } else if (fresh.candidates.length) {
+        setStep("compare");
+      } else {
+        // The run never produced an option (a round that failed on step one).
+        // Put its inputs back in the form so Start simply tries again.
+        setSeedType((fresh.session.seedType as ThemeWizardSeedType) || "current_pages");
+        const seed = fresh.session.seedPayload || {};
+        if (seed.url) setSeedUrl(seed.url);
+        if (seed.text) setSeedText(seed.text);
+        if (seed.assetId) setSeedAssetId(seed.assetId);
+        setStep("start");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open that run.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleDeleteRun(sessionId: string) {
+    setIsBusy(true);
+    setError("");
+    try {
+      await client.deleteSession(sessionId);
+      setPastSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      if (session?.id === sessionId) {
+        setSession(null);
+        setCandidates([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete that run.");
+    } finally {
+      setIsBusy(false);
+      setConfirmingDeleteId("");
+    }
+  }
 
   async function handleStart() {
     setIsBusy(true);
@@ -284,6 +381,13 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   function renderPreview(candidate: ThemeWizardCandidate, expandable = true) {
     if (!previewPage) return <div className="tw-preview-empty">No page to preview</div>;
     const { theme, themeStyles } = splitThemePatch(candidate.themePatch);
+    // Without themeShellBackground the candidate's backgroundColor never
+    // reaches the shell, and every look renders on the page's own (usually
+    // white) ground — the single most visible part of a palette.
+    const shellBackground =
+      typeof themeStyles.backgroundColor === "string" && themeStyles.backgroundColor
+        ? { backgroundColor: themeStyles.backgroundColor }
+        : null;
     const content = (
       <div className={expandable ? "tw-preview-scale" : "tw-preview-full"}>
         <BuilderTemplatePreview
@@ -291,6 +395,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
           pageBackground={(previewPage.pageBackground ?? {}) as never}
           theme={theme as never}
           themeStyles={themeStyles as never}
+          themeShellBackground={shellBackground as never}
           previewMode
         />
       </div>
@@ -404,6 +509,65 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
               Settings page — the wizard reads pages from whichever project is active.
             </p>
           )}
+        </section>
+      ) : null}
+
+      {step === "start" && pastSessions.length ? (
+        <section className="tw-panel">
+          <h3 className="tw-runs-title">Past runs</h3>
+          <p className="tw-muted">
+            Every run is saved, including its three looks and your rankings. Open one
+            to pick up where you left off, or delete the ones you are done with.
+          </p>
+          <ul className="tw-runs">
+            {pastSessions.map((run) => {
+              const { date, seed, rounds } = describeRun(run);
+              return (
+                <li key={run.id} className="tw-run-row">
+                  <div className="tw-run-info">
+                    <strong>{seed}</strong>
+                    <span className="tw-muted">
+                      {date ? ` — ${date}` : ""} · {rounds}
+                      {run.status === "applied" ? " · applied to the site" : ""}
+                    </span>
+                  </div>
+                  <div className="tw-run-actions">
+                    <button
+                      type="button"
+                      className="tw-secondary"
+                      onClick={() => handleResume(run.id)}
+                      disabled={isBusy}
+                    >
+                      Open
+                    </button>
+                    {confirmingDeleteId === run.id ? (
+                      <>
+                        <span className="tw-muted">Delete this run and its looks?</span>
+                        <button type="button" className="tw-link" onClick={() => handleDeleteRun(run.id)} disabled={isBusy}>
+                          Yes, delete
+                        </button>
+                        <button type="button" className="tw-link" onClick={() => setConfirmingDeleteId("")} disabled={isBusy}>
+                          Keep
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="tw-link"
+                        onClick={() => setConfirmingDeleteId(run.id)}
+                        disabled={isBusy || run.status === "applied"}
+                        title={run.status === "applied"
+                          ? "This run's theme is on the site and this run holds its undo — it can't be deleted while applied"
+                          : "Delete this run"}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       ) : null}
 
@@ -532,6 +696,18 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
               Apply my favourite to the site
             </button>
             {!winner ? <span className="tw-muted">Pick a favourite (rank 1) to continue.</span> : null}
+            <button
+              type="button"
+              className="tw-link"
+              onClick={async () => {
+                setStep("start");
+                // The list may have gained this very run since it loaded.
+                try { setPastSessions(await client.listSessions()); } catch { /* list is optional */ }
+              }}
+              disabled={isBusy}
+            >
+              Back to the start screen
+            </button>
           </div>
         </section>
       ) : null}
@@ -604,13 +780,22 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
         <section className="tw-panel">
           <h3>Applied</h3>
           <p>
-            {applyResult?.applied ?? 0} page{(applyResult?.applied ?? 0) === 1 ? "" : "s"} updated.
-            The theme is saved in Themes, so you can keep editing it there.
+            {/* applyResult only exists in the sitting where Apply was clicked;
+                a reopened run knows it is applied but not the page count. */}
+            {applyResult
+              ? `${applyResult.applied} page${applyResult.applied === 1 ? "" : "s"} updated.`
+              : "This run's theme is applied to the site."}
+            {" "}The theme is saved in Themes, so you can keep editing it there.
           </p>
           <div className="tw-actions">
             <button type="button" className="tw-secondary" onClick={handleUndo} disabled={isBusy}>
               {isBusy ? "Undoing…" : "Undo — put every page back"}
             </button>
+            {roundCandidates.length ? (
+              <button type="button" className="tw-link" onClick={() => setStep("compare")} disabled={isBusy}>
+                See this run&apos;s looks
+              </button>
+            ) : null}
             {onClose ? <button type="button" className="tw-link" onClick={onClose}>Done</button> : null}
           </div>
         </section>
