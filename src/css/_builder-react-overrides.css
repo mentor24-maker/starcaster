@@ -857,25 +857,29 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   width: 100%;
 }
 
+/* Text and link colors chain through the theme typography tokens
+   (--bx-*, set by getThemeRootVars on the preview root) so cards follow
+   the site theme wherever one is active, and fall back to the admin ink
+   tokens elsewhere. */
 .builder-preview-feature-card-title {
   font-size: 1rem;
   line-height: 1.15;
   text-transform: uppercase;
   margin: 18px 0 8px;
-  color: var(--ink-primary, #18324a);
+  color: var(--bx-heading, var(--ink-primary, #18324a));
 }
 
 .builder-preview-feature-card-body {
   font-size: 0.8rem;
   line-height: 1.5;
-  color: var(--ink-secondary, #43566d);
+  color: var(--bx-text, var(--ink-secondary, #43566d));
   margin: 0 0 8px;
 }
 
 .builder-preview-feature-card-list {
   font-size: 0.8rem;
   line-height: 1.5;
-  color: var(--ink-secondary, #43566d);
+  color: var(--bx-text, var(--ink-secondary, #43566d));
   margin: 0 0 8px;
   padding-left: 1.1em;
   text-align: left;
@@ -886,12 +890,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-weight: 900;
   text-transform: uppercase;
   text-decoration: none;
-  color: var(--accent, #4f9c3a);
+  color: var(--bx-link, var(--accent, #4f9c3a));
   margin-top: auto;
 }
 
 .builder-preview-feature-card-link:hover {
-  color: var(--ink-primary, #18324a);
+  color: var(--bx-link-hover, var(--ink-primary, #18324a));
 }
 
 /* Column count only. No structural rules below this line. */
