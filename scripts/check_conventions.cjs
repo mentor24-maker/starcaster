@@ -15,6 +15,9 @@
  *      never be committed (Vercel/CI rebuild them from source).
  *   2. public/js/ freeze — no NEW .js files there (see public/js/CLAUDE.md).
  *   3. No <button>/<a> inside <th> (sort id goes on the <th> itself).
+ *   4. UI doctrine checks — delegated to scripts/check_ui_doctrine.cjs
+ *      (docs/MODULE_UI_DOCTRINE.md). Field strips, H/V margin pairing,
+ *      breakpoint-only layout CSS, hex literals, the regenerated CSS layer.
  *
  * Generated-file list: keep in sync with .gitignore ("Build artifacts"
  * block), CLAUDE.md, and scripts/hooks/block_generated_edits.cjs.
@@ -138,6 +141,14 @@ function main() {
     checkPublicJsFreeze(stagedFiles('A'));
     checkButtonInTh();
   }
+
+  // UI doctrine (docs/MODULE_UI_DOCTRINE.md). Kept in its own module because
+  // it needs a CSS parser; surfaced here so pre-commit and CI pick it up with
+  // no extra wiring.
+  const uiDoctrine = require('./check_ui_doctrine.cjs');
+  const { failures: uiFailures, notes: uiNotes } = uiDoctrine.run({ all: MODE_ALL });
+  for (const note of uiNotes) console.log(`[conventions] ${note}`);
+  failures.push(...uiFailures);
 
   if (failures.length) {
     console.error('\n[conventions] Commit blocked — fix the following (or SKIP_CONVENTIONS=1 with a stated reason):\n');

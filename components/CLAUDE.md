@@ -6,6 +6,10 @@ Tests: `npm run test:builder-ui`.
 
 ## Module settings editors (`components/builder/*-module-settings.tsx`)
 
+> **Canonical rules: `docs/MODULE_UI_DOCTRINE.md` §1a.** The notes below are
+> the working summary; the doctrine carries the reasons, the enforcement tags,
+> and the checks. If they disagree, the doctrine wins.
+
 - **Field strips:** horizontal groups use `BuilderModuleFieldStrip` +
   `BuilderModuleField` — a wrapping flex row. Each field is
   `flex: 0 0 auto` with a declared width token; fields stay on one line
