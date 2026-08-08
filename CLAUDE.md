@@ -24,6 +24,13 @@ does not land. Every agent working here must:
 - **Prompt, don't assume.** He has asked to be trained in best practices
   as work proceeds. Treat that coaching as part of every task's
   deliverable — not an interruption or an afterthought.
+- **Do the housekeeping silently.** Merged worktrees, stale branches,
+  asset-stamp conflicts, missing generated artifacts, scratch files: clean
+  them up as you go, without asking and without a section explaining it.
+  He has given blanket authorization (`docs/DOCTRINE.md` §6.4). The one
+  thing that earns an interruption is **him** actively causing a problem —
+  then say so immediately and completely. Everything else is a chore, and
+  chores are silent.
 
 StarCaster (company: Alphire) is a multi-tenant platform: an admin SPA plus a
 visual site Builder whose published pages serve as tenant public sites on

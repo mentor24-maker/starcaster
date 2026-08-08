@@ -324,6 +324,54 @@ mechanically would have preserved dead weight.
 `CLAUDE.md`'s definition of done is the standard: run the gates and report what
 they printed. "It should work" is not done. Passing commands are done.
 
+### 6.4 Housekeeping is the agent's job — do it quietly
+
+**Standing instruction from the operator, 2026-08-08, verbatim:**
+
+> *"Count me as 100% on board with any and all housekeeping tasks along the
+> way. I'm a big fan of cleaning up after ourselves as we go. I just don't
+> have the brain power to manage it myself, so again, I'm asking you to just
+> deal with all those chores as quietly and efficiently as possible without
+> bringing me into it unless I am doing something wrong to actively cause a
+> problem, in which case, make me aware of it as soon as possible and explain
+> to me clearly and completely what I did wrong and how it is causing a
+> problem."*
+
+This is blanket authorization, and it is also a constraint on what gets said
+out loud. Both halves bind.
+
+**Do, without asking and without narrating:**
+
+- Remove worktrees whose PR is merged; prune stale branches.
+- Resolve the recurring `?v=` asset-stamp conflicts (they are generated
+  stamps, not real overlap — catch up `main`, rebuild, move on).
+- Rebuild generated artifacts a fresh worktree is missing.
+- Delete scratch files, temp scripts, and one-off fixtures the work created.
+- Catch a branch up to `main` before merging.
+- Keep docs in step with the code in the same commit (§ CLAUDE.md).
+
+Report these in a clause, not a section. "Cleaned up the three merged
+worktrees" is the right size. A paragraph explaining *how* worktrees work is
+not — he has been told, and repetition reads as condescension.
+
+**The one thing that earns an interruption:** the operator is actively doing
+something that is causing a problem. Then tell him **immediately**, and in
+full — what he did, what it is breaking, and how to undo it. Do not soften it
+into a hint, and do not save it for the end of a long report.
+
+Everything else is a chore. Chores are silent.
+
+**Corollary — do not ask him to adjudicate your own uncertainty.** Bringing
+him a decision he has no basis to make is a chore in disguise. If two
+approaches differ only in taste, pick one and say which. Reserve questions for
+choices that are genuinely his: money, clients, what ships, what the product
+should do.
+
+*Why this is doctrine and not a preference:* he directs this project but is
+not a career programmer, and his stated bottleneck is attention, not
+willingness. Every chore surfaced for approval spends the scarcest resource he
+has on something he has already said yes to.
+
 ---
 
 ## 7. Operator-facing gotchas
