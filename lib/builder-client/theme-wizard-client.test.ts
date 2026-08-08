@@ -192,8 +192,24 @@ describe("request shapes", () => {
     expect(path).toBe("/api/builder/theme-wizard/sessions");
     expect(JSON.parse(String(options?.body))).toEqual({
       seedType: "current_pages",
+      seedPayload: {},
       previewPageId: "page_9"
     });
+  });
+
+  it("carries the seed's own input through for the other starting points", async () => {
+    const api = vi.fn(async () => ({ id: "twiz_1" }));
+    const client = createWizardClient(api);
+
+    await client.startSession({ seedType: "external_url", seedPayload: { url: "example.com" } });
+    await client.startSession({ seedType: "brief", seedPayload: { text: "A tennis club." } });
+    await client.startSession({ seedType: "brand_kit", seedPayload: { assetId: "42" } });
+
+    const bodies = api.mock.calls.map(([, options]) => JSON.parse(String(options?.body)));
+    expect(bodies[0].seedType).toBe("external_url");
+    expect(bodies[0].seedPayload).toEqual({ url: "example.com" });
+    expect(bodies[1].seedPayload).toEqual({ text: "A tennis club." });
+    expect(bodies[2].seedPayload).toEqual({ assetId: "42" });
   });
 
   it("encodes ids so an odd id cannot break the path", async () => {

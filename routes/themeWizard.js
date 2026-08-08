@@ -24,7 +24,16 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listPages, updatePage } = require('../lib/builderPagesStore');
 const { createTheme } = require('../lib/builderThemesStore');
 const store = require('../lib/themeWizardStore');
-const { buildStyleBrief, deriveDirections, generateCandidate, sumUsage } = require('../lib/themeWizardGenerator');
+const {
+  buildStyleBrief,
+  buildStyleBriefFromText,
+  buildStyleBriefFromUrl,
+  buildStyleBriefFromImage,
+  deriveDirections,
+  generateCandidate,
+  sumUsage,
+} = require('../lib/themeWizardGenerator');
+const { getAssetById } = require('../lib/assetsStore');
 const { validateThemePatch, applyLockedValues } = require('../lib/themeWizardValidate');
 
 const PREFIX = '/api/builder/theme-wizard';
@@ -147,12 +156,30 @@ async function handleAdvance(req, res, jobId, scope) {
 
   // ── Step 1: read the site into a style brief ──────────────────────────────
   if (input.step === STEP_BRIEF) {
-    const pagesResult = await listPages(50, scope);
-    const pages = pagesResult.ok && Array.isArray(pagesResult.data) ? pagesResult.data : [];
-    if (!pages.length) return fail('This project has no pages to read a style from', 400);
+    const seed = session.seedPayload || {};
+    let brief;
 
-    const brief = await buildStyleBrief({ pages, projectName: scope.project?.name }, undefined);
-    if (!brief.ok) return fail(brief.error || 'Could not read the site', brief.status);
+    // One adapter per seed type (spec §5). Each produces the same style-brief
+    // shape, so everything downstream is identical regardless of where the look
+    // was derived from.
+    if (session.seedType === 'brief') {
+      brief = await buildStyleBriefFromText({ text: seed.text }, undefined);
+    } else if (session.seedType === 'external_url') {
+      brief = await buildStyleBriefFromUrl({ url: seed.url }, undefined);
+    } else if (session.seedType === 'brand_kit') {
+      const asset = await getAssetById(seed.assetId, scope);
+      if (!asset.ok) return fail('That logo could not be found in Assets', 404);
+      const imageUrl = asset.data?.location || '';
+      if (!imageUrl) return fail('That asset has no image file behind it', 400);
+      brief = await buildStyleBriefFromImage({ imageUrl, note: seed.note }, undefined);
+    } else {
+      const pagesResult = await listPages(50, scope);
+      const pages = pagesResult.ok && Array.isArray(pagesResult.data) ? pagesResult.data : [];
+      if (!pages.length) return fail('This project has no pages to read a style from', 400);
+      brief = await buildStyleBrief({ pages, projectName: scope.project?.name }, undefined);
+    }
+
+    if (!brief.ok) return fail(brief.error || 'Could not read the style', brief.status);
 
     await store.updateSession(job.sessionId, {
       styleBrief: brief.data,
@@ -400,12 +427,22 @@ async function handle(req, res, pathname, method) {
     if (!SEED_TYPES.includes(seedType)) {
       return sendErr(res, 400, `Unknown seed type "${seedType}". Expected one of: ${SEED_TYPES.join(', ')}`, { code: 'VALIDATION_ERROR' }), true;
     }
-    if (seedType !== 'current_pages') {
-      return sendErr(res, 400, `The "${seedType}" starting point arrives in Phase 5; use "current_pages" for now`, { code: 'NOT_IMPLEMENTED' }), true;
+    const seedPayload = body?.seedPayload && typeof body.seedPayload === 'object' ? body.seedPayload : {};
+    // Validate the seed's own input at create time. Discovering that the URL
+    // box was empty three model calls into a round is a waste of the operator's
+    // time and of tokens.
+    if (seedType === 'external_url' && !String(seedPayload.url || '').trim()) {
+      return sendErr(res, 400, 'Enter the website address to read', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (seedType === 'brief' && !String(seedPayload.text || '').trim()) {
+      return sendErr(res, 400, 'Describe the organisation first', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (seedType === 'brand_kit' && !String(seedPayload.assetId || '').trim()) {
+      return sendErr(res, 400, 'Pick a logo or brand image first', { code: 'VALIDATION_ERROR' }), true;
     }
     const result = await store.createSession({
       seedType,
-      seedPayload: body?.seedPayload || {},
+      seedPayload,
       previewPageId: String(body?.previewPageId || '').trim(),
       ownerUserId: scope.userId,
     }, scope);

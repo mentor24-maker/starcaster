@@ -1328,7 +1328,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .tw-field { display: block; margin: 12px 0; }
 .tw-field > span { display: block; font-size: 13px; margin-bottom: 4px; }
 .tw-field select,
-.tw-field textarea {
+.tw-field textarea,
+.tw-field input[type="text"] {
   width: 100%;
   border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
   border-radius: 10px;

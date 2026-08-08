@@ -146,3 +146,102 @@ test('earlier directions are quoted back so a round stops repeating itself', asy
     assert.match(sent.messages[0].content, /Warm editorial serif/);
   } finally { h.restore(); }
 });
+
+/**
+ * Phase 5 — the other three starting points (spec §5). Each adapter produces
+ * the same style-brief shape, so everything downstream is identical regardless
+ * of where the look came from. What differs is the failure modes.
+ */
+
+test('a typed brief refuses to run on an empty box', async () => {
+  const h = loadGenerator(async () => { throw new Error('no request should be made'); });
+  try {
+    const result = await h.generator.buildStyleBriefFromText({ text: "   " });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 400);
+    // Caught before a request, so no tokens are spent on an empty prompt.
+    assert.match(result.error, /Describe the organisation/);
+  } finally { h.restore(); }
+});
+
+test('a URL seed rejects nonsense before spending anything', async () => {
+  const h = loadGenerator(async () => { throw new Error('no request should be made'); });
+  try {
+    for (const bad of ['', '   ', 'not a url at all!!', 'ftp://files.example.com']) {
+      const result = await h.generator.buildStyleBriefFromUrl({ url: bad });
+      assert.equal(result.ok, false, `${bad} should be rejected`);
+      assert.equal(result.status, 400);
+    }
+  } finally { h.restore(); }
+});
+
+test('a bare domain is accepted and read over https', async () => {
+  const seen = [];
+  const h = loadGenerator(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    seen.push(body);
+    return body.tools
+      ? jsonResponse(200, { stop_reason: 'end_turn', content: [{ type: 'text', text: 'A tennis club.' }] })
+      : jsonResponse(200, { stop_reason: 'end_turn', content: [{ type: 'text', text: '{"sector":"club"}' }] });
+  });
+  try {
+    const result = await h.generator.buildStyleBriefFromUrl({ url: 'example.com' });
+    assert.equal(result.ok, true, result.error);
+    assert.match(seen[0].messages[0].content, /https:\/\/example\.com/);
+    assert.equal(seen[0].tools[0].name, 'web_fetch', 'the model fetches the page itself');
+    // Second call normalises the prose; schema and tools never ride together.
+    assert.equal(seen[1].tools, undefined);
+    assert.ok(seen[1].output_config, 'the normalising call is schema-constrained');
+  } finally { h.restore(); }
+});
+
+test('a URL read that comes back empty says which address failed', async () => {
+  const h = loadGenerator(async () => jsonResponse(200, { stop_reason: 'end_turn', content: [] }));
+  try {
+    const result = await h.generator.buildStyleBriefFromUrl({ url: 'https://example.com/x' });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /empty response|example\.com/);
+  } finally { h.restore(); }
+});
+
+test('the URL adapter reports the tokens from both of its calls', async () => {
+  // A two-call adapter that reports one call's usage under-bills the session
+  // tally, which is the number a future cost throttle reads.
+  const h = loadGenerator(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    return jsonResponse(200, {
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: body.tools ? 'A tennis club.' : '{"sector":"club"}' }],
+      usage: { input_tokens: 100, output_tokens: 20 },
+    });
+  });
+  try {
+    const result = await h.generator.buildStyleBriefFromUrl({ url: 'example.com' });
+    assert.equal(h.generator.sumUsage(result.usage), 240, 'both calls counted');
+  } finally { h.restore(); }
+});
+
+test('a brand-kit seed sends the image as an image block, not a description of one', async () => {
+  let sent = null;
+  const h = loadGenerator(async (_url, options) => {
+    sent = JSON.parse(options.body);
+    return jsonResponse(200, { stop_reason: 'end_turn', content: [{ type: 'text', text: '{"sector":"club"}' }] });
+  });
+  try {
+    const result = await h.generator.buildStyleBriefFromImage({ imageUrl: 'https://cdn.example/logo.png' });
+    assert.equal(result.ok, true, result.error);
+    const blocks = sent.messages[0].content;
+    assert.equal(blocks[0].type, 'image');
+    assert.equal(blocks[0].source.url, 'https://cdn.example/logo.png');
+    assert.equal(blocks[1].type, 'text');
+  } finally { h.restore(); }
+});
+
+test('a brand-kit seed with no image refuses before spending anything', async () => {
+  const h = loadGenerator(async () => { throw new Error('no request should be made'); });
+  try {
+    const result = await h.generator.buildStyleBriefFromImage({ imageUrl: '' });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Pick a logo/);
+  } finally { h.restore(); }
+});

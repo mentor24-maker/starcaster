@@ -8,7 +8,8 @@ import {
   lockableValuesFrom,
   type ThemeWizardCandidate,
   type ThemeWizardProgress,
-  type ThemeWizardSession
+  type ThemeWizardSession,
+  type ThemeWizardSeedType
 } from "@/lib/theme-wizard-client";
 
 /**
@@ -60,6 +61,11 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const [progress, setProgress] = useState<ThemeWizardProgress | null>(null);
   const [ranks, setRanks] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [seedType, setSeedType] = useState<ThemeWizardSeedType>("current_pages");
+  const [seedUrl, setSeedUrl] = useState("");
+  const [seedText, setSeedText] = useState("");
+  const [seedAssetId, setSeedAssetId] = useState("");
+  const [images, setImages] = useState<Array<{ id: string; assetName: string }>>([]);
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
@@ -78,6 +84,21 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
         const list = unwrapEnvelope<PageRecord[]>(body, "pages") ?? [];
         setPages(list);
         if (list.length && !previewPageId) setPreviewPageId(String(list[0].id));
+
+        // Images for the brand-kit seed. A failure here is not fatal — the
+        // other three starting points still work — so it does not surface as
+        // an error, only as an empty picker that says so.
+        try {
+          const assetBody = await appApi("/api/assets");
+          const assets = unwrapEnvelope<Array<Record<string, unknown>>>(assetBody, "assets") ?? [];
+          setImages(
+            assets
+              .filter((a) => String(a.assetType || "").toLowerCase().includes("image") && a.location)
+              .map((a) => ({ id: String(a.id), assetName: String(a.assetName || "") }))
+          );
+        } catch {
+          setImages([]);
+        }
       } catch (err) {
         // Pass the server's own words through. "Could not load this project's
         // pages" is true of every failure and useful for none — the actual
@@ -129,11 +150,25 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
     }
   }, [candidates.length]);
 
+  const seedPayload: Record<string, string> =
+    seedType === "external_url" ? { url: seedUrl.trim() }
+      : seedType === "brief" ? { text: seedText.trim() }
+        : seedType === "brand_kit" ? { assetId: seedAssetId }
+          : {};
+
+  // Each starting point needs its own input before it can run. Disabling Start
+  // with a reason beats letting it fail three model calls later.
+  const seedReady =
+    seedType === "current_pages" ? pages.length > 0
+      : seedType === "external_url" ? seedUrl.trim().length > 0
+        : seedType === "brief" ? seedText.trim().length > 0
+          : seedAssetId.length > 0;
+
   async function handleStart() {
     setIsBusy(true);
     setError("");
     try {
-      const created = await client.startSession({ previewPageId });
+      const created = await client.startSession({ previewPageId, seedType, seedPayload });
       setSession(created);
       await runRound(created.id);
     } catch (err) {
@@ -275,6 +310,58 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
           {pages.length ? (
             <>
               <label className="tw-field">
+                <span>Base the looks on</span>
+                <select value={seedType} onChange={(e) => setSeedType(e.target.value as ThemeWizardSeedType)}>
+                  <option value="current_pages">This site as it is now</option>
+                  <option value="external_url">Another website — paste the address</option>
+                  <option value="brand_kit">A logo or brand image from Assets</option>
+                  <option value="brief">A description I&apos;ll type</option>
+                </select>
+              </label>
+
+              {seedType === "external_url" ? (
+                <label className="tw-field">
+                  <span>Website address to read</span>
+                  <input
+                    type="text"
+                    value={seedUrl}
+                    placeholder="example.com"
+                    onChange={(e) => setSeedUrl(e.target.value)}
+                  />
+                  <span className="tw-muted">
+                    The site is read for what the organisation is and who it talks to — it is not copied.
+                  </span>
+                </label>
+              ) : null}
+
+              {seedType === "brief" ? (
+                <label className="tw-field">
+                  <span>Describe the organisation</span>
+                  <textarea
+                    rows={4}
+                    value={seedText}
+                    placeholder="A family-run tennis club in Delray Beach. Members are local families and serious adult players. Warm but not casual."
+                    onChange={(e) => setSeedText(e.target.value)}
+                  />
+                </label>
+              ) : null}
+
+              {seedType === "brand_kit" ? (
+                <label className="tw-field">
+                  <span>Logo or brand image</span>
+                  <select value={seedAssetId} onChange={(e) => setSeedAssetId(e.target.value)}>
+                    <option value="">— Choose an image —</option>
+                    {images.map((asset) => (
+                      <option key={asset.id} value={asset.id}>{asset.assetName || asset.id}</option>
+                    ))}
+                  </select>
+                  {!images.length ? (
+                    <span className="tw-muted">No images found in Assets for this project.</span>
+                  ) : null}
+                </label>
+              ) : null}
+
+              <label className="tw-field">
                 <span>Preview the looks on this page</span>
                 <select value={previewPageId} onChange={(e) => setPreviewPageId(e.target.value)}>
                   {pages.map((page) => (
@@ -282,7 +369,8 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
                   ))}
                 </select>
               </label>
-              <button type="button" className="tw-primary" onClick={handleStart} disabled={isBusy}>
+
+              <button type="button" className="tw-primary" onClick={handleStart} disabled={isBusy || !seedReady}>
                 {isBusy ? "Starting…" : "Start"}
               </button>
             </>

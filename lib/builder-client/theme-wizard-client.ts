@@ -10,6 +10,9 @@
 
 import { appApi, unwrapEnvelope } from "./adapters/starcaster-app";
 
+/** Where the look is derived from (spec §5). */
+export type ThemeWizardSeedType = "current_pages" | "external_url" | "brand_kit" | "brief";
+
 export type ThemeWizardProgress = {
   step: string;
   label: string;
@@ -160,9 +163,16 @@ export function lockableValuesFrom(patch: Record<string, unknown> | null | undef
 
 export function createWizardClient(api: ApiFn = defaultApi) {
   return {
-    async startSession(input: { previewPageId?: string } = {}) {
+    async startSession(
+      input: {
+        previewPageId?: string;
+        seedType?: ThemeWizardSeedType;
+        seedPayload?: Record<string, string>;
+      } = {}
+    ) {
       return (await post(api, `${BASE}/sessions`, {
-        seedType: "current_pages",
+        seedType: input.seedType || "current_pages",
+        seedPayload: input.seedPayload || {},
         previewPageId: input.previewPageId || ""
       })) as ThemeWizardSession;
     },
