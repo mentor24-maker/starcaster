@@ -14,6 +14,7 @@ import { BuilderButtonBackgroundPicker } from "./builder-button-background-picke
 import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { buildBuilderThemePaletteColors } from "./builder-utils";
 import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
+import { BuilderThemeWizard } from "@/components/builder/builder-theme-wizard";
 
 type DevelopThemeRecord = {
   id: string;
@@ -165,6 +166,7 @@ export function BuilderThemesPage() {
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const themeColors = buildBuilderThemePaletteColors(draft);
 
@@ -275,9 +277,33 @@ export function BuilderThemesPage() {
 
   const isEditing = Boolean(draft.id);
 
+  // The wizard takes over this panel rather than mounting its own React root.
+  // A separate root would need a host element registered in App.els and a
+  // vanilla-JS call site to mount it — two more places to get wrong, for a
+  // screen that belongs to Themes anyway.
+  if (isWizardOpen) {
+    return (
+      <BuilderThemeWizard
+        onClose={() => {
+          setIsWizardOpen(false);
+          // The wizard can save a new theme and change every page, so the list
+          // behind it is stale the moment it closes.
+          void loadThemes();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="builder-themes-page">
       <div className="builder-themes-header">
+        <button
+          type="button"
+          className="secondary-button builder-themes-btn"
+          onClick={() => setIsWizardOpen(true)}
+        >
+          Theme Wizard
+        </button>
         <select
           className="builder-themes-selector"
           value={selectedId}
