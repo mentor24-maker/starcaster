@@ -761,7 +761,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    image on desktop for its whole life; that is the mistake this ordering
    exists to prevent.
    --------------------------------------------------------------------- */
-.builder-react-root .builder-preview-feature-cards {
+.builder-preview-feature-cards {
   display: grid;
   grid-template-columns: repeat(var(--feature-card-columns, 3), minmax(0, 1fr));
   gap: var(--feature-card-gap, 12px);
@@ -779,7 +779,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-align: center;
 }
 
-.builder-react-root .builder-preview-feature-card {
+.builder-preview-feature-card {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -792,28 +792,28 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.builder-react-root .builder-preview-feature-cards-align-center .builder-preview-feature-card {
+.builder-preview-feature-cards-align-center .builder-preview-feature-card {
   text-align: center;
   align-items: center;
 }
 
-.builder-react-root .builder-preview-feature-cards-align-left .builder-preview-feature-card {
+.builder-preview-feature-cards-align-left .builder-preview-feature-card {
   text-align: left;
   align-items: flex-start;
 }
 
-.builder-react-root .builder-preview-feature-cards-shadow .builder-preview-feature-card {
+.builder-preview-feature-cards-shadow .builder-preview-feature-card {
   box-shadow: 0 10px 24px rgba(3, 29, 62, 0.1);
 }
 
-.builder-react-root .builder-preview-feature-cards-lift .builder-preview-feature-card:hover {
+.builder-preview-feature-cards-lift .builder-preview-feature-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 18px 40px rgba(3, 29, 62, 0.18);
 }
 
 /* Standard 3 corollary: the renderer uses a `fill` image, so the module
    must supply the positioned, sized container itself. */
-.builder-react-root .builder-preview-feature-card-media {
+.builder-preview-feature-card-media {
   position: relative;
   width: 100%;
   aspect-ratio: var(--feature-card-aspect, 4 / 3);
@@ -821,11 +821,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   overflow: hidden;
 }
 
-.builder-react-root .builder-preview-feature-card-media img {
+.builder-preview-feature-card-media img {
   object-fit: cover;
 }
 
-.builder-react-root .builder-preview-feature-card-badge {
+.builder-preview-feature-card-badge {
   position: absolute;
   top: -22px;
   left: 50%;
@@ -845,19 +845,19 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* A badge overhangs the card, so a grid with badges needs headroom or the
    first row is clipped by whatever sits above it. */
-.builder-react-root .builder-preview-feature-cards:has(.builder-preview-feature-card-badge) {
+.builder-preview-feature-cards:has(.builder-preview-feature-card-badge) {
   padding-top: 26px;
 }
 
 /* `flex: 1` on the copy block pushes every card's link to the bottom, so a
    row of cards with uneven body lengths still has its links aligned —
    without the source theme's brittle `min-height: 68px`. */
-.builder-react-root .builder-preview-feature-card-copy {
+.builder-preview-feature-card-copy {
   flex: 1 1 auto;
   width: 100%;
 }
 
-.builder-react-root .builder-preview-feature-card-title {
+.builder-preview-feature-card-title {
   font-size: 1rem;
   line-height: 1.15;
   text-transform: uppercase;
@@ -865,14 +865,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-primary, #18324a);
 }
 
-.builder-react-root .builder-preview-feature-card-body {
+.builder-preview-feature-card-body {
   font-size: 0.8rem;
   line-height: 1.5;
   color: var(--ink-secondary, #43566d);
   margin: 0 0 8px;
 }
 
-.builder-react-root .builder-preview-feature-card-list {
+.builder-preview-feature-card-list {
   font-size: 0.8rem;
   line-height: 1.5;
   color: var(--ink-secondary, #43566d);
@@ -881,7 +881,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-align: left;
 }
 
-.builder-react-root .builder-preview-feature-card-link {
+.builder-preview-feature-card-link {
   font-size: 0.78rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -890,26 +890,26 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   margin-top: auto;
 }
 
-.builder-react-root .builder-preview-feature-card-link:hover {
+.builder-preview-feature-card-link:hover {
   color: var(--ink-primary, #18324a);
 }
 
 /* Column count only. No structural rules below this line. */
 @media (max-width: 1100px) {
-  .builder-react-root .builder-preview-feature-cards {
+  .builder-preview-feature-cards {
     grid-template-columns: repeat(min(var(--feature-card-columns, 3), 3), minmax(0, 1fr));
     row-gap: 34px;
   }
 }
 
 @media (max-width: 760px) {
-  .builder-react-root .builder-preview-feature-cards {
+  .builder-preview-feature-cards {
     grid-template-columns: repeat(min(var(--feature-card-columns, 3), 2), minmax(0, 1fr));
   }
 }
 
 @media (max-width: 480px) {
-  .builder-react-root .builder-preview-feature-cards {
+  .builder-preview-feature-cards {
     grid-template-columns: minmax(0, 1fr);
   }
 }
