@@ -221,9 +221,22 @@ tests CSS, so a deletion is completely silent. (PR #61 added a drop guard.)
 `var(--bg-page)` — see `src/css/_variables.css`. A hardcoded `#333` is a
 module that will not follow a tenant's theme.
 
+`var(--bg-page, #ffffff)` is **correct and not a violation** — the token wins
+wherever it is defined and the literal is only the fallback. The check ignores
+hex inside a `var()` fallback; flagging it would punish exactly the behaviour
+this rule wants.
+
 *Standing debt, stated honestly:* `_builder-react.css` currently holds 565 hex
 literals against 491 `var()` uses. The check therefore runs on **added lines
 only** — it stops the bleeding rather than pretending the backlog is clean.
+
+*Added-line checks are skipped during a merge (2026-08-08).* Merging main
+presents every incoming line as "added", so R2 and R3 would fail a merge on
+work already reviewed and merged on its own PR. Whole-file checks (R1, E1, E4,
+E6) still run, because they judge the **result** — which is what actually
+ships. A gate that fires on someone else's committed code teaches people to
+reach for `SKIP_CONVENTIONS`, and a gate that is routinely bypassed is not a
+gate.
 
 *Known gap — do not write a rule this doc cannot keep:* `_variables.css` has 24
 tokens, all colour and radius. **There is no spacing scale and no type scale.**

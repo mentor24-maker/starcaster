@@ -64,6 +64,7 @@ const blog        = require('./blog');
 const admin       = require('./admin');
 const associations = require('./associations');
 const siteImport  = require('./siteImport');
+const themeWizard = require('./themeWizard');
 const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
@@ -82,6 +83,12 @@ const ROUTE_MODULES = [
   channels,
   contacts,
   engage,
+  // Ahead of `builder` on purpose. Both claim '/api/builder/*'; builder
+  // currently falls through with `false` on paths it doesn't recognise, so
+  // either order works today — but the day builder grows a catch-all 405, the
+  // wizard's routes would start 405-ing with nothing to point at. Matching
+  // first costs nothing and removes the dependency.
+  themeWizard,
   builder,
   siteImport,
   seoAltText,

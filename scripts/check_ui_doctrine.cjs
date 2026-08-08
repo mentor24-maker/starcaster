@@ -73,6 +73,20 @@ function stagedFiles() {
   return sh('git diff --cached --name-only --diff-filter=ACMR').split('\n').filter(Boolean);
 }
 
+/**
+ * True while a merge is in progress.
+ *
+ * Added-line checks must not run on a merge commit: the incoming branch's
+ * lines all look "added" to `git diff --cached`, so merging main would fail on
+ * work that is already reviewed and on main. Blocking a merge on someone
+ * else's committed code is how a gate teaches people to reach for
+ * SKIP_CONVENTIONS — and a gate that is routinely bypassed is not a gate.
+ * (Found 2026-08-08 merging the Theme Wizard, #106.)
+ */
+function isMerging() {
+  return sh('git rev-parse -q --verify MERGE_HEAD').trim() !== '';
+}
+
 function addedLines(pathspec) {
   return sh(`git diff --cached --unified=0 -- ${pathspec}`)
     .split('\n')
@@ -204,14 +218,18 @@ function checkHexLiterals(files) {
   );
   if (!cssFiles.length) return;
   for (const file of cssFiles) {
-    for (const line of addedLines(file)) {
+    for (const raw of addedLines(file)) {
       // Ignore url(#...) fragments and hex inside data: URIs.
-      if (/data:|url\(/.test(line)) continue;
+      if (/data:|url\(/.test(raw)) continue;
+      // A hex inside var(--token, #fallback) is the CORRECT pattern — the
+      // token wins when it is defined and the literal is only the fallback.
+      // Flagging it would punish exactly the behaviour this rule wants.
+      const line = raw.replace(/var\(\s*--[\w-]+\s*,[^)]*\)/g, 'var(--token)');
       const hits = line.match(/#[0-9a-fA-F]{3,8}\b/g);
       if (!hits) continue;
       failures.push(
         `[R3] Hardcoded colour ${hits.join(', ')} added in ${file}:\n` +
-          `        ${line.trim().slice(0, 100)}\n` +
+          `        ${raw.trim().slice(0, 100)}\n` +
           `      Use a token from src/css/_variables.css (var(--ink-primary), var(--border-light),\n` +
           `      var(--btn-bg), var(--accent), var(--bg-page)). A hex literal is a module that\n` +
           `      will not follow a tenant's theme.`
@@ -317,12 +335,24 @@ function run({ all = false } = {}) {
   } else {
     const files = stagedFiles();
     if (!files.length) return { failures, notes };
+
+    // Whole-file checks are safe during a merge: they judge the RESULT, which
+    // is what actually ships. R1 in particular is the reason the broken
+    // Theme Wizard merge was caught at all.
     checkBreakpointOnlyLayout({ all: false });
-    checkRegeneratedCssLayer(files);
-    checkHexLiterals(files);
     checkFieldStripAdoption(files);
     checkMarginPairing(files);
     checkNoDuplicatedChrome(files);
+
+    if (isMerging()) {
+      notes.push(
+        'merge in progress — added-line checks (R2, R3) skipped; the incoming ' +
+          'branch\'s lines are already reviewed on its own PR. Whole-file checks still ran.'
+      );
+    } else {
+      checkRegeneratedCssLayer(files);
+      checkHexLiterals(files);
+    }
   }
   return { failures, notes };
 }
