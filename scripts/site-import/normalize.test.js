@@ -21,7 +21,11 @@ const {
   splitSrcsetCandidates,
 } = require('../../lib/site-import/dist/normalize.js');
 
-const FIXTURES = ['wordpress', 'jsframework', 'tablelayout'];
+// blazefishcards: a real capture of a modern marketing homepage whose
+// six-tile grid is the reference case for card-grid detection (map.ts).
+// The older `wordpress` fixture is the PREVIOUS delraytennis.com site and
+// has no card grid at all, so it cannot serve as that reference.
+const FIXTURES = ['wordpress', 'jsframework', 'tablelayout', 'blazefishcards'];
 const fixturesDir = path.join(__dirname, 'fixtures');
 
 function loadJson(file) {

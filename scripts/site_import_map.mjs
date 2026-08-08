@@ -113,6 +113,8 @@ const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
 const FORCED_SECTIONS = new Set(flagValues('--force-section'));
+const NO_CARDS_PATHS = flagValues('--no-cards');
+const NO_CARDS_ALL = flag('--no-cards') && NO_CARDS_PATHS.length === 0;
 const NO_SLIDESHOW_PATHS = flagValues('--no-slideshow');
 const NO_SLIDESHOW_ALL = flag('--no-slideshow') && NO_SLIDESHOW_PATHS.length === 0;
 const JOB_ID = flagValue('--job');
@@ -173,6 +175,8 @@ async function main() {
     existingSlugs,
     skipAllSlideshows: NO_SLIDESHOW_ALL,
     skipSlideshowPaths: NO_SLIDESHOW_PATHS,
+    skipAllCardGrids: NO_CARDS_ALL,
+    skipCardGridPaths: NO_CARDS_PATHS,
   });
 
   // ---- Clobber guard (dry run computes it too, so reports are identical) --
@@ -219,6 +223,24 @@ async function main() {
       log(`     keep them as images with: --no-slideshow ${plan.pagePath || '/'}`);
     }
     log('  (already applied? scripts/site_import_revert_slideshow.mjs restores the images)\n');
+  }
+  if (NO_CARDS_ALL) {
+    log('Card grids: vetoed for this run (--no-cards) — repeated blocks stay as separate modules.');
+  } else if (NO_CARDS_PATHS.length) {
+    log(`Card grids: vetoed on ${NO_CARDS_PATHS.join(', ')}`);
+  }
+  if (out.cardGrids?.length) {
+    // Same reasoning as slideshows: this is an inference about INTENT, so
+    // the guess and the evidence for it are printed before anything is
+    // written, with the veto right next to them.
+    log('\nWill consolidate repeated blocks into Feature Cards (an intent guess — veto below):');
+    for (const plan of out.cardGrids) {
+      log(`  ${plan.pagePath || '/'}  →  ${plan.cardCount} cards, absorbs ${plan.absorbedIds.length} element(s)`);
+      log(`     matched shape: ${plan.signature}`);
+      log(`     titles: ${plan.titles.join(' | ')}`);
+      log(`     keep them separate with: --no-cards ${plan.pagePath || '/'}`);
+    }
+    log('');
   }
   if (out.report.placeholderPatterns?.length) {
     // Placeholders are the importer admitting it has no rule for
