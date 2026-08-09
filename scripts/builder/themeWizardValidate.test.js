@@ -190,3 +190,31 @@ test('a value the model already matched is not reported as overridden', () => {
   const { overridden } = applyLockedValues({ primaryColor: '#1a4d8f' }, { primaryColor: '#1a4d8f' });
   assert.deepEqual(overridden, [], 'obedience should not look like a correction');
 });
+
+test('treatments are bounded: tint normalised, opacity clamped, flags boolean', () => {
+  const result = validateThemePatch({
+    treatments: {
+      heroOverlay: '#12294D',
+      heroOverlayOpacity: 0.9,
+      cardOverlap: 'true',
+      footerInverse: false,
+    },
+  });
+  assert.equal(result.ok, true, result.errors.join('; '));
+  assert.equal(result.patch.treatments.heroOverlay, '#12294d'.replace('#12294d', '#12294d'));
+  // 0.9 would black out the photo; the cap is 0.75 and the clamp is recorded.
+  assert.equal(result.patch.treatments.heroOverlayOpacity, 0.75);
+  assert.match(result.warnings.join(' '), /clamped to 0.75/);
+  assert.equal(result.patch.treatments.cardOverlap, true);
+  assert.equal(result.patch.treatments.footerInverse, false);
+});
+
+test('malformed treatments degrade without failing the candidate', () => {
+  const result = validateThemePatch({
+    primaryColor: '#111111',
+    treatments: { heroOverlay: 'darkish', cardOverlap: 'maybe' },
+  });
+  assert.equal(result.ok, true, result.errors.join('; '));
+  assert.equal(result.patch.treatments, undefined, 'nothing usable means no treatments key');
+  assert.equal(result.warnings.length, 2);
+});
