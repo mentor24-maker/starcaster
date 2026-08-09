@@ -221,6 +221,24 @@ export function createWizardClient(api: ApiFn = defaultApi) {
       }>;
     },
 
+    /**
+     * The active theme's saved hero-banner options, for prefilling the three
+     * wizard slots ("if they haven't chosen those key images already"). First
+     * theme in the list is the project default, same rule the server uses.
+     */
+    async loadThemeHeroBanners(): Promise<string[]> {
+      const themes = (await api("/api/builder/themes")) as Array<{
+        heroBanners?: string[];
+        heroBanner?: { url?: string };
+      }>;
+      const first = Array.isArray(themes) ? themes[0] : null;
+      if (!first) return [];
+      if (Array.isArray(first.heroBanners) && first.heroBanners.length) {
+        return first.heroBanners.filter((u) => typeof u === "string" && u);
+      }
+      return first.heroBanner?.url ? [first.heroBanner.url] : [];
+    },
+
     /** Images from Assets, for the brand-kit starting point. */
     async loadBrandImages() {
       const assets = (await api("/api/assets")) as Array<Record<string, unknown>>;
