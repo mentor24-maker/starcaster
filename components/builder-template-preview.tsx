@@ -1240,6 +1240,22 @@ export function BuilderTemplatePreview({
     sectionBandRoles.set(lastPlainSectionId, "inverse");
   }
 
+  // The theme's hero banner: the first plain section wears it as an image
+  // background (the hero overlay then applies on top). The operator chose the
+  // image; the theme decides how the top band wears it. A section that already
+  // has its own background — including its own image — always wins.
+  const themeHeroBannerUrl = String(themeStyles?.heroBanner?.url || "");
+  let heroBannerSectionId = "";
+  if (themeHeroBannerUrl) {
+    for (const section of mainSections) {
+      const isNavigationRow = section.modules.length > 0
+        && section.modules.every((module) => module.type === "navigation");
+      if (isNavigationRow) continue;
+      if (!section.background || section.background.mode === "none") heroBannerSectionId = section.id;
+      break;
+    }
+  }
+
   // A feature-cards section directly after an image section pulls up over the
   // hero's bottom edge (the blazefish overlap). Identified here because it
   // needs the previous section, which the section renderer cannot see.
@@ -1248,7 +1264,8 @@ export function BuilderTemplatePreview({
     for (let i = 1; i < mainSections.length; i += 1) {
       const previous = mainSections[i - 1];
       const current = mainSections[i];
-      const previousIsImage = previous.background?.mode === "image" && Boolean(previous.background?.imageUrl);
+      const previousIsImage = (previous.background?.mode === "image" && Boolean(previous.background?.imageUrl))
+        || previous.id === heroBannerSectionId;
       const currentLeadsWithCards = current.modules.some((module) => module.type === "feature-cards")
         && (!current.background || current.background.mode === "none");
       if (previousIsImage && currentLeadsWithCards) overlapSectionIds.add(current.id);
@@ -1296,6 +1313,7 @@ export function BuilderTemplatePreview({
             <BuilderSectionPreview
               bandRole={sectionBandRoles.get(section.id)}
               emailPreview={emailPreview}
+              heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
               heroOverlay={themeTreatments?.heroOverlay}
               heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
               key={section.id}
@@ -1313,6 +1331,7 @@ export function BuilderTemplatePreview({
           <BuilderSectionPreview
             bandRole={sectionBandRoles.get(section.id)}
             emailPreview={emailPreview}
+            heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
             heroOverlay={themeTreatments?.heroOverlay}
             heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
             key={section.id}
@@ -1340,6 +1359,7 @@ function BuilderSectionPreview({
   theme,
   themePalette,
   bandRole,
+  heroBannerUrl,
   heroOverlay,
   heroOverlayOpacity,
   overlapsHero = false
@@ -1353,6 +1373,8 @@ function BuilderSectionPreview({
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   /** Theme palette role this backgroundless section takes its band from. */
   bandRole?: "surface" | "band" | "inverse";
+  /** The theme's hero banner image, when this is the section that wears it. */
+  heroBannerUrl?: string;
   /** Treatment: tint laid over an image-background section (hex + opacity). */
   heroOverlay?: string;
   heroOverlayOpacity?: number;
@@ -1375,15 +1397,27 @@ function BuilderSectionPreview({
   // photo, with the inverse text colour on top. Layered as a gradient IN FRONT
   // of the image, so the photo still reads through.
   const isImageSection = section.background?.mode === "image" && Boolean(section.background?.imageUrl);
-  const heroTint = normalizeBuilderHexColor(heroOverlay || "");
+  // A theme hero banner turns a plain section into an image section; it always
+  // gets an overlay (defaulting to a dark neutral) because text sits on it.
+  const bannerImage = !isImageSection && heroBannerUrl ? `url("${heroBannerUrl}")` : "";
+  const heroImageSource = bannerImage || (isImageSection ? String(sectionStyle?.backgroundImage || "") : "");
+  const heroTint = normalizeBuilderHexColor(heroOverlay || (bannerImage ? "#101820" : ""));
   const heroStyle: CSSProperties | undefined =
-    isImageSection && heroTint && sectionStyle?.backgroundImage
+    heroImageSource && heroTint
       ? (() => {
           const opacity = Math.min(0.75, Math.max(0, heroOverlayOpacity ?? 0.45));
           const [r, g, b] = [1, 3, 5].map((offset) => parseInt(heroTint.slice(offset, offset + 2), 16));
           const tint = `rgba(${r}, ${g}, ${b}, ${opacity})`;
           return {
-            backgroundImage: `linear-gradient(${tint}, ${tint}), ${sectionStyle.backgroundImage}`,
+            backgroundImage: `linear-gradient(${tint}, ${tint}), ${heroImageSource}`,
+            ...(bannerImage
+              ? {
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  paddingTop: "72px",
+                  paddingBottom: "72px"
+                }
+              : {}),
             color: "var(--lp-inverse-text, #ffffff)"
           };
         })()
