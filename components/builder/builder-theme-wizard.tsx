@@ -119,6 +119,51 @@ function describeRun(run: ThemeWizardSession) {
   return { date, seed, rounds };
 }
 
+/**
+ * The run's starting point, shown in full on an opened run. The description
+ * that seeded a run is something operators come back for ("give me that same
+ * prompt again") — it is stored with the session, so hiding it behind a
+ * 60-character teaser in the runs list was withholding data we already had.
+ */
+function SeedSummary({ session }: { session: ThemeWizardSession }) {
+  const [copied, setCopied] = useState(false);
+  const seed = session.seedPayload || {};
+  const fullText =
+    session.seedType === "brief" ? (seed.text || "")
+      : session.seedType === "external_url" ? (seed.url || "")
+        : "";
+
+  const intro =
+    session.seedType === "brief" ? "Based on this description:"
+      : session.seedType === "external_url" ? "Based on this website:"
+        : session.seedType === "brand_kit" ? "Based on a logo or brand image from Assets."
+          : "Based on this site as it was when the run started.";
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(fullText);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard can be denied; the text is selectable either way.
+    }
+  }
+
+  return (
+    <div className="tw-seed">
+      <span className="tw-muted">{intro}</span>
+      {fullText ? (
+        <>
+          <blockquote className="tw-seed-text">{fullText}</blockquote>
+          <button type="button" className="tw-link" onClick={handleCopy}>
+            {copied ? "Copied" : "Copy it"}
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const [step, setStep] = useState<Step>("start");
   const [pages, setPages] = useState<PageRecord[]>([]);
@@ -647,6 +692,8 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
               ? ` So far this session has used ${session.tokensSpent.toLocaleString()} tokens.`
               : ""}
           </p>
+
+          {session ? <SeedSummary session={session} /> : null}
 
           {lockedCount ? (
             <div className="tw-locked-summary">
