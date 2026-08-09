@@ -206,11 +206,62 @@ export type BuilderThemeTypography = {
     bottomMargin?: number;
     sideMargins?: number;
   };
+  /** Role palette storage home (see BuilderThemePalette) — no DB column needed. */
+  palette?: BuilderThemePalette;
 };
 
 export type BuilderTheme = {
   typography: BuilderThemeTypography;
 };
+
+/**
+ * Role palette — the multi-surface colour system a designed site actually uses,
+ * as opposed to the single `backgroundColor` wash. Five background/text pairs:
+ *
+ *   surface  — the main content section ground (usually white or near-white)
+ *   band     — the alternating tinted section that separates content bands
+ *   inverse  — the dark statement band (weighty sections, big footers)
+ *   header   — the site header / navigation chrome
+ *   button   — the primary call-to-action fill
+ *
+ * Stored inside the theme's `typography` JSONB as `typography.palette` (the
+ * same no-migration home `pageLayout` margins use) and surfaced as a top-level
+ * `palette` field on the theme summary. Values are hex strings; absent role =
+ * inherit the pre-theme default.
+ */
+export type BuilderThemePaletteRole =
+  | "surface"
+  | "surfaceText"
+  | "band"
+  | "bandText"
+  | "inverse"
+  | "inverseText"
+  | "header"
+  | "headerText"
+  | "button"
+  | "buttonText";
+
+export type BuilderThemePalette = Partial<Record<BuilderThemePaletteRole, string>>;
+
+export const THEME_PALETTE_ROLE_KEYS: BuilderThemePaletteRole[] = [
+  "surface", "surfaceText",
+  "band", "bandText",
+  "inverse", "inverseText",
+  "header", "headerText",
+  "button", "buttonText",
+];
+
+/** Keep known roles with non-empty string values; null when nothing usable. */
+export function normalizeThemePalette(raw: unknown): BuilderThemePalette | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const palette: BuilderThemePalette = {};
+  for (const role of THEME_PALETTE_ROLE_KEYS) {
+    const value = source[role];
+    if (typeof value === "string" && value.trim()) palette[role] = value.trim();
+  }
+  return Object.keys(palette).length ? palette : null;
+}
 
 /** Lightweight reference to a saved theme in the builder_themes table. */
 export type BuilderThemeSummary = {
@@ -236,6 +287,8 @@ export type BuilderThemeSummary = {
   /** @deprecated Use stylesPageBackground — kept for API compatibility. */
   pageBackground?: BackgroundSettings;
   typography?: BuilderThemeTypography;
+  /** Multi-role colour palette (surface/band/inverse/header/button pairs). */
+  palette?: BuilderThemePalette;
 };
 
 export type BuilderTemplateSection = {

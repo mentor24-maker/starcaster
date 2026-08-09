@@ -1430,6 +1430,37 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .tw-candidate h3 { font-size: 15px; margin: 0 0 8px; }
 .tw-rationale { font-size: 13px; line-height: 1.5; }
 
+/* Role-palette rail: one chip per background/text pair. The "Aa" renders in
+ * the pair's own text colour on its own background, so an unreadable pair is
+ * visible at a glance. */
+.tw-palette-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.tw-palette-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tw-palette-chip-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(9, 16, 24, 0.18);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tw-palette-chip-name {
+  font-size: 11px;
+  color: var(--ink-secondary, #43566d);
+}
+
 /* A real page, scaled to thumbnail size. */
 /* Clickable to open full size (spec section 8 screen 3). A real <button> so it
  * is keyboard reachable; the scaled page inside keeps pointer-events: none so a

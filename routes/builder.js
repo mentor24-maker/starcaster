@@ -612,6 +612,7 @@ async function handle(req, res, pathname, method) {
       stylesPageBackground,
       pageBackground: stylesPageBackground,
       typography,
+      palette: body.palette && typeof body.palette === 'object' ? body.palette : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
     if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
@@ -709,6 +710,7 @@ async function handle(req, res, pathname, method) {
       stylesPageBackground,
       pageBackground: stylesPageBackground,
       typography,
+      palette: body.palette && typeof body.palette === 'object' ? body.palette : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
     if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});

@@ -47,9 +47,53 @@ const LOCK_LABELS: Record<string, string> = {
   secondaryColor: "the secondary colour",
   backgroundColor: "the background colour",
   accentColor: "the accent colour",
+  "palette.header": "the header colour",
+  "palette.button": "the button colour",
   "typography.fonts.heading": "the heading font",
   "typography.fonts.body": "the body font"
 };
+
+/**
+ * The role palette shown as five labelled chips — background swatch with "Aa"
+ * in its paired text colour, so readable-or-not is visible before the operator
+ * ever enlarges a preview.
+ */
+const PALETTE_RAIL_ROLES: Array<{ bg: string; text: string; label: string }> = [
+  { bg: "header", text: "headerText", label: "Header" },
+  { bg: "surface", text: "surfaceText", label: "Sections" },
+  { bg: "band", text: "bandText", label: "Soft band" },
+  { bg: "inverse", text: "inverseText", label: "Dark band" },
+  { bg: "button", text: "buttonText", label: "Button" }
+];
+
+function PaletteRail({ patch }: { patch: Record<string, unknown> | null | undefined }) {
+  const palette = patch && typeof patch === "object"
+    ? (patch as { palette?: Record<string, string> }).palette
+    : undefined;
+  if (!palette || typeof palette !== "object") return null;
+  const chips = PALETTE_RAIL_ROLES.filter((role) => palette[role.bg]);
+  if (!chips.length) return null;
+  return (
+    <div className="tw-palette-rail" aria-label="Colour roles in this look">
+      {chips.map((role) => (
+        <div
+          key={role.bg}
+          className="tw-palette-chip"
+          title={`${role.label}: ${palette[role.bg]}${palette[role.text] ? ` with ${palette[role.text]} text` : ""}`}
+        >
+          <span
+            className="tw-palette-chip-swatch"
+            style={{ background: palette[role.bg], color: palette[role.text] || undefined }}
+            aria-hidden="true"
+          >
+            Aa
+          </span>
+          <span className="tw-palette-chip-name">{role.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const SEED_LABELS: Record<string, string> = {
   current_pages: "From this site",
@@ -631,6 +675,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
               <article key={candidate.id} className="tw-candidate">
                 <h3>{candidate.direction}</h3>
                 {renderPreview(candidate)}
+                <PaletteRail patch={candidate.themePatch} />
                 <p className="tw-rationale">{candidate.rationale}</p>
 
                 <div className="tw-pins">
