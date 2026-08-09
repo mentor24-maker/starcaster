@@ -93,6 +93,11 @@ export function splitThemePatch(patch: Record<string, unknown> | null | undefine
     if (Object.keys(palette).length) themeStyles.palette = palette;
   }
 
+  // Design treatments ride the same way; the preview honours them directly.
+  if (source.treatments && typeof source.treatments === "object" && !Array.isArray(source.treatments)) {
+    themeStyles.treatments = source.treatments;
+  }
+
   return {
     // Merged over the "inherit" defaults so any slot the model left out keeps
     // the site's existing value instead of rendering as empty.

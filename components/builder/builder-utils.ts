@@ -8,9 +8,10 @@ import type {
   BuilderTemplateRecord,
   BuilderTemplateSection,
   BuilderTheme,
-  BuilderThemePalette
+  BuilderThemePalette,
+  BuilderThemeTreatments
 } from "@/lib/builder-template";
-import { normalizeThemePalette } from "@/lib/builder-template";
+import { normalizeThemePalette, normalizeThemeTreatments } from "@/lib/builder-template";
 import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
@@ -972,6 +973,8 @@ export type BuilderThemeStyles = {
   sideMargins?: number;
   /** Role palette (surface/band/inverse/header/button pairs). */
   palette?: BuilderThemePalette | null;
+  /** Design treatments (hero overlay, card overlap, inverse footer). */
+  treatments?: BuilderThemeTreatments | null;
 };
 
 function safeThemeNumber(value: unknown, fallback = 0): number {
@@ -1062,6 +1065,9 @@ export function buildBuilderThemeStyles(
     palette:
       normalizeThemePalette(row.palette)
       || normalizeThemePalette((row.typography as Record<string, unknown> | undefined)?.palette),
+    treatments:
+      normalizeThemeTreatments(row.treatments)
+      || normalizeThemeTreatments((row.typography as Record<string, unknown> | undefined)?.treatments),
   };
 }
 

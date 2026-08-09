@@ -261,9 +261,28 @@ Validation: every pair is contrast-checked (WCAG ratio). Below 3.0:1 the
 candidate FAILS — an unreadable pair is a broken design, not a bold one.
 Between 3.0 and 4.5 it renders with a recorded warning.
 
-Consumption beyond the wizard preview's swatch rail — role-bound section
-backgrounds, the header/footer chrome, hero, and buttons actually reading
-these vars — is the follow-on slice, tracked in the overhaul plan.
+Consumption (shipped 2026-08-09): backgroundless sections alternate
+surface/band; the nav follows the header role via the pre-existing
+`--site-nav-*` vars; buttons follow the button role (web only — the shared
+style object is inlined into email, where `var()` resolves to nothing);
+feature cards fill from surface.
+
+### 6.8 Design treatments (added 2026-08-09)
+Styling moves applied to content the site already has — never content itself
+(images stay the operator's choice; the wizard styles whatever they supply):
+
+- `heroOverlay` + `heroOverlayOpacity` (capped 0.75) — a tint over any section
+  whose background is an image, with inverseText text on top, so a photo
+  section reads as a hero.
+- `cardOverlap` — a feature-cards section directly following an image section
+  pulls up over its bottom edge.
+- `footerInverse` — the last plain section takes the inverse role (only when
+  the page has more than one plain section).
+
+Stored as `typography.treatments` (same home as the palette), surfaced as
+`treatments` on theme records and `themeShell`, carried to the renderer on
+`themeStyles`. No treatments = no change — the pre-treatment render is the
+fallback everywhere.
 
 ---
 

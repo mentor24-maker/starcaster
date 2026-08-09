@@ -208,6 +208,8 @@ export type BuilderThemeTypography = {
   };
   /** Role palette storage home (see BuilderThemePalette) — no DB column needed. */
   palette?: BuilderThemePalette;
+  /** Design-treatments storage home (see BuilderThemeTreatments). */
+  treatments?: BuilderThemeTreatments;
 };
 
 export type BuilderTheme = {
@@ -251,6 +253,45 @@ export const THEME_PALETTE_ROLE_KEYS: BuilderThemePaletteRole[] = [
   "button", "buttonText",
 ];
 
+/**
+ * Design treatments — the layout-adjacent styling moves that make a themed
+ * page read as designed rather than repainted, all of them styling on top of
+ * content the operator supplied (never content itself):
+ *
+ *   heroOverlay/-Opacity — a tint laid over any section whose background is an
+ *     image, with light (inverseText) text on top, so a photo section reads as
+ *     a hero instead of text fighting a photograph.
+ *   cardOverlap — a feature-cards section directly after an image section
+ *     pulls up over its bottom edge.
+ *   footerInverse — the last plain section takes the inverse role: the dark
+ *     closing band big footers use.
+ *
+ * Same storage home as the palette: `typography.treatments` on the theme.
+ */
+export type BuilderThemeTreatments = {
+  heroOverlay?: string;
+  /** 0–0.75; a full blackout would defeat the photo. */
+  heroOverlayOpacity?: number;
+  cardOverlap?: boolean;
+  footerInverse?: boolean;
+};
+
+export function normalizeThemeTreatments(raw: unknown): BuilderThemeTreatments | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const treatments: BuilderThemeTreatments = {};
+  if (typeof source.heroOverlay === "string" && source.heroOverlay.trim()) {
+    treatments.heroOverlay = source.heroOverlay.trim();
+  }
+  const opacity = Number(source.heroOverlayOpacity);
+  if (Number.isFinite(opacity)) {
+    treatments.heroOverlayOpacity = Math.min(0.75, Math.max(0, opacity));
+  }
+  if (typeof source.cardOverlap === "boolean") treatments.cardOverlap = source.cardOverlap;
+  if (typeof source.footerInverse === "boolean") treatments.footerInverse = source.footerInverse;
+  return Object.keys(treatments).length ? treatments : null;
+}
+
 /** Keep known roles with non-empty string values; null when nothing usable. */
 export function normalizeThemePalette(raw: unknown): BuilderThemePalette | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -289,6 +330,8 @@ export type BuilderThemeSummary = {
   typography?: BuilderThemeTypography;
   /** Multi-role colour palette (surface/band/inverse/header/button pairs). */
   palette?: BuilderThemePalette;
+  /** Design treatments (hero overlay, card overlap, inverse footer). */
+  treatments?: BuilderThemeTreatments;
 };
 
 export type BuilderTemplateSection = {
