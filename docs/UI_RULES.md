@@ -41,9 +41,13 @@ as a rule first, then gets a checker where one is possible.
   labels … are all cut off by the fields")* — **[TODO-check]**
 - **L5.** Labels never **overlap** their controls or neighbors. *(6/28
   "Ensure that none of the labels overlap with the forms")* — **[eye]**
-- **L6.** Item-grid columns get **header titles**. *(7/1 "Give each of
-  those field columns titles: Parent Page, Page Name, Slug, Width,
-  Action")* — **[eye]**
+- **L6.** Item-grid columns get **header titles** — and this **applies to
+  card-style item managers too** (ruled 8/9): a manager that repeats field
+  labels on every card converts to a titled-column grid, with fields that
+  genuinely can't be columns (image pickers, long text) in a spanning
+  secondary row. Pattern: `.builder-item-grid` (successor to the nav
+  grid). *(7/1 "Give each of those field columns titles: Parent Page,
+  Page Name, Slug, Width, Action"; ruling 8/9)* — **[eye]**
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**
@@ -219,12 +223,29 @@ additions recorded so far:
 
 ## Violations already on the books (found 2026-08-09, to fix first)
 
-1. **W4**: tractor-nav Inner Opacity + Transition sliders span the panel.
+The full audit lives in `docs/UI_RULES_AUDIT.md` (rule-by-rule
+cross-reference + 13-fix plan). Original list, with status:
+
+1. **W4**: tractor-nav sliders span the panel (audit confirmed ×3 —
+   Inner Opacity, Transition, Curve; range inputs have no width rule).
 2. **D2/D3**: converted panels stack short rows down the left edge —
    the schema generator needs multi-column group layout (D4) before the
    panels can honor D1/D2.
 3. **S5**: blog-post-list lost its three-column layout in the sweep —
-   restore it.
+   restore it (needs D4 first).
+
+**Operator rulings 2026-08-09 (all three open questions closed):**
+- blog-post-list's half-built fields: **wire them up** — done for
+  postTitle (renders the list heading) and postSlug (names the post-view
+  page; replaces the old page-URL field per 6/28). popularityFilter needs
+  post view/like tracking that has never existed — control removed until
+  the tracking feature ships (Dev Backlog); wiring a sort with no data
+  would just be new C6 theater.
+- L6 **applies to card managers** — breadcrumb + feature-cards converted
+  to `.builder-item-grid` titled grids (done).
+- heading horizontal margin: **add capability** — done end to end
+  (renderer + normalization + paired control); E4 now gates repo-wide
+  with the Top/Bottom split accepted as the vertical side.
 4. ~~Field-strip labels render red-ish~~ — investigated 2026-08-09 and
    **withdrawn**: pixel-sampling the screenshot found zero red-dominant
    pixels; the labels are the standard muted token. (Kept as a record that

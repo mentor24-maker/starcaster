@@ -289,13 +289,28 @@ function checkFieldStripAdoption(files) {
   }
 }
 
-/** E4 — horizontal and vertical margin are always offered together. */
+/**
+ * E4 — horizontal and vertical margin are always offered together.
+ *
+ * The vertical side is satisfied by either `verticalMargin` or the split
+ * `marginTop` + `marginBottom` pair (heading's model — the split is a
+ * richer vertical offering, not a missing one; ruled 2026-08-09 when the
+ * operator had horizontal margin capability added to heading).
+ *
+ * Split-pair detection matches SETTINGS-KEY usage only (quoted key or
+ * `settings.` access) — a bare `marginTop:` is an inline style, and
+ * counting those flagged two innocent files the day this was written.
+ */
+function usesSettingsKey(src, key) {
+  return new RegExp(`["'\`]${key}["'\`]|settings\\.${key}`).test(src);
+}
+
 function checkMarginPairing(files) {
   for (const file of files.filter((f) => SETTINGS_GLOB.test(f))) {
     if (!fs.existsSync(file)) continue;
     const src = fs.readFileSync(file, 'utf8');
     const h = src.includes('horizontalMargin');
-    const v = src.includes('verticalMargin');
+    const v = src.includes('verticalMargin') || (usesSettingsKey(src, 'marginTop') && usesSettingsKey(src, 'marginBottom'));
     if (h === v) continue;
     failures.push(
       `[E4] ${file} offers ${h ? 'horizontalMargin without verticalMargin' : 'verticalMargin without horizontalMargin'}.\n` +
@@ -333,7 +348,8 @@ function report() {
   const offenders = breakpointOnlyLayout();
   const unpaired = settings.filter((f) => {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
-    return src.includes('horizontalMargin') !== src.includes('verticalMargin');
+    const v = src.includes('verticalMargin') || (usesSettingsKey(src, 'marginTop') && usesSettingsKey(src, 'marginBottom'));
+    return src.includes('horizontalMargin') !== v;
   });
 
   // R8 debt: distinct literal font sizes still in the hand-authored CSS.
@@ -372,10 +388,11 @@ function run({ all = false } = {}) {
     checkBreakpointOnlyLayout({ all: true });
     const tracked = sh("git ls-files 'components/builder/*-module-settings.tsx'").split('\n').filter(Boolean);
     checkNoDuplicatedChrome(tracked);
-    // E4 is deliberately NOT gated repo-wide: two editors violate it today
-    // (heading, current-poll), and fixing them means confirming the renderer
-    // actually honours horizontalMargin first — adding the control blind would
-    // violate E7 (no dead controls). Tracked in --report until then.
+    // E4 gated repo-wide since 2026-08-09: the two original violators are
+    // fixed — current-poll's renderer honours both margins and pairs the
+    // controls; heading gained horizontal margin capability by operator
+    // ruling (its Top/Bottom split satisfies the vertical side).
+    checkMarginPairing(tracked);
   } else {
     const files = stagedFiles();
     if (!files.length) return { failures, notes };

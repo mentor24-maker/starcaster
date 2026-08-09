@@ -1986,7 +1986,13 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const layout = settings.layout || "grid";
   const cols = Math.max(1, parseInt(settings.columns || "3", 10) || 3);
   const postsPerPage = Math.max(1, parseInt(settings.postsPerPage || "9", 10) || 9);
-  const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
+  // postSlug names the post-view page (operator 6/28: the slug field
+  // replaces the page-URL field). Legacy postPageUrl still wins when set
+  // so no saved page changes behavior.
+  const postSlug = (settings.postSlug || "").trim().replace(/^\/+/, "");
+  const postPageUrl =
+    (settings.postPageUrl || "").trim() || (postSlug ? `/${postSlug}` : defaultBlogPostViewPath());
+  const listTitle = (settings.postTitle || "").trim();
 
   // Card template — migrate from API (supports both old elements[] and new rows[] format)
   const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
@@ -2095,6 +2101,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
   return (
     <div>
+      {listTitle ? <h2 style={{ margin: "0 0 1rem" }}>{listTitle}</h2> : null}
       {hasFilterBar ? (
         <div style={{
           display: "flex", flexWrap: "wrap", gap: "0.625rem",

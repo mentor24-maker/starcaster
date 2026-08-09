@@ -1551,6 +1551,7 @@ export function normalizeBuilderModuleSettingsForType(
     const legacy = settings.verticalMargin;
     settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacy, "0");
     settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacy, "0");
+    settings.horizontalMargin = normalizeSpacingValue(settings.horizontalMargin, "0", 0, 160);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     settings.fontFamily = HEADING_FONT_KEYS.has(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";

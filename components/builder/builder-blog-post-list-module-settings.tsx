@@ -39,8 +39,26 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
             />
           )
         },
-        { key: "postTitle", label: "Post Title", width: "text-md", control: "text", placeholder: "Section title" },
-        { key: "postSlug", label: "Post Slug", width: "text-md", control: "text" }
+        // Wired 2026-08-09 by operator ruling (audit F7): postTitle renders
+        // as the heading above the list; postSlug names the page that shows
+        // a single post (links become /<slug>?post=<post-slug>), replacing
+        // the removed postPageUrl field per the 6/28 directive.
+        {
+          key: "postTitle",
+          label: "List Title",
+          width: "text-md",
+          control: "text",
+          placeholder: "Optional heading above the list",
+          rendersVia: "BlogPostListPreview heading"
+        },
+        {
+          key: "postSlug",
+          label: "Post Page",
+          width: "text-md",
+          control: "text",
+          placeholder: "blog-post-view",
+          rendersVia: "BlogPostListPreview postPageUrl resolution"
+        }
       ]
     ],
     layout: [
@@ -89,19 +107,13 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
         { key: "showCategoryFilter", label: "Category Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
         { key: "showDateFilter", label: "Date Filter", width: "select-sm", control: "select", fallback: "false", options: HIDE_SHOW },
         { key: "showAuthorFilter", label: "Author Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showTagFilter", label: "Tag Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        {
-          key: "popularityFilter",
-          label: "Popularity",
-          width: "select-md",
-          control: "select",
-          fallback: "false",
-          options: [
-            { value: "false", label: "Off" },
-            { value: "views", label: "By Views" },
-            { value: "likes", label: "By Likes" }
-          ]
-        }
+        { key: "showTagFilter", label: "Tag Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE }
+        // popularityFilter (By Views / By Likes) removed 2026-08-09: posts
+        // carry no view/like counts anywhere in the data model, so the
+        // control sorted nothing (audit C6). The operator ruled "wire it
+        // up" — that requires building post view/like tracking first;
+        // tracked in ClickUp Dev Backlog. Re-add the control WITH the
+        // tracking feature, never before it.
       ]
     ],
     style: [

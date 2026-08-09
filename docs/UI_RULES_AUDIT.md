@@ -377,3 +377,28 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
 - **W4's mechanism**: `text-md` sizes only text inputs, so range sliders
   have no width rule anywhere — bound `input[type="range"]` in the strip
   CSS and all three tractor-nav sliders are fixed at once.
+
+---
+
+## Progress log
+
+- **2026-08-09 (operator rulings, same day as audit):**
+  - **L6→card managers (ruled: yes):** breadcrumb + feature-cards
+    converted to `.builder-item-grid` titled-column grids (real CSS grid,
+    exact header alignment; spanning sub-row for image/alt/description).
+    Breadcrumb's ↑/↓ buttons retitled Move up/down (L7 fix). New generic
+    classes are the successor to the nav grid — future managers adopt
+    them, not a third system.
+  - **Heading H margin (ruled: add capability):** wired end to end —
+    `getModuleMarginStyle` now applies horizontal margin, heading
+    normalization clamps it, paired "H Margin" control added. E4 now
+    gates repo-wide (`--all`), with the Top/Bottom split accepted as the
+    vertical side and settings-key-aware detection (bare `marginTop:`
+    inline styles don't count).
+  - **blog-post-list dead fields (ruled: wire up):** `postTitle` renders
+    as the list heading; `postSlug` names the post-view page (links
+    become `/<slug>?post=<post-slug>`, legacy `postPageUrl` still wins
+    when set — no saved page moves). `popularityFilter` removed: posts
+    have no view/like data anywhere, so wiring requires the tracking
+    feature first — ClickUp 86bbb075p (Dev Backlog). Labels clarified
+    (List Title / Post Page) resolving the L7 flag.
