@@ -233,6 +233,38 @@ design, but the client must check `stop_reason` before reading content, and
 should opt into server-side fallback so a declined request re-runs on Opus 5
 automatically instead of failing the round.
 
+### 6.7 The role palette (added 2026-08-08)
+A designed page is a system of bands, not one wash of colour — the observation
+that motivated this: wizard output read as "monochrome" next to a reference
+design that was really five colour roles working together. Each candidate
+therefore carries a `palette` of five background/text pairs alongside the four
+legacy colours:
+
+| Role | Meaning |
+|---|---|
+| `surface` / `surfaceText` | Main content section ground, usually near-white |
+| `band` / `bandText` | Alternating tinted section — a quiet shift, not a statement |
+| `inverse` / `inverseText` | The dark statement band (weighty sections, big footers) |
+| `header` / `headerText` | Site header / navigation chrome |
+| `button` / `buttonText` | Primary call-to-action fill |
+
+Storage: inside the theme's `typography` JSONB as `typography.palette` (the
+same no-migration home `pageLayout` uses), surfaced as a top-level `palette`
+field on theme records and `themeShell`. Rendering: `getThemePaletteRoleVars`
+emits `--lp-surface`, `--lp-surface-text`, `--lp-band`, `--lp-band-text`,
+`--lp-inverse`, `--lp-inverse-text`, `--lp-header-bg`, `--lp-header-text`,
+`--lp-button-bg`, `--lp-button-text` on the preview shell root (one render
+path: Builder canvas and published sites both get them). Consumers opt in with
+`var(--lp-…, <their pre-theme default>)`, so an unset role changes nothing.
+
+Validation: every pair is contrast-checked (WCAG ratio). Below 3.0:1 the
+candidate FAILS — an unreadable pair is a broken design, not a bold one.
+Between 3.0 and 4.5 it renders with a recorded warning.
+
+Consumption beyond the wizard preview's swatch rail — role-bound section
+backgrounds, the header/footer chrome, hero, and buttons actually reading
+these vars — is the follow-on slice, tracked in the overhaul plan.
+
 ---
 
 ## 7. API surface

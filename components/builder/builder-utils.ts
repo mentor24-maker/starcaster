@@ -7,8 +7,10 @@ import type {
   BuilderTemplateModule,
   BuilderTemplateRecord,
   BuilderTemplateSection,
-  BuilderTheme
+  BuilderTheme,
+  BuilderThemePalette
 } from "@/lib/builder-template";
+import { normalizeThemePalette } from "@/lib/builder-template";
 import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
@@ -931,6 +933,8 @@ export type BuilderThemeStyles = {
   topMargin?: number;
   bottomMargin?: number;
   sideMargins?: number;
+  /** Role palette (surface/band/inverse/header/button pairs). */
+  palette?: BuilderThemePalette | null;
 };
 
 function safeThemeNumber(value: unknown, fallback = 0): number {
@@ -1018,6 +1022,9 @@ export function buildBuilderThemeStyles(
       readThemeMarginColumn(row, "sideMargins", "side_margins"),
       pageLayout?.sideMargins
     ),
+    palette:
+      normalizeThemePalette(row.palette)
+      || normalizeThemePalette((row.typography as Record<string, unknown> | undefined)?.palette),
   };
 }
 
@@ -1186,7 +1193,38 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   vars["--bx-theme-padding-bottom"] = `${bottomMargin}px`;
   vars["--bx-theme-padding-inline"] = `${sideMargins}px`;
 
+  Object.assign(vars, getThemePaletteRoleVars(styles.palette));
+
   return vars as CSSProperties;
+}
+
+/**
+ * Role palette → CSS vars. `surface` deliberately overwrites the pre-theme
+ * `--lp-surface` (both mean "the light ground content sits on"); every other
+ * role gets its own var so a dark band can never bleed into a consumer that
+ * assumed a light surface. Consumers style as
+ * `var(--lp-band, <today's default>)` so an unset role changes nothing.
+ */
+export function getThemePaletteRoleVars(
+  palette: BuilderThemePalette | null | undefined
+): Record<string, string> {
+  const vars: Record<string, string> = {};
+  if (!palette) return vars;
+  const set = (name: string, value: string | undefined) => {
+    const clean = String(value || "").trim();
+    if (clean) vars[name] = clean;
+  };
+  set("--lp-surface", palette.surface);
+  set("--lp-surface-text", palette.surfaceText);
+  set("--lp-band", palette.band);
+  set("--lp-band-text", palette.bandText);
+  set("--lp-inverse", palette.inverse);
+  set("--lp-inverse-text", palette.inverseText);
+  set("--lp-header-bg", palette.header);
+  set("--lp-header-text", palette.headerText);
+  set("--lp-button-bg", palette.button);
+  set("--lp-button-text", palette.buttonText);
+  return vars;
 }
 
 /** Palette vars consumed by CRM form theme tokens on builder/public pages. */

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const {
   normalizeHex,
+  contrastRatio,
   validateThemePatch,
   applyLockedValues,
 } = require('../../lib/themeWizardValidate');
@@ -67,6 +68,70 @@ test('out-of-range scale values are clamped, not rejected', () => {
   assert.equal(result.patch.typography.scale.baseSize, 24);
   assert.equal(result.patch.typography.scale.ratio, 1.8);
   assert.equal(result.warnings.length, 2, 'clamping is recorded, not silent');
+});
+
+test('contrast ratio matches the WCAG anchors', () => {
+  // Black on white is the 21:1 ceiling; a colour against itself is the 1:1
+  // floor. If either anchor drifts, every pair check below it is meaningless.
+  assert.equal(Math.round(contrastRatio('#000000', '#ffffff')), 21);
+  assert.equal(contrastRatio('#3366aa', '#3366aa'), 1);
+  assert.equal(
+    contrastRatio('#000000', '#ffffff'),
+    contrastRatio('#ffffff', '#000000'),
+    'order must not matter'
+  );
+});
+
+test('a well-formed role palette passes with normalised hexes', () => {
+  const result = validateThemePatch({
+    palette: {
+      surface: '#FFFFFF', surfaceText: '#1a2733',
+      band: '#eef4fb', bandText: '#1a2733',
+      inverse: '#12294a', inverseText: '#f2f7fd',
+      header: '#12294a', headerText: '#ffffff',
+      button: '#2f7d32', buttonText: '#ffffff',
+    },
+  });
+  assert.equal(result.ok, true, result.errors.join('; '));
+  assert.equal(result.patch.palette.surface, '#ffffff');
+  assert.equal(result.patch.palette.inverse, '#12294a');
+});
+
+test('an unreadable palette pair fails the candidate', () => {
+  // "Navy text on navy" is not a bold look, it is a bug the preview would
+  // faithfully render and ask the operator to judge.
+  const result = validateThemePatch({
+    palette: { inverse: '#12294a', inverseText: '#1a3055' },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(' '), /inverseText on palette\.inverse is unreadable/);
+});
+
+test('a low-but-legible palette pair is a warning, not a failure', () => {
+  const result = validateThemePatch({
+    palette: { button: '#2f7d32', buttonText: '#d9ead9' },
+  });
+  assert.equal(result.ok, true, result.errors.join('; '));
+  assert.match(result.warnings.join(' '), /buttonText on palette\.button is low-contrast/);
+});
+
+test('unknown palette roles are dropped and bad colours warned', () => {
+  const result = validateThemePatch({
+    palette: {
+      surface: '#ffffff',
+      surfaceText: 'charcoal-ish',
+      glow: '#ff00ff',
+    },
+  });
+  assert.equal(result.ok, true, result.errors.join('; '));
+  assert.deepEqual(Object.keys(result.patch.palette), ['surface']);
+  assert.match(result.warnings.join(' '), /surfaceText: "charcoal-ish" is not a colour/);
+});
+
+test('a palette that is not an object fails the candidate', () => {
+  const result = validateThemePatch({ palette: 'moody blues' });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(' '), /palette must be an object/);
 });
 
 test('keys outside colours-and-typography are dropped', () => {
