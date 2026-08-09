@@ -1461,6 +1461,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary, #43566d);
 }
 
+/* The gallery-picker button renders into arbitrary containers (setting rows,
+ * asset groups, wizard panels). In flex/grid rows the generated
+ * `.builder-gallery-button { min-width: 0 }` lets the pill shrink smaller than
+ * its own label ("Choose From Gallery" overflowing its container — doctrine
+ * §2 Buttons: the container yields, never the label). */
+.builder-react-root .builder-image-picker-field-button {
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+
 /* Themes editor: colour-role pairs and helper notes. */
 .builder-themes-col-note {
   font-size: var(--text-sm);

@@ -46,6 +46,7 @@ type DevelopThemeRecord = {
   palette?: BuilderThemePalette | null;
   treatments?: BuilderThemeTreatments | null;
   heroBanner?: BuilderThemeHeroBanner | null;
+  heroBanners?: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -81,6 +82,7 @@ function defaultDraft(): DevelopThemeRecord {
     palette: null,
     treatments: null,
     heroBanner: null,
+    heroBanners: null,
     createdAt: "",
     updatedAt: "",
   };
@@ -125,7 +127,11 @@ function buildPayload(draft: DevelopThemeRecord) {
     // next save from this screen.
     palette: draft.palette || null,
     treatments: draft.treatments || null,
-    heroBanner: draft.heroBanner || null,
+    heroBanners: (draft.heroBanners || []).filter(Boolean),
+    heroBanner: (() => {
+      const first = (draft.heroBanners || []).find(Boolean);
+      return first ? { url: first } : draft.heroBanner || null;
+    })(),
     typography: {
       ...(draft.typography ?? DEFAULT_TYPOGRAPHY),
       pageLayout: {
@@ -434,48 +440,6 @@ export function BuilderThemesPage() {
             ))}
           </div>
 
-          <div className="builder-themes-col">
-            <h3 className="builder-themes-col-heading">Hero &amp; Treatments</h3>
-            <BuilderSettingRow label="Hero Banner">
-              <BuilderImagePickerField
-                value={draft.heroBanner?.url || ""}
-                onChange={(url) => updateDraft({ heroBanner: url ? { url } : null })}
-              />
-            </BuilderSettingRow>
-            <p className="builder-themes-col-note">
-              The image the top of every page wears, tinted by the overlay below so
-              headlines stay readable on it.
-            </p>
-            <ColorRow
-              label="Photo overlay tint"
-              value={draft.treatments?.heroOverlay || ""}
-              onChange={(v) => updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlay: v } })}
-            />
-            <SliderRow
-              label="Overlay strength %"
-              value={Math.round((draft.treatments?.heroOverlayOpacity ?? 0.45) * 100)}
-              min={0}
-              max={75}
-              onChange={(v) =>
-                updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlayOpacity: v / 100 } })}
-            />
-            <BuilderSettingRow label="Cards overlap photo">
-              <input
-                type="checkbox"
-                checked={draft.treatments?.cardOverlap === true}
-                onChange={(e) =>
-                  updateDraft({ treatments: { ...(draft.treatments || {}), cardOverlap: e.target.checked } })}
-              />
-            </BuilderSettingRow>
-            <BuilderSettingRow label="Dark footer band">
-              <input
-                type="checkbox"
-                checked={draft.treatments?.footerInverse === true}
-                onChange={(e) =>
-                  updateDraft({ treatments: { ...(draft.treatments || {}), footerInverse: e.target.checked } })}
-              />
-            </BuilderSettingRow>
-          </div>
 
           <div className="builder-themes-col">
             <h3 className="builder-themes-col-heading">Styles</h3>
@@ -548,43 +512,97 @@ export function BuilderThemesPage() {
           />
         </div>
 
-        <div className="builder-themes-col">
-          <h3 className="builder-themes-col-heading">Assets</h3>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Logo — Wide</p>
-            <BuilderImagePickerField
-              value={draft.logoWideId}
-              onChange={(v) => updateDraft({ logoWideId: v })}
-              placeholder="Logo wide URL"
-              buttonLabel="Choose Logo Wide"
-            />
+        <div className="builder-themes-col-stack">
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Assets</h3>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Logo — Wide</p>
+              <BuilderImagePickerField
+                value={draft.logoWideId}
+                onChange={(v) => updateDraft({ logoWideId: v })}
+                placeholder="Logo wide URL"
+                buttonLabel="Choose Logo Wide"
+              />
+            </div>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Logo — Square</p>
+              <BuilderImagePickerField
+                value={draft.logoSquareId}
+                onChange={(v) => updateDraft({ logoSquareId: v })}
+                placeholder="Logo square URL"
+                buttonLabel="Choose Logo Square"
+              />
+            </div>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Feature Image</p>
+              <BuilderImagePickerField
+                value={draft.featureImageId}
+                onChange={(v) => updateDraft({ featureImageId: v })}
+                placeholder="Feature image URL"
+                buttonLabel="Choose Feature Image"
+              />
+            </div>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Background Image</p>
+              <BuilderImagePickerField
+                value={draft.backgroundImageId}
+                onChange={(v) => updateDraft({ backgroundImageId: v })}
+                placeholder="Background image URL"
+                buttonLabel="Choose Background Image"
+              />
+            </div>
           </div>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Logo — Square</p>
-            <BuilderImagePickerField
-              value={draft.logoSquareId}
-              onChange={(v) => updateDraft({ logoSquareId: v })}
-              placeholder="Logo square URL"
-              buttonLabel="Choose Logo Square"
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Hero &amp; Treatments</h3>
+            <p className="builder-themes-col-note">
+              Up to three hero banner options. <strong>Banner 1 is shown at the top of
+              every page</strong>, tinted by the overlay below so headlines stay readable;
+              the Theme Wizard designs one look around each option.
+            </p>
+            {[0, 1, 2].map((slot) => (
+              <div key={slot} className="builder-themes-asset-group">
+                <p className="builder-themes-asset-label">
+                  Hero Banner {slot + 1}{slot === 0 ? " — shown on pages" : ""}
+                </p>
+                <BuilderImagePickerField
+                  value={draft.heroBanners?.[slot] || ""}
+                  onChange={(url) =>
+                    updateDraft({
+                      heroBanners: [0, 1, 2].map((i) => (i === slot ? url : draft.heroBanners?.[i] || "")),
+                    })}
+                  placeholder="Banner image URL"
+                />
+              </div>
+            ))}
+            <ColorRow
+              label="Photo overlay tint"
+              value={draft.treatments?.heroOverlay || ""}
+              onChange={(v) => updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlay: v } })}
             />
-          </div>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Feature Image</p>
-            <BuilderImagePickerField
-              value={draft.featureImageId}
-              onChange={(v) => updateDraft({ featureImageId: v })}
-              placeholder="Feature image URL"
-              buttonLabel="Choose Feature Image"
+            <SliderRow
+              label="Overlay strength %"
+              value={Math.round((draft.treatments?.heroOverlayOpacity ?? 0.45) * 100)}
+              min={0}
+              max={75}
+              onChange={(v) =>
+                updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlayOpacity: v / 100 } })}
             />
-          </div>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Background Image</p>
-            <BuilderImagePickerField
-              value={draft.backgroundImageId}
-              onChange={(v) => updateDraft({ backgroundImageId: v })}
-              placeholder="Background image URL"
-              buttonLabel="Choose Background Image"
-            />
+            <BuilderSettingRow label="Cards overlap photo">
+              <input
+                type="checkbox"
+                checked={draft.treatments?.cardOverlap === true}
+                onChange={(e) =>
+                  updateDraft({ treatments: { ...(draft.treatments || {}), cardOverlap: e.target.checked } })}
+              />
+            </BuilderSettingRow>
+            <BuilderSettingRow label="Dark footer band">
+              <input
+                type="checkbox"
+                checked={draft.treatments?.footerInverse === true}
+                onChange={(e) =>
+                  updateDraft({ treatments: { ...(draft.treatments || {}), footerInverse: e.target.checked } })}
+              />
+            </BuilderSettingRow>
           </div>
         </div>
       </div>

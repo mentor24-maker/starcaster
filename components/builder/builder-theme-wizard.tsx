@@ -228,6 +228,19 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
         } catch {
           setPastSessions([]);
         }
+
+        // Prefill the banner slots from the theme's saved options, so key
+        // images chosen once (Themes → Hero & Treatments) carry over. Only
+        // when untouched — never overwrite something the operator typed.
+        try {
+          const saved = await client.loadThemeHeroBanners();
+          if (saved.length) {
+            setHeroBannerUrls((prev) =>
+              prev.some(Boolean) ? prev : [0, 1, 2].map((i) => saved[i] || ""));
+          }
+        } catch {
+          // The panel still works empty.
+        }
       } catch (err) {
         // Pass the server's own words through. "Could not load this project's
         // pages" is true of every failure and useful for none — the actual
