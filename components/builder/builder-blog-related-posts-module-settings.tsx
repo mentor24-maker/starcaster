@@ -2,7 +2,10 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
-import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
 
 export type RelatedPost = {
   id: string;
@@ -32,18 +35,13 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
-export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }: Props) {
-  const s = module.settings;
-  const isManual = s.matchBy === "manual";
-  const posts = parseRelatedPosts(s);
-  const isGrid = (s.layout ?? "grid") === "grid";
+const SHOW_HIDE_OPTIONS = [
+  { value: "true", label: "Show" },
+  { value: "false", label: "Hide" }
+];
 
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
+export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }: Props) {
+  const posts = parseRelatedPosts(module.settings);
 
   function persistPosts(next: RelatedPost[]) {
     onUpdateModule((current) => ({
@@ -77,184 +75,248 @@ export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }
     ]);
   }
 
+  const schema: BuilderSettingsSchema = {
+    content: [
+      [
+        {
+          key: "showTitle",
+          label: "Title",
+          width: "select-md",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "title",
+          label: "Title Text",
+          width: "text-md",
+          control: "custom",
+          rendersVia: "BlogRelatedPostsPreview",
+          visibleWhen: (settings) => (settings.showTitle ?? "true") === "true",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.title ?? "You Might Also Like"}
+              onChange={(e) => set("title", e.target.value)}
+              placeholder="You Might Also Like"
+            />
+          )
+        }
+      ],
+      [
+        {
+          key: "matchBy",
+          label: "Match By",
+          width: "auto",
+          control: "select",
+          options: [
+            { value: "categories", label: "Categories" },
+            { value: "tags", label: "Tags" },
+            { value: "both", label: "Categories + Tags" },
+            { value: "manual", label: "Manual selection" }
+          ],
+          fallback: "categories",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "count",
+          label: "Posts",
+          width: "select-sm",
+          control: "select",
+          options: [
+            { value: "2", label: "2" },
+            { value: "3", label: "3" },
+            { value: "4", label: "4" }
+          ],
+          fallback: "3",
+          rendersVia: "BlogRelatedPostsPreview",
+          visibleWhen: (settings) => settings.matchBy !== "manual"
+        }
+      ],
+      [
+        {
+          key: "showFeaturedImage",
+          label: "Image",
+          width: "select-md",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "showExcerpt",
+          label: "Excerpt",
+          width: "select-md",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "false",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "showAuthor",
+          label: "Author",
+          width: "select-md",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "false",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "showDate",
+          label: "Date",
+          width: "select-md",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "showCategories",
+          label: "Categories",
+          width: "select-md",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "BlogRelatedPostsPreview"
+        }
+      ],
+      [
+        {
+          key: "manualPosts",
+          label: "Posts",
+          width: "full",
+          control: "custom",
+          bare: true,
+          rendersVia: "BlogRelatedPostsPreview",
+          visibleWhen: (settings) => settings.matchBy === "manual",
+          render: () => (
+            <>
+              <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
+                Posts
+              </div>
+              <div className="builder-slider-items">
+                {posts.map((post, index) => (
+                  <div key={post.id} className="builder-slider-item-card">
+                    <div className="builder-slider-item-header">
+                      <strong>{post.title || `Post ${index + 1}`}</strong>
+                      <div className="builder-section-actions">
+                        <button type="button" className="builder-icon-button" onClick={() => movePost(post.id, -1)} title="Move up">↑</button>
+                        <button type="button" className="builder-icon-button" onClick={() => movePost(post.id, 1)} title="Move down">↓</button>
+                        <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removePost(post.id)} title="Remove">✕</button>
+                      </div>
+                    </div>
+                    <div className="builder-slider-item-grid">
+                      <label className="field">
+                        <span>Title</span>
+                        <input type="text" value={post.title} onChange={(e) => updatePost(post.id, "title", e.target.value)} placeholder="Post title" />
+                      </label>
+                      <label className="field">
+                        <span>URL</span>
+                        <input type="text" value={post.url} onChange={(e) => updatePost(post.id, "url", e.target.value)} placeholder="/blog/post-slug" />
+                      </label>
+                      <label className="field">
+                        <span>Date</span>
+                        <input type="text" value={post.date} onChange={(e) => updatePost(post.id, "date", e.target.value)} placeholder="Jun 20, 2026" />
+                      </label>
+                      <label className="field">
+                        <span>Categories</span>
+                        <input type="text" value={post.categories} onChange={(e) => updatePost(post.id, "categories", e.target.value)} placeholder="Tech, Design" />
+                      </label>
+                      <label className="field builder-slider-item-grid-full">
+                        <span>Image</span>
+                        <BuilderImagePickerField value={post.imageUrl} onChange={(url) => updatePost(post.id, "imageUrl", url)} />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="secondary-button" onClick={addPost}>
+                Add Post
+              </button>
+            </>
+          )
+        }
+      ]
+    ],
+    layout: [
+      [
+        {
+          key: "layout",
+          label: "Layout",
+          width: "select-md",
+          control: "select",
+          options: [
+            { value: "grid", label: "Grid" },
+            { value: "list", label: "List" }
+          ],
+          fallback: "grid",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "columns",
+          label: "Columns",
+          width: "select-sm",
+          control: "select",
+          options: [
+            { value: "2", label: "2" },
+            { value: "3", label: "3" },
+            { value: "4", label: "4" }
+          ],
+          fallback: "3",
+          rendersVia: "BlogRelatedPostsPreview",
+          visibleWhen: (settings) => (settings.layout ?? "grid") === "grid"
+        },
+        {
+          key: "cardGap",
+          label: "Card Gap",
+          width: "num",
+          control: "number",
+          min: 8,
+          max: 48,
+          step: 4,
+          fallback: "20",
+          rendersVia: "BlogRelatedPostsPreview"
+        },
+        {
+          key: "imageAspectRatio",
+          label: "Image Ratio",
+          width: "select-sm",
+          control: "select",
+          options: [
+            { value: "16:9", label: "16:9" },
+            { value: "4:3", label: "4:3" },
+            { value: "3:2", label: "3:2" },
+            { value: "1:1", label: "1:1" }
+          ],
+          fallback: "16:9",
+          rendersVia: "BlogRelatedPostsPreview",
+          visibleWhen: (settings) => (settings.showFeaturedImage ?? "true") === "true"
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "cardStyle",
+          label: "Card Style",
+          width: "select-md",
+          control: "select",
+          options: [
+            { value: "default", label: "Default" },
+            { value: "bordered", label: "Bordered" },
+            { value: "shadow", label: "Shadow" }
+          ],
+          fallback: "default",
+          rendersVia: "BlogRelatedPostsPreview"
+        }
+      ]
+    ]
+  };
+
   return (
     <div className="builder-blog-related-posts-settings">
-
-      {/* Section heading */}
-      <BuilderSettingRow label="Show title">
-        <select value={s.showTitle ?? "true"} onChange={(e) => set("showTitle", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      {(s.showTitle ?? "true") === "true" ? (
-        <BuilderSettingRow label="Title text" fullWidth>
-          <input
-            type="text"
-            value={s.title ?? "You Might Also Like"}
-            onChange={(e) => set("title", e.target.value)}
-            placeholder="You Might Also Like"
-          />
-        </BuilderSettingRow>
-      ) : null}
-
-      {/* Source */}
-      <BuilderSettingRow label="Match by" fullWidth>
-        <select value={s.matchBy ?? "categories"} onChange={(e) => set("matchBy", e.target.value)}>
-          <option value="categories">Categories</option>
-          <option value="tags">Tags</option>
-          <option value="both">Categories + Tags</option>
-          <option value="manual">Manual selection</option>
-        </select>
-      </BuilderSettingRow>
-
-      {!isManual ? (
-        <BuilderSettingRow label="Posts to show">
-          <select value={s.count ?? "3"} onChange={(e) => set("count", e.target.value)}>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-          </select>
-        </BuilderSettingRow>
-      ) : null}
-
-      {/* Layout */}
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Layout">
-            <select value={s.layout ?? "grid"} onChange={(e) => set("layout", e.target.value)}>
-              <option value="grid">Grid</option>
-              <option value="list">List</option>
-            </select>
-          </BuilderSettingRow>
-
-          {isGrid ? (
-            <BuilderSettingRow label="Columns">
-              <select value={s.columns ?? "3"} onChange={(e) => set("columns", e.target.value)}>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-              </select>
-            </BuilderSettingRow>
-          ) : null}
-
-          <BuilderSettingRow label="Card gap (px)">
-            <input
-              type="number"
-              min={8}
-              max={48}
-              step={4}
-              value={s.cardGap ?? "20"}
-              onChange={(e) => set("cardGap", e.target.value)}
-            />
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Card style">
-            <select value={s.cardStyle ?? "default"} onChange={(e) => set("cardStyle", e.target.value)}>
-              <option value="default">Default</option>
-              <option value="bordered">Bordered</option>
-              <option value="shadow">Shadow</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Image">
-            <select value={s.showFeaturedImage ?? "true"} onChange={(e) => set("showFeaturedImage", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-
-          {(s.showFeaturedImage ?? "true") === "true" ? (
-            <BuilderSettingRow label="Image ratio">
-              <select value={s.imageAspectRatio ?? "16:9"} onChange={(e) => set("imageAspectRatio", e.target.value)}>
-                <option value="16:9">16:9</option>
-                <option value="4:3">4:3</option>
-                <option value="3:2">3:2</option>
-                <option value="1:1">1:1</option>
-              </select>
-            </BuilderSettingRow>
-          ) : null}
-
-          <BuilderSettingRow label="Excerpt">
-            <select value={s.showExcerpt ?? "false"} onChange={(e) => set("showExcerpt", e.target.value)}>
-              <option value="false">Hide</option>
-              <option value="true">Show</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Author">
-            <select value={s.showAuthor ?? "false"} onChange={(e) => set("showAuthor", e.target.value)}>
-              <option value="false">Hide</option>
-              <option value="true">Show</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Date">
-            <select value={s.showDate ?? "true"} onChange={(e) => set("showDate", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Categories">
-            <select value={s.showCategories ?? "true"} onChange={(e) => set("showCategories", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-      </div>
-
-      {/* Manual post list */}
-      {isManual ? (
-        <>
-          <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
-            Posts
-          </div>
-          <div className="builder-slider-items">
-            {posts.map((post, index) => (
-              <div key={post.id} className="builder-slider-item-card">
-                <div className="builder-slider-item-header">
-                  <strong>{post.title || `Post ${index + 1}`}</strong>
-                  <div className="builder-section-actions">
-                    <button type="button" className="builder-icon-button" onClick={() => movePost(post.id, -1)} title="Move up">↑</button>
-                    <button type="button" className="builder-icon-button" onClick={() => movePost(post.id, 1)} title="Move down">↓</button>
-                    <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removePost(post.id)} title="Remove">✕</button>
-                  </div>
-                </div>
-                <div className="builder-slider-item-grid">
-                  <label className="field">
-                    <span>Title</span>
-                    <input type="text" value={post.title} onChange={(e) => updatePost(post.id, "title", e.target.value)} placeholder="Post title" />
-                  </label>
-                  <label className="field">
-                    <span>URL</span>
-                    <input type="text" value={post.url} onChange={(e) => updatePost(post.id, "url", e.target.value)} placeholder="/blog/post-slug" />
-                  </label>
-                  <label className="field">
-                    <span>Date</span>
-                    <input type="text" value={post.date} onChange={(e) => updatePost(post.id, "date", e.target.value)} placeholder="Jun 20, 2026" />
-                  </label>
-                  <label className="field">
-                    <span>Categories</span>
-                    <input type="text" value={post.categories} onChange={(e) => updatePost(post.id, "categories", e.target.value)} placeholder="Tech, Design" />
-                  </label>
-                  <label className="field builder-slider-item-grid-full">
-                    <span>Image</span>
-                    <BuilderImagePickerField value={post.imageUrl} onChange={(url) => updatePost(post.id, "imageUrl", url)} />
-                  </label>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button type="button" className="secondary-button" onClick={addPost}>
-            Add Post
-          </button>
-        </>
-      ) : null}
+      <BuilderSchemaModuleSettings schema={schema} module={module} onUpdateModule={onUpdateModule} />
     </div>
   );
 }

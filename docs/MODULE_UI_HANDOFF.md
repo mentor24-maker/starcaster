@@ -147,6 +147,17 @@ What landed with it:
 The measured state in §3 below is what motivated all of it. The original
 proposal is kept below for the reasoning; **the doc itself is now canonical.**
 
+**Update 2026-08-08 (later, `module-ui-overhaul` branch):** the doctrine's
+three prerequisite tasks are closed — spacing/type scales in
+`_variables.css` (with rule R8 gating literal font sizes), Navigation's
+editor extracted to `builder-navigation-module-settings.tsx`, and the
+declarative settings schema built (`builder-settings-schema.tsx`, first
+used by current-poll). The E4 margin debt is at zero and the full sweep of
+the remaining hand-rolled editors is in progress on that branch. §4's
+per-module issue lists are still awaited — deliberately after the sweep, so
+the operator's comments land on design judgment, not on mechanical
+inconsistency the rules already remove.
+
 A new doc, in `DOCTRINE.md` house style — every rule paired with the concrete
 thing that went wrong to produce it. Proposed structure:
 

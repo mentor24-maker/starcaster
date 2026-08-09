@@ -1,11 +1,12 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSchemaFieldContext,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import { type BuilderThemePalette } from "./builder-theme-color-field";
 
 export type BreadcrumbItem = { id: string; label: string; url: string };
 
@@ -29,26 +30,12 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-export function BuilderBreadcrumbModuleSettings({
-  module,
-  onUpdateModule,
-  themeColors = []
-}: Props) {
-  const settings = module.settings;
+/** Bespoke trail-item manager — stays custom; the scalar controls live in the schema. */
+function BreadcrumbItemsManager({ settings, set }: BuilderSchemaFieldContext) {
   const items = parseBreadcrumbItems(settings);
 
-  function updateSetting(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
-
   function persistItems(nextItems: BreadcrumbItem[]) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, items: serializeBreadcrumbItems(nextItems) }
-    }));
+    set("items", serializeBreadcrumbItems(nextItems));
   }
 
   function updateItem(id: string, field: keyof BreadcrumbItem, value: string) {
@@ -75,62 +62,7 @@ export function BuilderBreadcrumbModuleSettings({
   }
 
   return (
-    <div className="builder-breadcrumb-module-settings">
-      <div className="builder-breadcrumb-style-grid">
-        <BuilderSettingRow label="Separator">
-          <input
-            type="text"
-            maxLength={4}
-            value={settings.separator ?? "›"}
-            onChange={(e) => updateSetting("separator", e.target.value)}
-            style={{ width: 48 }}
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Size (px)">
-          <input
-            type="number"
-            min={10}
-            max={32}
-            step={1}
-            value={settings.fontSize ?? "14"}
-            onChange={(e) => updateSetting("fontSize", e.target.value)}
-          />
-        </BuilderSettingRow>
-        <BuilderThemeColorSettingRow
-          fallback="#587592"
-          label="Link color"
-          themeColors={themeColors}
-          value={settings.color ?? "#587592"}
-          onChange={(color) => updateSetting("color", color)}
-        />
-        <BuilderThemeColorSettingRow
-          fallback="#18324a"
-          label="Current color"
-          themeColors={themeColors}
-          value={settings.activeColor ?? "#18324a"}
-          onChange={(activeColor) => updateSetting("activeColor", activeColor)}
-        />
-        <BuilderSettingRow label="Bold">
-          <select
-            value={settings.bold ?? "false"}
-            onChange={(e) => updateSetting("bold", e.target.value)}
-          >
-            <option value="false">Off</option>
-            <option value="true">On</option>
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Align">
-          <select
-            value={settings.alignment ?? "left"}
-            onChange={(e) => updateSetting("alignment", e.target.value)}
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
-        </BuilderSettingRow>
-      </div>
-
+    <>
       <div className="builder-breadcrumb-items-label">Trail items — last item is the current page</div>
 
       <div className="builder-slider-items">
@@ -166,6 +98,118 @@ export function BuilderBreadcrumbModuleSettings({
       <button type="button" className="secondary-button" onClick={addItem}>
         Add Crumb
       </button>
+    </>
+  );
+}
+
+export function BuilderBreadcrumbModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
+  const schema: BuilderSettingsSchema = {
+    content: [
+      [
+        {
+          key: "items",
+          label: "Trail items",
+          width: "full",
+          control: "custom",
+          bare: true,
+          rendersVia: "parseBreadcrumbItems",
+          render: (ctx) => <BreadcrumbItemsManager {...ctx} />
+        }
+      ]
+    ],
+    layout: [
+      [
+        {
+          key: "alignment",
+          label: "Align",
+          width: "select-sm",
+          control: "select",
+          options: [
+            { value: "left", label: "Left" },
+            { value: "center", label: "Center" },
+            { value: "right", label: "Right" }
+          ],
+          fallback: "left",
+          rendersVia: "builder-module-card breadcrumb preview"
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "separator",
+          label: "Separator",
+          width: "auto",
+          control: "custom",
+          rendersVia: "builder-module-card breadcrumb preview",
+          render: (ctx) => (
+            <input
+              type="text"
+              maxLength={4}
+              value={ctx.settings.separator ?? "›"}
+              onChange={(e) => ctx.set("separator", e.target.value)}
+              style={{ width: 48 }}
+            />
+          )
+        },
+        {
+          key: "fontSize",
+          label: "Size",
+          width: "num",
+          control: "number",
+          min: 10,
+          max: 32,
+          fallback: "14",
+          rendersVia: "builder-module-card breadcrumb preview"
+        },
+        {
+          key: "bold",
+          label: "Bold",
+          width: "select-sm",
+          control: "select",
+          options: [
+            { value: "false", label: "Off" },
+            { value: "true", label: "On" }
+          ],
+          fallback: "false",
+          rendersVia: "builder-module-card breadcrumb preview"
+        }
+      ],
+      [
+        {
+          key: "color",
+          label: "Link Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Link color",
+          fallback: "#587592",
+          rendersVia: "builder-module-card breadcrumb preview"
+        },
+        {
+          key: "activeColor",
+          label: "Current Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Current color",
+          fallback: "#18324a",
+          rendersVia: "builder-module-card breadcrumb preview"
+        }
+      ]
+    ]
+  };
+
+  return (
+    <div className="builder-breadcrumb-module-settings">
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
+        themeColors={themeColors}
+      />
     </div>
   );
 }
