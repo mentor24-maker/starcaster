@@ -9,9 +9,14 @@ import type {
   BuilderTemplateSection,
   BuilderTheme,
   BuilderThemePalette,
-  BuilderThemeTreatments
+  BuilderThemeTreatments,
+  BuilderThemeHeroBanner
 } from "@/lib/builder-template";
-import { normalizeThemePalette, normalizeThemeTreatments } from "@/lib/builder-template";
+import {
+  normalizeThemePalette,
+  normalizeThemeTreatments,
+  normalizeThemeHeroBanner
+} from "@/lib/builder-template";
 import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
@@ -981,6 +986,8 @@ export type BuilderThemeStyles = {
   palette?: BuilderThemePalette | null;
   /** Design treatments (hero overlay, card overlap, inverse footer). */
   treatments?: BuilderThemeTreatments | null;
+  /** The image the site's top band wears. */
+  heroBanner?: BuilderThemeHeroBanner | null;
 };
 
 function safeThemeNumber(value: unknown, fallback = 0): number {
@@ -1074,6 +1081,9 @@ export function buildBuilderThemeStyles(
     treatments:
       normalizeThemeTreatments(row.treatments)
       || normalizeThemeTreatments((row.typography as Record<string, unknown> | undefined)?.treatments),
+    heroBanner:
+      normalizeThemeHeroBanner(row.heroBanner)
+      || normalizeThemeHeroBanner((row.typography as Record<string, unknown> | undefined)?.heroBanner),
   };
 }
 

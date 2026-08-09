@@ -1461,6 +1461,52 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary, #43566d);
 }
 
+/* Themes editor: colour-role pairs and helper notes. */
+.builder-themes-col-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary, #43566d);
+  margin: 2px 0 8px;
+  line-height: 1.4;
+}
+.builder-themes-role-pair {
+  border-bottom: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.builder-themes-role-pair:last-child {
+  border-bottom: none;
+}
+
+/* Hero banner slots on the start screen. */
+.tw-hero-panel {
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+  margin: 4px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tw-hero-panel legend {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  padding: 0 4px;
+}
+.tw-hero-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tw-hero-slot-label {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary, #43566d);
+  white-space: nowrap;
+}
+.tw-hero-slot > div {
+  flex: 1 1 auto;
+}
+
 /* The run's starting point, in full, with a copy affordance. */
 .tw-seed {
   margin: 4px 0 10px;

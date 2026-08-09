@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import type { BackgroundSettings, BuilderTheme, BuilderThemeTypography } from "@/lib/builder-template";
+import type {
+  BackgroundSettings,
+  BuilderTheme,
+  BuilderThemeTypography,
+  BuilderThemePalette,
+  BuilderThemeTreatments,
+  BuilderThemeHeroBanner,
+} from "@/lib/builder-template";
 import {
   createDefaultBackgroundSettings,
   finalizeThemeStylesPageBackground,
@@ -36,6 +43,9 @@ type DevelopThemeRecord = {
   backgroundImageId: string;
   stylesPageBackground: BackgroundSettings;
   typography: BuilderThemeTypography | null;
+  palette?: BuilderThemePalette | null;
+  treatments?: BuilderThemeTreatments | null;
+  heroBanner?: BuilderThemeHeroBanner | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -68,6 +78,9 @@ function defaultDraft(): DevelopThemeRecord {
     backgroundImageId: "",
     stylesPageBackground: createDefaultBackgroundSettings(),
     typography: { ...DEFAULT_TYPOGRAPHY },
+    palette: null,
+    treatments: null,
+    heroBanner: null,
     createdAt: "",
     updatedAt: "",
   };
@@ -107,6 +120,12 @@ function buildPayload(draft: DevelopThemeRecord) {
     backgroundImageId: draft.backgroundImageId,
     stylesPageBackground,
     pageBackground: stylesPageBackground,
+    // Wizard-written facets MUST ride along: this form sends the whole theme
+    // object, so leaving them out of the payload silently erased them on the
+    // next save from this screen.
+    palette: draft.palette || null,
+    treatments: draft.treatments || null,
+    heroBanner: draft.heroBanner || null,
     typography: {
       ...(draft.typography ?? DEFAULT_TYPOGRAPHY),
       pageLayout: {
@@ -158,6 +177,14 @@ function ColorRow({ label, value, onChange }: ColorRowProps) {
     </BuilderSettingRow>
   );
 }
+
+const PALETTE_ROLE_ROWS: Array<{ bg: keyof BuilderThemePalette; text: keyof BuilderThemePalette; label: string }> = [
+  { bg: "header", text: "headerText", label: "Header" },
+  { bg: "surface", text: "surfaceText", label: "Section" },
+  { bg: "band", text: "bandText", label: "Soft band" },
+  { bg: "inverse", text: "inverseText", label: "Dark band" },
+  { bg: "button", text: "buttonText", label: "Button" },
+];
 
 export function BuilderThemesPage() {
   const [themes, setThemes] = useState<DevelopThemeRecord[]>([]);
@@ -266,6 +293,10 @@ export function BuilderThemesPage() {
     setDraft((prev) => ({ ...prev, ...patch }));
     setStatus(null);
   }
+
+  const updatePaletteRole = (role: keyof BuilderThemePalette, value: string) => {
+    updateDraft({ palette: { ...(draft.palette || {}), [role]: value } });
+  };
 
   function handleTypographyChange(updater: (theme: BuilderTheme) => BuilderTheme) {
     setDraft((prev) => {
@@ -379,6 +410,71 @@ export function BuilderThemesPage() {
               value={draft.accentColor}
               onChange={(v) => updateDraft({ accentColor: v })}
             />
+          </div>
+
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Colour Roles</h3>
+            <p className="builder-themes-col-note">
+              The banded page system: each surface pairs a background with its text
+              colour. Empty = the pre-theme default.
+            </p>
+            {PALETTE_ROLE_ROWS.map((row) => (
+              <div key={row.bg} className="builder-themes-role-pair">
+                <ColorRow
+                  label={row.label}
+                  value={draft.palette?.[row.bg] || ""}
+                  onChange={(v) => updatePaletteRole(row.bg, v)}
+                />
+                <ColorRow
+                  label={`${row.label} text`}
+                  value={draft.palette?.[row.text] || ""}
+                  onChange={(v) => updatePaletteRole(row.text, v)}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Hero &amp; Treatments</h3>
+            <BuilderSettingRow label="Hero Banner">
+              <BuilderImagePickerField
+                value={draft.heroBanner?.url || ""}
+                onChange={(url) => updateDraft({ heroBanner: url ? { url } : null })}
+              />
+            </BuilderSettingRow>
+            <p className="builder-themes-col-note">
+              The image the top of every page wears, tinted by the overlay below so
+              headlines stay readable on it.
+            </p>
+            <ColorRow
+              label="Photo overlay tint"
+              value={draft.treatments?.heroOverlay || ""}
+              onChange={(v) => updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlay: v } })}
+            />
+            <SliderRow
+              label="Overlay strength %"
+              value={Math.round((draft.treatments?.heroOverlayOpacity ?? 0.45) * 100)}
+              min={0}
+              max={75}
+              onChange={(v) =>
+                updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlayOpacity: v / 100 } })}
+            />
+            <BuilderSettingRow label="Cards overlap photo">
+              <input
+                type="checkbox"
+                checked={draft.treatments?.cardOverlap === true}
+                onChange={(e) =>
+                  updateDraft({ treatments: { ...(draft.treatments || {}), cardOverlap: e.target.checked } })}
+              />
+            </BuilderSettingRow>
+            <BuilderSettingRow label="Dark footer band">
+              <input
+                type="checkbox"
+                checked={draft.treatments?.footerInverse === true}
+                onChange={(e) =>
+                  updateDraft({ treatments: { ...(draft.treatments || {}), footerInverse: e.target.checked } })}
+              />
+            </BuilderSettingRow>
           </div>
 
           <div className="builder-themes-col">

@@ -210,6 +210,8 @@ export type BuilderThemeTypography = {
   palette?: BuilderThemePalette;
   /** Design-treatments storage home (see BuilderThemeTreatments). */
   treatments?: BuilderThemeTreatments;
+  /** Hero-banner storage home (see BuilderThemeHeroBanner). */
+  heroBanner?: BuilderThemeHeroBanner;
 };
 
 export type BuilderTheme = {
@@ -276,6 +278,17 @@ export type BuilderThemeTreatments = {
   footerInverse?: boolean;
 };
 
+/** Hero banner: the image the site's top band wears. Operator-chosen URL. */
+export type BuilderThemeHeroBanner = {
+  url: string;
+};
+
+export function normalizeThemeHeroBanner(raw: unknown): BuilderThemeHeroBanner | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const url = String((raw as Record<string, unknown>).url || "").trim();
+  return /^https?:\/\//i.test(url) ? { url } : null;
+}
+
 export function normalizeThemeTreatments(raw: unknown): BuilderThemeTreatments | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
@@ -332,6 +345,8 @@ export type BuilderThemeSummary = {
   palette?: BuilderThemePalette;
   /** Design treatments (hero overlay, card overlap, inverse footer). */
   treatments?: BuilderThemeTreatments;
+  /** The image the site's top band wears (with the hero overlay on it). */
+  heroBanner?: BuilderThemeHeroBanner;
 };
 
 export type BuilderTemplateSection = {
