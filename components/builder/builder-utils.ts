@@ -776,9 +776,23 @@ export function applyButtonBackgroundSettings(
   };
 }
 
-export function getButtonModuleStyle(settings: Record<string, string>): CSSProperties {
+/**
+ * @param options.followThemePalette Let unset colours fall through to the
+ *   theme's button role via `var(--lp-button-*)`. OFF by default because this
+ *   same style object is inlined into marketing email HTML
+ *   (builder-email-render.ts), and email clients do not resolve CSS custom
+ *   properties — a var() there is a button with no colour at all. Web callers
+ *   opt in; a colour the operator actually picked always wins either way.
+ */
+export function getButtonModuleStyle(
+  settings: Record<string, string>,
+  options: { followThemePalette?: boolean } = {}
+): CSSProperties {
+  const themed = options.followThemePalette === true;
+  const roleOr = (role: string, fallback: string) => (themed ? `var(${role}, ${fallback})` : fallback);
+
   const fontSize = Number.parseInt(settings.fontSize ?? "", 10);
-  const textColor = settings.textColor || "#ffffff";
+  const textColor = settings.textColor || roleOr("--lp-button-text", "#ffffff");
   const textShadow = getModuleDropShadowStyle(settings);
   const borderStyle = settings.borderStyle === "none" || settings.borderStyle === "dashed" || settings.borderStyle === "dotted"
     ? settings.borderStyle
@@ -788,16 +802,25 @@ export function getButtonModuleStyle(settings: Record<string, string>): CSSPrope
   const resolvedBorderWidth = borderStyle === "none" ? 0 : Math.max(Number.isFinite(borderWidth) ? borderWidth : 2, 0);
   const resolvedBorderColor = borderStyle === "none" || settings.borderColor === "transparent"
     ? "transparent"
-    : settings.borderColor || "#214c71";
+    : settings.borderColor || roleOr("--lp-button-bg", "#214c71");
+
+  // The fill normally arrives as a background object, which would paint a
+  // concrete hex and leave --btn-bg unread. When the operator picked nothing
+  // and we are following the theme, hand the fill to --btn-bg instead so the
+  // role can reach it — the CSS fallback is the same #214c71 either way.
+  const hasChosenFill = Boolean(settings.buttonBackgroundMode || settings.buttonColor);
   const buttonBackground = getButtonBackgroundSettings(settings);
-  const buttonFillStyle = getBuilderBackgroundStyle(buttonBackground);
+  const buttonFillStyle = themed && !hasChosenFill
+    ? undefined
+    : getBuilderBackgroundStyle(buttonBackground);
 
   return {
     ...buttonFillStyle,
-    ...(!buttonFillStyle ? { "--btn-bg": settings.buttonColor || "#214c71" } : {}),
-    "--btn-bg-hover": settings.buttonHoverColor || "#0f4f8f",
+    ...(!buttonFillStyle ? { "--btn-bg": settings.buttonColor || roleOr("--lp-button-bg", "#214c71") } : {}),
+    "--btn-bg-hover": settings.buttonHoverColor
+      || (themed ? "var(--lp-button-hover, var(--lp-button-bg, #0f4f8f))" : "#0f4f8f"),
     "--btn-color": textColor,
-    "--btn-color-hover": settings.textHoverColor || "#ffffff",
+    "--btn-color-hover": settings.textHoverColor || roleOr("--lp-button-text", "#ffffff"),
     "--btn-text-shadow": textShadow,
     "--btn-border": resolvedBorderColor,
     color: textColor,
@@ -1218,6 +1241,12 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
  * role gets its own var so a dark band can never bleed into a consumer that
  * assumed a light surface. Consumers style as
  * `var(--lp-band, <today's default>)` so an unset role changes nothing.
+ *
+ * The nav vars are the palette's, not new ones: `--site-nav-bg` and friends
+ * already exist with factory fallbacks baked into the CSS, and the navigation
+ * module only writes them inline when the operator set a colour by hand. So
+ * publishing them here paints the header from the theme while an explicitly
+ * styled nav still wins — no CSS change and no markup change.
  */
 export function getThemePaletteRoleVars(
   palette: BuilderThemePalette | null | undefined
@@ -1238,7 +1267,48 @@ export function getThemePaletteRoleVars(
   set("--lp-header-text", palette.headerText);
   set("--lp-button-bg", palette.button);
   set("--lp-button-text", palette.buttonText);
+
+  // Hover has to stay distinguishable from rest, so it is derived rather than
+  // asked for — one more slot the model could contradict itself on.
+  if (palette.button) set("--lp-button-hover", shadeHexColor(palette.button, -0.14));
+
+  if (palette.header) {
+    set("--site-nav-bg", palette.header);
+    set("--site-nav-border", "transparent");
+  }
+  if (palette.headerText) {
+    set("--site-nav-link-color", palette.headerText);
+    set("--site-nav-link-hover-color", palette.headerText);
+    set("--site-nav-link-hover-bg", withHexAlpha(palette.headerText, 0.16));
+  }
+
+  // Bands need air around their content or they read as tinted strips rather
+  // than sections. Var-driven so a theme WITHOUT a palette resolves to 0 and
+  // every existing page keeps its exact spacing.
+  if (palette.surface || palette.band) vars["--lp-band-padding"] = "40px";
+
   return vars;
+}
+
+/** Lighten (amount > 0) or darken (amount < 0) a '#rrggbb' by a fraction. */
+function shadeHexColor(hex: string, amount: number): string {
+  const normalized = normalizeBuilderHexColor(hex);
+  if (!normalized) return hex;
+  const channels = [1, 3, 5].map((offset) => parseInt(normalized.slice(offset, offset + 2), 16));
+  const shaded = channels.map((value) => {
+    const target = amount < 0 ? 0 : 255;
+    const moved = Math.round(value + (target - value) * Math.abs(amount));
+    return Math.max(0, Math.min(255, moved));
+  });
+  return `#${shaded.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** '#rrggbb' → 'rgba(r, g, b, a)'. Returns the input unchanged if not hex. */
+function withHexAlpha(hex: string, alpha: number): string {
+  const normalized = normalizeBuilderHexColor(hex);
+  if (!normalized) return hex;
+  const [r, g, b] = [1, 3, 5].map((offset) => parseInt(normalized.slice(offset, offset + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /** Palette vars consumed by CRM form theme tokens on builder/public pages. */

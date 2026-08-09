@@ -1209,6 +1209,27 @@ export function BuilderTemplatePreview({
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
   const mainSections = layoutSections.filter((section) => !sectionHasOnlyPageOverlayImageModules(section));
 
+  /**
+   * Alternating bands are what make a page read as designed rather than as one
+   * wash of colour, so sections that set no background of their own take turns
+   * between the theme's `surface` and `band` roles.
+   *
+   * Only those sections: one with a background the operator chose keeps it, and
+   * a navigation row is chrome rather than a band. The roles resolve through
+   * `var(--lp-…, transparent)`, so a theme with no palette paints nothing at
+   * all and every existing page renders exactly as it did.
+   */
+  const sectionBandRoles = new Map<string, "surface" | "band">();
+  let plainSectionIndex = 0;
+  for (const section of mainSections) {
+    const hasOwnBackground = Boolean(section.background && section.background.mode !== "none");
+    const isNavigationRow = section.modules.length > 0
+      && section.modules.every((module) => module.type === "navigation");
+    if (hasOwnBackground || isNavigationRow) continue;
+    sectionBandRoles.set(section.id, plainSectionIndex % 2 === 0 ? "surface" : "band");
+    plainSectionIndex += 1;
+  }
+
   return (
     <div
       className={
@@ -1248,6 +1269,7 @@ export function BuilderTemplatePreview({
         <div className={contentClassName} style={themeMarginStyle}>
           {mainSections.map((section) => (
             <BuilderSectionPreview
+              bandRole={sectionBandRoles.get(section.id)}
               emailPreview={emailPreview}
               key={section.id}
               previewMode={previewMode}
@@ -1261,6 +1283,7 @@ export function BuilderTemplatePreview({
       ) : (
         mainSections.map((section) => (
           <BuilderSectionPreview
+            bandRole={sectionBandRoles.get(section.id)}
             emailPreview={emailPreview}
             key={section.id}
             previewMode={previewMode}
@@ -1284,7 +1307,8 @@ function BuilderSectionPreview({
   projectId = "",
   sitePlayerRegistered = false,
   theme,
-  themePalette
+  themePalette,
+  bandRole
 }: {
   section: BuilderTemplateSection;
   emailPreview?: boolean;
@@ -1293,8 +1317,20 @@ function BuilderSectionPreview({
   sitePlayerRegistered?: boolean;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** Theme palette role this backgroundless section takes its band from. */
+  bandRole?: "surface" | "band";
 }) {
   const sectionStyle = getBuilderBackgroundStyle(section.background);
+  // `transparent` and `inherit` are the no-palette answers, so a theme without
+  // one leaves this section exactly as it renders today.
+  const bandStyle: CSSProperties | undefined = bandRole
+    ? {
+        background: `var(--lp-${bandRole}, transparent)`,
+        color: `var(--lp-${bandRole}-text, inherit)`,
+        paddingTop: "var(--lp-band-padding, 0px)",
+        paddingBottom: "var(--lp-band-padding, 0px)"
+      }
+    : undefined;
   const columnKeys = getLayoutColumns(section.layout);
   const isNavigationSection = section.modules.length > 0 && section.modules.every((module) => module.type === "navigation");
   const hasNavigationModule = section.modules.some((module) => module.type === "navigation");
@@ -1306,6 +1342,9 @@ function BuilderSectionPreview({
   );
   const rowBorderWidth = Number(section.rowBorderWidth ?? "0");
   const gridStyle: CSSProperties = {
+    // Band first: a section carrying its own background never gets one, so
+    // this cannot overwrite an operator's choice.
+    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
     ...(isNavigationSection ? {} : sectionStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
     ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionWidthStyle(section)),
@@ -1553,7 +1592,7 @@ function BuilderModulePreview({
 
   if (module.type === "button") {
     const s = module.settings;
-    const btnStyle = getButtonModuleStyle(s);
+    const btnStyle = getButtonModuleStyle(s, { followThemePalette: !emailPreview });
     const href = emailPreview
       ? resolveEmailMergeTokensForPreview(module.settings.href || "#")
       : module.settings.href || "#";
@@ -5244,7 +5283,7 @@ function FeatureCardsModulePreview({
           "--feature-card-columns": String(columns),
           "--feature-card-gap": `${gap}px`,
           "--feature-card-radius": `${radius}px`,
-          "--feature-card-bg": module.settings.cardBackground || "#ffffff",
+          "--feature-card-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
           "--feature-card-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #e1e8f0)",
           "--feature-card-accent": iconColor,
           "--feature-card-aspect": aspect
