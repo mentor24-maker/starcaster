@@ -5,12 +5,11 @@ import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeSignedOffsetValue } from "@/lib/builder-template";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
-import { BuilderNumberSelectControl } from "./builder-inline-number-select";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
 
 type BuilderSpeechBubbleModuleSettingsProps = {
   module: BuilderTemplateModule;
@@ -19,133 +18,215 @@ type BuilderSpeechBubbleModuleSettingsProps = {
   themeColors?: BuilderThemePalette;
 };
 
+const OFFSET_INPUT_STYLE = { width: "9ch" } as const;
+
 export function BuilderSpeechBubbleModuleSettings({
   module,
   onUpdateModule,
   richTextGallery,
   themeColors = []
 }: BuilderSpeechBubbleModuleSettingsProps) {
-  function updateSettings(updates: Record<string, string>) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, ...updates }
-    }));
-  }
+  const schema: BuilderSettingsSchema = {
+    content: [
+      [
+        {
+          key: "text",
+          label: "Content",
+          width: "full",
+          control: "custom",
+          rendersVia: "builder-speech-bubble-runtime",
+          render: () => (
+            <BuilderRichTextEditor
+              value={module.text}
+              onChange={(value) => onUpdateModule((current) => ({ ...current, text: value }))}
+              {...richTextGallery}
+            />
+          )
+        }
+      ]
+    ],
+    layout: [
+      [
+        {
+          key: "containerWidth",
+          label: "Width",
+          width: "num",
+          control: "number",
+          min: 200,
+          max: 900,
+          step: 10,
+          fallback: "520",
+          rendersVia: "builder-speech-bubble-runtime"
+        },
+        {
+          key: "containerHeight",
+          label: "Height",
+          width: "num",
+          control: "number",
+          min: 0,
+          max: 800,
+          step: 10,
+          fallback: "0",
+          rendersVia: "builder-speech-bubble-runtime"
+        }
+      ],
+      [
+        {
+          key: "heightNote",
+          label: "",
+          width: "full",
+          control: "custom",
+          bare: true,
+          render: () => (
+            <span className="builder-module-offset-hint">
+              Height 0 fits the content; larger values set a minimum height.
+            </span>
+          )
+        }
+      ],
+      [
+        {
+          key: "offsetX",
+          label: "X Offset",
+          width: "num",
+          control: "custom",
+          rendersVia: "builder-speech-bubble-runtime",
+          render: ({ settings, set }) => (
+            <input
+              type="number"
+              min={-500}
+              max={500}
+              step={1}
+              style={OFFSET_INPUT_STYLE}
+              value={settings.offsetX ?? "0"}
+              onChange={(event) => set("offsetX", normalizeSignedOffsetValue(event.target.value, "0"))}
+            />
+          )
+        },
+        {
+          key: "offsetY",
+          label: "Y Offset",
+          width: "num",
+          control: "custom",
+          rendersVia: "builder-speech-bubble-runtime",
+          render: ({ settings, set }) => (
+            <input
+              type="number"
+              min={-500}
+              max={500}
+              step={1}
+              style={OFFSET_INPUT_STYLE}
+              value={settings.offsetY ?? "0"}
+              onChange={(event) => set("offsetY", normalizeSignedOffsetValue(event.target.value, "0"))}
+            />
+          )
+        },
+        {
+          key: "zIndex",
+          label: "Z-Index",
+          width: "num",
+          control: "custom",
+          rendersVia: "builder-speech-bubble-runtime",
+          render: ({ settings, set }) => (
+            <input
+              type="number"
+              min={-999}
+              max={999999}
+              step={1}
+              style={OFFSET_INPUT_STYLE}
+              value={settings.zIndex ?? "10"}
+              onChange={(event) => set("zIndex", event.target.value)}
+            />
+          )
+        }
+      ],
+      [
+        {
+          key: "offsetNote",
+          label: "",
+          width: "full",
+          control: "custom",
+          bare: true,
+          render: () => (
+            <span className="builder-module-offset-hint">
+              Positive X moves right; positive Y moves up. Higher Z-Index stacks in front.
+            </span>
+          )
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "backgroundColor",
+          label: "Background",
+          width: "color",
+          control: "custom",
+          rendersVia: "builder-speech-bubble-runtime",
+          render: ({ settings, set }) => (
+            <BuilderThemeColorField
+              dialogLabel="Background color"
+              fallback="#ffffff"
+              themeColors={themeColors}
+              value={normalizeBuilderHexColor(settings.backgroundColor || "#ffffff")}
+              onChange={(backgroundColor) => set("backgroundColor", normalizeBuilderHexColor(backgroundColor))}
+            />
+          )
+        },
+        {
+          key: "borderColor",
+          label: "Border Color",
+          width: "color",
+          control: "custom",
+          rendersVia: "builder-speech-bubble-runtime",
+          render: ({ settings, set }) => (
+            <BuilderThemeColorField
+              dialogLabel="Border color"
+              fallback="#9ed4ee"
+              themeColors={themeColors}
+              value={normalizeBuilderHexColor(settings.borderColor || "#9ed4ee")}
+              onChange={(borderColor) => set("borderColor", normalizeBuilderHexColor(borderColor))}
+            />
+          )
+        },
+        {
+          key: "borderThickness",
+          label: "Border",
+          width: "num",
+          control: "number",
+          min: 0,
+          max: 24,
+          fallback: "2",
+          rendersVia: "builder-speech-bubble-runtime"
+        },
+        {
+          key: "textColor",
+          label: "Text Color",
+          width: "color",
+          control: "custom",
+          rendersVia: "builder-speech-bubble-runtime",
+          render: ({ settings, set }) => (
+            <BuilderThemeColorField
+              dialogLabel="Text color"
+              fallback="#18324a"
+              themeColors={themeColors}
+              value={normalizeBuilderHexColor(settings.textColor || "#18324a")}
+              onChange={(textColor) => set("textColor", normalizeBuilderHexColor(textColor))}
+            />
+          )
+        }
+      ]
+    ]
+  };
 
   return (
     <div className="builder-speech-bubble-module-settings">
-      <BuilderSettingRow fullWidth label="Content">
-        <BuilderRichTextEditor
-          value={module.text}
-          onChange={(value) => onUpdateModule((current) => ({ ...current, text: value }))}
-          {...richTextGallery}
-        />
-      </BuilderSettingRow>
-      <BuilderThemeColorSettingRow
-        fullWidth
-        fallback="#ffffff"
-        label="Background Color"
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
         themeColors={themeColors}
-        value={normalizeBuilderHexColor(module.settings.backgroundColor || "#ffffff")}
-        onChange={(backgroundColor) =>
-          updateSettings({ backgroundColor: normalizeBuilderHexColor(backgroundColor) })
-        }
       />
-      <BuilderThemeColorSettingRow
-        fullWidth
-        fallback="#9ed4ee"
-        label="Border Color"
-        themeColors={themeColors}
-        value={normalizeBuilderHexColor(module.settings.borderColor || "#9ed4ee")}
-        onChange={(borderColor) =>
-          updateSettings({ borderColor: normalizeBuilderHexColor(borderColor) })
-        }
-      />
-      <BuilderSettingRow fullWidth label="Border Size">
-        <BuilderNumberSelectControl
-          fallback="2"
-          max={24}
-          min={0}
-          value={module.settings.borderThickness ?? "2"}
-          onChange={(borderThickness) => updateSettings({ borderThickness })}
-        />
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Container Width">
-        <BuilderNumberSelectControl
-          fallback="520"
-          max={900}
-          min={200}
-          step={10}
-          value={module.settings.containerWidth ?? "520"}
-          onChange={(containerWidth) => updateSettings({ containerWidth })}
-        />
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Container Height">
-        <div className="builder-setting-value-stack">
-          <BuilderNumberSelectControl
-            fallback="0"
-            max={800}
-            min={0}
-            step={10}
-            value={module.settings.containerHeight ?? "0"}
-            onChange={(containerHeight) => updateSettings({ containerHeight })}
-          />
-          <span className="builder-module-offset-hint">0 fits content; larger values set a minimum height.</span>
-        </div>
-      </BuilderSettingRow>
-      <BuilderThemeColorSettingRow
-        fullWidth
-        fallback="#18324a"
-        label="Text Color"
-        themeColors={themeColors}
-        value={normalizeBuilderHexColor(module.settings.textColor || "#18324a")}
-        onChange={(textColor) =>
-          updateSettings({ textColor: normalizeBuilderHexColor(textColor) })
-        }
-      />
-      <BuilderSettingRow fullWidth label="X-Index Offset">
-        <div className="builder-setting-value-stack">
-          <input
-            type="number"
-            min={-500}
-            max={500}
-            step={1}
-            value={module.settings.offsetX ?? "0"}
-            onChange={(event) =>
-              updateSettings({ offsetX: normalizeSignedOffsetValue(event.target.value, "0") })
-            }
-          />
-          <span className="builder-module-offset-hint">Positive moves right; negative moves left.</span>
-        </div>
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Y-Index Offset">
-        <div className="builder-setting-value-stack">
-          <input
-            type="number"
-            min={-500}
-            max={500}
-            step={1}
-            value={module.settings.offsetY ?? "0"}
-            onChange={(event) =>
-              updateSettings({ offsetY: normalizeSignedOffsetValue(event.target.value, "0") })
-            }
-          />
-          <span className="builder-module-offset-hint">Positive moves up; negative moves down.</span>
-        </div>
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Z-Index">
-        <div className="builder-setting-value-stack">
-          <input
-            type="number"
-            min={-999}
-            max={999999}
-            step={1}
-            value={module.settings.zIndex ?? "10"}
-            onChange={(event) => updateSettings({ zIndex: event.target.value })}
-          />
-          <span className="builder-module-offset-hint">Higher values stack in front; lower values stack behind.</span>
-        </div>
-      </BuilderSettingRow>
     </div>
   );
 }

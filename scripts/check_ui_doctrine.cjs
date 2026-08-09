@@ -238,15 +238,50 @@ function checkHexLiterals(files) {
   }
 }
 
+/** R8 — type sizes come from the scale, not literals (added lines only). */
+function checkTypeScaleLiterals(files) {
+  const cssFiles = files.filter(
+    (f) => f.startsWith('src/css/') && f.endsWith('.css') && !f.endsWith('_variables.css')
+  );
+  if (!cssFiles.length) return;
+  for (const file of cssFiles) {
+    for (const raw of addedLines(file)) {
+      // A literal inside var(--text-sm, 0.82rem) is the fallback pattern and
+      // is correct — same treatment as R3's hex-in-fallback.
+      const line = raw.replace(/var\(\s*--[\w-]+\s*,[^)]*\)/g, 'var(--token)');
+      const hit = line.match(/font-size\s*:\s*([0-9.]+(?:px|rem))/);
+      if (!hit) continue;
+      failures.push(
+        `[R8] Literal font-size ${hit[1]} added in ${file}:\n` +
+          `        ${raw.trim().slice(0, 100)}\n` +
+          `      Use the type scale in src/css/_variables.css (--text-xs … --text-3xl).\n` +
+          `      20+ one-off sizes accumulated exactly this way; the scale exists so the\n` +
+          `      count goes down, not up. Nearest step wins — the scale canonizes the\n` +
+          `      sizes already in majority use, so substitution rarely changes pixels.`
+      );
+    }
+  }
+}
+
+/**
+ * True when an editor is built to E1: either directly from field strips, or
+ * from the schema generator (which renders field strips itself — an editor
+ * using it never touches the markup at all, which is the stronger position).
+ */
+function usesFieldStrips(src) {
+  return src.includes('BuilderModuleFieldStrip') || src.includes('BuilderSchemaModuleSettings');
+}
+
 /** E1 — module settings editors are built from field strips. */
 function checkFieldStripAdoption(files) {
   for (const file of files.filter((f) => SETTINGS_GLOB.test(f))) {
     if (!fs.existsSync(file)) continue;
     const src = fs.readFileSync(file, 'utf8');
-    if (src.includes('BuilderModuleFieldStrip')) continue;
+    if (usesFieldStrips(src)) continue;
     failures.push(
       `[E1] ${file} does not use BuilderModuleFieldStrip.\n` +
-        `      Settings editors are built from BuilderModuleFieldStrip + BuilderModuleField,\n` +
+        `      Settings editors are built from BuilderModuleFieldStrip + BuilderModuleField —\n` +
+        `      or declared as a schema and generated (builder-schema-module-settings.tsx) —\n` +
         `      never a hand-rolled grid or a bespoke flex row. Reference implementation:\n` +
         `      components/builder/builder-image-module-settings.tsx\n` +
         `      (Boy-scout rule: a module you touch comes up to standard in the same PR.)`
@@ -294,14 +329,22 @@ function report() {
   const settings = fs.existsSync(dir)
     ? fs.readdirSync(dir).filter((f) => f.endsWith('-module-settings.tsx'))
     : [];
-  const adopted = settings.filter((f) =>
-    fs.readFileSync(path.join(dir, f), 'utf8').includes('BuilderModuleFieldStrip')
-  );
+  const adopted = settings.filter((f) => usesFieldStrips(fs.readFileSync(path.join(dir, f), 'utf8')));
   const offenders = breakpointOnlyLayout();
   const unpaired = settings.filter((f) => {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
     return src.includes('horizontalMargin') !== src.includes('verticalMargin');
   });
+
+  // R8 debt: distinct literal font sizes still in the hand-authored CSS.
+  const sizeLiterals = new Set();
+  if (fs.existsSync(CSS_DIR)) {
+    for (const f of fs.readdirSync(CSS_DIR).filter((n) => n.endsWith('.css') && n !== '_variables.css')) {
+      const src = fs.readFileSync(path.join(CSS_DIR, f), 'utf8')
+        .replace(/var\(\s*--[\w-]+\s*,[^)]*\)/g, 'var(--token)');
+      for (const m of src.matchAll(/font-size\s*:\s*([0-9.]+(?:px|rem))/g)) sizeLiterals.add(m[1]);
+    }
+  }
 
   console.log('\nUI doctrine — whole-repo debt (docs/MODULE_UI_DOCTRINE.md)\n');
   console.log(`  [E1] field-strip adoption ....... ${adopted.length}/${settings.length} editors`);
@@ -309,6 +352,7 @@ function report() {
   for (const f of unpaired) console.log(`         ${f}`);
   console.log(`  [R1] breakpoint-only layout ..... ${offenders.length} selectors (excl. ${R1_ALLOW.size} allowlisted)`);
   for (const o of offenders) console.log(`         ${o.file}:${o.line}  ${o.sel}`);
+  console.log(`  [R8] distinct literal font sizes  ${sizeLiterals.size} (scale has 8 steps)`);
   console.log('\n  These numbers should only ever go down.\n');
   console.log('  Not yet adopted:');
   for (const f of settings.filter((x) => !adopted.includes(x))) console.log(`    - ${f}`);
@@ -352,6 +396,7 @@ function run({ all = false } = {}) {
     } else {
       checkRegeneratedCssLayer(files);
       checkHexLiterals(files);
+      checkTypeScaleLiterals(files);
     }
   }
   return { failures, notes };

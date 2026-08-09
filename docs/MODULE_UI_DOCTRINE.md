@@ -92,9 +92,12 @@ read that file.
 
 #### E1. Editors are built from field strips `[auto]`
 
-Build from `BuilderModuleFieldStrip` + `BuilderModuleField`. Never a
-hand-rolled `<label class="field">` grid, never a bespoke flex row invented for
-one module.
+Build from `BuilderModuleFieldStrip` + `BuilderModuleField` — or, better,
+declare the settings as a schema and let
+`components/builder/builder-settings-schema.tsx` generate the editor (E1–E4
+then hold by construction; see §4). Never a hand-rolled
+`<label class="field">` grid, never a bespoke flex row invented for one
+module.
 
 *Incident (measured 2026-08-08):* 30 of 37 settings editors are neither field
 strips nor the legacy grid — they are 30 independent inventions. That is the
@@ -238,10 +241,15 @@ ships. A gate that fires on someone else's committed code teaches people to
 reach for `SKIP_CONVENTIONS`, and a gate that is routinely bypassed is not a
 gate.
 
-*Known gap — do not write a rule this doc cannot keep:* `_variables.css` has 24
-tokens, all colour and radius. **There is no spacing scale and no type scale.**
-A "use the spacing scale" rule would be unenforceable fiction today. Creating
-those scales is a prerequisite task, not a rule — see §4.
+*Gap closed 2026-08-08:* `_variables.css` now carries a spacing scale
+(`--space-1` … `--space-8`) and a type scale (`--text-xs` … `--text-3xl`,
+plus `--leading-tight`/`--leading-normal`). The steps canonize the values the
+CSS already clustered on when measured (0.82rem and 0.9rem were the two
+dominant font sizes; 4/6/8/12/16/24px the dominant gaps), so substituting a
+token is usually a zero-pixel change. Type sizes are enforced by R8 below;
+spacing stays `[eye]` for now because legitimate off-scale pixel values
+(1px borders, 2px nudges, transforms) would drown an automated check in
+false positives.
 
 #### R4. Empty state is a designed state `[test]`
 
@@ -272,6 +280,21 @@ clickable `<div>`s. Auto-advancing content pauses on hover. Focus is visible —
 
 Rich-text and embed HTML passes through `lib/builder-client/sanitize-html.ts`.
 Never `dangerouslySetInnerHTML` with raw user content.
+
+#### R8. Type sizes come from the scale `[auto]` *(added 2026-08-08)*
+
+`font-size` in hand-authored CSS uses a `--text-*` token, never a literal.
+`var(--text-sm, 0.82rem)` is fine — same fallback logic as R3.
+
+*Incident (measured 2026-08-08):* the hand-authored CSS held **20+ distinct
+font sizes** — 0.72, 0.75, 0.78, 0.8, 0.82, 0.85, 0.86, 0.875, 0.88, 0.9,
+0.92, 0.95rem and more — each one someone's reasonable guess on the day,
+none of them a decision. That is what "no scale" costs: not ugliness on any
+one line, but the impossibility of consistency across lines.
+
+*Standing debt, stated honestly:* the check runs on **added lines only**;
+`check:ui:report` tracks the distinct-literal count (71 at time of writing).
+Like R3, it stops the bleeding rather than pretending the backlog is clean.
 
 ---
 
@@ -339,6 +362,7 @@ They are reproduced here with honest tags.
 | R1 no breakpoint-only layout | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
 | R2 CSS in overrides layer | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
 | R3 tokens not hex | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
+| R8 type from the scale | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
 | R4 empty state | `[test]` | `npm run test:builder-ui` |
 | R5 1440 / 768 / 390 | `[eye]` | **operator** step, `/builder-preview` |
 | R6 accessibility floor | `[eye]` | state it in the PR |
@@ -349,23 +373,26 @@ They are reproduced here with honest tags.
 Everything `[auto]` runs automatically at **pre-commit** (staged changes) and in
 **CI** (`--all`). Nothing extra to remember.
 
-### Prerequisite tasks this doc deliberately did not turn into rules
+### Prerequisite tasks — all three closed 2026-08-08
 
-1. **A spacing scale and a type scale** in `_variables.css`. Until they exist,
-   "use the scale" is unenforceable. This is the highest-value next piece of
-   groundwork.
-2. **Extracting Navigation's editor** out of
-   `components/builder/builder-module-card.tsx` (4,684 lines, holds inline
-   settings UI for many types, including `navDropdownStyle`). E1 cannot be
-   applied to Navigation until its editor is a file.
-3. **A declarative settings schema** (proposed in
-   `docs/MODULE_SYSTEM_HANDOFF.md`) that *generates* editors rather than
-   hand-writing 37 of them. That and this doctrine are the same work from
-   opposite ends: the doctrine says what a good editor looks like; the schema
-   would make it the only thing you can build. **Doctrine first** — a generator
-   built before the standard just mass-produces the current mistakes. Rules E1,
-   E2, E3, E4 and E6 all become *free* under a generator; that list is the
-   schema's requirements document.
+Kept for the record; the doc above assumes they exist.
+
+1. **A spacing scale and a type scale** in `_variables.css` — done. Type
+   sizes are enforced by R8; spacing is `[eye]` (see R3's gap-closed note for
+   why).
+2. **Navigation's editor extracted** out of `builder-module-card.tsx` into
+   `builder-navigation-module-settings.tsx` — done, behaviour unchanged (live
+   tenant menus must not move). E1 now applies to it like any other editor.
+3. **The declarative settings schema** — done:
+   `components/builder/builder-settings-schema.tsx`. An editor declares its
+   fields grouped content/layout/style/advanced; the generator renders the
+   strips, so E1, E2, E3 and E4 (via `marginFields`) hold by construction.
+   Bespoke UI drops into `custom` fields — one special control is never a
+   reason to hand-roll a whole panel. First conversion:
+   `builder-current-poll-module-settings.tsx`. A field's `rendersVia` names
+   its renderer-side consumer (E7's paper trail); the conformance test that
+   asserts it is the remaining open piece, tracked in
+   `docs/MODULE_SYSTEM_HANDOFF.md` §3(c).
 
 ---
 

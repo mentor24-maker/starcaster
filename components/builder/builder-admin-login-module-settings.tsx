@@ -1,58 +1,69 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderSchemaModuleSettings, type BuilderSettingsSchema } from "./builder-settings-schema";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
+const SCHEMA: BuilderSettingsSchema = {
+  content: [
+    [
+      {
+        key: "formTitle",
+        label: "Form title",
+        width: "text-md",
+        control: "text",
+        placeholder: "Admin Sign In",
+        fallback: "Admin Sign In",
+        rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
+      },
+      {
+        key: "buttonText",
+        label: "Button text",
+        width: "text-md",
+        control: "text",
+        placeholder: "Sign In",
+        fallback: "Sign In",
+        rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
+      }
+    ],
+    [
+      {
+        key: "showForgotPassword",
+        label: "Forgot password",
+        width: "select-sm",
+        control: "select",
+        options: [
+          { value: "true", label: "Show" },
+          { value: "false", label: "Hide" }
+        ],
+        fallback: "true",
+        rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
+      }
+    ]
+  ],
+  advanced: [
+    [
+      {
+        key: "successRedirect",
+        label: "Redirect on success",
+        width: "full",
+        control: "text",
+        placeholder: "/admin-dashboard",
+        fallback: "/admin-dashboard",
+        rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
+      }
+    ]
+  ]
+};
+
 export function BuilderAdminLoginModuleSettings({ module, onUpdateModule }: Props) {
-  const s = module.settings;
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
-
   return (
     <div className="builder-crm-contacts-table-settings">
-      <BuilderSettingRow label="Form title" fullWidth>
-        <input
-          type="text"
-          value={s.formTitle ?? "Admin Sign In"}
-          onChange={(e) => set("formTitle", e.target.value)}
-          placeholder="Admin Sign In"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Button text" fullWidth>
-        <input
-          type="text"
-          value={s.buttonText ?? "Sign In"}
-          onChange={(e) => set("buttonText", e.target.value)}
-          placeholder="Sign In"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Forgot password link">
-        <select value={s.showForgotPassword ?? "true"} onChange={(e) => set("showForgotPassword", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Redirect on success" fullWidth>
-        <input
-          type="text"
-          value={s.successRedirect ?? "/admin-dashboard"}
-          onChange={(e) => set("successRedirect", e.target.value)}
-          placeholder="/admin-dashboard"
-        />
-      </BuilderSettingRow>
+      <BuilderSchemaModuleSettings schema={SCHEMA} module={module} onUpdateModule={onUpdateModule} />
     </div>
   );
 }

@@ -1,42 +1,42 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderSchemaModuleSettings, type BuilderSettingsSchema } from "./builder-settings-schema";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
+const SCHEMA: BuilderSettingsSchema = {
+  content: [
+    [
+      {
+        key: "linkText",
+        label: "Link text",
+        width: "text-md",
+        control: "text",
+        placeholder: "Admin",
+        fallback: "Admin",
+        rendersVia: "AdminNavLinkPreview (builder-template-preview.tsx)"
+      },
+      {
+        key: "linkHref",
+        label: "Link URL",
+        width: "text-md",
+        control: "text",
+        placeholder: "/admin-login",
+        fallback: "/admin-login",
+        rendersVia: "AdminNavLinkPreview (builder-template-preview.tsx)"
+      }
+    ]
+  ]
+};
+
 export function BuilderAdminNavLinkModuleSettings({ module, onUpdateModule }: Props) {
-  const s = module.settings;
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
-
   return (
     <div className="builder-crm-contacts-table-settings">
-      <BuilderSettingRow label="Link text" fullWidth>
-        <input
-          type="text"
-          value={s.linkText ?? "Admin"}
-          onChange={(e) => set("linkText", e.target.value)}
-          placeholder="Admin"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Link URL" fullWidth>
-        <input
-          type="text"
-          value={s.linkHref ?? "/admin-login"}
-          onChange={(e) => set("linkHref", e.target.value)}
-          placeholder="/admin-login"
-        />
-      </BuilderSettingRow>
+      <BuilderSchemaModuleSettings schema={SCHEMA} module={module} onUpdateModule={onUpdateModule} />
     </div>
   );
 }

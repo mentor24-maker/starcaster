@@ -9,7 +9,7 @@ import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { AdminGameAudienceField } from "@/components/admin-game-audience-field";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderNumberSelectControl } from "@/components/builder/builder-inline-number-select";
-import { BuilderSettingRow } from "@/components/builder/builder-setting-row";
+import { BuilderModuleField, BuilderModuleFieldStrip } from "@/components/builder/builder-module-field";
 import { BuilderCellPanelHeader } from "@/components/builder/builder-cell-panel-header";
 import { ReminderCriteriaEditor, type ReminderPollOption } from "@/components/reminder-criteria-editor";
 import {
@@ -33,7 +33,7 @@ import {
 } from "@/lib/builder-reminder-module";
 import { readAdminJson } from "@/lib/admin-fetch";
 import {
-  BuilderThemeColorSettingRow,
+  BuilderThemeColorField,
   type BuilderThemePalette
 } from "./builder-theme-color-field";
 
@@ -52,6 +52,8 @@ type BuilderReminderRecordEditorProps = {
   themeColors?: BuilderThemePalette;
 };
 
+const OFFSET_INPUT_STYLE = { width: "9ch" } as const;
+
 function BuilderReminderRecordEditor({
   record,
   pollOptions,
@@ -61,6 +63,7 @@ function BuilderReminderRecordEditor({
 }: BuilderReminderRecordEditorProps) {
   const { config } = useMemo(() => parseReminderCriteriaFromRecord(record), [record]);
   const criteria = config.criteria.length > 0 ? config.criteria : [createDefaultReminderCriterion()];
+  const isSpeechBubble = record.appearance === "speech_bubble";
 
   function updateRecord(updates: Partial<BuilderReminderRecord>) {
     onChange({ ...record, ...updates });
@@ -84,87 +87,63 @@ function BuilderReminderRecordEditor({
 
   return (
     <div className="builder-reminder-record-settings admin-game-reminder-editor">
-      <BuilderSettingRow fullWidth label="Name">
-        <input
-          type="text"
-          value={record.name}
-          onChange={(event) => updateRecord({ name: event.target.value })}
-          placeholder="Signup Nudge"
-        />
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="X Offset">
-        <div className="builder-setting-value-stack">
+      {/* Content */}
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Name" width="text-md">
+          <input
+            type="text"
+            value={record.name}
+            onChange={(event) => updateRecord({ name: event.target.value })}
+            placeholder="Signup Nudge"
+          />
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Message" width="full">
+          <BuilderRichTextEditor
+            enableEmojiPicker
+            value={record.messageHtml}
+            onChange={(messageHtml) => updateRecord({ messageHtml })}
+            {...richTextGallery}
+          />
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
+
+      {/* Layout */}
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="X Offset" width="num">
           <input
             type="number"
+            style={OFFSET_INPUT_STYLE}
             value={record.offsetX}
             onChange={(event) =>
               updateRecord({ offsetX: normalizeSignedOffsetValue(event.target.value, "0") })
             }
           />
-          <span className="builder-module-offset-hint">Positive moves right; negative moves left.</span>
-        </div>
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Y Offset">
-        <div className="builder-setting-value-stack">
+        </BuilderModuleField>
+        <BuilderModuleField label="Y Offset" width="num">
           <input
             type="number"
+            style={OFFSET_INPUT_STYLE}
             value={record.offsetY}
             onChange={(event) =>
               updateRecord({ offsetY: normalizeSignedOffsetValue(event.target.value, "0") })
             }
           />
-          <span className="builder-module-offset-hint">Positive moves up; negative moves down.</span>
-        </div>
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Z-Index">
-        <div className="builder-setting-value-stack">
+        </BuilderModuleField>
+        <BuilderModuleField label="Z-Index" width="num">
           <input
             max={999999}
             min={-999}
             step={1}
+            style={OFFSET_INPUT_STYLE}
             type="number"
             value={record.zIndex}
             onChange={(event) => updateRecord({ zIndex: event.target.value })}
           />
-          <span className="builder-module-offset-hint">
-            Higher values stack in front (above polls and floating images). Lower values stack behind.
-          </span>
-        </div>
-      </BuilderSettingRow>
-      {record.appearance === "speech_bubble" ? (
-        <BuilderThemeColorSettingRow
-          fullWidth
-          fallback="#ffffff"
-          label="Background Color"
-          themeColors={themeColors}
-          value={normalizeBuilderHexColor(record.backgroundColor)}
-          onChange={(backgroundColor) =>
-            updateRecord({ backgroundColor: normalizeBuilderHexColor(backgroundColor) })
-          }
-        />
-      ) : null}
-      {record.appearance === "speech_bubble" ? (
-        <>
-          <BuilderThemeColorSettingRow
-            fullWidth
-            fallback="#9ed4ee"
-            label="Border Color"
-            themeColors={themeColors}
-            value={normalizeBuilderHexColor(record.borderColor)}
-            onChange={(borderColor) =>
-              updateRecord({ borderColor: normalizeBuilderHexColor(borderColor) })
-            }
-          />
-          <BuilderSettingRow fullWidth label="Border Size">
-            <BuilderNumberSelectControl
-              fallback="2"
-              max={24}
-              min={0}
-              value={record.borderThickness}
-              onChange={(borderThickness) => updateRecord({ borderThickness })}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow fullWidth label="Container Width">
+        </BuilderModuleField>
+        {isSpeechBubble ? (
+          <BuilderModuleField label="Width" width="num">
             <BuilderNumberSelectControl
               fallback="520"
               max={900}
@@ -173,23 +152,68 @@ function BuilderReminderRecordEditor({
               value={record.containerWidth}
               onChange={(containerWidth) => updateRecord({ containerWidth })}
             />
-          </BuilderSettingRow>
-        </>
-      ) : null}
-      <BuilderSettingRow fullWidth label="Appearance">
-        <select
-          value={record.appearance}
-          onChange={(event) =>
-            updateRecord({ appearance: event.target.value as GameReminderAppearance })
-          }
-        >
-          {GAME_REMINDER_APPEARANCES.map((appearance) => (
-            <option key={appearance} value={appearance}>
-              {reminderAppearanceLabel(appearance)}
-            </option>
-          ))}
-        </select>
-      </BuilderSettingRow>
+          </BuilderModuleField>
+        ) : null}
+      </BuilderModuleFieldStrip>
+      <span className="builder-module-offset-hint">
+        Positive X moves right; positive Y moves up. Higher Z-Index stacks in front (above polls and floating
+        images).
+      </span>
+
+      {/* Style */}
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Appearance" width="select-md">
+          <select
+            value={record.appearance}
+            onChange={(event) =>
+              updateRecord({ appearance: event.target.value as GameReminderAppearance })
+            }
+          >
+            {GAME_REMINDER_APPEARANCES.map((appearance) => (
+              <option key={appearance} value={appearance}>
+                {reminderAppearanceLabel(appearance)}
+              </option>
+            ))}
+          </select>
+        </BuilderModuleField>
+        {isSpeechBubble ? (
+          <>
+            <BuilderModuleField label="Background" width="color">
+              <BuilderThemeColorField
+                dialogLabel="Background color"
+                fallback="#ffffff"
+                themeColors={themeColors}
+                value={normalizeBuilderHexColor(record.backgroundColor)}
+                onChange={(backgroundColor) =>
+                  updateRecord({ backgroundColor: normalizeBuilderHexColor(backgroundColor) })
+                }
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Border Color" width="color">
+              <BuilderThemeColorField
+                dialogLabel="Border color"
+                fallback="#9ed4ee"
+                themeColors={themeColors}
+                value={normalizeBuilderHexColor(record.borderColor)}
+                onChange={(borderColor) =>
+                  updateRecord({ borderColor: normalizeBuilderHexColor(borderColor) })
+                }
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Border" width="num">
+              <BuilderNumberSelectControl
+                fallback="2"
+                max={24}
+                min={0}
+                value={record.borderThickness}
+                onChange={(borderThickness) => updateRecord({ borderThickness })}
+              />
+            </BuilderModuleField>
+          </>
+        ) : null}
+      </BuilderModuleFieldStrip>
+
+      {/* Behavior — bespoke editors keep their own chrome */}
       <AdminGameAudienceField
         value={record.gameAudience}
         onChange={(gameAudience) => updateRecord({ gameAudience })}
@@ -201,24 +225,18 @@ function BuilderReminderRecordEditor({
         onCriteriaChange={(nextCriteria) => updateCriteriaConfig(record.criteriaLogic, nextCriteria)}
         onCriteriaLogicChange={(logic) => updateCriteriaConfig(logic, criteria)}
       />
-      <BuilderSettingRow fullWidth label="Active">
-        <label className="admin-game-reminder-active-toggle">
-          <input
-            checked={record.isActive}
-            onChange={(event) => updateRecord({ isActive: event.target.checked })}
-            type="checkbox"
-          />
-          <span>Show when criteria match</span>
-        </label>
-      </BuilderSettingRow>
-      <BuilderSettingRow fullWidth label="Message">
-        <BuilderRichTextEditor
-          enableEmojiPicker
-          value={record.messageHtml}
-          onChange={(messageHtml) => updateRecord({ messageHtml })}
-          {...richTextGallery}
-        />
-      </BuilderSettingRow>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Active" width="auto">
+          <label className="admin-game-reminder-active-toggle">
+            <input
+              checked={record.isActive}
+              onChange={(event) => updateRecord({ isActive: event.target.checked })}
+              type="checkbox"
+            />
+            <span>Show when criteria match</span>
+          </label>
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
     </div>
   );
 }

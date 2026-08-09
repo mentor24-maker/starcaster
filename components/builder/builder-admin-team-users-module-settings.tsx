@@ -1,86 +1,99 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderSchemaModuleSettings, type BuilderSettingsSchema } from "./builder-settings-schema";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
+const SHOW_HIDE_OPTIONS = [
+  { value: "true", label: "Show" },
+  { value: "false", label: "Hide" }
+];
+
+const SCHEMA: BuilderSettingsSchema = {
+  content: [
+    [
+      {
+        key: "showTitle",
+        label: "Show table title",
+        width: "select-sm",
+        control: "select",
+        options: SHOW_HIDE_OPTIONS,
+        fallback: "true",
+        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+      },
+      {
+        key: "tableTitle",
+        label: "Title text",
+        width: "text-md",
+        control: "text",
+        placeholder: "Team Members",
+        fallback: "Team Members",
+        visibleWhen: (s) => (s.showTitle ?? "true") === "true",
+        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+      }
+    ],
+    [
+      {
+        key: "rowActionsNote",
+        label: "",
+        width: "full",
+        control: "custom",
+        bare: true,
+        render: () => <div className="builder-breadcrumb-items-label">Row actions</div>
+      }
+    ],
+    [
+      {
+        key: "showEditButton",
+        label: "Edit button",
+        width: "select-sm",
+        control: "select",
+        options: SHOW_HIDE_OPTIONS,
+        fallback: "true",
+        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+      },
+      {
+        key: "showDeleteButton",
+        label: "Delete button",
+        width: "select-sm",
+        control: "select",
+        options: SHOW_HIDE_OPTIONS,
+        fallback: "true",
+        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+      },
+      {
+        key: "showAddButton",
+        label: "Add button",
+        width: "select-sm",
+        control: "select",
+        options: SHOW_HIDE_OPTIONS,
+        fallback: "true",
+        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+      }
+    ],
+    [
+      {
+        key: "addButtonLabel",
+        label: "Add button label",
+        width: "text-md",
+        control: "text",
+        placeholder: "Add Team Member",
+        fallback: "Add Team Member",
+        visibleWhen: (s) => (s.showAddButton ?? "true") === "true",
+        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+      }
+    ]
+  ]
+};
+
 export function BuilderAdminTeamUsersModuleSettings({ module, onUpdateModule }: Props) {
-  const s = module.settings;
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
-
-  const showTitle = (s.showTitle ?? "true") === "true";
-
   return (
     <div className="builder-crm-contacts-table-settings">
-      <BuilderSettingRow label="Show table title">
-        <select value={s.showTitle ?? "true"} onChange={(e) => set("showTitle", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      {showTitle && (
-        <BuilderSettingRow label="Title text" fullWidth>
-          <input
-            type="text"
-            value={s.tableTitle ?? "Team Members"}
-            onChange={(e) => set("tableTitle", e.target.value)}
-            placeholder="Team Members"
-          />
-        </BuilderSettingRow>
-      )}
-
-      <div className="builder-breadcrumb-items-label" style={{ marginTop: 12, marginBottom: 6 }}>
-        Row actions
-      </div>
-
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Edit button">
-            <select value={s.showEditButton ?? "true"} onChange={(e) => set("showEditButton", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Delete button">
-            <select value={s.showDeleteButton ?? "true"} onChange={(e) => set("showDeleteButton", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Add button">
-            <select value={s.showAddButton ?? "true"} onChange={(e) => set("showAddButton", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-
-          {(s.showAddButton ?? "true") === "true" && (
-            <BuilderSettingRow label="Add button label" fullWidth>
-              <input
-                type="text"
-                value={s.addButtonLabel ?? "Add Team Member"}
-                onChange={(e) => set("addButtonLabel", e.target.value)}
-                placeholder="Add Team Member"
-              />
-            </BuilderSettingRow>
-          )}
-        </div>
-      </div>
+      <BuilderSchemaModuleSettings schema={SCHEMA} module={module} onUpdateModule={onUpdateModule} />
     </div>
   );
 }

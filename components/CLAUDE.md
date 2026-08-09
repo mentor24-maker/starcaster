@@ -10,6 +10,12 @@ Tests: `npm run test:builder-ui`.
 > the working summary; the doctrine carries the reasons, the enforcement tags,
 > and the checks. If they disagree, the doctrine wins.
 
+- **Prefer the schema generator:** declare settings as a
+  `BuilderSettingsSchema` and render with `BuilderSchemaModuleSettings`
+  (`builder-settings-schema.tsx`) — strip order, width tokens, and margin
+  pairing then hold by construction. Hand-written strips are for editors
+  dominated by bespoke UI. Example conversion:
+  `builder-current-poll-module-settings.tsx`.
 - **Field strips:** horizontal groups use `BuilderModuleFieldStrip` +
   `BuilderModuleField` — a wrapping flex row. Each field is
   `flex: 0 0 auto` with a declared width token; fields stay on one line

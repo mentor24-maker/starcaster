@@ -170,12 +170,26 @@ export function getSplitVerticalMarginStyle(top: unknown, bottom: unknown): CSSP
 }
 
 export function getModuleMarginStyle(settings: Record<string, string>): CSSProperties {
+  const { top, bottom } = getModuleSplitMarginValues(settings);
+
+  return getSplitVerticalMarginStyle(top, bottom);
+}
+
+/**
+ * The split top/bottom margins with the legacy verticalMargin fallback —
+ * the SAME resolution getModuleMarginStyle renders with. Editors display
+ * these instead of reading the raw keys: table-cell modules never pass
+ * through normalizeBuilderModuleSettingsForType, so a cell heading can
+ * still carry only the legacy key, and an editor that reads marginTop
+ * directly shows 0 while the page renders the legacy value.
+ */
+export function getModuleSplitMarginValues(settings: Record<string, string>): { top: string; bottom: string } {
   const legacy = settings.verticalMargin;
 
-  return getSplitVerticalMarginStyle(
-    settings.marginTop ?? legacy,
-    settings.marginBottom ?? legacy
-  );
+  return {
+    top: String(normalizeSpacingValue(settings.marginTop ?? legacy, "0", 0, 160)),
+    bottom: String(normalizeSpacingValue(settings.marginBottom ?? legacy, "0", 0, 160))
+  };
 }
 
 export function getSectionMarginStyle(section: BuilderTemplateSection): CSSProperties {
