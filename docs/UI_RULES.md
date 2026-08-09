@@ -225,8 +225,10 @@ additions recorded so far:
    panels can honor D1/D2.
 3. **S5**: blog-post-list lost its three-column layout in the sweep —
    restore it.
-4. Field-strip labels render red-ish in the settings panels (no rule says
-   red; likely a styling bug — under investigation).
+4. ~~Field-strip labels render red-ish~~ — investigated 2026-08-09 and
+   **withdrawn**: pixel-sampling the screenshot found zero red-dominant
+   pixels; the labels are the standard muted token. (Kept as a record that
+   suspected violations get verified, not assumed.)
 
 ## How this list grows
 
