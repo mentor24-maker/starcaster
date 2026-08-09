@@ -145,6 +145,22 @@ describe("splitThemePatch", () => {
       expect(theme.typography.scale.baseSize).toBe(0);
     }
   });
+
+  it("carries the role palette on themeStyles so the preview emits its vars", () => {
+    const { themeStyles } = splitThemePatch({
+      backgroundColor: "#f5f7fa",
+      palette: { header: "#132a4a", headerText: "#ffffff", button: "#5aa02c", buttonText: "#ffffff" }
+    });
+    expect(themeStyles.palette).toEqual({
+      header: "#132a4a", headerText: "#ffffff", button: "#5aa02c", buttonText: "#ffffff"
+    });
+  });
+
+  it("drops a malformed or empty palette rather than passing junk to the shell", () => {
+    expect(splitThemePatch({ palette: "navy-ish" as never }).themeStyles.palette).toBeUndefined();
+    expect(splitThemePatch({ palette: {} }).themeStyles.palette).toBeUndefined();
+    expect(splitThemePatch({ palette: { header: 7 } as never }).themeStyles.palette).toBeUndefined();
+  });
 });
 
 describe("lockableValuesFrom", () => {
@@ -161,6 +177,12 @@ describe("lockableValuesFrom", () => {
       "typography.fonts.heading",
       "typography.fonts.body"
     ]);
+    // Role-palette pins ride the same dotted-path mechanism.
+    const withPalette = lockableValuesFrom({
+      palette: { header: "#132a4a", button: "#5aa02c" }
+    });
+    expect(withPalette.map((v) => v.path)).toEqual(["palette.header", "palette.button"]);
+    expect(withPalette[0].kind).toBe("colour");
     // The path is what lockedValues is keyed by, so it has to survive intact
     // all the way to applyLockedValues on the server.
     expect(values.find((v) => v.path === "typography.fonts.heading")?.value).toBe("lora");

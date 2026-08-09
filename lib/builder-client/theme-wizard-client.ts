@@ -83,6 +83,21 @@ export function splitThemePatch(patch: Record<string, unknown> | null | undefine
     if (typeof source[key] === "string" && source[key]) themeStyles[key] = source[key];
   }
 
+  // The role palette rides on themeStyles so the preview shell emits its CSS
+  // vars alongside the legacy four (see getThemePaletteRoleVars).
+  if (source.palette && typeof source.palette === "object" && !Array.isArray(source.palette)) {
+    const palette: Record<string, string> = {};
+    for (const [role, value] of Object.entries(source.palette as Record<string, unknown>)) {
+      if (typeof value === "string" && value) palette[role] = value;
+    }
+    if (Object.keys(palette).length) themeStyles.palette = palette;
+  }
+
+  // Design treatments ride the same way; the preview honours them directly.
+  if (source.treatments && typeof source.treatments === "object" && !Array.isArray(source.treatments)) {
+    themeStyles.treatments = source.treatments;
+  }
+
   return {
     // Merged over the "inherit" defaults so any slot the model left out keeps
     // the site's existing value instead of rendering as empty.
@@ -135,6 +150,8 @@ const LOCKABLE: Array<{ path: string; label: string; kind: "colour" | "font" }> 
   { path: "secondaryColor", label: "Secondary", kind: "colour" },
   { path: "backgroundColor", label: "Background", kind: "colour" },
   { path: "accentColor", label: "Accent", kind: "colour" },
+  { path: "palette.header", label: "Header", kind: "colour" },
+  { path: "palette.button", label: "Button", kind: "colour" },
   { path: "typography.fonts.heading", label: "Heading font", kind: "font" },
   { path: "typography.fonts.body", label: "Body font", kind: "font" }
 ];
