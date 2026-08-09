@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
@@ -65,33 +66,32 @@ function BreadcrumbItemsManager({ settings, set }: BuilderSchemaFieldContext) {
     <>
       <div className="builder-breadcrumb-items-label">Trail items — last item is the current page</div>
 
-      <div className="builder-slider-items">
+      <div className="builder-item-grid builder-item-grid--crumbs">
+        <span className="builder-item-grid-header">Label</span>
+        <span className="builder-item-grid-header">URL</span>
+        <span className="builder-item-grid-header">Action</span>
         {items.map((item, index) => (
-          <div key={item.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>{item.label || `Item ${index + 1}`}</strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move left">↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move right">↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
-              </div>
+          <Fragment key={item.id}>
+            <input
+              type="text"
+              value={item.label}
+              onChange={(e) => updateItem(item.id, "label", e.target.value)}
+              placeholder="Page name"
+              aria-label={`Item ${index + 1} label`}
+            />
+            <input
+              type="text"
+              value={item.url}
+              onChange={(e) => updateItem(item.id, "url", e.target.value)}
+              placeholder={index === items.length - 1 ? "current page — leave blank" : "/path-or-url"}
+              aria-label={`Item ${index + 1} URL`}
+            />
+            <div className="builder-item-grid-actions">
+              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} aria-label="Move Up" title="Move up">↑</button>
+              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} aria-label="Move Down" title="Move down">↓</button>
+              <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} aria-label="Delete" title="Delete">✕</button>
             </div>
-            <div className="builder-slider-item-grid">
-              <label className="field">
-                <span>Label</span>
-                <input type="text" value={item.label} onChange={(e) => updateItem(item.id, "label", e.target.value)} placeholder="Page name" />
-              </label>
-              <label className="field">
-                <span>URL{index === items.length - 1 ? " (current — leave blank)" : ""}</span>
-                <input
-                  type="text"
-                  value={item.url}
-                  onChange={(e) => updateItem(item.id, "url", e.target.value)}
-                  placeholder={index === items.length - 1 ? "" : "/path-or-url"}
-                />
-              </label>
-            </div>
-          </div>
+          </Fragment>
         ))}
       </div>
 

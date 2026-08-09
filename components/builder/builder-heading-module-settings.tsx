@@ -172,6 +172,18 @@ export function BuilderHeadingModuleSettings({
               onChange={(marginBottom) => ctx.set("marginBottom", marginBottom)}
             />
           )
+        },
+        // Horizontal margin capability added by operator ruling 2026-08-09
+        // (UI_RULES.md S2 audit item). Pairs with the Top/Bottom split above.
+        {
+          key: "horizontalMargin",
+          label: "H Margin",
+          width: "num",
+          control: "number",
+          min: 0,
+          max: 160,
+          fallback: "0",
+          rendersVia: "getModuleMarginStyle"
         }
       ]
     ],

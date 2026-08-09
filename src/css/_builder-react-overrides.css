@@ -1652,3 +1652,58 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-radius: 10px;
 }
 .tw-preview-full { width: 100%; }
+
+/* ---------------------------------------------------------------------------
+ * Item grid — titled-column item managers (UI_RULES L6).
+ *
+ * The generic successor to the Navigation Links grid: a header row of column
+ * titles, one compact row per item, actions column last. Column tracks are
+ * declared per manager via a --<manager> modifier; a field that cannot fit a
+ * column (image picker, multi-line text) renders as a .builder-item-grid-sub
+ * row spanning the grid under its item's primary row. Columns use minmax(...,
+ * 1fr) so they expand rather than crop (L4/W5). Adopted by: breadcrumb,
+ * feature-cards. New managers add a modifier here rather than a new system.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .builder-item-grid {
+  display: grid;
+  align-items: center;
+  column-gap: var(--space-3, 8px);
+  row-gap: var(--space-2, 6px);
+  margin: var(--space-3, 8px) 0 var(--space-2, 6px);
+}
+.builder-react-root .builder-item-grid--crumbs {
+  grid-template-columns: minmax(12ch, 1fr) minmax(12ch, 1.4fr) max-content;
+}
+.builder-react-root .builder-item-grid--cards {
+  grid-template-columns: minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+}
+.builder-react-root .builder-item-grid--cards.builder-item-grid--cards-icons {
+  grid-template-columns: 6ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+}
+.builder-react-root .builder-item-grid > input,
+.builder-react-root .builder-item-grid > select {
+  width: 100%;
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-header {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--muted, #888888);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.builder-react-root .builder-item-grid-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+}
+.builder-react-root .builder-item-grid-sub {
+  grid-column: 1 / -1;
+  padding-bottom: var(--space-2, 6px);
+  border-bottom: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+}
+.builder-react-root .builder-item-grid-sub:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
