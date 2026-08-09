@@ -178,7 +178,13 @@ export function getSplitVerticalMarginStyle(top: unknown, bottom: unknown): CSSP
 export function getModuleMarginStyle(settings: Record<string, string>): CSSProperties {
   const { top, bottom } = getModuleSplitMarginValues(settings);
 
-  return getSplitVerticalMarginStyle(top, bottom);
+  return {
+    ...getSplitVerticalMarginStyle(top, bottom),
+    // Horizontal margin capability added 2026-08-09 by operator ruling
+    // (UI_RULES.md S2 audit item). Defaults to 0, so existing headings
+    // do not move.
+    ...getHorizontalMarginStyle(settings.horizontalMargin)
+  };
 }
 
 /**
