@@ -1,7 +1,14 @@
 # UI Doctrine
 
-The single home for UI rules in this repo — both halves of it: the **modules**
-inside the Builder, and the **framework** of admin screens around them.
+The enforcement layer for UI rules in this repo — both halves of it: the
+**modules** inside the Builder, and the **framework** of admin screens around
+them.
+
+**Read `docs/UI_RULES.md` first** — the Master UI Rules, distilled from the
+operator's recorded statements (2026-08-09). That list is the *requirements*;
+this document is the *machinery* that enforces the enforceable subset and
+records the incident behind each check. When the two disagree, the master
+list wins and this doc gets a new checker.
 
 Written 2026-08-08, after the operator checked the Feature Cards and mega-menu
 work on production and reported: *"the functionality seems basically right. The

@@ -107,9 +107,89 @@ For each item record: **(A) editor or (B) rendered** · the file it lands in ·
 whether it is *this module only* or *a general rule* (general ones are the
 raw material of the doctrine).
 
+### 4.0 RECOVERED FEEDBACK (2026-08-09) — awaiting operator confirmation
+
+**How this section got here.** On 2026-08-09 the operator reviewed the
+converted panels on `module-tester` and said: *"this looks absolutely
+terrible, with lots of thinks I specifically talked about. For one thing,
+look at all the wasted screen real estate on the right side. Orphaned
+fields."* He was right: his design input from June–August sessions was never
+recorded in this repo — these sections sat empty while the doctrine encoded
+only the mechanically checkable layer. His words were then recovered by
+mining every Claude session transcript on the machine (128 keyword hits, 46
+genuine directives). Everything below is **verbatim**, with thread and date.
+Input given in claude.ai chats (not Code sessions) is not on this machine
+and is NOT here — the operator should add anything missing.
+
+**The clearest proof of the loss:** on 2026-06-28 he supplied a layout
+design for blog-post-list — *"Attached is a layout design for the
+blog-post-list module to organize and compact the form. This arranges the
+fields into three sections (general, Page Design, Card Design) arranged in
+three columns."* That three-column design was built — and then the
+2026-08-09 doctrine sweep **flattened it into stacked single rows**, because
+no rule recorded why it was three columns. A convention pass that doesn't
+know the design intent will steamroll it.
+
+#### Recurring demands (each appeared 2–6 times across threads)
+
+1. **Never force fields to maximum width; modest, uniform widths.**
+   *"I've begged and pleaded with every AI model I've used again and again
+   and agin not to always force every field to the widest possible width,
+   but to no avail. There appears to be some mysterious master style to rule
+   them all that overrides each and every attempt to reign in the width of
+   fields."* (main, 7/1) · *"make them all 100px wide"* (6/28) · *"expand
+   the field widths to 200px, which might get us to a uniform field width"*
+   (6/28) · *"Make the two columns the same width"* (6/24)
+2. **Minimize vertical space — related controls share a row; use the empty
+   right side.** *"The goal is to minimize vertical space and the need for
+   scrolling"* (6/30) · *"Put all the card elements on the same line. There
+   is plenty of room for all three dropdown lists on the same row"* (6/30)
+   · *"since there is plenty of room to the right of the Pages section,
+   display the selected pages to the right, parallel to the Pages section"*
+   (7/24) · *"wasted screen real estate on the right side. Orphaned
+   fields"* (8/9)
+3. **One uniform structure so every module feels familiar.** *"an elegant
+   and robust system... so the user finds every single widget familiar in
+   terms of structure and design"* (site-import, 8/7)
+4. **Labels never cut off, never overlapping, never cryptic; grid columns
+   get titles.** *"the labels Date Range filter, Popularity filter, and
+   Category filter are all cut off by the fields"* (6/28) · *"Give each of
+   those field columns titles: Parent Page, Page Name, Slug, Width,
+   Action"* (7/1) · *"come up with a clearer description. I'm not quite
+   sure what that even means"* (7/24)
+5. **Remove dead/redundant fields.** *"I notice this field has a 'content'
+   field that doesn't do anything. If that field is indeed extraneous,
+   please remove it."* (7/1) · *"Remove the 'Post view page' field
+   (redundant to the slug field)"* (6/28)
+6. **Readable contrast, always.** *"you've got the font in white, so I
+   can't see the pages"* (7/24) · *"fix the font and/or background colors
+   so they are readible"* (7/20)
+7. **Any long list gets search, filters, sort.** *"I anticipate dozens of
+   categories/types... for a total of hundreds and eventually thousands of
+   modules. So a clear navigation system is essential... we need at the top
+   nexto to the sort icons is a text search field"* (blazefish, 8/7)
+8. **Dropdowns with sensible presets over free-form fields.** *"it should
+   be a matter of selecting the destination from a dropdown list, which
+   will automatically format the URL"* (6/30) · standard width/height
+   presets + "Other"/"None" (7/1)
+9. **Standard icons for row actions, not ad-hoc buttons.** *"Use the
+   standard delete icon rather than a button"* (6/30)
+10. **Section width control: constrained vs full width** (7/24), and
+11. **Language switcher as text buttons, not flags** (7/17, 7/22) — module
+    specifics, kept for their modules.
+
+The full 46-entry digest with complete quotes lives at
+`docs/OPERATOR_UI_FEEDBACK.md` (same date). The operator then commissioned
+**`docs/UI_RULES.md` — the Master UI Rules** (2026-08-09): every statement
+distilled into numbered, sectioned rules with enforcement status. That list
+is now the requirements source for the overhaul; it grows as he supplies
+per-module lists.
+
 ### 4.1 Feature Cards
 
-> _(awaiting the operator's list)_
+> *"The attached shows what the Feature Cards look like currently: generic
+> black and white."* (main, 2026-08-08 — the trigger for PR #115.)
+> _(further items awaiting the operator's list)_
 
 ### 4.2 Mega menu / Navigation
 
@@ -117,8 +197,8 @@ raw material of the doctrine).
 
 ### 4.3 General — applies to all modules
 
-> _(items promoted from the two lists above, plus anything he raises about the
-> palette, the settings panel chrome, or the Builder canvas generally)_
+> See §4.0. _(items the operator adds or confirms land here as the working
+> list)_
 
 ---
 
