@@ -1,8 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
-import { BuilderThemeColorSettingRow, type BuilderThemePalette } from "./builder-theme-color-field";
+import {
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import type { BuilderThemePalette } from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
@@ -15,81 +18,119 @@ export function BuilderBlogSearchModuleSettings({
   onUpdateModule,
   themeColors = []
 }: Props) {
-  const s = module.settings;
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
+  const schema: BuilderSettingsSchema = {
+    content: [
+      [
+        {
+          key: "placeholder",
+          label: "Placeholder",
+          width: "full",
+          control: "custom",
+          rendersVia: "BlogSearchPreview",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.placeholder ?? "Search posts…"}
+              onChange={(e) => set("placeholder", e.target.value)}
+              placeholder="Search posts…"
+            />
+          )
+        }
+      ],
+      [
+        {
+          key: "buttonLabel",
+          label: "Button Label",
+          width: "text-md",
+          control: "custom",
+          rendersVia: "BlogSearchPreview",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.buttonLabel ?? "Search"}
+              onChange={(e) => set("buttonLabel", e.target.value)}
+              placeholder="Search"
+            />
+          )
+        }
+      ],
+      [
+        {
+          key: "targetPageUrl",
+          label: "Results Page URL",
+          width: "full",
+          control: "text",
+          placeholder: "/blog (leave blank to stay on current page)",
+          rendersVia: "BlogSearchPreview"
+        }
+      ],
+      [
+        {
+          key: "searchParam",
+          label: "Search Param",
+          width: "text-md",
+          control: "custom",
+          rendersVia: "BlogSearchPreview",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.searchParam ?? "search"}
+              onChange={(e) => set("searchParam", e.target.value)}
+              placeholder="search"
+            />
+          )
+        }
+      ],
+      [
+        {
+          key: "searchParamNote",
+          label: "",
+          width: "full",
+          control: "custom",
+          bare: true,
+          render: () => (
+            <div className="builder-module-runtime-note">
+              <p>
+                The search param must match the one set on the paired <strong>Blog Search Results</strong> module.
+              </p>
+            </div>
+          )
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "accentColor",
+          label: "Button Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Button color",
+          fallback: "#0f4f8f",
+          rendersVia: "BlogSearchPreview"
+        },
+        {
+          key: "borderRadius",
+          label: "Radius",
+          width: "num",
+          control: "number",
+          min: 0,
+          max: 40,
+          fallback: "8",
+          rendersVia: "BlogSearchPreview"
+        }
+      ]
+    ]
+  };
 
   return (
     <div className="builder-blog-search-settings">
-      <BuilderSettingRow label="Placeholder" fullWidth>
-        <input
-          type="text"
-          value={s.placeholder ?? "Search posts…"}
-          onChange={(e) => set("placeholder", e.target.value)}
-          placeholder="Search posts…"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Button Label" fullWidth>
-        <input
-          type="text"
-          value={s.buttonLabel ?? "Search"}
-          onChange={(e) => set("buttonLabel", e.target.value)}
-          placeholder="Search"
-        />
-      </BuilderSettingRow>
-
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderThemeColorSettingRow
-            fallback="#0f4f8f"
-            label="Button color"
-            themeColors={themeColors}
-            value={s.accentColor ?? "#0f4f8f"}
-            onChange={(accentColor) => set("accentColor", accentColor)}
-          />
-        </div>
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Border radius">
-            <input
-              type="number"
-              min={0}
-              max={40}
-              value={s.borderRadius ?? "8"}
-              onChange={(e) => set("borderRadius", e.target.value)}
-              style={{ width: 64 }}
-            />
-          </BuilderSettingRow>
-        </div>
-      </div>
-
-      <BuilderSettingRow label="Results page URL" fullWidth>
-        <input
-          type="text"
-          value={s.targetPageUrl ?? ""}
-          onChange={(e) => set("targetPageUrl", e.target.value)}
-          placeholder="/blog (leave blank to stay on current page)"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Search param" fullWidth>
-        <input
-          type="text"
-          value={s.searchParam ?? "search"}
-          onChange={(e) => set("searchParam", e.target.value)}
-          placeholder="search"
-        />
-      </BuilderSettingRow>
-      <div className="builder-module-runtime-note">
-        <p>
-          The search param must match the one set on the paired <strong>Blog Search Results</strong> module.
-        </p>
-      </div>
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
+        themeColors={themeColors}
+      />
     </div>
   );
 }

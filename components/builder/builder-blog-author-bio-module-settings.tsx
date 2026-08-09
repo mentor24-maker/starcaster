@@ -2,7 +2,10 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
-import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
 
 export type AuthorSocialLink = { id: string; platform: string; url: string };
 
@@ -38,15 +41,7 @@ type Props = {
 };
 
 export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: Props) {
-  const s = module.settings;
-  const links = parseSocialLinks(s);
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
+  const links = parseSocialLinks(module.settings);
 
   function persistLinks(next: AuthorSocialLink[]) {
     onUpdateModule((current) => ({
@@ -67,124 +62,122 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
     persistLinks([...links, { id: `social-${Date.now()}`, platform: "website", url: "" }]);
   }
 
+  const schema: BuilderSettingsSchema = {
+    content: [
+      [{ key: "name", label: "Name", width: "full", control: "text", placeholder: "Author name" }],
+      [{ key: "title", label: "Title / Role", width: "full", control: "text", placeholder: "Senior Editor" }],
+      [{ key: "bio", label: "Bio", width: "full", control: "textarea", rows: 3, placeholder: "A short bio about the author" }],
+      [
+        {
+          key: "avatarUrl",
+          label: "Photo",
+          width: "full",
+          control: "custom",
+          render: ({ settings, set }) => (
+            <BuilderImagePickerField
+              value={settings.avatarUrl ?? ""}
+              onChange={(url) => set("avatarUrl", url)}
+              placeholder="Photo URL"
+            />
+          )
+        }
+      ],
+      [
+        {
+          key: "socialLinks",
+          label: "Social Links",
+          width: "full",
+          control: "custom",
+          bare: true,
+          render: () => (
+            <>
+              <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>Social links</div>
+              <div className="builder-slider-items">
+                {links.map((link) => {
+                  const platformLabel = SOCIAL_PLATFORMS.find((p) => p.value === link.platform)?.label ?? link.platform;
+                  return (
+                    <div key={link.id} className="builder-slider-item-card">
+                      <div className="builder-slider-item-header">
+                        <strong>{platformLabel}</strong>
+                        <div className="builder-section-actions">
+                          <button
+                            type="button"
+                            className="builder-icon-button builder-icon-button-danger"
+                            onClick={() => removeLink(link.id)}
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                      <div className="builder-slider-item-grid">
+                        <label className="field">
+                          <span>Platform</span>
+                          <select value={link.platform} onChange={(e) => updateLink(link.id, "platform", e.target.value)}>
+                            {SOCIAL_PLATFORMS.map((p) => (
+                              <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span>URL</span>
+                          <input
+                            type="text"
+                            value={link.url}
+                            onChange={(e) => updateLink(link.id, "url", e.target.value)}
+                            placeholder="https://..."
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" className="secondary-button" onClick={addLink}>
+                Add Social Link
+              </button>
+            </>
+          )
+        }
+      ]
+    ],
+    layout: [
+      [
+        {
+          key: "layout",
+          label: "Layout",
+          width: "select-md",
+          control: "select",
+          fallback: "horizontal",
+          options: [
+            { value: "horizontal", label: "Horizontal (photo left)" },
+            { value: "vertical", label: "Vertical (photo above)" }
+          ]
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "avatarShape",
+          label: "Photo Shape",
+          width: "select-md",
+          control: "select",
+          fallback: "circle",
+          options: [
+            { value: "circle", label: "Circle" },
+            { value: "rounded", label: "Rounded" },
+            { value: "square", label: "Square" }
+          ]
+        },
+        { key: "avatarSize", label: "Photo Size", width: "num", control: "number", min: 40, max: 200, step: 8, fallback: "80" }
+      ]
+    ]
+  };
+
   return (
     <div className="builder-blog-author-bio-settings">
-
-      {/* Identity */}
-      <BuilderSettingRow label="Name" fullWidth>
-        <input
-          type="text"
-          value={s.name ?? ""}
-          onChange={(e) => set("name", e.target.value)}
-          placeholder="Author name"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Title / role" fullWidth>
-        <input
-          type="text"
-          value={s.title ?? ""}
-          onChange={(e) => set("title", e.target.value)}
-          placeholder="Senior Editor"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Bio" fullWidth>
-        <textarea
-          className="builder-textarea"
-          rows={3}
-          value={s.bio ?? ""}
-          onChange={(e) => set("bio", e.target.value)}
-          placeholder="A short bio about the author"
-        />
-      </BuilderSettingRow>
-
-      {/* Avatar */}
-      <BuilderSettingRow label="Photo" fullWidth>
-        <BuilderImagePickerField
-          value={s.avatarUrl ?? ""}
-          onChange={(url) => set("avatarUrl", url)}
-          placeholder="Photo URL"
-        />
-      </BuilderSettingRow>
-
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Photo shape">
-            <select value={s.avatarShape ?? "circle"} onChange={(e) => set("avatarShape", e.target.value)}>
-              <option value="circle">Circle</option>
-              <option value="rounded">Rounded</option>
-              <option value="square">Square</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Photo size (px)">
-            <input
-              type="number"
-              min={40}
-              max={200}
-              step={8}
-              value={s.avatarSize ?? "80"}
-              onChange={(e) => set("avatarSize", e.target.value)}
-            />
-          </BuilderSettingRow>
-        </div>
-      </div>
-
-      <BuilderSettingRow label="Layout">
-        <select value={s.layout ?? "horizontal"} onChange={(e) => set("layout", e.target.value)}>
-          <option value="horizontal">Horizontal (photo left)</option>
-          <option value="vertical">Vertical (photo above)</option>
-        </select>
-      </BuilderSettingRow>
-
-      {/* Social links */}
-      <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>Social links</div>
-      <div className="builder-slider-items">
-        {links.map((link) => {
-          const platformLabel = SOCIAL_PLATFORMS.find((p) => p.value === link.platform)?.label ?? link.platform;
-          return (
-            <div key={link.id} className="builder-slider-item-card">
-              <div className="builder-slider-item-header">
-                <strong>{platformLabel}</strong>
-                <div className="builder-section-actions">
-                  <button
-                    type="button"
-                    className="builder-icon-button builder-icon-button-danger"
-                    onClick={() => removeLink(link.id)}
-                    title="Remove"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-              <div className="builder-slider-item-grid">
-                <label className="field">
-                  <span>Platform</span>
-                  <select value={link.platform} onChange={(e) => updateLink(link.id, "platform", e.target.value)}>
-                    {SOCIAL_PLATFORMS.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>URL</span>
-                  <input
-                    type="text"
-                    value={link.url}
-                    onChange={(e) => updateLink(link.id, "url", e.target.value)}
-                    placeholder="https://..."
-                  />
-                </label>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <button type="button" className="secondary-button" onClick={addLink}>
-        Add Social Link
-      </button>
+      <BuilderSchemaModuleSettings schema={schema} module={module} onUpdateModule={onUpdateModule} />
     </div>
   );
 }
