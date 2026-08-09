@@ -1461,6 +1461,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary, #43566d);
 }
 
+/* The run's starting point, in full, with a copy affordance. */
+.tw-seed {
+  margin: 4px 0 10px;
+  font-size: var(--text-sm);
+}
+.tw-seed-text {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  background: var(--bg-hover);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* A real page, scaled to thumbnail size. */
 /* Clickable to open full size (spec section 8 screen 3). A real <button> so it
  * is keyboard reachable; the scaled page inside keeps pointer-events: none so a
