@@ -24,6 +24,13 @@ export function BuilderBlogSearchModuleSettings({
     // Button Color and Radius are the button's fill and corners, so they read
     // as Frame. The old panelColumns hint is gone: axes ARE the columns.
     // The search-param note stays with the field it explains.
+    //
+    // A1 sort (2026-08-10): both of Frame's controls are theme-backed — a
+    // colour and a corner radius — so both moved to Frame's own Advanced
+    // section, and Button Color became a `theme-color` override whose
+    // themeDefault is its old fallback (A2). Frame's basic row is therefore
+    // empty; the column holds its place so the Advanced grid stays aligned.
+    // Everything on Content is the module's own copy and stays basic (A4).
     axes: [
       {
         title: "Content",
@@ -108,15 +115,17 @@ export function BuilderBlogSearchModuleSettings({
       },
       {
         title: "Frame",
-        strips: [
+        strips: [],
+        // A1: the button's fill and its corner radius are both theme-backed.
+        advanced: [
           [
             {
               key: "accentColor",
               label: "Button Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Button color",
-              fallback: "#0f4f8f",
+              themeDefault: "#0f4f8f",
               rendersVia: "BlogSearchPreview"
             },
             {

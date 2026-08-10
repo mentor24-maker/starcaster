@@ -46,6 +46,15 @@ export function BuilderHeadingModuleSettings({
    * Compact mode hides exactly the controls it always hid, so a
    * table-cell heading renders Content / Text / Placement and the Frame
    * column disappears along with its only field.
+   *
+   * A1 sort (2026-08-10): the theme-backed settings dropped into their own
+   * axis's Advanced section — Colour and Font family under Text (Colour
+   * became a `theme-color` override whose themeDefault is its old fallback,
+   * A2), Drop Shadow under Frame, joining the offsets already under
+   * Placement (A5). Frame's basic row is therefore empty; the column holds
+   * its place so the Advanced grid stays aligned. Level, Size, Weight, the
+   * type toggles, alignment and the margins are the module's own settings
+   * and stay basic (A4) — font SIZE is not a theme override.
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -137,15 +146,6 @@ export function BuilderHeadingModuleSettings({
               rendersVia: "getHeadingModuleLevel"
             },
             {
-              key: "fontFamily",
-              label: "Font",
-              width: "auto",
-              control: "select",
-              options: BUILDER_HEADING_FONTS.map((font) => ({ value: font.key, label: font.label })),
-              fallback: "",
-              rendersVia: "getHeadingFontStack"
-            },
-            {
               key: "fontSize",
               label: "Size",
               width: "auto",
@@ -161,15 +161,6 @@ export function BuilderHeadingModuleSettings({
                   onChange={(event) => ctx.set("fontSize", event.target.value)}
                 />
               )
-            },
-            {
-              key: "color",
-              label: "Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Heading color",
-              fallback: "#18324a",
-              rendersVia: "getHeadingModuleStyle"
             },
             {
               key: "fontWeight",
@@ -275,6 +266,30 @@ export function BuilderHeadingModuleSettings({
               )
             }
           ]
+        ],
+        // A1: the heading's colour and its typeface are theme values — the
+        // theme should restyle them, so overriding one is the deliberate act.
+        advanced: [
+          [
+            {
+              key: "color",
+              label: "Color",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Heading color",
+              themeDefault: "#18324a",
+              rendersVia: "getHeadingModuleStyle"
+            },
+            {
+              key: "fontFamily",
+              label: "Font",
+              width: "auto",
+              control: "select",
+              options: BUILDER_HEADING_FONTS.map((font) => ({ value: font.key, label: font.label })),
+              fallback: "",
+              rendersVia: "getHeadingFontStack"
+            }
+          ]
         ]
       },
       {
@@ -369,7 +384,10 @@ export function BuilderHeadingModuleSettings({
       },
       {
         title: "Frame",
-        strips: [
+        strips: [],
+        // A1: a drop shadow is a theme value, so the whole block sits in
+        // Frame's own Advanced section — and, as before, never in compact.
+        advanced: [
           [
             {
               key: "dropShadow",

@@ -36,6 +36,13 @@ const EFFECT_OPTIONS: { value: string; label: string }[] = [
  * (`getImageModuleStyle` / `BuilderImagePreview`). The axes replace the
  * old content/layout/style trio plus `panelColumns`: the lone Width
  * select is a column of its own rather than a stranded row (D1/D3).
+ *
+ * A1 sort (2026-08-10): the border trio — thickness, radius and colour —
+ * are theme values, so they moved into Frame's own Advanced section, and
+ * Border Color became a `theme-color` override whose themeDefault is its
+ * old fallback (A2). Effect stays basic: it is an appearance mode the
+ * theme knows nothing about, not an override. Alt text and Width are the
+ * module's own settings and stay basic (A4).
  */
 export function BuilderImageModuleSettings({
   module,
@@ -80,6 +87,20 @@ export function BuilderImageModuleSettings({
         strips: [
           [
             {
+              key: "effect",
+              label: "Effect",
+              width: "select-md",
+              control: "select",
+              fallback: "none",
+              options: EFFECT_OPTIONS,
+              rendersVia: "getImageModuleStyle"
+            }
+          ]
+        ],
+        // A1: the border's thickness, corners and colour are all theme values.
+        advanced: [
+          [
+            {
               key: "borderThickness",
               label: "Border",
               width: "num",
@@ -103,18 +124,9 @@ export function BuilderImageModuleSettings({
               key: "borderColor",
               label: "Border Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Image border color",
-              fallback: "#0f4f8f",
-              rendersVia: "getImageModuleStyle"
-            },
-            {
-              key: "effect",
-              label: "Effect",
-              width: "select-md",
-              control: "select",
-              fallback: "none",
-              options: EFFECT_OPTIONS,
+              themeDefault: "#0f4f8f",
               rendersVia: "getImageModuleStyle"
             }
           ]

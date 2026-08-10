@@ -70,6 +70,12 @@ export function BuilderBlogTocModuleSettings({
     // Same keys, fallbacks and visibleWhen rules — only the column each
     // control sits in changed. "Style" (marker) and "Indent H3s" describe how
     // the list is arranged, so they are Structure, not typography.
+    //
+    // A1 sort (2026-08-10): Link Color is the module's one theme-backed
+    // setting, so it moved to Text's own Advanced section as a `theme-color`
+    // override whose themeDefault is its old fallback (A2). Font Size is a
+    // SIZE, not a theme override, so it stays basic — as do the title, the
+    // heading manager and the two Structure selects (A4).
     axes: [
       {
         title: "Content",
@@ -227,14 +233,19 @@ export function BuilderBlogTocModuleSettings({
               step: 1,
               fallback: "14",
               rendersVia: "builder-module-card.tsx blog-toc preview"
-            },
+            }
+          ]
+        ],
+        // A1: the link colour overrides the theme.
+        advanced: [
+          [
             {
               key: "color",
               label: "Link Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Link color",
-              fallback: "#0f4f8f",
+              themeDefault: "#0f4f8f",
               rendersVia: "builder-module-card.tsx blog-toc preview"
             }
           ]

@@ -71,8 +71,22 @@ export function BuilderBlogTagCloudModuleSettings({
     // Frame. Same keys, fallbacks, options and visibleWhen rules — only the
     // column each control sits in changed. Alignment rides with Layout on
     // Structure rather than opening a fifth Placement axis for one select;
-    // four is the ceiling. Gap sits on Frame with the pill background, and
-    // the Linking group below is untouched.
+    // four is the ceiling. Gap sits on Frame with the pill background.
+    //
+    // Linking fold (A1-A5): the old top-level "Linking" group made a SECOND
+    // collapsible below the per-axis Advanced region. Its controls are a
+    // destination and its URL param — Content by D8's table ("what the module
+    // shows … links") — so they now live in the Content axis's `advanced`.
+    // The panel has exactly one Advanced region, and these sit under their
+    // own column heading. Same keys, control types and rendersVia.
+    //
+    // A1 sort (2026-08-10): the three colours moved to their own axis's
+    // Advanced section — Tag Color and Active Color under Text, Tag Bg under
+    // Frame — and each became a `theme-color` override whose themeDefault is
+    // its old fallback (A2). Min/Max Font are font SIZES, not theme-backed, so
+    // they stay basic; Gap keeps its name and its place (W7 exempts it).
+    // Layout, Alignment, Counts and the tag manager are the module's own
+    // settings and stay basic (A4).
     axes: [
       {
         title: "Content",
@@ -149,6 +163,38 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "BlogTagCloudPreview"
             }
           ]
+        ],
+        // A1: where a tag click goes, and the param it sets — the former
+        // top-level "Linking" group, folded in so the panel has one Advanced.
+        advanced: [
+          [
+            {
+              key: "filterParam",
+              label: "URL Param",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "builder-template.ts blog-tag-cloud renderer",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.filterParam ?? "tag"}
+                  onChange={(e) => set("filterParam", e.target.value)}
+                  placeholder="tag"
+                />
+              )
+            },
+            {
+              key: "targetPageUrl",
+              label: "Target Page",
+              width: "text-md",
+              control: "picker",
+              source: "pages",
+              valueKind: "path",
+              noneLabel: "Current page",
+              placeholder: "/blog",
+              rendersVia: "builder-template.ts blog-tag-cloud renderer"
+            }
+          ]
         ]
       },
       {
@@ -211,24 +257,27 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "BlogTagCloudPreview",
               visibleWhen: (settings) => (settings.layout ?? "cloud") === "cloud"
             }
-          ],
+          ]
+        ],
+        // A1: tag colours override the theme.
+        advanced: [
           [
             {
               key: "inactiveColor",
               label: "Tag Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Tag color",
-              fallback: "#587592",
+              themeDefault: "#587592",
               rendersVia: "BlogTagCloudPreview"
             },
             {
               key: "activeColor",
               label: "Active Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Active tag color",
-              fallback: "#0f4f8f",
+              themeDefault: "#0f4f8f",
               rendersVia: "BlogTagCloudPreview"
             }
           ]
@@ -238,15 +287,6 @@ export function BuilderBlogTagCloudModuleSettings({
         title: "Frame",
         strips: [
           [
-            {
-              key: "inactiveBg",
-              label: "Tag Bg",
-              width: "color",
-              control: "color",
-              dialogLabel: "Tag background",
-              fallback: "#f0f4f8",
-              rendersVia: "BlogTagCloudPreview"
-            },
             {
               key: "gap",
               label: "Gap",
@@ -259,38 +299,22 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "BlogTagCloudPreview"
             }
           ]
+        ],
+        // A1: the pill background overrides the theme.
+        advanced: [
+          [
+            {
+              key: "inactiveBg",
+              label: "Tag Bg",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Tag background",
+              themeDefault: "#f0f4f8",
+              rendersVia: "BlogTagCloudPreview"
+            }
+          ]
         ]
       }
-    ],
-    advanced: [
-      [
-        {
-          key: "filterParam",
-          label: "URL Param",
-          width: "text-md",
-          control: "custom",
-          rendersVia: "builder-template.ts blog-tag-cloud renderer",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.filterParam ?? "tag"}
-              onChange={(e) => set("filterParam", e.target.value)}
-              placeholder="tag"
-            />
-          )
-        },
-        {
-          key: "targetPageUrl",
-          label: "Target Page",
-          width: "text-md",
-          control: "picker",
-          source: "pages",
-          valueKind: "path",
-          noneLabel: "Current page",
-          placeholder: "/blog",
-          rendersVia: "builder-template.ts blog-tag-cloud renderer"
-        }
-      ]
     ]
   };
 
@@ -301,7 +325,6 @@ export function BuilderBlogTagCloudModuleSettings({
         module={module}
         onUpdateModule={onUpdateModule}
         themeColors={themeColors}
-        advancedLabel="Linking"
       />
     </div>
   );

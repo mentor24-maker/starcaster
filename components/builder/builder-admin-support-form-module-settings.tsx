@@ -24,6 +24,11 @@ type Props = {
  * toggles gating a whole region with no sibling field (`showScreenshot`) stay
  * on Structure. Keys, fallbacks, options, visibleWhen and labels are
  * unchanged.
+ *
+ * A1 SORT (2026-08-10): no theme overrides in this panel. Everything here is
+ * form copy, toggles, a default priority and a layout mode — content and
+ * structure, none of it theme-backed — so nothing moves to Advanced and the
+ * module needs no Advanced section (A4).
  */
 const SCHEMA: BuilderSettingsSchema = {
   axes: [

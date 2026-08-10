@@ -15,6 +15,9 @@ type Props = {
  * field (`showTitle` → `panelTitle`) is one control pair and stays adjacent
  * in the same strip, toggle first, on the axis where the field belongs. That
  * pair is this module's only setting, so there is no Structure axis to title.
+ *
+ * A1 SORT (2026-08-10): no theme overrides — a show/hide toggle and its title
+ * text, neither of which second-guesses the theme. Both stay basic (A4).
  */
 const SCHEMA: BuilderSettingsSchema = {
   axes: [

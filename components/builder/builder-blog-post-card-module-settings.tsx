@@ -18,6 +18,11 @@ export function BuilderBlogPostCardModuleSettings({ module, onUpdateModule }: Pr
     // keys — only which column they live in changed. The show/hide bank
     // decides WHAT appears on the card, so it sits with the card layout
     // in Structure; the text and images it shows stay in Content.
+    //
+    // A1 sort (2026-08-10): settings that second-guess the theme drop into
+    // their own axis's `advanced`. Here that is Radius (a border radius —
+    // theme-backed) under Frame. Card Style stays basic: it picks a card
+    // preset (a layout mode), not a theme value to override.
     axes: [
       {
         title: "Content",
@@ -120,7 +125,14 @@ export function BuilderBlogPostCardModuleSettings({ module, onUpdateModule }: Pr
                 { value: "bordered", label: "Bordered" },
                 { value: "shadow", label: "Shadow" }
               ]
-            },
+            }
+          ]
+        ],
+        // A1: border radius is a theme value — overriding it is deliberate,
+        // so it lives under Frame's own Advanced rather than beside the
+        // everyday card controls. Same key, same fallback, same control.
+        advanced: [
+          [
             { key: "cardBorderRadius", label: "Radius", width: "num", control: "number", min: 0, max: 32, step: 2, fallback: "12" }
           ]
         ]

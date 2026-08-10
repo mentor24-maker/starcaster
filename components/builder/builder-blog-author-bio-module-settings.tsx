@@ -68,6 +68,11 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
     // the rest of what the module shows; only the arrangement controls
     // move out. Two axes is the honest count — no axis was invented to
     // reach four.
+    //
+    // A1 sort (2026-08-10): nothing here overrides a theme value, so this
+    // panel has no Advanced section. The module carries no colours, borders
+    // or shadows at all; Photo Shape and Photo Size are structural sizing,
+    // which the criteria keep basic.
     axes: [
       {
         title: "Content",

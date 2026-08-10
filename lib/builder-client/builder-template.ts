@@ -1988,7 +1988,12 @@ export function createEmptyModule(
       ? {
           level: "h2",
           fontSize: "32",
-          color: "#18324a",
+          // A2 (UI_RULES.md): seeded empty so a new heading FOLLOWS THE
+          // THEME. getHeadingModuleStyle falls back to this exact hex
+          // (builder-utils.ts `settings.color || "#18324a"`), so nothing
+          // renders differently — but the Advanced badge no longer reports
+          // an override the operator never chose.
+          color: "",
           bold: "true",
           fontFamily: "",
           fontWeight: "800",
@@ -2015,7 +2020,9 @@ export function createEmptyModule(
           alt: "",
           size: "100",
           borderThickness: "0",
-          borderColor: "#0f4f8f",
+          // A2: empty = follow the theme; getImageModuleStyle falls back to
+          // this same hex, so the rendered result is unchanged.
+          borderColor: "",
           borderRadius: "18",
           // horizontalOffset / verticalOffset removed 2026-08-07: nothing in
           // the image render path ever read them (they are a
@@ -2028,8 +2035,8 @@ export function createEmptyModule(
           url: "",
           alt: "",
           size: "15",
-          borderThickness: "0",
-          borderColor: "#0f4f8f",
+          // A2: empty = follow the theme (same renderer fallback).
+          borderColor: "",
           borderRadius: "18",
           overlayAnchor: "center",
           offsetX: "0",
@@ -2221,8 +2228,12 @@ export function createEmptyModule(
                             items: JSON.stringify([{ id: "home", label: "Home", url: "/" }]),
                             separator: "›",
                             fontSize: "14",
-                            color: "#587592",
-                            activeColor: "#18324a",
+                            // A2: empty = follow the theme; builder-module-card.tsx
+                            // breadcrumb preview falls back to this same hex (#587592).
+                            color: "",
+                            // A2: empty = follow the theme; builder-module-card.tsx
+                            // breadcrumb preview falls back to this same hex (#18324a).
+                            activeColor: "",
                             bold: "false",
                             alignment: "left"
                           }
@@ -2282,7 +2293,9 @@ export function createEmptyModule(
                             indentSubheadings: "true",
                             fontSize: "14",
                             titleFontSize: "16",
-                            color: "#0f4f8f",
+                            // A2: empty = follow the theme; builder-module-card.tsx
+                            // blog-toc preview falls back to this same hex (#0f4f8f).
+                            color: "",
                             titleColor: "#18324a"
                           }
                       : type === "blog-newsletter-subscribe"
@@ -2293,8 +2306,14 @@ export function createEmptyModule(
                             layout: "stacked",
                             showImage: "false",
                             imageUrl: "",
-                            accentColor: "#0f4f8f",
-                            bgColor: "#eaf4ff",
+                            // A2: empty = follow the theme; builder-module-card.tsx
+                            // blog-newsletter-subscribe preview falls back to this
+                            // same hex (#0f4f8f).
+                            accentColor: "",
+                            // A2: empty = follow the theme; builder-module-card.tsx
+                            // and BlogNewsletterSubscribePreview both fall back to
+                            // this same hex (#eaf4ff).
+                            bgColor: "",
                             successMessage: "You're subscribed! Check your inbox."
                           }
                       : type === "blog-related-posts"
@@ -2441,7 +2460,10 @@ export function createEmptyModule(
                             layout: "cloud",
                             targetPageUrl: "",
                             filterParam: "tag",
-                            activeColor: "#0f4f8f",
+                            // A2: empty = follow the theme; MessagingTagListPreview
+                            // (builder-template-preview.tsx) falls back to this same
+                            // hex (#0f4f8f), and no other renderer reads it.
+                            activeColor: "",
                             inactiveColor: "#587592",
                             inactiveBg: "#f0f4f8",
                             minFontSize: "12",

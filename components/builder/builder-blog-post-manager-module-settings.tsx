@@ -22,6 +22,11 @@ export function BuilderBlogPostManagerModuleSettings({
     // D8 logical axes: Content / Structure / Frame. The two page pickers
     // are destinations (Content); the toggles decide which columns the
     // manager shows (Structure); Accent is the module's own colour (Frame).
+    //
+    // A1 sort (2026-08-10): Accent is a theme value, so it moves to Frame ›
+    // Advanced as a `theme-color` (A2 — empty means "follow the theme"; the
+    // old fallback is now themeDefault). The page pickers and column
+    // toggles are the module's own settings and stay basic (A4).
     axes: [
       {
         title: "Content",
@@ -85,15 +90,16 @@ export function BuilderBlogPostManagerModuleSettings({
       },
       {
         title: "Frame",
-        strips: [
+        strips: [],
+        advanced: [
       [
         {
           key: "accentColor",
           label: "Accent Color",
           width: "color",
-          control: "color",
+          control: "theme-color",
           dialogLabel: "Accent color",
-          fallback: "#0f4f8f",
+          themeDefault: "#0f4f8f",
           rendersVia: "BlogPostManagerPreview"
         }
       ]

@@ -16,6 +16,11 @@ export function BuilderBlogSearchResultsModuleSettings({ module, onUpdateModule 
     // D8 axes (master rule D8, docs/UI_RULES.md): Content / Structure. Same
     // keys and fallbacks — only the column each control sits in changed.
     // Max Results is a count and Thumb Width is sizing, so both are Structure.
+    //
+    // A1 sort (2026-08-10): nothing here is a theme override, so no axis gets
+    // an Advanced section — the module has no colour, border, radius, shadow
+    // or font control at all. Max Results is a count and Thumb Width is a
+    // structural size; both stay basic (A4).
     axes: [
       {
         title: "Content",

@@ -1340,10 +1340,10 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const layout = s.layout ?? "pills";
     const allLabel = s.allLabel || "All";
     const showAll = s.showAll !== "false";
-    const activeColor = s.activeColor ?? "#0f4f8f";
-    const activeBg = s.activeBg ?? "#e8f6fc";
-    const inactiveColor = s.inactiveColor ?? "#587592";
-    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+    const activeColor = s.activeColor || "#0f4f8f";
+    const activeBg = s.activeBg || "#e8f6fc";
+    const inactiveColor = s.inactiveColor || "#587592";
+    const inactiveBg = s.inactiveBg || "#f0f4f8";
     const borderRadius = parseInt(s.borderRadius ?? "20", 10) || 20;
     const fontSize = parseInt(s.fontSize ?? "13", 10) || 13;
     const gap = parseInt(s.gap ?? "8", 10) || 8;
@@ -1512,9 +1512,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
   if (module.type === "blog-tag-cloud") {
     const s = module.settings;
     const layout = s.layout ?? "cloud";
-    const inactiveColor = s.inactiveColor ?? "#587592";
-    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
-    const activeColor = s.activeColor ?? "#0f4f8f";
+    const inactiveColor = s.inactiveColor || "#587592";
+    const inactiveBg = s.inactiveBg || "#f0f4f8";
+    const activeColor = s.activeColor || "#0f4f8f";
     const minFont = parseInt(s.minFontSize ?? "12", 10) || 12;
     const maxFont = parseInt(s.maxFontSize ?? "22", 10) || 22;
     const gap = parseInt(s.gap ?? "8", 10) || 8;
@@ -1579,8 +1579,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const layout = s.layout ?? "pills";
     const showPrefix = s.showPrefix !== "false";
     const prefix = s.prefix || "Tags:";
-    const color = s.color ?? "#587592";
-    const bgColor = s.bgColor ?? "#f0f4f8";
+    const color = s.color || "#587592";
+    const bgColor = s.bgColor || "#f0f4f8";
     const borderRadius = parseInt(s.borderRadius ?? "4", 10) || 4;
     const fontSize = parseInt(s.fontSize ?? "12", 10) || 12;
     const gap = parseInt(s.gap ?? "6", 10) || 6;
@@ -1612,7 +1612,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "blog-post-create") {
     const s = module.settings;
-    const accent = s.accentColor ?? "#0f4f8f";
+    const accent = s.accentColor || "#0f4f8f";
     const showFormTitle = s.showFormTitle !== "false";
     const formTitle = s.formTitle || "Create New Post";
     const submitLabel = s.submitLabel || "Publish Post";
@@ -1750,7 +1750,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
   }
 
   if (module.type === "blog-post-manager") {
-    const accent = module.settings.accentColor ?? "#0f4f8f";
+    const accent = module.settings.accentColor || "#0f4f8f";
     const rows = [
       { title: "Introducing Starcaster", status: "published", date: "Jun 23, 2026" },
       { title: "How to Build a Blog", status: "draft", date: "Jun 22, 2026" },
@@ -1779,7 +1779,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
   }
 
   if (module.type === "blog-category-manager") {
-    const accent = module.settings.accentColor ?? "#0f4f8f";
+    const accent = module.settings.accentColor || "#0f4f8f";
     const rows = [
       { name: "Technology", slug: "technology", color: "#3b82f6", description: "Tech news and tutorials" },
       { name: "Sports",     slug: "sports",     color: "#16a34a", description: "Game recaps and analysis" },
@@ -1812,10 +1812,10 @@ function renderModulePreview(module: BuilderTemplateModule) {
   if (module.type === "messaging-topic-list") {
     const s = module.settings;
     const layout = s.layout ?? "pills";
-    const activeColor = s.activeColor ?? "#0f4f8f";
+    const activeColor = s.activeColor || "#0f4f8f";
     const activeBg = s.activeBg ?? activeColor;
-    const inactiveColor = s.inactiveColor ?? "#587592";
-    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+    const inactiveColor = s.inactiveColor || "#587592";
+    const inactiveBg = s.inactiveBg || "#f0f4f8";
     const borderRadius = parseInt(s.borderRadius ?? "20", 10) || 20;
     const fontSize = parseInt(s.fontSize ?? "13", 10) || 13;
     const gap = parseInt(s.gap ?? "8", 10) || 8;
@@ -1853,8 +1853,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
   if (module.type === "messaging-tag-list") {
     const s = module.settings;
     const layout = s.layout ?? "cloud";
-    const inactiveColor = s.inactiveColor ?? "#587592";
-    const inactiveBg = s.inactiveBg ?? "#f0f4f8";
+    const inactiveColor = s.inactiveColor || "#587592";
+    const inactiveBg = s.inactiveBg || "#f0f4f8";
     const gap = parseInt(s.gap ?? "8", 10) || 8;
     const minFs = parseInt(s.minFontSize ?? "12", 10) || 12;
     const maxFs = parseInt(s.maxFontSize ?? "22", 10) || 22;
@@ -2687,7 +2687,7 @@ function TableModuleEditor({
               dialogLabel="Table border color"
               fallback="#cccccc"
               themeColors={themeColors}
-              value={module.settings.borderColor ?? "#cccccc"}
+              value={module.settings.borderColor || "#cccccc"}
               onChange={(borderColor) => updateSetting("borderColor", borderColor)}
             />
           </label>
@@ -3241,7 +3241,7 @@ function PollCategoryListModuleEditor({
         fallback="#18324a"
         label="Color"
         themeColors={themeColors}
-        value={module.settings.color ?? "#18324a"}
+        value={module.settings.color || "#18324a"}
         onChange={(color) => updateSetting("color", color)}
       />
       <BuilderSettingRow label="Bold">
@@ -3335,7 +3335,7 @@ function HeadlineRotatorModuleEditor({
             dialogLabel="Headline rotator color"
             fallback="#18324a"
             themeColors={themeColors}
-            value={module.settings.color ?? "#18324a"}
+            value={module.settings.color || "#18324a"}
             onChange={(color) => updateSetting("color", color)}
           />
         </label>

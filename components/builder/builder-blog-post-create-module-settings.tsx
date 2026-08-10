@@ -24,6 +24,12 @@ export function BuilderBlogPostCreateModuleSettings({
     // afterwards (a destination); Structure holds the status defaults and
     // the "Fields to show" bank — the controls that decide what the form
     // is made of; Frame holds the accent colour.
+    //
+    // A1 sort (2026-08-10): Accent is a theme value, so it moves to Frame ›
+    // Advanced as a `theme-color` (A2 — empty means "follow the theme"; the
+    // old fallback is now themeDefault). Nothing else here overrides the
+    // theme: labels, buttons, destinations and the field bank are the
+    // module's own settings, so they stay basic (A4).
     axes: [
       {
         title: "Content",
@@ -193,9 +199,10 @@ export function BuilderBlogPostCreateModuleSettings({
       },
       {
         title: "Frame",
-        strips: [
+        strips: [],
+        advanced: [
       [
-        { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" }
+        { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" }
       ]
         ]
       }

@@ -17,6 +17,10 @@ type Props = {
  * axis where the field belongs. Only toggles gating a whole region with no
  * sibling field (`showEditButton`, `showDeleteButton`) stay on Structure.
  * Keys, fallbacks and visibleWhen are unchanged.
+ *
+ * A1 SORT (2026-08-10): no theme overrides — button labels and four
+ * visibility toggles, with no colour, radius, border, shadow or font-family
+ * control. Everything stays basic (A4).
  */
 const SCHEMA: BuilderSettingsSchema = {
   axes: [
