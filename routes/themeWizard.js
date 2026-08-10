@@ -29,6 +29,7 @@ const {
   buildStyleBriefFromText,
   buildStyleBriefFromUrl,
   buildStyleBriefFromImage,
+  describeHeroReference,
   deriveDirections,
   generateCandidate,
   sumUsage,
@@ -181,8 +182,30 @@ async function handleAdvance(req, res, jobId, scope) {
 
     if (!brief.ok) return fail(brief.error || 'Could not read the style', brief.status);
 
+    // Hero banner context (any seed type can carry it): the operator's own
+    // description of the banner area, plus — when they pasted a reference
+    // URL — a read of that site's actual hero treatment. Both feed every
+    // candidate alongside the brief. A failed reference read degrades to a
+    // warning: the banner note is enhancement, the brief is the substance.
+    let heroUsage = null;
+    const heroParts = [];
+    if (String(seed.heroNote || '').trim()) heroParts.push(String(seed.heroNote).trim().slice(0, 2000));
+    if (String(seed.heroReferenceUrl || '').trim()) {
+      const reference = await describeHeroReference({ url: seed.heroReferenceUrl });
+      if (reference.ok && String(reference.text || '').trim()) {
+        heroParts.push(`The reference site's hero treatment: ${reference.text.trim().slice(0, 3000)}`);
+        heroUsage = reference.usage;
+      } else if (!reference.ok) {
+        input.warnings = [...(input.warnings || []),
+          `The reference site could not be read (${reference.error || 'unknown error'}); continuing without it`];
+      }
+    }
+    const briefData = heroParts.length
+      ? { ...brief.data, heroBanner: heroParts.join('\n\n') }
+      : brief.data;
+
     await store.updateSession(job.sessionId, {
-      styleBrief: brief.data,
+      styleBrief: briefData,
       // Recorded from day one so the cost throttle that is deliberately
       // deferred (spec §9) has real history to work from whenever it is built.
       tokensSpent: session.tokensSpent + sumUsage(brief.usage),
@@ -230,12 +253,22 @@ async function handleAdvance(req, res, jobId, scope) {
       if (parent.ok) parentPatch = parent.data.themePatch;
     }
 
+    // Hero banners: slot i keys on banner i (wrapping when fewer than three
+    // were chosen), so the three looks are grounded in three different
+    // photographs rather than three guesses.
+    const heroUrls = Array.isArray(session.seedPayload?.heroBannerUrls)
+      ? session.seedPayload.heroBannerUrls.filter((u) => typeof u === 'string' && u.trim())
+      : [];
+    const heroUrl = heroUrls.length ? heroUrls[slotIndex % heroUrls.length] : '';
+    const heroNote = String(session.styleBrief?.heroBanner || '');
+
     const generated = await generateCandidate({
       styleBrief: session.styleBrief,
       direction,
       lockedValues: session.lockedValues || {},
       parentPatch,
       feedback: input.feedback || '',
+      heroImage: heroUrl ? { url: heroUrl, note: heroNote } : null,
     }, undefined);
     if (!generated.ok) return fail(generated.error || 'Could not generate this option', generated.status);
 
@@ -248,6 +281,10 @@ async function handleAdvance(req, res, jobId, scope) {
 
     // §6.4 — locks are stated in the prompt AND enforced here.
     const { patch, overridden } = applyLockedValues(checked.patch, session.lockedValues || {});
+
+    // Stamped by the server, not returned by the model: the server chose the
+    // banner, so the model cannot mis-assign it.
+    if (heroUrl) patch.heroBannerUrl = heroUrl;
 
     const created = await store.createCandidate({
       sessionId: job.sessionId,
@@ -331,7 +368,13 @@ async function handleApply(req, res, candidateId, scope) {
   const themeName = String(body?.name || '').trim()
     || `Theme Wizard — ${candidate.direction}`.slice(0, 255);
 
-  const themeResult = await createTheme({ name: themeName, ...themePatch }, scope);
+  const themeResult = await createTheme({
+    name: themeName,
+    ...themePatch,
+    // The banner this look was keyed to travels with the theme, so the site's
+    // top band can wear it (and the hero overlay) everywhere the theme goes.
+    ...(themePatch.heroBannerUrl ? { heroBanner: { url: String(themePatch.heroBannerUrl) } } : {}),
+  }, scope);
   if (!themeResult.ok) return sendErr(res, themeResult.status || 500, themeResult.error || 'Could not save the theme'), true;
 
   // Rule 2 — awaited, and pageBackground is carried through explicitly so the
@@ -427,7 +470,19 @@ async function handle(req, res, pathname, method) {
     if (!SEED_TYPES.includes(seedType)) {
       return sendErr(res, 400, `Unknown seed type "${seedType}". Expected one of: ${SEED_TYPES.join(', ')}`, { code: 'VALIDATION_ERROR' }), true;
     }
-    const seedPayload = body?.seedPayload && typeof body.seedPayload === 'object' ? body.seedPayload : {};
+    const rawSeedPayload = body?.seedPayload && typeof body.seedPayload === 'object' ? body.seedPayload : {};
+    // Hero-banner extras ride on any seed type. URLs only (the picker and the
+    // upload flow both hand back URLs); capped at three, matching the slots.
+    const heroBannerUrls = (Array.isArray(rawSeedPayload.heroBannerUrls) ? rawSeedPayload.heroBannerUrls : [])
+      .map((value) => String(value || '').trim())
+      .filter((value) => /^https?:\/\//i.test(value))
+      .slice(0, 3);
+    const seedPayload = {
+      ...rawSeedPayload,
+      heroBannerUrls,
+      heroNote: String(rawSeedPayload.heroNote || '').slice(0, 2000),
+      heroReferenceUrl: String(rawSeedPayload.heroReferenceUrl || '').trim().slice(0, 2048),
+    };
     // Validate the seed's own input at create time. Discovering that the URL
     // box was empty three model calls into a round is a waste of the operator's
     // time and of tokens.

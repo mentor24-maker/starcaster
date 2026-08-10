@@ -210,6 +210,10 @@ export type BuilderThemeTypography = {
   palette?: BuilderThemePalette;
   /** Design-treatments storage home (see BuilderThemeTreatments). */
   treatments?: BuilderThemeTreatments;
+  /** Hero-banner storage home (see BuilderThemeHeroBanner). */
+  heroBanner?: BuilderThemeHeroBanner;
+  /** Up to three saved banner options (the wizard keys one look on each). */
+  heroBanners?: string[];
 };
 
 export type BuilderTheme = {
@@ -276,6 +280,28 @@ export type BuilderThemeTreatments = {
   footerInverse?: boolean;
 };
 
+/** Hero banner: the image the site's top band wears. Operator-chosen URL. */
+export type BuilderThemeHeroBanner = {
+  url: string;
+};
+
+export function normalizeThemeHeroBanner(raw: unknown): BuilderThemeHeroBanner | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const url = String((raw as Record<string, unknown>).url || "").trim();
+  return /^https?:\/\//i.test(url) ? { url } : null;
+}
+
+/** Up to three saved banner options — the bank the wizard's three looks key on.
+ * The first non-empty one is what pages actually wear. */
+export function normalizeThemeHeroBanners(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const urls = raw
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^https?:\/\//i.test(value))
+    .slice(0, 3);
+  return urls.length ? urls : null;
+}
+
 export function normalizeThemeTreatments(raw: unknown): BuilderThemeTreatments | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
@@ -332,6 +358,10 @@ export type BuilderThemeSummary = {
   palette?: BuilderThemePalette;
   /** Design treatments (hero overlay, card overlap, inverse footer). */
   treatments?: BuilderThemeTreatments;
+  /** The image the site's top band wears (with the hero overlay on it). */
+  heroBanner?: BuilderThemeHeroBanner;
+  /** Up to three saved banner options (the wizard keys one look on each). */
+  heroBanners?: string[];
 };
 
 export type BuilderTemplateSection = {

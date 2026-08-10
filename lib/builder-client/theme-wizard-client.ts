@@ -13,6 +13,20 @@ import { appApi, unwrapEnvelope } from "./adapters/starcaster-app";
 /** Where the look is derived from (spec §5). */
 export type ThemeWizardSeedType = "current_pages" | "external_url" | "brand_kit" | "brief";
 
+/**
+ * Seed inputs. The hero-banner extras ride on any seed type: up to three
+ * banner image URLs (one per candidate slot), the operator's description of
+ * the banner area, and a reference site whose hero treatment to learn from.
+ */
+export type ThemeWizardSeedPayload = {
+  url?: string;
+  text?: string;
+  assetId?: string;
+  heroBannerUrls?: string[];
+  heroNote?: string;
+  heroReferenceUrl?: string;
+};
+
 export type ThemeWizardProgress = {
   step: string;
   label: string;
@@ -36,7 +50,7 @@ export type ThemeWizardSession = {
   id: string;
   status: "active" | "applied" | "abandoned";
   seedType: string;
-  seedPayload?: Record<string, string>;
+  seedPayload?: ThemeWizardSeedPayload;
   previewPageId: string;
   styleBrief: Record<string, unknown>;
   lockedValues: Record<string, string>;
@@ -96,6 +110,12 @@ export function splitThemePatch(patch: Record<string, unknown> | null | undefine
   // Design treatments ride the same way; the preview honours them directly.
   if (source.treatments && typeof source.treatments === "object" && !Array.isArray(source.treatments)) {
     themeStyles.treatments = source.treatments;
+  }
+
+  // The banner this candidate was keyed to (stamped by the server, so the
+  // preview shows the exact image the palette was derived from).
+  if (typeof source.heroBannerUrl === "string" && source.heroBannerUrl) {
+    themeStyles.heroBanner = { url: source.heroBannerUrl };
   }
 
   return {
@@ -201,6 +221,24 @@ export function createWizardClient(api: ApiFn = defaultApi) {
       }>;
     },
 
+    /**
+     * The active theme's saved hero-banner options, for prefilling the three
+     * wizard slots ("if they haven't chosen those key images already"). First
+     * theme in the list is the project default, same rule the server uses.
+     */
+    async loadThemeHeroBanners(): Promise<string[]> {
+      const themes = (await api("/api/builder/themes")) as Array<{
+        heroBanners?: string[];
+        heroBanner?: { url?: string };
+      }>;
+      const first = Array.isArray(themes) ? themes[0] : null;
+      if (!first) return [];
+      if (Array.isArray(first.heroBanners) && first.heroBanners.length) {
+        return first.heroBanners.filter((u) => typeof u === "string" && u);
+      }
+      return first.heroBanner?.url ? [first.heroBanner.url] : [];
+    },
+
     /** Images from Assets, for the brand-kit starting point. */
     async loadBrandImages() {
       const assets = (await api("/api/assets")) as Array<Record<string, unknown>>;
@@ -213,7 +251,7 @@ export function createWizardClient(api: ApiFn = defaultApi) {
       input: {
         previewPageId?: string;
         seedType?: ThemeWizardSeedType;
-        seedPayload?: Record<string, string>;
+        seedPayload?: ThemeWizardSeedPayload;
       } = {}
     ) {
       return (await post(api, `${BASE}/sessions`, {

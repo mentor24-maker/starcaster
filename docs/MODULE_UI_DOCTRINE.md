@@ -315,7 +315,14 @@ They are reproduced here with honest tags.
   `btn btn-danger`; table micro-actions `btn tiny-btn icon-btn`. Labels in Title
   Case, `white-space: nowrap`, `width: fit-content` (not full-width unless the
   layout demands). Icon-only buttons square (~28×28), `inline-flex` centered,
-  `aria-label` required.
+  `aria-label` required. **A label must never overflow its button.** Flex/grid
+  rows squeeze children, and a button carrying `min-width: 0` (or a fixed width
+  narrower than its text) renders the label spilling past the pill. A shared
+  button that lands in arbitrary containers declares `flex: 0 0 auto` +
+  `min-width: fit-content`; the row yields, never the label. Incident: the
+  gallery-picker button in Themes → Hero & Treatments, 2026-08-09 — the
+  generated `.builder-gallery-button { min-width: 0 }` let a settings row crush
+  the pill smaller than "Choose From Gallery".
 - **Page titles `[eye]`** — `<h2>` in `.page-heading-row`, format
   `Module: Subpage` (e.g. `Contacts: Personnel`) — single colon plus space.
 - **Tables `[auto]`** — canonical styles in `_tables.css`; no per-module header

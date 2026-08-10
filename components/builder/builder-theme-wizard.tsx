@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
+import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
 import {
   createWizardClient,
   splitThemePatch,
@@ -8,7 +9,8 @@ import {
   type ThemeWizardCandidate,
   type ThemeWizardProgress,
   type ThemeWizardSession,
-  type ThemeWizardSeedType
+  type ThemeWizardSeedType,
+  type ThemeWizardSeedPayload
 } from "@/lib/theme-wizard-client";
 
 /**
@@ -177,6 +179,9 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
   const [seedUrl, setSeedUrl] = useState("");
   const [seedText, setSeedText] = useState("");
   const [seedAssetId, setSeedAssetId] = useState("");
+  const [heroBannerUrls, setHeroBannerUrls] = useState<string[]>(["", "", ""]);
+  const [heroNote, setHeroNote] = useState("");
+  const [heroReferenceUrl, setHeroReferenceUrl] = useState("");
   const [images, setImages] = useState<Array<{ id: string; assetName: string }>>([]);
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -222,6 +227,19 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
           setPastSessions(await client.listSessions());
         } catch {
           setPastSessions([]);
+        }
+
+        // Prefill the banner slots from the theme's saved options, so key
+        // images chosen once (Themes → Hero & Treatments) carry over. Only
+        // when untouched — never overwrite something the operator typed.
+        try {
+          const saved = await client.loadThemeHeroBanners();
+          if (saved.length) {
+            setHeroBannerUrls((prev) =>
+              prev.some(Boolean) ? prev : [0, 1, 2].map((i) => saved[i] || ""));
+          }
+        } catch {
+          // The panel still works empty.
         }
       } catch (err) {
         // Pass the server's own words through. "Could not load this project's
@@ -274,11 +292,14 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
     }
   }, [candidates.length]);
 
-  const seedPayload: Record<string, string> =
-    seedType === "external_url" ? { url: seedUrl.trim() }
-      : seedType === "brief" ? { text: seedText.trim() }
-        : seedType === "brand_kit" ? { assetId: seedAssetId }
-          : {};
+  const seedPayload: ThemeWizardSeedPayload = {
+    ...(seedType === "external_url" ? { url: seedUrl.trim() } : {}),
+    ...(seedType === "brief" ? { text: seedText.trim() } : {}),
+    ...(seedType === "brand_kit" ? { assetId: seedAssetId } : {}),
+    heroBannerUrls: heroBannerUrls.map((u) => u.trim()).filter(Boolean),
+    heroNote: heroNote.trim(),
+    heroReferenceUrl: heroReferenceUrl.trim()
+  };
 
   // Each starting point needs its own input before it can run. Disabling Start
   // with a reason beats letting it fail three model calls later.
@@ -325,6 +346,11 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
         if (seed.url) setSeedUrl(seed.url);
         if (seed.text) setSeedText(seed.text);
         if (seed.assetId) setSeedAssetId(seed.assetId);
+        if (Array.isArray(seed.heroBannerUrls) && seed.heroBannerUrls.length) {
+          setHeroBannerUrls([0, 1, 2].map((i) => seed.heroBannerUrls?.[i] || ""));
+        }
+        if (seed.heroNote) setHeroNote(seed.heroNote);
+        if (seed.heroReferenceUrl) setHeroReferenceUrl(seed.heroReferenceUrl);
         setStep("start");
       }
     } catch (err) {
@@ -584,6 +610,46 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
                   ))}
                 </select>
               </label>
+
+              <fieldset className="tw-hero-panel">
+                <legend>Hero banners <span className="tw-muted">(optional, up to three)</span></legend>
+                <p className="tw-muted">
+                  The big image at the top of the site. Give up to three and each look is
+                  designed around its own — colours pulled from the actual photo. Pick from
+                  your gallery or upload right here.
+                </p>
+                {[0, 1, 2].map((slot) => (
+                  <div key={slot} className="tw-hero-slot">
+                    <span className="tw-hero-slot-label">Banner {slot + 1}</span>
+                    <BuilderImagePickerField
+                      value={heroBannerUrls[slot] || ""}
+                      onChange={(url) =>
+                        setHeroBannerUrls((prev) => [0, 1, 2].map((i) => (i === slot ? url : prev[i] || "")))}
+                    />
+                  </div>
+                ))}
+                <label className="tw-field">
+                  <span>Describe the banner area <span className="tw-muted">(optional)</span></span>
+                  <textarea
+                    rows={2}
+                    value={heroNote}
+                    placeholder="Full-width photo with a dark wash, big headline over it, two buttons."
+                    onChange={(e) => setHeroNote(e.target.value)}
+                  />
+                </label>
+                <label className="tw-field">
+                  <span>Reference website for the banner look <span className="tw-muted">(optional)</span></span>
+                  <input
+                    type="text"
+                    value={heroReferenceUrl}
+                    placeholder="example.com"
+                    onChange={(e) => setHeroReferenceUrl(e.target.value)}
+                  />
+                  <span className="tw-muted">
+                    Its hero area is read for how it treats imagery and headlines — nothing is copied.
+                  </span>
+                </label>
+              </fieldset>
 
               <button type="button" className="tw-primary" onClick={handleStart} disabled={isBusy || !seedReady}>
                 {isBusy ? "Starting…" : "Start"}

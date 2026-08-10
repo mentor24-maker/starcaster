@@ -156,6 +156,15 @@ describe("splitThemePatch", () => {
     });
   });
 
+  it("carries the server-stamped hero banner so the preview shows the keyed image", () => {
+    const { themeStyles } = splitThemePatch({
+      heroBannerUrl: "https://blob.example/banner-1.jpg"
+    });
+    expect(themeStyles.heroBanner).toEqual({ url: "https://blob.example/banner-1.jpg" });
+    expect(splitThemePatch({ heroBannerUrl: "" }).themeStyles.heroBanner).toBeUndefined();
+    expect(splitThemePatch({}).themeStyles.heroBanner).toBeUndefined();
+  });
+
   it("drops a malformed or empty palette rather than passing junk to the shell", () => {
     expect(splitThemePatch({ palette: "navy-ish" as never }).themeStyles.palette).toBeUndefined();
     expect(splitThemePatch({ palette: {} }).themeStyles.palette).toBeUndefined();
