@@ -43,3 +43,6 @@ docs/SQL/backups/
 # Supabase CLI local state — machine-specific, not project source
 supabase/.branches/
 supabase/.temp/
+
+# Screenshots from `npm run check:screens` — local artifacts, never committed
+.ui-check/

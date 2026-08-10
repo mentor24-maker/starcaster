@@ -103,6 +103,39 @@ table:not(.builder-module-preview-table):not(.builder-preview-table) tbody tr:ho
   text-decoration: underline;
 }
 
+/* --- Bulk actions in the filter row ---
+   The canonical toolbar for "act on the checked rows". Put it on the filter
+   row's last <th>, spanning whatever trailing columns it needs, so the
+   buttons land right-aligned above the Actions column — where the eye
+   already goes for per-row actions (UI_RULES T10).
+
+   The name deliberately does NOT end in "-actions-cell": the selector below
+   catches that suffix and centres it, which is what pushed the Builder:
+   Pages buttons out over the Updated column (2026-08-10). */
+.crud-bulk-actions {
+  white-space: nowrap;
+}
+
+/* Block-level flex, not inline-flex: the base `table:not(…) th` rule sets
+   `text-align: left` at a higher specificity than any single class here, so
+   an inline toolbar sits at the LEFT of the span no matter what this file
+   says. Filling the cell and justifying to the end takes text-align out of
+   the argument entirely. */
+.crud-bulk-actions-row {
+  display: flex;
+  /* Wraps rather than pushing the table wide — T0 outranks staying on one
+     line. */
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.crud-bulk-actions-row .btn {
+  white-space: nowrap;
+  width: fit-content;
+}
+
 /* --- Actions column ---
    Consolidated class replacing all per-table *-actions-heading variants.
    Use on both th and td in the Actions column. */
