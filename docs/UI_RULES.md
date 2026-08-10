@@ -170,8 +170,10 @@ is ever wider than the screen.*
   window. If the data genuinely cannot fit after the whole T7 ladder, the
   **table's own container** scrolls; the page never does. *(8/10 "The
   Builder:Pages CRUD currently extends beyond the width of the screen. This
-  should never happen")* — **[TODO-check]** (a Playwright width assertion
-  per CRUD at three viewports is the obvious checker)
+  should never happen")* — **[browser-check]** `npm run check:screens`
+  (`scripts/ui/check_screens.mjs`) drives the real app and asserts this per
+  CRUD at 1280/1440/1920. Not in CI — CI has no browsers — so it is a
+  command you run before shipping UI work, like `smoke_capture.mjs`.
 
 - **T7. The width ladder.** When a CRUD is too wide, reclaim width in this
   order and **stop at the first rung that makes it fit**. The order is by
@@ -225,7 +227,8 @@ is ever wider than the screen.*
   which is what makes "acts on the checked rows" read as the bulk twin of
   "acts on this row". *(8/10 "Bulk actions such as Delete, Publish, Archive,
   etc. should appear right-aligned in the filter bar, above the Actions
-  column")* — **[eye]**
+  column")* — **[browser-check]** `npm run check:screens` asserts
+  `justify-content: flex-end` and that the toolbar stays inside its cell.
   Canonical markup: `<th class="crud-bulk-actions" colspan="N">` wrapping
   `<div class="crud-bulk-actions-row">`, styled once in
   `src/css/_tables.css`. Do **not** hand-roll a per-table variant, and do
@@ -369,6 +372,27 @@ cross-reference + 13-fix plan). Original list, with status:
    **withdrawn**: pixel-sampling the screenshot found zero red-dominant
    pixels; the labels are the standard muted token. (Kept as a record that
    suspected violations get verified, not assumed.)
+
+## Checking these rules
+
+Most of section T is about geometry, which cannot be read off the source —
+four layout bugs on 2026-08-09/10 were diagnosed wrongly from the CSS and
+only fell out once the running app was measured. So:
+
+```
+npm run dev                 # in another shell
+npm run seed:ui-fixture     # once: a local project of deliberately awful content
+export UI_HARNESS_PROJECT_ID=<the id it prints>
+npm run check:screens       # T0 + T10 across every CRUD at 1280/1440/1920
+```
+
+`scripts/ui/check_screens.mjs` carries the registry of screens — adding one
+is a line. It writes screenshots to `.ui-check/` and says so on every run,
+because **assertions only check what someone thought to assert**: an Assets
+toolbar passed every numeric check while stacking its buttons into a ragged
+column, and a sweep once reported a confident "12/12 conform" while
+measuring the same three toolbars four times. Zero failures is an
+invitation to look at the screenshots, not a substitute for it.
 
 ## How this list grows
 

@@ -8451,7 +8451,23 @@ App.builder = (function () {
     if (!text || box.scrollWidth <= box.clientWidth + 1) return;
 
     const parts = text.split(separator).filter((part) => part !== '');
-    if (parts.length <= 1) return; // one long token — nothing to cut between
+    if (parts.length <= 1) {
+      // A single unbroken token: there is no boundary to break at, so L4's
+      // "never cut through a word" cannot be honored either way. Returning
+      // early left `overflow: hidden` to clip it with no ellipsis at all —
+      // the reader could not tell the value was cut. Falling back to
+      // characters at least says so.
+      let low = 1;
+      let high = text.length;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        textEl.textContent = text.slice(0, mid) + '…';
+        if (box.scrollWidth <= box.clientWidth + 1) low = mid;
+        else high = mid - 1;
+      }
+      textEl.textContent = text.slice(0, low) + '…';
+      return;
+    }
 
     // Largest number of leading parts that still fits, by bisection.
     let low = 1;
