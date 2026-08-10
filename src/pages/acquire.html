@@ -845,7 +845,7 @@
                   <input id="youtubeResearchSelectAllVisible" type="checkbox" aria-label="Select all visible research candidates" />
                   <span>Check All</span>
                 </label>
-                <div class="youtube-research-bulk-actions">
+                <div class="crud-bulk-actions-row youtube-research-bulk-actions">
                   <button type="button" id="youtubeResearchBanSelectedBtn" disabled class="btn">Ban Video</button>
                   <button type="button" id="youtubeResearchSendToTargetingBtn" disabled class="btn">Send Selected To Target</button>
                 </div>
@@ -916,8 +916,8 @@
                           <option value="failed">Failed</option>
                         </select>
                       </th>
-                      <th class="youtube-repository-bulk-actions-cell">
-                        <div class="youtube-repository-bulk-actions">
+                      <th class="crud-bulk-actions youtube-repository-bulk-actions-cell">
+                        <div class="crud-bulk-actions-row youtube-repository-bulk-actions">
                           <form id="youtubeRunsBulkTopicForm" style="display:inline-flex; align-items:center; gap:0.5rem; margin:0;">
                             <label for="youtubeRunsBulkEditTopicSelect" style="white-space:nowrap; margin:0;">Change Topic to:</label>
                             <select id="youtubeRunsBulkEditTopicSelect" name="topic" disabled>
@@ -1037,12 +1037,12 @@
                       </th>
                     </tr>
                     <tr>
-                      <th colspan="8" class="youtube-comment-bulk-actions-row">
+                      <th colspan="8" class="crud-bulk-actions youtube-comment-bulk-actions-row">
                         <div class="youtube-comment-bulk-controls">
                           <div class="youtube-comment-bulk-checkall">
                             <input id="youtubeCommentMinerSelectAllVisible" type="checkbox" aria-label="Select all visible comments" />
                           </div>
-                          <div class="youtube-comment-bulk-actions">
+                          <div class="crud-bulk-actions-row youtube-comment-bulk-actions">
                           <button id="youtubeCommentMinerEditSelectedBtn" type="button" disabled class="btn">Edit Selected</button>
                           <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled class="btn">Delete Selected</button>
                           <button id="youtubeCommentMinerAddContactBtn" type="button" disabled class="btn">Add Contact</button>
@@ -1055,7 +1055,6 @@
                           </select>
                           <button id="youtubeCommentMinerAssignBtn" type="button" disabled class="btn">Assign</button>
                           </div>
-                          <div></div>
                         </div>
                       </th>
                     </tr>
@@ -1816,7 +1815,7 @@
           <div class="page-heading-row" style="margin-bottom: 0.75rem;">
             <h3 style="margin: 0;">Discovery Results</h3>
           </div>
-          <div id="blueskyDiscoveryBulkActions" class="assets-bulk-action-row" style="margin-bottom: 0.75rem;">
+          <div id="blueskyDiscoveryBulkActions" class="crud-bulk-actions-row assets-bulk-action-row" style="margin-bottom: 0.75rem;">
             <label for="blueskyDiscoveryBulkQuality" style="font-weight: 700;">Bulk Quality</label>
             <select id="blueskyDiscoveryBulkQuality" aria-label="Bulk quality for selected BlueSky rows">
               <option value="">Set quality...</option>
