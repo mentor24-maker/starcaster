@@ -32,12 +32,8 @@ const SCHEMA: BuilderSettingsSchema = {
       {
         key: "showForgotPassword",
         label: "Forgot password",
-        width: "select-sm",
-        control: "select",
-        options: [
-          { value: "true", label: "Show" },
-          { value: "false", label: "Hide" }
-        ],
+        width: "check",
+        control: "checkbox",
         fallback: "true",
         rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
       }
@@ -49,7 +45,9 @@ const SCHEMA: BuilderSettingsSchema = {
         key: "successRedirect",
         label: "Redirect on success",
         width: "full",
-        control: "text",
+        control: "picker",
+        source: "pages",
+        valueKind: "path",
         placeholder: "/admin-dashboard",
         fallback: "/admin-dashboard",
         rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"

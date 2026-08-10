@@ -13,16 +13,6 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
-const YES_NO_OPTIONS = [
-  { value: "true", label: "Yes" },
-  { value: "false", label: "No" }
-];
-
 export function BuilderBlogPostTagsModuleSettings({
   module,
   onUpdateModule,
@@ -58,9 +48,8 @@ export function BuilderBlogPostTagsModuleSettings({
         {
           key: "showPrefix",
           label: "Prefix",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostTagsPreview"
         },
@@ -158,9 +147,8 @@ export function BuilderBlogPostTagsModuleSettings({
         {
           key: "linkToFilter",
           label: "Link to Filter",
-          width: "select-md",
-          control: "select",
-          options: YES_NO_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "builder-template.ts blog-post-tags renderer"
         },
@@ -184,8 +172,11 @@ export function BuilderBlogPostTagsModuleSettings({
           key: "targetPageUrl",
           label: "Target Page",
           width: "text-md",
-          control: "text",
-          placeholder: "Leave blank for current page",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Current page",
+          placeholder: "/blog",
           rendersVia: "builder-template.ts blog-post-tags renderer",
           visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true"
         }

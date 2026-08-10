@@ -8,11 +8,6 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 /**
  * "Row actions" is a proper titled group (D5) — it borrows the layout SLOT
  * only for its position in the fixed group order; the toggles are content
@@ -24,9 +19,8 @@ const SCHEMA: BuilderSettingsSchema = {
       {
         key: "showTitle",
         label: "Show title",
-        width: "select-sm",
-        control: "select",
-        options: SHOW_HIDE_OPTIONS,
+        width: "check",
+        control: "checkbox",
         fallback: "true",
         rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
       },
@@ -49,27 +43,24 @@ const SCHEMA: BuilderSettingsSchema = {
         {
           key: "showEditButton",
           label: "Edit button",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
         },
         {
           key: "showDeleteButton",
           label: "Delete button",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
         },
         {
           key: "showAddButton",
           label: "Add button",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
         },

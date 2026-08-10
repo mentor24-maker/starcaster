@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderAlignmentIconGroup, type BuilderModuleAlignment } from "./builder-alignment-icon-group";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip, type BuilderModuleFieldWidth } from "./builder-module-field";
 import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
@@ -58,6 +59,19 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
     | { control: "color"; dialogLabel: string }
     | { control: "align"; ariaLabel: string }
     | { control: "image" }
+    | {
+        /**
+         * Pick from project data (pages / posts / CRM forms) and store the
+         * derived value — master rules C1/C2 (fix F6). See
+         * builder-project-data-picker.tsx.
+         */
+        control: "picker";
+        source: "pages" | "posts" | "crm-forms";
+        valueKind: "path" | "slug" | "id";
+        /** Label for the empty-value option ("Current page", "Default"). */
+        noneLabel?: string;
+        placeholder?: string;
+      }
     | {
         control: "custom";
         render: (ctx: BuilderSchemaFieldContext) => ReactNode;
@@ -230,6 +244,18 @@ function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext
         <BuilderImagePickerField
           value={ctx.settings[field.key] ?? ""}
           onChange={(url) => ctx.set(field.key, url)}
+        />
+      );
+    case "picker":
+      return (
+        <BuilderProjectDataPicker
+          source={field.source}
+          valueKind={field.valueKind}
+          noneLabel={field.noneLabel}
+          placeholder={field.placeholder}
+          ariaLabel={typeof field.label === "string" ? field.label : undefined}
+          value={ctx.settings[field.key] ?? field.fallback ?? ""}
+          onChange={(next) => ctx.set(field.key, next)}
         />
       );
     case "custom":

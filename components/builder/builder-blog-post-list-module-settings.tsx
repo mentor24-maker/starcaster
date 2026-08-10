@@ -11,16 +11,6 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
-const SHOW_HIDE = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
-const HIDE_SHOW = [
-  { value: "false", label: "Hide" },
-  { value: "true", label: "Show" }
-];
-
 export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Props) {
   const schema: BuilderSettingsSchema = {
     // S5 registry (docs/UI_RULES.md): the operator's 6/28 three-column
@@ -61,7 +51,10 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
           key: "postSlug",
           label: "Post Page",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "pages",
+          valueKind: "slug",
+          noneLabel: "Default (blog-post-view)",
           placeholder: "blog-post-view",
           rendersVia: "BlogPostListPreview postPageUrl resolution"
         }
@@ -111,16 +104,17 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
           ]
         }
       ],
-      // The five filter Show/Hides split across two strips so this column
+      // The five filter toggles split across two strips so this column
       // stays as narrow as its siblings (D4 equal-width columns).
+      // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
       [
-        { key: "showSearch", label: "Search Bar", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showCategoryFilter", label: "Category Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showDateFilter", label: "Date Filter", width: "select-sm", control: "select", fallback: "false", options: HIDE_SHOW }
+        { key: "showSearch", label: "Search Bar", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showCategoryFilter", label: "Category Filter", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showDateFilter", label: "Date Filter", width: "check", control: "checkbox", fallback: "false" }
       ],
       [
-        { key: "showAuthorFilter", label: "Author Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showTagFilter", label: "Tag Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE }
+        { key: "showAuthorFilter", label: "Author Filter", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showTagFilter", label: "Tag Filter", width: "check", control: "checkbox", fallback: "true" }
         // popularityFilter (By Views / By Likes) removed 2026-08-09: posts
         // carry no view/like counts anywhere in the data model, so the
         // control sorted nothing (audit C6). The operator ruled "wire it

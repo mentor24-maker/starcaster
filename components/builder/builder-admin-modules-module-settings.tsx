@@ -14,12 +14,8 @@ const SCHEMA: BuilderSettingsSchema = {
       {
         key: "showTitle",
         label: "Show title",
-        width: "select-sm",
-        control: "select",
-        options: [
-          { value: "true", label: "Show" },
-          { value: "false", label: "Hide" }
-        ],
+        width: "check",
+        control: "checkbox",
         fallback: "true",
         rendersVia: "AdminModulesPreview (builder-template-preview.tsx)"
       },
@@ -34,16 +30,23 @@ const SCHEMA: BuilderSettingsSchema = {
         rendersVia: "AdminModulesPreview (builder-template-preview.tsx)"
       },
       {
+        // The old select's Hide option read "Hide (read-only)" — that nuance
+        // (unchecked leaves visitors a read-only modules list) rides on the
+        // tooltip so it cannot silently disappear (L7).
         key: "showToggle",
         label: "Toggle buttons",
-        width: "select-md",
-        control: "select",
-        options: [
-          { value: "true", label: "Show" },
-          { value: "false", label: "Hide (read-only)" }
-        ],
+        width: "check",
+        control: "custom",
         fallback: "true",
-        rendersVia: "AdminModulesPreview (builder-template-preview.tsx)"
+        rendersVia: "AdminModulesPreview (builder-template-preview.tsx)",
+        render: (ctx) => (
+          <input
+            type="checkbox"
+            title="Unchecked: modules list is read-only"
+            checked={(ctx.settings.showToggle ?? "true") === "true"}
+            onChange={(event) => ctx.set("showToggle", event.target.checked ? "true" : "false")}
+          />
+        )
       }
     ]
   ]

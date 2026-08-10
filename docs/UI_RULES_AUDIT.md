@@ -432,3 +432,30 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
     blog-post-list, and admin-support-form — panels fill their width in
     columns; no orphans; no cropped options. Screenshots on the
     operator's Desktop ("AFTER - …").
+
+- **2026-08-10 (F4 — boolean migration, complete):** all ~55 Show/Hide,
+  Yes/No, On/Off, and None/Show selects converted to checkboxes across 22
+  files — every schema panel, the strips-based blog-post Display tab, the
+  button design editor, breadcrumb, heading (Italic/Underline/Outline),
+  headline-rotator's Drop shadow, and the hand-written messaging
+  topic-list. Stored values byte-identical everywhere ("true"/"false",
+  same fallbacks); option-label nuances preserved as checkbox tooltips
+  per L7 ("Hide (read-only)", "Hide (use logged-in user)", "No (uses
+  default)"). Two-option MODE selects (grid/list, stacked/inline,
+  two-column/stacked, draft/published, left/center) correctly stayed
+  selects — they are choices, not booleans. C3 status: clear.
+
+- **2026-08-09/10 (F6 — the shared project-data picker, complete):**
+  `builder-project-data-picker.tsx` + schema `picker` control (sources:
+  pages / posts / crm-forms; valueKind path / slug / id; session-cached
+  fetch; degrades to a text input on fetch failure; unknown saved values
+  render in Custom mode untouched). Adopted at 12 fields across 11
+  modules: admin-nav-link linkHref, admin-login successRedirect,
+  blog-search + search-results + post-manager (×2) + post-tags +
+  tag-cloud + category-filter page targets, messaging-topic-list feed
+  URL, blog-post-list postSlug (slug kind), newsletter CRM Form (id
+  kind). Stored formats unchanged everywhere. Also removed a duplicate
+  Headline control the layout wave left in newsletter-subscribe (C6).
+  C1/C2 status: page/form targets clear; remaining C2 items (post-card /
+  related-posts per-item post fills, blog-post slug-from-title, toc
+  anchors-from-headings) are richer derivations — future work, noted.

@@ -13,16 +13,6 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-const SHOW_HIDE = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
-const HIDE_SHOW = [
-  { value: "false", label: "Hide" },
-  { value: "true", label: "Show" }
-];
-
 export function BuilderBlogCategoryManagerModuleSettings({
   module,
   onUpdateModule,
@@ -31,10 +21,11 @@ export function BuilderBlogCategoryManagerModuleSettings({
   const schema: BuilderSettingsSchema = {
     content: [
       [
-        { key: "showDescription", label: "Description", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showColor", label: "Color", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showSortOrder", label: "Sort Order", width: "select-sm", control: "select", fallback: "false", options: HIDE_SHOW },
-        { key: "showDelete", label: "Delete", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
+        // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
+        { key: "showDescription", label: "Description", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showColor", label: "Color", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showSortOrder", label: "Sort Order", width: "check", control: "checkbox", fallback: "false" },
+        { key: "showDelete", label: "Delete", width: "check", control: "checkbox", fallback: "true" },
         // D3: Accent rides the toggle strip instead of stranding a one-field
         // style group on its own row. Same key/fallback — layout only.
         { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" }

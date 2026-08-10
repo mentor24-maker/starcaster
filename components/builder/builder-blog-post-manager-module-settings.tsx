@@ -13,11 +13,6 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 export function BuilderBlogPostManagerModuleSettings({
   module,
   onUpdateModule,
@@ -30,7 +25,10 @@ export function BuilderBlogPostManagerModuleSettings({
           key: "editPageUrl",
           label: "Edit Page URL",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Auto",
           placeholder: "/builder-preview.html?slug=blog-post-edit",
           rendersVia: "BlogPostManagerPreview"
         },
@@ -38,7 +36,10 @@ export function BuilderBlogPostManagerModuleSettings({
           key: "viewPageUrl",
           label: "View Page URL",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Auto",
           placeholder: "/builder-preview.html?slug=blog-post-view",
           rendersVia: "BlogPostManagerPreview"
         }
@@ -47,27 +48,24 @@ export function BuilderBlogPostManagerModuleSettings({
         {
           key: "showStatus",
           label: "Status",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
         },
         {
           key: "showDate",
           label: "Date",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
         },
         {
           key: "showDelete",
           label: "Delete",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
         },

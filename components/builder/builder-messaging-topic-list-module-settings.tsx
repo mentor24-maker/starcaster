@@ -3,6 +3,7 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
   BuilderThemeColorField,
@@ -40,11 +41,12 @@ export function BuilderMessagingTopicListModuleSettings({
             <option value="dropdown">Dropdown</option>
           </select>
         </BuilderModuleField>
-        <BuilderModuleField label="Show 'All'" width="select-sm">
-          <select value={s.showAll ?? "true"} onChange={(e) => set("showAll", e.target.value)}>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+        <BuilderModuleField label="Show 'All'" width="check">
+          <input
+            type="checkbox"
+            checked={(s.showAll ?? "true") === "true"}
+            onChange={(e) => set("showAll", e.target.checked ? "true" : "false")}
+          />
         </BuilderModuleField>
         <BuilderModuleField label="Alignment" width="select-sm">
           <select value={s.alignment ?? "left"} onChange={(e) => set("alignment", e.target.value)}>
@@ -138,11 +140,14 @@ export function BuilderMessagingTopicListModuleSettings({
       </BuilderModuleFieldStrip>
 
       <BuilderSettingRow label="Post feed URL" fullWidth>
-        <input
-          type="text"
+        <BuilderProjectDataPicker
+          source="pages"
+          valueKind="path"
           value={s.targetPageUrl ?? ""}
-          onChange={(e) => set("targetPageUrl", e.target.value)}
+          onChange={(targetPageUrl) => set("targetPageUrl", targetPageUrl)}
+          noneLabel="None"
           placeholder="/builder-preview.html?slug=blog"
+          ariaLabel="Post feed URL"
         />
       </BuilderSettingRow>
 

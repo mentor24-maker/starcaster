@@ -23,11 +23,6 @@ const SECTION_LABELS: Record<Section, string> = {
   display:  "Display",
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richTextGallery }: Props) {
   const s = module.settings;
   const [section, setSection] = useState<Section>("content");
@@ -45,12 +40,12 @@ export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richText
 
   function showHideField(key: string, label: string, fallback: string) {
     return (
-      <BuilderModuleField label={label} width="select-md">
-        <select value={s[key] ?? fallback} onChange={(e) => set(key, e.target.value)}>
-          {SHOW_HIDE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
+      <BuilderModuleField label={label} width="check">
+        <input
+          type="checkbox"
+          checked={(s[key] ?? fallback) === "true"}
+          onChange={(e) => set(key, e.target.checked ? "true" : "false")}
+        />
       </BuilderModuleField>
     );
   }
