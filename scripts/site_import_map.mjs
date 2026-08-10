@@ -317,8 +317,19 @@ async function main() {
 
   // 3. Promote referenced assets into the project's library (URL = copied
   //    URL, same string that lands in the page JSON, so "Used In" matches).
+  //    Keyed by location, because --apply is re-run routinely — a second
+  //    pass, a later --nav pass — and an unconditional create minted a
+  //    fresh row every time. The blob copy above is idempotent (a
+  //    deterministic path), so this must be too, or the library fills with
+  //    rows pointing at one file: 335 rows for 48 images in Delray inside
+  //    three days (2026-08-09).
+  const libraryRows = must(await assetsStore.listAssets(scope), 'list project assets');
+  const knownLocations = new Set(libraryRows.map((row) => row.location).filter(Boolean));
+  let promoted = 0;
   for (const asset of out.copyPlan.assets) {
     const location = urlMap.get(asset.fromUrl) || asset.fromUrl;
+    if (!location || knownLocations.has(location)) continue;
+    knownLocations.add(location);
     must(await assetsStore.createAsset({
       assetName: asset.originalUrl.split('/').pop() || asset.assetId,
       assetType: (asset.mimeType || '').startsWith('image/') ? 'Image' : 'File',
@@ -327,7 +338,9 @@ async function main() {
       caption: asset.altText,
       comments: `Imported from ${asset.originalUrl} (job ${JOB_ID})`,
     }, scope), `promote asset ${asset.assetId}`);
+    promoted += 1;
   }
+  log(`Assets promoted: ${promoted} new, ${out.copyPlan.assets.length - promoted} already in the library.`);
 
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
