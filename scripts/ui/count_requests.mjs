@@ -49,15 +49,11 @@ try {
   console.log('top endpoints:');
   top.slice(0, 8).forEach(([u, n]) => console.log(String(n).padStart(6), u));
 
-  // Budget, not 1. One load of acquireYoutubePage makes 3 topics requests, and
-  // none of them are the storm:
+  // Budget, not 1. One load of acquireYoutubePage makes 2 topics requests, and
+  // neither is the storm:
   //   1x through App.ui.ensureMessagingTopicsLoaded — the real, cached fetch.
-  //   2x messaging.js refreshMessagingTopics, which loads full topic records
-  //     for its own CRUD table and cannot use the flat name cache. It runs
-  //     twice because public/app.js and public/js/core.js each dispatch
-  //     onPageActivated — every module's activation callback fires twice on
-  //     every navigation. That is a separate, wider defect; when it is fixed
-  //     this drops to 2.
+  //   1x messaging.js refreshMessagingTopics, which loads full topic records
+  //     for its own CRUD table and cannot use the flat name cache.
   // Anything that reintroduces a per-row or per-render fetch lands in the
   // hundreds, so this threshold catches the regression it is meant to catch.
   const TOPICS_BUDGET = 6;

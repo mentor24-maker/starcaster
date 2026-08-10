@@ -155,22 +155,10 @@ if (App.els.topNav) {
       }
     }
 
+    // App.setActivePage dispatches onPageActivated itself (core.js). Doing it
+    // again here ran every module's activation callback twice per navigation.
     App.setActivePage(targetPage);
     App.refresh().catch((err) => App.notify(err.message, true));
-
-    // Trigger on-activation callbacks for modules that want them
-    for (const mod of App.manifests) {
-      if (!mod || typeof mod !== 'object') continue;
-      const pageId = String(mod?.manifest?.pageId || '');
-      const pagePrefixes = Array.isArray(mod?.manifest?.pagePrefixes)
-        ? mod.manifest.pagePrefixes.map((item) => String(item || '').trim()).filter(Boolean)
-        : [];
-      const matchesPrefix = pagePrefixes.some((prefix) => targetPage.startsWith(prefix));
-      if (mod.manifest && (pageId === targetPage || matchesPrefix) &&
-          typeof mod.onPageActivated === 'function') {
-        mod.onPageActivated(targetPage);
-      }
-    }
   });
 }
 
@@ -220,25 +208,9 @@ App.bootMainApp = function bootMainApp() {
   if (App.pageHeadingNav?.bindBackLinks) App.pageHeadingNav.bindBackLinks();
 
   const initialPage = App.getInitialPage();
+  // Dispatches onPageActivated for the initial page (core.js). It used to be
+  // repeated here, so the first page loaded its data twice on every boot.
   App.setActivePage(initialPage, { persist: false });
-  
-  // Trigger on-activation callbacks for the initial page
-  for (const mod of App.manifests) {
-    if (!mod || typeof mod !== 'object') continue;
-    const pageId = String(mod?.manifest?.pageId || '');
-    const pagePrefixes = Array.isArray(mod?.manifest?.pagePrefixes)
-      ? mod.manifest.pagePrefixes.map((item) => String(item || '').trim()).filter(Boolean)
-      : [];
-    const matchesPrefix = pagePrefixes.some((prefix) => initialPage.startsWith(prefix));
-    if (mod.manifest && (pageId === initialPage || matchesPrefix) &&
-        typeof mod.onPageActivated === 'function') {
-      try {
-        mod.onPageActivated(initialPage);
-      } catch (err) {
-        console.error(`Page activation failed:`, err);
-      }
-    }
-  }
 
   try {
     App.youtube.renderYoutubeAcquireResult();
