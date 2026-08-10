@@ -217,6 +217,25 @@ is ever wider than the screen.*
   12. **Let the table's own container scroll sideways**, with the
       identifier column frozen. The last resort, and never the page body.
 
+- **T10.** **Bulk actions live right-aligned in the filter row, above the
+  Actions column.** One toolbar per CRUD (Publish / Archive / Delete /
+  whatever the entity supports), on the filter row's last `<th>`, spanning
+  whatever trailing columns it needs. Right-aligned so it lands over the
+  Actions column — the same place the eye already goes for per-row actions,
+  which is what makes "acts on the checked rows" read as the bulk twin of
+  "acts on this row". *(8/10 "Bulk actions such as Delete, Publish, Archive,
+  etc. should appear right-aligned in the filter bar, above the Actions
+  column")* — **[eye]**
+  Canonical markup: `<th class="crud-bulk-actions" colspan="N">` wrapping
+  `<div class="crud-bulk-actions-row">`, styled once in
+  `src/css/_tables.css`. Do **not** hand-roll a per-table variant, and do
+  not name it `*-actions-cell` — that suffix is caught by the actions-column
+  selector and centred, which is exactly how the Builder: Pages toolbar
+  drifted out over the Updated column.
+  *Known non-compliant (2026-08-10):* Acquire's YouTube repository
+  (`youtube-repository-bulk-actions-cell`) and YouTube comments
+  (`youtube-comment-bulk-actions-row`), and Assets
+  (`assets-bulk-action-row`) — three hand-rolled variants of this one idea.
 - **T8.** Every flex/grid ancestor of a table sets **`min-width: 0`**. A
   grid or flex child defaults to `min-content` and will happily push its
   container past the viewport — this is the most common cause of a CRUD
