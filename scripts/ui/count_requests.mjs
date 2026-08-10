@@ -49,18 +49,18 @@ try {
   console.log('top endpoints:');
   top.slice(0, 8).forEach(([u, n]) => console.log(String(n).padStart(6), u));
 
-  // Budget, not 1. After the core.js cache fix, one load of acquireYoutubePage
-  // makes ~7 topics requests, and none of them are the storm:
-  //   4x HTTP 400 during boot — assets.js / assetsVideo.js populate topic
-  //     dropdowns before a project is active, so the request is rejected and
-  //     (correctly) not cached. Separate defect; see the handoff doc.
+  // Budget, not 1. One load of acquireYoutubePage makes 3 topics requests, and
+  // none of them are the storm:
   //   1x through App.ui.ensureMessagingTopicsLoaded — the real, cached fetch.
-  //   2x direct api('/api/messaging/topics?limit=5000') from callers that need
-  //     the full topic records, not the cache's flat name list
-  //     (youtube.js loadYoutubeResearchMessagingCache, campaigns.js).
+  //   2x messaging.js refreshMessagingTopics, which loads full topic records
+  //     for its own CRUD table and cannot use the flat name cache. It runs
+  //     twice because public/app.js and public/js/core.js each dispatch
+  //     onPageActivated — every module's activation callback fires twice on
+  //     every navigation. That is a separate, wider defect; when it is fixed
+  //     this drops to 2.
   // Anything that reintroduces a per-row or per-render fetch lands in the
   // hundreds, so this threshold catches the regression it is meant to catch.
-  const TOPICS_BUDGET = 10;
+  const TOPICS_BUDGET = 6;
   const topics = counts.get('/api/messaging/topics') || 0;
   console.log(`\n/api/messaging/topics: ${topics} (budget ${TOPICS_BUDGET})   HTTP 429s: ${throttled}`);
   if (topics > TOPICS_BUDGET || throttled > 0) {

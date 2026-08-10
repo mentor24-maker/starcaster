@@ -1010,6 +1010,15 @@ App.iconButtonMarkup = function iconButtonMarkup(iconKey, label, className = '')
 
 App.ui = App.ui || {};
 
+/** Active project id, resolved exactly the way App.api resolves it. */
+function currentProjectId() {
+  return (
+    typeof App.projectContext?.getSessionProjectId === 'function'
+      ? App.projectContext.getSessionProjectId()
+      : String(App.state.currentProjectId || '').trim()
+  );
+}
+
 /**
  * Drop the cached messaging topics. Called on every project switch —
  * the topic list is project-scoped, and an in-flight fetch started under the
@@ -1034,6 +1043,13 @@ App.ui.ensureMessagingTopicsLoaded = async function() {
   // Hand every concurrent caller the same in-flight promise.
   if (App.state.cachedTopicsPromise) {
     return App.state.cachedTopicsPromise;
+  }
+  // Modules populate topic dropdowns during boot, before a project is active.
+  // /api/messaging/topics is project-scoped and 400s without one, so skip the
+  // round trip. Not cached as loaded — the project switch that follows resets
+  // the epoch anyway, and the next caller then fetches for real.
+  if (!currentProjectId()) {
+    return Array.isArray(App.state.cachedTopics) ? App.state.cachedTopics : [];
   }
 
   const epoch = App.state.cachedTopicsEpoch || 0;

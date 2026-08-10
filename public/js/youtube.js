@@ -1140,8 +1140,14 @@ App.youtube = (function () {
 
   async function loadYoutubeResearchMessagingCache() {
     if (youtubeResearchMessagingCache) return youtubeResearchMessagingCache;
+    // Topics come from the shared cache in core.js rather than a fifth request:
+    // this screen only ever reads the topic name (getYoutubeResearchTopicValue),
+    // so the cache's flat name list is enough. Mapped back to { topic } records
+    // to keep the shape every consumer below already expects.
     var requests = [
-      api('/api/messaging/topics?limit=5000'),
+      App.ui && App.ui.ensureMessagingTopicsLoaded
+        ? App.ui.ensureMessagingTopicsLoaded()
+        : api('/api/messaging/topics?limit=5000'),
       api('/api/messaging/hashtags?limit=5000'),
       api('/api/messaging/articles?limit=5000'),
       api('/api/messaging/posts?limit=5000'),
@@ -1154,7 +1160,10 @@ App.youtube = (function () {
     var posts = [];
     var tweets = [];
     if (results[0].status === 'fulfilled') {
-      topics = toArray(results[0].value?.topics || results[0].value?.topics || results[0].value?.data || results[0].value);
+      topics = toArray(results[0].value?.topics || results[0].value?.data || results[0].value)
+        .map(function(item) {
+          return typeof item === 'string' ? { topic: item } : item;
+        });
     }
     if (results[1].status === 'fulfilled') hashtags = toArray(results[1].value?.hashtags);
     if (results[2].status === 'fulfilled') articles = toArray(results[2].value?.articles);
@@ -4484,6 +4493,10 @@ App.youtube = (function () {
       syncBulkSelectionUi();
       return;
     }
+    // Collected here and filled once below. Building each row's option list
+    // separately cost one full <option> set per row on every render.
+    var pendingTopicSelects = [];
+
     runs.forEach(function(run) {
       var tr = document.createElement('tr');
 
@@ -4527,9 +4540,7 @@ App.youtube = (function () {
       if (safeText(run.video_record_id) || safeText(run.detail_run_id)) {
         var topicSelect = document.createElement('select');
         var currentTopic = safeText(run.topic);
-        if (App.ui && App.ui.populateTopicsDropdown) {
-           App.ui.populateTopicsDropdown(topicSelect, 'Topic', '', currentTopic);
-        }
+        pendingTopicSelects.push({ select: topicSelect, value: currentTopic });
         topicSelect.addEventListener('change', function() {
           var nextTopic = safeText(topicSelect.value);
           if (!nextTopic) return;
@@ -4664,7 +4675,46 @@ App.youtube = (function () {
       actionsTd.appendChild(delBtn);
       els.youtubeRunsTable.appendChild(tr);
     });
+    fillRunTopicSelects(pendingTopicSelects);
     syncBulkSelectionUi();
+  }
+
+  /**
+   * Populate every run row's topic <select> from one prebuilt option list.
+   *
+   * Previously each row called App.ui.populateTopicsDropdown itself, which
+   * rebuilt the whole <option> set per row — 82 rows x every topic on each
+   * render. The list is identical for every row, so build it once and clone.
+   *
+   * A row whose current topic is no longer in the list (a deleted topic) needs
+   * that value spliced into sorted position, which is per-row work; those fall
+   * back to populateTopicsDropdown. That case is rare, so the common path stays
+   * one build regardless of row count.
+   */
+  function fillRunTopicSelects(entries) {
+    if (!entries || !entries.length) return;
+    if (!App.ui || !App.ui.ensureMessagingTopicsLoaded) return;
+    App.ui.ensureMessagingTopicsLoaded().then(function(topics) {
+      var list = Array.isArray(topics) ? topics : [];
+      var known = new Set(list);
+      var prototypeOptions = document.createDocumentFragment();
+      prototypeOptions.appendChild(new Option('Topic', ''));
+      list.forEach(function(topic) {
+        prototypeOptions.appendChild(new Option(topic, topic));
+      });
+      entries.forEach(function(entry) {
+        var value = entry.value;
+        if (value && !known.has(value)) {
+          if (App.ui.populateTopicsDropdown) {
+            App.ui.populateTopicsDropdown(entry.select, 'Topic', '', value);
+          }
+          return;
+        }
+        entry.select.options.length = 0;
+        entry.select.appendChild(prototypeOptions.cloneNode(true));
+        entry.select.value = value || '';
+      });
+    });
   }
 
   function toLocalDateKey(input) {
