@@ -36,9 +36,14 @@ as a rule first, then gets a checker where one is possible.
 - **L3.** Labels carry **no redundant or unnecessary words** — "Border",
   not "Border thickness in pixels". If a label needs a sentence, the
   control is wrong. *(8/9 example; doctrine E5)* — **[eye]**
-- **L4.** **Never crop a word** — not in a label, a value, an option, or a
-  column heading. Widen the container instead. *(8/9 example; 6/28 "the
-  labels … are all cut off by the fields")* — **[TODO-check]**
+- **L4.** **Never crop a word** — not in a label, an option, or a column
+  heading. Widen the container instead. *(8/9 example; 6/28 "the labels …
+  are all cut off by the fields")* — **[TODO-check]**
+  **Carve-out 8/10:** *data values in table cells* are the one exception,
+  and only there — a cell may truncate at T7 rung 10 provided the full
+  value is one hover or click away. Labels, options and headings keep the
+  absolute rule: a cropped heading is fixed by rewording it (T7 rung 6),
+  never by cutting it off.
 - **L5.** Labels never **overlap** their controls or neighbors. *(6/28
   "Ensure that none of the labels overlap with the forms")* — **[eye]**
 - **L6.** Item-grid columns get **header titles** — and this **applies to
@@ -104,6 +109,9 @@ screen allows.*
 - **W5.** Columns and fields **may expand to avoid wrapping or cropping**
   (L2/L4 outrank W2's uniformity). *(8/9 example "Allow columns to expand
   width to avoid wrapping")* — **[eye]**
+  Scope: settings-panel fields and their label columns. It is **not** a
+  licence to widen a table past the viewport — inside a CRUD, T0 outranks
+  it and the T7 ladder says how to buy the width back.
 - **W6.** A field must never push another field out of view. *(7/1 "Page
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
@@ -142,16 +150,88 @@ screen allows.*
 
 ## T — Tables, lists, and CRUDs
 
-*Umbrella: any list the operator will ever scroll is navigable.*
+*Umbrella: any list the operator will ever scroll is navigable — and no CRUD
+is ever wider than the screen.*
 
+- **T0. A CRUD never extends beyond the width of the screen.** The master
+  rule of this section: it outranks every other width preference here, and
+  "the data needs the room" is not an exception. Concretely — the page body
+  never scrolls sideways, and nothing is reachable only by dragging the
+  window. If the data genuinely cannot fit after the whole T7 ladder, the
+  **table's own container** scrolls; the page never does. *(8/10 "The
+  Builder:Pages CRUD currently extends beyond the width of the screen. This
+  should never happen")* — **[TODO-check]** (a Playwright width assertion
+  per CRUD at three viewports is the obvious checker)
+
+- **T7. The width ladder.** When a CRUD is too wide, reclaim width in this
+  order and **stop at the first rung that makes it fit**. The order is by
+  what each step costs the operator: the early rungs cost nothing, the late
+  ones cost visibility, and rung 12 is an admission that the earlier rungs
+  were skipped. *(rungs 1, 4, 6 and 11 are the operator's own 8/10 list; the
+  rest fill in around them. Ladder ratified 8/10, with truncation moved
+  above wrapping by his ruling.)* — **[eye]**
+
+  1. **Cut columns that are not needed.** *(operator step 1)* Costs nothing
+     — the column was carrying no decision.
+  2. **Move rarely-read fields off the row** into its detail/expand view or
+     the edit form. Costs one click; loses no data.
+  3. **Merge fields that read as one thing** into a single cell (title with
+     its slug beneath; "Updated" carrying who and when).
+  4. **Size columns to their content, not to a share of the table.**
+     *(operator step 2)* A status column has no business being as wide as a
+     title column. Costs nothing.
+  5. **Reclaim the non-data width**: right-size the checkbox and actions
+     columns, trim cell padding, drop decorative gutters. Costs nothing —
+     this is chrome, not information.
+  6. **Shorten the headings** to the shortest wording that still names the
+     column unambiguously. *(operator step 3)* Never to a riddle.
+  7. **Shorten the data itself** — compact dates ("Aug 9" over "August 9,
+     2026, 3:04:22 PM"), relative times, numbers without noise. Full
+     precision stays in the tooltip.
+  8. **Turn enumerated values into icons or badges** — visibility, status,
+     type — each with a tooltip and an accessible label.
+  9. **Hide the least important columns at narrow breakpoints**, restoring
+     them when there is room. Costs data on small screens only.
+  10. **Truncate, with the full value one hover or click away.** Costs a
+      cropped line of text and nothing else — the value is still one hover
+      from the operator, which is why this outranks wrapping. The hover is
+      not optional; a truncation with no way to read the rest is a bug.
+      *(operator ruling 8/10)*
+  11. **Wrap onto a second line.** *(operator step 4)* For values that must
+      be readable at a glance rather than on hover. Below truncation
+      deliberately — ragged row heights cost scannability on every row,
+      while truncation costs one hover on the rare long value. *(operator
+      ruling 8/10 moved this from rung 9 to here)*
+  12. **Let the table's own container scroll sideways**, with the
+      identifier column frozen. The last resort, and never the page body.
+
+- **T8.** Every flex/grid ancestor of a table sets **`min-width: 0`**. A
+  grid or flex child defaults to `min-content` and will happily push its
+  container past the viewport — this is the most common cause of a CRUD
+  that overflows despite the table itself being `width: 100%`. *(lesson of
+  2026-08-10)* — **[TODO-check]**
+- **T9.** **No hardcoded pixel `min-width` on a table.** It pins the CRUD
+  wider than a laptop and defeats every rung of T7. `.polls-table` carries
+  `min-width: 1180px`; `.builder-templates-table` happens to override it
+  back to `100%`, so only tables that forget that second class are exposed
+  — `builder-bulk-create-preview-table` and
+  `builder-bulk-create-results-table` are exposed today. *(lesson of
+  2026-08-10)* — **[TODO-check]**
 - **T1.** Any list that can grow gets **search, filters, and sort**.
   *(8/7 "hundreds and eventually thousands of modules. So a clear
   navigation system is essential … a text search field"; 7/23 the
   Facebook no-search rant)* — **[eye]**
-- **T2.** Tables **fit the page**: long text columns truncate (full value
-  one click away); the page body never scrolls sideways. *(8/6 "truncate
-  the slug column so we can fit the whole table on the page"; doctrine R1)*
-  — **[auto]** for the scroll container, **[eye]** for truncation
+- **T2.** Tables **fit the page**; the page body never scrolls sideways.
+  *(8/6 "truncate the slug column so we can fit the whole table on the
+  page"; doctrine R1)* — **[auto]** for the scroll container, **[eye]** for
+  the rest.
+  **Confirmed 8/10:** truncation stands, and it outranks wrapping — it is
+  rung 10 of the T7 ladder, above wrap at 11. The one condition is that the
+  full value stays reachable: *"Truncating is acceptable with the additional
+  hover you suggested."* A truncated cell with no hover or click to the full
+  value is a bug, not a fitted table. This closes the apparent conflict with
+  the 8/10 "don't truncate" step, which the operator resolved in favor of
+  truncate-then-wrap.
 - **T3.** Every CRUD row carries its **full action set** with the standard
   icons — view, edit, delete; no missing verbs. *(7/22 "the whole Saved
   Cells CRUD doesn't have an edit icon")* — **[eye]**

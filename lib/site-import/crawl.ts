@@ -305,15 +305,26 @@ export type CrawlQueueOptions = {
 
 export type CrawlItem = { url: string; depth: number };
 
+export type CrawlSource = "link" | "sitemap";
+
 /**
  * Visited-set BFS over normalized URLs, scoped to the seed's registrable
  * domain, page- and depth-capped, with a backlog cap (maxPages × 4, as in
  * directAcquire) so link-farm pages can't balloon memory. The worker
  * drives it: next() → capture → add(discovered links) → repeat.
+ *
+ * Two tiers: link-discovered URLs are always served before the sitemap
+ * backlog. A WordPress sitemap index lists every blog post ahead of the
+ * real pages, so a time-budgeted capture that honors sitemap order spends
+ * its whole budget on posts and never reaches the pages the site's own
+ * nav points at (the Delray import, 2026-08-09). The seed's nav links are
+ * the site's own statement of what matters — capture those first.
  */
 export class CrawlQueue {
-  private queue: CrawlItem[] = [];
+  private linkQueue: CrawlItem[] = [];
+  private sitemapQueue: CrawlItem[] = [];
   private enqueued = new Set<string>();
+  private capturedFinal = new Set<string>();
   private served = 0;
   private opts: CrawlQueueOptions;
   /** True once a cap refused work — reported in coverage.caps. */
@@ -327,29 +338,83 @@ export class CrawlQueue {
   }
 
   /** Returns true if the URL joined the queue. */
-  add(url: string, depth: number): boolean {
+  add(url: string, depth: number, source: CrawlSource = "link"): boolean {
     const normalized = normalizeCrawlUrl(url);
     if (!normalized) return false;
-    if (this.enqueued.has(normalized)) return false;
+    if (this.enqueued.has(normalized)) {
+      // The sitemap is seeded up front, so every link a captured page
+      // reveals is usually a dedupe hit — but a link sighting proves the
+      // page is reachable from the site itself, so pull it out of the
+      // sitemap backlog into the priority tier.
+      if (source === "link") this.promote(normalized);
+      return false;
+    }
     if (!sameSite(normalized, this.opts.seedUrl)) return false;
     if (!looksLikeHtmlUrl(normalized)) return false;
     if (depth > this.opts.maxDepth) {
       this.hitDepthCap = true;
       return false;
     }
-    if (this.queue.length >= this.opts.maxPages * 4) return false;
+    if (this.linkQueue.length + this.sitemapQueue.length >= this.opts.maxPages * 4) return false;
     this.enqueued.add(normalized);
-    this.queue.push({ url: normalized, depth });
+    (source === "sitemap" ? this.sitemapQueue : this.linkQueue).push({ url: normalized, depth });
+    return true;
+  }
+
+  /** Move a not-yet-served sitemap entry into the priority tier. */
+  private promote(normalizedUrl: string): void {
+    const i = this.sitemapQueue.findIndex((item) => item.url === normalizedUrl);
+    if (i === -1) return;
+    const [item] = this.sitemapQueue.splice(i, 1);
+    this.linkQueue.push(item);
+  }
+
+  /** Drop a not-yet-served URL from whichever tier holds it. */
+  private drop(normalizedUrl: string): void {
+    for (const q of [this.linkQueue, this.sitemapQueue]) {
+      const i = q.findIndex((item) => item.url === normalizedUrl);
+      if (i !== -1) q.splice(i, 1);
+    }
+  }
+
+  /**
+   * Records a captured page by its URL *after* redirects. Returns false
+   * when some earlier capture already landed on that URL — the caller must
+   * discard this one.
+   *
+   * A CMS site is full of aliases for one page (/Fees → /course/fees/,
+   * http:// → https://, /Events-Calendar → /events-calendar). Each alias
+   * is a distinct URL, so the crawl queue cannot dedupe them; only the
+   * post-redirect URL can. Without this the same page is imported twice
+   * and the second copy gets a "-imported" slug suffix — three duplicate
+   * pages in the Delray import, 2026-08-09.
+   *
+   * A discarded capture refunds its maxPages slot, so the cap keeps
+   * meaning "pages that made it into the import". Progress stays
+   * monotonic (the URL is marked seen either way), so no redirect chain
+   * can spin the loop.
+   */
+  claimCaptured(finalUrl: string): boolean {
+    const normalized = normalizeCrawlUrl(finalUrl);
+    if (!normalized) return true; // unparseable — trust the requested URL
+    if (this.capturedFinal.has(normalized)) {
+      this.served = Math.max(0, this.served - 1);
+      return false;
+    }
+    this.capturedFinal.add(normalized);
+    // The alias target must never be fetched again in its own right.
+    this.enqueued.add(normalized);
+    this.drop(normalized);
     return true;
   }
 
   /** Next page to capture, or null when done (drained or page cap hit). */
   next(): CrawlItem | null {
     if (this.served >= this.opts.maxPages) {
-      if (this.queue.length > 0) this.hitPageCap = true;
+      if (this.linkQueue.length + this.sitemapQueue.length > 0) this.hitPageCap = true;
       return null;
     }
-    const item = this.queue.shift();
+    const item = this.linkQueue.shift() ?? this.sitemapQueue.shift();
     if (!item) return null;
     this.served += 1;
     return item;
