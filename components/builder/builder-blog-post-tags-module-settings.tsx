@@ -179,13 +179,11 @@ export function BuilderBlogPostTagsModuleSettings({
               placeholder="tag"
             />
           )
-        }
-      ],
-      [
+        },
         {
           key: "targetPageUrl",
           label: "Target Page",
-          width: "full",
+          width: "text-md",
           control: "text",
           placeholder: "Leave blank for current page",
           rendersVia: "builder-template.ts blog-post-tags renderer",

@@ -187,6 +187,8 @@ export function BuilderBlogCategoryFilterModuleSettings({
       ]
     ],
     advanced: [
+      // D3: one strip, not two single-field rows. Target Page narrowed
+      // full → text-md so they can share; placeholder shortened to fit.
       [
         {
           key: "filterParam",
@@ -201,15 +203,13 @@ export function BuilderBlogCategoryFilterModuleSettings({
               placeholder="category"
             />
           )
-        }
-      ],
-      [
+        },
         {
           key: "targetPageUrl",
           label: "Target Page",
-          width: "full",
+          width: "text-md",
           control: "text",
-          placeholder: "Leave blank to filter on the current page"
+          placeholder: "blank = current page"
         }
       ]
     ]

@@ -59,6 +59,8 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
             )
         }
       ],
+      // D1: Title and Rows/Search controls share one strip instead of two
+      // short rows stacked down the left edge.
       [
         {
           key: "showTitle",
@@ -86,9 +88,7 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
               placeholder="Contacts"
             />
           )
-        }
-      ],
-      [
+        },
         {
           key: "rowsPerPage",
           label: "Rows Per Page",
@@ -112,78 +112,72 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
           fallback: "true",
           rendersVia: "renderCrmContactsTableModule"
         }
-      ],
-      [
-        {
-          key: "rowActionsLabel",
-          label: "Row actions",
-          width: "full",
-          control: "custom",
-          bare: true,
-          render: () => (
-            <div className="builder-breadcrumb-items-label" style={{ marginTop: 12, marginBottom: 6 }}>
-              Row actions
-            </div>
-          )
-        }
-      ],
-      [
-        {
-          key: "showViewButton",
-          label: "View",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
-          fallback: "true",
-          rendersVia: "renderCrmContactsTableModule"
-        },
-        {
-          key: "showEditButton",
-          label: "Edit",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
-          fallback: "true",
-          rendersVia: "renderCrmContactsTableModule"
-        },
-        {
-          key: "showDeleteButton",
-          label: "Delete",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
-          fallback: "true",
-          rendersVia: "renderCrmContactsTableModule"
-        },
-        {
-          key: "showAddButton",
-          label: "Add",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
-          fallback: "true",
-          rendersVia: "renderCrmContactsTableModule"
-        }
-      ],
-      [
-        {
-          key: "addButtonLabel",
-          label: "Add Button Label",
-          width: "text-md",
-          control: "custom",
-          visibleWhen: (settings) => (settings.showAddButton ?? "true") === "true",
-          rendersVia: "renderCrmContactsTableModule",
-          render: (ctx) => (
-            <input
-              type="text"
-              value={ctx.settings.addButtonLabel ?? "Add Contact"}
-              onChange={(e) => ctx.set("addButtonLabel", e.target.value)}
-              placeholder="Add Contact"
-            />
-          )
-        }
       ]
-    ]
+    ],
+    // Real titled group (D5) — replaces the old bare <div> divider that
+    // borrowed the breadcrumb label class. The `layout` slot is the ordering
+    // slot that renders after `content`; the title is what the operator sees.
+    layout: {
+      title: "Row actions",
+      strips: [
+        [
+          {
+            key: "showViewButton",
+            label: "View",
+            width: "select-sm",
+            control: "select",
+            options: SHOW_HIDE_OPTIONS,
+            fallback: "true",
+            rendersVia: "renderCrmContactsTableModule"
+          },
+          {
+            key: "showEditButton",
+            label: "Edit",
+            width: "select-sm",
+            control: "select",
+            options: SHOW_HIDE_OPTIONS,
+            fallback: "true",
+            rendersVia: "renderCrmContactsTableModule"
+          },
+          {
+            key: "showDeleteButton",
+            label: "Delete",
+            width: "select-sm",
+            control: "select",
+            options: SHOW_HIDE_OPTIONS,
+            fallback: "true",
+            rendersVia: "renderCrmContactsTableModule"
+          },
+          {
+            key: "showAddButton",
+            label: "Add",
+            width: "select-sm",
+            control: "select",
+            options: SHOW_HIDE_OPTIONS,
+            fallback: "true",
+            rendersVia: "renderCrmContactsTableModule"
+          },
+          // D3: joins the four selects instead of sitting orphaned on its
+          // own row; still only appears while Add is set to Show.
+          {
+            key: "addButtonLabel",
+            label: "Add Button Label",
+            width: "text-md",
+            control: "custom",
+            visibleWhen: (settings) => (settings.showAddButton ?? "true") === "true",
+            rendersVia: "renderCrmContactsTableModule",
+            render: (ctx) => (
+              <input
+                type="text"
+                value={ctx.settings.addButtonLabel ?? "Add Contact"}
+                onChange={(e) => ctx.set("addButtonLabel", e.target.value)}
+                placeholder="Add Contact"
+              />
+            )
+          }
+        ]
+      ]
+    }
   };
 
   return (

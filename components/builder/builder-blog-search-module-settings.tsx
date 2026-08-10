@@ -24,7 +24,7 @@ export function BuilderBlogSearchModuleSettings({
         {
           key: "placeholder",
           label: "Placeholder",
-          width: "full",
+          width: "text-md",
           control: "custom",
           rendersVia: "BlogSearchPreview",
           render: ({ settings, set }) => (
@@ -35,6 +35,14 @@ export function BuilderBlogSearchModuleSettings({
               placeholder="Search posts…"
             />
           )
+        },
+        {
+          key: "targetPageUrl",
+          label: "Results Page URL",
+          width: "text-md",
+          control: "text",
+          placeholder: "/blog (blank = current page)",
+          rendersVia: "BlogSearchPreview"
         }
       ],
       [
@@ -52,19 +60,7 @@ export function BuilderBlogSearchModuleSettings({
               placeholder="Search"
             />
           )
-        }
-      ],
-      [
-        {
-          key: "targetPageUrl",
-          label: "Results Page URL",
-          width: "full",
-          control: "text",
-          placeholder: "/blog (leave blank to stay on current page)",
-          rendersVia: "BlogSearchPreview"
-        }
-      ],
-      [
+        },
         {
           key: "searchParam",
           label: "Search Param",
@@ -120,7 +116,8 @@ export function BuilderBlogSearchModuleSettings({
           rendersVia: "BlogSearchPreview"
         }
       ]
-    ]
+    ],
+    panelColumns: [["content"], ["style"]]
   };
 
   return (

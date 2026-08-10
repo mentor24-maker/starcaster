@@ -23,7 +23,13 @@ const HIDE_SHOW = [
 
 export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Props) {
   const schema: BuilderSettingsSchema = {
-    content: [
+    // S5 registry (docs/UI_RULES.md): the operator's 6/28 three-column
+    // design — General / Page Design / Card Appearance side by side.
+    // Flattened once by a convention sweep (2026-08-09 audit); never again.
+    panelColumns: [["content"], ["layout"], ["style"]],
+    content: {
+      title: "General",
+      strips: [
       [
         {
           key: "moduleName",
@@ -60,8 +66,11 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
           rendersVia: "BlogPostListPreview postPageUrl resolution"
         }
       ]
-    ],
-    layout: [
+      ]
+    },
+    layout: {
+      title: "Page Design",
+      strips: [
       [
         {
           key: "layout",
@@ -102,10 +111,14 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
           ]
         }
       ],
+      // The five filter Show/Hides split across two strips so this column
+      // stays as narrow as its siblings (D4 equal-width columns).
       [
         { key: "showSearch", label: "Search Bar", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
         { key: "showCategoryFilter", label: "Category Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showDateFilter", label: "Date Filter", width: "select-sm", control: "select", fallback: "false", options: HIDE_SHOW },
+        { key: "showDateFilter", label: "Date Filter", width: "select-sm", control: "select", fallback: "false", options: HIDE_SHOW }
+      ],
+      [
         { key: "showAuthorFilter", label: "Author Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
         { key: "showTagFilter", label: "Tag Filter", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE }
         // popularityFilter (By Views / By Likes) removed 2026-08-09: posts
@@ -115,8 +128,11 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
         // tracked in ClickUp Dev Backlog. Re-add the control WITH the
         // tracking feature, never before it.
       ]
-    ],
-    style: [
+      ]
+    },
+    style: {
+      title: "Card Appearance",
+      strips: [
       [
         {
           key: "cardManagerNote",
@@ -135,7 +151,8 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
       [
         { key: "cardGap", label: "Card Gap", width: "num", control: "number", min: 8, max: 64, step: 4, fallback: "24" }
       ]
-    ]
+      ]
+    }
   };
 
   return (

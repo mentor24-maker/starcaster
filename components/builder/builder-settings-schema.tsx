@@ -75,18 +75,71 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
 export type BuilderSchemaStrip = BuilderSchemaField[];
 
 /**
+ * A group is either a plain list of strips (the original form — most
+ * editors) or an object that adds a visible title and/or distributes its
+ * strips across 1–3 equal-width columns.
+ *
+ * Added 2026-08-09 for master rules D2/D4/D5 (docs/UI_RULES.md): the
+ * operator's density rules — "minimize vertical space", "no wasted right
+ * side", "rows of 1–3 equal-width columns", "titled groups" — were
+ * impossible to express while the generator could only stack strips
+ * single-column (the flattening of his 6/28 blog-post-list three-column
+ * design was the incident).
+ */
+export type BuilderSchemaGroup =
+  | BuilderSchemaStrip[]
+  | {
+      /** Visible group heading (D5). Omit for an untitled group. */
+      title?: string;
+      /**
+       * Distribute this group's strips across N equal columns (D4).
+       * Strips split into contiguous runs, so declaration order still
+       * reads top-to-bottom within each column. Columns wrap to fewer on
+       * narrow panels (flex-basis), so nothing crops.
+       */
+      columns?: 1 | 2 | 3;
+      strips: BuilderSchemaStrip[];
+    };
+
+/**
  * Groups render in doctrine order (E3) no matter how the object is written:
  * content → layout → style → advanced. `advanced` renders inside
  * `<details class="hanging-details">`.
  */
 export type BuilderSettingsSchema = {
-  content?: BuilderSchemaStrip[];
-  layout?: BuilderSchemaStrip[];
-  style?: BuilderSchemaStrip[];
-  advanced?: BuilderSchemaStrip[];
+  content?: BuilderSchemaGroup;
+  layout?: BuilderSchemaGroup;
+  style?: BuilderSchemaGroup;
+  advanced?: BuilderSchemaGroup;
+  /**
+   * Arrange the top-level GROUPS side by side (D2): each inner array is
+   * one column of group names, columns left→right — so doctrine order
+   * (E3) reads left-to-right instead of top-to-bottom. Groups not named
+   * render stacked below the columns; `advanced` always renders last,
+   * full width. This is the mechanism that restores the operator's 6/28
+   * blog-post-list three-column layout.
+   */
+  panelColumns?: Array<Array<"content" | "layout" | "style">>;
 };
 
 const GROUP_ORDER = ["content", "layout", "style", "advanced"] as const;
+
+type BuilderSchemaGroupName = (typeof GROUP_ORDER)[number];
+
+function normalizeGroup(group: BuilderSchemaGroup | undefined): { title?: string; columns: 1 | 2 | 3; strips: BuilderSchemaStrip[] } | null {
+  if (!group) return null;
+  const normalized = Array.isArray(group) ? { strips: group, columns: 1 as const } : { columns: 1 as const, ...group };
+  if (!normalized.strips?.length) return null;
+  return normalized;
+}
+
+/** Split strips into N contiguous runs — order reads down each column. */
+function splitIntoColumns(strips: BuilderSchemaStrip[], columns: number): BuilderSchemaStrip[][] {
+  const out: BuilderSchemaStrip[][] = [];
+  const per = Math.ceil(strips.length / columns);
+  for (let i = 0; i < strips.length; i += per) out.push(strips.slice(i, i + per));
+  return out;
+}
 
 /**
  * The H+V margin pair, always together and adjacent — doctrine E4 by
@@ -231,21 +284,54 @@ export function BuilderSchemaModuleSettings({
       onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }))
   };
 
+  function renderGroup(name: BuilderSchemaGroupName) {
+    const group = normalizeGroup(schema[name]);
+    if (!group) return null;
+    if (name === "advanced") {
+      return (
+        <details className="hanging-details" key={name}>
+          <summary>{group.title ?? advancedLabel}</summary>
+          {renderStrips(group.strips, ctx)}
+        </details>
+      );
+    }
+    const body =
+      group.columns > 1 ? (
+        <div className="builder-schema-group-columns">
+          {splitIntoColumns(group.strips, group.columns).map((columnStrips, index) => (
+            <div className="builder-schema-group-column" key={index}>
+              {renderStrips(columnStrips, ctx)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        renderStrips(group.strips, ctx)
+      );
+    return (
+      <div key={name}>
+        {group.title ? <div className="builder-schema-group-title">{group.title}</div> : null}
+        {body}
+      </div>
+    );
+  }
+
+  const columnNames = schema.panelColumns?.flat() ?? [];
+  const stackedGroups = GROUP_ORDER.filter(
+    (name) => name === "advanced" || !columnNames.includes(name as Exclude<BuilderSchemaGroupName, "advanced">)
+  );
+
   return (
     <>
-      {GROUP_ORDER.map((group) => {
-        const strips = schema[group];
-        if (!strips?.length) return null;
-        if (group === "advanced") {
-          return (
-            <details className="hanging-details" key={group}>
-              <summary>{advancedLabel}</summary>
-              {renderStrips(strips, ctx)}
-            </details>
-          );
-        }
-        return <div key={group}>{renderStrips(strips, ctx)}</div>;
-      })}
+      {schema.panelColumns?.length ? (
+        <div className="builder-schema-panel-columns">
+          {schema.panelColumns.map((names, index) => (
+            <div className="builder-schema-panel-column" key={index}>
+              {names.map((name) => renderGroup(name))}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {stackedGroups.map((name) => renderGroup(name))}
     </>
   );
 }

@@ -29,17 +29,15 @@ export function BuilderBlogPostManagerModuleSettings({
         {
           key: "editPageUrl",
           label: "Edit Page URL",
-          width: "full",
+          width: "text-md",
           control: "text",
           placeholder: "/builder-preview.html?slug=blog-post-edit",
           rendersVia: "BlogPostManagerPreview"
-        }
-      ],
-      [
+        },
         {
           key: "viewPageUrl",
           label: "View Page URL",
-          width: "full",
+          width: "text-md",
           control: "text",
           placeholder: "/builder-preview.html?slug=blog-post-view",
           rendersVia: "BlogPostManagerPreview"
@@ -72,11 +70,7 @@ export function BuilderBlogPostManagerModuleSettings({
           options: SHOW_HIDE_OPTIONS,
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
-        }
-      ]
-    ],
-    style: [
-      [
+        },
         {
           key: "accentColor",
           label: "Accent Color",

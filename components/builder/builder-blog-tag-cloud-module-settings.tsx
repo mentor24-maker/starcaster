@@ -111,7 +111,7 @@ export function BuilderBlogTagCloudModuleSettings({
                       </label>
                       {isCloud ? (
                         <label className="field">
-                          <span>Count / weight</span>
+                          <span>Count</span>
                           <input
                             type="number" min={1} max={999}
                             value={tag.count ?? 1}
@@ -256,13 +256,11 @@ export function BuilderBlogTagCloudModuleSettings({
               placeholder="tag"
             />
           )
-        }
-      ],
-      [
+        },
         {
           key: "targetPageUrl",
           label: "Target Page",
-          width: "full",
+          width: "text-md",
           control: "text",
           placeholder: "Leave blank to filter on the current page",
           rendersVia: "builder-template.ts blog-tag-cloud renderer"

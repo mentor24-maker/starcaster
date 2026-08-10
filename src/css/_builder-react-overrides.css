@@ -504,6 +504,48 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: 10px 14px;
 }
 
+/*
+ * Schema panel/group columns (master rules D2/D4/D5, added 2026-08-09).
+ * Flex-basis columns so narrow panels (table-cell editors, popups) wrap
+ * to fewer columns instead of cropping — L4/W5 outrank the column count.
+ */
+.builder-react-root .builder-schema-panel-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-schema-panel-column {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-schema-group-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-schema-group-column {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 8px);
+}
+
+.builder-react-root .builder-schema-group-title {
+  font-size: var(--text-sm, 0.82rem);
+  font-weight: 700;
+  color: var(--ink-secondary, #475569);
+  margin: var(--space-2, 6px) 0 var(--space-1, 4px);
+}
+
 .builder-react-root .builder-module-field {
   display: inline-flex;
   align-items: center;
@@ -537,13 +579,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   max-width: min(230px, 100%);
 }
 
+/*
+ * Select tokens are MINIMUMS, not fixed widths (changed 2026-08-09,
+ * master rule L4/W5): the fixed ch widths were mechanically cropping
+ * real option labels ("Section Heading", "Hide (read-only)", "Power
+ * Curve" — see UI_RULES_AUDIT.md). A select auto-sizes to its longest
+ * option; the token only stops it collapsing below a sane floor.
+ */
 .builder-react-root .builder-module-field--select-sm .builder-module-field-control select {
-  width: 7.5ch;
+  width: auto;
   min-width: 7.5ch;
 }
 
 .builder-react-root .builder-module-field--select-md .builder-module-field-control select {
-  width: 9.5ch;
+  width: auto;
   min-width: 9.5ch;
 }
 
@@ -569,6 +618,58 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
       var(--numeric-select-padding-inline)
   );
   max-width: 100%;
+}
+
+/*
+ * Sliders get a bounded width (master rule W4, 2026-08-09): range inputs
+ * had NO width rule anywhere, so tractor-nav's three sliders spanned the
+ * whole panel. Bounded here for every strip field at once.
+ */
+.builder-react-root .builder-module-field-control input[type="range"] {
+  width: 200px;
+  max-width: 100%;
+}
+
+/*
+ * The inline number select stretched flex:1 to half the row under 2-3
+ * digit values (master rule W3; table/slider/slideshow/social-share).
+ * The rule it overrides lives in regenerated _builder-react.css.
+ */
+.builder-react-root .builder-inline-number-field select {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+/*
+ * F3 (UI_RULES_AUDIT.md): these grid classes were referenced by four
+ * inline editors (slider, slideshow, social-share, headline-rotator)
+ * but DEFINED NOWHERE — the editors have rendered as accidental
+ * single-column stacks of full-width fields since birth. Real grids:
+ * auto-fit columns bound each field to a column width (W1) and use the
+ * panel's full width (D2), wrapping to one column on narrow panels.
+ */
+.builder-react-root .builder-slider-design-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3, 8px) var(--space-5, 16px);
+  align-items: start;
+}
+
+.builder-react-root .builder-slider-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-slider-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2, 6px) var(--space-5, 16px);
+  align-items: start;
+}
+
+.builder-react-root .builder-slider-item-grid-full {
+  grid-column: 1 / -1;
 }
 
 .builder-react-root .builder-module-background-details {

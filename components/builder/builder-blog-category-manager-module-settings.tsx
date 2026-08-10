@@ -34,11 +34,9 @@ export function BuilderBlogCategoryManagerModuleSettings({
         { key: "showDescription", label: "Description", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
         { key: "showColor", label: "Color", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
         { key: "showSortOrder", label: "Sort Order", width: "select-sm", control: "select", fallback: "false", options: HIDE_SHOW },
-        { key: "showDelete", label: "Delete", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE }
-      ]
-    ],
-    style: [
-      [
+        { key: "showDelete", label: "Delete", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
+        // D3: Accent rides the toggle strip instead of stranding a one-field
+        // style group on its own row. Same key/fallback — layout only.
         { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" }
       ]
     ]

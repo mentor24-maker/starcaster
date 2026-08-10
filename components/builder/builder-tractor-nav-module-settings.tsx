@@ -26,12 +26,17 @@ export function BuilderTractorNavModuleSettings({
   themeColors = []
 }: Props) {
   const schema: BuilderSettingsSchema = {
+    // D2: content+layout left, style right — short strips stop stacking
+    // down the left edge.
+    panelColumns: [["content", "layout"], ["style"]],
     content: [
+      // D3: New Tab rides the Dot Link strip instead of its own row.
+      // Dot Link narrowed full → text-md so they can share.
       [
         {
           key: "dotUrl",
           label: "Dot Link",
-          width: "full",
+          width: "text-md",
           control: "custom",
           rendersVia: "BuilderTractorNavModule",
           render: ({ settings, set }) => (
@@ -42,9 +47,7 @@ export function BuilderTractorNavModuleSettings({
               onChange={(event) => set("dotUrl", event.target.value)}
             />
           )
-        }
-      ],
-      [
+        },
         {
           key: "dotNewTab",
           label: "New Tab",

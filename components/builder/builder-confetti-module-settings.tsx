@@ -28,6 +28,9 @@ export function BuilderConfettiModuleSettings({
   const settings = normalizeConfettiModuleSettings(module.settings);
 
   const schema: BuilderSettingsSchema = {
+    // D2: three short strips would stack down the left edge — arrange the
+    // groups side by side so the panel fills its width.
+    panelColumns: [["content", "layout"], ["style"]],
     content: [
       [
         {

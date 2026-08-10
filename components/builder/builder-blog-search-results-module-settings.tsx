@@ -29,6 +29,29 @@ export function BuilderBlogSearchResultsModuleSettings({ module, onUpdateModule 
               placeholder="search"
             />
           )
+        },
+        {
+          key: "postPageUrl",
+          label: "Post Page URL",
+          width: "text-md",
+          control: "text",
+          placeholder: "/blog-post-view",
+          rendersVia: "BlogSearchResultsPreview"
+        },
+        {
+          key: "emptyMessage",
+          label: "Empty Message",
+          width: "text-md",
+          control: "custom",
+          rendersVia: "BlogSearchResultsPreview",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.emptyMessage ?? "No posts found."}
+              onChange={(e) => set("emptyMessage", e.target.value)}
+              placeholder="No posts found."
+            />
+          )
         }
       ],
       [
@@ -42,33 +65,6 @@ export function BuilderBlogSearchResultsModuleSettings({ module, onUpdateModule 
             <div className="builder-module-runtime-note">
               <p>Must match the search param on the paired <strong>Blog Search</strong> module.</p>
             </div>
-          )
-        }
-      ],
-      [
-        {
-          key: "postPageUrl",
-          label: "Post Page URL",
-          width: "full",
-          control: "text",
-          placeholder: "/blog-post-view",
-          rendersVia: "BlogSearchResultsPreview"
-        }
-      ],
-      [
-        {
-          key: "emptyMessage",
-          label: "Empty Message",
-          width: "full",
-          control: "custom",
-          rendersVia: "BlogSearchResultsPreview",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.emptyMessage ?? "No posts found."}
-              onChange={(e) => set("emptyMessage", e.target.value)}
-              placeholder="No posts found."
-            />
           )
         }
       ]
