@@ -176,6 +176,21 @@ function BuilderReminderRecordEditor({
             ))}
           </select>
         </BuilderModuleField>
+        {/* F13/C7: the player display has always honoured strip placement
+            (resolveReminderStripPlacement) but nothing wrote it, so Builder
+            strips were stuck at the top. Strip-only — a speech bubble is
+            positioned by its offsets instead. */}
+        {record.appearance === "strip" ? (
+          <BuilderModuleField label="Placement" width="select-md">
+            <select
+              value={record.stripPlacement === "bottom" ? "bottom" : "top"}
+              onChange={(event) => updateRecord({ stripPlacement: event.target.value })}
+            >
+              <option value="top">Top of screen</option>
+              <option value="bottom">Bottom of screen</option>
+            </select>
+          </BuilderModuleField>
+        ) : null}
         {isSpeechBubble ? (
           <>
             <BuilderModuleField label="Background" width="color">

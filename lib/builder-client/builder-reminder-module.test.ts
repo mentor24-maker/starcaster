@@ -10,6 +10,7 @@ import {
   serializeReminderRecords,
   sortReminderRecordsByQuestionNumber
 } from "@/lib/builder-reminder-module";
+import { resolveReminderStripPlacement } from "@/lib/game-reminder-presentation";
 
 function buildReminderModule(
   overrides: Partial<BuilderTemplateModule> = {}
@@ -159,5 +160,40 @@ describe("collectEvaluableRemindersFromLayout", () => {
 
     expect(reminders).toHaveLength(2);
     expect(reminders.map((reminder) => reminder.id)).toEqual(["record-a", "record-b"]);
+  });
+});
+
+describe("strip placement (F13 — the setting the player honoured but nobody wrote)", () => {
+  it("defaults to top and survives a serialize → parse round trip", () => {
+    const record = createSignupNudgeReminderRecord("r1");
+    expect(record.stripPlacement).toBe("top");
+
+    const bottom = { ...record, appearance: "strip" as const, stripPlacement: "bottom" };
+    const settings = { [REMINDER_RECORDS_JSON_SETTING_KEY]: serializeReminderRecords([bottom]) };
+    const [parsed] = parseReminderRecordsFromModule(buildReminderModule({ settings }));
+
+    expect(parsed.stripPlacement).toBe("bottom");
+  });
+
+  it("reaches the player as metadata resolveReminderStripPlacement can read", () => {
+    const record = { ...createSignupNudgeReminderRecord("r2"), appearance: "strip" as const, stripPlacement: "bottom" };
+    const settings = { [REMINDER_RECORDS_JSON_SETTING_KEY]: serializeReminderRecords([record]) };
+    const [evaluable] = collectEvaluableRemindersFromLayout([
+      {
+        id: "s1",
+        columns: ["main"],
+        modules: [buildReminderModule({ settings })]
+      } as never
+    ]);
+
+    expect(resolveReminderStripPlacement(evaluable.metadata as Record<string, unknown>)).toBe("bottom");
+  });
+
+  it("an unknown stored value falls back to top rather than breaking", () => {
+    const record = { ...createSignupNudgeReminderRecord("r3"), stripPlacement: "sideways" };
+    const settings = { [REMINDER_RECORDS_JSON_SETTING_KEY]: serializeReminderRecords([record]) };
+    const [parsed] = parseReminderRecordsFromModule(buildReminderModule({ settings }));
+
+    expect(parsed.stripPlacement).toBe("top");
   });
 });
