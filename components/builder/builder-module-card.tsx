@@ -3573,6 +3573,134 @@ export function BuilderModuleCard({
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
+
+    /**
+     * Modules that lost the universal chrome (Background / Alignment / H+V
+     * Margin) — master rules C7/S2, audit fix F13.
+     *
+     * The chrome is the ELSE branch of the ~30-way settings-editor ternary
+     * below, so the day a module got its own settings component it silently
+     * stopped offering background, alignment and margins — while the
+     * renderer kept honouring those settings for it
+     * (`getModuleOuterSpacingStyle` + `getBuilderBackgroundStyle` in
+     * builder-template-preview.tsx). Settings that exist, work, and are
+     * unreachable. These modules render the same chrome the else branch
+     * does, after their own editor.
+     *
+     * Deliberately NOT here: current-poll / social / crm-form (their own
+     * editors offer background + margins), heading / floating-image (own
+     * chrome blocks), navigation (has chrome AND duplicates — deduped
+     * separately), button / table / poll-category-list / reminder (bespoke
+     * or opted out), tractor-nav / confetti (fixed-position overlays where
+     * wrapper margins are meaningless).
+     */
+    const needsRestoredChrome =
+      isBreadcrumbModule ||
+      isBlogPostListModule ||
+      isBlogPostCardModule ||
+      isBlogAuthorBioModule ||
+      isBlogTocModule ||
+      isBlogNewsletterModule ||
+      isBlogRelatedPostsModule ||
+      isBlogCategoryFilterModule ||
+      isBlogPostModule ||
+      isBlogTagCloudModule ||
+      isBlogPostTagsModule ||
+      isBlogPostCreateModule ||
+      isBlogPostManagerModule ||
+      isBlogCategoryManagerModule ||
+      isBlogCardManagerModule ||
+      isBlogSearchModule ||
+      isBlogSearchResultsModule ||
+      isMessagingTopicListModule ||
+      isMessagingTagListModule ||
+      isCrmContactsTableModule ||
+      isAdminTeamUsersModule ||
+      isAdminModulesModule ||
+      isAdminLoginModule ||
+      isAdminNavLinkModule ||
+      isAdminSiteSettingsModule ||
+      isAdminSupportFormModule;
+
+    const sharedModuleChrome = (
+      <div className="builder-module-chrome">
+        {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
+            the standard modal's gradient/image/style modes are no-ops on a bubble. */}
+        {module.type !== "speech-bubble" ? (
+          <BuilderBackgroundControls
+            label="Background"
+            background={getModuleBackgroundSettings(module.settings)}
+            horizontal
+            onChange={onUpdateModuleBackground}
+            themeBackgroundColor={themeBackgroundColor}
+            themeColors={themeColors}
+            themePrimaryColor={themePrimaryColor}
+          />
+        ) : null}
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Alignment" width="align">
+            <BuilderAlignmentIconGroup
+              value={moduleAlignment}
+              onChange={(alignment) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, alignment }
+                }))
+              }
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="H Margin" width="num">
+            <BuilderNumberSelectControl
+              fallback="0"
+              max={160}
+              min={0}
+              value={module.settings.horizontalMargin ?? "0"}
+              onChange={(horizontalMargin) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, horizontalMargin }
+                }))
+              }
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="V Margin" width="num">
+            <BuilderNumberSelectControl
+              fallback="0"
+              max={160}
+              min={0}
+              value={module.settings.verticalMargin ?? "0"}
+              onChange={(verticalMargin) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, verticalMargin }
+                }))
+              }
+            />
+          </BuilderModuleField>
+          {module.type === "text" ? (
+            <BuilderModuleField label="Width" width="select-sm">
+              <select
+                value={module.settings.size ?? "100"}
+                onChange={(event) =>
+                  onUpdateModule((current) => ({
+                    ...current,
+                    settings: { ...current.settings, size: event.target.value }
+                  }))
+                }
+              >
+                <option value="25">25%</option>
+                <option value="33">33%</option>
+                <option value="50">50%</option>
+                <option value="66">66%</option>
+                <option value="75">75%</option>
+                <option value="90">90%</option>
+                <option value="100">100%</option>
+              </select>
+            </BuilderModuleField>
+          ) : null}
+        </BuilderModuleFieldStrip>
+      </div>
+    );
   return (
     <div
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
@@ -3878,85 +4006,14 @@ export function BuilderModuleCard({
                 />
               </div>
             ) : (
-              <div className="builder-module-chrome">
-                {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
-                    the standard modal's gradient/image/style modes are no-ops on a bubble. */}
-                {module.type !== "speech-bubble" ? (
-                  <BuilderBackgroundControls
-                    label="Background"
-                    background={getModuleBackgroundSettings(module.settings)}
-                    horizontal
-                    onChange={onUpdateModuleBackground}
-                    themeBackgroundColor={themeBackgroundColor}
-                    themeColors={themeColors}
-                    themePrimaryColor={themePrimaryColor}
-                  />
-                ) : null}
-                <BuilderModuleFieldStrip>
-                  <BuilderModuleField label="Alignment" width="align">
-                    <BuilderAlignmentIconGroup
-                      value={moduleAlignment}
-                      onChange={(alignment) =>
-                        onUpdateModule((current) => ({
-                          ...current,
-                          settings: { ...current.settings, alignment }
-                        }))
-                      }
-                    />
-                  </BuilderModuleField>
-                  <BuilderModuleField label="H Margin" width="num">
-                    <BuilderNumberSelectControl
-                      fallback="0"
-                      max={160}
-                      min={0}
-                      value={module.settings.horizontalMargin ?? "0"}
-                      onChange={(horizontalMargin) =>
-                        onUpdateModule((current) => ({
-                          ...current,
-                          settings: { ...current.settings, horizontalMargin }
-                        }))
-                      }
-                    />
-                  </BuilderModuleField>
-                  <BuilderModuleField label="V Margin" width="num">
-                    <BuilderNumberSelectControl
-                      fallback="0"
-                      max={160}
-                      min={0}
-                      value={module.settings.verticalMargin ?? "0"}
-                      onChange={(verticalMargin) =>
-                        onUpdateModule((current) => ({
-                          ...current,
-                          settings: { ...current.settings, verticalMargin }
-                        }))
-                      }
-                    />
-                  </BuilderModuleField>
-                  {module.type === "text" ? (
-                    <BuilderModuleField label="Width" width="select-sm">
-                      <select
-                        value={module.settings.size ?? "100"}
-                        onChange={(event) =>
-                          onUpdateModule((current) => ({
-                            ...current,
-                            settings: { ...current.settings, size: event.target.value }
-                          }))
-                        }
-                      >
-                        <option value="25">25%</option>
-                        <option value="33">33%</option>
-                        <option value="50">50%</option>
-                        <option value="66">66%</option>
-                        <option value="75">75%</option>
-                        <option value="90">90%</option>
-                        <option value="100">100%</option>
-                      </select>
-                    </BuilderModuleField>
-                  ) : null}
-                </BuilderModuleFieldStrip>
-              </div>
+              sharedModuleChrome
             )
           ) : null}
+
+          {/* F13: the chrome the settings-editor ternary above swallowed —
+              rendered here for modules whose renderer honours background and
+              margins but whose own editor never offered them. */}
+          {needsRestoredChrome ? sharedModuleChrome : null}
 
           {isStandardImage ? (
             <BuilderModuleOffsetFields
@@ -4157,10 +4214,7 @@ export function BuilderModuleCard({
             <BuilderNavigationModuleSettings
               module={module}
               onUpdateModule={onUpdateModule}
-              onUpdateModuleBackground={onUpdateModuleBackground}
-              themeBackgroundColor={themeBackgroundColor}
               themeColors={themeColors}
-              themePrimaryColor={themePrimaryColor}
             />
           )}
           {module.type === "headline-rotator" && (
