@@ -8,28 +8,41 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
+/**
+ * D8 logical axes (docs/UI_RULES.md): Content only.
+ *
+ * PAIRING RULE — do not re-split: a toggle that gates ONE specific sibling
+ * field (`showTitle` → `panelTitle`) is one control pair and stays adjacent
+ * in the same strip, toggle first, on the axis where the field belongs. That
+ * pair is this module's only setting, so there is no Structure axis to title.
+ */
 const SCHEMA: BuilderSettingsSchema = {
-  content: [
-    [
-      {
-        key: "showTitle",
-        label: "Show title",
-        width: "check",
-        control: "checkbox",
-        fallback: "true",
-        rendersVia: "AdminSiteSettingsPreview (builder-template-preview.tsx)"
-      },
-      {
-        key: "panelTitle",
-        label: "Title text",
-        width: "text-md",
-        control: "text",
-        placeholder: "Site Settings",
-        fallback: "Site Settings",
-        visibleWhen: (s) => (s.showTitle ?? "true") === "true",
-        rendersVia: "AdminSiteSettingsPreview (builder-template-preview.tsx)"
-      }
-    ]
+  axes: [
+    {
+      title: "Content",
+      strips: [
+        [
+          {
+            key: "showTitle",
+            label: "Show title",
+            width: "check",
+            control: "checkbox",
+            fallback: "true",
+            rendersVia: "AdminSiteSettingsPreview (builder-template-preview.tsx)"
+          },
+          {
+            key: "panelTitle",
+            label: "Title text",
+            width: "text-md",
+            control: "text",
+            placeholder: "Site Settings",
+            fallback: "Site Settings",
+            visibleWhen: (s) => (s.showTitle ?? "true") === "true",
+            rendersVia: "AdminSiteSettingsPreview (builder-template-preview.tsx)"
+          }
+        ]
+      ]
+    }
   ]
 };
 

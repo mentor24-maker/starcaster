@@ -19,17 +19,36 @@ export function BuilderBlogCategoryManagerModuleSettings({
   themeColors = []
 }: Props) {
   const schema: BuilderSettingsSchema = {
-    content: [
-      [
-        // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
-        { key: "showDescription", label: "Description", width: "check", control: "checkbox", fallback: "true" },
-        { key: "showColor", label: "Color", width: "check", control: "checkbox", fallback: "true" },
-        { key: "showSortOrder", label: "Sort Order", width: "check", control: "checkbox", fallback: "false" },
-        { key: "showDelete", label: "Delete", width: "check", control: "checkbox", fallback: "true" },
-        // D3: Accent rides the toggle strip instead of stranding a one-field
-        // style group on its own row. Same key/fallback — layout only.
-        { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" }
-      ]
+    // D8 logical axes: Structure / Frame. Every toggle here decides which
+    // column the manager shows, so they are Structure, not Content — the
+    // module's content is the category rows themselves, which come from
+    // the database, not from settings.
+    axes: [
+      {
+        title: "Structure",
+        strips: [
+          [
+            // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
+            { key: "showDescription", label: "Description", width: "check", control: "checkbox", fallback: "true" },
+            { key: "showColor", label: "Color", width: "check", control: "checkbox", fallback: "true" },
+            { key: "showSortOrder", label: "Sort Order", width: "check", control: "checkbox", fallback: "false" },
+            { key: "showDelete", label: "Delete", width: "check", control: "checkbox", fallback: "true" }
+          ]
+        ]
+      },
+      {
+        // D3 note kept for its history: Accent used to ride the toggle strip
+        // so a one-field style group would not strand itself on its own ROW.
+        // Under D8 it gets its own COLUMN instead — same key, same fallback,
+        // still no wasted row. It is the first thing to leave if border and
+        // accent settings move to Themes, which would drop this to one axis.
+        title: "Frame",
+        strips: [
+          [
+            { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" }
+          ]
+        ]
+      }
     ]
   };
 

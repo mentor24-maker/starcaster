@@ -187,3 +187,49 @@ describe("columns by default (D2 — the opt-in that got forgotten)", () => {
     expect((render({ ...schema, panelColumns: [["content", "layout"]] }).match(/builder-schema-panel-column"/g) ?? []).length).toBe(1);
   });
 });
+
+describe("logical axes (D8)", () => {
+  it("renders each axis as a titled column in declaration order", () => {
+    const html = render({
+      axes: [
+        { title: "Structure", strips: [[{ key: "a", label: "StructMark", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]] },
+        { title: "Text", strips: [[{ key: "b", label: "TextMark", width: "num", control: "number", min: 0, max: 9 }]] },
+        { title: "Placement", strips: [[{ key: "c", label: "PlaceMark", width: "align", control: "align", ariaLabel: "a" }]] }
+      ]
+    });
+    expect((html.match(/builder-schema-panel-column"/g) ?? []).length).toBe(3);
+    const order = ["Structure", "Text", "Placement"].map((t) => html.indexOf(t));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(html.indexOf("StructMark")).toBeLessThan(html.indexOf("TextMark"));
+  });
+
+  it("throws on a fifth axis rather than rendering a cramped column", () => {
+    const axis = (title: string) => ({
+      title,
+      strips: [[{ key: title, label: title, width: "num" as const, control: "number" as const, min: 0, max: 9 }]]
+    });
+    expect(() => render({ axes: [axis("A"), axis("B"), axis("C"), axis("D"), axis("E")] })).toThrow(/ceiling is 4/);
+    expect(() => render({ axes: [axis("A"), axis("B"), axis("C"), axis("D")] })).not.toThrow();
+  });
+
+  it("keeps advanced below the axes, full width", () => {
+    const html = render({
+      axes: [{ title: "Structure", strips: [[{ key: "a", label: "StructMark", width: "num", control: "number", min: 0, max: 9 }]] }],
+      advanced: [[{ key: "z", label: "AdvMark", width: "num", control: "number", min: 0, max: 9 }]]
+    });
+    expect(html.indexOf("AdvMark")).toBeGreaterThan(html.indexOf("StructMark"));
+    expect(html).toContain("hanging-details");
+  });
+
+  it("drops an axis whose every field is hidden by visibleWhen", () => {
+    const html = render({
+      axes: [
+        { title: "Structure", strips: [[{ key: "a", label: "StructMark", width: "num", control: "number", min: 0, max: 9 }]] },
+        { title: "Frame", strips: [[{ key: "b", label: "FrameMark", width: "num", control: "number", min: 0, max: 9, visibleWhen: () => false }]] }
+      ]
+    });
+    expect(html).toContain("StructMark");
+    expect(html).not.toContain("FrameMark");
+    expect(html).not.toContain("Frame</div>");
+  });
+});

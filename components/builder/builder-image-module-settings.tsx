@@ -29,12 +29,13 @@ const EFFECT_OPTIONS: { value: string; label: string }[] = [
  * wherever it lives.
  *
  * REFERENCE IMPLEMENTATION for the settings-editor layout standard —
- * see "Settings editor layout" in docs/MODULE_STANDARDS.md. Groups run
- * content → layout → style, every control declares a width token, and
- * every setting here is honoured by the renderer
- * (`getImageModuleStyle` / `BuilderImagePreview`). `panelColumns` keeps
- * the lone Width select from stranding a row (D1/D3) without moving it
- * out of its semantic layout group.
+ * see "Settings editor layout" in docs/MODULE_STANDARDS.md. Controls are
+ * sorted onto logical axes (master rule D8, 2026-08-10) — Content /
+ * Structure / Frame, each a titled column — every control declares a
+ * width token, and every setting here is honoured by the renderer
+ * (`getImageModuleStyle` / `BuilderImagePreview`). The axes replace the
+ * old content/layout/style trio plus `panelColumns`: the lone Width
+ * select is a column of its own rather than a stranded row (D1/D3).
  */
 export function BuilderImageModuleSettings({
   module,
@@ -42,73 +43,83 @@ export function BuilderImageModuleSettings({
   themeColors = []
 }: BuilderImageModuleSettingsProps) {
   const schema: BuilderSettingsSchema = {
-    panelColumns: [["content", "layout"], ["style"]],
-    content: [
-      [
-        {
-          key: "alt",
-          label: "Alt text",
-          width: "full",
-          control: "text",
-          placeholder: "Describe the image for screen readers",
-          rendersVia: "BuilderImagePreview"
-        }
-      ]
-    ],
-    layout: [
-      [
-        {
-          key: "size",
-          label: "Width",
-          width: "select-sm",
-          control: "select",
-          fallback: "100",
-          options: SIZE_OPTIONS.map((value) => ({ value, label: `${value}%` })),
-          rendersVia: "getImageModuleStyle"
-        }
-      ]
-    ],
-    style: [
-      [
-        {
-          key: "borderThickness",
-          label: "Border",
-          width: "num",
-          control: "number",
-          min: 0,
-          max: 24,
-          fallback: "0",
-          rendersVia: "getImageModuleStyle"
-        },
-        {
-          key: "borderRadius",
-          label: "Radius",
-          width: "num",
-          control: "number",
-          min: 0,
-          max: 80,
-          fallback: "18",
-          rendersVia: "getImageModuleStyle"
-        },
-        {
-          key: "borderColor",
-          label: "Border Color",
-          width: "color",
-          control: "color",
-          dialogLabel: "Image border color",
-          fallback: "#0f4f8f",
-          rendersVia: "getImageModuleStyle"
-        },
-        {
-          key: "effect",
-          label: "Effect",
-          width: "select-md",
-          control: "select",
-          fallback: "none",
-          options: EFFECT_OPTIONS,
-          rendersVia: "getImageModuleStyle"
-        }
-      ]
+    axes: [
+      {
+        title: "Content",
+        strips: [
+          [
+            {
+              key: "alt",
+              label: "Alt text",
+              width: "full",
+              control: "text",
+              placeholder: "Describe the image for screen readers",
+              rendersVia: "BuilderImagePreview"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
+          [
+            {
+              key: "size",
+              label: "Width",
+              width: "select-sm",
+              control: "select",
+              fallback: "100",
+              options: SIZE_OPTIONS.map((value) => ({ value, label: `${value}%` })),
+              rendersVia: "getImageModuleStyle"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
+          [
+            {
+              key: "borderThickness",
+              label: "Border",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 24,
+              fallback: "0",
+              rendersVia: "getImageModuleStyle"
+            },
+            {
+              key: "borderRadius",
+              label: "Radius",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 80,
+              fallback: "18",
+              rendersVia: "getImageModuleStyle"
+            },
+            {
+              key: "borderColor",
+              label: "Border Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Image border color",
+              fallback: "#0f4f8f",
+              rendersVia: "getImageModuleStyle"
+            },
+            {
+              key: "effect",
+              label: "Effect",
+              width: "select-md",
+              control: "select",
+              fallback: "none",
+              options: EFFECT_OPTIONS,
+              rendersVia: "getImageModuleStyle"
+            }
+          ]
+        ]
+      }
     ]
   };
 

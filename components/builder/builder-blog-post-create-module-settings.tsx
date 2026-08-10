@@ -19,7 +19,15 @@ export function BuilderBlogPostCreateModuleSettings({
   themeColors = []
 }: Props) {
   const schema: BuilderSettingsSchema = {
-    content: [
+    // D8 logical axes: Content / Structure / Frame. Content holds every
+    // word the form puts on screen plus where it sends the author
+    // afterwards (a destination); Structure holds the status defaults and
+    // the "Fields to show" bank — the controls that decide what the form
+    // is made of; Frame holds the accent colour.
+    axes: [
+      {
+        title: "Content",
+        strips: [
       [
         // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
         { key: "showFormTitle", label: "Form Title", width: "check", control: "checkbox", fallback: "true" },
@@ -69,6 +77,50 @@ export function BuilderBlogPostCreateModuleSettings({
           )
         }
       ],
+      [
+        {
+          key: "afterSubmitHeader",
+          label: "After Submit",
+          width: "full",
+          control: "custom",
+          bare: true,
+          render: () => (
+            <div className="builder-breadcrumb-items-label" style={{ marginTop: 12, marginBottom: 6 }}>
+              After submit
+            </div>
+          )
+        }
+      ],
+      [
+        {
+          key: "successMessage",
+          label: "Success Message",
+          width: "full",
+          control: "custom",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.successMessage ?? "Post created successfully."}
+              onChange={(e) => set("successMessage", e.target.value)}
+              placeholder="Post created successfully."
+            />
+          )
+        }
+      ],
+      [
+        {
+          key: "redirectAfterCreate",
+          label: "Redirect To",
+          width: "full",
+          control: "text",
+          placeholder: "/admin/posts  (leave blank to stay on this page)"
+        }
+      ]
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
       [
         {
           key: "defaultStatus",
@@ -136,51 +188,17 @@ export function BuilderBlogPostCreateModuleSettings({
         { key: "showCategories", label: "Categories", width: "check", control: "checkbox", fallback: "true" },
         { key: "showTags", label: "Tags", width: "check", control: "checkbox", fallback: "true" },
         { key: "showSeoFields", label: "SEO Fields", width: "check", control: "checkbox", fallback: "false" }
-      ],
-      [
-        {
-          key: "afterSubmitHeader",
-          label: "After Submit",
-          width: "full",
-          control: "custom",
-          bare: true,
-          render: () => (
-            <div className="builder-breadcrumb-items-label" style={{ marginTop: 12, marginBottom: 6 }}>
-              After submit
-            </div>
-          )
-        }
-      ],
-      [
-        {
-          key: "successMessage",
-          label: "Success Message",
-          width: "full",
-          control: "custom",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.successMessage ?? "Post created successfully."}
-              onChange={(e) => set("successMessage", e.target.value)}
-              placeholder="Post created successfully."
-            />
-          )
-        }
-      ],
-      [
-        {
-          key: "redirectAfterCreate",
-          label: "Redirect To",
-          width: "full",
-          control: "text",
-          placeholder: "/admin/posts  (leave blank to stay on this page)"
-        }
       ]
-    ],
-    style: [
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
       [
         { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" }
       ]
+        ]
+      }
     ]
   };
 

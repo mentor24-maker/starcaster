@@ -514,3 +514,35 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
   - Still hand-written and un-columned (dominated by wide item managers,
     so columns buy little): blog-post (already tabbed), crm-form,
     feature-cards, messaging-topic-list, reminder, social.
+
+- **2026-08-10 (D8 axes — every module reorganized by logical axis):**
+  the operator ratified B2 alignment and gave the axis concept using
+  Navigation's own grouping. Applied everywhere:
+  - **Generator**: `axes: [{ title, strips }]` — each axis is a titled
+    column, declaration order left→right. **More than four throws**, so a
+    fifth axis cannot pass silently. An axis whose fields are all hidden
+    by `visibleWhen` drops out (heading in compact mode renders three).
+  - **B2 alignment**: inside a panel column each field is a two-track
+    grid (fixed label column + control), auto-filling — a narrow axis
+    column holds one pair, a wider one holds two. Alignment without
+    surrendering D2.
+  - **~38 modules converted.** None needed five axes. Two reached four
+    only by bending one control off its canonical column, flagged for
+    the operator: heading (Level on Text, not Structure) and
+    speech-bubble (Text Color on Frame, not Text).
+  - **Toggle pairing, made consistent**: a toggle that gates ONE sibling
+    field stays beside it (usually Content); a toggle that gates a whole
+    region stays on Structure. Three batches had split them; a
+    correction pass unified six admin/CRM panels.
+  - **Legacy `BuilderSettingRow` blocks inside axis columns** (drop
+    shadow, offsets, heading's chrome alignment) rendered oversized dark
+    labels that overlapped their inputs — caught by screenshotting the
+    converted heading panel, fixed with a compact treatment scoped to
+    panel columns. Heading and floating-image chrome now flow like the
+    universal chrome.
+  - `messaging-topic-list` was fully converted from hand-written strips
+    to the schema generator in the process; `card-manager` was left
+    alone (it has no controls, only a pointer note).
+  - **Open, recorded in D8**: the operator's own question — border
+    settings arguably belong to **Themes**, not per module. If that
+    lands, most Frame axes empty and those modules drop to three.

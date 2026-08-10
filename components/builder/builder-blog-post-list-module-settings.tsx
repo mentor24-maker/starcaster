@@ -16,10 +16,14 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
     // S5 registry (docs/UI_RULES.md): the operator's 6/28 three-column
     // design — General / Page Design / Card Appearance side by side.
     // Flattened once by a convention sweep (2026-08-09 audit); never again.
-    panelColumns: [["content"], ["layout"], ["style"]],
-    content: {
-      title: "General",
-      strips: [
+    // Since 2026-08-10 that layout is expressed as D8 logical axes:
+    // Content / Structure / Frame, in that left-to-right order — the same
+    // three columns holding the same controls, renamed to the canonical
+    // axis vocabulary so a control sits in the same place in every module.
+    axes: [
+      {
+        title: "Content",
+        strips: [
       [
         {
           key: "moduleName",
@@ -59,11 +63,11 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
           rendersVia: "BlogPostListPreview postPageUrl resolution"
         }
       ]
-      ]
-    },
-    layout: {
-      title: "Page Design",
-      strips: [
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
       [
         {
           key: "layout",
@@ -122,11 +126,11 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
         // tracked in ClickUp Dev Backlog. Re-add the control WITH the
         // tracking feature, never before it.
       ]
-      ]
-    },
-    style: {
-      title: "Card Appearance",
-      strips: [
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
       [
         {
           key: "cardManagerNote",
@@ -145,8 +149,9 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
       [
         { key: "cardGap", label: "Card Gap", width: "num", control: "number", min: 8, max: 64, step: 4, fallback: "24" }
       ]
-      ]
-    }
+        ]
+      }
+    ]
   };
 
   return (

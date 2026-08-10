@@ -19,7 +19,13 @@ export function BuilderBlogPostManagerModuleSettings({
   themeColors = []
 }: Props) {
   const schema: BuilderSettingsSchema = {
-    content: [
+    // D8 logical axes: Content / Structure / Frame. The two page pickers
+    // are destinations (Content); the toggles decide which columns the
+    // manager shows (Structure); Accent is the module's own colour (Frame).
+    axes: [
+      {
+        title: "Content",
+        strips: [
       [
         {
           key: "editPageUrl",
@@ -43,7 +49,12 @@ export function BuilderBlogPostManagerModuleSettings({
           placeholder: "/builder-preview.html?slug=blog-post-view",
           rendersVia: "BlogPostManagerPreview"
         }
-      ],
+      ]
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
       [
         {
           key: "showStatus",
@@ -68,7 +79,14 @@ export function BuilderBlogPostManagerModuleSettings({
           control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
-        },
+        }
+      ]
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
+      [
         {
           key: "accentColor",
           label: "Accent Color",
@@ -79,6 +97,8 @@ export function BuilderBlogPostManagerModuleSettings({
           rendersVia: "BlogPostManagerPreview"
         }
       ]
+        ]
+      }
     ]
   };
 

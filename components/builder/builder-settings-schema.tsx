@@ -116,11 +116,43 @@ export type BuilderSchemaGroup =
     };
 
 /**
+ * A logical axis — one titled column of related controls (master rule D8,
+ * ratified 2026-08-10). The operator's framing, on Navigation: "the four
+ * columns/axes could be Structure / Text / Orientation / Border".
+ *
+ * Use the canonical titles so a control sits in the same place in every
+ * module — that familiarity is the whole point:
+ *
+ *   Content     what the module shows (text, items, images, links)
+ *   Structure   how it is arranged (layout mode, levels, columns, counts)
+ *   Text        typography — font, size, weight, transform, text colour
+ *   Placement   alignment, padding, margin, offsets
+ *   Frame       border width/radius/colour, shadow
+ *   Behavior    triggers, destinations, params (usually `advanced` instead)
+ *
+ * Four axes is the ceiling; a module that genuinely needs a fifth is a
+ * design question for the operator, so the generator throws rather than
+ * silently rendering a cramped fifth column.
+ */
+export type BuilderSchemaAxis = {
+  title: string;
+  strips: BuilderSchemaStrip[];
+};
+
+export const MAX_AXES = 4;
+
+/**
  * Groups render in doctrine order (E3) no matter how the object is written:
  * content → layout → style → advanced. `advanced` renders inside
  * `<details class="hanging-details">`.
  */
 export type BuilderSettingsSchema = {
+  /**
+   * Logical axes (D8) — each becomes a column, in declaration order.
+   * Supersedes the content/layout/style trio for converted modules;
+   * `advanced` still renders below, full width.
+   */
+  axes?: BuilderSchemaAxis[];
   content?: BuilderSchemaGroup;
   layout?: BuilderSchemaGroup;
   style?: BuilderSchemaGroup;
@@ -397,6 +429,36 @@ export function BuilderSchemaModuleSettings({
         {group.title ? <div className="builder-schema-group-title">{group.title}</div> : null}
         {body}
       </div>
+    );
+  }
+
+  // Axes (D8) win when declared: each is a column, in declaration order.
+  if (schema.axes?.length) {
+    if (schema.axes.length > MAX_AXES) {
+      throw new Error(
+        `Settings schema declares ${schema.axes.length} axes (${schema.axes
+          .map((axis) => axis.title)
+          .join(", ")}). The ceiling is ${MAX_AXES} — a fifth axis is a design question for the operator, not a cramped column.`
+      );
+    }
+    return (
+      <>
+        <div className="builder-schema-panel-columns">
+          {schema.axes.map((axis) => {
+            const visible = axis.strips.filter((strip) =>
+              strip.some((field) => !field.visibleWhen || field.visibleWhen(ctx.settings))
+            );
+            if (!visible.length) return null;
+            return (
+              <div className="builder-schema-panel-column" key={axis.title}>
+                <div className="builder-schema-group-title">{axis.title}</div>
+                {renderStrips(visible, ctx)}
+              </div>
+            );
+          })}
+        </div>
+        {renderGroup("advanced")}
+      </>
     );
   }
 

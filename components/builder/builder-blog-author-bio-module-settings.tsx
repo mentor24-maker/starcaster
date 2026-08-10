@@ -63,7 +63,15 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
   }
 
   const schema: BuilderSettingsSchema = {
-    content: [
+    // D8 logical axes: Content / Structure. The social-link manager
+    // dominates the panel, so it stays in the first (leftmost) axis with
+    // the rest of what the module shows; only the arrangement controls
+    // move out. Two axes is the honest count — no axis was invented to
+    // reach four.
+    axes: [
+      {
+        title: "Content",
+        strips: [
       // Name + Title share one strip at content-sized widths (D1/W3) —
       // they were two stacked full-width rows.
       [
@@ -144,10 +152,13 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
           )
         }
       ]
-    ],
-    // Layout + photo shape/size share one strip (D1/D3) — the Layout
-    // select sat orphaned in its own group, one row above them.
-    layout: [
+        ]
+      },
+      // Layout + photo shape/size share one strip (D1/D3) — the Layout
+      // select sat orphaned in its own group, one row above them.
+      {
+        title: "Structure",
+        strips: [
       [
         {
           key: "layout",
@@ -174,6 +185,8 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
         },
         { key: "avatarSize", label: "Photo Size", width: "num", control: "number", min: 40, max: 200, step: 8, fallback: "80" }
       ]
+        ]
+      }
     ]
   };
 

@@ -97,6 +97,33 @@ layout would avoid.*
   and form modals **never scroll internally**, especially sideways
   *(doctrine §2)*. — **[eye]**
 
+- **D8.** Panel controls are organized into **logical axes** — up to four
+  titled columns, each holding the controls that belong to one aspect of
+  the module. Use the canonical titles so a control lives in the same
+  place in every module:
+
+  | Axis | Holds |
+  |---|---|
+  | **Content** | what the module shows — text, items, images, links |
+  | **Structure** | how it is arranged — layout mode, levels, columns, counts, sizing |
+  | **Text** | typography — font, size, weight, transform, text colour |
+  | **Placement** | alignment, padding, margin, offsets |
+  | **Frame** | border width / radius / colour, shadow |
+
+  One, two or three axes is fine; **four is the ceiling**. A module that
+  genuinely needs a fifth is a design question for the operator — the
+  generator throws rather than render a cramped fifth column, so it
+  cannot pass silently. *(operator 8/10, giving Navigation's own axes:
+  "Structure / Text / Orientation / Border")* — **[type]** (the throw)
+  + **[eye]** (which control belongs on which axis)
+
+  *Open question he raised in the same breath, not yet decided:* border
+  settings arguably belong to **Themes**, not to each module — a client
+  can never be restyled globally while every module carries its own
+  border colour. If that lands, the **Frame** axis empties on most
+  modules and they drop to three. Tracked as its own piece of work; the
+  axes are designed to collapse cleanly when it does.
+
 ## W — Field and control widths
 
 *Umbrella: a control is as wide as its content needs — never as wide as the

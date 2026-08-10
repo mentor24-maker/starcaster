@@ -20,10 +20,15 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
   themeColors = []
 }: Props) {
   const schema: BuilderSettingsSchema = {
-    // Text content is left; the short layout + color strips stack on the
-    // right instead of wasting it (D2).
-    panelColumns: [["content"], ["layout", "style"]],
-    content: [
+    // D8 logical axes: Content / Structure / Frame. Text content is still
+    // the leftmost column (it dominates the panel); the short layout and
+    // colour strips become their own axes instead of wasting the right
+    // side (D2). The Image checkbox stays with the Image URL it reveals —
+    // together they are one content control, not a display bank.
+    axes: [
+      {
+        title: "Content",
+        strips: [
       // Form ID + Headline share a strip (D1) — they were two stacked
       // full-width rows.
       [
@@ -105,8 +110,11 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
           )
         }
       ]
-    ],
-    layout: [
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
       [
         {
           key: "layout",
@@ -120,12 +128,17 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
           ]
         }
       ]
-    ],
-    style: [
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
       [
         { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" },
         { key: "bgColor", label: "Background", width: "color", control: "color", dialogLabel: "Background color", fallback: "#eaf4ff" }
       ]
+        ]
+      }
     ]
   };
 

@@ -108,92 +108,116 @@ export function BuilderBreadcrumbModuleSettings({
   themeColors = []
 }: Props) {
   const schema: BuilderSettingsSchema = {
-    content: [
-      [
-        {
-          key: "items",
-          label: "Trail items",
-          width: "full",
-          control: "custom",
-          bare: true,
-          rendersVia: "parseBreadcrumbItems",
-          render: (ctx) => <BreadcrumbItemsManager {...ctx} />
-        }
-      ]
-    ],
-    style: [
-      [
-        // D1/D3: Align is a lone small select — it joins the trail-styling
-        // strip rather than stranding a row of its own. (It is a layout
-        // setting; the merge is purely visual, the key is unchanged.)
-        {
-          key: "alignment",
-          label: "Align",
-          width: "select-sm",
-          control: "select",
-          options: [
-            { value: "left", label: "Left" },
-            { value: "center", label: "Center" },
-            { value: "right", label: "Right" }
+    // D8 axes (master rule D8, docs/UI_RULES.md): Content / Placement / Text.
+    // Same keys, fallbacks and options — only the column each control sits in
+    // changed. The separator character is something the module SHOWS, so it
+    // joins the trail items on Content; Align gets the Placement column.
+    axes: [
+      {
+        title: "Content",
+        strips: [
+          [
+            {
+              key: "items",
+              label: "Trail items",
+              width: "full",
+              control: "custom",
+              bare: true,
+              rendersVia: "parseBreadcrumbItems",
+              render: (ctx) => <BreadcrumbItemsManager {...ctx} />
+            }
           ],
-          fallback: "left",
-          rendersVia: "builder-module-card breadcrumb preview"
-        },
-        {
-          key: "separator",
-          label: "Separator",
-          width: "auto",
-          control: "custom",
-          rendersVia: "builder-module-card breadcrumb preview",
-          render: (ctx) => (
-            <input
-              type="text"
-              maxLength={4}
-              value={ctx.settings.separator ?? "›"}
-              onChange={(e) => ctx.set("separator", e.target.value)}
-              style={{ width: 48 }}
-            />
-          )
-        },
-        {
-          key: "fontSize",
-          label: "Size",
-          width: "num",
-          control: "number",
-          min: 10,
-          max: 32,
-          fallback: "14",
-          rendersVia: "builder-module-card breadcrumb preview"
-        },
-        {
-          key: "bold",
-          label: "Bold",
-          width: "check",
-          control: "checkbox",
-          fallback: "false",
-          rendersVia: "builder-module-card breadcrumb preview"
-        }
-      ],
-      [
-        {
-          key: "color",
-          label: "Link Color",
-          width: "color",
-          control: "color",
-          dialogLabel: "Link color",
-          fallback: "#587592",
-          rendersVia: "builder-module-card breadcrumb preview"
-        },
-        {
-          key: "activeColor",
-          label: "Current Color",
-          width: "color",
-          control: "color",
-          dialogLabel: "Current color",
-          fallback: "#18324a",
-          rendersVia: "builder-module-card breadcrumb preview"
-        }
-      ]
+          [
+            {
+              key: "separator",
+              label: "Separator",
+              width: "auto",
+              control: "custom",
+              rendersVia: "builder-module-card breadcrumb preview",
+              render: (ctx) => (
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={ctx.settings.separator ?? "›"}
+                  onChange={(e) => ctx.set("separator", e.target.value)}
+                  style={{ width: 48 }}
+                />
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [
+          [
+            // D1/D3: Align is a lone small select — it joins the trail-styling
+            // strip rather than stranding a row of its own. (It is a layout
+            // setting; the merge is purely visual, the key is unchanged.)
+            // D8 (8/10): axes give it the Placement column instead, so the
+            // anti-orphan merge is no longer what holds it up — kept for the
+            // history, and the key is still unchanged.
+            {
+              key: "alignment",
+              label: "Align",
+              width: "select-sm",
+              control: "select",
+              options: [
+                { value: "left", label: "Left" },
+                { value: "center", label: "Center" },
+                { value: "right", label: "Right" }
+              ],
+              fallback: "left",
+              rendersVia: "builder-module-card breadcrumb preview"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Text",
+        strips: [
+          [
+            {
+              key: "fontSize",
+              label: "Size",
+              width: "num",
+              control: "number",
+              min: 10,
+              max: 32,
+              fallback: "14",
+              rendersVia: "builder-module-card breadcrumb preview"
+            },
+            {
+              key: "bold",
+              label: "Bold",
+              width: "check",
+              control: "checkbox",
+              fallback: "false",
+              rendersVia: "builder-module-card breadcrumb preview"
+            }
+          ],
+          [
+            {
+              key: "color",
+              label: "Link Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Link color",
+              fallback: "#587592",
+              rendersVia: "builder-module-card breadcrumb preview"
+            },
+            {
+              key: "activeColor",
+              label: "Current Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Current color",
+              fallback: "#18324a",
+              rendersVia: "builder-module-card breadcrumb preview"
+            }
+          ]
+        ]
+      }
     ]
   };
 
