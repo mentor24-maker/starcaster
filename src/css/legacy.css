@@ -7128,7 +7128,7 @@ button.builder-inline-asset-status-btn:focus-visible {
    percentages so they absorb whatever the screen gives; everything else is
    sized to its own content once (T7 rung 4) and never grows. */
 #builderManagePagesPage .builder-pages-col-name {
-  width: 30%;
+  width: 27%;
 }
 
 #builderManagePagesPage .builder-pages-col-template {
@@ -7156,19 +7156,22 @@ button.builder-inline-asset-status-btn:focus-visible {
   width: 8rem;
 }
 
+/* Holds a single checkbox; the heading is what sets the floor. */
 #builderManagePagesPage .builder-pages-col-published {
-  width: 5.5rem;
+  width: 4.25rem;
   text-align: center;
 }
 
 /* T7 rung 7 — the value shortened from "8/9/2026, 9:07:50 PM" to "Aug 9,
    2026"; the exact timestamp moved to the cell's title. */
 #builderManagePagesPage .builder-pages-col-updated {
-  width: 7rem;
+  width: 6.25rem;
 }
 
+/* Four icon buttons plus their gaps need ~150px; at 7.5rem the fourth was
+   clipped and the table scrolled 54px to hide it (harness, 2026-08-10). */
 #builderManagePagesPage .builder-pages-col-actions {
-  width: 7.5rem;
+  width: 9.5rem;
 }
 
 #builderManagePagesPage .builder-pages-col-published .standard-form-checkbox {
