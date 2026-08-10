@@ -7,7 +7,7 @@ import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
-import { BuilderThemeColorField } from "./builder-theme-color-field";
+import { BuilderThemeColorControlWithDefault } from "./builder-theme-color-field";
 
 /**
  * Navigation settings editor.
@@ -75,6 +75,10 @@ export function BuilderNavigationModuleSettings({
   const [linksCollapsed, setLinksCollapsed] = useState(false);
   const items = parseNavItems(module.settings);
   const { v: padV, h: padH } = parseNavPadding(module.settings.navPadding ?? "");
+  // A3: how many of this module's theme-backed settings are overridden.
+  const navThemeOverrideCount = ["navColor", "navHoverColor", "navHoverBackground"].filter(
+    (key) => (module.settings[key] ?? "") !== ""
+  ).length;
   const topLevelWidthTotal = items
     .filter((i) => !i.parentId)
     .reduce((sum, i) => sum + (parseFloat(i.width ?? "") || 0), 0);
@@ -221,33 +225,6 @@ export function BuilderNavigationModuleSettings({
                       onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")}
                     />
                   </BuilderModuleField>
-                  <BuilderModuleField label="Color" width="color">
-                    <BuilderThemeColorField
-                      dialogLabel="Menu text color"
-                      fallback="#163a5e"
-                      themeColors={themeColors}
-                      value={module.settings.navColor ?? ""}
-                      onChange={(v) => updateSetting("navColor", v)}
-                    />
-                  </BuilderModuleField>
-                  <BuilderModuleField label="Hover text" width="color">
-                    <BuilderThemeColorField
-                      dialogLabel="Menu hover text color"
-                      fallback="#0a8fc4"
-                      themeColors={themeColors}
-                      value={module.settings.navHoverColor ?? ""}
-                      onChange={(v) => updateSetting("navHoverColor", v)}
-                    />
-                  </BuilderModuleField>
-                  <BuilderModuleField label="Hover bg" width="color">
-                    <BuilderThemeColorField
-                      dialogLabel="Menu hover background color"
-                      fallback="#d0f0fb"
-                      themeColors={themeColors}
-                      value={module.settings.navHoverBackground ?? ""}
-                      onChange={(v) => updateSetting("navHoverBackground", v)}
-                    />
-                  </BuilderModuleField>
                 </BuilderModuleFieldStrip>
               </div>
 
@@ -296,6 +273,58 @@ export function BuilderNavigationModuleSettings({
                 </BuilderModuleFieldStrip>
               </div>
             </div>
+
+            {/*
+              A1: theme overrides live in Advanced. Empty means "follow the
+              theme" — the renderer does `navColor || undefined`, so an empty
+              value lets the theme's CSS decide — so these sit collapsed
+              rather than in the Text column inviting an override.
+              A3: the summary counts active overrides, because a collapsed
+              override that quietly ignores a themed restyle otherwise looks
+              like a theme bug.
+            */}
+            <details className="hanging-details builder-schema-advanced">
+              <summary>
+                Advanced
+                {navThemeOverrideCount > 0 ? (
+                  <span className="builder-schema-override-count">
+                    {navThemeOverrideCount} overriding the theme
+                  </span>
+                ) : null}
+              </summary>
+              <BuilderModuleFieldStrip>
+                <BuilderModuleField label="Color" width="color">
+                  <BuilderThemeColorControlWithDefault
+                    dialogLabel="Menu text color"
+                    defaultColor="#163a5e"
+                    hint="theme"
+                    themeColors={themeColors}
+                    value={module.settings.navColor ?? ""}
+                    onChange={(v) => updateSetting("navColor", v)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Hover text" width="color">
+                  <BuilderThemeColorControlWithDefault
+                    dialogLabel="Menu hover text color"
+                    defaultColor="#0a8fc4"
+                    hint="theme"
+                    themeColors={themeColors}
+                    value={module.settings.navHoverColor ?? ""}
+                    onChange={(v) => updateSetting("navHoverColor", v)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Hover bg" width="color">
+                  <BuilderThemeColorControlWithDefault
+                    dialogLabel="Menu hover background color"
+                    defaultColor="#d0f0fb"
+                    hint="theme"
+                    themeColors={themeColors}
+                    value={module.settings.navHoverBackground ?? ""}
+                    onChange={(v) => updateSetting("navHoverBackground", v)}
+                  />
+                </BuilderModuleField>
+              </BuilderModuleFieldStrip>
+            </details>
           </div>
         )}
       </div>

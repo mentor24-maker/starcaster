@@ -5,7 +5,11 @@ import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip, type BuilderModuleFieldWidth } from "./builder-module-field";
-import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
+import {
+  BuilderThemeColorControlWithDefault,
+  BuilderThemeColorField,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 /**
  * Declarative settings schema — doctrine §4 prerequisite 3
@@ -59,6 +63,19 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
     | { control: "color"; dialogLabel: string }
     | { control: "align"; ariaLabel: string }
     | { control: "image" }
+    | {
+        /**
+         * A THEME OVERRIDE (master rule A1): empty means "follow the
+         * theme", and the control shows the theme's value with a reset.
+         * These belong in the `advanced` group — the theme should be the
+         * path of least resistance, not something every panel invites you
+         * to override up front.
+         */
+        control: "theme-color";
+        /** The value the theme supplies when this setting is empty. */
+        themeDefault: string;
+        dialogLabel: string;
+      }
     | {
         /**
          * Pick from project data (pages / posts / CRM forms) and store the
@@ -238,6 +255,19 @@ function derivePanelBlocks(schema: BuilderSettingsSchema): DerivedBlock[] {
   return blocks;
 }
 
+
+/**
+ * How many settings in a group are currently overriding the theme — a
+ * theme-override field counts when it holds a value (empty means "follow
+ * the theme"). Drives the Advanced summary badge (master rule A1).
+ */
+export function countThemeOverrides(strips: BuilderSchemaStrip[], settings: SettingsRecord): number {
+  return strips
+    .flat()
+    .filter((field) => field.control === "theme-color" && (settings[field.key] ?? "") !== "")
+    .length;
+}
+
 /** Split strips into N contiguous runs — order reads down each column. */
 function splitIntoColumns(strips: BuilderSchemaStrip[], columns: number): BuilderSchemaStrip[][] {
   const out: BuilderSchemaStrip[][] = [];
@@ -337,6 +367,17 @@ function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext
           onChange={(url) => ctx.set(field.key, url)}
         />
       );
+    case "theme-color":
+      return (
+        <BuilderThemeColorControlWithDefault
+          dialogLabel={field.dialogLabel}
+          defaultColor={field.themeDefault}
+          themeColors={ctx.themeColors}
+          hint="theme"
+          value={ctx.settings[field.key] ?? ""}
+          onChange={(next) => ctx.set(field.key, next)}
+        />
+      );
     case "picker":
       return (
         <BuilderProjectDataPicker
@@ -405,9 +446,22 @@ export function BuilderSchemaModuleSettings({
     const group = normalizeGroup(schema[name]);
     if (!group) return null;
     if (name === "advanced") {
+      // Advanced is where THEME OVERRIDES live (master rule A1). It is
+      // collapsed, so an override could hide silently and leave the
+      // operator wondering why a themed restyle skipped this module —
+      // the summary therefore says how many settings are currently
+      // overriding the theme.
+      const overrides = countThemeOverrides(group.strips, ctx.settings);
       return (
-        <details className="hanging-details" key={name}>
-          <summary>{group.title ?? advancedLabel}</summary>
+        <details className="hanging-details builder-schema-advanced" key={name}>
+          <summary>
+            {group.title ?? advancedLabel}
+            {overrides > 0 ? (
+              <span className="builder-schema-override-count">
+                {overrides} overriding the theme
+              </span>
+            ) : null}
+          </summary>
           {renderStrips(group.strips, ctx)}
         </details>
       );

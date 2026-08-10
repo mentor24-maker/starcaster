@@ -153,6 +153,37 @@ screen allows.*
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
 
+## A — Advanced, and overriding the theme
+
+*Umbrella: the theme does the styling; a module only overrides it
+deliberately, and says so.*
+
+- **A1.** **A setting that overrides a theme value lives in Advanced.**
+  The everyday axes hold the module's own settings; anything that
+  second-guesses the theme is collapsed out of the way, because a themed
+  restyle should be the path of least resistance rather than something
+  every panel invites you to fight. *(operator 8/10: "anything that is a
+  theme override would be included in the Advanced settings")* —
+  **[eye]** (which settings are theme-backed) + **[type]** (the
+  `theme-color` control)
+- **A2.** A theme override is **empty by default and shows the theme's
+  value**, with one click to give it back ("theme"). Never a hardcoded
+  colour pre-filled into the field — that is an override nobody chose.
+  Schema: `control: "theme-color"` with `themeDefault`. — **[type]**
+- **A3.** **Collapsed must not mean invisible.** The Advanced summary
+  states how many settings are currently overriding the theme, so a
+  module that ignores a themed restyle explains itself instead of
+  looking like a theme bug. — **[auto-ish]** (the generator renders the
+  count)
+- **A4.** Advanced is for theme overrides and genuinely rare settings —
+  **not** a place to hide controls that did not fit a column. If a
+  control belongs to an axis, it goes on the axis. *(guard against A1
+  becoming a junk drawer)* — **[eye]**
+
+*Status:* the infrastructure is in (control, badge, rule). Which
+settings across the 38 modules are theme-backed — and therefore move to
+Advanced — is the follow-on pass the operator sequenced after this.
+
 ## C — Controls: pick the right one
 
 *Umbrella: the control does the thinking, not the operator.*

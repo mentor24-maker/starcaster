@@ -546,3 +546,26 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
   - **Open, recorded in D8**: the operator's own question — border
     settings arguably belong to **Themes**, not per module. If that
     lands, most Frame axes empty and those modules drop to three.
+
+- **2026-08-10 (A-rules — Advanced as the home for theme overrides):**
+  the operator's call: *"anything that is a theme override would be
+  included in the Advanced settings"*. Infrastructure first, module
+  division to follow.
+  - **New rules A1–A4** in UI_RULES.md: overrides live in Advanced (A1);
+    a theme override is empty by default and shows the theme's value with
+    one-click reset, never a pre-filled hex nobody chose (A2); the
+    Advanced summary reports how many settings currently override the
+    theme, so a collapsed override cannot silently look like a theme bug
+    (A3); Advanced is not a junk drawer for controls that did not fit a
+    column (A4).
+  - **Generator**: new `control: "theme-color"` with `themeDefault`
+    (wraps the existing `BuilderThemeColorControlWithDefault`, which
+    already had the swatch + reset + hint), plus `countThemeOverrides`
+    driving the summary badge.
+  - **Demonstrated on Navigation**: its three colours moved out of the
+    Text axis into Advanced, each reading "theme" until overridden. The
+    renderer already did `navColor || undefined`, so empty genuinely
+    means the theme decides — this made the existing semantics visible
+    rather than changing them.
+  - Next: decide which settings across the 38 modules are theme-backed
+    and move them, per the operator's sequencing.
