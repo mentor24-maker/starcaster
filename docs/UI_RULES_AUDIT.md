@@ -630,3 +630,30 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
     category-filter, newsletter and friends) still make the badge report
     overrides on new modules — being verified key-by-key next, since a
     seed may only be cleared when the renderer's fallback is byte-identical.
+
+- **2026-08-10 (A2 at the source — clearing false "overrides", and a live
+  bug it exposed):**
+  - Six more factory seeds cleared after byte-identical verification of
+    every reader (breadcrumb `color` + `activeColor`, blog-toc `color`,
+    newsletter `accentColor` + `bgColor`, messaging-tag-list
+    `activeColor`). A seed is only safe to clear when EVERY renderer falls
+    back to that exact hex.
+  - **The live bug:** `builder-module-card.tsx` read ~20 colour settings
+    with `??`, which does not fall back on `""` — the value the new
+    theme-override reset button creates. So clearing a colour made the
+    editor's card preview lose that colour entirely. Converted those reads
+    to `||`. This was already broken before the seeds work; the sort just
+    made it reachable.
+  - **18 seeds still blocked, deliberately.** Beyond the `??` reads (now
+    fixed), some have renderers that disagree with each other about the
+    default: blog-tag-cloud `inactiveBg` (card #f0f4f8 vs preview
+    #f3f4f6), blog-post-tags `color` (#587592 vs #0f4f8f) and `bgColor`
+    (#f0f4f8 vs #eff6ff), blog-category-filter `activeBg` (preview chains
+    to `activeColor`). Clearing those WOULD change what a page renders, so
+    they stay until the card/preview disagreement is settled against the
+    schema's `themeDefault` — an operator-visible decision, not a
+    refactor.
+  - Also left alone: keys whose control is not `theme-color`
+    (poll-category-list, headline-rotator, speech-bubble, button, table)
+    and any key `normalizeBuilderModuleSettingsForType` rewrites back to a
+    hex on load.
