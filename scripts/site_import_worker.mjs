@@ -246,7 +246,7 @@ async function runCaptureStage(job, opts) {
     limit: caps.maxPages * 2,
     robotsSitemaps: robots.sitemaps,
   });
-  for (const url of sitemapUrls) queue.add(url, 0);
+  for (const url of sitemapUrls) queue.add(url, 0, 'sitemap');
   log(`crawl plan: seed ${seed}, ${sitemapUrls.length} sitemap URLs`);
 
   const provider = new PlaywrightCaptureProvider();
@@ -254,6 +254,7 @@ async function runCaptureStage(job, opts) {
   const pages = [];               // capture index entries
   const assetMap = new Map();     // url -> { altText, referencedBy: [] }
   let failed = 0;
+  let duplicates = 0;
   let robotsSkipped = 0;
   let browserMs = 0;
   const capsHit = new Set();
@@ -280,12 +281,23 @@ async function runCaptureStage(job, opts) {
         // screenshots map feeds the status UI's page gallery directly —
         // full-page shot URLs without having to download the capture JSON.
         const entry = { url: item.url, slug, depth: item.depth, viewports: {}, screenshots: {} };
+        let duplicateOf = '';
         for (const label of ['desktop', 'tablet', 'mobile']) {
           const raw = await provider.capture(item.url, {
             viewport: VIEWPORTS[label],
             timeoutMs: caps.pageTimeoutMs,
             userAgent: DEFAULT_USER_AGENT,
           });
+          // Redirect aliases only reveal themselves here, once the browser
+          // has landed. Checked before any upload so a duplicate costs
+          // nothing but the fetch.
+          if (label === 'desktop') {
+            const finalUrl = raw.finalUrl || item.url;
+            if (!queue.claimCaptured(finalUrl)) {
+              duplicateOf = finalUrl;
+              break;
+            }
+          }
           // Upload screenshots, then persist the CaptureResult with Blob
           // URLs in place of binaries — element crops re-keyed by sourceId.
           const fullPageScreenshot = await uploadPng(job.id, `shots/${slug}.${label}.full.png`, raw.screenshots.fullPage);
@@ -326,7 +338,12 @@ async function runCaptureStage(job, opts) {
             }
           }
         }
-        pages.push(entry);
+        if (duplicateOf) {
+          duplicates += 1;
+          log(`  duplicate: redirects to ${duplicateOf}, already captured — skipped`);
+        } else {
+          pages.push(entry);
+        }
       } catch (err) {
         failed += 1;
         log(`  FAILED: ${err.message}`);
@@ -358,7 +375,7 @@ async function runCaptureStage(job, opts) {
     seed,
     pages,
     robotsSkipped,
-    stats: { discovered: queue.discovered, captured: pages.length, failed },
+    stats: { discovered: queue.discovered, captured: pages.length, failed, duplicates },
     capsHit: Array.from(capsHit),
   };
   const indexUrl = await uploadJson(job.id, 'capture/index.json', index);
@@ -371,7 +388,7 @@ async function runCaptureStage(job, opts) {
       pagesCaptured: pages.length,
     },
   }), 'record capture stats');
-  log(`capture done: ${pages.length} pages, ${assetRows.length} unique assets, ${Math.round(browserMs / 1000)} browser-seconds`);
+  log(`capture done: ${pages.length} pages, ${duplicates} redirect-duplicate(s) skipped, ${assetRows.length} unique assets, ${Math.round(browserMs / 1000)} browser-seconds`);
   return job;
 }
 

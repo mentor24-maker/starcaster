@@ -196,14 +196,18 @@ export type MapOptions = {
  * ------------------------------------------------------------------------ */
 
 /** Slugs the platform treats as auto-private or reserved — an import must
- *  never emit them (lib/builder-client/public-site-page-slugs.js). */
-const RESERVED_SLUG_RE = /^(admin|admin-.*|blog-post-edit|blog-create-post|blog-post-manager|blog-category-manager|crm|home)$/;
+ *  never emit them (lib/builder-client/public-site-page-slugs.js).
+ *  "home" is deliberately NOT here: it is the platform's own home-page
+ *  slug, explicitly public, and the only slug besides "" that gets served
+ *  at the site root. Prefixing it stranded the imported home page at
+ *  /imported-home, a URL nothing links to (the Delray import, 2026-08-09). */
+const RESERVED_SLUG_RE = /^(admin|admin-.*|blog-post-edit|blog-create-post|blog-post-manager|blog-category-manager|crm)$/;
 
 /** Builder slugs are single-segment (middleware rewrites /{slug}) and
  *  lowercase. Flatten path separators, ascii-fold, strip the rest. */
 export function normalizeImportSlug(irPath: string): string {
   const path = String(irPath || "").trim();
-  if (path === "" || path === "/") return "imported-home";
+  if (path === "" || path === "/") return "home";
   const flattened = path
     .toLowerCase()
     .normalize("NFKD")
@@ -1082,10 +1086,17 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   // matching only: substring URL replacement would corrupt asset URLs
   // that share the site root as a prefix.
   const localHrefBySource = new Map<string, string>();
+  /** The site root is served at "/", never at the home page's slug — link
+   *  there directly so the menu's Home item works no matter what that
+   *  page's slug ends up being. */
+  const isRootPath = (p: string): boolean => {
+    const t = String(p || "").trim();
+    return t === "" || t === "/";
+  };
   for (const irPage of ir.pages || []) {
     const mapped = pages.find((p) => p.irPath === irPage.path);
     if (!mapped) continue;
-    const local = `/${mapped.slug}`;
+    const local = isRootPath(irPage.path) ? "/" : `/${mapped.slug}`;
     const variants = new Set<string>();
     const abs = String(irPage.url || "").trim();
     if (abs) {
@@ -1119,6 +1130,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       const abs = new URL(raw, ir.sourceUrl);
       if (!sameSite(abs.href, ir.sourceUrl)) return raw; // external
       if (!looksLikeHtmlUrl(abs.href)) return raw; // an asset file, not a page
+      if (isRootPath(abs.pathname)) return "/";
       return `/${normalizeImportSlug(abs.pathname)}`;
     } catch {
       return raw;

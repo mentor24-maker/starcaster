@@ -174,3 +174,44 @@ test('CrawlQueue: BFS order, dedupe, scoping, depth and page caps', () => {
   assert.equal(q.hitPageCap, true);
   assert.equal(q.captured, 3);
 });
+
+test('CrawlQueue: link-discovered pages are served before the sitemap backlog', () => {
+  const q = new CrawlQueue({ seedUrl: 'https://example.com/', maxPages: 10, maxDepth: 2 });
+  // Worker seeds the whole sitemap up front (a WP site lists posts first)…
+  q.add('https://example.com/post-1', 0, 'sitemap');
+  q.add('https://example.com/post-2', 0, 'sitemap');
+  q.add('https://example.com/about', 0, 'sitemap');
+
+  assert.deepEqual(q.next(), { url: 'https://example.com/', depth: 0 });
+  // …then the seed's own nav links arrive; they must jump the backlog,
+  // including ones already sitting in the sitemap tier (promotion).
+  q.add('https://example.com/about', 1);
+  q.add('https://example.com/contact', 1);
+  assert.deepEqual(q.next(), { url: 'https://example.com/about', depth: 0 });
+  assert.deepEqual(q.next(), { url: 'https://example.com/contact', depth: 1 });
+  assert.deepEqual(q.next(), { url: 'https://example.com/post-1', depth: 0 });
+  assert.deepEqual(q.next(), { url: 'https://example.com/post-2', depth: 0 });
+  assert.equal(q.next(), null);
+});
+
+test('CrawlQueue: claimCaptured rejects aliases that redirect to a captured page', () => {
+  const q = new CrawlQueue({ seedUrl: 'https://example.com/', maxPages: 3, maxDepth: 2 });
+  q.add('https://example.com/Fees', 1);        // alias → /course/fees
+  q.add('https://example.com/course/fees', 1); // the real page
+  q.add('http://example.com/contact', 1);      // scheme alias → https
+
+  assert.deepEqual(q.next(), { url: 'https://example.com/', depth: 0 });
+  assert.equal(q.claimCaptured('https://example.com/'), true);
+
+  // /Fees lands on /course/fees — a first sighting, so it is kept, and the
+  // queued copy of the redirect target is dropped rather than re-fetched.
+  assert.deepEqual(q.next(), { url: 'https://example.com/Fees', depth: 1 });
+  assert.equal(q.claimCaptured('https://example.com/course/fees/'), true);
+  assert.deepEqual(q.next(), { url: 'http://example.com/contact', depth: 1 });
+
+  // A later capture landing on an already-captured URL is refused, and
+  // refunds its page slot so the cap still yields maxPages real pages.
+  assert.equal(q.claimCaptured('https://example.com/course/fees'), false);
+  assert.deepEqual(q.next(), null);
+  assert.equal(q.captured, 2);
+});

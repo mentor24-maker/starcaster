@@ -160,12 +160,12 @@ function completenessIr() {
 }
 
 test('slug normalizer: home, nesting, admin trap, junk', () => {
-  assert.equal(normalizeImportSlug('/'), 'imported-home');
+  assert.equal(normalizeImportSlug('/'), 'home');
   assert.equal(normalizeImportSlug('/about/team'), 'about-team');
   assert.equal(normalizeImportSlug('/Admin-Office'), 'imported-admin-office');
   assert.equal(normalizeImportSlug('/crm'), 'imported-crm');
   assert.equal(normalizeImportSlug('/Über uns/'), 'uber-uns');
-  assert.equal(normalizeImportSlug(''), 'imported-home');
+  assert.equal(normalizeImportSlug(''), 'home');
 });
 
 test('oversize ladder: splits children, hard-splits text, refuses atoms', () => {
@@ -202,7 +202,7 @@ test('completeness fixture: every disposition, reconciled', () => {
 
   // Slugs: home special-cased, collision suffixed, admin trap dodged.
   assert.deepEqual(out.pages.map((p) => p.slug),
-    ['imported-home', 'about-team-imported', 'imported-admin-office']);
+    ['home', 'about-team-imported', 'imported-admin-office']);
 
   const home = out.pages[0];
   const allModules = home.sections.flatMap((s) => s.modules);
@@ -257,7 +257,8 @@ test('completeness fixture: every disposition, reconciled', () => {
   // Link localization: nav + in-content links to IMPORTED pages point at
   // the imported slugs; external links untouched.
   assert.equal(team.href, '/about-team-imported'); // /about/team collided → suffixed slug
-  assert.equal(out.navItems.find((n) => n.label === 'Home').href, '/imported-home');
+  // The site root is served at "/", never at the home page's slug.
+  assert.equal(out.navItems.find((n) => n.label === 'Home').href, '/');
   const proseHtml = allModules.filter((m) => m.type === 'text').map((m) => m.text).join('');
   assert.ok(proseHtml.includes('href="/about-team-imported"'), 'internal link localized');
   assert.ok(proseHtml.includes('href="/menu.pdf"'), 'external link untouched');
@@ -364,7 +365,7 @@ test('delraytennis IR maps with full reconciliation', () => {
   assert.ok(reportReconciles(out.report), JSON.stringify(out.report.elements));
   assert.equal(out.report.elements.skipped, 0);
   assert.equal(out.pages.length, 2);
-  assert.equal(out.pages[0].slug, 'imported-home');
+  assert.equal(out.pages[0].slug, 'home');
   assert.ok(out.navItems.length > 0);
   // The homepage slider (15 unique images cloned to 30) becomes ONE
   // slideshow module; clones land in deduped. (This 2-page fixture keeps
