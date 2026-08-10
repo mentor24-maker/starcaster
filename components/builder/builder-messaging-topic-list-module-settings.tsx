@@ -40,11 +40,12 @@ export function BuilderMessagingTopicListModuleSettings({
             <option value="dropdown">Dropdown</option>
           </select>
         </BuilderModuleField>
-        <BuilderModuleField label="Show 'All'" width="select-sm">
-          <select value={s.showAll ?? "true"} onChange={(e) => set("showAll", e.target.value)}>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+        <BuilderModuleField label="Show 'All'" width="check">
+          <input
+            type="checkbox"
+            checked={(s.showAll ?? "true") === "true"}
+            onChange={(e) => set("showAll", e.target.checked ? "true" : "false")}
+          />
         </BuilderModuleField>
         <BuilderModuleField label="Alignment" width="select-sm">
           <select value={s.alignment ?? "left"} onChange={(e) => set("alignment", e.target.value)}>

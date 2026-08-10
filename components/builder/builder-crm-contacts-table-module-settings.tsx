@@ -13,11 +13,6 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }: Props) {
   const [configs, setConfigs] = useState<{ id: string; name: string }[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
@@ -65,9 +60,8 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
         {
           key: "showTitle",
           label: "Table Title",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "renderCrmContactsTableModule"
         },
@@ -106,9 +100,8 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
         {
           key: "showSearch",
           label: "Search Bar",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "renderCrmContactsTableModule"
         }
@@ -124,36 +117,32 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
           {
             key: "showViewButton",
             label: "View",
-            width: "select-sm",
-            control: "select",
-            options: SHOW_HIDE_OPTIONS,
+            width: "check",
+            control: "checkbox",
             fallback: "true",
             rendersVia: "renderCrmContactsTableModule"
           },
           {
             key: "showEditButton",
             label: "Edit",
-            width: "select-sm",
-            control: "select",
-            options: SHOW_HIDE_OPTIONS,
+            width: "check",
+            control: "checkbox",
             fallback: "true",
             rendersVia: "renderCrmContactsTableModule"
           },
           {
             key: "showDeleteButton",
             label: "Delete",
-            width: "select-sm",
-            control: "select",
-            options: SHOW_HIDE_OPTIONS,
+            width: "check",
+            control: "checkbox",
             fallback: "true",
             rendersVia: "renderCrmContactsTableModule"
           },
           {
             key: "showAddButton",
             label: "Add",
-            width: "select-sm",
-            control: "select",
-            options: SHOW_HIDE_OPTIONS,
+            width: "check",
+            control: "checkbox",
             fallback: "true",
             rendersVia: "renderCrmContactsTableModule"
           },

@@ -8,11 +8,6 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 /**
  * Three titled groups for the panel's three concerns (D5): contact block,
  * form, request history. All three are content semantically — the layout
@@ -30,9 +25,8 @@ const SCHEMA: BuilderSettingsSchema = {
         {
           key: "showContact",
           label: "Contact details",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
         },
@@ -67,9 +61,8 @@ const SCHEMA: BuilderSettingsSchema = {
         {
           key: "showTitle",
           label: "Show title",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
         },
@@ -102,9 +95,8 @@ const SCHEMA: BuilderSettingsSchema = {
         {
           key: "showScreenshot",
           label: "Screenshot upload",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
         },
@@ -139,9 +131,8 @@ const SCHEMA: BuilderSettingsSchema = {
         {
           key: "showHistory",
           label: "Past requests",
-          width: "select-sm",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
         },

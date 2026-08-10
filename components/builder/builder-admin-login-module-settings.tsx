@@ -32,12 +32,8 @@ const SCHEMA: BuilderSettingsSchema = {
       {
         key: "showForgotPassword",
         label: "Forgot password",
-        width: "select-sm",
-        control: "select",
-        options: [
-          { value: "true", label: "Show" },
-          { value: "false", label: "Hide" }
-        ],
+        width: "check",
+        control: "checkbox",
         fallback: "true",
         rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
       }

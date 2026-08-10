@@ -346,32 +346,28 @@ export function BuilderButtonDesignSettings({
             </BuilderSettingRow>
           </div>
           <div className="builder-button-setting-column">
+            {/* C3: booleans read as on/off — same "true"/"false" values the
+                selects wrote; bold defaults on, the others off. */}
             <BuilderSettingRow label="Bold">
-              <select
-                value={settings.bold ?? "true"}
-                onChange={(event) => updateSetting("bold", event.target.value)}
-              >
-                <option value="true">On</option>
-                <option value="false">Off</option>
-              </select>
+              <input
+                type="checkbox"
+                checked={(settings.bold ?? "true") === "true"}
+                onChange={(event) => updateSetting("bold", event.target.checked ? "true" : "false")}
+              />
             </BuilderSettingRow>
             <BuilderSettingRow label="Italic">
-              <select
-                value={settings.italic ?? "false"}
-                onChange={(event) => updateSetting("italic", event.target.value)}
-              >
-                <option value="false">Off</option>
-                <option value="true">On</option>
-              </select>
+              <input
+                type="checkbox"
+                checked={(settings.italic ?? "false") === "true"}
+                onChange={(event) => updateSetting("italic", event.target.checked ? "true" : "false")}
+              />
             </BuilderSettingRow>
             <BuilderSettingRow label="Underline">
-              <select
-                value={settings.underline ?? "false"}
-                onChange={(event) => updateSetting("underline", event.target.value)}
-              >
-                <option value="false">Off</option>
-                <option value="true">On</option>
-              </select>
+              <input
+                type="checkbox"
+                checked={(settings.underline ?? "false") === "true"}
+                onChange={(event) => updateSetting("underline", event.target.checked ? "true" : "false")}
+              />
             </BuilderSettingRow>
           </div>
         </div>

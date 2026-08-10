@@ -12,11 +12,6 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
-const SHOW_HIDE = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 export function BuilderBlogPostCardModuleSettings({ module, onUpdateModule }: Props) {
   const schema: BuilderSettingsSchema = {
     content: [
@@ -43,15 +38,16 @@ export function BuilderBlogPostCardModuleSettings({ module, onUpdateModule }: Pr
           )
         }
       ],
+      // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
       [
-        { key: "showFeaturedImage", label: "Image", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showExcerpt", label: "Excerpt", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showAuthor", label: "Author", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showDate", label: "Date", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showCategories", label: "Categories", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE }
+        { key: "showFeaturedImage", label: "Image", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showExcerpt", label: "Excerpt", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showAuthor", label: "Author", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showDate", label: "Date", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showCategories", label: "Categories", width: "check", control: "checkbox", fallback: "true" }
       ],
       [
-        { key: "showReadMore", label: "Read More", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
+        { key: "showReadMore", label: "Read More", width: "check", control: "checkbox", fallback: "true" },
         {
           key: "readMoreLabel",
           label: "Read More Label",

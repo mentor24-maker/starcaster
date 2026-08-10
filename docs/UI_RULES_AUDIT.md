@@ -432,3 +432,15 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
     blog-post-list, and admin-support-form — panels fill their width in
     columns; no orphans; no cropped options. Screenshots on the
     operator's Desktop ("AFTER - …").
+
+- **2026-08-10 (F4 — boolean migration, complete):** all ~55 Show/Hide,
+  Yes/No, On/Off, and None/Show selects converted to checkboxes across 22
+  files — every schema panel, the strips-based blog-post Display tab, the
+  button design editor, breadcrumb, heading (Italic/Underline/Outline),
+  headline-rotator's Drop shadow, and the hand-written messaging
+  topic-list. Stored values byte-identical everywhere ("true"/"false",
+  same fallbacks); option-label nuances preserved as checkbox tooltips
+  per L7 ("Hide (read-only)", "Hide (use logged-in user)", "No (uses
+  default)"). Two-option MODE selects (grid/list, stacked/inline,
+  two-column/stacked, draft/published, left/center) correctly stayed
+  selects — they are choices, not booleans. C3 status: clear.

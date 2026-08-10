@@ -168,12 +168,8 @@ export function BuilderBreadcrumbModuleSettings({
         {
           key: "bold",
           label: "Bold",
-          width: "select-sm",
-          control: "select",
-          options: [
-            { value: "false", label: "Off" },
-            { value: "true", label: "On" }
-          ],
+          width: "check",
+          control: "checkbox",
           fallback: "false",
           rendersVia: "builder-module-card breadcrumb preview"
         }
