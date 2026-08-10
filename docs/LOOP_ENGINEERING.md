@@ -45,6 +45,14 @@ Your day:
 3. **When you're ready:** tell CC "merge PR #NN" and it merges (only with all
    checks green). Merging stays manual on purpose — see Safety.
 
+## The work log — a plain-English record
+
+Every task's PR also adds one dated, plain-English entry to `docs/WORK-LOG.md`
+(newest first) — written for a non-programmer: what changed and why it mattered.
+Because the entry rides inside the task's own PR, the log updates on `main` at
+the exact moment the work merges; nothing edits `WORK-LOG.md` directly. Scroll
+that one file any day to read, in English, everything the loops have shipped.
+
 ## Safety — why this is wired tighter than the YouTube version
 
 The popular "just wake up and hit merge" demos run on throwaway apps. Starcaster
