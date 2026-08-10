@@ -43,7 +43,12 @@ Each run of this skill builds **one** task into **one** PR. When run under
      CLAUDE.md artifact table). Landmine: editing `builder-template.ts` without
      `npm run build:builder-template` silently turns the module into `"text"`.
    - `node scripts/check_conventions.cjs`
+   - `node scripts/check_ui_doctrine.cjs` if any UI was touched
    - `npm run check:syntax` if `public/js/` or `public/shared/` was touched.
+   - `npm run check:screens` if a CRUD screen's layout changed — it drives the
+     real app in a browser and checks the width rules in `docs/UI_RULES.md`.
+     Needs `npm run dev` and `npm run seed:ui-fixture` first, and is **not** a
+     CI gate (CI has no browsers), so nothing else will catch a regression here.
 
    If a gate fails and you cannot fix it **within the task's scope**, set the
    task to `blocked`, add a ClickUp comment explaining exactly what failed, and

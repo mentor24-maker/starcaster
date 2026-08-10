@@ -8,6 +8,10 @@ This file is maintained automatically — each task's PR adds its own entry as
 part of the change, so the log lands on `main` at the same moment the work does.
 See `docs/LOOP_ENGINEERING.md` for how the loop works.
 
+**Scope:** loop-shipped work only. Work done by hand in a normal session is not
+here — so a quiet stretch in this log means the loop was idle, not that nothing
+was built. The log starts when the loop did.
+
 ---
 
 ## 2026-07-28 — Safety check for "local dev mode" detection (#52)
