@@ -1988,7 +1988,12 @@ export function createEmptyModule(
       ? {
           level: "h2",
           fontSize: "32",
-          color: "#18324a",
+          // A2 (UI_RULES.md): seeded empty so a new heading FOLLOWS THE
+          // THEME. getHeadingModuleStyle falls back to this exact hex
+          // (builder-utils.ts `settings.color || "#18324a"`), so nothing
+          // renders differently — but the Advanced badge no longer reports
+          // an override the operator never chose.
+          color: "",
           bold: "true",
           fontFamily: "",
           fontWeight: "800",
@@ -2015,7 +2020,9 @@ export function createEmptyModule(
           alt: "",
           size: "100",
           borderThickness: "0",
-          borderColor: "#0f4f8f",
+          // A2: empty = follow the theme; getImageModuleStyle falls back to
+          // this same hex, so the rendered result is unchanged.
+          borderColor: "",
           borderRadius: "18",
           // horizontalOffset / verticalOffset removed 2026-08-07: nothing in
           // the image render path ever read them (they are a
@@ -2028,8 +2035,8 @@ export function createEmptyModule(
           url: "",
           alt: "",
           size: "15",
-          borderThickness: "0",
-          borderColor: "#0f4f8f",
+          // A2: empty = follow the theme (same renderer fallback).
+          borderColor: "",
           borderRadius: "18",
           overlayAnchor: "center",
           offsetX: "0",

@@ -20,6 +20,13 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
     // Content / Structure / Frame, in that left-to-right order — the same
     // three columns holding the same controls, renamed to the canonical
     // axis vocabulary so a control sits in the same place in every module.
+    //
+    // A1 sort (2026-08-10): nothing here overrides a theme value, so this
+    // panel has no Advanced section. Card Gap is spacing between cards, not
+    // a theme token, and every other control is a label, a destination, a
+    // layout mode, a count, or a filter toggle — all of which stay basic.
+    // Card colours, borders and radii belong to the Card Manager module
+    // (see the Frame note below), which is where the A1 sort applies.
     axes: [
       {
         title: "Content",

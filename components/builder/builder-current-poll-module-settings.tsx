@@ -36,6 +36,14 @@ export function BuilderCurrentPollModuleSettings({
   // own body, so this editor only ever positions and dresses the shell —
   // Frame carries the background surface, and empties if background moves to
   // Themes.
+  //
+  // A1 sort (2026-08-10): nothing moved. Width, Alignment and the H+V margin
+  // pair are the module's own settings (A4), and there is no colour picker,
+  // border, shadow or font here to override the theme with. The Background
+  // block is the one judgement call — it is the shared BuilderBackgroundControls
+  // surface, which already resolves the theme's colour itself rather than a
+  // per-module override of it, and the open Themes question in D8 is where
+  // background belongs long-term. It stays basic until that lands.
   const schema: BuilderSettingsSchema = {
     axes: [
       {

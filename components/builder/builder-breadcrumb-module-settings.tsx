@@ -112,6 +112,12 @@ export function BuilderBreadcrumbModuleSettings({
     // Same keys, fallbacks and options — only the column each control sits in
     // changed. The separator character is something the module SHOWS, so it
     // joins the trail items on Content; Align gets the Placement column.
+    //
+    // A1 sort (2026-08-10): Link Color and Current Color are theme overrides,
+    // so both moved to Text's own Advanced section as `theme-color` controls
+    // whose themeDefault is their old fallback (A2). Size (a font SIZE) and
+    // Bold stay on Text's basic row; the trail items, Separator and Align are
+    // the module's own settings and stay basic (A4).
     axes: [
       {
         title: "Content",
@@ -195,24 +201,27 @@ export function BuilderBreadcrumbModuleSettings({
               fallback: "false",
               rendersVia: "builder-module-card breadcrumb preview"
             }
-          ],
+          ]
+        ],
+        // A1: both trail colours override the theme.
+        advanced: [
           [
             {
               key: "color",
               label: "Link Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Link color",
-              fallback: "#587592",
+              themeDefault: "#587592",
               rendersVia: "builder-module-card breadcrumb preview"
             },
             {
               key: "activeColor",
               label: "Current Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Current color",
-              fallback: "#18324a",
+              themeDefault: "#18324a",
               rendersVia: "builder-module-card breadcrumb preview"
             }
           ]

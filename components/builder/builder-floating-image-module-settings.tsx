@@ -58,6 +58,15 @@ export function BuilderFloatingImageModuleSettings({
    * carries BOTH offset systems — the anchor-relative X/Y/Z that positions
    * the overlay on the page, and the module nudge below it — which is
    * exactly why they stay in one block with their hints intact.
+   *
+   * A1 sort (2026-08-10): that whole offsets block — both systems together,
+   * hints and all — moved into Placement's own Advanced section (A5), and
+   * the border trio (thickness, radius, colour) into Frame's, with Border
+   * Color becoming a `theme-color` override whose themeDefault is its old
+   * fallback (A2). Anchor stays basic: it is where the image sits, not a
+   * nudge off that spot. Effect stays basic too — an appearance mode, not a
+   * theme override. Duration, URL, media, alt text and Size are the
+   * module's own settings (A4).
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -179,7 +188,11 @@ export function BuilderFloatingImageModuleSettings({
               fallback: "center",
               rendersVia: "getImageOverlayStyle"
             }
-          ],
+          ]
+        ],
+        // A5: both offset systems are nudges, not everyday placement — they
+        // move into Placement's Advanced section together, as one block.
+        advanced: [
           [
             {
               key: "offsetX",
@@ -244,6 +257,20 @@ export function BuilderFloatingImageModuleSettings({
         strips: [
           [
             {
+              key: "effect",
+              label: "Effect",
+              width: "select-md",
+              control: "select",
+              options: [...EFFECT_OPTIONS],
+              fallback: "none",
+              rendersVia: "getImageEffectClassName"
+            }
+          ]
+        ],
+        // A1: the border's thickness, corners and colour are all theme values.
+        advanced: [
+          [
+            {
               key: "borderThickness",
               label: "Border",
               width: "num",
@@ -267,19 +294,10 @@ export function BuilderFloatingImageModuleSettings({
               key: "borderColor",
               label: "Border Color",
               width: "color",
-              control: "color",
+              control: "theme-color",
               dialogLabel: "Border Color",
-              fallback: "#0f4f8f",
+              themeDefault: "#0f4f8f",
               rendersVia: "getImageModuleStyle"
-            },
-            {
-              key: "effect",
-              label: "Effect",
-              width: "select-md",
-              control: "select",
-              options: [...EFFECT_OPTIONS],
-              fallback: "none",
-              rendersVia: "getImageEffectClassName"
             }
           ]
         ]

@@ -23,6 +23,16 @@ const SECTION_LABELS: Record<Section, string> = {
   display:  "Display",
 };
 
+/*
+ * A1 sort (2026-08-10): reviewed and unchanged. This editor is the post's
+ * DATA — body, meta, taxonomy, SEO, and which of those fields the post view
+ * shows. It carries no colour, border, radius, shadow or font control, so
+ * there is nothing that overrides the theme and nothing to collapse into an
+ * Advanced section. (The hex values below are the panel's own chrome — the
+ * status badge and the section tabs — not module settings.) Still a
+ * hand-rolled tabbed panel rather than a D8 axes schema; that conversion is
+ * separate work.
+ */
 export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richTextGallery }: Props) {
   const s = module.settings;
   const [section, setSection] = useState<Section>("content");

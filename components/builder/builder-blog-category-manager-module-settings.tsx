@@ -42,10 +42,16 @@ export function BuilderBlogCategoryManagerModuleSettings({
         // Under D8 it gets its own COLUMN instead — same key, same fallback,
         // still no wasted row. It is the first thing to leave if border and
         // accent settings move to Themes, which would drop this to one axis.
+        //
+        // A1 sort (2026-08-10): Accent is a theme value, so it moves into
+        // Frame's own `advanced` as a `theme-color` (A2 — empty means
+        // "follow the theme"; the old fallback is now themeDefault). The
+        // axis stays declared so the control keeps its column heading.
         title: "Frame",
-        strips: [
+        strips: [],
+        advanced: [
           [
-            { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" }
+            { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" }
           ]
         ]
       }

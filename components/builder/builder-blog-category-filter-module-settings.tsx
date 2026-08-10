@@ -69,8 +69,22 @@ export function BuilderBlogCategoryFilterModuleSettings({
     // D8 logical axes: Content / Structure / Text / Frame — the ceiling,
     // reached honestly. The pill's own text colours live on Text (D8:
     // "font, size, weight, transform, text colour"); the box behind it —
-    // backgrounds and radius — lives on Frame. Advanced keeps the URL
-    // param + target page below, full width.
+    // backgrounds and radius — lives on Frame.
+    //
+    // Linking fold (A1-A5): the URL param + target page used to sit in a
+    // top-level `advanced` group, which rendered a SECOND collapsible below
+    // the per-axis Advanced region. They are a destination and its param —
+    // Content by D8's table ("what the module shows … links") — so they now
+    // live in the Content axis's `advanced`. One Advanced region, and these
+    // sit under their own column heading. Same keys and control types.
+    //
+    // A1 sort (2026-08-10): every colour here is a theme value, as is the
+    // pill radius, so each drops into its OWN axis's `advanced` — Active /
+    // Inactive under Text, Active BG / Inactive BG / Radius under Frame.
+    // Colours become `theme-color` (A2): empty means "follow the theme" and
+    // the old fallback is now themeDefault. Font Size stays basic (font SIZE
+    // is not theme-backed); Frame's basic row empties, and the axis stays
+    // declared so its Advanced controls keep their column.
     axes: [
       {
         title: "Content",
@@ -153,6 +167,38 @@ export function BuilderBlogCategoryFilterModuleSettings({
           )
         }
       ]
+        ],
+        // A1: where a category click goes, and the param it sets — the former
+        // top-level advanced group, folded in so the panel has one Advanced.
+        // D3: one strip, not two single-field rows. Target Page narrowed
+        // full → text-md so they can share; placeholder shortened to fit.
+        advanced: [
+      [
+        {
+          key: "filterParam",
+          label: "URL Param",
+          width: "text-md",
+          control: "custom",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.filterParam ?? "category"}
+              onChange={(e) => set("filterParam", e.target.value)}
+              placeholder="category"
+            />
+          )
+        },
+        {
+          key: "targetPageUrl",
+          label: "Target Page",
+          width: "text-md",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Current page",
+          placeholder: "/blog"
+        }
+      ]
         ]
       },
       {
@@ -187,54 +233,29 @@ export function BuilderBlogCategoryFilterModuleSettings({
         title: "Text",
         strips: [
       [
-        { key: "fontSize", label: "Font Size", width: "num", control: "number", min: 10, max: 20, step: 1, fallback: "13" },
-        { key: "activeColor", label: "Active", width: "color", control: "color", dialogLabel: "Active color", fallback: "#0f4f8f" },
-        { key: "inactiveColor", label: "Inactive", width: "color", control: "color", dialogLabel: "Inactive color", fallback: "#587592" }
+        { key: "fontSize", label: "Font Size", width: "num", control: "number", min: 10, max: 20, step: 1, fallback: "13" }
+      ]
+        ],
+        advanced: [
+      [
+        { key: "activeColor", label: "Active", width: "color", control: "theme-color", dialogLabel: "Active color", themeDefault: "#0f4f8f" },
+        { key: "inactiveColor", label: "Inactive", width: "color", control: "theme-color", dialogLabel: "Inactive color", themeDefault: "#587592" }
       ]
         ]
       },
       {
         title: "Frame",
-        strips: [
+        strips: [],
+        advanced: [
       [
-        { key: "activeBg", label: "Active BG", width: "color", control: "color", dialogLabel: "Active background", fallback: "#e8f6fc" },
-        { key: "inactiveBg", label: "Inactive BG", width: "color", control: "color", dialogLabel: "Inactive background", fallback: "#f0f4f8" }
+        { key: "activeBg", label: "Active BG", width: "color", control: "theme-color", dialogLabel: "Active background", themeDefault: "#e8f6fc" },
+        { key: "inactiveBg", label: "Inactive BG", width: "color", control: "theme-color", dialogLabel: "Inactive background", themeDefault: "#f0f4f8" }
       ],
       [
         { key: "borderRadius", label: "Radius", width: "num", control: "number", min: 0, max: 32, step: 2, fallback: "20" }
       ]
         ]
       }
-    ],
-    advanced: [
-      // D3: one strip, not two single-field rows. Target Page narrowed
-      // full → text-md so they can share; placeholder shortened to fit.
-      [
-        {
-          key: "filterParam",
-          label: "URL Param",
-          width: "text-md",
-          control: "custom",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.filterParam ?? "category"}
-              onChange={(e) => set("filterParam", e.target.value)}
-              placeholder="category"
-            />
-          )
-        },
-        {
-          key: "targetPageUrl",
-          label: "Target Page",
-          width: "text-md",
-          control: "picker",
-          source: "pages",
-          valueKind: "path",
-          noneLabel: "Current page",
-          placeholder: "/blog"
-        }
-      ]
     ]
   };
 

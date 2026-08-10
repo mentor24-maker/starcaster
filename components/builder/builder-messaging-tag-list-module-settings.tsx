@@ -54,6 +54,15 @@ export function BuilderMessagingTagListModuleSettings({
    *
    * There is no Frame axis here: the module has no border, radius or shadow
    * settings. Keys, fallbacks, options, visibleWhen and labels are unchanged.
+   *
+   * A1 SORT (2026-08-10): the three tag colours (Active Color, Tag Color, Tag
+   * Bg) are theme overrides, so they moved out of the Text axis's basic strip
+   * into that axis's own `advanced` and became `theme-color` (A2) — empty now
+   * means "follow the theme", and each themeDefault is exactly the hex that
+   * used to be its fallback. Min/Max Font stay basic: font SIZE is a
+   * per-module decision, not a brand token. Layout, Gap, Max Tags, Alignment
+   * and the whole Content axis are structural or content, so they stay basic
+   * too (A4).
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -157,35 +166,6 @@ export function BuilderMessagingTagListModuleSettings({
         strips: [
           [
             {
-              key: "activeColor",
-              label: "Active Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Active tag color",
-              fallback: "#0f4f8f",
-              rendersVia: "builder-template-preview messaging-tag-list"
-            },
-            {
-              key: "inactiveColor",
-              label: "Tag Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Tag color",
-              fallback: "#587592",
-              rendersVia: "builder-template-preview messaging-tag-list"
-            },
-            {
-              key: "inactiveBg",
-              label: "Tag Bg",
-              width: "color",
-              control: "color",
-              dialogLabel: "Tag background color",
-              fallback: "#f0f4f8",
-              rendersVia: "builder-template-preview messaging-tag-list"
-            }
-          ],
-          [
-            {
               key: "minFontSize",
               label: "Min Font",
               width: "num",
@@ -203,6 +183,42 @@ export function BuilderMessagingTagListModuleSettings({
               min: 14,
               max: 32,
               fallback: "22",
+              rendersVia: "builder-template-preview messaging-tag-list"
+            }
+          ]
+        ],
+        // A1/A2: theme overrides, under the Text heading they belong to.
+        // Each themeDefault is the hex that used to be the field's fallback,
+        // so the control shows the same colour it always did — the difference
+        // is that the stored value now starts EMPTY and means "follow the
+        // theme" instead of pre-filling an override nobody chose.
+        advanced: [
+          [
+            {
+              key: "activeColor",
+              label: "Active Color",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Active tag color",
+              themeDefault: "#0f4f8f",
+              rendersVia: "builder-template-preview messaging-tag-list"
+            },
+            {
+              key: "inactiveColor",
+              label: "Tag Color",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Tag color",
+              themeDefault: "#587592",
+              rendersVia: "builder-template-preview messaging-tag-list"
+            },
+            {
+              key: "inactiveBg",
+              label: "Tag Bg",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Tag background color",
+              themeDefault: "#f0f4f8",
               rendersVia: "builder-template-preview messaging-tag-list"
             }
           ]

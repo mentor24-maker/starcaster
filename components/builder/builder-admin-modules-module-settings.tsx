@@ -16,6 +16,10 @@ type Props = {
  * in the same strip, toggle first, on the axis where the field belongs.
  * Only a toggle gating a whole region with no sibling field (`showToggle`)
  * lives on Structure.
+ *
+ * A1 SORT (2026-08-10): no theme overrides in this panel — title copy and two
+ * toggles, with no colour, radius, border, shadow or font-family control. No
+ * Advanced section is warranted (A4).
  */
 const SCHEMA: BuilderSettingsSchema = {
   axes: [

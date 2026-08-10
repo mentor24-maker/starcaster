@@ -599,3 +599,34 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
   - Still to sweep: canonical spacing names and offsets-to-Advanced
     across the remaining modules, and deciding which settings are
     theme-backed (A1) module by module.
+
+- **2026-08-10 (the Basic/Advanced sort — A1/A2/A5/W7 applied module-wide):**
+  - Theme-backed settings (every colour, border radius/width, shadow, font
+    family) moved to their axis's `advanced`; colours became
+    `control: "theme-color"` where the renderer's empty-value semantics
+    allowed. Offsets and their z-index moved to Placement › Advanced.
+  - **Seven admin/CRM modules had nothing theme-backed at all** — pure
+    content and toggles. The criteria are not over-reaching.
+  - **Left basic on judgement, consistently, by two independent agents:**
+    `cardStyle` ("Default / Bordered / Shadow") in post-card and
+    related-posts — a preset choice, not a value that second-guesses the
+    theme. Flagged for the operator's manual pass.
+  - **Not converted, deliberately** (A2's escape hatch — converting would
+    change what an empty value renders): speech-bubble's three colours and
+    topic-list's `moduleBorderColor` (their empty-value fallback is a
+    hardcoded hex via `||`), and tractor-nav's two colours (
+    `normalizeBuilderModuleSettingsForType` rewrites an empty value back to
+    its hex on EVERY load, so a reset would silently revert).
+  - **One Advanced region per panel:** three modules kept a separate
+    top-level "Linking" group, which would have rendered a second
+    collapsible against the operator's ruling — folded into the Content
+    axis's advanced. `messaging-topic-list` was re-axised (Alignment to
+    Structure, freeing a Frame axis) for the same reason.
+  - **A2 made true at the source:** `createEmptyModule` seeded
+    `color: "#18324a"` (heading) and `borderColor: "#0f4f8f"` (image,
+    floating-image) — so a brand-new module reported an override nobody
+    chose. Cleared; the renderers fall back to those exact hexes, so
+    nothing renders differently. **Remaining seeds** (tag-cloud,
+    category-filter, newsletter and friends) still make the badge report
+    overrides on new modules — being verified key-by-key next, since a
+    seed may only be cleared when the renderer's fallback is byte-identical.

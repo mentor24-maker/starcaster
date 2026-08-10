@@ -32,6 +32,14 @@ export function BuilderConfettiModuleSettings({
     // no text and no frame — the counts shape it, the origin places it, and
     // the sound is what it does. (Replaces the D2 panelColumns pairing: three
     // short strips no longer stack down the left edge either way.)
+    //
+    // A1 sort (2026-08-10): the burst has no colour, border, shadow or font,
+    // so nothing here overrides the theme and Advanced holds one control —
+    // Z-Index, under Placement per A5. Its companions are Origin X/Y rather
+    // than the X/Y Offsets A5 names, but it is the same stacking control the
+    // other modules put in Placement › Advanced, and D8's whole point is that
+    // a control sits in the same place everywhere. Particles, Spread, the
+    // origins, Sound and Volume are the module's own settings (A4).
     axes: [
       {
         title: "Structure",
@@ -79,7 +87,12 @@ export function BuilderConfettiModuleSettings({
               control: "select",
               options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
               rendersVia: "buildConfettiEffectOptions"
-            },
+            }
+          ]
+        ],
+        // A5: stacking order is a nudge, not everyday placement.
+        advanced: [
+          [
             {
               key: "zIndex",
               label: "Z-Index",

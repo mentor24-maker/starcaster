@@ -18,6 +18,12 @@ type Props = {
  * PAIRING RULE: `showForgotPassword` gates a whole region and has no sibling
  * field to reveal, so it correctly belongs on Structure. (A toggle that DID
  * gate one specific field would instead sit beside that field, toggle first.)
+ *
+ * A1 SORT (2026-08-10): nothing here overrides a theme value — the panel is
+ * form copy plus one toggle, and there is no colour, radius, border, shadow
+ * or font-family control to move. Every basic control stays basic (A4). The
+ * existing `advanced` group holds the success redirect, which is a rare
+ * behaviour setting rather than a theme override, so it stays put.
  */
 const SCHEMA: BuilderSettingsSchema = {
   axes: [

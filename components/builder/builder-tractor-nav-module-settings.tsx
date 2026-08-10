@@ -32,6 +32,16 @@ export function BuilderTractorNavModuleSettings({
    *
    * (Replaces the D2 panelColumns pairing of content+layout left, style
    * right.)
+   *
+   * A1 sort (2026-08-10): the two colours moved into Frame's own Advanced
+   * section, but stayed `color` controls — see the note there; the
+   * normalizer backfills them, so the A2 conversion would silently revert.
+   * Inner Opacity, Opacity Step and Transition stay basic with their note —
+   * they are the ring effect's own dial, not a colour, border, shadow or
+   * font the theme supplies. Z-Index moved to
+   * Placement › Advanced per A5; Position X/Y stay basic, because they are
+   * where the rings SIT rather than a nudge off that position (the note on
+   * Structure still explains their units).
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -202,7 +212,12 @@ export function BuilderTractorNavModuleSettings({
                   onChange={(event) => set("posY", event.target.value)}
                 />
               )
-            },
+            }
+          ]
+        ],
+        // A5: stacking order is a nudge, not everyday placement.
+        advanced: [
+          [
             {
               key: "zIndex",
               label: "Z-Index",
@@ -225,26 +240,6 @@ export function BuilderTractorNavModuleSettings({
       {
         title: "Frame",
         strips: [
-          [
-            {
-              key: "color",
-              label: "Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Ring color",
-              fallback: "#0000ff",
-              rendersVia: "BuilderTractorNavModule"
-            },
-            {
-              key: "dotHoverColor",
-              label: "Hover Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Dot hover color",
-              fallback: "#ffffff",
-              rendersVia: "BuilderTractorNavModule"
-            }
-          ],
           [
             {
               key: "innerOpacity",
@@ -309,6 +304,35 @@ export function BuilderTractorNavModuleSettings({
                   Opacity Step is % per ring; Transition is the hover fade in ms.
                 </span>
               )
+            }
+          ]
+        ],
+        // A1: the ring colour and the dot's hover colour are theme values.
+        // Both stay `color` controls rather than becoming `theme-color` (A2):
+        // normalizeBuilderModuleSettingsForType backfills an empty color /
+        // dotHoverColor with its hex on EVERY load, so "give it back to the
+        // theme" would appear to work and silently revert on the next reload.
+        // The A2 conversion needs those two backfill lines in
+        // lib/builder-client/builder-template.ts to go first.
+        advanced: [
+          [
+            {
+              key: "color",
+              label: "Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Ring color",
+              fallback: "#0000ff",
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "dotHoverColor",
+              label: "Hover Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Dot hover color",
+              fallback: "#ffffff",
+              rendersVia: "BuilderTractorNavModule"
             }
           ]
         ]

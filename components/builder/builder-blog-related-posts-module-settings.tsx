@@ -76,6 +76,14 @@ export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }
     // control sits in changed. "Match By" keeps its "Posts" count beside it:
     // the count exists only to qualify the match (it hides on manual), so
     // splitting the pair across axes would strand it (D1/D3).
+    //
+    // A1 sort (2026-08-10): nothing here is a theme override, so no axis gets
+    // an Advanced section. The module has no colour, border, radius, shadow or
+    // font-family control of its own. Card Style stays basic deliberately: it
+    // names a card TREATMENT ("Default / Bordered / Shadow"), i.e. a layout
+    // mode, not a border or shadow VALUE that second-guesses the theme — if
+    // that enum is ever replaced by real border/shadow settings, those move.
+    // Card Gap and Image Ratio are structural sizing and stay basic (A4).
     axes: [
       {
         title: "Content",

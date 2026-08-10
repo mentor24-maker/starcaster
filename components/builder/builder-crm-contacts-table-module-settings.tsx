@@ -38,6 +38,11 @@ export function BuilderCrmContactsTableModuleSettings({ module, onUpdateModule }
    * no sibling field (`showSearch`, `showViewButton`, `showEditButton`,
    * `showDeleteButton`) stay on Structure, alongside the page size. Keys,
    * fallbacks, options, visibleWhen and labels are unchanged.
+   *
+   * A1 SORT (2026-08-10): no theme overrides in this panel. The CRM config
+   * picker, the title/button copy, the rows-per-page count and the five
+   * visibility toggles are all content and structure — none of them
+   * second-guesses a theme value — so nothing moves to Advanced (A4).
    */
   const schema: BuilderSettingsSchema = {
     axes: [

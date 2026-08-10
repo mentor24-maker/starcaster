@@ -33,6 +33,20 @@ const ASPECT_OPTIONS: { value: string; label: string }[] = [
  * 10) — strips run content → layout → style → advanced, and every field
  * declares a width token. Every control here is consumed by
  * `FeatureCardsModulePreview` (rule 13); nothing is decorative.
+ *
+ * A1 sort (2026-08-10): the theme-backed settings moved into the Advanced
+ * block — Radius, Card Color, Border Color, Shadow, and the two icon
+ * colours. The colours were already `BuilderThemeColorControlWithDefault`
+ * with `hint="theme"`, so they arrive A2-compliant: empty means "follow the
+ * theme", and normalizeBuilderModuleSettingsForType already converts the
+ * old factory hexes to empty. Columns, Gap (W7 exempts its name), Align,
+ * Image Shape, Hover Lift and the two icon toggles are the module's own
+ * settings and stay basic (A4).
+ *
+ * This editor is not schema-driven — the card manager is a bespoke titled
+ * grid (L6) — so Advanced is the one existing `<details>` rather than the
+ * generator's per-axis columns. The controls that moved keep the exact
+ * visibility rules they had.
  */
 export function BuilderFeatureCardsModuleSettings({
   module,
@@ -219,44 +233,9 @@ export function BuilderFeatureCardsModuleSettings({
         </BuilderModuleField>
       </BuilderModuleFieldStrip>
 
-      {/* Style */}
+      {/* Style — what is left after the A1 sort: the card's own behaviour
+          toggles. The colours, radius and shadow moved to Advanced. */}
       <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Radius" width="num">
-          <BuilderNumberSelectControl
-            value={module.settings.cardRadius ?? "18"}
-            min={0}
-            max={48}
-            fallback="18"
-            onChange={(cardRadius) => set("cardRadius", cardRadius)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Card Color" width="color">
-          <BuilderThemeColorControlWithDefault
-            defaultColor="#ffffff"
-            dialogLabel="Card background color"
-            hint="theme"
-            themeColors={themeColors}
-            value={module.settings.cardBackground ?? ""}
-            onChange={(cardBackground) => set("cardBackground", cardBackground)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Border Color" width="color">
-          <BuilderThemeColorControlWithDefault
-            defaultColor={borderDefault}
-            dialogLabel="Card border color"
-            hint="theme"
-            themeColors={themeColors}
-            value={module.settings.cardBorderColor ?? ""}
-            onChange={(cardBorderColor) => set("cardBorderColor", cardBorderColor)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Shadow" width="check">
-          <input
-            type="checkbox"
-            checked={module.settings.cardShadow !== "false"}
-            onChange={(event) => set("cardShadow", event.target.checked ? "true" : "false")}
-          />
-        </BuilderModuleField>
         <BuilderModuleField label="Hover Lift" width="check">
           <input
             type="checkbox"
@@ -264,9 +243,6 @@ export function BuilderFeatureCardsModuleSettings({
             onChange={(event) => set("cardHoverLift", event.target.checked ? "true" : "false")}
           />
         </BuilderModuleField>
-      </BuilderModuleFieldStrip>
-
-      <BuilderModuleFieldStrip>
         <BuilderModuleField label="Icons" width="check">
           <input
             type="checkbox"
@@ -275,7 +251,62 @@ export function BuilderFeatureCardsModuleSettings({
           />
         </BuilderModuleField>
         {showIcons ? (
-          <>
+          <BuilderModuleField label="Alternate" width="check">
+            <input
+              type="checkbox"
+              checked={module.settings.iconAlternate !== "false"}
+              onChange={(event) => set("iconAlternate", event.target.checked ? "true" : "false")}
+            />
+          </BuilderModuleField>
+        ) : null}
+      </BuilderModuleFieldStrip>
+
+      {/* Advanced */}
+      <details className="hanging-details">
+        <summary>Advanced</summary>
+        {/* A1: every setting here second-guesses the theme — the card
+            surface, its corners, its border and its shadow. */}
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Radius" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.cardRadius ?? "18"}
+              min={0}
+              max={48}
+              fallback="18"
+              onChange={(cardRadius) => set("cardRadius", cardRadius)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Card Color" width="color">
+            <BuilderThemeColorControlWithDefault
+              defaultColor="#ffffff"
+              dialogLabel="Card background color"
+              hint="theme"
+              themeColors={themeColors}
+              value={module.settings.cardBackground ?? ""}
+              onChange={(cardBackground) => set("cardBackground", cardBackground)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Border Color" width="color">
+            <BuilderThemeColorControlWithDefault
+              defaultColor={borderDefault}
+              dialogLabel="Card border color"
+              hint="theme"
+              themeColors={themeColors}
+              value={module.settings.cardBorderColor ?? ""}
+              onChange={(cardBorderColor) => set("cardBorderColor", cardBorderColor)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Shadow" width="check">
+            <input
+              type="checkbox"
+              checked={module.settings.cardShadow !== "false"}
+              onChange={(event) => set("cardShadow", event.target.checked ? "true" : "false")}
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+
+        {showIcons ? (
+          <BuilderModuleFieldStrip>
             <BuilderModuleField label="Icon Color" width="color">
               <BuilderThemeColorControlWithDefault
                 defaultColor={iconDefault}
@@ -284,13 +315,6 @@ export function BuilderFeatureCardsModuleSettings({
                 themeColors={themeColors}
                 value={module.settings.iconColor ?? ""}
                 onChange={(iconColor) => set("iconColor", iconColor)}
-              />
-            </BuilderModuleField>
-            <BuilderModuleField label="Alternate" width="check">
-              <input
-                type="checkbox"
-                checked={module.settings.iconAlternate !== "false"}
-                onChange={(event) => set("iconAlternate", event.target.checked ? "true" : "false")}
               />
             </BuilderModuleField>
             {module.settings.iconAlternate !== "false" ? (
@@ -305,13 +329,9 @@ export function BuilderFeatureCardsModuleSettings({
                 />
               </BuilderModuleField>
             ) : null}
-          </>
+          </BuilderModuleFieldStrip>
         ) : null}
-      </BuilderModuleFieldStrip>
 
-      {/* Advanced */}
-      <details className="hanging-details">
-        <summary>Advanced</summary>
         <BuilderModuleFieldStrip>
           <BuilderModuleField label="Default Link Text" width="text-md">
             <input

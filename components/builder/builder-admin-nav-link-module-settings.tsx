@@ -12,6 +12,9 @@ type Props = {
  * D8 logical axes (docs/UI_RULES.md): Content only. The module is one link —
  * its words and its destination, both Content. Inventing a second axis to
  * fill the row would put controls somewhere they do not belong.
+ *
+ * A1 SORT (2026-08-10): no theme overrides — the link's text and URL are
+ * content, so both stay basic and the module needs no Advanced section (A4).
  */
 const SCHEMA: BuilderSettingsSchema = {
   axes: [

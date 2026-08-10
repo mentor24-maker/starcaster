@@ -34,6 +34,18 @@ export function BuilderSpeechBubbleModuleSettings({
    *
    * (Replaces the D2 panelColumns pairing that put rich text left and the
    * short layout + style strips right.)
+   *
+   * A1 sort (2026-08-10): every one of Frame's four controls is theme-backed
+   * — three colours and a border thickness — so the whole row moved into
+   * Frame's own Advanced section, and the X/Y offsets and Z-Index moved into
+   * Placement's (A5), taking their explanatory hint with them. Both basic
+   * rows are therefore empty; the columns hold their place so the Advanced
+   * grid stays aligned. The four colours keep their `custom` renders: each
+   * one round-trips through normalizeBuilderHexColor and treats an empty
+   * value as its hardcoded default, so converting them to `theme-color`
+   * (A2) would change what an empty setting MEANS — that conversion needs
+   * the runtime to learn "empty = follow the theme" first.
+   * Content, Width and Height are the module's own settings (A4).
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -103,7 +115,10 @@ export function BuilderSpeechBubbleModuleSettings({
       },
       {
         title: "Placement",
-        strips: [
+        strips: [],
+        // A5: offsets and the stacking order they travel with are nudges,
+        // not everyday placement — the hint moves with the fields it explains.
+        advanced: [
           [
             {
               key: "offsetX",
@@ -178,7 +193,10 @@ export function BuilderSpeechBubbleModuleSettings({
       },
       {
         title: "Frame",
-        strips: [
+        strips: [],
+        // A1: three colours and a border thickness — all theme values. Left
+        // as `custom` renders on purpose; see the note at the top of the file.
+        advanced: [
           [
             {
               key: "backgroundColor",

@@ -25,6 +25,11 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
     // colour strips become their own axes instead of wasting the right
     // side (D2). The Image checkbox stays with the Image URL it reveals —
     // together they are one content control, not a display bank.
+    //
+    // A1 sort (2026-08-10): both colours are theme values, so Frame's basic
+    // row empties and they move to Frame › Advanced as `theme-color` (A2 —
+    // empty means "follow the theme", the old fallback becomes themeDefault).
+    // The axis stays declared so its Advanced controls keep their column.
     axes: [
       {
         title: "Content",
@@ -132,10 +137,11 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
       },
       {
         title: "Frame",
-        strips: [
+        strips: [],
+        advanced: [
       [
-        { key: "accentColor", label: "Accent", width: "color", control: "color", dialogLabel: "Accent color", fallback: "#0f4f8f" },
-        { key: "bgColor", label: "Background", width: "color", control: "color", dialogLabel: "Background color", fallback: "#eaf4ff" }
+        { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" },
+        { key: "bgColor", label: "Background", width: "color", control: "theme-color", dialogLabel: "Background color", themeDefault: "#eaf4ff" }
       ]
         ]
       }
