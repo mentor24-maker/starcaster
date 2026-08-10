@@ -8429,6 +8429,59 @@ App.builder = (function () {
     return payload;
   }
 
+  /**
+   * Crop one line of text to fit its box, cutting only at `separator`
+   * boundaries — never through a word (UI_RULES L4, T7 rung 10).
+   *
+   * CSS cannot do this. `text-overflow: ellipsis` cuts at whatever character
+   * lands on the edge, and `-webkit-line-clamp` wraps at word boundaries but
+   * then shortens the last line to make room for its own ellipsis, landing
+   * mid-word too ("Junior Tenni…"). So the ellipsis is placed here, by
+   * dropping whole words until what is left fits.
+   *
+   * The element must be a single-line, overflow-hidden box for the
+   * scrollWidth/clientWidth comparison to mean anything; legacy.css sets
+   * that on .builder-pages-name-text and .builder-pages-slug-link.
+   */
+  function clampCellTextToBoundary(box, textEl, fullText, separator) {
+    const text = String(fullText == null ? '' : fullText);
+    textEl.textContent = text;
+    // `box` must be the block, overflow-hidden element: an inline <code>
+    // reports clientWidth 0, so measuring it would compare nothing.
+    if (!text || box.scrollWidth <= box.clientWidth + 1) return;
+
+    const parts = text.split(separator).filter((part) => part !== '');
+    if (parts.length <= 1) return; // one long token — nothing to cut between
+
+    // Largest number of leading parts that still fits, by bisection.
+    let low = 1;
+    let high = parts.length - 1;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      textEl.textContent = parts.slice(0, mid).join(separator) + '…';
+      if (box.scrollWidth <= box.clientWidth + 1) low = mid;
+      else high = mid - 1;
+    }
+    textEl.textContent = parts.slice(0, low).join(separator) + '…';
+  }
+
+  /** Re-crop every clamped cell; run after a render and after a resize. */
+  function clampPagesTableText() {
+    document.querySelectorAll('#builderPagesTableBody .builder-pages-name-text')
+      .forEach((el) => clampCellTextToBoundary(el, el, el.title, ' '));
+    document.querySelectorAll('#builderPagesTableBody .builder-pages-slug-link')
+      .forEach((link) => {
+        const code = link.querySelector('code');
+        if (code) clampCellTextToBoundary(link, code, link.title, '-');
+      });
+  }
+
+  let pagesClampResizeTimer = null;
+  window.addEventListener('resize', () => {
+    window.clearTimeout(pagesClampResizeTimer);
+    pagesClampResizeTimer = window.setTimeout(clampPagesTableText, 120);
+  });
+
   function renderPagesTable() {
     const tbody = byId('builderPagesTableBody');
     if (!tbody) return;
@@ -8504,7 +8557,19 @@ App.builder = (function () {
         row.appendChild(td);
       };
 
-      append(safeText(item.name) || '-', 'builder-pages-col-name');
+      // Name clamps to one line at a word boundary, so the full title has to
+      // stay reachable on hover (UI_RULES T7 rung 10). The span exists because
+      // a <td> cannot itself be the clamping box without breaking the table.
+      const nameTd = document.createElement('td');
+      nameTd.className = 'builder-pages-col-name';
+      const nameText = safeText(item.name) || '-';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'builder-pages-name-text';
+      nameSpan.textContent = nameText;
+      nameSpan.title = nameText;
+      nameTd.appendChild(nameSpan);
+      row.appendChild(nameTd);
+
       append(getLandingPageTemplateName(item.templateId) || '-', 'builder-pages-col-template');
 
       const slugTd = document.createElement('td');
@@ -8559,7 +8624,20 @@ App.builder = (function () {
       publishTd.appendChild(publishCheckbox);
       row.appendChild(publishTd);
 
-      append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-', 'builder-pages-col-updated');
+      // T7 rung 7: the column only has to answer "how recently"; the exact
+      // second is a hover away rather than 200px of every row.
+      const updatedTd = document.createElement('td');
+      updatedTd.className = 'builder-pages-col-updated';
+      if (item.updatedAt) {
+        const updatedAt = new Date(item.updatedAt);
+        updatedTd.textContent = updatedAt.toLocaleDateString(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric',
+        });
+        updatedTd.title = updatedAt.toLocaleString();
+      } else {
+        updatedTd.textContent = '-';
+      }
+      row.appendChild(updatedTd);
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'builder-pages-actions-cell builder-pages-col-actions';
@@ -8617,6 +8695,7 @@ App.builder = (function () {
       tbody.appendChild(row);
     });
 
+    clampPagesTableText();
     syncLandingPageTableControls();
   }
 

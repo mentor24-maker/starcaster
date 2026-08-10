@@ -36,14 +36,24 @@ as a rule first, then gets a checker where one is possible.
 - **L3.** Labels carry **no redundant or unnecessary words** — "Border",
   not "Border thickness in pixels". If a label needs a sentence, the
   control is wrong. *(8/9 example; doctrine E5)* — **[eye]**
-- **L4.** **Never crop a word** — not in a label, an option, or a column
-  heading. Widen the container instead. *(8/9 example; 6/28 "the labels …
-  are all cut off by the fields")* — **[TODO-check]**
-  **Carve-out 8/10:** *data values in table cells* are the one exception,
-  and only there — a cell may truncate at T7 rung 10 provided the full
-  value is one hover or click away. Labels, options and headings keep the
-  absolute rule: a cropped heading is fixed by rewording it (T7 rung 6),
-  never by cutting it off.
+- **L4.** **Never crop a word** — not in a label, a value, an option, or a
+  column heading. Widen the container instead. *(8/9 example; 6/28 "the
+  labels … are all cut off by the fields")* — **[TODO-check]**
+  **Clarified 8/10 (no carve-out — the rule stands in full):** "never crop
+  a word" means never cut *through* a word. It has never forbidden dropping
+  whole words. So a truncating cell (T7 rung 10) must **break between
+  words** and never mid-word: *"Delray Beach Tennis…"*, never *"Delray
+  Beach Tennis Cen…"*. In the operator's words, *"we want the extra code to
+  gracefully crop cell contents between words."*
+  **"The extra code" is literal — CSS cannot do this** (verified
+  2026-08-10): `text-overflow: ellipsis` cuts at whatever character lands on
+  the edge, and `-webkit-line-clamp` wraps at word boundaries but then
+  shortens the last line to make room for its own ellipsis, landing mid-word
+  too ("Junior Tenni…"). The compliant technique is to drop whole words in
+  JS until the text fits — see `clampCellTextToBoundary()` in
+  `public/js/builder.js`, which also handles hyphen-separated slugs and
+  re-runs on resize. Labels, options and headings still get widened or
+  reworded rather than shortened at all.
 - **L5.** Labels never **overlap** their controls or neighbors. *(6/28
   "Ensure that none of the labels overlap with the forms")* — **[eye]**
 - **L6.** Item-grid columns get **header titles** — and this **applies to
@@ -192,11 +202,13 @@ is ever wider than the screen.*
      type — each with a tooltip and an accessible label.
   9. **Hide the least important columns at narrow breakpoints**, restoring
      them when there is room. Costs data on small screens only.
-  10. **Truncate, with the full value one hover or click away.** Costs a
-      cropped line of text and nothing else — the value is still one hover
-      from the operator, which is why this outranks wrapping. The hover is
-      not optional; a truncation with no way to read the rest is a bug.
-      *(operator ruling 8/10)*
+  10. **Truncate between words, with the full value one hover or click
+      away.** Costs a cropped line and nothing else — the value is still one
+      hover from the operator, which is why this outranks wrapping. Two
+      conditions, both mandatory: the break falls **between words**, never
+      through one (L4), and the full value is reachable. A mid-word crop or
+      a truncation with no hover is a bug, not a fitted table. *(operator
+      ruling 8/10)*
   11. **Wrap onto a second line.** *(operator step 4)* For values that must
       be readable at a glance rather than on hover. Below truncation
       deliberately — ragged row heights cost scannability on every row,
