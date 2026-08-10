@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import type {
   BackgroundSettings,
   BuilderTheme,
@@ -14,6 +14,7 @@ import {
   normalizeBuilderAssetUrl,
   promoteThemeStylesPageBackground,
 } from "@/lib/builder-template";
+import { BuilderColorWheelInput } from "./builder-color-wheel-input";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeTypographySettings } from "./builder-theme-typography-settings";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
@@ -177,9 +178,16 @@ type ColorRowProps = {
 };
 
 function ColorRow({ label, value, onChange }: ColorRowProps) {
+  const inputId = useId();
+
   return (
-    <BuilderSettingRow label={label}>
-      <input type="color" value={value || "#000000"} onChange={(e) => onChange(e.target.value)} />
+    <BuilderSettingRow label={label} labelFor={inputId}>
+      <BuilderColorWheelInput
+        ariaLabel={label}
+        id={inputId}
+        value={value || "#000000"}
+        onChange={onChange}
+      />
     </BuilderSettingRow>
   );
 }

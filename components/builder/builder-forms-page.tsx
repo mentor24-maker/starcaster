@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
+import { BuilderColorWheelInput } from "./builder-color-wheel-input";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 
@@ -191,6 +192,7 @@ function FormPreview({ draft, ctaLabel }: { draft: DevelopFormRecord; ctaLabel: 
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function BuilderFormsPage() {
+  const accentColorInputId = useId();
   const [forms, setForms] = useState<DevelopFormRecord[]>([]);
   const [ctas, setCtas] = useState<CtaRecord[]>([]);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
@@ -444,12 +446,13 @@ export function BuilderFormsPage() {
             {/* Color */}
             <section className="builder-forms-section">
               <h4 className="builder-forms-section-heading">Color</h4>
-              <BuilderSettingRow label="Accent color">
-                <input
-                  type="color"
-                  value={draft.accentColor || DEFAULT_ACCENT}
+              <BuilderSettingRow label="Accent color" labelFor={accentColorInputId}>
+                <BuilderColorWheelInput
+                  ariaLabel="Accent color"
                   disabled={draft.matchLandingColor}
-                  onChange={(e) => patch({ accentColor: e.target.value })}
+                  id={accentColorInputId}
+                  value={draft.accentColor || DEFAULT_ACCENT}
+                  onChange={(accentColor) => patch({ accentColor })}
                 />
               </BuilderSettingRow>
               <BuilderSettingRow label="Match page color" fullWidth>

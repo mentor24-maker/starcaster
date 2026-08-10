@@ -7054,6 +7054,81 @@
   border-radius: 999px;
 }
 
+/* legacy.css styles the frozen vanilla admin's color inputs at
+   `min-width: 84px`, and that bare type selector reaches into the React
+   builder too. `min-width` outranks `width`, so every builder swatch that
+   asked for 40px (or 18px, in the rich-text toolbar) silently rendered as an
+   84px pill. Release the floor here; each control below sets its own size. */
+.builder-react-root input[type="color"] {
+  min-width: 0;
+}
+
+/* Color wheel dial: rainbow ring, current color in the core. A bare
+   input[type="color"] renders as a pale box that reads as decoration rather
+   than a control, so nobody knows to click it (operator, 2026-08-10). */
+.builder-react-root .builder-color-wheel-input,
+.builder-react-root .builder-setting-value input.builder-color-wheel-input {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: conic-gradient(
+    from 90deg,
+    #ff3b30,
+    #ff9500,
+    #ffcc00,
+    #34c759,
+    #00c7be,
+    #007aff,
+    #5856d6,
+    #af52de,
+    #ff2d55,
+    #ff3b30
+  );
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+/* Toolbar-height variant, for rows of 28px controls. */
+.builder-react-root .builder-color-wheel-input-sm,
+.builder-react-root .builder-setting-value input.builder-color-wheel-input-sm {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 4px;
+}
+
+.builder-react-root .builder-color-wheel-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.builder-react-root .builder-color-wheel-input::-webkit-color-swatch-wrapper,
+.builder-react-root .builder-setting-value input.builder-color-wheel-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+/* Keep the two vendor swatch selectors in separate rules — a browser that does
+   not recognize one of them discards the whole rule, ring and all. */
+.builder-react-root .builder-color-wheel-input::-webkit-color-swatch,
+.builder-react-root .builder-setting-value input.builder-color-wheel-input::-webkit-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+}
+
+.builder-react-root .builder-color-wheel-input::-moz-color-swatch,
+.builder-react-root .builder-setting-value input.builder-color-wheel-input::-moz-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+}
+
+/* A row label wired to a control with `labelFor` is clickable — say so. */
+.builder-react-root label.builder-setting-label {
+  cursor: pointer;
+}
+
 .builder-react-root .builder-setting-value .builder-alignment-icon-group {
   justify-content: flex-start;
 }
@@ -12071,16 +12146,6 @@
 .builder-react-root .bcm-unit {
   font-size: 0.72rem;
   color: #94a3b8;
-}
-
-.builder-react-root .bcm-color-input {
-  padding: 2px;
-  width: 40px;
-  height: 28px;
-  border: 1px solid #cbd5e0;
-  border-radius: 5px;
-  background: #fff;
-  cursor: pointer;
 }
 
 /* Shared toggle button group */

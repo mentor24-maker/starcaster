@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+import { BuilderColorWheelInput } from "./builder-color-wheel-input";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeSwatches } from "./builder-theme-swatches";
 
@@ -30,16 +32,18 @@ export function BuilderThemeColorPickerContent({
   onClear
 }: BuilderThemeColorPickerContentProps) {
   const resolved = resolveHexColor(value, fallback);
+  const customInputId = useId();
 
   return (
     <>
       <BuilderThemeSwatches colors={themeColors} onSelect={onChange} showLabels />
-      <BuilderSettingRow label="Custom" fullWidth>
-        <input
-          type="color"
+      <BuilderSettingRow label="Custom" labelFor={customInputId} fullWidth>
+        <BuilderColorWheelInput
+          ariaLabel="Custom color"
           disabled={disabled}
+          id={customInputId}
           value={resolved}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={onChange}
         />
       </BuilderSettingRow>
       {opacity !== undefined && onChangeOpacity ? (

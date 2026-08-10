@@ -3378,10 +3378,10 @@ function BlogCardManagerPreview() {
             <span className="bcm-unit">px</span>
           </div>
         </div>
-        <div className="bcm-control">
+        <label className="bcm-control">
           <span className="bcm-label">Color</span>
-          <input type="color" className="bcm-color-input" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
-        </div>
+          <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
+        </label>
         <div className="bcm-control">
           <span className="bcm-label">Read More</span>
           <input type="text" style={{ ...sel, width: 100 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
@@ -3637,10 +3637,10 @@ function BlogCategoryManagerPreview({ settings }: { settings: Record<string, str
           ) : null}
           <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
             {showColor ? (
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Color</label>
-                <input type="color" value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))} style={{ height: 36, width: 60, padding: 2, border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" }} />
-              </div>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Color</span>
+                <input type="color" className="builder-color-wheel-input" title="Open the color picker" value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))} />
+              </label>
             ) : null}
             {showSortOrder ? (
               <div style={fieldStyle}>
