@@ -132,6 +132,10 @@ export type BuilderSettingsSchema = {
    * render stacked below the columns; `advanced` always renders last,
    * full width. This is the mechanism that restores the operator's 6/28
    * blog-post-list three-column layout.
+   *
+   * Omitted, the generator DERIVES a sensible arrangement (see
+   * derivePanelColumns) — columns are the default, not an opt-in. Pass
+   * `[]` to force the old single-column stack.
    */
   panelColumns?: Array<Array<"content" | "layout" | "style">>;
 };
@@ -145,6 +149,61 @@ function normalizeGroup(group: BuilderSchemaGroup | undefined): { title?: string
   const normalized = Array.isArray(group) ? { strips: group, columns: 1 as const } : { columns: 1 as const, ...group };
   if (!normalized.strips?.length) return null;
   return normalized;
+}
+
+/**
+ * A group is "wide" when squeezing it into a column would hurt: it holds a
+ * `full`-width field (long text, textarea) or a bare custom block (item
+ * managers, notes). Wide groups keep the full panel width; only narrow
+ * groups become columns.
+ */
+function groupIsWide(group: BuilderSchemaGroup | undefined): boolean {
+  const normalized = normalizeGroup(group);
+  if (!normalized) return false;
+  return normalized.strips.some((strip) =>
+    strip.some((field) => field.width === "full" || (field.control === "custom" && field.bare))
+  );
+}
+
+/**
+ * Columns by default (master rule D2 — "no wasted right side").
+ *
+ * Written 2026-08-10 after the operator, looking at a panel that still hugged
+ * the left edge, pointed out the obvious: the layout wave had BUILT the
+ * column capability and then applied it to 8 panels out of 38. An opt-in
+ * layout rule gets forgotten; a default cannot be. Explicit `panelColumns`
+ * still wins, and genuinely wide groups stay full width.
+ */
+type DerivedBlock =
+  | { kind: "columns"; names: Array<"content" | "layout" | "style"> }
+  | { kind: "full"; name: "content" | "layout" | "style" };
+
+function derivePanelBlocks(schema: BuilderSettingsSchema): DerivedBlock[] {
+  const blocks: DerivedBlock[] = [];
+  let run: Array<"content" | "layout" | "style"> = [];
+
+  // Doctrine order is not negotiable (E3): walk content → layout → style and
+  // group CONSECUTIVE narrow groups into a columns row. A wide group flushes
+  // the run and takes the full width in its own place, so nothing is ever
+  // reordered to make columns happen.
+  const flush = () => {
+    if (run.length >= 2) blocks.push({ kind: "columns", names: run });
+    else if (run.length === 1) blocks.push({ kind: "full", name: run[0] });
+    run = [];
+  };
+
+  for (const name of ["content", "layout", "style"] as const) {
+    if (!normalizeGroup(schema[name])) continue;
+    if (groupIsWide(schema[name])) {
+      flush();
+      blocks.push({ kind: "full", name });
+      continue;
+    }
+    run.push(name);
+  }
+  flush();
+
+  return blocks;
 }
 
 /** Split strips into N contiguous runs — order reads down each column. */
@@ -341,23 +400,47 @@ export function BuilderSchemaModuleSettings({
     );
   }
 
-  const columnNames = schema.panelColumns?.flat() ?? [];
-  const stackedGroups = GROUP_ORDER.filter(
-    (name) => name === "advanced" || !columnNames.includes(name as Exclude<BuilderSchemaGroupName, "advanced">)
-  );
+  function renderColumns(names: Array<"content" | "layout" | "style">, key: string | number) {
+    return (
+      <div className="builder-schema-panel-columns" key={key}>
+        {names.map((name) => (
+          <div className="builder-schema-panel-column" key={name}>
+            {renderGroup(name)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // An explicit panelColumns keeps its documented shape: the named columns
+  // first, then anything unnamed, then advanced.
+  if (schema.panelColumns) {
+    const columnNames = schema.panelColumns.flat();
+    const stacked = GROUP_ORDER.filter(
+      (name) => name === "advanced" || !columnNames.includes(name as Exclude<BuilderSchemaGroupName, "advanced">)
+    );
+    return (
+      <>
+        {schema.panelColumns.length ? (
+          <div className="builder-schema-panel-columns">
+            {schema.panelColumns.map((names, index) => (
+              <div className="builder-schema-panel-column" key={index}>
+                {names.map((name) => renderGroup(name))}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {stacked.map((name) => renderGroup(name))}
+      </>
+    );
+  }
 
   return (
     <>
-      {schema.panelColumns?.length ? (
-        <div className="builder-schema-panel-columns">
-          {schema.panelColumns.map((names, index) => (
-            <div className="builder-schema-panel-column" key={index}>
-              {names.map((name) => renderGroup(name))}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {stackedGroups.map((name) => renderGroup(name))}
+      {derivePanelBlocks(schema).map((block, index) =>
+        block.kind === "columns" ? renderColumns(block.names, index) : renderGroup(block.name)
+      )}
+      {renderGroup("advanced")}
     </>
   );
 }

@@ -488,3 +488,29 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
     never wrote it — Builder strips were locked to the top of the screen.
     Threaded through the record type, parser, factories, serializer and
     metadata, with a strip-only "Placement" control and 3 round-trip tests.
+
+- **2026-08-10 (sweep A — columns by DEFAULT):** the operator looked at
+  Navigation after F13 and said it still looked terrible. He was right,
+  and the measurement was damning: the layout wave built the column
+  capability and applied it to **8 of 38** editors. 30 still stacked; 7
+  hand-written editors (Navigation among them) could not use
+  `panelColumns` at all.
+  - **The fix is a default, not a sweep:** `derivePanelBlocks` in the
+    generator arranges groups side by side automatically. Consecutive
+    *narrow* groups pair up; a *wide* group (any `full` field or bare
+    block — item managers, textareas) keeps the full width **in its own
+    place**, so doctrine order (E3) is never reordered to make columns
+    happen. Explicit `panelColumns` still wins; `[]` opts out. An
+    opt-in layout rule gets forgotten — a default cannot be.
+  - **The universal chrome now flows** instead of stacking: Background +
+    Alignment + H/V Margin share one wrapping row on every module.
+  - **Navigation** (hand-written) gets the same two-column treatment by
+    reusing the generator's column classes rather than inventing a third
+    layout system.
+  - Measured after: post-list 3 columns, tag-cloud / team-users /
+    support-form / confetti / tractor-nav / navigation 2 columns each;
+    Navigation's panel is ~25% shorter, support-form went from 8 stacked
+    strips to two titled columns.
+  - Still hand-written and un-columned (dominated by wide item managers,
+    so columns buy little): blog-post (already tabbed), crm-form,
+    feature-cards, messaging-topic-list, reminder, social.

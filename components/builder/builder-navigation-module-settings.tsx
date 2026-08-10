@@ -127,6 +127,15 @@ export function BuilderNavigationModuleSettings({
         />
         {!styleCollapsed && (
           <div className="builder-nav-style-body">
+            {/*
+              D2: this hand-written panel could not use the generator's
+              panelColumns, so it kept hugging the left edge while the
+              schema panels gained columns. It reuses the SAME column
+              classes rather than inventing a third layout system:
+              typography + dropdown left, spacing + colour right.
+            */}
+            <div className="builder-schema-group-columns">
+            <div className="builder-schema-group-column">
             <BuilderModuleFieldStrip>
               <BuilderModuleField label="Font" width="num">
                 <BuilderNumberSelectControl
@@ -207,6 +216,8 @@ export function BuilderNavigationModuleSettings({
               are live on tenant sites — relabelled so the scopes read
               differently (L7) rather than removed.
             */}
+            </div>
+            <div className="builder-schema-group-column">
             <BuilderModuleFieldStrip>
               <BuilderModuleField label="Menu Alignment" width="align">
                 <BuilderAlignmentIconGroup
@@ -274,6 +285,8 @@ export function BuilderNavigationModuleSettings({
                 />
               </BuilderModuleField>
             </BuilderModuleFieldStrip>
+            </div>
+            </div>
           </div>
         )}
       </div>

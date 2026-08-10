@@ -141,3 +141,49 @@ describe("BuilderSchemaModuleSettings", () => {
     expect(html).toMatch(/<input type="checkbox" checked/);
   });
 });
+
+describe("columns by default (D2 — the opt-in that got forgotten)", () => {
+  it("derives side-by-side columns when two or more narrow groups exist", () => {
+    const html = render({
+      content: [[{ key: "a", label: "AMark", width: "text-md", control: "text" }]],
+      layout: [[{ key: "b", label: "BMark", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]]
+    });
+    expect((html.match(/builder-schema-panel-column"/g) ?? []).length).toBe(2);
+    expect(html.indexOf("AMark")).toBeLessThan(html.indexOf("BMark"));
+  });
+
+  it("leaves a lone group full width — nothing to sit beside", () => {
+    const html = render({ content: [[{ key: "a", label: "AMark", width: "text-md", control: "text" }]] });
+    expect(html).not.toContain("builder-schema-panel-columns");
+  });
+
+  it("keeps wide groups (full-width fields, bare blocks) out of the columns", () => {
+    const html = render({
+      content: [[{ key: "a", label: "Wide", width: "full", control: "textarea" }]],
+      layout: [[{ key: "b", label: "Narrow", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]]
+    });
+    // Only one narrow group remains, so no columns are forced on the wide one.
+    expect(html).not.toContain("builder-schema-panel-columns");
+  });
+
+  it("never reorders groups to make columns — a wide group holds its place (E3)", () => {
+    const html = render({
+      content: [[{ key: "a", label: "ContentMark", width: "full", control: "textarea" }]],
+      layout: [[{ key: "b", label: "LayoutMark", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]],
+      style: [[{ key: "c", label: "StyleMark", width: "color", control: "color", dialogLabel: "c" }]]
+    });
+    const order = ["ContentMark", "LayoutMark", "StyleMark"].map((m) => html.indexOf(m));
+    expect(order).toEqual([...order].sort((x, y) => x - y));
+    // layout + style are both narrow and adjacent, so they pair up.
+    expect((html.match(/builder-schema-panel-column"/g) ?? []).length).toBe(2);
+  });
+
+  it("an explicit panelColumns still wins, including an empty opt-out", () => {
+    const schema: BuilderSettingsSchema = {
+      content: [[{ key: "a", label: "AMark", width: "text-md", control: "text" }]],
+      layout: [[{ key: "b", label: "BMark", width: "text-md", control: "text" }]]
+    };
+    expect(render({ ...schema, panelColumns: [] })).not.toContain("builder-schema-panel-columns");
+    expect((render({ ...schema, panelColumns: [["content", "layout"]] }).match(/builder-schema-panel-column"/g) ?? []).length).toBe(1);
+  });
+});

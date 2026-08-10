@@ -672,6 +672,25 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   grid-column: 1 / -1;
 }
 
+/*
+ * The universal chrome flows instead of stacking (D1/D2, 2026-08-10).
+ * Label, Background and the Alignment/H+V-Margin strip were three grid
+ * rows hugging the left edge — on EVERY module, above every panel. They
+ * are all short, so they share a wrapping row and only break when they
+ * genuinely run out of width. The image-mode URL row still takes its own
+ * line (it is a `full` field inside its own strip).
+ */
+.builder-react-root .builder-module-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3, 8px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-module-chrome > * {
+  margin: 0;
+}
+
 /* F6: the project-data picker — select + optional Custom input share a row. */
 .builder-react-root .builder-project-data-picker {
   display: inline-flex;
