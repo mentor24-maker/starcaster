@@ -10,8 +10,13 @@ import {
   getStarterModulesForPaletteGroup,
   isSavedModuleOnlyPaletteGroup
 } from "@/lib/builder-saved-module-palette";
+import {
+  searchModulePalette,
+  type ModuleSearchHit
+} from "@/lib/builder-module-search";
 import type { ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
-import { modulePaletteGroups } from "./builder-types";
+import { modulePaletteGroups, modulePaletteItems } from "./builder-types";
+import { getModuleGroupIcon } from "./builder-module-group-icons";
 
 export type ModulePaletteAnchor = {
   x: number;
@@ -112,10 +117,48 @@ export function BuilderModulePaletteModal({
   const [mounted, setMounted] = useState(false);
   const [sortCategoriesAz, setSortCategoriesAz] = useState(false);
   const [sortCategoriesPopularity, setSortCategoriesPopularity] = useState(false);
+  const [query, setQuery] = useState("");
   const displayGroups = useMemo(
     () => sortModulePaletteGroups(modulePaletteGroups, sortCategoriesAz, sortCategoriesPopularity),
     [sortCategoriesAz, sortCategoriesPopularity]
   );
+
+  const groupLabelFor = (group: string) =>
+    modulePaletteGroups.find((entry) => entry.value === group)?.label ?? group;
+
+  /**
+   * Search spans every category at once, and returns modules directly
+   * rather than the categories that hold them — see the note in
+   * lib/builder-client/builder-module-search.ts.
+   */
+  const searchHits = useMemo<ModuleSearchHit[]>(() => {
+    if (!query.trim()) return [];
+
+    return searchModulePalette(query, {
+      groups: modulePaletteGroups.map((group) => ({
+        value: group.value,
+        label: group.label,
+        description: group.description
+      })),
+      items: modulePaletteItems.map((item) => ({
+        id: item.id,
+        label: item.label,
+        description: item.description,
+        group: item.group,
+        groupLabel: groupLabelFor(item.group)
+      })),
+      saved: cellModules
+        .filter((cellModule) => cellModule.modules.length === 1)
+        .map((cellModule) => ({
+          id: cellModule.id,
+          label: getSavedModulePaletteLabel(cellModule),
+          group: "",
+          groupLabel: "Saved Modules"
+        }))
+    });
+  }, [query, cellModules]);
+
+  const isSearching = query.trim().length > 0;
   const starterModules = activeGroup ? getStarterModulesForPaletteGroup(activeGroup) : [];
   const savedModulesForGroup = activeGroup ? getSavedModulesForPaletteGroup(cellModules, activeGroup) : [];
   const classOnlyGroup = activeGroup ? isSavedModuleOnlyPaletteGroup(activeGroup) : false;
@@ -195,6 +238,41 @@ export function BuilderModulePaletteModal({
             ) : null}
           </div>
           <div className="builder-gallery-header-actions">
+            <div className="builder-module-palette-search">
+              <span className="builder-module-palette-search-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="m16 16 4.5 4.5" />
+                </svg>
+              </span>
+              <input
+                type="search"
+                className="builder-module-palette-search-input"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  // Escape clears the search before it closes the modal, so a
+                  // stray search doesn't cost the operator the whole dialog.
+                  if (event.key === "Escape" && query) {
+                    event.stopPropagation();
+                    setQuery("");
+                  }
+                }}
+                placeholder="Search all modules"
+                aria-label="Search all modules and categories"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  className="builder-module-palette-search-clear"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              ) : null}
+            </div>
             <button
               aria-label={sortCategoriesPopularity ? "Use default category order" : "Sort by popularity"}
               aria-pressed={sortCategoriesPopularity}
@@ -224,7 +302,77 @@ export function BuilderModulePaletteModal({
           </div>
         </div>
 
-        {activeGroup ? (
+        {isSearching ? (
+          searchHits.length === 0 ? (
+            <p className="panel-copy builder-module-palette-empty">
+              Nothing matches “{query.trim()}”. Try a shorter word — search covers module names, category names, and
+              descriptions.
+            </p>
+          ) : (
+            <div className="builder-module-palette-section">
+              <div className="builder-module-palette-section-label">
+                {searchHits.length} {searchHits.length === 1 ? "result" : "results"} across all categories
+              </div>
+              <div className="builder-module-item-grid">
+                {searchHits.map((hit) => {
+                  if (hit.kind === "group") {
+                    const group = modulePaletteGroups.find((entry) => entry.value === hit.group.value);
+                    return (
+                      <button
+                        className="builder-module-item-card builder-module-search-result"
+                        key={`group-${hit.group.value}`}
+                        onClick={() => {
+                          setQuery("");
+                          onSelectGroup(hit.group.value as ModulePaletteGroup);
+                        }}
+                        type="button"
+                      >
+                        <span className="builder-module-item-icon">
+                          {getModuleGroupIcon(hit.group.value as ModulePaletteGroup) ?? group?.icon ?? "◆"}
+                        </span>
+                        <strong>{hit.group.label}</strong>
+                        <span className="builder-module-search-result-meta">Category</span>
+                      </button>
+                    );
+                  }
+
+                  if (hit.kind === "saved") {
+                    return (
+                      <button
+                        className="builder-module-item-card builder-module-item-card-saved builder-module-search-result"
+                        key={`saved-${hit.saved.id}`}
+                        onClick={() => onSelectSavedModule?.(hit.saved.id)}
+                        type="button"
+                      >
+                        <span className="builder-module-item-icon">◆</span>
+                        <strong>{hit.saved.label}</strong>
+                        <span className="builder-module-search-result-meta">Saved Module</span>
+                      </button>
+                    );
+                  }
+
+                  const item = modulePaletteItems.find((entry) => entry.id === hit.item.id);
+                  if (!item) return null;
+
+                  return (
+                    <button
+                      className="builder-module-item-card builder-module-search-result"
+                      key={`item-${item.id}`}
+                      onClick={() => onSelectItem(item)}
+                      type="button"
+                    >
+                      <span className="builder-module-item-icon">
+                        {getModuleGroupIcon(item.group) ?? item.icon}
+                      </span>
+                      <strong>{item.label}</strong>
+                      <span className="builder-module-search-result-meta">{hit.item.groupLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )
+        ) : activeGroup ? (
           <>
             {starterModules.length > 0 ? (
               <div className="builder-module-palette-section">
@@ -237,7 +385,9 @@ export function BuilderModulePaletteModal({
                       onClick={() => onSelectItem(item)}
                       type="button"
                     >
-                      <span className="builder-module-item-icon">{item.icon}</span>
+                      <span className="builder-module-item-icon">
+                        {getModuleGroupIcon(item.group) ?? item.icon}
+                      </span>
                       <strong>{item.label}</strong>
                     </button>
                   ))}
@@ -287,7 +437,9 @@ export function BuilderModulePaletteModal({
                 onClick={() => onSelectGroup(group.value)}
                 type="button"
               >
-                <span className="builder-module-group-card-icon">{group.icon}</span>
+                <span className="builder-module-group-card-icon">
+                  {getModuleGroupIcon(group.value) ?? group.icon}
+                </span>
                 <strong>{group.label}</strong>
               </button>
             ))}

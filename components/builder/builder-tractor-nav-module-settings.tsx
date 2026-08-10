@@ -1,11 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import { type BuilderThemePalette } from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
@@ -13,11 +13,11 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-function update(
-  onUpdateModule: Props["onUpdateModule"],
-  patch: Record<string, string>
-) {
-  onUpdateModule((m) => ({ ...m, settings: { ...m.settings, ...patch } }));
+const NUMBER_INPUT_STYLE = { width: "9ch" } as const;
+const RANGE_READOUT_STYLE = { marginLeft: 8, fontSize: 12, minWidth: 36 } as const;
+
+function isLinearSizing(settings: Record<string, string>): boolean {
+  return (settings.sizingMode || "linear") === "linear";
 }
 
 export function BuilderTractorNavModuleSettings({
@@ -25,135 +25,305 @@ export function BuilderTractorNavModuleSettings({
   onUpdateModule,
   themeColors = []
 }: Props) {
-  const s = module.settings;
-  const sizingMode = s.sizingMode || "linear";
-
-  function set(patch: Record<string, string>) {
-    update(onUpdateModule, patch);
-  }
+  /*
+   * D8 axes (2026-08-10): Content / Structure / Placement / Frame. The rings
+   * have no text, so the ring colours, opacity and hover fade sit on Frame —
+   * they dress the drawn shape the way a border does.
+   *
+   * (Replaces the D2 panelColumns pairing of content+layout left, style
+   * right.)
+   */
+  const schema: BuilderSettingsSchema = {
+    axes: [
+      {
+        title: "Content",
+        // D3: New Tab rides the Dot Link strip instead of its own row.
+        // Dot Link narrowed full → text-md so they can share.
+        strips: [
+          [
+            {
+              key: "dotUrl",
+              label: "Dot Link",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <input
+                  type="url"
+                  placeholder="https://…"
+                  value={settings.dotUrl || ""}
+                  onChange={(event) => set("dotUrl", event.target.value)}
+                />
+              )
+            },
+            {
+              key: "dotNewTab",
+              label: "New Tab",
+              width: "check",
+              control: "checkbox",
+              rendersVia: "BuilderTractorNavModule"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
+          [
+            {
+              key: "dotSize",
+              label: "Dot Size",
+              width: "num",
+              control: "number",
+              min: 2,
+              max: 100,
+              fallback: "10",
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "ringCount",
+              label: "Ring Count",
+              width: "num",
+              control: "number",
+              min: 1,
+              max: 30,
+              fallback: "10",
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "sizingMode",
+              label: "Sizing Mode",
+              width: "select-md",
+              control: "select",
+              fallback: "linear",
+              options: [
+                { value: "linear", label: "Linear" },
+                { value: "geometric", label: "Power Curve" }
+              ],
+              rendersVia: "BuilderTractorNavModule"
+            }
+          ],
+          [
+            {
+              key: "ringStep",
+              label: "Ring Step",
+              width: "num",
+              control: "number",
+              min: 2,
+              max: 200,
+              fallback: "10",
+              visibleWhen: isLinearSizing,
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "outerSize",
+              label: "Outer Size",
+              width: "num",
+              control: "number",
+              min: 50,
+              max: 1400,
+              step: 10,
+              fallback: "600",
+              visibleWhen: (settings) => !isLinearSizing(settings),
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "curve",
+              label: "Curve",
+              width: "text-md",
+              control: "custom",
+              visibleWhen: (settings) => !isLinearSizing(settings),
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <>
+                  <input
+                    type="range"
+                    min={1}
+                    max={5}
+                    step={0.1}
+                    value={settings.curve || "2"}
+                    onChange={(event) => set("curve", event.target.value)}
+                  />
+                  <span style={RANGE_READOUT_STYLE}>{parseFloat(settings.curve || "2").toFixed(1)}</span>
+                </>
+              )
+            }
+          ],
+          [
+            // Kept whole on Structure: it explains the units for the sizes
+            // above AND for the positions on the next axis.
+            {
+              key: "layoutNote",
+              label: "",
+              width: "full",
+              control: "custom",
+              bare: true,
+              render: () => (
+                <span className="builder-module-offset-hint">
+                  Sizes are in px; positions are px from the ring center.
+                </span>
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [
+          [
+            {
+              key: "posX",
+              label: "Position X",
+              width: "num",
+              control: "custom",
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <input
+                  type="number"
+                  step={1}
+                  style={NUMBER_INPUT_STYLE}
+                  value={settings.posX || "0"}
+                  onChange={(event) => set("posX", event.target.value)}
+                />
+              )
+            },
+            {
+              key: "posY",
+              label: "Position Y",
+              width: "num",
+              control: "custom",
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <input
+                  type="number"
+                  step={1}
+                  style={NUMBER_INPUT_STYLE}
+                  value={settings.posY || "0"}
+                  onChange={(event) => set("posY", event.target.value)}
+                />
+              )
+            },
+            {
+              key: "zIndex",
+              label: "Z-Index",
+              width: "num",
+              control: "custom",
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <input
+                  type="number"
+                  step={1}
+                  style={NUMBER_INPUT_STYLE}
+                  value={settings.zIndex || "-9999"}
+                  onChange={(event) => set("zIndex", event.target.value)}
+                />
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
+          [
+            {
+              key: "color",
+              label: "Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Ring color",
+              fallback: "#0000ff",
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "dotHoverColor",
+              label: "Hover Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Dot hover color",
+              fallback: "#ffffff",
+              rendersVia: "BuilderTractorNavModule"
+            }
+          ],
+          [
+            {
+              key: "innerOpacity",
+              label: "Inner Opacity",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={settings.innerOpacity || "90"}
+                    onChange={(event) => set("innerOpacity", event.target.value)}
+                  />
+                  <span style={RANGE_READOUT_STYLE}>{settings.innerOpacity || "90"}%</span>
+                </>
+              )
+            },
+            {
+              key: "opacityStep",
+              label: "Opacity Step",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 50,
+              fallback: "10",
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "transition",
+              label: "Transition",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <>
+                  <input
+                    type="range"
+                    min={0}
+                    max={500}
+                    step={10}
+                    value={settings.transition || "0"}
+                    onChange={(event) => set("transition", event.target.value)}
+                  />
+                  <span style={RANGE_READOUT_STYLE}>{settings.transition || "0"}ms</span>
+                </>
+              )
+            }
+          ],
+          [
+            {
+              key: "styleNote",
+              label: "",
+              width: "full",
+              control: "custom",
+              bare: true,
+              render: () => (
+                <span className="builder-module-offset-hint">
+                  Opacity Step is % per ring; Transition is the hover fade in ms.
+                </span>
+              )
+            }
+          ]
+        ]
+      }
+    ]
+  };
 
   return (
     <div className="builder-tractor-nav-module-settings">
-
-      <BuilderThemeColorSettingRow
-        fullWidth
-        fallback="#0000ff"
-        label="Color"
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
         themeColors={themeColors}
-        value={s.color || "#0000ff"}
-        onChange={(color) => set({ color })}
       />
-
-      <BuilderSettingRow label="Center Dot Size" fullWidth>
-        <input type="number" min={2} max={100} step={1}
-          value={s.dotSize || "10"}
-          onChange={(e) => set({ dotSize: e.target.value })} />
-        <span style={{ marginLeft: 6, fontSize: 12, color: "var(--text-muted, #888)" }}>px</span>
-      </BuilderSettingRow>
-
-      <BuilderThemeColorSettingRow
-        fullWidth
-        fallback="#ffffff"
-        label="Dot Hover Color"
-        themeColors={themeColors}
-        value={s.dotHoverColor || "#ffffff"}
-        onChange={(dotHoverColor) => set({ dotHoverColor })}
-      />
-
-      <BuilderSettingRow label="Dot Link" fullWidth>
-        <input type="url" placeholder="https://…"
-          value={s.dotUrl || ""}
-          onChange={(e) => set({ dotUrl: e.target.value })}
-          style={{ width: "100%" }} />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="New Tab" fullWidth>
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <input type="checkbox"
-            checked={s.dotNewTab === "true"}
-            onChange={(e) => set({ dotNewTab: e.target.checked ? "true" : "false" })} />
-          Open in new tab
-        </label>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Ring Count" fullWidth>
-        <input type="number" min={1} max={30} step={1}
-          value={s.ringCount || "10"}
-          onChange={(e) => set({ ringCount: e.target.value })} />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Sizing Mode" fullWidth>
-        <select value={sizingMode} onChange={(e) => set({ sizingMode: e.target.value })}>
-          <option value="linear">Linear</option>
-          <option value="geometric">Power Curve</option>
-        </select>
-      </BuilderSettingRow>
-
-      {sizingMode === "linear" ? (
-        <BuilderSettingRow label="Ring Step" fullWidth>
-          <input type="number" min={2} max={200} step={1}
-            value={s.ringStep || "10"}
-            onChange={(e) => set({ ringStep: e.target.value })} />
-          <span style={{ marginLeft: 6, fontSize: 12, color: "var(--text-muted, #888)" }}>px</span>
-        </BuilderSettingRow>
-      ) : (
-        <>
-          <BuilderSettingRow label="Outer Diameter" fullWidth>
-            <input type="number" min={50} max={1400} step={10}
-              value={s.outerSize || "600"}
-              onChange={(e) => set({ outerSize: e.target.value })} />
-            <span style={{ marginLeft: 6, fontSize: 12, color: "var(--text-muted, #888)" }}>px</span>
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Curve (1–5)" fullWidth>
-            <input type="range" min={1} max={5} step={0.1}
-              value={s.curve || "2"}
-              onChange={(e) => set({ curve: e.target.value })} />
-            <span style={{ marginLeft: 8, fontSize: 12, minWidth: 28 }}>{parseFloat(s.curve || "2").toFixed(1)}</span>
-          </BuilderSettingRow>
-        </>
-      )}
-
-      <BuilderSettingRow label="Inner Opacity" fullWidth>
-        <input type="range" min={0} max={100} step={1}
-          value={s.innerOpacity || "90"}
-          onChange={(e) => set({ innerOpacity: e.target.value })} />
-        <span style={{ marginLeft: 8, fontSize: 12, minWidth: 36 }}>{s.innerOpacity || "90"}%</span>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Opacity Step" fullWidth>
-        <input type="number" min={0} max={50} step={1}
-          value={s.opacityStep || "10"}
-          onChange={(e) => set({ opacityStep: e.target.value })} />
-        <span style={{ marginLeft: 6, fontSize: 12, color: "var(--text-muted, #888)" }}>% / ring</span>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Transition" fullWidth>
-        <input type="range" min={0} max={500} step={10}
-          value={s.transition || "0"}
-          onChange={(e) => set({ transition: e.target.value })} />
-        <span style={{ marginLeft: 8, fontSize: 12, minWidth: 36 }}>{s.transition || "0"}ms</span>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Position X" fullWidth>
-        <input type="number" step={1}
-          value={s.posX || "0"}
-          onChange={(e) => set({ posX: e.target.value })} />
-        <span style={{ marginLeft: 6, fontSize: 12, color: "var(--text-muted, #888)" }}>px from center</span>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Position Y" fullWidth>
-        <input type="number" step={1}
-          value={s.posY || "0"}
-          onChange={(e) => set({ posY: e.target.value })} />
-        <span style={{ marginLeft: 6, fontSize: 12, color: "var(--text-muted, #888)" }}>px from center</span>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Z-Index" fullWidth>
-        <input type="number" step={1}
-          value={s.zIndex || "-9999"}
-          onChange={(e) => set({ zIndex: e.target.value })} />
-      </BuilderSettingRow>
-
     </div>
   );
 }

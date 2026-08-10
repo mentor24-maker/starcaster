@@ -128,6 +128,51 @@ type BuilderThemeColorFieldWithDefaultProps = {
   fullWidth?: boolean;
 };
 
+type BuilderThemeColorControlWithDefaultProps = {
+  value: string;
+  defaultColor: string;
+  onChange: (value: string) => void;
+  themeColors?: BuilderThemePalette;
+  dialogLabel: string;
+  hint?: string;
+};
+
+/** Bare swatch + reset control; empty value shows defaultColor with a hint. */
+export function BuilderThemeColorControlWithDefault({
+  value,
+  defaultColor,
+  onChange,
+  themeColors = [],
+  dialogLabel,
+  hint = "default"
+}: BuilderThemeColorControlWithDefaultProps) {
+  const isSet = !!value;
+
+  return (
+    <div className="builder-nav-color-field">
+      <BuilderThemeColorField
+        dialogLabel={dialogLabel}
+        fallback={defaultColor}
+        themeColors={themeColors}
+        value={isSet ? value : defaultColor}
+        onChange={onChange}
+      />
+      {isSet ? (
+        <button
+          className="builder-nav-color-clear"
+          onClick={() => onChange("")}
+          title={`Reset to ${hint}`}
+          type="button"
+        >
+          ✕
+        </button>
+      ) : (
+        <span className="builder-nav-color-hint">{hint}</span>
+      )}
+    </div>
+  );
+}
+
 /** Theme swatch picker; empty value shows platform/theme default with optional reset. */
 export function BuilderThemeColorFieldWithDefault({
   label,
@@ -138,31 +183,15 @@ export function BuilderThemeColorFieldWithDefault({
   dialogLabel,
   fullWidth = true
 }: BuilderThemeColorFieldWithDefaultProps) {
-  const isSet = !!value;
-
   return (
     <BuilderSettingRow fullWidth={fullWidth} label={label}>
-      <div className="builder-nav-color-field">
-        <BuilderThemeColorField
-          dialogLabel={dialogLabel ?? label}
-          fallback={defaultColor}
-          themeColors={themeColors}
-          value={isSet ? value : defaultColor}
-          onChange={onChange}
-        />
-        {isSet ? (
-          <button
-            className="builder-nav-color-clear"
-            onClick={() => onChange("")}
-            title="Reset to default"
-            type="button"
-          >
-            ✕
-          </button>
-        ) : (
-          <span className="builder-nav-color-hint">default</span>
-        )}
-      </div>
+      <BuilderThemeColorControlWithDefault
+        defaultColor={defaultColor}
+        dialogLabel={dialogLabel ?? label}
+        themeColors={themeColors}
+        value={value}
+        onChange={onChange}
+      />
     </BuilderSettingRow>
   );
 }

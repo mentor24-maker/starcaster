@@ -50,6 +50,8 @@ export type BuilderTemplateModuleType =
   | "player-portal"
   | "table"
   | "slider"
+  | "slideshow"
+  | "feature-cards"
   | "social"
   | "social-share"
   | "previous-results"
@@ -81,7 +83,9 @@ export type BuilderTemplateModuleType =
   | "admin-team-users"
   | "admin-modules"
   | "admin-login"
-  | "admin-nav-link";
+  | "admin-nav-link"
+  | "admin-site-settings"
+  | "admin-support-form";
 
 export type BuilderTemplateModule = {
   id: string;
@@ -202,11 +206,129 @@ export type BuilderThemeTypography = {
     bottomMargin?: number;
     sideMargins?: number;
   };
+  /** Role palette storage home (see BuilderThemePalette) — no DB column needed. */
+  palette?: BuilderThemePalette;
+  /** Design-treatments storage home (see BuilderThemeTreatments). */
+  treatments?: BuilderThemeTreatments;
+  /** Hero-banner storage home (see BuilderThemeHeroBanner). */
+  heroBanner?: BuilderThemeHeroBanner;
+  /** Up to three saved banner options (the wizard keys one look on each). */
+  heroBanners?: string[];
 };
 
 export type BuilderTheme = {
   typography: BuilderThemeTypography;
 };
+
+/**
+ * Role palette — the multi-surface colour system a designed site actually uses,
+ * as opposed to the single `backgroundColor` wash. Five background/text pairs:
+ *
+ *   surface  — the main content section ground (usually white or near-white)
+ *   band     — the alternating tinted section that separates content bands
+ *   inverse  — the dark statement band (weighty sections, big footers)
+ *   header   — the site header / navigation chrome
+ *   button   — the primary call-to-action fill
+ *
+ * Stored inside the theme's `typography` JSONB as `typography.palette` (the
+ * same no-migration home `pageLayout` margins use) and surfaced as a top-level
+ * `palette` field on the theme summary. Values are hex strings; absent role =
+ * inherit the pre-theme default.
+ */
+export type BuilderThemePaletteRole =
+  | "surface"
+  | "surfaceText"
+  | "band"
+  | "bandText"
+  | "inverse"
+  | "inverseText"
+  | "header"
+  | "headerText"
+  | "button"
+  | "buttonText";
+
+export type BuilderThemePalette = Partial<Record<BuilderThemePaletteRole, string>>;
+
+export const THEME_PALETTE_ROLE_KEYS: BuilderThemePaletteRole[] = [
+  "surface", "surfaceText",
+  "band", "bandText",
+  "inverse", "inverseText",
+  "header", "headerText",
+  "button", "buttonText",
+];
+
+/**
+ * Design treatments — the layout-adjacent styling moves that make a themed
+ * page read as designed rather than repainted, all of them styling on top of
+ * content the operator supplied (never content itself):
+ *
+ *   heroOverlay/-Opacity — a tint laid over any section whose background is an
+ *     image, with light (inverseText) text on top, so a photo section reads as
+ *     a hero instead of text fighting a photograph.
+ *   cardOverlap — a feature-cards section directly after an image section
+ *     pulls up over its bottom edge.
+ *   footerInverse — the last plain section takes the inverse role: the dark
+ *     closing band big footers use.
+ *
+ * Same storage home as the palette: `typography.treatments` on the theme.
+ */
+export type BuilderThemeTreatments = {
+  heroOverlay?: string;
+  /** 0–0.75; a full blackout would defeat the photo. */
+  heroOverlayOpacity?: number;
+  cardOverlap?: boolean;
+  footerInverse?: boolean;
+};
+
+/** Hero banner: the image the site's top band wears. Operator-chosen URL. */
+export type BuilderThemeHeroBanner = {
+  url: string;
+};
+
+export function normalizeThemeHeroBanner(raw: unknown): BuilderThemeHeroBanner | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const url = String((raw as Record<string, unknown>).url || "").trim();
+  return /^https?:\/\//i.test(url) ? { url } : null;
+}
+
+/** Up to three saved banner options — the bank the wizard's three looks key on.
+ * The first non-empty one is what pages actually wear. */
+export function normalizeThemeHeroBanners(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const urls = raw
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^https?:\/\//i.test(value))
+    .slice(0, 3);
+  return urls.length ? urls : null;
+}
+
+export function normalizeThemeTreatments(raw: unknown): BuilderThemeTreatments | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const treatments: BuilderThemeTreatments = {};
+  if (typeof source.heroOverlay === "string" && source.heroOverlay.trim()) {
+    treatments.heroOverlay = source.heroOverlay.trim();
+  }
+  const opacity = Number(source.heroOverlayOpacity);
+  if (Number.isFinite(opacity)) {
+    treatments.heroOverlayOpacity = Math.min(0.75, Math.max(0, opacity));
+  }
+  if (typeof source.cardOverlap === "boolean") treatments.cardOverlap = source.cardOverlap;
+  if (typeof source.footerInverse === "boolean") treatments.footerInverse = source.footerInverse;
+  return Object.keys(treatments).length ? treatments : null;
+}
+
+/** Keep known roles with non-empty string values; null when nothing usable. */
+export function normalizeThemePalette(raw: unknown): BuilderThemePalette | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const palette: BuilderThemePalette = {};
+  for (const role of THEME_PALETTE_ROLE_KEYS) {
+    const value = source[role];
+    if (typeof value === "string" && value.trim()) palette[role] = value.trim();
+  }
+  return Object.keys(palette).length ? palette : null;
+}
 
 /** Lightweight reference to a saved theme in the builder_themes table. */
 export type BuilderThemeSummary = {
@@ -232,6 +354,14 @@ export type BuilderThemeSummary = {
   /** @deprecated Use stylesPageBackground — kept for API compatibility. */
   pageBackground?: BackgroundSettings;
   typography?: BuilderThemeTypography;
+  /** Multi-role colour palette (surface/band/inverse/header/button pairs). */
+  palette?: BuilderThemePalette;
+  /** Design treatments (hero overlay, card overlap, inverse footer). */
+  treatments?: BuilderThemeTreatments;
+  /** The image the site's top band wears (with the hero overlay on it). */
+  heroBanner?: BuilderThemeHeroBanner;
+  /** Up to three saved banner options (the wizard keys one look on each). */
+  heroBanners?: string[];
 };
 
 export type BuilderTemplateSection = {
@@ -1211,6 +1341,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "player-portal" ||
     type === "table" ||
     type === "slider" ||
+    type === "slideshow" ||
+    type === "feature-cards" ||
     type === "social" ||
     type === "social-share" ||
     type === "previous-results" ||
@@ -1242,7 +1374,9 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-team-users" ||
     type === "admin-modules" ||
     type === "admin-login" ||
-    type === "admin-nav-link"
+    type === "admin-nav-link" ||
+    type === "admin-site-settings" ||
+    type === "admin-support-form"
   ) {
     return type;
   }
@@ -1265,6 +1399,15 @@ export function normalizeModuleSettings(value: unknown) {
           ? (normalizeBackgroundSettings(raw) as unknown as string)
           : normalizedKey === "url" || normalizedKey === "backgroundImageUrl"
             ? normalizeBuilderAssetUrl(raw)
+            : normalizedKey === "slides"
+              ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 200000))
+            // Standard 6: collection keys must be exempted from the 10k cap
+            // or a long collection is truncated mid-JSON on save, parses as
+            // empty on the next load, and the content is gone with no error.
+            // `sliderItems` was missing here until 2026-08-07 — the Card
+            // Slider had been capped at 10k since it shipped.
+            : normalizedKey === "cards" || normalizedKey === "sliderItems"
+              ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 200000))
             : normalizedKey === "navItems"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 500000))
               : normalizedKey === "tableData" || normalizedKey === "content" || normalizedKey === "tableContents"
@@ -1415,10 +1558,30 @@ export function normalizeBuilderModuleSettingsForType(
     }
   }
 
+  if (type === "feature-cards") {
+    // Empty color settings mean "follow the site theme". Modules created
+    // before 2026-08-08 were seeded with these literal factory colors, so a
+    // module still carrying the complete untouched set is one nobody ever
+    // recolored — convert it to theme-following. Changing any single color
+    // breaks the fingerprint and preserves the operator's choice.
+    if (
+      settings.cardBackground === "#ffffff" &&
+      settings.cardBorderColor === "#e1e8f0" &&
+      settings.iconColor === "#0b2a4a" &&
+      settings.iconAltColor === "#4f9c3a"
+    ) {
+      settings.cardBackground = "";
+      settings.cardBorderColor = "";
+      settings.iconColor = "";
+      settings.iconAltColor = "";
+    }
+  }
+
   if (type === "heading") {
     const legacy = settings.verticalMargin;
     settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacy, "0");
     settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacy, "0");
+    settings.horizontalMargin = normalizeSpacingValue(settings.horizontalMargin, "0", 0, 160);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     settings.fontFamily = HEADING_FONT_KEYS.has(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";
@@ -1854,8 +2017,10 @@ export function createEmptyModule(
           borderThickness: "0",
           borderColor: "#0f4f8f",
           borderRadius: "18",
-          horizontalOffset: "0",
-          verticalOffset: "0",
+          // horizontalOffset / verticalOffset removed 2026-08-07: nothing in
+          // the image render path ever read them (they are a
+          // floating-image concept). Existing pages keep the stale keys
+          // harmlessly; no renderer consults them.
           effect: "none"
         }
       : type === "floating-image"
@@ -1886,6 +2051,35 @@ export function createEmptyModule(
           productName: "",
           imageUrl: "",
           buttonLabel: "Buy on Redbubble"
+        }
+      : type === "slideshow"
+      ? {
+          slides: "[]",
+          intervalMs: "5000",
+          transition: "slide",
+          heightPx: ""
+        }
+      : type === "feature-cards"
+      ? {
+          cards: "[]",
+          cardColumns: "3",
+          cardGap: "12",
+          cardAlign: "center",
+          cardRadius: "18",
+          // Empty color = follow the site theme (resolved to --crm-theme-*
+          // vars at render). A hex here would be stamped into every new
+          // module's data and pin it to that color forever.
+          cardBackground: "",
+          cardBorderColor: "",
+          cardShadow: "true",
+          cardHoverLift: "true",
+          imageAspect: "4-3",
+          showIcons: "true",
+          iconColor: "",
+          iconAltColor: "",
+          iconAlternate: "true",
+          linkLabel: "Learn More",
+          linkArrow: "true"
         }
       : type === "video"
       ? {
@@ -2294,6 +2488,25 @@ export function createEmptyModule(
                         ? {
                             linkText: "Admin",
                             linkHref: "/admin-login"
+                          }
+                      : type === "admin-site-settings"
+                        ? {
+                            panelTitle: "Site Settings",
+                            showTitle: "true"
+                          }
+                      : type === "admin-support-form"
+                        ? {
+                            formTitle: "Request Support",
+                            showTitle: "true",
+                            layout: "two-column",
+                            defaultPriority: "normal",
+                            showScreenshot: "true",
+                            buttonText: "Send Request",
+                            showHistory: "true",
+                            historyTitle: "Your Recent Requests",
+                            showContact: "true",
+                            contactHeading: "Need a hand with your website?",
+                            contactIntro: "Use the form below and it comes straight to us, along with anything you attach. For anything urgent, reach out directly:"
                           }
           : {};
 

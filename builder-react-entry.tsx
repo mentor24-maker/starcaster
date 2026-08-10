@@ -7,7 +7,9 @@ import { BuilderFormsPage } from './components/builder/builder-forms-page';
 import { BuilderModuleClassesPanel } from './components/builder/builder-module-classes-panel';
 import { BuilderExtensionsPage } from './components/builder/builder-extensions-page';
 import { BuilderPopulateTitlesPage } from './components/builder/builder-populate-titles-page';
+import { BuilderSeoAltTextPage } from './components/builder/builder-seo-alt-text-page';
 import { BuilderAgentsPage } from './components/builder/builder-agents-page';
+import SiteImportPage, { SiteImportErrorBoundary } from './components/builder/site-import-page';
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 
 let activeRoot: Root | null = null;
@@ -84,6 +86,7 @@ let extensionsRoot: Root | null = null;
 let extensionsOpenItemFn: ((item: unknown) => void) | null = null;
 let pendingExtensionItem: unknown = null;
 let agentsRoot: Root | null = null;
+let siteImportRoot: Root | null = null;
 let agentsSetViewFn: ((view: "list" | "builder") => void) | null = null;
 
 export function mountThemesReact(host: HTMLElement | null) {
@@ -173,6 +176,22 @@ export function unmountPopulateTitlesReact() {
   }
 }
 
+let seoAltTextRoot: Root | null = null;
+
+export function mountSeoAltTextReact(host: HTMLElement | null) {
+  if (!host) return;
+  if (seoAltTextRoot) return;
+  seoAltTextRoot = createRoot(host);
+  seoAltTextRoot.render(<BuilderSeoAltTextPage />);
+}
+
+export function unmountSeoAltTextReact() {
+  if (seoAltTextRoot) {
+    seoAltTextRoot.unmount();
+    seoAltTextRoot = null;
+  }
+}
+
 export function openExtensionItemReact(item: unknown) {
   if (extensionsOpenItemFn) {
     extensionsOpenItemFn(item);
@@ -202,6 +221,33 @@ export function unmountAgentsReact() {
     agentsRoot = null;
   }
   agentsSetViewFn = null;
+}
+
+// --- Site Import (staff-only) ---
+
+export function mountSiteImportReact(host: HTMLElement | null) {
+  if (!host) return;
+  // Always rebuild the root: a keep-existing-mount guard turned one render
+  // crash into a permanently blank screen (the root survived the crash, so
+  // remount attempts were no-ops). A fresh mount per open also means the
+  // screen always shows current data.
+  if (siteImportRoot) {
+    siteImportRoot.unmount();
+    siteImportRoot = null;
+  }
+  siteImportRoot = createRoot(host);
+  siteImportRoot.render(
+    <SiteImportErrorBoundary>
+      <SiteImportPage />
+    </SiteImportErrorBoundary>
+  );
+}
+
+export function unmountSiteImportReact() {
+  if (siteImportRoot) {
+    siteImportRoot.unmount();
+    siteImportRoot = null;
+  }
 }
 
 // --- Saved Section Editor ---
@@ -276,6 +322,10 @@ declare global {
       mount: typeof mountPopulateTitlesReact;
       unmount: typeof unmountPopulateTitlesReact;
     };
+    SeoAltTextReact: {
+      mount: typeof mountSeoAltTextReact;
+      unmount: typeof unmountSeoAltTextReact;
+    };
     AgentsReact: {
       mount: typeof mountAgentsReact;
       unmount: typeof unmountAgentsReact;
@@ -283,6 +333,10 @@ declare global {
     SavedSectionEditorReact: {
       mount: typeof mountSavedSectionEditor;
       unmount: typeof unmountSavedSectionEditor;
+    };
+    SiteImportReact: {
+      mount: typeof mountSiteImportReact;
+      unmount: typeof unmountSiteImportReact;
     };
   }
 }
@@ -320,6 +374,11 @@ window.PopulateTitlesReact = {
   unmount: unmountPopulateTitlesReact,
 };
 
+window.SeoAltTextReact = {
+  mount: mountSeoAltTextReact,
+  unmount: unmountSeoAltTextReact,
+};
+
 window.AgentsReact = {
   mount: mountAgentsReact,
   unmount: unmountAgentsReact,
@@ -328,4 +387,9 @@ window.AgentsReact = {
 window.SavedSectionEditorReact = {
   mount: mountSavedSectionEditor,
   unmount: unmountSavedSectionEditor,
+};
+
+window.SiteImportReact = {
+  mount: mountSiteImportReact,
+  unmount: unmountSiteImportReact,
 };

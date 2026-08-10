@@ -32,6 +32,8 @@ public/js/richtext-vendor.js
 lib/builder/template.js
 lib/builder/email-template.js
 lib/builder/email-render.js
+lib/build-stamp.json
+lib/site-import/dist/
 
 # Claude Code: settings.json is shared; everything else is personal
 .claude/*
@@ -41,3 +43,6 @@ docs/SQL/backups/
 # Supabase CLI local state — machine-specific, not project source
 supabase/.branches/
 supabase/.temp/
+
+# Screenshots from `npm run check:screens` — local artifacts, never committed
+.ui-check/

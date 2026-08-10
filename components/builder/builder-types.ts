@@ -103,6 +103,13 @@ export const modulePaletteGroups: Array<{
   { value: "social", label: "Social", icon: "@", description: "Linked rows of social icons and profile badges." },
   { value: "table", label: "Tables", icon: "⊞", description: "Data tables with configurable columns and rows." },
   { value: "slider", label: "Sliders", icon: "⇆", description: "Horizontally scrollable bars of managed cards." },
+  { value: "slideshow", label: "Slideshow", icon: "🖼", description: "Full-width auto-rotating image slideshow." },
+  {
+    value: "feature-cards",
+    label: "Feature Cards",
+    icon: "▦",
+    description: "A responsive grid of linked cards with images, icons, and short copy."
+  },
   { value: "breadcrumb", label: "Breadcrumb", icon: "›", description: "Horizontal trail showing the visitor's location in the site hierarchy." },
   { value: "blog", label: "Blog", icon: "✍", description: "Blog content modules — post feeds, filters, author bios, and more." },
   {
@@ -604,6 +611,28 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { variant: "standard" }
   },
   {
+    id: "slideshow-standard",
+    type: "slideshow",
+    group: "slideshow",
+    label: "Slideshow",
+    icon: "🖼",
+    description: "A full-width auto-rotating slideshow of images.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "feature-cards-standard",
+    type: "feature-cards",
+    group: "feature-cards",
+    label: "Feature Cards",
+    icon: "▦",
+    description: "A row of linked tiles — image, title, short copy, and a link. Wraps to fewer columns on small screens.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "breadcrumb-standard",
     type: "breadcrumb",
     group: "breadcrumb",
@@ -896,6 +925,28 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Admin Nav Link",
     icon: "🔗",
     description: "Conditional link that only appears once an admin is signed in (admin nav cookie is set). Drop it in the header to give admins a discreet way back into the admin area.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "admin-site-settings",
+    type: "admin-site-settings",
+    group: "admin",
+    label: "Site Settings",
+    icon: "⚙️",
+    description: "Settings panel for the tenant's own admin area. Currently one field: the Contact Alert Email recipients notified whenever a public contact form is submitted — one address or several.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "admin-support-form",
+    type: "admin-support-form",
+    group: "admin",
+    label: "Support Request Form",
+    icon: "🛟",
+    description: "Lets a signed-in site admin report a problem: priority, title, description and an optional screenshot. Saves the request and emails the Support Alert Email set in StarCaster under Settings > Projects > Edit. Can also list the admin's own recent requests.",
     name: "",
     text: "",
     settings: {}

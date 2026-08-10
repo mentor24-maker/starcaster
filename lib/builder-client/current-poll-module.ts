@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import {
   getModuleBackgroundSettings,
-  getModuleWidthShellStyle,
-  getVerticalMarginStyle
+  getModuleOuterSpacingStyle,
+  getModuleWidthShellStyle
 } from "@/components/builder/builder-utils";
 import { getBuilderBackgroundStyle } from "@/lib/builder-template";
 import {
@@ -24,7 +24,9 @@ export function getCurrentPollModuleShellStyle(settings: Record<string, string>)
 
   return {
     ...getModuleWidthShellStyle({ ...settings, size: width }),
-    ...getVerticalMarginStyle(settings.verticalMargin),
+    // Both margins, not just vertical — doctrine E4. horizontalMargin
+    // defaults to 0, so pages saved before the control existed do not move.
+    ...getModuleOuterSpacingStyle(settings),
     ...(moduleBackground ?? {})
   };
 }

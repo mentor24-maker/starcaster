@@ -18,7 +18,8 @@
     "build:assets": "node scripts/build_pinned_assets.mjs",
     "typecheck": "tsc --noEmit",
     "test:builder-ui": "vitest run",
-    "build": "npm run build:richtext && npm run build:builder-template && npm run build:builder-email-render && npm run build:html && npx esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx && npx esbuild src/css/main.css --bundle --outfile=public/styles.css && npm run build:builder && npm run pin:assets && npm run check:assets",
+    "build": "npm run build:stamp && npm run build:richtext && npm run build:builder-template && npm run build:builder-email-render && npm run build:html && npx esbuild react-entry.js --bundle --outfile=public/bundle.js --loader:.js=jsx && npx esbuild src/css/main.css --bundle --outfile=public/styles.css && npm run build:builder && npm run pin:assets && npm run check:assets",
+    "build:stamp": "node scripts/write_build_stamp.mjs",
     "dev": "node scripts/dev.mjs",
     "start": "npm run build:html && npm run build:builder && node server.js",
     "build:richtext": "node scripts/build_richtext_bundle.mjs",
@@ -49,9 +50,15 @@
     "migrate:email-templates:dry-run": "node scripts/migrate_email_templates_to_page_templates.mjs",
     "migrate:email-templates:apply": "node scripts/migrate_email_templates_to_page_templates.mjs --apply",
     "test:builder": "node --test scripts/builder/*.test.js",
+    "build:site-import": "node scripts/build_site_import_bundle.mjs",
+    "test:site-import": "npm run build:site-import && npm run build:builder-template && node --test scripts/site-import/*.test.js",
     "build:builder-template": "node scripts/build_template_bundle.mjs",
     "build:builder-email-render": "node scripts/build_email_render_bundle.mjs",
-    "extract:builder-css": "node scripts/extract_builder_css.mjs"
+    "extract:builder-css": "node scripts/extract_builder_css.mjs",
+    "check:ui": "node scripts/check_ui_doctrine.cjs --all",
+    "check:screens": "node scripts/ui/check_screens.mjs",
+    "seed:ui-fixture": "node scripts/ui/seed_fixture.mjs",
+    "check:ui:report": "node scripts/check_ui_doctrine.cjs --report"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

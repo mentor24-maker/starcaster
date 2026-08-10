@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import type { BackgroundSettings, BuilderTheme, BuilderThemeTypography } from "@/lib/builder-template";
+import type {
+  BackgroundSettings,
+  BuilderTheme,
+  BuilderThemeTypography,
+  BuilderThemePalette,
+  BuilderThemeTreatments,
+  BuilderThemeHeroBanner,
+} from "@/lib/builder-template";
 import {
   createDefaultBackgroundSettings,
   finalizeThemeStylesPageBackground,
@@ -14,6 +21,7 @@ import { BuilderButtonBackgroundPicker } from "./builder-button-background-picke
 import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { buildBuilderThemePaletteColors } from "./builder-utils";
 import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
+import { BuilderThemeWizard } from "@/components/builder/builder-theme-wizard";
 
 type DevelopThemeRecord = {
   id: string;
@@ -35,6 +43,10 @@ type DevelopThemeRecord = {
   backgroundImageId: string;
   stylesPageBackground: BackgroundSettings;
   typography: BuilderThemeTypography | null;
+  palette?: BuilderThemePalette | null;
+  treatments?: BuilderThemeTreatments | null;
+  heroBanner?: BuilderThemeHeroBanner | null;
+  heroBanners?: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -67,6 +79,10 @@ function defaultDraft(): DevelopThemeRecord {
     backgroundImageId: "",
     stylesPageBackground: createDefaultBackgroundSettings(),
     typography: { ...DEFAULT_TYPOGRAPHY },
+    palette: null,
+    treatments: null,
+    heroBanner: null,
+    heroBanners: null,
     createdAt: "",
     updatedAt: "",
   };
@@ -106,6 +122,16 @@ function buildPayload(draft: DevelopThemeRecord) {
     backgroundImageId: draft.backgroundImageId,
     stylesPageBackground,
     pageBackground: stylesPageBackground,
+    // Wizard-written facets MUST ride along: this form sends the whole theme
+    // object, so leaving them out of the payload silently erased them on the
+    // next save from this screen.
+    palette: draft.palette || null,
+    treatments: draft.treatments || null,
+    heroBanners: (draft.heroBanners || []).filter(Boolean),
+    heroBanner: (() => {
+      const first = (draft.heroBanners || []).find(Boolean);
+      return first ? { url: first } : draft.heroBanner || null;
+    })(),
     typography: {
       ...(draft.typography ?? DEFAULT_TYPOGRAPHY),
       pageLayout: {
@@ -158,6 +184,14 @@ function ColorRow({ label, value, onChange }: ColorRowProps) {
   );
 }
 
+const PALETTE_ROLE_ROWS: Array<{ bg: keyof BuilderThemePalette; text: keyof BuilderThemePalette; label: string }> = [
+  { bg: "header", text: "headerText", label: "Header" },
+  { bg: "surface", text: "surfaceText", label: "Section" },
+  { bg: "band", text: "bandText", label: "Soft band" },
+  { bg: "inverse", text: "inverseText", label: "Dark band" },
+  { bg: "button", text: "buttonText", label: "Button" },
+];
+
 export function BuilderThemesPage() {
   const [themes, setThemes] = useState<DevelopThemeRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -165,6 +199,7 @@ export function BuilderThemesPage() {
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const themeColors = buildBuilderThemePaletteColors(draft);
 
@@ -265,6 +300,10 @@ export function BuilderThemesPage() {
     setStatus(null);
   }
 
+  const updatePaletteRole = (role: keyof BuilderThemePalette, value: string) => {
+    updateDraft({ palette: { ...(draft.palette || {}), [role]: value } });
+  };
+
   function handleTypographyChange(updater: (theme: BuilderTheme) => BuilderTheme) {
     setDraft((prev) => {
       const next = updater(toBuilderTheme(prev));
@@ -275,9 +314,33 @@ export function BuilderThemesPage() {
 
   const isEditing = Boolean(draft.id);
 
+  // The wizard takes over this panel rather than mounting its own React root.
+  // A separate root would need a host element registered in App.els and a
+  // vanilla-JS call site to mount it — two more places to get wrong, for a
+  // screen that belongs to Themes anyway.
+  if (isWizardOpen) {
+    return (
+      <BuilderThemeWizard
+        onClose={() => {
+          setIsWizardOpen(false);
+          // The wizard can save a new theme and change every page, so the list
+          // behind it is stale the moment it closes.
+          void loadThemes();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="builder-themes-page">
       <div className="builder-themes-header">
+        <button
+          type="button"
+          className="secondary-button builder-themes-btn"
+          onClick={() => setIsWizardOpen(true)}
+        >
+          Theme Wizard
+        </button>
         <select
           className="builder-themes-selector"
           value={selectedId}
@@ -356,6 +419,29 @@ export function BuilderThemesPage() {
           </div>
 
           <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Colour Roles</h3>
+            <p className="builder-themes-col-note">
+              The banded page system: each surface pairs a background with its text
+              colour. Empty = the pre-theme default.
+            </p>
+            {PALETTE_ROLE_ROWS.map((row) => (
+              <div key={row.bg} className="builder-themes-role-pair">
+                <ColorRow
+                  label={row.label}
+                  value={draft.palette?.[row.bg] || ""}
+                  onChange={(v) => updatePaletteRole(row.bg, v)}
+                />
+                <ColorRow
+                  label={`${row.label} text`}
+                  value={draft.palette?.[row.text] || ""}
+                  onChange={(v) => updatePaletteRole(row.text, v)}
+                />
+              </div>
+            ))}
+          </div>
+
+
+          <div className="builder-themes-col">
             <h3 className="builder-themes-col-heading">Styles</h3>
             <BuilderSettingRow label="Page Background">
               <BuilderButtonBackgroundPicker
@@ -426,43 +512,97 @@ export function BuilderThemesPage() {
           />
         </div>
 
-        <div className="builder-themes-col">
-          <h3 className="builder-themes-col-heading">Assets</h3>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Logo — Wide</p>
-            <BuilderImagePickerField
-              value={draft.logoWideId}
-              onChange={(v) => updateDraft({ logoWideId: v })}
-              placeholder="Logo wide URL"
-              buttonLabel="Choose Logo Wide"
-            />
+        <div className="builder-themes-col-stack">
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Assets</h3>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Logo — Wide</p>
+              <BuilderImagePickerField
+                value={draft.logoWideId}
+                onChange={(v) => updateDraft({ logoWideId: v })}
+                placeholder="Logo wide URL"
+                buttonLabel="Choose Logo Wide"
+              />
+            </div>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Logo — Square</p>
+              <BuilderImagePickerField
+                value={draft.logoSquareId}
+                onChange={(v) => updateDraft({ logoSquareId: v })}
+                placeholder="Logo square URL"
+                buttonLabel="Choose Logo Square"
+              />
+            </div>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Feature Image</p>
+              <BuilderImagePickerField
+                value={draft.featureImageId}
+                onChange={(v) => updateDraft({ featureImageId: v })}
+                placeholder="Feature image URL"
+                buttonLabel="Choose Feature Image"
+              />
+            </div>
+            <div className="builder-themes-asset-group">
+              <p className="builder-themes-asset-label">Background Image</p>
+              <BuilderImagePickerField
+                value={draft.backgroundImageId}
+                onChange={(v) => updateDraft({ backgroundImageId: v })}
+                placeholder="Background image URL"
+                buttonLabel="Choose Background Image"
+              />
+            </div>
           </div>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Logo — Square</p>
-            <BuilderImagePickerField
-              value={draft.logoSquareId}
-              onChange={(v) => updateDraft({ logoSquareId: v })}
-              placeholder="Logo square URL"
-              buttonLabel="Choose Logo Square"
+          <div className="builder-themes-col">
+            <h3 className="builder-themes-col-heading">Hero &amp; Treatments</h3>
+            <p className="builder-themes-col-note">
+              Up to three hero banner options. <strong>Banner 1 is shown at the top of
+              every page</strong>, tinted by the overlay below so headlines stay readable;
+              the Theme Wizard designs one look around each option.
+            </p>
+            {[0, 1, 2].map((slot) => (
+              <div key={slot} className="builder-themes-asset-group">
+                <p className="builder-themes-asset-label">
+                  Hero Banner {slot + 1}{slot === 0 ? " — shown on pages" : ""}
+                </p>
+                <BuilderImagePickerField
+                  value={draft.heroBanners?.[slot] || ""}
+                  onChange={(url) =>
+                    updateDraft({
+                      heroBanners: [0, 1, 2].map((i) => (i === slot ? url : draft.heroBanners?.[i] || "")),
+                    })}
+                  placeholder="Banner image URL"
+                />
+              </div>
+            ))}
+            <ColorRow
+              label="Photo overlay tint"
+              value={draft.treatments?.heroOverlay || ""}
+              onChange={(v) => updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlay: v } })}
             />
-          </div>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Feature Image</p>
-            <BuilderImagePickerField
-              value={draft.featureImageId}
-              onChange={(v) => updateDraft({ featureImageId: v })}
-              placeholder="Feature image URL"
-              buttonLabel="Choose Feature Image"
+            <SliderRow
+              label="Overlay strength %"
+              value={Math.round((draft.treatments?.heroOverlayOpacity ?? 0.45) * 100)}
+              min={0}
+              max={75}
+              onChange={(v) =>
+                updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlayOpacity: v / 100 } })}
             />
-          </div>
-          <div className="builder-themes-asset-group">
-            <p className="builder-themes-asset-label">Background Image</p>
-            <BuilderImagePickerField
-              value={draft.backgroundImageId}
-              onChange={(v) => updateDraft({ backgroundImageId: v })}
-              placeholder="Background image URL"
-              buttonLabel="Choose Background Image"
-            />
+            <BuilderSettingRow label="Cards overlap photo">
+              <input
+                type="checkbox"
+                checked={draft.treatments?.cardOverlap === true}
+                onChange={(e) =>
+                  updateDraft({ treatments: { ...(draft.treatments || {}), cardOverlap: e.target.checked } })}
+              />
+            </BuilderSettingRow>
+            <BuilderSettingRow label="Dark footer band">
+              <input
+                type="checkbox"
+                checked={draft.treatments?.footerInverse === true}
+                onChange={(e) =>
+                  updateDraft({ treatments: { ...(draft.treatments || {}), footerInverse: e.target.checked } })}
+              />
+            </BuilderSettingRow>
           </div>
         </div>
       </div>

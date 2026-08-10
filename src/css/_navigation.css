@@ -7,6 +7,11 @@ header {
   min-height: 154px;
   display: flex;
   align-items: center;
+  /* The logo will not shrink and the account block is flex-shrink: 0, so
+     below ~1290px the pair pushed "Projects" past the right edge and the
+     whole app scrolled sideways (UI_RULES T0/T8, measured 2026-08-10).
+     Wrapping the account block under the logo is the graceful failure. */
+  flex-wrap: wrap;
 }
 
 .brand-wordmark {
@@ -59,6 +64,11 @@ header {
   padding: 0;
   display: flex;
   align-items: stretch;
+  /* 15 top-level items need ~1420px. Without wrapping they simply hang off
+     the right edge — the last item sat 53px past a 1440px viewport and made
+     every page in the app scroll sideways (UI_RULES T0, measured
+     2026-08-10). Wrapping to a second row is the graceful failure. */
+  flex-wrap: wrap;
 }
 
 .menu-item {
@@ -81,7 +91,9 @@ header {
 
 .menu-link {
   display: block;
-  padding: 0.8rem 1rem;
+  /* 0.85rem sides rather than 1rem: buys back ~70px across the 15 items, so
+     the bar still fits one row at 1440 instead of wrapping there. */
+  padding: 0.8rem 0.85rem;
   text-decoration: none;
   color: var(--btn-text);
   font-weight: 700;

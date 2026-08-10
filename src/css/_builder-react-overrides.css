@@ -504,6 +504,91 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: 10px 14px;
 }
 
+/*
+ * Schema panel/group columns (master rules D2/D4/D5, added 2026-08-09).
+ * Flex-basis columns so narrow panels (table-cell editors, popups) wrap
+ * to fewer columns instead of cropping — L4/W5 outrank the column count.
+ */
+.builder-react-root .builder-schema-panel-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+/*
+ * When the panel declares its axis count, both the basic row and the
+ * Advanced row use the SAME fixed tracks, so an advanced control lands
+ * directly under its own axis heading (operator 8/10). Below 1100px the
+ * tracks collapse and the columns wrap instead of cramping.
+ */
+.builder-react-root .builder-schema-panel-columns[style*="--builder-axis-count"] {
+  display: grid;
+  grid-template-columns: repeat(var(--builder-axis-count, 1), minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .builder-react-root .builder-schema-panel-columns[style*="--builder-axis-count"] {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+.builder-react-root .builder-schema-panel-column {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-schema-group-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-schema-group-column {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 8px);
+}
+
+/*
+ * Headings and labels, per the operator (8/10): headings bold and a step
+ * larger; every heading inside an editor the same dark blue; field labels
+ * the same dark colour and weight at normal size. The muted grey they had
+ * been failed his contrast rule (R9) — grey-on-blue is exactly the
+ * low-contrast pairing he called out.
+ */
+.builder-react-root .builder-schema-group-title {
+  font-size: var(--text-lg, 1.1rem);
+  font-weight: 700;
+  color: var(--builder-editor-heading, #0b2a4a);
+  margin: var(--space-2, 6px) 0 var(--space-3, 8px);
+}
+
+.builder-react-root .builder-schema-advanced > summary {
+  font-size: var(--text-lg, 1.1rem);
+  font-weight: 700;
+  color: var(--builder-editor-heading, #0b2a4a);
+}
+
+/* Field labels: same dark colour and weight, normal size. */
+.builder-react-root .builder-module-editor .builder-module-field-label,
+.builder-react-root .builder-module-field-label,
+.builder-react-root .builder-module-editor .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-module-chrome .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-floating-image-module-chrome .builder-setting-label {
+  font-size: var(--text-base, 0.9rem);
+  font-weight: 700;
+  color: var(--builder-editor-label, #12395f);
+}
+
 .builder-react-root .builder-module-field {
   display: inline-flex;
   align-items: center;
@@ -537,13 +622,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   max-width: min(230px, 100%);
 }
 
+/*
+ * Select tokens are MINIMUMS, not fixed widths (changed 2026-08-09,
+ * master rule L4/W5): the fixed ch widths were mechanically cropping
+ * real option labels ("Section Heading", "Hide (read-only)", "Power
+ * Curve" — see UI_RULES_AUDIT.md). A select auto-sizes to its longest
+ * option; the token only stops it collapsing below a sane floor.
+ */
 .builder-react-root .builder-module-field--select-sm .builder-module-field-control select {
-  width: 7.5ch;
+  width: auto;
   min-width: 7.5ch;
 }
 
 .builder-react-root .builder-module-field--select-md .builder-module-field-control select {
-  width: 9.5ch;
+  width: auto;
   min-width: 9.5ch;
 }
 
@@ -568,6 +660,235 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     var(--numeric-select-digit-count, 2) * var(--numeric-select-digit-width) +
       var(--numeric-select-padding-inline)
   );
+  max-width: 100%;
+}
+
+/*
+ * Sliders get a bounded width (master rule W4, 2026-08-09): range inputs
+ * had NO width rule anywhere, so tractor-nav's three sliders spanned the
+ * whole panel. Bounded here for every strip field at once.
+ */
+.builder-react-root .builder-module-field-control input[type="range"] {
+  width: 200px;
+  max-width: 100%;
+}
+
+/*
+ * The inline number select stretched flex:1 to half the row under 2-3
+ * digit values (master rule W3; table/slider/slideshow/social-share).
+ * The rule it overrides lives in regenerated _builder-react.css.
+ */
+.builder-react-root .builder-inline-number-field select {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+/*
+ * F3 (UI_RULES_AUDIT.md): these grid classes were referenced by four
+ * inline editors (slider, slideshow, social-share, headline-rotator)
+ * but DEFINED NOWHERE — the editors have rendered as accidental
+ * single-column stacks of full-width fields since birth. Real grids:
+ * auto-fit columns bound each field to a column width (W1) and use the
+ * panel's full width (D2), wrapping to one column on narrow panels.
+ */
+.builder-react-root .builder-slider-design-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3, 8px) var(--space-5, 16px);
+  align-items: start;
+}
+
+.builder-react-root .builder-slider-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-slider-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2, 6px) var(--space-5, 16px);
+  align-items: start;
+}
+
+.builder-react-root .builder-slider-item-grid-full {
+  grid-column: 1 / -1;
+}
+
+/*
+ * B2, ratified 2026-08-10: inside a panel column, every control starts at
+ * the same x. Each field becomes a two-track grid — a fixed label column
+ * plus its control — so the eye reads a clean vertical edge instead of the
+ * ragged one the operator called out on Navigation.
+ *
+ * auto-fill, not a forced single column: a narrow axis column holds one
+ * label+control pair, while a wider column (a panel with only one or two
+ * axes) fills its room with two instead of stranding it — alignment
+ * without giving up D2.
+ *
+ * Scoped to panel columns on purpose: the universal chrome above them
+ * stays a single flowing row (it is one line of module-level settings,
+ * not a form), and item-manager grids keep their own column system.
+ */
+.builder-react-root .builder-schema-panel-column .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-2, 6px) var(--space-5, 16px);
+  align-items: center;
+}
+
+.builder-react-root .builder-schema-panel-column .builder-module-field {
+  display: grid;
+  /*
+   * The label track sizes to the longest label in the column rather than
+   * a fixed width — the canonical spacing names (W7: "Horizontal
+   * Padding") are long, and L4 (never crop a word) outranks W2's
+   * uniformity, exactly as W5 says.
+   */
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3, 8px);
+}
+
+/*
+ * Legacy BuilderSettingRow blocks inside an axis column (drop shadow, the
+ * offset fields, heading's alignment) rendered with big dark labels that
+ * overlapped their inputs — they were built for a full-width two-column
+ * grid, not a 300px column. Inside panel columns they wear the same
+ * compact label + bounded control treatment as a field strip, so an axis
+ * column reads as one thing (2026-08-10, caught by screenshotting the
+ * converted heading panel).
+ */
+.builder-react-root .builder-schema-panel-column .builder-setting-row,
+.builder-react-root .builder-schema-panel-column .builder-setting-row-full {
+  display: grid;
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3, 8px);
+  margin: 0 0 var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-editor .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-schema-panel-column .builder-setting-label {
+  white-space: nowrap;
+  text-align: left;
+}
+
+.builder-react-root .builder-schema-panel-column .builder-setting-value {
+  min-width: 0;
+}
+
+.builder-react-root .builder-schema-panel-column .builder-setting-value > input[type="number"],
+.builder-react-root .builder-schema-panel-column .builder-setting-value > input[type="text"],
+.builder-react-root .builder-schema-panel-column .builder-setting-value > select {
+  width: 100%;
+  max-width: 180px;
+}
+
+/* Hint text under a control keeps the control's column, not the label's. */
+.builder-react-root .builder-schema-panel-column .builder-module-offset-hint {
+  grid-column: 2;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--muted, #445465);
+}
+
+/* Checkboxes and icon groups sit at the start of their track, beside the
+   label, instead of drifting into the middle of a wide cell. */
+.builder-react-root .builder-schema-panel-column .builder-module-field--check .builder-module-field-control,
+.builder-react-root .builder-schema-panel-column .builder-module-field--align .builder-module-field-control,
+.builder-react-root .builder-schema-panel-column .builder-module-field--color .builder-module-field-control {
+  justify-self: start;
+}
+
+/* A full-width field spans both tracks — long text keeps the room. */
+.builder-react-root .builder-schema-panel-column .builder-module-field--full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * The universal chrome flows instead of stacking (D1/D2, 2026-08-10).
+ * Label, Background and the Alignment/H+V-Margin strip were three grid
+ * rows hugging the left edge — on EVERY module, above every panel. They
+ * are all short, so they share a wrapping row and only break when they
+ * genuinely run out of width. The image-mode URL row still takes its own
+ * line (it is a `full` field inside its own strip).
+ */
+.builder-react-root .builder-module-chrome,
+.builder-react-root .builder-heading-module-chrome,
+.builder-react-root .builder-floating-image-module-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3, 8px) var(--space-6, 24px);
+}
+
+/* Their inner rows are compact too, not full-width label/value grids. */
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-row,
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-row-full {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3, 8px);
+  margin: 0;
+}
+
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-label {
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-module-chrome > * {
+  margin: 0;
+}
+
+/*
+ * Advanced = where theme overrides live (master rule A1). The badge makes
+ * a collapsed override visible: without it, a module quietly ignoring a
+ * themed restyle looks like a theme bug.
+ */
+.builder-react-root .builder-schema-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 8px);
+}
+
+/* Swatch + "theme" hint (or reset ✕) need air between them. */
+.builder-react-root .builder-nav-color-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-nav-color-hint {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--muted, #445465);
+}
+
+.builder-react-root .builder-schema-override-count {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--ink-secondary, #475569);
+  background: var(--bg-hover, #f1f5f9);
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: var(--radius-btn, 10px);
+  padding: 2px var(--space-3, 8px);
+  white-space: nowrap;
+}
+
+/* F6: the project-data picker — select + optional Custom input share a row. */
+.builder-react-root .builder-project-data-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
+  max-width: 100%;
+}
+
+.builder-react-root .builder-project-data-picker select {
+  width: auto;
+  min-width: 9.5ch;
+  max-width: 28ch;
+}
+
+.builder-react-root .builder-project-data-picker input[type="text"] {
+  width: 200px;
   max-width: 100%;
 }
 
@@ -679,4 +1000,1089 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   background: rgba(10, 55, 100, 0.96);
   color: #fff;
   text-decoration: none;
+}
+
+/* --- Card Slider: desktop layout ------------------------------------------
+   The slider module's layout rules (flex row, card sizing, positioned image
+   frame) existed ONLY inside @media (max-width: 900px) in
+   _builder-react.css, so above 900px the cards had no styling and each
+   `fill` image escaped its card to span the page — the module effectively
+   showed one giant photo instead of a scrollable row. Found 2026-08-06
+   comparing the imported Delray slider against the new slideshow module.
+   Card width/gap still come from the module's inline settings; these rules
+   only supply the structure the mobile block always assumed. -------------- */
+
+.builder-react-root .builder-preview-slider-wrap {
+  position: relative;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-preview-slider {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.builder-react-root .builder-preview-slider-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  scroll-snap-align: start;
+}
+
+.builder-react-root .builder-preview-slider-image {
+  position: relative;
+  width: 100%;
+  min-height: 180px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.builder-react-root .builder-preview-slider-image img {
+  object-fit: cover;
+}
+
+/* The scroll arrows had no styling at all — they rendered as bare buttons
+   in the text flow instead of overlaying the strip. */
+.builder-react-root .builder-preview-slider-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-light, #d1d5db);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink-primary, #18324a);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.builder-react-root .builder-preview-slider-arrow-left { left: 6px; }
+.builder-react-root .builder-preview-slider-arrow-right { right: 6px; }
+
+/* ---------------------------------------------------------------------
+   Feature Cards module (type: feature-cards)
+   ClickUp 86bbaffu3 — built to docs/MODULE_STANDARDS.md 2026-08-07.
+
+   Standard 3: every structural rule (the grid, the card box, the
+   positioned media frame, the overhanging icon badge) is in THIS base
+   layer. The media queries at the bottom only REDUCE the column count —
+   they never introduce layout. The Card Slider shipped with its entire
+   layout inside `@media (max-width: 900px)` and rendered as one giant
+   image on desktop for its whole life; that is the mistake this ordering
+   exists to prevent.
+   --------------------------------------------------------------------- */
+.builder-preview-feature-cards {
+  display: grid;
+  grid-template-columns: repeat(var(--feature-card-columns, 3), minmax(0, 1fr));
+  gap: var(--feature-card-gap, 12px);
+  align-items: stretch;
+  width: 100%;
+}
+
+.builder-react-root .builder-preview-feature-cards-empty {
+  display: block;
+  padding: 18px;
+  border: 1px dashed var(--border-light, #d1d5db);
+  border-radius: 12px;
+  color: var(--ink-secondary, #5b6b7d);
+  font-size: 14px;
+  text-align: center;
+}
+
+.builder-preview-feature-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--feature-card-bg, #ffffff);
+  border: 1px solid var(--feature-card-border, #e1e8f0);
+  border-radius: var(--feature-card-radius, 18px);
+  padding: 12px 12px 18px;
+  /* The icon badge deliberately overhangs the top edge. */
+  overflow: visible;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.builder-preview-feature-cards-align-center .builder-preview-feature-card {
+  text-align: center;
+  align-items: center;
+}
+
+.builder-preview-feature-cards-align-left .builder-preview-feature-card {
+  text-align: left;
+  align-items: flex-start;
+}
+
+.builder-preview-feature-cards-shadow .builder-preview-feature-card {
+  box-shadow: 0 10px 24px rgba(3, 29, 62, 0.1);
+}
+
+.builder-preview-feature-cards-lift .builder-preview-feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 40px rgba(3, 29, 62, 0.18);
+}
+
+/* Standard 3 corollary: the renderer uses a `fill` image, so the module
+   must supply the positioned, sized container itself. */
+.builder-preview-feature-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--feature-card-aspect, 4 / 3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.builder-preview-feature-card-media img {
+  object-fit: cover;
+}
+
+.builder-preview-feature-card-badge {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  border: 4px solid #ffffff;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+}
+
+/* A badge overhangs the card, so a grid with badges needs headroom or the
+   first row is clipped by whatever sits above it. */
+.builder-preview-feature-cards:has(.builder-preview-feature-card-badge) {
+  padding-top: 26px;
+}
+
+/* `flex: 1` on the copy block pushes every card's link to the bottom, so a
+   row of cards with uneven body lengths still has its links aligned —
+   without the source theme's brittle `min-height: 68px`. */
+.builder-preview-feature-card-copy {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* Text and link colors chain through the theme typography tokens
+   (--bx-*, set by getThemeRootVars on the preview root) so cards follow
+   the site theme wherever one is active, and fall back to the admin ink
+   tokens elsewhere. */
+/* Titles take the theme accent — on pale themes the heading color is
+   near-black and the border near-white, so without this the whole card
+   reads as an unstyled white box (the 2026-08-08 delraytennis report). */
+.builder-preview-feature-card-title {
+  font-size: 1rem;
+  line-height: 1.15;
+  text-transform: uppercase;
+  margin: 18px 0 8px;
+  color: var(--crm-theme-accent, var(--bx-heading, var(--ink-primary, #18324a)));
+}
+
+/* Short accent bar under the title; follows the icon color setting so a
+   recolored module stays cohesive. */
+.builder-preview-feature-card-title::after {
+  content: "";
+  display: block;
+  width: 44px;
+  height: 3px;
+  margin: 10px auto 0;
+  border-radius: 2px;
+  background: var(--feature-card-accent, var(--crm-theme-accent, #4f9c3a));
+}
+
+.builder-preview-feature-cards-align-left .builder-preview-feature-card-title::after {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.builder-preview-feature-card-body {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--bx-text, var(--ink-secondary, #43566d));
+  margin: 0 0 8px;
+}
+
+.builder-preview-feature-card-list {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--bx-text, var(--ink-secondary, #43566d));
+  margin: 0 0 8px;
+  padding-left: 1.1em;
+  text-align: left;
+}
+
+.builder-preview-feature-card-link {
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--bx-link, var(--accent, #4f9c3a));
+  margin-top: auto;
+}
+
+.builder-preview-feature-card-link:hover {
+  color: var(--bx-link-hover, var(--ink-primary, #18324a));
+}
+
+/* Column count only. No structural rules below this line. */
+@media (max-width: 1100px) {
+  .builder-preview-feature-cards {
+    grid-template-columns: repeat(min(var(--feature-card-columns, 3), 3), minmax(0, 1fr));
+    row-gap: 34px;
+  }
+}
+
+@media (max-width: 760px) {
+  .builder-preview-feature-cards {
+    grid-template-columns: repeat(min(var(--feature-card-columns, 3), 2), minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .builder-preview-feature-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The editor's device switcher simulates widths without changing the
+   viewport, so the same reductions must be keyed off its classes too. */
+.builder-react-root .builder-preview-device-tablet .builder-preview-feature-cards {
+  grid-template-columns: repeat(min(var(--feature-card-columns, 3), 2), minmax(0, 1fr));
+  row-gap: 34px;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-feature-cards {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 34px;
+}
+
+/* Feature Cards — canvas preview inside the editor's module card. */
+.builder-react-root .builder-module-preview-feature-cards {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.builder-react-root .builder-module-preview-feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border-light, #d1d5db);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.builder-react-root .builder-module-preview-feature-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+.builder-react-root .builder-module-preview-feature-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-module-preview-empty {
+  display: block;
+  padding: 10px;
+  color: var(--ink-secondary, #5b6b7d);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------
+   Mega menu — panel mode for the Navigation module (navDropdownStyle: mega)
+   ClickUp 86bbafg38, 2026-08-07.
+
+   Standard 3: all structural rules are in this base layer. The media query
+   at the bottom only converts the absolutely-positioned panel into an
+   in-flow accordion; it does not introduce the layout.
+   --------------------------------------------------------------------- */
+.builder-react-root .site-nav-mega {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.builder-react-root .site-nav-mega-trigger {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.builder-react-root .site-nav-mega-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.18s ease;
+}
+
+.builder-react-root .site-nav-mega-toggle:focus-visible {
+  outline: 2px solid var(--accent, #17b7ee);
+  outline-offset: 2px;
+}
+
+.builder-react-root .site-nav-mega--open .site-nav-mega-toggle {
+  transform: rotate(180deg);
+}
+
+.builder-react-root .site-nav-mega-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(var(--site-nav-mega-width, 1040px), 92vw);
+  padding: 26px;
+  border-radius: 0 0 18px 18px;
+  background: #ffffff;
+  color: var(--ink-primary, #18324a);
+  box-shadow: 0 24px 60px rgba(3, 29, 62, 0.22);
+}
+
+/* `hidden` is how the renderer closes the panel; without this the UA's
+   `display: block` from our own rule above would win and it would never
+   actually close. */
+.builder-react-root .site-nav-mega-panel[hidden] {
+  display: none;
+}
+
+.builder-react-root .site-nav-mega-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.builder-react-root .site-nav-mega-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.builder-react-root .site-nav-mega-heading {
+  margin: 0 0 10px;
+  color: var(--ink-primary, #163a5e);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.builder-react-root .site-nav-mega-link {
+  display: block;
+  padding: 5px 0;
+  color: var(--ink-secondary, #334861);
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
+.builder-react-root .site-nav-mega-link:hover,
+.builder-react-root .site-nav-mega-link:focus-visible {
+  color: var(--accent, #17b7ee);
+}
+
+.builder-react-root .site-nav-mega-feature {
+  display: block;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bg-subtle, #f1f6fb);
+  color: inherit;
+  text-decoration: none;
+}
+
+.builder-react-root .site-nav-mega-feature img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+/* Mobile: an accordion inside the hamburger drawer, NOT `display: none`.
+   The reference theme hides its mega panels outright below 900px, which
+   makes every sub-link unreachable on a phone — the links exist in the
+   markup and simply cannot be got at. */
+@media (max-width: 900px) {
+  .builder-react-root .site-nav-mega {
+    display: block;
+    width: 100%;
+  }
+
+  .builder-react-root .site-nav-mega-trigger {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .builder-react-root .site-nav-mega-toggle {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+
+  .builder-react-root .site-nav-mega-panel {
+    position: static;
+    transform: none;
+    width: 100%;
+    padding: 6px 0 12px 14px;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .builder-react-root .site-nav-mega-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+}
+
+/* The editor's device switcher changes a class, not the viewport, so the
+   accordion has to be reachable that way too. */
+.builder-react-root .builder-preview-device-mobile .site-nav-mega,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega {
+  display: block;
+  width: 100%;
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav-mega-panel,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega-panel {
+  position: static;
+  transform: none;
+  width: 100%;
+  padding: 6px 0 12px 14px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav-mega-grid,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+/* ---------------------------------------------------------------------
+   Module Library — bigger icons and cross-category search.
+   2026-08-07, at the operator's direction: the palette is heading for
+   dozens of categories over hundreds of modules, so the browse grid has
+   to read at a glance and search has to reach modules directly.
+   --------------------------------------------------------------------- */
+
+/* Doubled from 34px. The `!important` matches the existing radius rule in
+   this file — these override generated `_builder-react.css` declarations
+   of equal specificity that would otherwise win on source order. */
+.builder-react-root .builder-module-palette-modal .builder-module-item-icon,
+.builder-react-root .builder-module-palette-modal .builder-module-group-card-icon {
+  width: 68px !important;
+  height: 68px !important;
+  border-radius: 18px !important;
+  font-size: 1.5rem;
+}
+
+/* The icons are line SVGs on a 24x24 grid; size them off the chip so the
+   stroke weight stays even as the chip changes. */
+.builder-react-root .builder-module-palette-modal .builder-module-item-icon svg,
+.builder-react-root .builder-module-palette-modal .builder-module-group-card-icon svg {
+  width: 60%;
+  height: 60%;
+}
+
+.builder-react-root .builder-module-palette-modal .builder-module-group-card,
+.builder-react-root .builder-module-palette-modal .builder-module-item-card {
+  padding: 16px 12px;
+  gap: 10px;
+}
+
+/* Search ------------------------------------------------------------- */
+.builder-react-root .builder-module-palette-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 4px;
+}
+
+.builder-react-root .builder-module-palette-search-icon {
+  position: absolute;
+  left: 9px;
+  display: flex;
+  width: 15px;
+  height: 15px;
+  color: var(--ink-secondary, #5b6b7d);
+  pointer-events: none;
+}
+
+.builder-react-root .builder-module-palette-search-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.builder-react-root .builder-module-palette-search-input {
+  width: 220px;
+  height: 32px;
+  padding: 0 26px 0 30px;
+  border: 1px solid var(--border-light, #d1d5db);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink-primary, #18324a);
+  font-size: 0.86rem;
+}
+
+.builder-react-root .builder-module-palette-search-input:focus-visible {
+  outline: 2px solid var(--accent, #17b7ee);
+  outline-offset: 1px;
+}
+
+/* Safari draws its own clear affordance on type=search; ours is a real
+   button so screen readers can reach it. */
+.builder-react-root .builder-module-palette-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.builder-react-root .builder-module-palette-search-clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-secondary, #5b6b7d);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-module-palette-search-clear:hover {
+  color: var(--ink-primary, #18324a);
+}
+
+/* A search result has to say which category it came from, or the operator
+   learns nothing about where to find it next time. */
+.builder-react-root .builder-module-search-result {
+  position: relative;
+}
+
+.builder-react-root .builder-module-search-result-meta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-secondary, #5b6b7d);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .builder-react-root .builder-module-palette-search-input {
+    width: 140px;
+  }
+}
+/* ---------------------------------------------------------------------------
+ * Theme Wizard (components/builder/builder-theme-wizard.tsx).
+ *
+ * Lives here rather than in _builder-react.css because that file is wholesale
+ * regenerated by `npm run extract:builder-css` — a regeneration silently
+ * deleted the CRM modal styles once already.
+ *
+ * The `.tw-preview-*` rules scale a real rendered page down to a thumbnail.
+ * transform: scale keeps the page's own layout maths intact, which zoom or a
+ * width override would not; the wrapper clips the overflow it creates.
+ * ------------------------------------------------------------------------ */
+
+/* Explicit ground and ink. Without these the wizard inherits the surrounding
+ * builder chrome, which is dark — the header rendered as a black band with an
+ * invisible title the first time this was opened in a browser. */
+.tw-wizard {
+  padding: 16px;
+  background: var(--bg-page, #ffffff);
+  color: var(--ink-primary);
+}
+
+.tw-wizard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  background: transparent;
+}
+.tw-wizard-header h2 {
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: 20px;
+}
+
+.tw-panel {
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 10px;
+  background: var(--bg-page, #ffffff);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.tw-error {
+  border: 1px solid #b42318;
+  border-radius: 10px;
+  background: #fef3f2;
+  color: #7a271a;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.tw-muted { color: #52606d; font-size: 13px; }
+
+.tw-field { display: block; margin: 12px 0; }
+.tw-field > span { display: block; font-size: 13px; margin-bottom: 4px; }
+.tw-field select,
+.tw-field textarea,
+.tw-field input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 10px;
+  padding: 8px;
+  font: inherit;
+}
+
+.tw-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+
+.tw-primary,
+.tw-secondary {
+  border-radius: 10px;
+  padding: 9px 14px;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--ink-primary);
+}
+.tw-primary { background: var(--ink-primary); color: var(--btn-text, #ffffff); }
+.tw-secondary { background: var(--bg-page, #ffffff); color: var(--ink-primary); }
+.tw-primary[disabled],
+.tw-secondary[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+.tw-link {
+  background: none;
+  border: 0;
+  color: var(--ink-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px;
+}
+
+.tw-runs-title { margin: 0 0 4px; font-size: 16px; color: var(--ink-primary); }
+.tw-runs { list-style: none; margin: 8px 0 0; padding: 0; }
+.tw-run-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+}
+.tw-run-row:first-child { border-top: 0; }
+.tw-run-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.tw-progress-track {
+  height: 8px;
+  border-radius: 5px;
+  background: rgba(9, 16, 24, 0.1);
+  overflow: hidden;
+  margin: 8px 0;
+}
+.tw-progress-bar {
+  height: 100%;
+  background: var(--ink-primary);
+  transition: width 240ms ease;
+}
+.tw-progress-label { font-weight: 600; margin: 0; }
+
+.tw-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.tw-candidate {
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 10px;
+  padding: 12px;
+  background: #fbfcfd;
+}
+.tw-candidate h3 { font-size: 15px; margin: 0 0 8px; }
+.tw-rationale { font-size: 13px; line-height: 1.5; }
+
+/* Role-palette rail: one chip per background/text pair. The "Aa" renders in
+ * the pair's own text colour on its own background, so an unreadable pair is
+ * visible at a glance. */
+.tw-palette-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.tw-palette-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tw-palette-chip-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(9, 16, 24, 0.18);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tw-palette-chip-name {
+  font-size: 11px;
+  color: var(--ink-secondary, #43566d);
+}
+
+/* The gallery-picker button renders into arbitrary containers (setting rows,
+ * asset groups, wizard panels). In flex/grid rows the generated
+ * `.builder-gallery-button { min-width: 0 }` lets the pill shrink smaller than
+ * its own label ("Choose From Gallery" overflowing its container — doctrine
+ * §2 Buttons: the container yields, never the label). */
+.builder-react-root .builder-image-picker-field-button {
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+
+/* Themes editor: colour-role pairs and helper notes. */
+.builder-themes-col-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary, #43566d);
+  margin: 2px 0 8px;
+  line-height: 1.4;
+}
+.builder-themes-role-pair {
+  border-bottom: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.builder-themes-role-pair:last-child {
+  border-bottom: none;
+}
+
+/* Hero banner slots on the start screen. */
+.tw-hero-panel {
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+  margin: 4px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tw-hero-panel legend {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  padding: 0 4px;
+}
+.tw-hero-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tw-hero-slot-label {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary, #43566d);
+  white-space: nowrap;
+}
+.tw-hero-slot > div {
+  flex: 1 1 auto;
+}
+
+/* The run's starting point, in full, with a copy affordance. */
+.tw-seed {
+  margin: 4px 0 10px;
+  font-size: var(--text-sm);
+}
+.tw-seed-text {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  background: var(--bg-hover);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A real page, scaled to thumbnail size. */
+/* Clickable to open full size (spec section 8 screen 3). A real <button> so it
+ * is keyboard reachable; the scaled page inside keeps pointer-events: none so a
+ * click cannot land on a link belonging to the page being previewed. */
+.tw-preview-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 320px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.12));
+  border-radius: 10px;
+  background: var(--bg-page, #ffffff);
+  cursor: zoom-in;
+}
+.tw-preview-frame:hover { border-color: var(--ink-primary); }
+.tw-preview-frame:focus-visible {
+  outline: 3px solid var(--sc-field-focus-color, #22c55e);
+  outline-offset: 2px;
+}
+
+.tw-preview-hint {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(9, 16, 24, 0.72);
+  color: var(--btn-text, #ffffff);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.tw-preview-frame:hover .tw-preview-hint,
+.tw-preview-frame:focus-visible .tw-preview-hint { opacity: 1; }
+.tw-preview-scale {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  transform: scale(0.25);
+  transform-origin: top left;
+  pointer-events: none;
+}
+.tw-preview-empty {
+  height: 320px;
+  display: grid;
+  place-items: center;
+  color: #52606d;
+  border: 1px dashed rgba(9, 16, 24, 0.2);
+  border-radius: 10px;
+}
+
+.tw-warnings { margin: 8px 0; font-size: 13px; }
+.tw-warnings ul { margin: 6px 0 0 18px; }
+
+.tw-confirm {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 16, 24, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+.tw-confirm-body {
+  background: var(--bg-page, #ffffff);
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 460px;
+  width: calc(100% - 32px);
+}
+.tw-confirm-body h3 { margin-top: 0; }
+
+/* Lock-a-value (spec §6.4) — pin a colour or font so later rounds keep it. */
+.tw-pins { margin: 10px 0; }
+.tw-pin-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+.tw-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 5px;
+  background: var(--bg-page, #ffffff);
+  color: var(--ink-primary);
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tw-pin.is-pinned {
+  border-color: var(--ink-primary);
+  border-width: 2px;
+  font-weight: 600;
+}
+.tw-pin-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 5px;
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+}
+
+.tw-locked-summary {
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  background: var(--bg-page, #ffffff);
+}
+
+/* ---------------------------------------------------------------------------
+ * Table module: the scroll container is BASE layout, not mobile-only.
+ *
+ * Doctrine 1b.R1. Until 2026-08-08 `.builder-preview-table-wrap` got its
+ * `overflow-x: auto` only inside `@media (max-width: 900px)` in the
+ * regenerated `_builder-react.css`, so on any desktop browser a wide table had
+ * no scroll container at all and the PAGE BODY scrolled sideways instead.
+ * Found by scripts/check_ui_doctrine.cjs on the day it was written — the same
+ * species of bug as the Card Slider that started the module-quality effort.
+ *
+ * No `width: 100%`: the wrapper is a block element and already fills its
+ * parent, and the renderer sets an inline max-width when the module has a
+ * configured table width (builder-template-preview.tsx). Forcing a width here
+ * would stretch tables that currently size to their content.
+ * ------------------------------------------------------------------------- */
+.builder-react-root .builder-preview-table-wrap,
+.builder-react-root .builder-module-preview-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Full-size preview overlay. */
+.tw-expand {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(9, 16, 24, 0.6);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+}
+.tw-expand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--bg-page, #ffffff);
+  color: var(--ink-primary);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.tw-expand-bar .tw-actions { margin-top: 0; }
+
+.tw-inline-field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.tw-inline-field select {
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 10px;
+  padding: 5px 8px;
+  font: inherit;
+}
+
+/* The page renders at its own width and scrolls, rather than being scaled —
+ * the point of opening it is to see it at the size a visitor would. */
+.tw-expand-body {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-page, #ffffff);
+  border-radius: 10px;
+}
+.tw-preview-full { width: 100%; }
+
+/* ---------------------------------------------------------------------------
+ * Item grid — titled-column item managers (UI_RULES L6).
+ *
+ * The generic successor to the Navigation Links grid: a header row of column
+ * titles, one compact row per item, actions column last. Column tracks are
+ * declared per manager via a --<manager> modifier; a field that cannot fit a
+ * column (image picker, multi-line text) renders as a .builder-item-grid-sub
+ * row spanning the grid under its item's primary row. Columns use minmax(...,
+ * 1fr) so they expand rather than crop (L4/W5). Adopted by: breadcrumb,
+ * feature-cards. New managers add a modifier here rather than a new system.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .builder-item-grid {
+  display: grid;
+  align-items: center;
+  column-gap: var(--space-3, 8px);
+  row-gap: var(--space-2, 6px);
+  margin: var(--space-3, 8px) 0 var(--space-2, 6px);
+}
+.builder-react-root .builder-item-grid--crumbs {
+  grid-template-columns: minmax(12ch, 1fr) minmax(12ch, 1.4fr) max-content;
+}
+.builder-react-root .builder-item-grid--cards {
+  grid-template-columns: minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+}
+.builder-react-root .builder-item-grid--cards.builder-item-grid--cards-icons {
+  grid-template-columns: 6ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+}
+.builder-react-root .builder-item-grid > input,
+.builder-react-root .builder-item-grid > select {
+  width: 100%;
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-header {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--muted, #888888);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.builder-react-root .builder-item-grid-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+}
+.builder-react-root .builder-item-grid-sub {
+  grid-column: 1 / -1;
+  padding-bottom: var(--space-2, 6px);
+  border-bottom: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+}
+.builder-react-root .builder-item-grid-sub:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
 }

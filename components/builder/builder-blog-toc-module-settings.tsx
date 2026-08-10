@@ -1,11 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import type { BuilderThemePalette } from "./builder-theme-color-field";
 
 export type TocItem = { id: string; label: string; anchor: string; depth: 1 | 2 };
 
@@ -34,15 +34,7 @@ export function BuilderBlogTocModuleSettings({
   onUpdateModule,
   themeColors = []
 }: Props) {
-  const s = module.settings;
-  const items = parseTocItems(s);
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
+  const items = parseTocItems(module.settings);
 
   function persist(next: TocItem[]) {
     onUpdateModule((current) => ({
@@ -73,133 +65,192 @@ export function BuilderBlogTocModuleSettings({
     persist([...items, { id: `toc-${Date.now()}-${items.length}`, label: "", anchor: "", depth }]);
   }
 
+  const schema: BuilderSettingsSchema = {
+    // D8 axes (master rule D8, docs/UI_RULES.md): Content / Structure / Text.
+    // Same keys, fallbacks and visibleWhen rules — only the column each
+    // control sits in changed. "Style" (marker) and "Indent H3s" describe how
+    // the list is arranged, so they are Structure, not typography.
+    axes: [
+      {
+        title: "Content",
+        strips: [
+          [
+            {
+              key: "showTitle",
+              label: "Title",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "true", label: "Show" },
+                { value: "false", label: "Hide" }
+              ],
+              fallback: "true",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            },
+            {
+              key: "title",
+              label: "Title Text",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "builder-module-card.tsx blog-toc preview",
+              visibleWhen: (settings) => (settings.showTitle ?? "true") === "true",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.title ?? "In This Article"}
+                  onChange={(e) => set("title", e.target.value)}
+                  placeholder="In This Article"
+                />
+              )
+            }
+          ],
+          [
+            {
+              key: "items",
+              label: "Headings",
+              width: "full",
+              control: "custom",
+              bare: true,
+              rendersVia: "builder-module-card.tsx blog-toc preview",
+              render: () => (
+                <>
+                  <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
+                    Headings — H3s indent under the nearest H2
+                  </div>
+                  <div className="builder-slider-items">
+                    {items.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className="builder-slider-item-card"
+                        style={{ marginLeft: item.depth === 2 ? 16 : 0 }}
+                      >
+                        <div className="builder-slider-item-header">
+                          <strong style={{ color: item.depth === 2 ? "#8ba9be" : undefined }}>
+                            {item.depth === 2 ? "H3" : "H2"} {item.label || `Heading ${index + 1}`}
+                          </strong>
+                          <div className="builder-section-actions">
+                            <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
+                            <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
+                            <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
+                          </div>
+                        </div>
+                        <div className="builder-slider-item-grid">
+                          <label className="field">
+                            <span>Label</span>
+                            <input
+                              type="text"
+                              value={item.label}
+                              onChange={(e) => updateItem(item.id, "label", e.target.value)}
+                              placeholder="Section heading text"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Anchor ID</span>
+                            <input
+                              type="text"
+                              value={item.anchor}
+                              onChange={(e) => updateItem(item.id, "anchor", e.target.value)}
+                              placeholder="section-slug"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Level</span>
+                            <select
+                              value={item.depth}
+                              onChange={(e) => updateItem(item.id, "depth", Number(e.target.value) as 1 | 2)}
+                            >
+                              <option value={1}>H2</option>
+                              <option value={2}>H3 (sub)</option>
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button type="button" className="secondary-button" onClick={() => addItem(1)}>
+                      + H2
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => addItem(2)}>
+                      + H3
+                    </button>
+                  </div>
+                </>
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
+          [
+            {
+              key: "style",
+              label: "Style",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "default", label: "Default" },
+                { value: "numbered", label: "Numbered" },
+                { value: "dotted", label: "Dotted" }
+              ],
+              fallback: "default",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            },
+            {
+              key: "indentSubheadings",
+              label: "Indent H3s",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" }
+              ],
+              fallback: "true",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Text",
+        strips: [
+          [
+            {
+              key: "fontSize",
+              label: "Font Size",
+              width: "num",
+              control: "number",
+              min: 11,
+              max: 20,
+              step: 1,
+              fallback: "14",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            },
+            {
+              key: "color",
+              label: "Link Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Link color",
+              fallback: "#0f4f8f",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            }
+          ]
+        ]
+      }
+    ]
+  };
+
   return (
     <div className="builder-blog-toc-settings">
-
-      {/* Title */}
-      <BuilderSettingRow label="Show title">
-        <select value={s.showTitle ?? "true"} onChange={(e) => set("showTitle", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      {(s.showTitle ?? "true") === "true" ? (
-        <BuilderSettingRow label="Title text" fullWidth>
-          <input
-            type="text"
-            value={s.title ?? "In This Article"}
-            onChange={(e) => set("title", e.target.value)}
-            placeholder="In This Article"
-          />
-        </BuilderSettingRow>
-      ) : null}
-
-      {/* Style */}
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Style">
-            <select value={s.style ?? "default"} onChange={(e) => set("style", e.target.value)}>
-              <option value="default">Default</option>
-              <option value="numbered">Numbered</option>
-              <option value="dotted">Dotted</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Indent subheadings">
-            <select value={s.indentSubheadings ?? "true"} onChange={(e) => set("indentSubheadings", e.target.value)}>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </BuilderSettingRow>
-        </div>
-
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Font size (px)">
-            <input
-              type="number"
-              min={11}
-              max={20}
-              step={1}
-              value={s.fontSize ?? "14"}
-              onChange={(e) => set("fontSize", e.target.value)}
-            />
-          </BuilderSettingRow>
-
-          <BuilderThemeColorSettingRow
-            fallback="#0f4f8f"
-            label="Link color"
-            themeColors={themeColors}
-            value={s.color ?? "#0f4f8f"}
-            onChange={(color) => set("color", color)}
-          />
-        </div>
-      </div>
-
-      {/* Items */}
-      <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
-        Headings — H3s indent under the nearest H2
-      </div>
-
-      <div className="builder-slider-items">
-        {items.map((item, index) => (
-          <div
-            key={item.id}
-            className="builder-slider-item-card"
-            style={{ marginLeft: item.depth === 2 ? 16 : 0 }}
-          >
-            <div className="builder-slider-item-header">
-              <strong style={{ color: item.depth === 2 ? "#8ba9be" : undefined }}>
-                {item.depth === 2 ? "H3" : "H2"} {item.label || `Heading ${index + 1}`}
-              </strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
-              </div>
-            </div>
-            <div className="builder-slider-item-grid">
-              <label className="field">
-                <span>Label</span>
-                <input
-                  type="text"
-                  value={item.label}
-                  onChange={(e) => updateItem(item.id, "label", e.target.value)}
-                  placeholder="Section heading text"
-                />
-              </label>
-              <label className="field">
-                <span>Anchor ID</span>
-                <input
-                  type="text"
-                  value={item.anchor}
-                  onChange={(e) => updateItem(item.id, "anchor", e.target.value)}
-                  placeholder="section-slug"
-                />
-              </label>
-              <label className="field">
-                <span>Level</span>
-                <select
-                  value={item.depth}
-                  onChange={(e) => updateItem(item.id, "depth", Number(e.target.value) as 1 | 2)}
-                >
-                  <option value={1}>H2</option>
-                  <option value={2}>H3 (sub)</option>
-                </select>
-              </label>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-        <button type="button" className="secondary-button" onClick={() => addItem(1)}>
-          + H2
-        </button>
-        <button type="button" className="secondary-button" onClick={() => addItem(2)}>
-          + H3
-        </button>
-      </div>
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
+        themeColors={themeColors}
+      />
     </div>
   );
 }

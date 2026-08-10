@@ -9,6 +9,12 @@ import { getRichTextGalleryModalStyle, type BuilderModalAnchor } from "@/lib/bui
 import { buildGalleryMediaCategoryOptions } from "@/lib/gallery-media-category";
 import { buildGalleryMediaTopicOptions } from "@/lib/gallery-media-topic";
 import { getGalleryMediaThumbnailUrl } from "@/lib/gallery-media-thumbnail";
+import {
+  galleryMediaFileName,
+  sortGalleryMediaList,
+  type GalleryMediaListSort,
+  type GalleryMediaListSortKey
+} from "@/lib/gallery-media-list-sort";
 import { useGalleryMediaLibrary, type GalleryMediaSource } from "@/lib/use-gallery-media-library";
 import type { AdminMediaItem } from "@/lib/admin-media-shared";
 
@@ -33,16 +39,6 @@ function parseMediaCategory(mediaCategory: string | undefined): [string, string]
   return [parts[0] ?? "", parts[1] ?? ""];
 }
 
-function fileNameFromPath(path: string): string {
-  const clean = path.split(/[?#]/)[0] ?? path;
-  const segment = clean.split("/").pop() ?? clean;
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return segment;
-  }
-}
-
 function formatDimensions(width?: number, height?: number): string {
   if (width && height) {
     return `${width} × ${height}`;
@@ -55,39 +51,6 @@ function formatCreateDate(value?: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-// Columns the List view can be sorted by, in click-a-header order.
-type ListSortKey = "name" | "fileName" | "category" | "type" | "dimensions" | "createdAt";
-type ListSortState = { key: ListSortKey; dir: "asc" | "desc" };
-
-function listSortValue(item: AdminMediaItem, key: ListSortKey): string | number {
-  switch (key) {
-    case "fileName":
-      return fileNameFromPath(item.path).toLowerCase();
-    case "category":
-      return (item.mediaCategory ?? "").toLowerCase();
-    case "type":
-      return (item.mediaType || item.kind).toLowerCase();
-    case "dimensions":
-      return (item.imageWidth ?? 0) * (item.imageHeight ?? 0);
-    case "createdAt":
-      return item.createdAt ?? "";
-    default:
-      return item.name.toLowerCase();
-  }
-}
-
-function compareMedia(a: AdminMediaItem, b: AdminMediaItem, sort: ListSortState): number {
-  const av = listSortValue(a, sort.key);
-  const bv = listSortValue(b, sort.key);
-  let result: number;
-  if (typeof av === "number" && typeof bv === "number") {
-    result = av - bv;
-  } else {
-    result = String(av).localeCompare(String(bv));
-  }
-  return sort.dir === "asc" ? result : -result;
 }
 
 function previewPanelStyle(rect: DOMRect): CSSProperties {
@@ -118,7 +81,7 @@ export function BuilderGalleryModal({
   const [communityTopCat, setCommunityTopCat] = useState("");
   const [communitySubCat, setCommunitySubCat] = useState("");
   const [preview, setPreview] = useState<HoverPreview | null>(null);
-  const [listSort, setListSort] = useState<ListSortState | null>(null);
+  const [listSort, setListSort] = useState<GalleryMediaListSort | null>(null);
   const [measuredDimensions, setMeasuredDimensions] = useState<{ width: number; height: number } | null>(null);
   const isAnchored = anchor != null;
   const anchoredModalStyle = isAnchored && mounted ? getRichTextGalleryModalStyle() : undefined;
@@ -134,7 +97,13 @@ export function BuilderGalleryModal({
     clearFilters,
     rangeEnd,
     canLoadMore
-  } = useGalleryMediaLibrary({ source: mediaSource, syncOnFirstLoad: false });
+  } = useGalleryMediaLibrary({
+    source: mediaSource,
+    syncOnFirstLoad: false,
+    // The hook sorts every matching asset before it slices off a page, so the
+    // column sort spans the whole library rather than the loaded page.
+    listSort: viewMode === "list" ? listSort : null
+  });
 
   // Build dropdown options from the FULL asset set, not the currently paged/
   // filtered subset — otherwise categories only present in not-yet-loaded
@@ -177,14 +146,15 @@ export function BuilderGalleryModal({
     });
   }, [media, mediaSource, communityTopCat, communitySubCat]);
 
-  // List view can be re-sorted by clicking a column head. When no header is
-  // active we keep the order the filter bar / hook already produced.
-  const listMedia = useMemo(() => {
-    if (!listSort) return displayMedia;
-    return [...displayMedia].sort((a, b) => compareMedia(a, b, listSort));
-  }, [displayMedia, listSort]);
+  // The hook already ordered the full result set by the active column, and
+  // filtering preserves order — so this only re-sorts the community view,
+  // whose category filter runs here rather than in the hook.
+  const listMedia = useMemo(
+    () => (mediaSource === "community" ? sortGalleryMediaList(displayMedia, listSort) : displayMedia),
+    [displayMedia, listSort, mediaSource]
+  );
 
-  function toggleListSort(key: ListSortKey) {
+  function toggleListSort(key: GalleryMediaListSortKey) {
     setListSort((current) =>
       current && current.key === key
         ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
@@ -192,7 +162,7 @@ export function BuilderGalleryModal({
     );
   }
 
-  function renderSortHeader(key: ListSortKey, label: string, extraClass?: string) {
+  function renderSortHeader(key: GalleryMediaListSortKey, label: string, extraClass?: string) {
     const active = listSort?.key === key;
     const ariaSort = active ? (listSort?.dir === "asc" ? "ascending" : "descending") : "none";
     return (
@@ -417,7 +387,7 @@ export function BuilderGalleryModal({
                         </span>
                       </td>
                       <td>{image.name}</td>
-                      <td className="builder-gallery-table-filename">{fileNameFromPath(image.path)}</td>
+                      <td className="builder-gallery-table-filename">{galleryMediaFileName(image.path)}</td>
                       <td>{image.mediaCategory || "—"}</td>
                       <td>{image.mediaType || image.kind}</td>
                       <td>{formatDimensions(image.imageWidth, image.imageHeight)}</td>
@@ -518,7 +488,7 @@ export function BuilderGalleryModal({
             </div>
             <div>
               <dt>File</dt>
-              <dd className="builder-gallery-hovercard-filename">{fileNameFromPath(previewItem.path)}</dd>
+              <dd className="builder-gallery-hovercard-filename">{galleryMediaFileName(previewItem.path)}</dd>
             </div>
             <div>
               <dt>Dimensions</dt>

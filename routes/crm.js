@@ -6,12 +6,105 @@ const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = req
 const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
 const { listForms, getForm, createForm, updateForm, deleteForm, getLastFormStoreError } = require('../lib/crmFormsStore');
 const { logActivity } = require('../lib/activityLog');
+const { getContactAlertEmails } = require('../lib/projectSiteSettingsStore');
+const { getPublicProjectById } = require('../lib/projectsStore');
+const { sendEmail } = require('../lib/mailer');
 
 function requestScope(req) {
   return {
     projectId: String(req?.projectContext?.project?.id || '').trim(),
     userId: String(req?.authUser?.id || '').trim(),
   };
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** "first_name" -> "First Name" — used for alert-email row labels. */
+function humanizeFieldKey(key) {
+  return String(key || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Email the project's Contact Alert recipients about a public form
+ * submission. Set on the tenant admin Settings page; an empty list means no
+ * alerts.
+ *
+ * All recipients go on one message rather than one message each, so a reply
+ * keeps the whole team on the thread.
+ *
+ * Swallows every failure by design: the contact row is already saved, and the
+ * visitor must not see an error because the site owner's mail provider is
+ * misconfigured. Failures are logged for the server logs instead.
+ */
+async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) {
+  try {
+    const alertTo = await getContactAlertEmails(projectId);
+    if (!alertTo.length) return;
+
+    const projectResult = await getPublicProjectById(projectId);
+    const siteName = String(projectResult?.data?.name || '').trim() || 'your site';
+
+    const rows = [];
+    if (email) rows.push(['Email', email]);
+    for (const [key, value] of Object.entries(data || {})) {
+      const text = String(value ?? '').trim();
+      if (!text) continue;
+      if (key === 'email' && email) continue;
+      rows.push([humanizeFieldKey(key), text]);
+    }
+    if (!rows.length) rows.push(['(no details submitted)', '']);
+
+    const textBody = [
+      `New contact form submission on ${siteName}.`,
+      '',
+      ...rows.map(([label, value]) => `${label}: ${value}`),
+      '',
+      isDuplicate
+        ? 'Note: this email address was already in your contacts, so no new record was created.'
+        : 'This has been saved to your Contact Manager.',
+    ].join('\n');
+
+    const htmlRows = rows.map(([label, value]) => `
+      <tr>
+        <td style="padding: 6px 12px 6px 0; color: #587592; font-size: 13px; vertical-align: top; white-space: nowrap;">${escapeHtml(label)}</td>
+        <td style="padding: 6px 0; color: #18324a; font-size: 14px;">${escapeHtml(value)}</td>
+      </tr>`).join('');
+
+    const mail = await sendEmail({
+      to: alertTo,
+      fromName: siteName,
+      replyTo: email || undefined,
+      subject: `New contact form submission — ${siteName}`,
+      text: textBody,
+      html: `
+        <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18324a;">
+          <h2 style="margin: 0 0 16px;">New contact form submission</h2>
+          <table style="border-collapse: collapse;">${htmlRows}</table>
+          <p style="margin: 20px 0 0; color: #587592; font-size: 13px;">
+            ${isDuplicate
+              ? 'This email address was already in your contacts, so no new record was created.'
+              : 'This has been saved to your Contact Manager.'}
+          </p>
+        </div>
+      `,
+    });
+
+    if (!mail.ok) {
+      console.error('[crm] Contact alert email failed:', mail.error);
+    }
+  } catch (err) {
+    console.error('[crm] Contact alert email threw:', err?.message || err);
+  }
 }
 
 async function handle(req, res, pathname, method) {
@@ -86,17 +179,36 @@ async function handle(req, res, pathname, method) {
     if (String(body._trap || '').trim()) {
       return sendOk(res, 200, {}, { message: 'Thank you!' }), true;
     }
+    const scopedProjectId = bind.projectId || projectId;
+    const submittedEmail = String(body.email || '').trim().toLowerCase() || null;
+    const submittedData = (body.data && typeof body.data === 'object') ? body.data : {};
+    let stored = true;
     try {
       await createContact({
         crmConfigId,
-        email: String(body.email || '').trim().toLowerCase() || null,
-        data: (body.data && typeof body.data === 'object') ? body.data : {},
+        email: submittedEmail,
+        data: submittedData,
         source: String(body.source || 'form').trim(),
         tags: [],
-      }, { projectId: bind.projectId || projectId, userId: '' });
+      }, { projectId: scopedProjectId, userId: '' });
     } catch (err) {
       if (err.code !== 'DUPLICATE_EMAIL') throw err;
+      stored = false;
     }
+
+    // Notify the project's internal Contact Alert Email, if one is set on the
+    // Settings page. Awaited rather than fire-and-forget: on Vercel the lambda
+    // freezes as soon as the response is sent, which silently kills in-flight
+    // work (see docs — that is what truncated Header/Footer propagation).
+    // Deliberately never fails the submission — the visitor's data is already
+    // saved, so a mail problem must not show them an error.
+    await notifyContactAlertEmail({
+      projectId: scopedProjectId,
+      email: submittedEmail,
+      data: submittedData,
+      isDuplicate: !stored,
+    });
+
     return sendOk(res, 200, {}, { message: 'Thank you! Your information has been saved.' }), true;
   }
 

@@ -1,11 +1,13 @@
 "use client";
 
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSchemaFieldContext,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import { type BuilderThemePalette } from "./builder-theme-color-field";
 
 export type BreadcrumbItem = { id: string; label: string; url: string };
 
@@ -29,26 +31,12 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-export function BuilderBreadcrumbModuleSettings({
-  module,
-  onUpdateModule,
-  themeColors = []
-}: Props) {
-  const settings = module.settings;
+/** Bespoke trail-item manager — stays custom; the scalar controls live in the schema. */
+function BreadcrumbItemsManager({ settings, set }: BuilderSchemaFieldContext) {
   const items = parseBreadcrumbItems(settings);
 
-  function updateSetting(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
-
   function persistItems(nextItems: BreadcrumbItem[]) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, items: serializeBreadcrumbItems(nextItems) }
-    }));
+    set("items", serializeBreadcrumbItems(nextItems));
   }
 
   function updateItem(id: string, field: keyof BreadcrumbItem, value: string) {
@@ -75,97 +63,172 @@ export function BuilderBreadcrumbModuleSettings({
   }
 
   return (
-    <div className="builder-breadcrumb-module-settings">
-      <div className="builder-breadcrumb-style-grid">
-        <BuilderSettingRow label="Separator">
-          <input
-            type="text"
-            maxLength={4}
-            value={settings.separator ?? "›"}
-            onChange={(e) => updateSetting("separator", e.target.value)}
-            style={{ width: 48 }}
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Size (px)">
-          <input
-            type="number"
-            min={10}
-            max={32}
-            step={1}
-            value={settings.fontSize ?? "14"}
-            onChange={(e) => updateSetting("fontSize", e.target.value)}
-          />
-        </BuilderSettingRow>
-        <BuilderThemeColorSettingRow
-          fallback="#587592"
-          label="Link color"
-          themeColors={themeColors}
-          value={settings.color ?? "#587592"}
-          onChange={(color) => updateSetting("color", color)}
-        />
-        <BuilderThemeColorSettingRow
-          fallback="#18324a"
-          label="Current color"
-          themeColors={themeColors}
-          value={settings.activeColor ?? "#18324a"}
-          onChange={(activeColor) => updateSetting("activeColor", activeColor)}
-        />
-        <BuilderSettingRow label="Bold">
-          <select
-            value={settings.bold ?? "false"}
-            onChange={(e) => updateSetting("bold", e.target.value)}
-          >
-            <option value="false">Off</option>
-            <option value="true">On</option>
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Align">
-          <select
-            value={settings.alignment ?? "left"}
-            onChange={(e) => updateSetting("alignment", e.target.value)}
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
-        </BuilderSettingRow>
-      </div>
-
+    <>
       <div className="builder-breadcrumb-items-label">Trail items — last item is the current page</div>
 
-      <div className="builder-slider-items">
+      <div className="builder-item-grid builder-item-grid--crumbs">
+        <span className="builder-item-grid-header">Label</span>
+        <span className="builder-item-grid-header">URL</span>
+        <span className="builder-item-grid-header">Action</span>
         {items.map((item, index) => (
-          <div key={item.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>{item.label || `Item ${index + 1}`}</strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move left">↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move right">↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
-              </div>
+          <Fragment key={item.id}>
+            <input
+              type="text"
+              value={item.label}
+              onChange={(e) => updateItem(item.id, "label", e.target.value)}
+              placeholder="Page name"
+              aria-label={`Item ${index + 1} label`}
+            />
+            <input
+              type="text"
+              value={item.url}
+              onChange={(e) => updateItem(item.id, "url", e.target.value)}
+              placeholder={index === items.length - 1 ? "current page — leave blank" : "/path-or-url"}
+              aria-label={`Item ${index + 1} URL`}
+            />
+            <div className="builder-item-grid-actions">
+              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} aria-label="Move Up" title="Move up">↑</button>
+              <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} aria-label="Move Down" title="Move down">↓</button>
+              <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} aria-label="Delete" title="Delete">✕</button>
             </div>
-            <div className="builder-slider-item-grid">
-              <label className="field">
-                <span>Label</span>
-                <input type="text" value={item.label} onChange={(e) => updateItem(item.id, "label", e.target.value)} placeholder="Page name" />
-              </label>
-              <label className="field">
-                <span>URL{index === items.length - 1 ? " (current — leave blank)" : ""}</span>
-                <input
-                  type="text"
-                  value={item.url}
-                  onChange={(e) => updateItem(item.id, "url", e.target.value)}
-                  placeholder={index === items.length - 1 ? "" : "/path-or-url"}
-                />
-              </label>
-            </div>
-          </div>
+          </Fragment>
         ))}
       </div>
 
       <button type="button" className="secondary-button" onClick={addItem}>
         Add Crumb
       </button>
+    </>
+  );
+}
+
+export function BuilderBreadcrumbModuleSettings({
+  module,
+  onUpdateModule,
+  themeColors = []
+}: Props) {
+  const schema: BuilderSettingsSchema = {
+    // D8 axes (master rule D8, docs/UI_RULES.md): Content / Placement / Text.
+    // Same keys, fallbacks and options — only the column each control sits in
+    // changed. The separator character is something the module SHOWS, so it
+    // joins the trail items on Content; Align gets the Placement column.
+    axes: [
+      {
+        title: "Content",
+        strips: [
+          [
+            {
+              key: "items",
+              label: "Trail items",
+              width: "full",
+              control: "custom",
+              bare: true,
+              rendersVia: "parseBreadcrumbItems",
+              render: (ctx) => <BreadcrumbItemsManager {...ctx} />
+            }
+          ],
+          [
+            {
+              key: "separator",
+              label: "Separator",
+              width: "auto",
+              control: "custom",
+              rendersVia: "builder-module-card breadcrumb preview",
+              render: (ctx) => (
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={ctx.settings.separator ?? "›"}
+                  onChange={(e) => ctx.set("separator", e.target.value)}
+                  style={{ width: 48 }}
+                />
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [
+          [
+            // D1/D3: Align is a lone small select — it joins the trail-styling
+            // strip rather than stranding a row of its own. (It is a layout
+            // setting; the merge is purely visual, the key is unchanged.)
+            // D8 (8/10): axes give it the Placement column instead, so the
+            // anti-orphan merge is no longer what holds it up — kept for the
+            // history, and the key is still unchanged.
+            {
+              key: "alignment",
+              label: "Align",
+              width: "select-sm",
+              control: "select",
+              options: [
+                { value: "left", label: "Left" },
+                { value: "center", label: "Center" },
+                { value: "right", label: "Right" }
+              ],
+              fallback: "left",
+              rendersVia: "builder-module-card breadcrumb preview"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Text",
+        strips: [
+          [
+            {
+              key: "fontSize",
+              label: "Size",
+              width: "num",
+              control: "number",
+              min: 10,
+              max: 32,
+              fallback: "14",
+              rendersVia: "builder-module-card breadcrumb preview"
+            },
+            {
+              key: "bold",
+              label: "Bold",
+              width: "check",
+              control: "checkbox",
+              fallback: "false",
+              rendersVia: "builder-module-card breadcrumb preview"
+            }
+          ],
+          [
+            {
+              key: "color",
+              label: "Link Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Link color",
+              fallback: "#587592",
+              rendersVia: "builder-module-card breadcrumb preview"
+            },
+            {
+              key: "activeColor",
+              label: "Current Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Current color",
+              fallback: "#18324a",
+              rendersVia: "builder-module-card breadcrumb preview"
+            }
+          ]
+        ]
+      }
+    ]
+  };
+
+  return (
+    <div className="builder-breadcrumb-module-settings">
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
+        themeColors={themeColors}
+      />
     </div>
   );
 }

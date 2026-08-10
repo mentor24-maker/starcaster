@@ -194,6 +194,16 @@
                 <select id="settingsProjectTimezoneSelect"></select>
               </div>
               <p class="meta project-details-field-hint">Used when scheduling Promote: Social posts. Pick the IANA region for this workspace.</p>
+              <div class="form-row">
+                <label for="settingsProjectSupportEmail">Support Email</label>
+                <input id="settingsProjectSupportEmail" type="email" placeholder="Type an email address" />
+              </div>
+              <p class="meta project-details-field-hint">How this client reaches <strong>you</strong> when their website misbehaves. Shown on the Support page in their admin area, and where their submitted support requests are emailed. Not the same as their own Contact Alert Email, which they set themselves and which receives enquiries from their public site's visitors. Leave blank to use the platform default (SUPPORT_ALERT_EMAIL).</p>
+              <div class="form-row">
+                <label for="settingsProjectSupportPhone">Support Phone</label>
+                <input id="settingsProjectSupportPhone" type="tel" placeholder="Type a phone number" />
+              </div>
+              <p class="meta project-details-field-hint">Your phone number, shown to the client on their Support page next to the Support Email. Leave blank to hide it.</p>
               <div class="project-branding-pair-shell">
                 <section class="project-branding-block" aria-labelledby="settingsProjectLogoHeading">
                   <h4 id="settingsProjectLogoHeading" class="project-branding-block-title">Project Logo</h4>
@@ -546,7 +556,11 @@
             
             <div id="apiFieldsContainer" class="standard-form-grid-full api-fields-stack"></div>
             <div></div>
+            <div class="table-actions-row">
               <button type="submit" class="btn btn-primary">Save Credentials</button>
+              <button type="button" id="apiVerifyBtn" class="btn">Test Connection</button>
+            </div>
+            <div id="apiVerifyResult" class="standard-form-grid-full meta hidden"></div>
           </form>
         </div>
 

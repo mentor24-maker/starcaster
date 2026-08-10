@@ -12,6 +12,9 @@ import {
   getLayoutGridTemplate,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
+import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
+import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
+import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
   buildCrmFormRenderContext,
@@ -1207,6 +1210,68 @@ export function BuilderTemplatePreview({
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
   const mainSections = layoutSections.filter((section) => !sectionHasOnlyPageOverlayImageModules(section));
 
+  /**
+   * Alternating bands are what make a page read as designed rather than as one
+   * wash of colour, so sections that set no background of their own take turns
+   * between the theme's `surface` and `band` roles.
+   *
+   * Only those sections: one with a background the operator chose keeps it, and
+   * a navigation row is chrome rather than a band. The roles resolve through
+   * `var(--lp-…, transparent)`, so a theme with no palette paints nothing at
+   * all and every existing page renders exactly as it did.
+   */
+  const themeTreatments = themeStyles?.treatments || null;
+
+  const sectionBandRoles = new Map<string, "surface" | "band" | "inverse">();
+  let plainSectionIndex = 0;
+  let lastPlainSectionId = "";
+  for (const section of mainSections) {
+    const hasOwnBackground = Boolean(section.background && section.background.mode !== "none");
+    const isNavigationRow = section.modules.length > 0
+      && section.modules.every((module) => module.type === "navigation");
+    if (hasOwnBackground || isNavigationRow) continue;
+    sectionBandRoles.set(section.id, plainSectionIndex % 2 === 0 ? "surface" : "band");
+    plainSectionIndex += 1;
+    lastPlainSectionId = section.id;
+  }
+  // The closing dark band big footers use — only when there is more than one
+  // plain section, so a single-section page does not go entirely dark.
+  if (themeTreatments?.footerInverse && lastPlainSectionId && plainSectionIndex > 1) {
+    sectionBandRoles.set(lastPlainSectionId, "inverse");
+  }
+
+  // The theme's hero banner: the first plain section wears it as an image
+  // background (the hero overlay then applies on top). The operator chose the
+  // image; the theme decides how the top band wears it. A section that already
+  // has its own background — including its own image — always wins.
+  const themeHeroBannerUrl = String(themeStyles?.heroBanner?.url || "");
+  let heroBannerSectionId = "";
+  if (themeHeroBannerUrl) {
+    for (const section of mainSections) {
+      const isNavigationRow = section.modules.length > 0
+        && section.modules.every((module) => module.type === "navigation");
+      if (isNavigationRow) continue;
+      if (!section.background || section.background.mode === "none") heroBannerSectionId = section.id;
+      break;
+    }
+  }
+
+  // A feature-cards section directly after an image section pulls up over the
+  // hero's bottom edge (the blazefish overlap). Identified here because it
+  // needs the previous section, which the section renderer cannot see.
+  const overlapSectionIds = new Set<string>();
+  if (themeTreatments?.cardOverlap) {
+    for (let i = 1; i < mainSections.length; i += 1) {
+      const previous = mainSections[i - 1];
+      const current = mainSections[i];
+      const previousIsImage = (previous.background?.mode === "image" && Boolean(previous.background?.imageUrl))
+        || previous.id === heroBannerSectionId;
+      const currentLeadsWithCards = current.modules.some((module) => module.type === "feature-cards")
+        && (!current.background || current.background.mode === "none");
+      if (previousIsImage && currentLeadsWithCards) overlapSectionIds.add(current.id);
+    }
+  }
+
   return (
     <div
       className={
@@ -1246,8 +1311,13 @@ export function BuilderTemplatePreview({
         <div className={contentClassName} style={themeMarginStyle}>
           {mainSections.map((section) => (
             <BuilderSectionPreview
+              bandRole={sectionBandRoles.get(section.id)}
               emailPreview={emailPreview}
+              heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
+              heroOverlay={themeTreatments?.heroOverlay}
+              heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
               key={section.id}
+              overlapsHero={overlapSectionIds.has(section.id)}
               previewMode={previewMode}
               section={section}
               sitePlayerRegistered={sitePlayerRegistered}
@@ -1259,8 +1329,13 @@ export function BuilderTemplatePreview({
       ) : (
         mainSections.map((section) => (
           <BuilderSectionPreview
+            bandRole={sectionBandRoles.get(section.id)}
             emailPreview={emailPreview}
+            heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
+            heroOverlay={themeTreatments?.heroOverlay}
+            heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
             key={section.id}
+            overlapsHero={overlapSectionIds.has(section.id)}
             previewMode={previewMode}
             section={section}
             sitePlayerRegistered={sitePlayerRegistered}
@@ -1282,7 +1357,12 @@ function BuilderSectionPreview({
   projectId = "",
   sitePlayerRegistered = false,
   theme,
-  themePalette
+  themePalette,
+  bandRole,
+  heroBannerUrl,
+  heroOverlay,
+  heroOverlayOpacity,
+  overlapsHero = false
 }: {
   section: BuilderTemplateSection;
   emailPreview?: boolean;
@@ -1291,8 +1371,62 @@ function BuilderSectionPreview({
   sitePlayerRegistered?: boolean;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** Theme palette role this backgroundless section takes its band from. */
+  bandRole?: "surface" | "band" | "inverse";
+  /** The theme's hero banner image, when this is the section that wears it. */
+  heroBannerUrl?: string;
+  /** Treatment: tint laid over an image-background section (hex + opacity). */
+  heroOverlay?: string;
+  heroOverlayOpacity?: number;
+  /** Treatment: this section pulls up over the previous image section. */
+  overlapsHero?: boolean;
 }) {
   const sectionStyle = getBuilderBackgroundStyle(section.background);
+  // `transparent` and `inherit` are the no-palette answers, so a theme without
+  // one leaves this section exactly as it renders today.
+  const bandStyle: CSSProperties | undefined = bandRole
+    ? {
+        background: `var(--lp-${bandRole}, transparent)`,
+        color: `var(--lp-${bandRole}-text, inherit)`,
+        paddingTop: "var(--lp-band-padding, 0px)",
+        paddingBottom: "var(--lp-band-padding, 0px)"
+      }
+    : undefined;
+
+  // Hero treatment: a tint over an image background so text can sit on the
+  // photo, with the inverse text colour on top. Layered as a gradient IN FRONT
+  // of the image, so the photo still reads through.
+  const isImageSection = section.background?.mode === "image" && Boolean(section.background?.imageUrl);
+  // A theme hero banner turns a plain section into an image section; it always
+  // gets an overlay (defaulting to a dark neutral) because text sits on it.
+  const bannerImage = !isImageSection && heroBannerUrl ? `url("${heroBannerUrl}")` : "";
+  const heroImageSource = bannerImage || (isImageSection ? String(sectionStyle?.backgroundImage || "") : "");
+  const heroTint = normalizeBuilderHexColor(heroOverlay || (bannerImage ? "#101820" : ""));
+  const heroStyle: CSSProperties | undefined =
+    heroImageSource && heroTint
+      ? (() => {
+          const opacity = Math.min(0.75, Math.max(0, heroOverlayOpacity ?? 0.45));
+          const [r, g, b] = [1, 3, 5].map((offset) => parseInt(heroTint.slice(offset, offset + 2), 16));
+          const tint = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+          return {
+            backgroundImage: `linear-gradient(${tint}, ${tint}), ${heroImageSource}`,
+            ...(bannerImage
+              ? {
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  paddingTop: "72px",
+                  paddingBottom: "72px"
+                }
+              : {}),
+            color: "var(--lp-inverse-text, #ffffff)"
+          };
+        })()
+      : undefined;
+
+  // Overlap treatment: ride up over the hero's bottom edge, above its tint.
+  const overlapStyle: CSSProperties | undefined = overlapsHero
+    ? { marginTop: "-56px", position: "relative", zIndex: 2 }
+    : undefined;
   const columnKeys = getLayoutColumns(section.layout);
   const isNavigationSection = section.modules.length > 0 && section.modules.every((module) => module.type === "navigation");
   const hasNavigationModule = section.modules.some((module) => module.type === "navigation");
@@ -1304,7 +1438,13 @@ function BuilderSectionPreview({
   );
   const rowBorderWidth = Number(section.rowBorderWidth ?? "0");
   const gridStyle: CSSProperties = {
+    // Band first: a section carrying its own background never gets one, so
+    // this cannot overwrite an operator's choice.
+    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
     ...(isNavigationSection ? {} : sectionStyle),
+    // Hero tint and overlap layer on top of the section's own background.
+    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
+    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
     ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionWidthStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
@@ -1489,6 +1629,14 @@ function BuilderModulePreview({
     return <HeadlineRotatorPreview module={module} />;
   }
 
+  if (module.type === "slideshow") {
+    return <SlideshowPreview module={module} />;
+  }
+
+  if (module.type === "feature-cards") {
+    return <FeatureCardsModulePreview module={module} previewMode={previewMode} />;
+  }
+
   if (module.type === "poll-category-list") {
     return <PollCategoryListPreview module={module} />;
   }
@@ -1543,7 +1691,7 @@ function BuilderModulePreview({
 
   if (module.type === "button") {
     const s = module.settings;
-    const btnStyle = getButtonModuleStyle(s);
+    const btnStyle = getButtonModuleStyle(s, { followThemePalette: !emailPreview });
     const href = emailPreview
       ? resolveEmailMergeTokensForPreview(module.settings.href || "#")
       : module.settings.href || "#";
@@ -1786,6 +1934,14 @@ function BuilderModulePreview({
     return <AdminLoginPreview settings={module.settings} projectId={projectId} />;
   }
 
+  if (module.type === "admin-site-settings") {
+    return <AdminSiteSettingsPreview settings={module.settings} projectId={projectId} />;
+  }
+
+  if (module.type === "admin-support-form") {
+    return <AdminSupportFormPreview settings={module.settings} projectId={projectId} />;
+  }
+
   if (module.type === "admin-nav-link") {
     return <AdminNavLinkPreview settings={module.settings} />;
   }
@@ -1864,7 +2020,13 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const layout = settings.layout || "grid";
   const cols = Math.max(1, parseInt(settings.columns || "3", 10) || 3);
   const postsPerPage = Math.max(1, parseInt(settings.postsPerPage || "9", 10) || 9);
-  const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
+  // postSlug names the post-view page (operator 6/28: the slug field
+  // replaces the page-URL field). Legacy postPageUrl still wins when set
+  // so no saved page changes behavior.
+  const postSlug = (settings.postSlug || "").trim().replace(/^\/+/, "");
+  const postPageUrl =
+    (settings.postPageUrl || "").trim() || (postSlug ? `/${postSlug}` : defaultBlogPostViewPath());
+  const listTitle = (settings.postTitle || "").trim();
 
   // Card template — migrate from API (supports both old elements[] and new rows[] format)
   const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
@@ -1973,6 +2135,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
   return (
     <div>
+      {listTitle ? <h2 style={{ margin: "0 0 1rem" }}>{listTitle}</h2> : null}
       {hasFilterBar ? (
         <div style={{
           display: "flex", flexWrap: "wrap", gap: "0.625rem",
@@ -4478,6 +4641,81 @@ function BlogModulePlaceholder({ type }: { type: string }) {
   );
 }
 
+function SlideshowPreview({
+  module
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+}) {
+  const slides = useMemo(() => {
+    try {
+      const raw = JSON.parse(module.settings.slides || "[]");
+      if (!Array.isArray(raw)) return [] as { id: string; url: string; alt: string }[];
+      return raw
+        .map((entry, index) => ({
+          id: String((entry as { id?: string })?.id || `slide-${index}`),
+          url: String((entry as { url?: string })?.url || "").trim(),
+          alt: String((entry as { alt?: string })?.alt || "")
+        }))
+        .filter((slide) => slide.url);
+    } catch {
+      return [] as { id: string; url: string; alt: string }[];
+    }
+  }, [module.settings.slides]);
+  const intervalMs = Math.max(Number.parseInt(module.settings.intervalMs ?? "5000", 10) || 5000, 1000);
+  const transition = module.settings.transition === "fade" ? "fade" : "slide";
+  const heightPx = Number.parseInt(module.settings.heightPx ?? "", 10) || 0;
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (slides.length <= 1 || paused) return;
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % slides.length);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [slides.length, intervalMs, paused]);
+
+  useEffect(() => {
+    if (index >= slides.length) setIndex(0);
+  }, [slides.length, index]);
+
+  if (slides.length === 0) {
+    return <div className="builder-preview-slideshow builder-preview-slideshow-empty">Add slides in the editor</div>;
+  }
+
+  const frameStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
+  return (
+    <div
+      className={`builder-preview-slideshow builder-preview-slideshow-${transition}`}
+      style={frameStyle}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      {transition === "slide" ? (
+        <div
+          className="builder-preview-slideshow-track"
+          style={{ transform: `translateX(-${index * 100}%)` }}
+        >
+          {slides.map((slide) => (
+            <img key={slide.id} src={slide.url} alt={slide.alt} loading="lazy" />
+          ))}
+        </div>
+      ) : (
+        slides.map((slide, slideIndex) => (
+          <img
+            key={slide.id}
+            src={slide.url}
+            alt={slide.alt}
+            loading="lazy"
+            className="builder-preview-slideshow-fade-frame"
+            style={{ opacity: slideIndex === index ? 1 : 0 }}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
 function HeadlineRotatorPreview({
   module
 }: {
@@ -4668,6 +4906,157 @@ function toPreviewHref(href: string): string {
   return `${withoutTrailingSlash}.html`;
 }
 
+type NavRenderItem = {
+  href: string;
+  label: string;
+  id?: string;
+  parentId?: string;
+  width?: string;
+  featureImage?: string;
+  featureHeading?: string;
+};
+
+/**
+ * One top-level item of a mega menu, plus its panel.
+ *
+ * ClickUp 86bbafg38. The reference implementation this was modelled on
+ * (blazefish.com) opens the panel purely with `:hover` / `:focus-within`,
+ * which means: no `aria-expanded` for screen readers, no way to dismiss it
+ * from the keyboard, and it flickers open whenever the pointer merely
+ * crosses the item. This version keeps the top-level link navigable and
+ * adds a real disclosure `<button>` beside it, so the panel is operable by
+ * mouse, touch, and keyboard alike.
+ */
+function NavMegaItem({
+  item,
+  columns,
+  isOpen,
+  onOpen,
+  onClose,
+  previewMode,
+  activePath
+}: {
+  item: NavRenderItem;
+  columns: NavMegaColumn<NavRenderItem>[];
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  previewMode: boolean;
+  activePath: string;
+}) {
+  const panelId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    };
+  }, []);
+
+  function clearHoverTimer() {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  }
+
+  // Hover intent: a panel that opens the instant the pointer grazes the
+  // label makes a nav bar feel like a minefield when you are aiming at the
+  // item next to it.
+  function handleMouseEnter() {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(onOpen, 120);
+  }
+
+  function handleMouseLeave() {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(onClose, 160);
+  }
+
+  const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
+  const isActive = normalizeNavPath(item.href || "#") === activePath;
+  const featureImage = item.featureImage ? resolvePublicBuilderAssetUrl(item.featureImage) : "";
+
+  return (
+    <div
+      className={`site-nav-mega${isOpen ? " site-nav-mega--open" : ""}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div className="site-nav-mega-trigger">
+        <Link
+          aria-current={isActive ? "page" : undefined}
+          className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
+          href={href}
+        >
+          {item.label}
+        </Link>
+        <button
+          type="button"
+          ref={toggleRef}
+          className="site-nav-mega-toggle"
+          aria-expanded={isOpen}
+          aria-controls={panelId}
+          aria-label={`${item.label} menu`}
+          onClick={() => {
+            clearHoverTimer();
+            if (isOpen) onClose();
+            else onOpen();
+          }}
+        >
+          <span aria-hidden="true">▾</span>
+        </button>
+      </div>
+
+      <div className="site-nav-mega-panel" id={panelId} hidden={!isOpen}>
+        <div className="site-nav-mega-grid">
+          {columns.map((column) => (
+            <div className="site-nav-mega-column" key={column.id}>
+              {column.heading ? (
+                column.heading.href ? (
+                  <Link
+                    className="site-nav-mega-heading"
+                    href={previewMode ? toPreviewHref(column.heading.href) : toPublicHref(column.heading.href)}
+                  >
+                    {column.heading.label}
+                  </Link>
+                ) : (
+                  <span className="site-nav-mega-heading">{column.heading.label}</span>
+                )
+              ) : null}
+              {column.links.map((link) => {
+                const linkHref = previewMode ? toPreviewHref(link.href || "#") : toPublicHref(link.href || "#");
+                const linkActive = normalizeNavPath(link.href || "#") === activePath;
+                return (
+                  <Link
+                    key={link.id ?? `${linkHref}-${link.label}`}
+                    className={`site-nav-mega-link${linkActive ? " site-nav-link-active" : ""}`}
+                    href={linkHref}
+                    aria-current={linkActive ? "page" : undefined}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+
+          {featureImage || item.featureHeading ? (
+            <Link className="site-nav-mega-feature" href={href}>
+              {featureImage ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={featureImage} alt="" loading="lazy" />
+              ) : null}
+              {item.featureHeading ? <strong>{item.featureHeading}</strong> : null}
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NavigationModulePreview({
   module,
   previewMode = false
@@ -4684,7 +5073,13 @@ function NavigationModulePreview({
     setMobileOpen(false);
   }, [pathname]);
 
-  let navItems: { href: string; label: string; id?: string; parentId?: string; width?: string }[] = [];
+  const [openMegaId, setOpenMegaId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOpenMegaId(null);
+  }, [pathname]);
+
+  let navItems: NavRenderItem[] = [];
   try {
     const parsed = JSON.parse(module.settings.navItems || "[]");
     navItems = Array.isArray(parsed)
@@ -4713,11 +5108,28 @@ function NavigationModulePreview({
   const itemSizing = module.settings.navItemSizing === "custom" || module.settings.navItemSizing === "equal"
     ? module.settings.navItemSizing
     : "auto";
+  // Backward compatibility is a hard requirement on this module (live tenant
+  // sites run it): anything other than an explicit "mega" keeps the exact
+  // dropdown markup that shipped before.
+  const isMega = module.settings.navDropdownStyle === "mega" && !isVertical;
+  const megaColumnCount = Math.min(5, Math.max(1, Number.parseInt(module.settings.navMegaColumns ?? "3", 10) || 3));
+  const megaWidth = Math.min(1600, Math.max(320, Number.parseInt(module.settings.navMegaWidth ?? "1040", 10) || 1040));
 
   return (
     <nav
-      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}`}
+      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}${isMega ? " site-nav--mega" : ""}`}
       aria-label="Main navigation"
+      onKeyDown={
+        isMega
+          ? (event) => {
+              // Escape closes the open panel — the reference implementation
+              // has no keyboard dismissal at all.
+              if (event.key === "Escape" && openMegaId) {
+                setOpenMegaId(null);
+              }
+            }
+          : undefined
+      }
       style={
         {
           ...moduleBackgroundStyle,
@@ -4731,7 +5143,8 @@ function NavigationModulePreview({
           ...(marginV ? { marginTop: marginV, marginBottom: marginV } : {}),
           "--site-nav-link-color": color,
           "--site-nav-link-hover-color": hoverColor,
-          "--site-nav-link-hover-bg": hoverBackground
+          "--site-nav-link-hover-bg": hoverBackground,
+          ...(isMega ? { "--site-nav-mega-width": `${megaWidth}px` } : {})
         } as CSSProperties
       }
     >
@@ -4772,6 +5185,21 @@ function NavigationModulePreview({
             >
               {item.label}
             </Link>
+          );
+        }
+
+        if (isMega) {
+          return (
+            <NavMegaItem
+              key={itemId}
+              item={item}
+              activePath={activePath}
+              previewMode={previewMode}
+              columns={buildMegaColumns(children, childrenOf, megaColumnCount)}
+              isOpen={openMegaId === itemId}
+              onOpen={() => setOpenMegaId(itemId)}
+              onClose={() => setOpenMegaId((current) => (current === itemId ? null : current))}
+            />
           );
         }
 
@@ -4884,31 +5312,151 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
   );
 }
 
-type SliderItem = {
-  id: string;
-  title: string;
-  body: string;
-  imageUrl: string;
-  linkUrl: string;
-};
+/**
+ * Slider and Feature Cards share one card model (`BuilderCardItem`) so an
+ * operator can move content between them — see lib/builder-client/
+ * builder-card-items.ts. Slider ignores the fields it has no use for.
+ */
+type SliderItem = import("@/lib/builder-card-items").BuilderCardItem;
 
 function parseSliderItems(settings: Record<string, string>): SliderItem[] {
-  try {
-    const items = JSON.parse(settings.sliderItems || "[]");
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      const raw = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-      return {
-        id: String(raw.id || `slide-${index + 1}`),
-        title: String(raw.title || ""),
-        body: String(raw.body || ""),
-        imageUrl: resolvePublicBuilderAssetUrl(raw.imageUrl),
-        linkUrl: String(raw.linkUrl || "")
-      };
-    });
-  } catch {
-    return [];
+  return parseBuilderCardItems(settings.sliderItems, "slide");
+}
+
+const FEATURE_CARD_ASPECTS: Record<string, string> = {
+  "4-3": "4 / 3",
+  "16-9": "16 / 9",
+  "3-2": "3 / 2",
+  "1-1": "1 / 1"
+};
+
+/**
+ * Feature Cards — a responsive grid of linked cards.
+ *
+ * Built to docs/MODULE_STANDARDS.md from the spec on ClickUp 86bbaffu3.
+ * All structural CSS lives in the BASE layer of
+ * `_builder-react-overrides.css` (standard 3); the media queries there only
+ * reduce the column count, they never introduce layout.
+ */
+function FeatureCardsModulePreview({
+  module,
+  previewMode = false
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+  previewMode?: boolean;
+}) {
+  const cards = parseBuilderCardItems(module.settings.cards, "card");
+
+  // Standard 5: an empty module is a designed state, not a blank box.
+  if (cards.length === 0) {
+    return (
+      <div className="builder-preview-feature-cards builder-preview-feature-cards-empty">
+        Add cards in the editor
+      </div>
+    );
   }
+
+  const columns = Math.min(6, Math.max(1, Number.parseInt(module.settings.cardColumns || "3", 10) || 3));
+  const gap = Math.min(48, Math.max(0, Number.parseInt(module.settings.cardGap || "12", 10) || 0));
+  const radius = Math.min(48, Math.max(0, Number.parseInt(module.settings.cardRadius || "18", 10) || 0));
+  const align = module.settings.cardAlign === "left" ? "left" : "center";
+  const aspect = FEATURE_CARD_ASPECTS[module.settings.imageAspect || "4-3"] || FEATURE_CARD_ASPECTS["4-3"];
+  const showIcons = module.settings.showIcons !== "false";
+  const alternateIcons = module.settings.iconAlternate !== "false";
+  // Empty color settings follow the site theme; the --crm-theme-* vars are
+  // set on the preview root by getCrmThemePaletteVars on both the editor
+  // canvas and the public site, with the factory colors as the no-theme
+  // fallback.
+  const iconColor = module.settings.iconColor || "var(--crm-theme-accent, #0b2a4a)";
+  const iconAltColor = module.settings.iconAltColor || "var(--crm-theme-primary, #4f9c3a)";
+  const showArrow = module.settings.linkArrow !== "false";
+  const fallbackLinkLabel = module.settings.linkLabel ?? "Learn More";
+
+  const className = [
+    "builder-preview-feature-cards",
+    `builder-preview-feature-cards-align-${align}`,
+    module.settings.cardShadow === "false" ? "" : "builder-preview-feature-cards-shadow",
+    module.settings.cardHoverLift === "false" ? "" : "builder-preview-feature-cards-lift"
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div
+      className={className}
+      style={
+        {
+          "--feature-card-columns": String(columns),
+          "--feature-card-gap": `${gap}px`,
+          "--feature-card-radius": `${radius}px`,
+          "--feature-card-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
+          "--feature-card-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #e1e8f0)",
+          "--feature-card-accent": iconColor,
+          "--feature-card-aspect": aspect
+        } as CSSProperties
+      }
+    >
+      {cards.map((card, index) => {
+        const body = parseCardBody(card.body);
+        const href = card.linkUrl ? (previewMode ? toPreviewHref(card.linkUrl) : toPublicHref(card.linkUrl)) : "";
+        const linkLabel = card.linkLabel || fallbackLinkLabel;
+        const badgeColor = alternateIcons && index % 2 === 1 ? iconAltColor : iconColor;
+
+        return (
+          <article className="builder-preview-feature-card" key={card.id}>
+            {showIcons && card.icon ? (
+              <span
+                className="builder-preview-feature-card-badge"
+                style={{ background: badgeColor }}
+                aria-hidden="true"
+              >
+                {card.icon}
+              </span>
+            ) : null}
+
+            {card.imageUrl ? (
+              <div className="builder-preview-feature-card-media">
+                <Image
+                  alt={card.imageAlt}
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  src={card.imageUrl}
+                  unoptimized
+                />
+              </div>
+            ) : null}
+
+            <div className="builder-preview-feature-card-copy">
+              {card.title ? <h3 className="builder-preview-feature-card-title">{card.title}</h3> : null}
+
+              {body.lines.length > 0 ? (
+                body.kind === "list" ? (
+                  <ul className="builder-preview-feature-card-list">
+                    {body.lines.map((line, lineIndex) => (
+                      <li key={`${card.id}-line-${lineIndex}`}>{line}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  body.lines.map((line, lineIndex) => (
+                    <p className="builder-preview-feature-card-body" key={`${card.id}-line-${lineIndex}`}>
+                      {line}
+                    </p>
+                  ))
+                )
+              ) : null}
+            </div>
+
+            {href && linkLabel ? (
+              <Link className="builder-preview-feature-card-link" href={href}>
+                {linkLabel}
+                {showArrow ? <span aria-hidden="true"> →</span> : null}
+              </Link>
+            ) : null}
+          </article>
+        );
+      })}
+    </div>
+  );
 }
 
 function SliderModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
@@ -4956,7 +5504,7 @@ function SliderModulePreview({ module }: { module: import("@/lib/builder-templat
           <article key={item.id} className="builder-preview-slider-card" style={{ minWidth: `${cardWidth}px` }}>
             {item.imageUrl ? (
               <div className="builder-preview-slider-image">
-                <Image alt={item.title || "Slider item"} fill sizes="280px" src={item.imageUrl} unoptimized />
+                <Image alt={item.imageAlt || item.title || "Slider item"} fill sizes="280px" src={item.imageUrl} unoptimized />
               </div>
             ) : null}
             <div className="builder-preview-slider-copy">
@@ -5447,7 +5995,16 @@ function AdminLoginPreview({
   const [loading, setLoading]         = useState(false);
   const [showForgot, setShowForgot]   = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSent, setForgotSent]   = useState(false);
+  // "request" = ask for the email, "code" = enter the emailed code + new password,
+  // "done" = password changed. Replaces an earlier stub that only flipped a flag
+  // and never contacted the server, so no reset email was ever sent.
+  const [forgotStep, setForgotStep]       = useState<"request" | "code" | "done">("request");
+  const [forgotNotice, setForgotNotice]   = useState("");
+  const [forgotError, setForgotError]     = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [resetCode, setResetCode]         = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirm, setResetConfirm]   = useState("");
 
   const successRedirect = settings.successRedirect || "/admin-dashboard";
   const projectId = projectIdProp || getCrmProjectHeaders()["X-Project-ID"] || "";
@@ -5496,6 +6053,84 @@ function AdminLoginPreview({
     }
   }
 
+  function closeForgot() {
+    setShowForgot(false);
+    setForgotStep("request");
+    setForgotEmail("");
+    setForgotNotice("");
+    setForgotError("");
+    setResetCode("");
+    setResetPassword("");
+    setResetConfirm("");
+  }
+
+  async function handleForgotRequest(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError("");
+    setForgotNotice("");
+    setForgotLoading(true);
+    try {
+      const r = await fetch("/api/admin/auth/forgot-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, email: forgotEmail.trim().toLowerCase() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setForgotError(readApiErrorMessage(d, "Could not send the reset email. Please try again."));
+        return;
+      }
+      const payload = (d && typeof d === "object" ? d.data ?? d : {}) as Record<string, unknown>;
+      setForgotNotice(
+        String(d?.message || payload.message || "")
+        || "If that email has an admin account, a 6-digit reset code is on its way."
+      );
+      setForgotStep("code");
+    } catch {
+      setForgotError("Connection error. Please try again.");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
+  async function handleResetSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError("");
+    if (resetPassword !== resetConfirm) {
+      setForgotError("The two passwords do not match.");
+      return;
+    }
+    if (resetPassword.length < 8) {
+      setForgotError("Please choose a password of at least 8 characters.");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const r = await fetch("/api/admin/auth/reset-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          email: forgotEmail.trim().toLowerCase(),
+          code: resetCode.trim(),
+          password: resetPassword,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setForgotError(readApiErrorMessage(d, "That code is invalid or has expired."));
+        return;
+      }
+      setForgotStep("done");
+    } catch {
+      setForgotError("Connection error. Please try again.");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
   const cardStyle: React.CSSProperties = {
     maxWidth: 420, margin: "0 auto", background: "#fff",
     border: "1px solid #dde8f0", borderRadius: 12, padding: "36px 32px",
@@ -5517,26 +6152,123 @@ function AdminLoginPreview({
   }
 
   if (showForgot) {
+    const forgotBtnStyle: React.CSSProperties = {
+      ...btnStyle,
+      cursor: forgotLoading ? "not-allowed" : "pointer",
+      opacity: forgotLoading ? 0.7 : 1,
+    };
+    const noticeStyle: React.CSSProperties = {
+      marginTop: 14, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7,
+      padding: "12px 14px", fontSize: 13, color: "#15803d",
+    };
+    const errorStyle: React.CSSProperties = {
+      marginTop: 10, fontSize: 13, color: "#c0392b", background: "#fef2f2",
+      border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px",
+    };
+
     return (
       <div style={cardStyle}>
         <div style={{ fontWeight: 700, fontSize: 18, color: "#18324a", marginBottom: 4 }}>Reset Password</div>
-        <div style={{ fontSize: 13, color: "#587592", marginBottom: 18 }}>Enter your email and your administrator will be notified.</div>
-        {forgotSent ? (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7, padding: "12px 14px", fontSize: 13, color: "#15803d" }}>
-            Request sent. Your administrator will follow up with reset instructions.
-          </div>
+
+        {forgotStep === "done" ? (
+          <>
+            <div style={noticeStyle}>
+              Your password has been updated. You can sign in with it now.
+            </div>
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <button type="button" onClick={closeForgot} style={{ background: "none", border: "none", color: "#0f4f8f", fontSize: 13, cursor: "pointer" }}>
+                Go to sign in
+              </button>
+            </div>
+          </>
+        ) : forgotStep === "code" ? (
+          <>
+            <div style={{ fontSize: 13, color: "#587592", marginBottom: 4 }}>
+              Enter the 6-digit code we emailed you, then choose a new password.
+            </div>
+            {forgotNotice && <div style={noticeStyle}>{forgotNotice}</div>}
+            <form onSubmit={handleResetSubmit}>
+              <label style={labelStyle}>6-digit code</label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                style={inputStyle}
+                value={resetCode}
+                onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+              />
+              <label style={labelStyle}>New password</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                style={inputStyle}
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+              <label style={labelStyle}>Confirm new password</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                style={inputStyle}
+                value={resetConfirm}
+                onChange={(e) => setResetConfirm(e.target.value)}
+                placeholder="Re-type it"
+              />
+              {forgotError && <div style={errorStyle}>{forgotError}</div>}
+              <button type="submit" disabled={forgotLoading} style={forgotBtnStyle}>
+                {forgotLoading ? "Updating…" : "Set New Password"}
+              </button>
+            </form>
+            <div style={{ marginTop: 12, textAlign: "center" }}>
+              <button
+                type="button"
+                onClick={() => { setForgotStep("request"); setForgotError(""); setForgotNotice(""); }}
+                style={{ background: "none", border: "none", color: "#587592", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
+              >
+                Didn&rsquo;t get a code? Send it again
+              </button>
+            </div>
+          </>
         ) : (
-          <form onSubmit={(e) => { e.preventDefault(); setForgotSent(true); }}>
-            <label style={labelStyle}>Email address</label>
-            <input type="email" required style={inputStyle} value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" />
-            <button type="submit" style={btnStyle}>Send Request</button>
-          </form>
+          <>
+            <div style={{ fontSize: 13, color: "#587592", marginBottom: 4 }}>
+              Enter your email and we&rsquo;ll send you a 6-digit code to set a new password.
+            </div>
+            <form onSubmit={handleForgotRequest}>
+              <label style={labelStyle}>Email address</label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                style={inputStyle}
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+              {forgotError && <div style={errorStyle}>{forgotError}</div>}
+              <button type="submit" disabled={forgotLoading} style={forgotBtnStyle}>
+                {forgotLoading ? "Sending…" : "Email Me A Code"}
+              </button>
+            </form>
+          </>
         )}
-        <div style={{ marginTop: 16, textAlign: "center" }}>
-          <button onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(""); }} style={{ background: "none", border: "none", color: "#0f4f8f", fontSize: 13, cursor: "pointer" }}>
-            Back to sign in
-          </button>
-        </div>
+
+        {forgotStep !== "done" && (
+          <div style={{ marginTop: 16, textAlign: "center" }}>
+            <button type="button" onClick={closeForgot} style={{ background: "none", border: "none", color: "#0f4f8f", fontSize: 13, cursor: "pointer" }}>
+              Back to sign in
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -5591,6 +6323,640 @@ const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: st
   { key: "crm",  label: "CRM",  description: "Lead capture forms and contact table" },
   { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
 ];
+
+/** Mirrors MAX_CONTACT_ALERT_RECIPIENTS in lib/projectSiteSettingsStore.js. */
+const MAX_CONTACT_ALERT_RECIPIENTS = 10;
+
+/**
+ * Read the stored Contact Alert value into editable rows.
+ *
+ * Handles both shapes: an array (current) and a bare string (older project
+ * rows, from before this setting took more than one address). Always returns
+ * at least one row so the field is visible when nothing is set yet.
+ */
+function readEmailList(value: unknown): string[] {
+  const list = Array.isArray(value)
+    ? value.map((v) => String(v ?? ""))
+    : String(value ?? "").split(/[,;\n]/);
+  const cleaned = list.map((v) => v.trim()).filter(Boolean);
+  return cleaned.length ? cleaned : [""];
+}
+
+/**
+ * Settings panel for a tenant's own admin area (/admin-settings).
+ *
+ * Backed by GET/PATCH /api/admin/site-settings, which pins a project-admin
+ * session to its own project — so this reads and writes only the site the
+ * signed-in admin belongs to.
+ */
+function AdminSiteSettingsPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
+  const panelTitle = settings.panelTitle || "Site Settings";
+  const showTitle  = settings.showTitle !== "false";
+
+  // Always at least one row, so the field is visible when nothing is set yet.
+  const [contactAlertEmails, setContactAlertEmails] = useState<string[]>([""]);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+
+  const headers = getCrmProjectHeaders(projectIdProp);
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  useEffect(() => {
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/admin/site-settings${qs}`, { credentials: "include", headers })
+      .then(async (r) => {
+        if (r.status === 401 && !isPreview) {
+          window.location.href = "/admin-login";
+          return null;
+        }
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load settings (${r.status})`));
+        return d;
+      })
+      .then((d) => {
+        if (!d) return;
+        const s = d.siteSettings ?? d.data ?? d;
+        if (s && typeof s === "object") {
+          setContactAlertEmails(readEmailList((s as Record<string, unknown>).contactAlertEmail));
+        }
+      })
+      .catch((e: Error) => setLoadError(e.message || "Failed to load settings."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function updateRecipient(index: number, value: string) {
+    setContactAlertEmails((prev) => prev.map((v, i) => (i === index ? value : v)));
+    setSavedNote("");
+  }
+
+  function addRecipient() {
+    setContactAlertEmails((prev) => [...prev, ""]);
+    setSavedNote("");
+  }
+
+  function removeRecipient(index: number) {
+    // Never drop to zero rows — an empty list is expressed by leaving the one
+    // remaining box blank, which is clearer than the field vanishing.
+    setContactAlertEmails((prev) => (prev.length <= 1 ? [""] : prev.filter((_, i) => i !== index)));
+    setSavedNote("");
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaveError("");
+    setSavedNote("");
+    setSaving(true);
+    try {
+      const projectId = headers["X-Project-ID"] || "";
+      const r = await fetch("/api/admin/site-settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({
+          projectId,
+          // Blank rows are dropped rather than rejected, so an empty box the
+          // user never filled in does not block the save.
+          settings: {
+            contactAlertEmail: contactAlertEmails
+              .map((v) => v.trim().toLowerCase())
+              .filter(Boolean),
+          },
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setSaveError(readApiErrorMessage(d, "Could not save settings."));
+        return;
+      }
+      // Show what the server actually stored, not what was typed — a save
+      // toast alone proves a write happened, not that it wrote the right value.
+      const s = (d.siteSettings ?? d.data ?? d) as Record<string, unknown>;
+      if (s && typeof s === "object" && s.contactAlertEmail !== undefined) {
+        setContactAlertEmails(readEmailList(s.contactAlertEmail));
+      }
+      setSavedNote("Saved.");
+    } catch {
+      setSaveError("Connection error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
+      {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{panelTitle}</h3>}
+      {loading ? (
+        <p className="builder-module-runtime-note">Loading settings…</p>
+      ) : loadError ? (
+        <p className="builder-module-runtime-note" style={{ color: "var(--danger, #c00)" }}>{loadError}</p>
+      ) : (
+        <form onSubmit={handleSave} style={{ display: "grid", gap: 10, maxWidth: 520 }}>
+          <div style={{ padding: "14px 16px", border: "1px solid var(--border, #e5e7eb)", borderRadius: 8 }}>
+            <label htmlFor="admin-contact-alert-email-0" style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
+              Contact Alert Email
+            </label>
+            <p style={{ margin: "2px 0 8px", fontSize: 12, color: "var(--muted, #888)" }}>
+              Where we email you when someone submits a contact form on your site.
+              Add as many recipients as you like &mdash; they all receive the same
+              message. Leave them blank to turn these alerts off.
+            </p>
+            <div style={{ display: "grid", gap: 8 }}>
+              {contactAlertEmails.map((value, index) => (
+                <div key={index} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    id={`admin-contact-alert-email-${index}`}
+                    type="email"
+                    value={value}
+                    onChange={(e) => updateRecipient(index, e.target.value)}
+                    placeholder="you@example.com"
+                    aria-label={`Contact alert recipient ${index + 1}`}
+                    style={{
+                      width: "100%", maxWidth: 340, padding: "7px 10px", fontSize: 14,
+                      border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",
+                    }}
+                  />
+                  {contactAlertEmails.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeRecipient(index)}
+                      aria-label={`Remove recipient ${index + 1}`}
+                      title="Remove this recipient"
+                      style={{
+                        border: "none", background: "none", cursor: "pointer",
+                        fontSize: 18, lineHeight: 1, padding: "0 4px",
+                        color: "var(--muted, #888)",
+                      }}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {contactAlertEmails.length < MAX_CONTACT_ALERT_RECIPIENTS ? (
+              <button
+                type="button"
+                onClick={addRecipient}
+                style={{
+                  marginTop: 10, border: "none", background: "none", padding: 0,
+                  color: "#0f4f8f", fontSize: 13, fontWeight: 600,
+                  cursor: "pointer", textDecoration: "underline",
+                }}
+              >
+                + Add Recipient
+              </button>
+            ) : (
+              <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--muted, #888)" }}>
+                That&rsquo;s the maximum of {MAX_CONTACT_ALERT_RECIPIENTS} recipients.
+              </p>
+            )}
+          </div>
+          {saveError && (
+            <p className="builder-module-runtime-note" style={{ margin: 0, color: "var(--danger, #c00)" }}>{saveError}</p>
+          )}
+          {savedNote && (
+            <p className="builder-module-runtime-note" style={{ margin: 0, color: "#15803d" }}>{savedNote}</p>
+          )}
+          <div>
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                padding: "8px 18px", fontSize: 13, fontWeight: 600, borderRadius: 6,
+                border: "1px solid #0f4f8f", background: "#0f4f8f", color: "#fff",
+                cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
+                whiteSpace: "nowrap", width: "fit-content",
+              }}
+            >
+              {saving ? "Saving…" : "Save Settings"}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+// ── Support request form ────────────────────────────────────────────────────
+
+/** Mirrors PRIORITIES in lib/projectSupportRequestsStore.js and the SQL CHECK. */
+const SUPPORT_PRIORITIES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "low", label: "Low — whenever you get to it" },
+  { value: "normal", label: "Normal — needs attention soon" },
+  { value: "high", label: "High — something is broken" },
+  { value: "urgent", label: "Urgent — the site is down" },
+];
+
+/** Same ceiling as routes/projectSupport.js, checked here to fail fast. */
+const MAX_SCREENSHOT_BASE64_CHARS = 9_000_000;
+
+type SupportRequestRecord = {
+  id: string;
+  priority: string;
+  title: string;
+  description: string;
+  screenshotUrl: string;
+  status: string;
+  createdAt: string | null;
+};
+
+function supportPriorityLabel(value: string): string {
+  switch (value) {
+    case "low": return "Low";
+    case "high": return "High";
+    case "urgent": return "Urgent";
+    default: return "Normal";
+  }
+}
+
+function supportStatusLabel(value: string): string {
+  switch (value) {
+    case "in_progress": return "In progress";
+    case "resolved": return "Resolved";
+    case "closed": return "Closed";
+    default: return "Open";
+  }
+}
+
+function formatSupportDate(value: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** Strip the `data:image/png;base64,` prefix a FileReader result carries. */
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("That file could not be read."));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Support request form for a tenant's own admin area (/admin-support).
+ *
+ * Backed by POST/GET /api/support/requests, which pins a project-admin session
+ * to its own project — an admin can only ever file against, and read back,
+ * the site they belong to.
+ */
+function AdminSupportFormPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
+  const formTitle      = settings.formTitle || "Request Support";
+  const showTitle      = settings.showTitle !== "false";
+  const buttonText     = settings.buttonText || "Send Request";
+  const showScreenshot = settings.showScreenshot !== "false";
+  const showHistory    = settings.showHistory !== "false";
+  const historyTitle   = settings.historyTitle || "Your Recent Requests";
+  const showContact    = settings.showContact !== "false";
+  const contactHeading = settings.contactHeading ?? "Need a hand with your website?";
+  const contactIntro   = settings.contactIntro ?? "";
+  // Two columns by default: the form and the request history read better side
+  // by side than stacked. Falls back to one column on narrow screens.
+  const twoColumn      = (settings.layout ?? "two-column") !== "stacked";
+  const defaultPriority = SUPPORT_PRIORITIES.some((p) => p.value === settings.defaultPriority)
+    ? settings.defaultPriority
+    : "normal";
+
+  const [priority, setPriority]       = useState(defaultPriority);
+  const [title, setTitle]             = useState("");
+  const [description, setDescription] = useState("");
+  const [file, setFile]               = useState<File | null>(null);
+  const [fileError, setFileError]     = useState("");
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [successNote, setSuccessNote] = useState("");
+  const [warningNote, setWarningNote] = useState("");
+
+  const [history, setHistory] = useState<SupportRequestRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(showHistory);
+
+  // Support contact details come from StarCaster > Settings > Projects > Edit.
+  // They are platform-only settings that a tenant may READ but not write, so
+  // the client cannot change the number they are told to call.
+  const [supportEmail, setSupportEmail] = useState("");
+  const [supportPhone, setSupportPhone] = useState("");
+
+  const headers = getCrmProjectHeaders(projectIdProp);
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  useEffect(() => {
+    if (!showContact) return;
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/admin/site-settings${qs}`, { credentials: "include", headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const s = (d.siteSettings ?? d.data ?? d) as Record<string, unknown>;
+        if (s && typeof s === "object") {
+          setSupportEmail(String(s.supportEmail ?? ""));
+          setSupportPhone(String(s.supportPhone ?? ""));
+        }
+      })
+      // Contact details are a nicety; failing to load them must not stop the
+      // admin filing a request, so this stays silent.
+      .catch(() => {});
+  }, []);
+
+  function loadHistory() {
+    if (!showHistory) return;
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/support/requests${qs}`, { credentials: "include", headers })
+      .then(async (r) => {
+        if (r.status === 401 && !isPreview) {
+          window.location.href = "/admin-login";
+          return null;
+        }
+        if (!r.ok) return null;
+        return r.json().catch(() => null);
+      })
+      .then((d) => {
+        if (!d) return;
+        const rows = d.supportRequests ?? d.data ?? [];
+        if (Array.isArray(rows)) setHistory(rows as SupportRequestRecord[]);
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }
+
+  useEffect(loadHistory, []);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setFileError("");
+    const picked = e.target.files?.[0] || null;
+    if (picked && !picked.type.startsWith("image/")) {
+      setFile(null);
+      setFileError("Please choose an image file (PNG, JPG or GIF).");
+      return;
+    }
+    setFile(picked);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitError("");
+    setSuccessNote("");
+    setWarningNote("");
+
+    if (!title.trim()) {
+      setSubmitError("Please give the issue a short title.");
+      return;
+    }
+    setSubmitting(true);
+
+    try {
+      let screenshot: { fileName: string; mimeType: string; fileBase64: string } | undefined;
+      if (file) {
+        const fileBase64 = await readFileAsBase64(file);
+        if (fileBase64.length > MAX_SCREENSHOT_BASE64_CHARS) {
+          setSubmitError("That screenshot is too large. Please use an image under about 6MB.");
+          return;
+        }
+        screenshot = { fileName: file.name, mimeType: file.type, fileBase64 };
+      }
+
+      const projectId = headers["X-Project-ID"] || "";
+      const r = await fetch("/api/support/requests", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({
+          projectId,
+          priority,
+          title: title.trim(),
+          description: description.trim(),
+          ...(screenshot ? { screenshot } : {}),
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setSubmitError(readApiErrorMessage(d, "Could not send your request."));
+        return;
+      }
+
+      // Say what actually happened. The request is saved either way, but if the
+      // notification email did not go out, claiming "we have been notified"
+      // would be a lie.
+      setSuccessNote(d.emailSent
+        ? "Thanks — your request has been sent. We'll be in touch."
+        : "Your request has been saved, but the notification email could not be sent. Please follow up using the contact details on this page.");
+      if (d.screenshotWarning) setWarningNote(String(d.screenshotWarning));
+
+      setTitle("");
+      setDescription("");
+      setPriority(defaultPriority);
+      setFile(null);
+      const created = d.supportRequest ?? d.data;
+      if (created && typeof created === "object") {
+        setHistory((prev) => [created as SupportRequestRecord, ...prev]);
+      }
+    } catch {
+      setSubmitError("Connection error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    width: "100%", padding: "7px 10px", fontSize: 14,
+    border: "1px solid #c9dcea", borderRadius: 7, boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = { display: "block", fontSize: 14, fontWeight: 600, marginBottom: 4 };
+
+  return (
+    <div className="builder-module-runtime-wrapper" style={{ padding: "1rem" }}>
+      {showContact && (contactHeading || contactIntro || supportEmail || supportPhone) ? (
+        <div style={{ marginBottom: 22, maxWidth: 560 }}>
+          {contactHeading ? (
+            <h3 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700 }}>{contactHeading}</h3>
+          ) : null}
+          {contactIntro ? (
+            <p style={{ margin: "0 0 10px", fontSize: 14, lineHeight: 1.5 }}>{contactIntro}</p>
+          ) : null}
+          {supportEmail || supportPhone ? (
+            <div style={{ display: "grid", gap: 4, fontSize: 14 }}>
+              {supportEmail ? (
+                <div><strong>Email:</strong>{" "}
+                  <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
+                </div>
+              ) : null}
+              {supportPhone ? (
+                <div><strong>Phone:</strong>{" "}
+                  <a href={`tel:${supportPhone.replace(/[^\d+]/g, "")}`}>{supportPhone}</a>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        style={twoColumn
+          // auto-fit + minmax gives two columns when there is room for two
+          // and one when there is not, with no media query — which matters
+          // because these are inline styles and cannot carry one.
+          ? {
+              display: "grid",
+              gap: 32,
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+              alignItems: "start",
+            }
+          : { display: "grid", gap: 28 }}
+      >
+        <div>
+      {showTitle && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>{formTitle}</h3>}
+
+      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, maxWidth: 560 }}>
+        <div>
+          <label htmlFor="admin-support-priority" style={labelStyle}>Priority</label>
+          <select
+            id="admin-support-priority"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            style={fieldStyle}
+          >
+            {SUPPORT_PRIORITIES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="admin-support-title" style={labelStyle}>Issue title</label>
+          <input
+            id="admin-support-title"
+            type="text"
+            required
+            maxLength={200}
+            value={title}
+            onChange={(e) => { setTitle(e.target.value); setSuccessNote(""); }}
+            placeholder="Short summary of the problem"
+            style={fieldStyle}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="admin-support-description" style={labelStyle}>Issue description</label>
+          <textarea
+            id="admin-support-description"
+            rows={6}
+            maxLength={5000}
+            value={description}
+            onChange={(e) => { setDescription(e.target.value); setSuccessNote(""); }}
+            placeholder="What happened, what were you doing at the time, and what did you expect instead?"
+            style={{ ...fieldStyle, resize: "vertical" }}
+          />
+        </div>
+
+        {showScreenshot && (
+          <div>
+            <label htmlFor="admin-support-screenshot" style={labelStyle}>Screenshot (optional)</label>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--muted, #888)" }}>
+              A picture of what you are seeing helps a lot. Images up to about 6MB.
+            </p>
+            <input
+              id="admin-support-screenshot"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={{ fontSize: 13 }}
+            />
+            {file && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--muted, #888)" }}>
+                Attached: {file.name}
+              </p>
+            )}
+            {fileError && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--danger, #c00)" }}>{fileError}</p>
+            )}
+          </div>
+        )}
+
+        {submitError && (
+          <p className="builder-module-runtime-note" style={{ margin: 0, color: "var(--danger, #c00)" }}>{submitError}</p>
+        )}
+        {successNote && (
+          <p className="builder-module-runtime-note" style={{ margin: 0, color: "#15803d" }}>{successNote}</p>
+        )}
+        {warningNote && (
+          <p className="builder-module-runtime-note" style={{ margin: 0, color: "#b45309" }}>{warningNote}</p>
+        )}
+
+        <div>
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: "8px 18px", fontSize: 13, fontWeight: 600, borderRadius: 6,
+              border: "1px solid #0f4f8f", background: "#0f4f8f", color: "#fff",
+              cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.7 : 1,
+              whiteSpace: "nowrap", width: "fit-content",
+            }}
+          >
+            {submitting ? "Sending…" : buttonText}
+          </button>
+        </div>
+      </form>
+        </div>
+
+      {showHistory && (
+        <div style={{ maxWidth: 560 }}>
+          <h4 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700 }}>{historyTitle}</h4>
+          {historyLoading ? (
+            <p className="builder-module-runtime-note">Loading your requests…</p>
+          ) : history.length === 0 ? (
+            <p className="builder-module-runtime-note">You haven&rsquo;t sent any support requests yet.</p>
+          ) : (
+            <div style={{ display: "grid", gap: 8 }}>
+              {history.map((r) => (
+                <div
+                  key={r.id}
+                  style={{ padding: "10px 14px", border: "1px solid var(--border, #e5e7eb)", borderRadius: 8 }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                    <strong style={{ fontSize: 14 }}>{r.title}</strong>
+                    <span style={{ fontSize: 12, color: "var(--muted, #888)", whiteSpace: "nowrap" }}>
+                      {formatSupportDate(r.createdAt)}
+                    </span>
+                  </div>
+                  <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--muted, #888)" }}>
+                    {supportPriorityLabel(r.priority)} priority &middot; {supportStatusLabel(r.status)}
+                    {r.screenshotUrl ? " · screenshot attached" : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      </div>
+    </div>
+  );
+}
 
 function AdminModulesPreview({
   settings,

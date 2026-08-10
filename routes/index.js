@@ -38,6 +38,7 @@ const {
 
 const auth        = require('./auth');
 const projectAdmin = require('./projectAdmin');
+const projectSupport = require('./projectSupport');
 const projects    = require('./projects');
 const settings    = require('./settings');
 const acquire     = require('./acquire');
@@ -50,6 +51,7 @@ const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
 const builder     = require('./builder');
+const seoAltText  = require('./seoAltText');
 const communityAssets = require('./communityAssets');
 const observe     = require('./observe');
 const roger       = require('./devAgent');
@@ -60,6 +62,9 @@ const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const blog        = require('./blog');
 const admin       = require('./admin');
+const associations = require('./associations');
+const siteImport  = require('./siteImport');
+const themeWizard = require('./themeWizard');
 const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
@@ -68,15 +73,25 @@ const ROUTE_MODULES = [
   admin,
   auth,
   projectAdmin,
+  projectSupport,
   projects,
   settings,
   acquire,
   promoLeads,
   assets,
+  associations,
   channels,
   contacts,
   engage,
+  // Ahead of `builder` on purpose. Both claim '/api/builder/*'; builder
+  // currently falls through with `false` on paths it doesn't recognise, so
+  // either order works today — but the day builder grows a catch-all 405, the
+  // wizard's routes would start 405-ing with nothing to point at. Matching
+  // first costs nothing and removes the dependency.
+  themeWizard,
   builder,
+  siteImport,
+  seoAltText,
   communityAssets,
   messaging,
   activityLog,

@@ -1,11 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import type { BuilderThemePalette } from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
@@ -18,62 +18,97 @@ export function BuilderBlogPostManagerModuleSettings({
   onUpdateModule,
   themeColors = []
 }: Props) {
-  const s = module.settings;
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
+  const schema: BuilderSettingsSchema = {
+    // D8 logical axes: Content / Structure / Frame. The two page pickers
+    // are destinations (Content); the toggles decide which columns the
+    // manager shows (Structure); Accent is the module's own colour (Frame).
+    axes: [
+      {
+        title: "Content",
+        strips: [
+      [
+        {
+          key: "editPageUrl",
+          label: "Edit Page URL",
+          width: "text-md",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Auto",
+          placeholder: "/builder-preview.html?slug=blog-post-edit",
+          rendersVia: "BlogPostManagerPreview"
+        },
+        {
+          key: "viewPageUrl",
+          label: "View Page URL",
+          width: "text-md",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Auto",
+          placeholder: "/builder-preview.html?slug=blog-post-view",
+          rendersVia: "BlogPostManagerPreview"
+        }
+      ]
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
+      [
+        {
+          key: "showStatus",
+          label: "Status",
+          width: "check",
+          control: "checkbox",
+          fallback: "true",
+          rendersVia: "BlogPostManagerPreview"
+        },
+        {
+          key: "showDate",
+          label: "Date",
+          width: "check",
+          control: "checkbox",
+          fallback: "true",
+          rendersVia: "BlogPostManagerPreview"
+        },
+        {
+          key: "showDelete",
+          label: "Delete",
+          width: "check",
+          control: "checkbox",
+          fallback: "true",
+          rendersVia: "BlogPostManagerPreview"
+        }
+      ]
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
+      [
+        {
+          key: "accentColor",
+          label: "Accent Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Accent color",
+          fallback: "#0f4f8f",
+          rendersVia: "BlogPostManagerPreview"
+        }
+      ]
+        ]
+      }
+    ]
+  };
 
   return (
     <div className="builder-blog-post-manager-settings">
-      <BuilderSettingRow label="Edit page URL" fullWidth>
-        <input
-          type="text"
-          value={s.editPageUrl ?? ""}
-          onChange={(e) => set("editPageUrl", e.target.value)}
-          placeholder="/builder-preview.html?slug=blog-post-edit"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="View page URL" fullWidth>
-        <input
-          type="text"
-          value={s.viewPageUrl ?? ""}
-          onChange={(e) => set("viewPageUrl", e.target.value)}
-          placeholder="/builder-preview.html?slug=blog-post-view"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Show status">
-        <select value={s.showStatus ?? "true"} onChange={(e) => set("showStatus", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Show date">
-        <select value={s.showDate ?? "true"} onChange={(e) => set("showDate", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Show delete">
-        <select value={s.showDelete ?? "true"} onChange={(e) => set("showDelete", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderThemeColorSettingRow
-        fallback="#0f4f8f"
-        label="Accent color"
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
         themeColors={themeColors}
-        value={s.accentColor ?? "#0f4f8f"}
-        onChange={(accentColor) => set("accentColor", accentColor)}
       />
     </div>
   );

@@ -1,0 +1,62 @@
+{
+  "__comment": "Synthetic CaptureResult fixture — modern JS-framework site, content assembled client-side into div soup (archetype 2 of 3, spec §Testing). Exercises: wrapper-chain descent (#root), bare text runs in divs, role=button divs, svg→other, iframe→embed, headings inside card divs. Will be replaced by a real capture once the capture layer lands.",
+  "jobId": "job-fixture-jsx",
+  "sourceUrl": "https://example-app.com/",
+  "capturedAt": "2026-08-05T12:00:00.000Z",
+  "assets": [
+    {
+      "id": "b1",
+      "originalUrl": "https://cdn.example-app.com/hero-bg.webp",
+      "storageUrl": "SiteImport/job-fixture-jsx/assets/cccc3333.webp",
+      "contentHash": "cccc3333",
+      "mimeType": "image/webp",
+      "byteSize": 91000,
+      "width": 2400,
+      "height": 1200,
+      "altText": "",
+      "referencedBy": [],
+      "status": "downloaded",
+      "error": ""
+    }
+  ],
+  "pageStats": { "discovered": 1, "captured": 1, "failed": 0 },
+  "capsHit": [],
+  "pages": [
+    {
+      "desktop": {
+        "url": "https://example-app.com/",
+        "finalUrl": "https://example-app.com/",
+        "viewport": "desktop",
+        "html": "<!DOCTYPE html><html lang='en'><head><title>Acme — Ship faster</title></head><body><div id='root' data-scim='1'><div class='app' data-scim='2'><div class='nav-bar' data-scim='3'><a class='brand' href='/' data-scim='4'>Acme</a><a href='/pricing' data-scim='5'>Pricing</a><a href='/docs' data-scim='6'>Docs</a><button class='signin' data-scim='7'>Sign in</button></div><div class='hero' data-scim='8'><h2 data-scim='9'>Ship faster with Acme</h2><div class='sub' data-scim='10'>The deployment platform for modern teams.</div><div role='button' tabindex='0' class='cta' data-scim='11'>Get started free</div></div><div class='media-strip' data-scim='12'><svg viewBox='0 0 24 24' data-scim='13'><path d='M12 2L2 22h20z'></path></svg><iframe src='https://www.youtube.com/embed/dQw4w9WgXcQ' title='Demo video' data-scim='14'></iframe></div><div class='cards' data-scim='15'><div class='card' data-scim='16'><h3 data-scim='17'>Fast</h3><div data-scim='18'>Deploy in seconds, not hours.</div></div><div class='card' data-scim='19'><h3 data-scim='20'>Safe</h3><div data-scim='21'>SOC2-ready out of the box.</div></div></div></div></div></body></html>",
+        "styles": {
+          "8": { "background-color": "rgb(15, 23, 42)", "background-image": "url(https://cdn.example-app.com/hero-bg.webp)", "padding-top": "96px", "padding-bottom": "96px" },
+          "9": { "color": "rgb(255, 255, 255)", "font-family": "Inter, sans-serif", "font-size": "56px", "font-weight": "800", "letter-spacing": "-1.4px" },
+          "10": { "color": "rgb(148, 163, 184)", "font-family": "Inter, sans-serif", "font-size": "20px", "line-height": "32px" },
+          "11": { "color": "rgb(15, 23, 42)", "background-color": "rgb(52, 211, 153)", "font-size": "18px", "font-weight": "700", "border-radius": "9999px", "padding-top": "14px", "padding-bottom": "14px", "padding-left": "28px", "padding-right": "28px", "display": "inline-flex", "justify-content": "center", "align-items": "center" },
+          "17": { "color": "rgb(15, 23, 42)", "font-family": "Inter, sans-serif", "font-size": "24px", "font-weight": "700" },
+          "18": { "color": "rgb(71, 85, 105)", "font-family": "Inter, sans-serif", "font-size": "16px", "line-height": "24px" },
+          "15": { "display": "flex", "gap": "24px", "justify-content": "center" }
+        },
+        "fullPageScreenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.full.png",
+        "sectionScreenshots": {
+          "0": "SiteImport/job-fixture-jsx/shots/home.desktop.s0.png",
+          "1": "SiteImport/job-fixture-jsx/shots/home.desktop.s1.png",
+          "2": "SiteImport/job-fixture-jsx/shots/home.desktop.s2.png",
+          "3": "SiteImport/job-fixture-jsx/shots/home.desktop.s3.png"
+        },
+        "elementScreenshots": {},
+        "assetUrls": [
+          { "url": "https://cdn.example-app.com/hero-bg.webp", "via": "css-background" }
+        ],
+        "fontFamilies": [{ "value": "Inter, sans-serif", "count": 24 }],
+        "meta": {
+          "title": "Acme — Ship faster",
+          "metaDescription": "The deployment platform for modern teams.",
+          "ogTags": { "og:title": "Acme", "og:image": "https://cdn.example-app.com/hero-bg.webp" },
+          "canonicalUrl": "https://example-app.com/",
+          "lang": "en"
+        }
+      }
+    }
+  ]
+}

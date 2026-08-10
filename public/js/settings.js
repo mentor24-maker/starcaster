@@ -913,6 +913,12 @@ App.settings = (function () {
     if (els.settingsProjectDefaultUrlInput) {
       els.settingsProjectDefaultUrlInput.value = String(active?.projectUrl || active?.project_url || active?.website || '');
     }
+    if (els.settingsProjectSupportEmail) {
+      els.settingsProjectSupportEmail.value = String(active?.supportEmail || '');
+    }
+    if (els.settingsProjectSupportPhone) {
+      els.settingsProjectSupportPhone.value = String(active?.supportPhone || '');
+    }
     syncProjectTimezoneSelectValue(active);
     const logoDataUrl = getProjectLogoDataUrl(active);
     if (els.settingsProjectLogoPreview) {
@@ -1181,8 +1187,11 @@ App.settings = (function () {
     setApiFormVisible(false, 'Add API');
   }
 
-  function openApiSettingsForm(provider, values, title, diagnostics) {
+  function openApiSettingsForm(provider, values, title, diagnostics, hasValue) {
     state.apiFormValues = values && typeof values === 'object' ? { ...values } : {};
+    // Which secrets already have a stored value, so the form can offer Reveal
+    // and treat a blank field as "keep what is there".
+    state.apiFormHasValue = (hasValue && typeof hasValue === 'object') ? { ...hasValue } : {};
     // Per-field source metadata (which value is actually in effect) for the
     // provider being edited. Tagged with its provider so we never show it
     // against a different provider selected from the dropdown.
@@ -1276,11 +1285,55 @@ App.settings = (function () {
         input.rows = Number(field.rows || 6) || 6;
       }
       if (field.required) input.required = true;
-      input.value = String(state.apiFormValues[field.key] || '');
+
+      // Secrets are no longer prefilled — the server sends a mask, not the
+      // value. A blank secret field means "leave this one as it is", so the
+      // placeholder has to say so or it reads as "not set".
+      const alreadySet = Boolean(state.apiFormHasValue[field.key]);
+      if (field.secret) {
+        input.value = '';
+        if (alreadySet) {
+          input.placeholder = 'Saved — leave blank to keep, or paste a new value';
+          // A required field that already has a stored value must not block the
+          // form just because it is intentionally blank.
+          input.required = false;
+        }
+      } else {
+        input.value = String(state.apiFormValues[field.key] || '');
+      }
 
       const control = document.createElement('div');
       control.className = 'api-field-control';
       control.appendChild(input);
+
+      // Reveal fetches this one field, on an explicit click that is logged.
+      if (field.secret && alreadySet) {
+        const revealBtn = document.createElement('button');
+        revealBtn.type = 'button';
+        revealBtn.className = 'btn btn-ghost api-field-toggle';
+        revealBtn.textContent = 'Reveal';
+        revealBtn.setAttribute('aria-label', `Reveal ${field.label}`);
+        revealBtn.addEventListener('click', async () => {
+          revealBtn.disabled = true;
+          const previous = revealBtn.textContent;
+          revealBtn.textContent = '...';
+          try {
+            const res = await api(
+              `/api/settings/apis/${encodeURIComponent(provider)}/reveal/${encodeURIComponent(field.key)}`
+            );
+            const value = String(res?.data?.value || res?.value || '');
+            if (!value) throw new Error('No value returned');
+            input.value = value;
+            input.type = 'text';
+            revealBtn.textContent = 'Revealed';
+          } catch (err) {
+            revealBtn.textContent = previous;
+            revealBtn.disabled = false;
+            notify(err.message || 'Could not reveal this value', true);
+          }
+        });
+        control.appendChild(revealBtn);
+      }
 
       if (field.secret && !isMultiline) {
         const toggleBtn = document.createElement('button');
@@ -1510,14 +1563,87 @@ App.settings = (function () {
 
   function clearApiSettingsForm() {
     state.apiFormValues = {};
+    state.apiFormHasValue = {};
     if (els.apiSettingsForm) els.apiSettingsForm.reset();
     renderApiProviderOptions(state.apiSchemas[0]?.provider);
     renderApiFieldInputs();
   }
 
+  /**
+   * Live credential check for whichever provider the form is showing.
+   *
+   * This is the control the old GET /api/settings/apis/:provider/test was
+   * reaching for — that route called a function that did not exist, so it threw
+   * a 500 on every request and nothing ever called it. It now works, and it
+   * covers every provider the registry knows rather than the handful the
+   * Connection Ops page happens to list.
+   *
+   * Three outcomes, deliberately distinguished: verified (and as whom),
+   * failed (with the reason), and not checkable at all. The third must never
+   * look like either of the first two.
+   */
+  async function runApiProviderVerify() {
+    const provider = String(els.apiProviderSelect?.value || '').trim();
+    const out = els.apiVerifyResult;
+    if (!provider) {
+      notify('Pick a provider first', true);
+      return;
+    }
+    if (out) {
+      out.classList.remove('hidden');
+      out.textContent = `Checking ${provider}...`;
+    }
+    if (els.apiVerifyBtn) els.apiVerifyBtn.disabled = true;
+    try {
+      const raw = await api(`/api/settings/apis/${encodeURIComponent(provider)}/verify`);
+      const result = raw?.verification || raw?.data || raw || {};
+      const identity = result.identity && result.identity.label ? String(result.identity.label) : '';
+      const notCheckable = String(result.code || '') === 'not_verifiable';
+
+      let line;
+      if (result.ok) {
+        line = identity
+          ? `Verified — authenticated as ${identity}.`
+          : 'Verified — the provider accepted these credentials.';
+      } else if (notCheckable) {
+        line = String(result.message || 'No live check exists for this provider yet.');
+      } else {
+        line = String(result.message || 'Verification failed.');
+      }
+
+      // A pass can still deserve a warning: the account may have changed under
+      // you, which matters more than the pass itself.
+      const driftMessage = String(result.identityDrift?.message || '').trim();
+      // On a failure, say whether the value in Vercel is simply not live yet —
+      // "wrong value" and "right value, not deployed" look identical otherwise.
+      const stalenessMessage = String(result.envStaleness?.message || '').trim();
+
+      if (out) {
+        out.textContent = [line, driftMessage, stalenessMessage].filter(Boolean).join(' ');
+        // Green only for a clean pass. A pass with identity drift is not clean,
+        // and "cannot check" is not a pass at all.
+        out.style.color = (result.ok && !driftMessage)
+          ? '#1d6f42'
+          : (result.ok ? '#8a5a00' : (notCheckable ? '' : '#8a1d2b'));
+      }
+      const toast = result.ok
+        ? (driftMessage || (identity ? `Verified as ${identity}` : 'Credentials verified'))
+        : [line, stalenessMessage].filter(Boolean).join(' ');
+      notify(toast, !result.ok || Boolean(driftMessage));
+    } catch (err) {
+      if (out) {
+        out.textContent = `Could not run the check: ${err.message || err}`;
+        out.style.color = '#8a1d2b';
+      }
+      notify(err.message || 'Verification request failed', true);
+    } finally {
+      if (els.apiVerifyBtn) els.apiVerifyBtn.disabled = false;
+    }
+  }
+
   async function editApiConfig(provider) {
     const data = await api(`/api/settings/apis/${encodeURIComponent(provider)}`);
-    openApiSettingsForm(data.provider, data.values || {}, `Edit API: ${data.label || data.provider}`, data.diagnostics);
+    openApiSettingsForm(data.provider, data.values || {}, `Edit API: ${data.label || data.provider}`, data.diagnostics, data.hasValue || {});
   }
 
   async function deleteApiConfig(provider) {
@@ -1910,26 +2036,14 @@ App.settings = (function () {
     let summary = '';
     let details = '';
     let blockerCode = '';
+    let verifiedIdentity = '';
+    // "We cannot check this" must never be shown as a pass or as a rejection.
+    let notVerifiable = false;
 
-    if (platform === 'bluesky') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/bluesky/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Bluesky auth test passed' : `Bluesky auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'BLUESKY_401';
-    } else if (platform === 'x') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/x/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'X auth test passed' : `X auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'X_AUTH_FAILED';
-    } else if (platform === 'facebook') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/facebook/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Facebook auth test passed' : `Facebook auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'FACEBOOK_401';
-    } else if (platform === 'facebook_personal') {
+    // facebook_personal is not a credential check — it probes the OpenClaw
+    // browser gateway, so there is nothing for the credential registry to
+    // verify. Every other platform goes through the one generic path below.
+    if (platform === 'facebook_personal') {
       const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/facebook-personal/auth-test'));
       testOk = parsed.authOk;
       summary = testOk
@@ -1937,32 +2051,24 @@ App.settings = (function () {
         : `OpenClaw gateway test failed: ${parsed.error || 'unknown error'}`;
       details = JSON.stringify(parsed.raw || {}, null, 2);
       blockerCode = testOk ? '' : 'OPENCLAW_AUTH_FAILED';
-    } else if (platform === 'instagram') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/instagram/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Instagram auth test passed' : `Instagram auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'INSTAGRAM_401';
-    } else if (platform === 'threads') {
-      const parsed = parseSocialAuthTestResponse(await api('/api/promote/social/threads/auth-test'));
-      testOk = parsed.authOk;
-      summary = testOk ? 'Threads auth test passed' : `Threads auth test failed: ${parsed.error || 'unknown error'}`;
-      details = JSON.stringify(parsed.raw || {}, null, 2);
-      blockerCode = testOk ? '' : 'THREADS_401';
-    } else if (platform === 'telegram') {
-      const res = await api('/api/promote/social/telegram/status');
-      testOk = res?.configured === true;
-      summary = testOk ? 'Telegram config test passed' : 'Telegram config test failed (missing bot token/chat id)';
-      details = JSON.stringify(res || {}, null, 2);
-      blockerCode = testOk ? '' : 'CHAT_ID_NOT_FOUND';
-    } else if (platform === 'reddit') {
-      const res = await api('/api/engage/reddit/status');
-      testOk = res?.authOk === true;
-      summary = testOk ? 'Reddit auth test passed' : `Reddit auth test failed: ${String(res?.auth?.error || 'unknown error')}`;
-      details = JSON.stringify(res || {}, null, 2);
-      blockerCode = testOk ? '' : 'REDDIT_401';
     } else {
-      throw new Error('No test handler for this platform yet');
+      // One path for every provider in lib/credentialVerify.js. This replaced
+      // eight near-identical branches, and the reason it matters is what the
+      // chain did when a platform was not listed: it threw "No test handler for
+      // this platform yet". Buffer and YouTube were both configured and live,
+      // and neither had a branch — so neither could be tested at all.
+      const raw = await api(`/api/settings/apis/${encodeURIComponent(platform)}/verify`);
+      const result = raw?.verification || raw?.data || raw || {};
+      testOk = result.ok === true;
+      const identity = result.identity && result.identity.label ? String(result.identity.label) : '';
+      summary = testOk
+        ? `${platform} credentials verified${identity ? ` as ${identity}` : ''}`
+        : String(result.message || `${platform} verification failed`);
+      details = JSON.stringify(result, null, 2);
+      // Free-text on the attempts record; the code is what the operator acts on.
+      blockerCode = testOk ? '' : `${platform.toUpperCase()}_${String(result.code || 'FAILED').toUpperCase()}`;
+      verifiedIdentity = identity;
+      notVerifiable = String(result.code || '') === 'not_verifiable';
     }
 
     await api(`/api/settings/connection-ops/${encodeURIComponent(platform)}/attempts`, {
@@ -1975,8 +2081,16 @@ App.settings = (function () {
       }),
     });
     await refreshConnectionOps(platform);
-    setConnectionOpsStatus(testOk ? `${platform} test passed.` : `${platform} test failed. Check latest attempt.`);
-    notify(testOk ? 'Connection test passed' : summary || 'Connection test failed', !testOk);
+    // Say which account passed. "Authenticated" without "as whom" is half an
+    // answer when every project posts as a different identity.
+    const passLine = verifiedIdentity
+      ? `${platform} verified as ${verifiedIdentity}.`
+      : `${platform} test passed.`;
+    const failLine = notVerifiable
+      ? `${platform} could not be checked — no live test exists for it yet.`
+      : `${platform} test failed. Check latest attempt.`;
+    setConnectionOpsStatus(testOk ? passLine : failLine);
+    notify(testOk ? passLine : (summary || 'Connection test failed'), !testOk);
   }
 
   function renderConnectionOpsSetupLinks(data) {
@@ -2438,9 +2552,14 @@ App.settings = (function () {
         const description = String(els.settingsProjectDetailsDescription?.value || '').trim();
         const projectUrl = normalizeProjectDefaultUrl(els.settingsProjectDefaultUrlInput?.value);
         const timezone = String(els.settingsProjectTimezoneSelect?.value || '').trim() || 'UTC';
+        const supportEmail = String(els.settingsProjectSupportEmail?.value || '').trim().toLowerCase();
+        const supportPhone = String(els.settingsProjectSupportPhone?.value || '').trim();
         if (!name) return notify('Project name is required', true);
         if (!slug) return notify('Project slug is required', true);
         if (!projectUrl) return notify('Default URL is required', true);
+        if (supportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportEmail)) {
+          return notify('Support Email must be a valid email address (or blank)', true);
+        }
         if (domain && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
           return notify('Custom domain must be a valid hostname (e.g. benvin.org)', true);
         }
@@ -2461,7 +2580,10 @@ App.settings = (function () {
           }
           const res = await api(`/api/projects/${encodeURIComponent(activeId)}`, {
             method: 'PATCH',
-            body: JSON.stringify({ name, slug, domain, description, projectUrl, timezone }),
+            body: JSON.stringify({
+              name, slug, domain, description, projectUrl, timezone,
+              supportEmail, supportPhone,
+            }),
           });
           mergeSavedProjectIntoState(res.project || res.data);
           await refreshProjectContext();
@@ -2757,6 +2879,12 @@ App.settings = (function () {
       });
     }
 
+    if (els.apiVerifyBtn) {
+      els.apiVerifyBtn.addEventListener('click', async () => {
+        await runApiProviderVerify();
+      });
+    }
+
     if (els.apiSettingsForm) {
       els.apiSettingsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -2766,8 +2894,16 @@ App.settings = (function () {
           values[input.name] = String(input.value || '').trim();
         });
         try {
-          await api('/api/settings/apis', { method: 'POST', body: JSON.stringify({ provider, values }) });
-          notify('API credentials saved');
+          const saved = await api('/api/settings/apis', { method: 'POST', body: JSON.stringify({ provider, values }) });
+          // A save can succeed and still be worth a second look — an unfamiliar
+          // key prefix, or whitespace that was trimmed here but would survive in
+          // the Vercel dashboard. These are heuristics, so they never block.
+          const savedWarnings = (saved?.data?.warnings || saved?.warnings || []);
+          if (Array.isArray(savedWarnings) && savedWarnings.length) {
+            notify(`Saved, but check this: ${savedWarnings[0].message}`, true);
+          } else {
+            notify('API credentials saved');
+          }
           const channelMode = Boolean(activeChannelLabel);
           await refreshApiSettings();
           if (!channelMode) closeApiSettingsForm();

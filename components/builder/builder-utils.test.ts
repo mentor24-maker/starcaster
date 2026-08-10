@@ -20,6 +20,8 @@ import {
   getSpeechBubbleModuleStyle,
   buildBuilderThemeStyles,
   getBuilderThemeStyleVars,
+  getThemePaletteRoleVars,
+  getButtonModuleStyle,
   getBuilderThemePageMarginStyle,
   getThemeRootVars,
   isFloatingImageModule,
@@ -832,5 +834,90 @@ describe("getThemeShellBackgroundSeedColor", () => {
         backgroundColor: "#f5fbff",
       })
     ).toBe("#f5fbff");
+  });
+});
+
+describe("getThemePaletteRoleVars", () => {
+  const palette = {
+    surface: "#fdfeff",
+    surfaceText: "#142a4c",
+    band: "#e1effa",
+    bandText: "#142a4c",
+    inverse: "#12294d",
+    inverseText: "#eaf3fb",
+    header: "#12294d",
+    headerText: "#f5fafe",
+    button: "#d9e62e",
+    buttonText: "#12294d",
+  };
+
+  it("emits nothing at all without a palette", () => {
+    // The load-bearing invariant: every site that predates the role palette
+    // has no palette, so it must receive no vars and render byte-identically.
+    expect(getThemePaletteRoleVars(undefined)).toEqual({});
+    expect(getThemePaletteRoleVars(null)).toEqual({});
+    expect(getThemePaletteRoleVars({})).toEqual({});
+  });
+
+  it("publishes each role under its own var", () => {
+    const vars = getThemePaletteRoleVars(palette);
+    expect(vars["--lp-surface"]).toBe("#fdfeff");
+    expect(vars["--lp-band"]).toBe("#e1effa");
+    expect(vars["--lp-band-text"]).toBe("#142a4c");
+    expect(vars["--lp-inverse"]).toBe("#12294d");
+    expect(vars["--lp-button-bg"]).toBe("#d9e62e");
+    expect(vars["--lp-button-text"]).toBe("#12294d");
+  });
+
+  it("drives the nav through the var names the CSS already reads", () => {
+    // The header is painted by publishing --site-nav-*, not by new CSS: the
+    // navigation module only writes those inline when the operator picked a
+    // colour, so a hand-styled nav still wins.
+    const vars = getThemePaletteRoleVars(palette);
+    expect(vars["--site-nav-bg"]).toBe("#12294d");
+    expect(vars["--site-nav-link-color"]).toBe("#f5fafe");
+    expect(vars["--site-nav-link-hover-bg"]).toBe("rgba(245, 250, 254, 0.16)");
+  });
+
+  it("derives a button hover shade instead of asking for one", () => {
+    const vars = getThemePaletteRoleVars(palette);
+    expect(vars["--lp-button-hover"]).toMatch(/^#[0-9a-f]{6}$/);
+    expect(vars["--lp-button-hover"]).not.toBe(palette.button);
+  });
+
+  it("only opens up band padding once there is a palette to band with", () => {
+    expect(getThemePaletteRoleVars({ button: "#d9e62e" })["--lp-band-padding"]).toBeUndefined();
+    expect(getThemePaletteRoleVars({ band: "#e1effa" })["--lp-band-padding"]).toBe("40px");
+  });
+});
+
+describe("getButtonModuleStyle palette defaults", () => {
+  it("follows the theme's button role when no colour was picked", () => {
+    const style = getButtonModuleStyle({}, { followThemePalette: true }) as Record<string, string>;
+    expect(style["--btn-bg"]).toBe("var(--lp-button-bg, #214c71)");
+    expect(style["--btn-color"]).toBe("var(--lp-button-text, #ffffff)");
+    expect(style["--btn-bg-hover"]).toBe("var(--lp-button-hover, var(--lp-button-bg, #0f4f8f))");
+  });
+
+  it("never overrides a colour the operator actually chose", () => {
+    const style = getButtonModuleStyle(
+      { buttonColor: "#a64e2c", textColor: "#ffffff" },
+      { followThemePalette: true }
+    ) as Record<string, string>;
+    expect(style.background).toBe("#a64e2c");
+    expect(style["--btn-color"]).toBe("#ffffff");
+  });
+});
+
+describe("getButtonModuleStyle email safety", () => {
+  it("keeps concrete colours for email, where var() resolves to nothing", () => {
+    // builder-email-render.ts inlines this style object into email HTML, and
+    // email clients do not support CSS custom properties. A var() here is a
+    // button with no colour at all in Gmail.
+    const style = getButtonModuleStyle({}) as Record<string, string>;
+    for (const value of Object.values(style)) {
+      expect(String(value)).not.toContain("var(");
+    }
+    expect(style.background).toBe("#214c71");
   });
 });

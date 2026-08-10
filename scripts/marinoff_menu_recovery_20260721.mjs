@@ -103,12 +103,13 @@ function loadEnv() {
 }
 
 const env = loadEnv();
-// The live Marinoff data is in the cloud project; .env.local's active
-// SUPABASE_URL points at the local dev stack.
-const SB_URL = env.NEW_SUPABASE_URL;
-const SB_KEY = env.NEW_SUPABASE_SERVICE_KEY;
-if (!SB_URL || !SB_KEY) {
-  console.error('Missing NEW_SUPABASE_URL / NEW_SUPABASE_SERVICE_KEY in .env.local');
+// Live cloud credentials come from Doppler prd at run time; .env.local's
+// active SUPABASE_URL points at the local dev stack, so refuse localhost.
+const SB_URL = process.env.SUPABASE_URL || env.SUPABASE_URL || '';
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY || env.SUPABASE_SERVICE_KEY || '';
+if (!SB_URL || !SB_KEY || /127\.0\.0\.1|localhost/.test(SB_URL)) {
+  console.error('This script edits live cloud data. Run it with production credentials:');
+  console.error('  doppler run --config prd -- node ' + process.argv[1]);
   process.exit(1);
 }
 const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });

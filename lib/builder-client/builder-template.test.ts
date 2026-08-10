@@ -37,6 +37,34 @@ describe("normalizeBuilderModuleSettingsForType", () => {
     expect(settings.backgroundImageUrl).toBe("");
     expect(settings.backgroundStyleKey).toBe("");
   });
+
+  it("converts the untouched feature-cards factory colors to theme-following", () => {
+    const settings = normalizeBuilderModuleSettingsForType("feature-cards", {
+      cardBackground: "#ffffff",
+      cardBorderColor: "#e1e8f0",
+      iconColor: "#0b2a4a",
+      iconAltColor: "#4f9c3a"
+    });
+
+    expect(settings.cardBackground).toBe("");
+    expect(settings.cardBorderColor).toBe("");
+    expect(settings.iconColor).toBe("");
+    expect(settings.iconAltColor).toBe("");
+  });
+
+  it("keeps feature-cards colors when any one differs from the factory set", () => {
+    const settings = normalizeBuilderModuleSettingsForType("feature-cards", {
+      cardBackground: "#ffffff",
+      cardBorderColor: "#e1e8f0",
+      iconColor: "#cc0000",
+      iconAltColor: "#4f9c3a"
+    });
+
+    expect(settings.cardBackground).toBe("#ffffff");
+    expect(settings.cardBorderColor).toBe("#e1e8f0");
+    expect(settings.iconColor).toBe("#cc0000");
+    expect(settings.iconAltColor).toBe("#4f9c3a");
+  });
 });
 
 describe("formatRichTextContent", () => {

@@ -60,6 +60,13 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     module.type === "headline-rotator" ||
     module.type === "poll-category-list" ||
     module.type === "slider" ||
+    module.type === "slideshow" ||
+    // Standard 11, decided 2026-08-07: skipped. Feature Cards is a CSS-grid
+    // layout, and Outlook's Word rendering engine supports neither grid nor
+    // flex — it would collapse to a single stacked column with none of the
+    // card styling. Doing it properly means a nested-table rewrite of the
+    // renderer, which is its own task, not a footnote on this one.
+    module.type === "feature-cards" ||
     module.type === "social" ||
     module.type === "social-share" ||
     module.type === "table" ||

@@ -3,6 +3,9 @@
 Read this file plus the `CLAUDE.md` nearest the files you are editing
 (`components/`, `src/css/`, `routes/`, `public/js/`, `lib/builder-client/`).
 Architecture, known issues, and roadmap: `docs/FABLE_OVERHAUL_PLAN.md`.
+**Hard-won rules, each with the incident that produced it: `docs/DOCTRINE.md`.**
+Read it before diagnosing a "it worked yesterday" failure, writing an error
+message, or adding a check that could silently not run.
 
 ## IMPORTANT: Coach the operator
 
@@ -21,6 +24,13 @@ does not land. Every agent working here must:
 - **Prompt, don't assume.** He has asked to be trained in best practices
   as work proceeds. Treat that coaching as part of every task's
   deliverable — not an interruption or an afterthought.
+- **Do the housekeeping silently.** Merged worktrees, stale branches,
+  asset-stamp conflicts, missing generated artifacts, scratch files: clean
+  them up as you go, without asking and without a section explaining it.
+  He has given blanket authorization (`docs/DOCTRINE.md` §6.4). The one
+  thing that earns an interruption is **him** actively causing a problem —
+  then say so immediately and completely. Everything else is a chore, and
+  chores are silent.
 
 StarCaster (company: Alphire) is a multi-tenant platform: an admin SPA plus a
 visual site Builder whose published pages serve as tenant public sites on
@@ -48,6 +58,8 @@ them locally.
 | `public/js/richtext-vendor.js` | `public/js/richtext-vendor-entry.js` | `npm run build:richtext` |
 | `lib/builder/template.js`, `lib/builder/email-template.js` | `lib/builder-client/builder-template.ts`, `builder-email-template.ts` | `npm run build:builder-template` |
 | `lib/builder/email-render.js` | builder-client sources | `npm run build:builder-email-render` |
+| `lib/site-import/dist/*.js` | `lib/site-import/*.ts` | `npm run build:site-import` |
+| `lib/build-stamp.json` | `scripts/write_build_stamp.mjs` (records build time) | `npm run build:stamp` |
 
 `public/about.html` and `public/site.html` are hand-authored but get asset
 hashes pinned by `npm run pin:assets` — editing them is fine.
@@ -88,6 +100,15 @@ hashes pinned by `npm run pin:assets` — editing them is fine.
    pre-commit and CI, but it catches syntax only: a typo like
    `App.assset.foo()` still parses and fails at runtime. Open the app and
    check the browser console after editing these files.
+10. **Vercel bakes env vars in at build time.** Editing one in the dashboard
+    does NOT reach the deployment already serving traffic — it takes a redeploy.
+    So "the value is wrong" and "the value is right but not live" look
+    identical. This cost an hour on 2026-07-29; before suspecting a credential,
+    compare the build time (`lib/buildInfo.js`) with when the variable changed.
+11. **`checkEndpointLimit` returns `true` when it has ALREADY sent a 429.**
+    `if (checkEndpointLimit(...)) return true;` is correct. The inverted form
+    bails out of every normal request and writes nothing at all — status 0,
+    empty body, a completely dead endpoint that still looks fine in review.
 
 ## One worktree per thread
 

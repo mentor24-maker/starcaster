@@ -195,10 +195,11 @@
                     <option value="unset">Unset</option>
                   </select>
                 </th>
-                <th></th>
-                <th></th>
-                <th class="builder-pages-bulk-actions-cell">
-                  <div class="table-actions-row builder-pages-bulk-actions-row">
+                <!-- Spans Published + Updated + Actions: the three bulk
+                     buttons need ~230px and the Actions column is 7.5rem,
+                     so confining them to it pushed the table off-screen. -->
+                <th class="crud-bulk-actions" colspan="3">
+                  <div class="crud-bulk-actions-row">
                     <button id="builderPagesBulkPublishBtn" class="btn" type="button" disabled>Publish</button>
                     <button id="builderPagesBulkArchiveBtn" class="btn" type="button" disabled>Archive</button>
                     <button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete</button>
@@ -912,6 +913,16 @@
         <p>Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
         <div id="builderExtensionsFeaturedGrid" class="builder-extensions-tree"></div>
       </section>
+      <section id="builderSiteImportPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Builder: Site Import</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
+          </div>
+        </div>
+        <p>Capture a client's existing website — pages, screenshots, and assets — as raw material for rebuilding it in Builder. Internal staff tool.</p>
+        <div id="builderReactRootSiteImport" class="builder-react-root"></div>
+      </section>
       <section id="builderExtensionsManagerPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="builderToolsPage">Builder: Extensions</a>: Manager</h2>
@@ -1140,4 +1151,14 @@
           </div>
         </div>
         <div id="builderReactRootPopulateTitles"></div>
+      </section>
+      <section id="builderExtensionSeoAltTextPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Extension: SEO Alt Text</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('builderToolsPage')" class="btn">Back To Extensions</button>
+            <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
+          </div>
+        </div>
+        <div id="builderReactRootSeoAltText"></div>
       </section>

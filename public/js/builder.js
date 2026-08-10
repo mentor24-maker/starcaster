@@ -791,6 +791,13 @@ App.builder = (function () {
     }
   }
 
+  function mountSeoAltTextReact() {
+    const host = byId('builderReactRootSeoAltText');
+    if (host && window.SeoAltTextReact?.mount) {
+      window.SeoAltTextReact.mount(host);
+    }
+  }
+
   function openAgentsPage() {
     const host = byId('builderReactRootAgents');
     window.AgentsReact?.mount(host, 'list');
@@ -801,6 +808,13 @@ App.builder = (function () {
     const host = byId('builderReactRootAgents');
     window.AgentsReact?.mount(host, 'builder');
     App.setActivePage('builderAgentsPage');
+  }
+
+  // Site Import (staff-only React screen). Mounting happens in
+  // onPageActivated so refreshes and deep links render too — this helper
+  // only navigates.
+  function openSiteImportPage() {
+    App.setActivePage('builderSiteImportPage');
   }
 
   function slugify(value) {
@@ -8109,9 +8123,45 @@ App.builder = (function () {
       });
   }
 
+  /** Active project's custom/staging domain, '' when none is configured. */
+  function activeProjectDomain() {
+    const activeId = typeof App.projectContext?.getSessionProjectId === 'function'
+      ? String(App.projectContext.getSessionProjectId() || '')
+      : '';
+    const projects = Array.isArray(App.state?.projects) ? App.state.projects : [];
+    const active = projects.find((p) => String(p?.id || '') === activeId);
+    return String(active?.domain || '').trim();
+  }
+
+  /** Preview URL for a SAVED page. Projects with a domain (custom or
+   *  staging subdomain) link straight to the real site — the page as
+   *  visitors see it. Note: unpublished drafts are not served publicly,
+   *  so the public site falls back to home for them; the admin
+   *  builder-preview remains the fallback when no domain is set. */
+  function landingPagePreviewUrl(record) {
+    const domain = activeProjectDomain();
+    const slug = safeText(record?.slug);
+    if (domain) {
+      return 'https://' + domain + '/' + (slug === 'home' ? '' : encodeURIComponent(slug));
+    }
+    const ref = safeText(record?.id) || slug;
+    return window.location.origin + '/builder-preview.html?slug=' + encodeURIComponent(ref);
+  }
+
   function openLandingPagePreview(record, options = {}) {
     if (!record) return;
     if (normalizePageTemplateKind(record.templateKind) === 'modular') {
+      // Saved pages open as a dedicated standalone tab that fetches the
+      // page FRESH by id (?slug= matches slug or id in builder-preview).
+      // The old localStorage stash meant every preview tab showed whatever
+      // was stashed last and refreshes served stale content.
+      const savedRef = safeText(record.id) || safeText(record.slug);
+      if (savedRef) {
+        window.open(landingPagePreviewUrl(record), '_blank');
+        return;
+      }
+      // Unsaved in-memory drafts still preview via the stash — they have
+      // no id for the preview page to fetch.
       try {
         window.localStorage.setItem('normie_builder_preview_draft', JSON.stringify({
           name: record.name,
@@ -8379,6 +8429,75 @@ App.builder = (function () {
     return payload;
   }
 
+  /**
+   * Crop one line of text to fit its box, cutting only at `separator`
+   * boundaries — never through a word (UI_RULES L4, T7 rung 10).
+   *
+   * CSS cannot do this. `text-overflow: ellipsis` cuts at whatever character
+   * lands on the edge, and `-webkit-line-clamp` wraps at word boundaries but
+   * then shortens the last line to make room for its own ellipsis, landing
+   * mid-word too ("Junior Tenni…"). So the ellipsis is placed here, by
+   * dropping whole words until what is left fits.
+   *
+   * The element must be a single-line, overflow-hidden box for the
+   * scrollWidth/clientWidth comparison to mean anything; legacy.css sets
+   * that on .builder-pages-name-text and .builder-pages-slug-link.
+   */
+  function clampCellTextToBoundary(box, textEl, fullText, separator) {
+    const text = String(fullText == null ? '' : fullText);
+    textEl.textContent = text;
+    // `box` must be the block, overflow-hidden element: an inline <code>
+    // reports clientWidth 0, so measuring it would compare nothing.
+    if (!text || box.scrollWidth <= box.clientWidth + 1) return;
+
+    const parts = text.split(separator).filter((part) => part !== '');
+    if (parts.length <= 1) {
+      // A single unbroken token: there is no boundary to break at, so L4's
+      // "never cut through a word" cannot be honored either way. Returning
+      // early left `overflow: hidden` to clip it with no ellipsis at all —
+      // the reader could not tell the value was cut. Falling back to
+      // characters at least says so.
+      let low = 1;
+      let high = text.length;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        textEl.textContent = text.slice(0, mid) + '…';
+        if (box.scrollWidth <= box.clientWidth + 1) low = mid;
+        else high = mid - 1;
+      }
+      textEl.textContent = text.slice(0, low) + '…';
+      return;
+    }
+
+    // Largest number of leading parts that still fits, by bisection.
+    let low = 1;
+    let high = parts.length - 1;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      textEl.textContent = parts.slice(0, mid).join(separator) + '…';
+      if (box.scrollWidth <= box.clientWidth + 1) low = mid;
+      else high = mid - 1;
+    }
+    textEl.textContent = parts.slice(0, low).join(separator) + '…';
+  }
+
+  /** Re-crop every clamped cell; run after a render and after a resize. */
+  function clampPagesTableText() {
+    document.querySelectorAll('#builderPagesTableBody .builder-pages-name-text')
+      .forEach((el) => clampCellTextToBoundary(el, el, el.title, ' '));
+    document.querySelectorAll('#builderPagesTableBody .builder-pages-slug-link')
+      .forEach((link) => {
+        const code = link.querySelector('code');
+        if (code) clampCellTextToBoundary(link, code, link.title, '-');
+      });
+  }
+
+  let pagesClampResizeTimer = null;
+  window.addEventListener('resize', () => {
+    window.clearTimeout(pagesClampResizeTimer);
+    pagesClampResizeTimer = window.setTimeout(clampPagesTableText, 120);
+  });
+
   function renderPagesTable() {
     const tbody = byId('builderPagesTableBody');
     if (!tbody) return;
@@ -8454,15 +8573,42 @@ App.builder = (function () {
         row.appendChild(td);
       };
 
-      append(safeText(item.name) || '-', 'builder-pages-col-name');
+      // Name clamps to one line at a word boundary, so the full title has to
+      // stay reachable on hover (UI_RULES T7 rung 10). The span exists because
+      // a <td> cannot itself be the clamping box without breaking the table.
+      const nameTd = document.createElement('td');
+      nameTd.className = 'builder-pages-col-name';
+      const nameText = safeText(item.name) || '-';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'builder-pages-name-text';
+      nameSpan.textContent = nameText;
+      nameSpan.title = nameText;
+      nameTd.appendChild(nameSpan);
+      row.appendChild(nameTd);
+
       append(getLandingPageTemplateName(item.templateId) || '-', 'builder-pages-col-template');
 
       const slugTd = document.createElement('td');
       slugTd.className = 'builder-pages-col-slug';
-      const slugCode = document.createElement('code');
       const slugText = safeText(item.slug);
+      const slugLink = document.createElement('a');
+      slugLink.className = 'builder-pages-slug-link';
+      slugLink.href = normalizePageTemplateKind(item.templateKind) === 'modular'
+        ? landingPagePreviewUrl(item)
+        : '#';
+      slugLink.target = '_blank';
+      slugLink.rel = 'noopener';
+      slugLink.title = slugText ? `/${slugText}` : '/';
+      slugLink.addEventListener('click', (e) => {
+        if (slugLink.getAttribute('href') === '#') {
+          e.preventDefault();
+          openLandingPagePreview(item);
+        }
+      });
+      const slugCode = document.createElement('code');
       slugCode.textContent = slugText ? `/${slugText}` : '/';
-      slugTd.appendChild(slugCode);
+      slugLink.appendChild(slugCode);
+      slugTd.appendChild(slugLink);
       row.appendChild(slugTd);
 
       const visibilityTd = document.createElement('td');
@@ -8494,7 +8640,20 @@ App.builder = (function () {
       publishTd.appendChild(publishCheckbox);
       row.appendChild(publishTd);
 
-      append(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-', 'builder-pages-col-updated');
+      // T7 rung 7: the column only has to answer "how recently"; the exact
+      // second is a hover away rather than 200px of every row.
+      const updatedTd = document.createElement('td');
+      updatedTd.className = 'builder-pages-col-updated';
+      if (item.updatedAt) {
+        const updatedAt = new Date(item.updatedAt);
+        updatedTd.textContent = updatedAt.toLocaleDateString(undefined, {
+          month: 'short', day: 'numeric', year: 'numeric',
+        });
+        updatedTd.title = updatedAt.toLocaleString();
+      } else {
+        updatedTd.textContent = '-';
+      }
+      row.appendChild(updatedTd);
 
       const actionsTd = document.createElement('td');
       actionsTd.className = 'builder-pages-actions-cell builder-pages-col-actions';
@@ -8552,6 +8711,7 @@ App.builder = (function () {
       tbody.appendChild(row);
     });
 
+    clampPagesTableText();
     syncLandingPageTableControls();
   }
 
@@ -14326,9 +14486,14 @@ App.builder = (function () {
 
       if (pageId === 'builderPageArchivesPage') {
         loadPageArchives().then(() => renderPageArchivesTable()).catch(() => {});
+      } else if (pageId === 'builderSiteImportPage') {
+        // Mount on activation (not just the nav link's onclick) so landing
+        // here from a browser refresh or a #page= deep link still renders.
+        window.SiteImportReact?.mount(byId('builderReactRootSiteImport'));
       } else if (pageId === 'builderThemesPage') mountThemesReact();
       else if (pageId === 'builderFormsPage') mountFormsReact();
       else if (pageId === 'builderExtensionPopulateTitlesPage') mountPopulateTitlesReact();
+      else if (pageId === 'builderExtensionSeoAltTextPage') mountSeoAltTextReact();
       else if (pageId === 'builderBuilderWorkspacePage') {
         if (!builderActiveMount || builderActiveMount.surface !== 'hub') {
           mount({ surface: 'hub', editorMode: 'template', onClose: () => {} });
@@ -14352,6 +14517,7 @@ App.builder = (function () {
     openFormsPage,
     openAgentsPage,
     openAgentsCreate,
+    openSiteImportPage,
     openModularPageTemplateEditor,
     buildModularPageTemplatePreviewMarkup,
     openBulkCreateFromManagePage,

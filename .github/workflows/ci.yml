@@ -59,8 +59,23 @@ jobs:
       - name: Unit tests (builder server libs)
         run: npm run test:builder
 
+      - name: Unit tests (site import engine)
+        # Runs after the full build so lib/builder/template.js exists for
+        # the mapper's round-trip proof.
+        run: npm run test:site-import
+
+      - name: UI doctrine (blocking)
+        # docs/MODULE_UI_DOCTRINE.md. Deliberately a SEPARATE, blocking step:
+        # the conventions check below is advisory because of pre-existing
+        # button-in-<th> violations, and folding the UI rules into it would
+        # have made them advisory too — which is precisely how every previous
+        # UI rule in this repo decayed into a suggestion. These checks are
+        # clean repo-wide today, so this gate is green and only NEW violations
+        # can turn it red.
+        run: npm run check:ui
+
       - name: Convention checks (advisory)
-        # Non-blocking until the 6 pre-existing button-in-<th> violations
+        # Non-blocking until the 7 pre-existing button-in-<th> violations
         # are cleaned up; then drop continue-on-error to make it a gate.
         continue-on-error: true
         run: node scripts/check_conventions.cjs --all

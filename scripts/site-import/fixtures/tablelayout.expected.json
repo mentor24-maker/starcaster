@@ -1,0 +1,117 @@
+{
+  "ir": {
+    "irVersion": "1.0",
+    "jobId": "job-fixture-tbl",
+    "sourceUrl": "http://example-plumber.com/",
+    "capturedAt": "2026-08-05T12:00:00.000Z",
+    "pages": [
+      {
+        "url": "http://example-plumber.com/",
+        "path": "/",
+        "title": "Smith & Sons Plumbing",
+        "metaDescription": "",
+        "ogTags": {},
+        "canonicalUrl": "",
+        "lang": "",
+        "sections": [
+          {
+            "sourceId": "0-08c2bf26",
+            "type": "unknown",
+            "screenshot": "SiteImport/job-fixture-tbl/shots/home.desktop.s0.png",
+            "elements": [
+              {
+                "sourceId": "0-3607c80e",
+                "class": "table",
+                "html": "<table width=\"800\" border=\"0\" cellpadding=\"4\"><tbody><tr><td colspan=\"2\" align=\"center\"><img src=\"banner.gif\" width=\"760\" height=\"90\" alt=\"Smith and Sons Plumbing\"></td></tr><tr><td width=\"180\" valign=\"top\" bgcolor=\"#003366\"><a href=\"index.html\"><font color=\"#ffffff\">Home</font></a><br><a href=\"services.html\"><font color=\"#ffffff\">Services</font></a><br><a href=\"contact.html\"><font color=\"#ffffff\">Contact</font></a></td><td valign=\"top\"><font face=\"Times New Roman\" size=\"4\">Serving the Delray area since 1974. No job too small!</font><table border=\"1\"><tbody><tr><td>Emergency</td><td>24 hours</td></tr><tr><td>Office</td><td>Mon–Fri 8–5</td></tr></tbody></table></td></tr></tbody></table>",
+                "textContent": "HomeServicesContactServing the Delray area since 1974. No job too small!Emergency24 hoursOfficeMon–Fri 8–5",
+                "textLength": 106,
+                "computedStyles": {},
+                "documentPosition": 0,
+                "depth": 2,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-445cbd61",
+                "class": "text",
+                "html": "Call us: 555-0100",
+                "textContent": "Call us: 555-0100",
+                "textLength": 17,
+                "computedStyles": {
+                  "color": "rgb(0, 0, 0)",
+                  "font-family": "'Times New Roman', serif",
+                  "font-size": "13px"
+                },
+                "documentPosition": 1,
+                "depth": 3,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-e7eaa896",
+                "class": "text",
+                "html": "Family owned and operated for 50 years!",
+                "textContent": "Family owned and operated for 50 years!",
+                "textLength": 39,
+                "computedStyles": {},
+                "documentPosition": 2,
+                "depth": 3,
+                "assetRefs": []
+              }
+            ]
+          }
+        ],
+        "screenshots": {
+          "desktop": "SiteImport/job-fixture-tbl/shots/home.desktop.full.png",
+          "tablet": "",
+          "mobile": ""
+        }
+      }
+    ],
+    "assets": [],
+    "taxonomy": {
+      "navs": [],
+      "pageOrder": [
+        "/"
+      ]
+    },
+    "rawTokens": {
+      "colors": [
+        {
+          "value": "rgb(0, 0, 0)",
+          "count": 1
+        }
+      ],
+      "fontSizes": [
+        {
+          "value": "13px",
+          "count": 1
+        }
+      ],
+      "fontFamilies": [
+        {
+          "value": "'Times New Roman', serif",
+          "count": 9
+        }
+      ],
+      "spacing": []
+    }
+  },
+  "coverage": {
+    "captured": {
+      "table": 1,
+      "text": 2
+    },
+    "emitted": {
+      "table": 1,
+      "text": 2
+    },
+    "dropped": {},
+    "pages": {
+      "discovered": 1,
+      "captured": 1,
+      "failed": 0
+    },
+    "caps": {
+      "hit": []
+    }
+  }
+}

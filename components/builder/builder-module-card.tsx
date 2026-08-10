@@ -5,6 +5,14 @@ import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-an
 import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
+import { BuilderFeatureCardsModuleSettings } from "./builder-feature-cards-module-settings";
+import {
+  createBuilderCardItem,
+  parseBuilderCardItems,
+  serializeBuilderCardItems,
+  type BuilderCardItem
+} from "@/lib/builder-card-items";
+import { BuilderNavigationModuleSettings } from "./builder-navigation-module-settings";
 import type {
   BackgroundSettings,
   BuilderPageRecord,
@@ -20,7 +28,6 @@ import {
 } from "@/lib/builder-template";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
-import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
@@ -39,7 +46,7 @@ import {
   getSocialSharePlatformEnabled,
   type SocialSharePlatformId
 } from "@/components/social-share-module";
-import { BuilderAlignmentIconGroup, type BuilderModuleAlignment } from "./builder-alignment-icon-group";
+import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderButtonBackgroundPicker } from "./builder-button-background-picker";
@@ -85,6 +92,8 @@ import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
 import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
 import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
+import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
+import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -614,6 +623,46 @@ function renderModulePreview(module: BuilderTemplateModule) {
             ))}
           </tbody>
         </table>
+      </div>
+    );
+  }
+
+  if (module.type === "slideshow") {
+    const slides = parseSlideshowSlides(module.settings);
+    const first = slides[0];
+    return (
+      <div className="builder-module-preview-slideshow">
+        {first ? (
+          <img src={first.url} alt={first.alt || ""} loading="lazy" />
+        ) : (
+          <span className="builder-module-preview-slideshow-empty">Add slides in the editor</span>
+        )}
+        {slides.length > 1 ? (
+          <span className="builder-module-preview-slideshow-count">{slides.length} slides</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (module.type === "feature-cards") {
+    const cards = parseBuilderCardItems(module.settings.cards, "card");
+    const columns = Math.min(6, Math.max(1, Number.parseInt(module.settings.cardColumns || "3", 10) || 3));
+
+    if (cards.length === 0) {
+      return <span className="builder-module-preview-empty">Add cards in the editor</span>;
+    }
+
+    return (
+      <div
+        className="builder-module-preview-feature-cards"
+        style={{ gridTemplateColumns: `repeat(${Math.min(columns, cards.length)}, minmax(0, 1fr))` }}
+      >
+        {cards.slice(0, 6).map((card) => (
+          <article key={card.id} className="builder-module-preview-feature-card">
+            {card.imageUrl ? <img src={card.imageUrl} alt={card.imageAlt || ""} loading="lazy" /> : null}
+            <strong>{card.title || "Untitled card"}</strong>
+          </article>
+        ))}
       </div>
     );
   }
@@ -1935,6 +1984,98 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "admin-site-settings") {
+    const showTitle = module.settings.showTitle !== "false";
+    const title     = module.settings.panelTitle || "Site Settings";
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ maxWidth: 380, padding: "12px 14px", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a" }}>Contact Alert Email</div>
+          <div style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 7px" }}>
+            Where we email you when someone submits a contact form.
+          </div>
+          <input type="email" disabled placeholder="you@example.com" style={{ width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea", borderRadius: 6, boxSizing: "border-box", background: "#fafcff" }} />
+          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: "#0f4f8f", textDecoration: "underline" }}>
+            + Add Recipient
+          </div>
+        </div>
+        <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#0f4f8f", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "default" }}>
+          Save Settings
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "admin-support-form") {
+    const showTitle      = module.settings.showTitle !== "false";
+    const title          = module.settings.formTitle || "Request Support";
+    const buttonText     = module.settings.buttonText || "Send Request";
+    const showScreenshot = module.settings.showScreenshot !== "false";
+    const showHistory    = module.settings.showHistory !== "false";
+    const historyTitle   = module.settings.historyTitle || "Your Recent Requests";
+    const showContact    = module.settings.showContact !== "false";
+    const contactHeading = module.settings.contactHeading ?? "Need a hand with your website?";
+    const twoColumn      = (module.settings.layout ?? "two-column") !== "stacked";
+    const fieldStyle = {
+      width: "100%", padding: "6px 9px", fontSize: 12, border: "1px solid #c9dcea",
+      borderRadius: 6, boxSizing: "border-box" as const, background: "#fafcff",
+    };
+    return (
+      <div className="builder-module-preview-copy">
+        {showContact && (
+          <div style={{ marginBottom: 12, maxWidth: 380 }}>
+            {contactHeading ? (
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 4 }}>{contactHeading}</div>
+            ) : null}
+            <div style={{ fontSize: 11, color: "#8ba9be" }}>
+              Email and phone come from Settings &rsaquo; Projects &rsaquo; Edit.
+            </div>
+          </div>
+        )}
+        <div style={twoColumn
+          ? { display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", alignItems: "start" }
+          : undefined}
+        >
+          <div>
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ maxWidth: 380, padding: "12px 14px", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff", display: "grid", gap: 9 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Priority</div>
+            <select disabled style={fieldStyle}><option>Normal</option></select>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Issue title</div>
+            <input type="text" disabled placeholder="Short summary of the problem" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Issue description</div>
+            <textarea disabled rows={3} placeholder="What happened, and what were you doing?" style={{ ...fieldStyle, resize: "none" }} />
+          </div>
+          {showScreenshot && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#18324a", marginBottom: 3 }}>Screenshot</div>
+              <div style={{ ...fieldStyle, color: "#8ba9be", borderStyle: "dashed" }}>Choose an image…</div>
+            </div>
+          )}
+        </div>
+        <div style={{ marginTop: 10, display: "inline-block", padding: "6px 14px", background: "#0f4f8f", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "default" }}>
+          {buttonText}
+        </div>
+          </div>
+        {showHistory && (
+          <div style={{ marginTop: twoColumn ? 0 : 14, maxWidth: 380 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#18324a", marginBottom: 6 }}>{historyTitle}</div>
+            <div style={{ fontSize: 11, color: "#8ba9be", border: "1px solid #e3edf5", borderRadius: 6, padding: "8px 10px" }}>
+              Past requests appear here on the live page.
+            </div>
+          </div>
+        )}
+        </div>
+      </div>
+    );
+  }
+
   if (module.type === "admin-nav-link") {
     const linkText = module.settings.linkText || "Admin";
     return (
@@ -1975,13 +2116,8 @@ type ParsedTableData = {
   rowCount: number;
 };
 
-type SliderItem = {
-  id: string;
-  title: string;
-  body: string;
-  imageUrl: string;
-  linkUrl: string;
-};
+/** Shared with the Feature Cards module — see lib/builder-client/builder-card-items.ts */
+type SliderItem = BuilderCardItem;
 
 type SocialItem = {
   id: string;
@@ -1989,14 +2125,6 @@ type SocialItem = {
   href: string;
   iconUrl: string;
   backgroundColor: string;
-};
-
-type NavItem = {
-  id: string;
-  label: string;
-  href: string;
-  parentId?: string;
-  width?: string;
 };
 
 type HeadlineItem = HeadlineRotatorEntry;
@@ -2009,54 +2137,35 @@ function serializeHeadlineItems(items: HeadlineItem[]) {
   return serializeHeadlineRotatorEntries(items);
 }
 
-function parseNavItems(settings: Record<string, string>): NavItem[] {
-  try {
-    const items = JSON.parse(settings.navItems || "[]");
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      const raw = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-      return {
-        id: String(raw.id || `nav-${index + 1}`),
-        label: String(raw.label || ""),
-        href: String(raw.href || raw.url || ""),
-        ...(raw.parentId ? { parentId: String(raw.parentId) } : {}),
-        ...(raw.width ? { width: String(raw.width) } : {})
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-function serializeNavItems(items: NavItem[]) {
-  return JSON.stringify(items);
-}
-
 function renderCompactCellModulePreview(module: BuilderTemplateModule) {
   return <div className="builder-table-cell-module-preview">{renderModulePreview(module)}</div>;
 }
 
-function parseSliderItems(settings: Record<string, string>): SliderItem[] {
+type SlideshowSlide = { id: string; url: string; alt: string };
+
+function parseSlideshowSlides(settings: Record<string, string>): SlideshowSlide[] {
   try {
-    const items = JSON.parse(settings.sliderItems || "[]");
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      const raw = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-      return {
-        id: String(raw.id || `slide-${index + 1}`),
-        title: String(raw.title || ""),
-        body: String(raw.body || ""),
-        imageUrl: normalizeBuilderAssetUrl(raw.imageUrl),
-        linkUrl: String(raw.linkUrl || "")
-      };
-    });
+    const raw = JSON.parse(settings.slides || "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((entry, index) => ({
+        id: String((entry as SlideshowSlide)?.id || `slide-${index}`),
+        url: String((entry as SlideshowSlide)?.url || "").trim(),
+        alt: String((entry as SlideshowSlide)?.alt || "")
+      }));
+    // Empty-url slides stay: a just-added slide must survive until the
+    // operator picks its image. Renderers filter empties at display time.
   } catch {
     return [];
   }
 }
 
+function parseSliderItems(settings: Record<string, string>): SliderItem[] {
+  return parseBuilderCardItems(settings.sliderItems, "slide", "storage");
+}
+
 function serializeSliderItems(items: SliderItem[]) {
-  return JSON.stringify(items);
+  return serializeBuilderCardItems(items);
 }
 
 function parseSocialItems(settings: Record<string, string>): SocialItem[] {
@@ -2667,6 +2776,100 @@ function TableModuleEditor({
   );
 }
 
+function SlideshowModuleEditor({
+  module,
+  onUpdateModule
+}: {
+  module: BuilderTemplateModule;
+  onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+}) {
+  const slides = parseSlideshowSlides(module.settings);
+
+  function persist(next: SlideshowSlide[]) {
+    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, slides: JSON.stringify(next) } }));
+  }
+
+  function setSetting(key: string, value: string) {
+    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
+  }
+
+  function updateSlide(id: string, updates: Partial<SlideshowSlide>) {
+    persist(slides.map((slide) => (slide.id === id ? { ...slide, ...updates } : slide)));
+  }
+
+  function moveSlide(id: string, direction: -1 | 1) {
+    const index = slides.findIndex((slide) => slide.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= slides.length) return;
+    const next = [...slides];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    persist(next);
+  }
+
+  return (
+    <>
+      <div className="builder-slider-design-grid">
+        <BuilderInlineNumberSelectRow>
+          <BuilderInlineNumberSelect
+            label="Interval (ms)"
+            value={module.settings.intervalMs ?? "5000"}
+            min={1000}
+            max={20000}
+            step={500}
+            fallback="5000"
+            onChange={(value) => setSetting("intervalMs", value)}
+          />
+          <BuilderInlineNumberSelect
+            label="Height (px, 0 = auto)"
+            value={module.settings.heightPx || "0"}
+            min={0}
+            max={900}
+            step={20}
+            fallback="0"
+            onChange={(value) => setSetting("heightPx", value === "0" ? "" : value)}
+          />
+        </BuilderInlineNumberSelectRow>
+        <label className="field">
+          <span>Transition</span>
+          <select
+            value={module.settings.transition === "fade" ? "fade" : "slide"}
+            onChange={(e) => setSetting("transition", e.target.value)}
+          >
+            <option value="slide">Slide</option>
+            <option value="fade">Fade</option>
+          </select>
+        </label>
+      </div>
+      <div className="builder-slider-items">
+        {slides.map((slide, index) => (
+          <div key={slide.id} className="builder-slider-item-card">
+            <div className="builder-slider-item-header">
+              <strong>Slide {index + 1}</strong>
+              <div className="builder-section-actions">
+                <button type="button" className="builder-icon-button" onClick={() => moveSlide(slide.id, -1)} title="Move up">↑</button>
+                <button type="button" className="builder-icon-button" onClick={() => moveSlide(slide.id, 1)} title="Move down">↓</button>
+                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => persist(slides.filter((s) => s.id !== slide.id))} title="Delete slide">✕</button>
+              </div>
+            </div>
+            <div className="builder-slider-item-grid">
+              <label className="field builder-slider-item-grid-full"><span>Image</span><BuilderImagePickerField value={slide.url} onChange={(url) => updateSlide(slide.id, { url })} /></label>
+              <label className="field builder-slider-item-grid-full"><span>Alt text</span><input type="text" value={slide.alt} onChange={(e) => updateSlide(slide.id, { alt: e.target.value })} placeholder="Describe the image" /></label>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => persist([...slides, { id: `slide-${Date.now()}-${slides.length + 1}`, url: "", alt: "" }])}
+      >
+        Add Slide
+      </button>
+    </>
+  );
+}
+
 function SliderModuleEditor({
   module,
   onUpdateModule
@@ -2697,7 +2900,7 @@ function SliderModuleEditor({
   function removeItem(id: string) { persist(items.filter((item) => item.id !== id)); }
 
   function addItem() {
-    persist([...items, { id: `slide-${Date.now()}-${items.length + 1}`, title: "", body: "", imageUrl: "", linkUrl: "" }]);
+    persist([...items, createBuilderCardItem(items.length + 1, "slide")]);
   }
 
   return (
@@ -2951,276 +3154,6 @@ function SocialShareModuleEditor({
   );
 }
 
-function parseNavPadding(navPadding: string): { v: number; h: number } {
-  const parts = (navPadding || "").trim().split(/\s+/);
-  const v = parseInt(parts[0]) || 8;
-  const h = parts.length > 1 ? parseInt(parts[1]) || 12 : v;
-  return { v, h };
-}
-
-function NavModuleEditor({
-  module,
-  onUpdateModule,
-  onUpdateModuleBackground,
-  themeColors = [],
-  themeBackgroundColor,
-  themePrimaryColor
-}: {
-  module: BuilderTemplateModule;
-  onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
-  onUpdateModuleBackground: (updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
-  themeColors?: Array<{ label: string; hex: string }>;
-  themeBackgroundColor?: string;
-  themePrimaryColor?: string;
-}) {
-  const [styleCollapsed, setStyleCollapsed] = useState(false);
-  const [linksCollapsed, setLinksCollapsed] = useState(false);
-  const items = parseNavItems(module.settings);
-  const { v: padV, h: padH } = parseNavPadding(module.settings.navPadding ?? "");
-  const topLevelWidthTotal = items
-    .filter((i) => !i.parentId)
-    .reduce((sum, i) => sum + (parseFloat(i.width ?? "") || 0), 0);
-
-  function persist(nextItems: NavItem[]) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, navItems: serializeNavItems(nextItems) } }));
-  }
-  function updateItem(id: string, updates: Partial<NavItem>) {
-    persist(items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
-  }
-  function moveItem(id: string, direction: -1 | 1) {
-    const index = items.findIndex((item) => item.id === id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= items.length) return;
-    const next = [...items];
-    const [moved] = next.splice(index, 1);
-    next.splice(target, 0, moved);
-    persist(next);
-  }
-  function removeItem(id: string) { persist(items.filter((item) => item.id !== id)); }
-  function addItem() {
-    persist([...items, { id: `nav-${Date.now()}-${items.length + 1}`, label: "", href: "" }]);
-  }
-  function updateSetting(key: string, value: string) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
-  }
-  function updatePadding(v: number, h: number) {
-    updateSetting("navPadding", `${v}px ${h}px`);
-  }
-
-  return (
-    <>
-      <div className="builder-cell-panel">
-        <BuilderCellPanelHeader
-          title="Style"
-          isCollapsed={styleCollapsed}
-          onToggle={() => setStyleCollapsed((c) => !c)}
-        />
-        {!styleCollapsed && (
-          <div className="builder-nav-style-body">
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Font" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navFontSize ?? "16"}
-                  min={10} max={48} fallback="16"
-                  onChange={(v) => updateSetting("navFontSize", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Bold" width="check">
-                <input
-                  type="checkbox"
-                  checked={module.settings.navBold === "true"}
-                  onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Direction" width="select-md">
-                <select
-                  value={module.settings.navDirection ?? "horizontal"}
-                  onChange={(e) => updateSetting("navDirection", e.target.value)}
-                >
-                  <option value="horizontal">Horizontal</option>
-                  <option value="vertical">Vertical</option>
-                </select>
-              </BuilderModuleField>
-              <BuilderModuleField label="Levels" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navLevels ?? "2"}
-                  min={1} max={3} fallback="2"
-                  onChange={(v) => updateSetting("navLevels", v)}
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Alignment" width="align">
-                <BuilderAlignmentIconGroup
-                  value={(module.settings.navAlignment ?? "center") as BuilderModuleAlignment}
-                  onChange={(alignment) => updateSetting("navAlignment", alignment)}
-                  ariaLabel="Navigation alignment"
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Pad V" width="num">
-                <BuilderNumberSelectControl
-                  value={String(padV)} min={0} max={40} fallback="8"
-                  onChange={(v) => updatePadding(Number(v), padH)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Pad H" width="num">
-                <BuilderNumberSelectControl
-                  value={String(padH)} min={0} max={60} fallback="12"
-                  onChange={(v) => updatePadding(padV, Number(v))}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Radius" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navBorderRadius ?? "0"}
-                  min={0} max={48} fallback="0"
-                  onChange={(v) => updateSetting("navBorderRadius", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="H Margin" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navMarginH ?? "0"}
-                  min={0} max={80} fallback="0"
-                  onChange={(v) => updateSetting("navMarginH", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="V Margin" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navMarginV ?? "0"}
-                  min={0} max={80} fallback="0"
-                  onChange={(v) => updateSetting("navMarginV", v)}
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-
-            <BuilderThemeColorSettingRow
-              label="Text"
-              fallback="#163a5e"
-              themeColors={themeColors}
-              value={module.settings.navColor ?? ""}
-              onChange={(v) => updateSetting("navColor", v)}
-            />
-            <BuilderThemeColorSettingRow
-              label="Hover text"
-              fallback="#0a8fc4"
-              themeColors={themeColors}
-              value={module.settings.navHoverColor ?? ""}
-              onChange={(v) => updateSetting("navHoverColor", v)}
-            />
-            <BuilderThemeColorSettingRow
-              label="Hover bg"
-              fallback="#d0f0fb"
-              themeColors={themeColors}
-              value={module.settings.navHoverBackground ?? ""}
-              onChange={(v) => updateSetting("navHoverBackground", v)}
-            />
-            <details className="hanging-details">
-              <summary>Background</summary>
-              <BuilderBackgroundControls
-                label="Background"
-                background={getModuleBackgroundSettings(module.settings)}
-                onChange={onUpdateModuleBackground}
-                themeBackgroundColor={themeBackgroundColor}
-                themeColors={themeColors}
-                themePrimaryColor={themePrimaryColor}
-              />
-            </details>
-          </div>
-        )}
-      </div>
-
-      <div className="builder-cell-panel">
-        <BuilderCellPanelHeader
-          title="Links"
-          isCollapsed={linksCollapsed}
-          onToggle={() => setLinksCollapsed((c) => !c)}
-        />
-        {!linksCollapsed && (
-          <>
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Sizing" width="select-md">
-                <select
-                  value={module.settings.navItemSizing ?? "auto"}
-                  onChange={(e) => updateSetting("navItemSizing", e.target.value)}
-                >
-                  <option value="auto">Auto</option>
-                  <option value="equal">Equal</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-            <div className="builder-nav-items-header builder-nav-item-row">
-              <div className="builder-nav-item-fields">
-                <span>Parent Page</span>
-                <span>Page Name</span>
-                <span>Slug</span>
-                {module.settings.navItemSizing === "custom" && <span className="builder-nav-item-width-wrap">Width</span>}
-              </div>
-              <span className="builder-nav-items-header-action">Action</span>
-            </div>
-            <div className="builder-nav-items">
-              {items.map((item, index) => {
-                const isCustomSizing = module.settings.navItemSizing === "custom";
-                const isParent = items.some((i) => i.parentId === item.id);
-                const topLevelItems = items.filter((i) => !i.parentId && i.id !== item.id);
-                return (
-                  <div key={item.id} className="builder-nav-item-row">
-                    <div className="builder-nav-item-fields">
-                      <select
-                        className="builder-nav-item-parent-select"
-                        value={item.parentId ?? ""}
-                        disabled={isParent}
-                        title={isParent ? "This item has sub-items and cannot itself be a sub-item" : undefined}
-                        onChange={(e) => updateItem(item.id, { parentId: e.target.value || undefined })}
-                      >
-                        <option value="">Top level</option>
-                        {topLevelItems.map((parent) => (
-                          <option key={parent.id} value={parent.id}>{parent.label || `Link ${items.indexOf(parent) + 1}`}</option>
-                        ))}
-                      </select>
-                      <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
-                      <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
-                      {isCustomSizing && (
-                        <div className="builder-nav-item-width-wrap">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="1"
-                            className="builder-nav-item-width"
-                            value={item.width ?? ""}
-                            disabled={Boolean(item.parentId)}
-                            onChange={(e) => updateItem(item.id, { width: e.target.value })}
-                            placeholder={item.parentId ? "" : "0"}
-                            title="Width percentage for this top-level link"
-                          />
-                          {!item.parentId && <span className="builder-nav-item-width-unit">%</span>}
-                        </div>
-                      )}
-                    </div>
-                    <div className="builder-nav-item-actions">
-                      <button type="button" className="builder-icon-button" aria-label="Move Up" onClick={() => moveItem(item.id, -1)}>↑</button>
-                      <button type="button" className="builder-icon-button" aria-label="Move Down" onClick={() => moveItem(item.id, 1)}>↓</button>
-                      <button type="button" className="builder-icon-button builder-icon-button-danger" aria-label="Delete" onClick={() => removeItem(item.id)}>✕</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {module.settings.navItemSizing === "custom" && (
-              <div className={`builder-nav-width-total${topLevelWidthTotal > 100 ? " builder-nav-width-total-over" : ""}`}>
-                Total: {Math.round(topLevelWidthTotal * 10) / 10}%
-                {topLevelWidthTotal > 100 && " — over 100%"}
-              </div>
-            )}
-            <button type="button" className="secondary-button builder-nav-add-link-button" onClick={addItem}>+ Add Link</button>
-          </>
-        )}
-      </div>
-    </>
-  );
-}
-
 function PollCategoryListModuleEditor({
   module,
   onUpdateModule,
@@ -3411,7 +3344,9 @@ function HeadlineRotatorModuleEditor({
         <label className="field"><span>Min height (px)</span><input type="number" min="0" max="1200" step="4" value={module.settings.minHeight ?? "480"} onChange={(e) => updateSetting("minHeight", e.target.value)} /></label>
         <label className="field"><span>Fade duration (ms)</span><input type="number" min="0" max="5000" step="50" value={module.settings.fadeDuration ?? "800"} onChange={(e) => updateSetting("fadeDuration", e.target.value)} /></label>
         <label className="field"><span>Display speed (ms)</span><input type="number" min="500" max="20000" step="100" value={module.settings.displaySpeed ?? "3000"} onChange={(e) => updateSetting("displaySpeed", e.target.value)} /></label>
-        <label className="field"><span>Drop shadow</span><select value={module.settings.dropShadow ?? "false"} onChange={(e) => updateSetting("dropShadow", e.target.value)}><option value="false">Off</option><option value="true">On</option></select></label>
+        {/* C3: boolean reads as on/off, matching the Bold checkbox above —
+            same "true"/"false" stored values the select wrote. */}
+        <label className="field builder-checkbox-field"><span>Drop shadow</span><input type="checkbox" checked={(module.settings.dropShadow ?? "false") === "true"} onChange={(e) => updateSetting("dropShadow", e.target.checked ? "true" : "false")} /></label>
         <label className="field">
           <span>Shadow color</span>
           <BuilderThemeColorField
@@ -3634,8 +3569,138 @@ export function BuilderModuleCard({
     const isAdminModulesModule = module.type === "admin-modules";
     const isAdminLoginModule = module.type === "admin-login";
     const isAdminNavLinkModule = module.type === "admin-nav-link";
+    const isAdminSiteSettingsModule = module.type === "admin-site-settings";
+    const isAdminSupportFormModule = module.type === "admin-support-form";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
+
+    /**
+     * Modules that lost the universal chrome (Background / Alignment / H+V
+     * Margin) — master rules C7/S2, audit fix F13.
+     *
+     * The chrome is the ELSE branch of the ~30-way settings-editor ternary
+     * below, so the day a module got its own settings component it silently
+     * stopped offering background, alignment and margins — while the
+     * renderer kept honouring those settings for it
+     * (`getModuleOuterSpacingStyle` + `getBuilderBackgroundStyle` in
+     * builder-template-preview.tsx). Settings that exist, work, and are
+     * unreachable. These modules render the same chrome the else branch
+     * does, after their own editor.
+     *
+     * Deliberately NOT here: current-poll / social / crm-form (their own
+     * editors offer background + margins), heading / floating-image (own
+     * chrome blocks), navigation (has chrome AND duplicates — deduped
+     * separately), button / table / poll-category-list / reminder (bespoke
+     * or opted out), tractor-nav / confetti (fixed-position overlays where
+     * wrapper margins are meaningless).
+     */
+    const needsRestoredChrome =
+      isBreadcrumbModule ||
+      isBlogPostListModule ||
+      isBlogPostCardModule ||
+      isBlogAuthorBioModule ||
+      isBlogTocModule ||
+      isBlogNewsletterModule ||
+      isBlogRelatedPostsModule ||
+      isBlogCategoryFilterModule ||
+      isBlogPostModule ||
+      isBlogTagCloudModule ||
+      isBlogPostTagsModule ||
+      isBlogPostCreateModule ||
+      isBlogPostManagerModule ||
+      isBlogCategoryManagerModule ||
+      isBlogCardManagerModule ||
+      isBlogSearchModule ||
+      isBlogSearchResultsModule ||
+      isMessagingTopicListModule ||
+      isMessagingTagListModule ||
+      isCrmContactsTableModule ||
+      isAdminTeamUsersModule ||
+      isAdminModulesModule ||
+      isAdminLoginModule ||
+      isAdminNavLinkModule ||
+      isAdminSiteSettingsModule ||
+      isAdminSupportFormModule;
+
+    const sharedModuleChrome = (
+      <div className="builder-module-chrome">
+        {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
+            the standard modal's gradient/image/style modes are no-ops on a bubble. */}
+        {module.type !== "speech-bubble" ? (
+          <BuilderBackgroundControls
+            label="Background"
+            background={getModuleBackgroundSettings(module.settings)}
+            horizontal
+            onChange={onUpdateModuleBackground}
+            themeBackgroundColor={themeBackgroundColor}
+            themeColors={themeColors}
+            themePrimaryColor={themePrimaryColor}
+          />
+        ) : null}
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Alignment" width="align">
+            <BuilderAlignmentIconGroup
+              value={moduleAlignment}
+              onChange={(alignment) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, alignment }
+                }))
+              }
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="H Margin" width="num">
+            <BuilderNumberSelectControl
+              fallback="0"
+              max={160}
+              min={0}
+              value={module.settings.horizontalMargin ?? "0"}
+              onChange={(horizontalMargin) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, horizontalMargin }
+                }))
+              }
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="V Margin" width="num">
+            <BuilderNumberSelectControl
+              fallback="0"
+              max={160}
+              min={0}
+              value={module.settings.verticalMargin ?? "0"}
+              onChange={(verticalMargin) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, verticalMargin }
+                }))
+              }
+            />
+          </BuilderModuleField>
+          {module.type === "text" ? (
+            <BuilderModuleField label="Width" width="select-sm">
+              <select
+                value={module.settings.size ?? "100"}
+                onChange={(event) =>
+                  onUpdateModule((current) => ({
+                    ...current,
+                    settings: { ...current.settings, size: event.target.value }
+                  }))
+                }
+              >
+                <option value="25">25%</option>
+                <option value="33">33%</option>
+                <option value="50">50%</option>
+                <option value="66">66%</option>
+                <option value="75">75%</option>
+                <option value="90">90%</option>
+                <option value="100">100%</option>
+              </select>
+            </BuilderModuleField>
+          ) : null}
+        </BuilderModuleFieldStrip>
+      </div>
+    );
   return (
     <div
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
@@ -3741,14 +3806,18 @@ export function BuilderModuleCard({
       {(isExpanded || isPopped) ? (
         <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
           {module.type !== "social" && module.type !== "blog-post-list" ? (
-            <BuilderSettingRow label="Label" fullWidth>
-              <input
-                type="text"
-                value={module.name}
-                onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Optional internal label"
-              />
-            </BuilderSettingRow>
+            // Content-sized, not full-panel — this row tops every module,
+            // so master rule W1 applies here with maximum leverage.
+            <BuilderModuleFieldStrip>
+              <BuilderModuleField label="Label" width="text-md">
+                <input
+                  type="text"
+                  value={module.name}
+                  onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Optional internal label"
+                />
+              </BuilderModuleField>
+            </BuilderModuleFieldStrip>
           ) : null}
 
           {editorDevice === "mobile" ? (
@@ -3887,6 +3956,10 @@ export function BuilderModuleCard({
               <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminNavLinkModule ? (
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminSiteSettingsModule ? (
+              <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminSupportFormModule ? (
+              <BuilderAdminSupportFormModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isSocialModule ? (
               <BuilderSocialModuleSettings
                 module={module}
@@ -3933,85 +4006,14 @@ export function BuilderModuleCard({
                 />
               </div>
             ) : (
-              <div className="builder-module-chrome">
-                {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
-                    the standard modal's gradient/image/style modes are no-ops on a bubble. */}
-                {module.type !== "speech-bubble" ? (
-                  <BuilderBackgroundControls
-                    label="Background"
-                    background={getModuleBackgroundSettings(module.settings)}
-                    horizontal
-                    onChange={onUpdateModuleBackground}
-                    themeBackgroundColor={themeBackgroundColor}
-                    themeColors={themeColors}
-                    themePrimaryColor={themePrimaryColor}
-                  />
-                ) : null}
-                <BuilderModuleFieldStrip>
-                  <BuilderModuleField label="Alignment" width="align">
-                    <BuilderAlignmentIconGroup
-                      value={moduleAlignment}
-                      onChange={(alignment) =>
-                        onUpdateModule((current) => ({
-                          ...current,
-                          settings: { ...current.settings, alignment }
-                        }))
-                      }
-                    />
-                  </BuilderModuleField>
-                  <BuilderModuleField label="H Margin" width="num">
-                    <BuilderNumberSelectControl
-                      fallback="0"
-                      max={160}
-                      min={0}
-                      value={module.settings.horizontalMargin ?? "0"}
-                      onChange={(horizontalMargin) =>
-                        onUpdateModule((current) => ({
-                          ...current,
-                          settings: { ...current.settings, horizontalMargin }
-                        }))
-                      }
-                    />
-                  </BuilderModuleField>
-                  <BuilderModuleField label="V Margin" width="num">
-                    <BuilderNumberSelectControl
-                      fallback="0"
-                      max={160}
-                      min={0}
-                      value={module.settings.verticalMargin ?? "0"}
-                      onChange={(verticalMargin) =>
-                        onUpdateModule((current) => ({
-                          ...current,
-                          settings: { ...current.settings, verticalMargin }
-                        }))
-                      }
-                    />
-                  </BuilderModuleField>
-                  {module.type === "text" ? (
-                    <BuilderModuleField label="Width" width="select-sm">
-                      <select
-                        value={module.settings.size ?? "100"}
-                        onChange={(event) =>
-                          onUpdateModule((current) => ({
-                            ...current,
-                            settings: { ...current.settings, size: event.target.value }
-                          }))
-                        }
-                      >
-                        <option value="25">25%</option>
-                        <option value="33">33%</option>
-                        <option value="50">50%</option>
-                        <option value="66">66%</option>
-                        <option value="75">75%</option>
-                        <option value="90">90%</option>
-                        <option value="100">100%</option>
-                      </select>
-                    </BuilderModuleField>
-                  ) : null}
-                </BuilderModuleFieldStrip>
-              </div>
+              sharedModuleChrome
             )
           ) : null}
+
+          {/* F13: the chrome the settings-editor ternary above swallowed —
+              rendered here for modules whose renderer honours background and
+              margins but whose own editor never offered them. */}
+          {needsRestoredChrome ? sharedModuleChrome : null}
 
           {isStandardImage ? (
             <BuilderModuleOffsetFields
@@ -4204,14 +4206,15 @@ export function BuilderModuleCard({
             <TableModuleEditor module={module} pages={pages} themeColors={themeColors} onUpdateModule={onUpdateModule} />
           )}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "slideshow" && <SlideshowModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "feature-cards" && (
+            <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          )}
           {module.type === "navigation" && (
-            <NavModuleEditor
+            <BuilderNavigationModuleSettings
               module={module}
               onUpdateModule={onUpdateModule}
-              onUpdateModuleBackground={onUpdateModuleBackground}
-              themeBackgroundColor={themeBackgroundColor}
               themeColors={themeColors}
-              themePrimaryColor={themePrimaryColor}
             />
           )}
           {module.type === "headline-rotator" && (

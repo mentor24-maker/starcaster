@@ -7,8 +7,10 @@ import {
   CONFETTI_SOUND_OPTIONS,
   normalizeConfettiModuleSettings
 } from "@/lib/confetti-effect";
-import { BuilderNumberSelectControl } from "./builder-inline-number-select";
-import { BuilderSettingRow } from "./builder-setting-row";
+import {
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
 
 type BuilderConfettiModuleSettingsProps = {
   module: BuilderTemplateModule;
@@ -21,98 +23,124 @@ export function BuilderConfettiModuleSettings({
   module,
   onUpdateModule
 }: BuilderConfettiModuleSettingsProps) {
+  // Every read and write goes through normalizeConfettiModuleSettings, exactly
+  // as the pre-schema editor did — values are clamped on save, not just shown.
   const settings = normalizeConfettiModuleSettings(module.settings);
 
-  function updateSettings(updates: Record<string, string>) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: normalizeConfettiModuleSettings({ ...current.settings, ...updates })
-    }));
-  }
+  const schema: BuilderSettingsSchema = {
+    // D8 axes (2026-08-10): Structure / Placement / Behavior. The burst has
+    // no text and no frame — the counts shape it, the origin places it, and
+    // the sound is what it does. (Replaces the D2 panelColumns pairing: three
+    // short strips no longer stack down the left edge either way.)
+    axes: [
+      {
+        title: "Structure",
+        strips: [
+          [
+            {
+              key: "particleCount",
+              label: "Particles",
+              width: "num",
+              control: "number",
+              min: 1,
+              max: 500,
+              fallback: CONFETTI_EFFECT_DEFAULTS.particleCount,
+              rendersVia: "buildConfettiEffectOptions"
+            },
+            {
+              key: "spread",
+              label: "Spread",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 180,
+              fallback: CONFETTI_EFFECT_DEFAULTS.spread,
+              rendersVia: "buildConfettiEffectOptions"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [
+          [
+            {
+              key: "originX",
+              label: "Origin X",
+              width: "select-sm",
+              control: "select",
+              options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
+              rendersVia: "buildConfettiEffectOptions"
+            },
+            {
+              key: "originY",
+              label: "Origin Y",
+              width: "select-sm",
+              control: "select",
+              options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
+              rendersVia: "buildConfettiEffectOptions"
+            },
+            {
+              key: "zIndex",
+              label: "Z-Index",
+              width: "auto",
+              control: "custom",
+              rendersVia: "buildConfettiEffectOptions",
+              render: (ctx) => (
+                <input
+                  max={999999}
+                  min={1}
+                  onChange={(event) => ctx.set("zIndex", event.target.value)}
+                  step={1}
+                  type="number"
+                  value={ctx.settings.zIndex}
+                />
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Behavior",
+        strips: [
+          [
+            {
+              key: "sound",
+              label: "Sound",
+              width: "select-md",
+              control: "select",
+              options: CONFETTI_SOUND_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+              rendersVia: "resolveConfettiSound"
+            },
+            {
+              key: "popVolume",
+              label: "Volume",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 100,
+              fallback: CONFETTI_EFFECT_DEFAULTS.popVolume,
+              visibleWhen: (settings) => settings.sound !== "off",
+              rendersVia: "resolveConfettiSound"
+            }
+          ]
+        ]
+      }
+    ]
+  };
 
   return (
     <div className="builder-confetti-module-settings">
-      <BuilderSettingRow label="Particle Count" fullWidth>
-        <BuilderNumberSelectControl
-          value={settings.particleCount}
-          min={1}
-          max={500}
-          fallback={CONFETTI_EFFECT_DEFAULTS.particleCount}
-          onChange={(particleCount) => updateSettings({ particleCount })}
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Spread" fullWidth>
-        <BuilderNumberSelectControl
-          value={settings.spread}
-          min={0}
-          max={180}
-          fallback={CONFETTI_EFFECT_DEFAULTS.spread}
-          onChange={(spread) => updateSettings({ spread })}
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Origin X" fullWidth>
-        <select
-          value={settings.originX}
-          onChange={(event) => updateSettings({ originX: event.target.value })}
-        >
-          {ORIGIN_OPTIONS.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Origin Y" fullWidth>
-        <select
-          value={settings.originY}
-          onChange={(event) => updateSettings({ originY: event.target.value })}
-        >
-          {ORIGIN_OPTIONS.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Z-Index" fullWidth>
-        <input
-          max={999999}
-          min={1}
-          onChange={(event) => updateSettings({ zIndex: event.target.value })}
-          step={1}
-          type="number"
-          value={settings.zIndex}
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Sound" fullWidth>
-        <select
-          value={settings.sound}
-          onChange={(event) => updateSettings({ sound: event.target.value })}
-        >
-          {CONFETTI_SOUND_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </BuilderSettingRow>
-
-      {settings.sound !== "off" ? (
-        <BuilderSettingRow label="Sound Volume" fullWidth>
-          <BuilderNumberSelectControl
-            value={settings.popVolume}
-            min={0}
-            max={100}
-            fallback={CONFETTI_EFFECT_DEFAULTS.popVolume}
-            onChange={(popVolume) => updateSettings({ popVolume })}
-          />
-        </BuilderSettingRow>
-      ) : null}
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={{ ...module, settings }}
+        onUpdateModule={(updater) =>
+          onUpdateModule((current) => {
+            const next = updater(current);
+            return { ...next, settings: normalizeConfettiModuleSettings(next.settings) };
+          })
+        }
+      />
     </div>
   );
 }
