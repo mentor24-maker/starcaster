@@ -14,12 +14,8 @@ const SCHEMA: BuilderSettingsSchema = {
       {
         key: "showTitle",
         label: "Show title",
-        width: "select-sm",
-        control: "select",
-        options: [
-          { value: "true", label: "Show" },
-          { value: "false", label: "Hide" }
-        ],
+        width: "check",
+        control: "checkbox",
         fallback: "true",
         rendersVia: "AdminSiteSettingsPreview (builder-template-preview.tsx)"
       },

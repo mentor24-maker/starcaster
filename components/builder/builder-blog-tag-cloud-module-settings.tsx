@@ -176,12 +176,8 @@ export function BuilderBlogTagCloudModuleSettings({
         {
           key: "showCounts",
           label: "Counts",
-          width: "select-md",
-          control: "select",
-          options: [
-            { value: "false", label: "Hide" },
-            { value: "true", label: "Show" }
-          ],
+          width: "check",
+          control: "checkbox",
           fallback: "false",
           rendersVia: "BlogTagCloudPreview"
         },

@@ -13,11 +13,6 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 export function BuilderBlogPostManagerModuleSettings({
   module,
   onUpdateModule,
@@ -47,27 +42,24 @@ export function BuilderBlogPostManagerModuleSettings({
         {
           key: "showStatus",
           label: "Status",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
         },
         {
           key: "showDate",
           label: "Date",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
         },
         {
           key: "showDelete",
           label: "Delete",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogPostManagerPreview"
         },

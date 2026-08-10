@@ -68,16 +68,13 @@ export function BuilderBlogCategoryFilterModuleSettings({
   const schema: BuilderSettingsSchema = {
     content: [
       [
+        // C3: was a Yes/No select — same "true"/"false" stored values.
         {
           key: "showAll",
           label: "Show 'All'",
-          width: "select-sm",
-          control: "select",
-          fallback: "true",
-          options: [
-            { value: "true", label: "Yes" },
-            { value: "false", label: "No" }
-          ]
+          width: "check",
+          control: "checkbox",
+          fallback: "true"
         },
         {
           key: "allLabel",

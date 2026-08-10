@@ -3344,7 +3344,9 @@ function HeadlineRotatorModuleEditor({
         <label className="field"><span>Min height (px)</span><input type="number" min="0" max="1200" step="4" value={module.settings.minHeight ?? "480"} onChange={(e) => updateSetting("minHeight", e.target.value)} /></label>
         <label className="field"><span>Fade duration (ms)</span><input type="number" min="0" max="5000" step="50" value={module.settings.fadeDuration ?? "800"} onChange={(e) => updateSetting("fadeDuration", e.target.value)} /></label>
         <label className="field"><span>Display speed (ms)</span><input type="number" min="500" max="20000" step="100" value={module.settings.displaySpeed ?? "3000"} onChange={(e) => updateSetting("displaySpeed", e.target.value)} /></label>
-        <label className="field"><span>Drop shadow</span><select value={module.settings.dropShadow ?? "false"} onChange={(e) => updateSetting("dropShadow", e.target.value)}><option value="false">Off</option><option value="true">On</option></select></label>
+        {/* C3: boolean reads as on/off, matching the Bold checkbox above —
+            same "true"/"false" stored values the select wrote. */}
+        <label className="field builder-checkbox-field"><span>Drop shadow</span><input type="checkbox" checked={(module.settings.dropShadow ?? "false") === "true"} onChange={(e) => updateSetting("dropShadow", e.target.checked ? "true" : "false")} /></label>
         <label className="field">
           <span>Shadow color</span>
           <BuilderThemeColorField

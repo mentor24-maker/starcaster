@@ -35,11 +35,6 @@ type Props = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
-const SHOW_HIDE_OPTIONS = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
 export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }: Props) {
   const posts = parseRelatedPosts(module.settings);
 
@@ -81,9 +76,8 @@ export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }
         {
           key: "showTitle",
           label: "Title",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogRelatedPostsPreview"
         },
@@ -138,45 +132,40 @@ export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }
         {
           key: "showFeaturedImage",
           label: "Image",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogRelatedPostsPreview"
         },
         {
           key: "showExcerpt",
           label: "Excerpt",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "false",
           rendersVia: "BlogRelatedPostsPreview"
         },
         {
           key: "showAuthor",
           label: "Author",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "false",
           rendersVia: "BlogRelatedPostsPreview"
         },
         {
           key: "showDate",
           label: "Date",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogRelatedPostsPreview"
         },
         {
           key: "showCategories",
           label: "Categories",
-          width: "select-md",
-          control: "select",
-          options: SHOW_HIDE_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "true",
           rendersVia: "BlogRelatedPostsPreview"
         }

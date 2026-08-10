@@ -13,16 +13,6 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-const SHOW_HIDE = [
-  { value: "true", label: "Show" },
-  { value: "false", label: "Hide" }
-];
-
-const HIDE_SHOW = [
-  { value: "false", label: "Hide" },
-  { value: "true", label: "Show" }
-];
-
 export function BuilderBlogPostCreateModuleSettings({
   module,
   onUpdateModule,
@@ -31,7 +21,8 @@ export function BuilderBlogPostCreateModuleSettings({
   const schema: BuilderSettingsSchema = {
     content: [
       [
-        { key: "showFormTitle", label: "Form Title", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
+        // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
+        { key: "showFormTitle", label: "Form Title", width: "check", control: "checkbox", fallback: "true" },
         {
           key: "formTitle",
           label: "Title Text",
@@ -90,16 +81,21 @@ export function BuilderBlogPostCreateModuleSettings({
             { value: "published", label: "Published" }
           ]
         },
+        // C3: was a Yes / "No (uses default)" select — same "true"/"false"
+        // stored values; the "uses default" nuance moves to a tooltip (L7).
         {
           key: "allowStatusChange",
           label: "Author Can Change",
-          width: "select-md",
-          control: "select",
-          fallback: "true",
-          options: [
-            { value: "true", label: "Yes" },
-            { value: "false", label: "No (uses default)" }
-          ]
+          width: "check",
+          control: "custom",
+          render: ({ settings, set }) => (
+            <input
+              type="checkbox"
+              title="Unchecked: posts always use the default status above"
+              checked={(settings.allowStatusChange ?? "true") === "true"}
+              onChange={(e) => set("allowStatusChange", e.target.checked ? "true" : "false")}
+            />
+          )
         }
       ],
       [
@@ -117,23 +113,29 @@ export function BuilderBlogPostCreateModuleSettings({
         }
       ],
       [
-        { key: "showSlug", label: "Slug", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showFeaturedImage", label: "Featured Image", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showExcerpt", label: "Excerpt", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
+        // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
+        { key: "showSlug", label: "Slug", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showFeaturedImage", label: "Featured Image", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showExcerpt", label: "Excerpt", width: "check", control: "checkbox", fallback: "true" },
+        // The old Hide option read "Hide (use logged-in user)" — that
+        // nuance moves to a tooltip (L7).
         {
           key: "showAuthorField",
           label: "Author Field",
-          width: "select-md",
-          control: "select",
-          fallback: "false",
-          options: [
-            { value: "false", label: "Hide (use logged-in user)" },
-            { value: "true", label: "Show" }
-          ]
+          width: "check",
+          control: "custom",
+          render: ({ settings, set }) => (
+            <input
+              type="checkbox"
+              title="Unchecked: the field is hidden and the logged-in user is the author"
+              checked={(settings.showAuthorField ?? "false") === "true"}
+              onChange={(e) => set("showAuthorField", e.target.checked ? "true" : "false")}
+            />
+          )
         },
-        { key: "showCategories", label: "Categories", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showTags", label: "Tags", width: "select-sm", control: "select", fallback: "true", options: SHOW_HIDE },
-        { key: "showSeoFields", label: "SEO Fields", width: "select-sm", control: "select", fallback: "false", options: HIDE_SHOW }
+        { key: "showCategories", label: "Categories", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showTags", label: "Tags", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showSeoFields", label: "SEO Fields", width: "check", control: "checkbox", fallback: "false" }
       ],
       [
         {

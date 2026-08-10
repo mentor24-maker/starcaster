@@ -23,11 +23,6 @@ type BuilderHeadingModuleSettingsProps = {
   themeColors?: BuilderThemePalette;
 };
 
-const ON_OFF_OPTIONS = [
-  { value: "false", label: "Off" },
-  { value: "true", label: "On" }
-];
-
 export function BuilderHeadingModuleSettings({
   module,
   onUpdateModule,
@@ -250,9 +245,8 @@ export function BuilderHeadingModuleSettings({
         {
           key: "italic",
           label: "Italic",
-          width: "select-sm",
-          control: "select",
-          options: ON_OFF_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "false",
           visibleWhen: () => !compact,
           rendersVia: "getHeadingModuleStyle"
@@ -260,9 +254,8 @@ export function BuilderHeadingModuleSettings({
         {
           key: "underline",
           label: "Underline",
-          width: "select-sm",
-          control: "select",
-          options: ON_OFF_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "false",
           visibleWhen: () => !compact,
           rendersVia: "getHeadingModuleStyle"
@@ -270,9 +263,8 @@ export function BuilderHeadingModuleSettings({
         {
           key: "outline",
           label: "Outline",
-          width: "select-sm",
-          control: "select",
-          options: ON_OFF_OPTIONS,
+          width: "check",
+          control: "checkbox",
           fallback: "false",
           visibleWhen: () => !compact,
           rendersVia: "getHeadingModuleStyle"

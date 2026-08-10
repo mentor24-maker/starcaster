@@ -93,16 +93,13 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
         }
       ],
       [
+        // C3: was a None/Show select — same "true"/"false" stored values.
         {
           key: "showImage",
           label: "Image",
-          width: "select-sm",
-          control: "select",
-          fallback: "false",
-          options: [
-            { value: "false", label: "None" },
-            { value: "true", label: "Show" }
-          ]
+          width: "check",
+          control: "checkbox",
+          fallback: "false"
         }
       ],
       [
