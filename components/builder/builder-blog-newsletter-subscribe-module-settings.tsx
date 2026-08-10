@@ -20,14 +20,33 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
   themeColors = []
 }: Props) {
   const schema: BuilderSettingsSchema = {
+    // Text content is left; the short layout + color strips stack on the
+    // right instead of wasting it (D2).
+    panelColumns: [["content"], ["layout", "style"]],
     content: [
+      // Form ID + Headline share a strip (D1) — they were two stacked
+      // full-width rows.
       [
         {
           key: "crmFormId",
           label: "CRM Form ID",
-          width: "full",
+          width: "text-md",
           control: "text",
           placeholder: "Paste Form ID from Builder › CRM"
+        },
+        {
+          key: "headline",
+          label: "Headline",
+          width: "text-md",
+          control: "custom",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.headline ?? "Stay in the loop"}
+              onChange={(e) => set("headline", e.target.value)}
+              placeholder="Stay in the loop"
+            />
+          )
         }
       ],
       [

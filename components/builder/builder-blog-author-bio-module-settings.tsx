@@ -64,8 +64,12 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
 
   const schema: BuilderSettingsSchema = {
     content: [
-      [{ key: "name", label: "Name", width: "full", control: "text", placeholder: "Author name" }],
-      [{ key: "title", label: "Title / Role", width: "full", control: "text", placeholder: "Senior Editor" }],
+      // Name + Title share one strip at content-sized widths (D1/W3) —
+      // they were two stacked full-width rows.
+      [
+        { key: "name", label: "Name", width: "text-md", control: "text", placeholder: "Author name" },
+        { key: "title", label: "Title / Role", width: "text-md", control: "text", placeholder: "Senior Editor" }
+      ],
       [{ key: "bio", label: "Bio", width: "full", control: "textarea", rows: 3, placeholder: "A short bio about the author" }],
       [
         {
@@ -141,6 +145,8 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
         }
       ]
     ],
+    // Layout + photo shape/size share one strip (D1/D3) — the Layout
+    // select sat orphaned in its own group, one row above them.
     layout: [
       [
         {
@@ -153,11 +159,7 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
             { value: "horizontal", label: "Horizontal (photo left)" },
             { value: "vertical", label: "Vertical (photo above)" }
           ]
-        }
-      ]
-    ],
-    style: [
-      [
+        },
         {
           key: "avatarShape",
           label: "Photo Shape",

@@ -1,10 +1,9 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderNumberSelectControl } from "./builder-inline-number-select";
-import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import {
-  BuilderThemeColorField,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import { type BuilderThemePalette } from "./builder-theme-color-field";
 
 type BuilderImageModuleSettingsProps = {
   module: BuilderTemplateModule;
@@ -30,81 +29,95 @@ const EFFECT_OPTIONS: { value: string; label: string }[] = [
  * wherever it lives.
  *
  * REFERENCE IMPLEMENTATION for the settings-editor layout standard —
- * see "Settings editor layout" in docs/MODULE_STANDARDS.md. Strips run
- * content → layout → style → advanced, every control declares a width
- * token, and every setting here is honoured by the renderer
- * (`getImageModuleStyle` / `BuilderImagePreview`).
+ * see "Settings editor layout" in docs/MODULE_STANDARDS.md. Groups run
+ * content → layout → style, every control declares a width token, and
+ * every setting here is honoured by the renderer
+ * (`getImageModuleStyle` / `BuilderImagePreview`). `panelColumns` keeps
+ * the lone Width select from stranding a row (D1/D3) without moving it
+ * out of its semantic layout group.
  */
 export function BuilderImageModuleSettings({
   module,
   onUpdateModule,
   themeColors = []
 }: BuilderImageModuleSettingsProps) {
-  const set = (key: string, value: string) =>
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
+  const schema: BuilderSettingsSchema = {
+    panelColumns: [["content", "layout"], ["style"]],
+    content: [
+      [
+        {
+          key: "alt",
+          label: "Alt text",
+          width: "full",
+          control: "text",
+          placeholder: "Describe the image for screen readers",
+          rendersVia: "BuilderImagePreview"
+        }
+      ]
+    ],
+    layout: [
+      [
+        {
+          key: "size",
+          label: "Width",
+          width: "select-sm",
+          control: "select",
+          fallback: "100",
+          options: SIZE_OPTIONS.map((value) => ({ value, label: `${value}%` })),
+          rendersVia: "getImageModuleStyle"
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "borderThickness",
+          label: "Border",
+          width: "num",
+          control: "number",
+          min: 0,
+          max: 24,
+          fallback: "0",
+          rendersVia: "getImageModuleStyle"
+        },
+        {
+          key: "borderRadius",
+          label: "Radius",
+          width: "num",
+          control: "number",
+          min: 0,
+          max: 80,
+          fallback: "18",
+          rendersVia: "getImageModuleStyle"
+        },
+        {
+          key: "borderColor",
+          label: "Border Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Image border color",
+          fallback: "#0f4f8f",
+          rendersVia: "getImageModuleStyle"
+        },
+        {
+          key: "effect",
+          label: "Effect",
+          width: "select-md",
+          control: "select",
+          fallback: "none",
+          options: EFFECT_OPTIONS,
+          rendersVia: "getImageModuleStyle"
+        }
+      ]
+    ]
+  };
 
   return (
-    <>
-      {/* Content */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Alt text" width="full">
-          <input
-            type="text"
-            value={module.settings.alt ?? ""}
-            onChange={(event) => set("alt", event.target.value)}
-            placeholder="Describe the image for screen readers"
-          />
-        </BuilderModuleField>
-      </BuilderModuleFieldStrip>
-
-      {/* Layout */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Width" width="select-sm">
-          <select value={module.settings.size ?? "100"} onChange={(event) => set("size", event.target.value)}>
-            {SIZE_OPTIONS.map((value) => (
-              <option key={value} value={value}>{`${value}%`}</option>
-            ))}
-          </select>
-        </BuilderModuleField>
-      </BuilderModuleFieldStrip>
-
-      {/* Style */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Border" width="num">
-          <BuilderNumberSelectControl
-            value={module.settings.borderThickness ?? "0"}
-            min={0}
-            max={24}
-            fallback="0"
-            onChange={(borderThickness) => set("borderThickness", borderThickness)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Radius" width="num">
-          <BuilderNumberSelectControl
-            value={module.settings.borderRadius ?? "18"}
-            min={0}
-            max={80}
-            fallback="18"
-            onChange={(borderRadius) => set("borderRadius", borderRadius)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Border Color" width="color">
-          <BuilderThemeColorField
-            dialogLabel="Image border color"
-            fallback="#0f4f8f"
-            themeColors={themeColors}
-            value={module.settings.borderColor ?? "#0f4f8f"}
-            onChange={(borderColor) => set("borderColor", borderColor)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Effect" width="select-md">
-          <select value={module.settings.effect ?? "none"} onChange={(event) => set("effect", event.target.value)}>
-            {EFFECT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </BuilderModuleField>
-      </BuilderModuleFieldStrip>
-    </>
+    <BuilderSchemaModuleSettings
+      schema={schema}
+      module={module}
+      onUpdateModule={onUpdateModule}
+      themeColors={themeColors}
+    />
   );
 }

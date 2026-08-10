@@ -89,6 +89,47 @@ describe("BuilderSchemaModuleSettings", () => {
     ).toThrow(/bare custom field/);
   });
 
+  it("renders titled groups and distributes strips across columns (D4/D5)", () => {
+    const html = render({
+      content: {
+        title: "General",
+        columns: 2,
+        strips: [
+          [{ key: "a", label: "FieldA", width: "text-md", control: "text" }],
+          [{ key: "b", label: "FieldB", width: "text-md", control: "text" }]
+        ]
+      }
+    });
+    expect(html).toContain("builder-schema-group-title");
+    expect(html).toContain("General");
+    expect((html.match(/builder-schema-group-column"/g) ?? []).length).toBe(2);
+    // Contiguous split: A in the first column, B in the second.
+    expect(html.indexOf("FieldA")).toBeLessThan(html.indexOf("FieldB"));
+  });
+
+  it("panelColumns arranges groups side by side, doctrine order left-to-right (D2)", () => {
+    const html = render({
+      panelColumns: [["content"], ["layout"], ["style"]],
+      style: [[{ key: "c", label: "StyleMarker", width: "color", control: "color", dialogLabel: "c" }]],
+      content: [[{ key: "a", label: "ContentMarker", width: "full", control: "text" }]],
+      layout: [[{ key: "b", label: "LayoutMarker", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]],
+      advanced: [[{ key: "d", label: "AdvMarker", width: "num", control: "number", min: 0, max: 9 }]]
+    });
+    expect((html.match(/builder-schema-panel-column"/g) ?? []).length).toBe(3);
+    const order = ["ContentMarker", "LayoutMarker", "StyleMarker"].map((m) => html.indexOf(m));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    // Advanced never joins the columns — it renders after them, full width.
+    expect(html.indexOf("AdvMarker")).toBeGreaterThan(html.indexOf("StyleMarker"));
+    expect(html.indexOf("<details")).toBeGreaterThan(html.indexOf("builder-schema-panel-columns"));
+  });
+
+  it("plain array groups render exactly as before (backwards compatible)", () => {
+    const html = render({ content: [[{ key: "a", label: "Alt", width: "full", control: "text" }]] });
+    expect(html).toContain("builder-module-field-strip");
+    expect(html).not.toContain("builder-schema-group-title");
+    expect(html).not.toContain("builder-schema-panel-columns");
+  });
+
   it("select and checkbox honour fallback and custom true values", () => {
     const html = render({
       content: [[

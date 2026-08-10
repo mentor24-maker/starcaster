@@ -32,9 +32,7 @@ const SCHEMA: BuilderSettingsSchema = {
         fallback: "Premium Modules",
         visibleWhen: (s) => (s.showTitle ?? "true") === "true",
         rendersVia: "AdminModulesPreview (builder-template-preview.tsx)"
-      }
-    ],
-    [
+      },
       {
         key: "showToggle",
         label: "Toggle buttons",

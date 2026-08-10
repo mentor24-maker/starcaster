@@ -3676,14 +3676,18 @@ export function BuilderModuleCard({
       {(isExpanded || isPopped) ? (
         <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
           {module.type !== "social" && module.type !== "blog-post-list" ? (
-            <BuilderSettingRow label="Label" fullWidth>
-              <input
-                type="text"
-                value={module.name}
-                onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Optional internal label"
-              />
-            </BuilderSettingRow>
+            // Content-sized, not full-panel — this row tops every module,
+            // so master rule W1 applies here with maximum leverage.
+            <BuilderModuleFieldStrip>
+              <BuilderModuleField label="Label" width="text-md">
+                <input
+                  type="text"
+                  value={module.name}
+                  onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Optional internal label"
+                />
+              </BuilderModuleField>
+            </BuilderModuleFieldStrip>
           ) : null}
 
           {editorDevice === "mobile" ? (

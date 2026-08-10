@@ -121,8 +121,11 @@ export function BuilderBreadcrumbModuleSettings({
         }
       ]
     ],
-    layout: [
+    style: [
       [
+        // D1/D3: Align is a lone small select — it joins the trail-styling
+        // strip rather than stranding a row of its own. (It is a layout
+        // setting; the merge is purely visual, the key is unchanged.)
         {
           key: "alignment",
           label: "Align",
@@ -135,11 +138,7 @@ export function BuilderBreadcrumbModuleSettings({
           ],
           fallback: "left",
           rendersVia: "builder-module-card breadcrumb preview"
-        }
-      ]
-    ],
-    style: [
-      [
+        },
         {
           key: "separator",
           label: "Separator",

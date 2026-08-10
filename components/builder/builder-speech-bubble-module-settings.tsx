@@ -27,6 +27,9 @@ export function BuilderSpeechBubbleModuleSettings({
   themeColors = []
 }: BuilderSpeechBubbleModuleSettingsProps) {
   const schema: BuilderSettingsSchema = {
+    // D2: rich-text content left; the short layout + style strips share
+    // the right column instead of stacking below.
+    panelColumns: [["content"], ["layout", "style"]],
     content: [
       [
         {

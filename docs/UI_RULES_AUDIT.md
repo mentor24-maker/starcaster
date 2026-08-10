@@ -402,3 +402,33 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
     have no view/like data anywhere, so wiring requires the tracking
     feature first — ClickUp 86bbb075p (Dev Backlog). Labels clarified
     (List Title / Post Page) resolving the L7 flag.
+
+- **2026-08-09/10 (the layout wave — F1/F2/F3/F5/F8 partial/W4):**
+  - **F1 done:** generator supports titled groups, 1–3 column group
+    splits, and `panelColumns` (groups side by side, doctrine order
+    left→right). 11 generator tests.
+  - **F2 done:** shared chrome rebuilt — Label row content-sized;
+    Background renders as a genuinely horizontal field strip everywhere
+    (was single-column: its horizontal CSS existed only in a social-only
+    scope); Clear rides the strip; mode select token-sized.
+  - **F3 done:** the vapor grid classes now exist (auto-fit column grids
+    in the overrides layer) — slider/slideshow/social-share/
+    headline-rotator render their intended layouts for the first time.
+  - **F5 done:** select tokens became minimums; selects auto-size to
+    their longest option — every audited L4 crop clears at once.
+  - **W4 done:** range inputs bounded (200px) in strips — all three
+    tractor-nav sliders fixed by one rule.
+  - **F8 partial:** `BuilderInlineNumberSelect` no longer stretches
+    flex:1 (CSS override); replacing raw number inputs continues later.
+  - **Panel re-layouts applied** (D1/D2/D3/D5) to: blog-post-list (**S5
+    three-column layout RESTORED**: General | Page Design | Card
+    Appearance), admin-support-form (three titled groups, two columns),
+    admin-login/modules/team-users, author-bio, newsletter-subscribe,
+    category-manager, category-filter, search, search-results,
+    post-manager, post-tags, tag-cloud, confetti, crm-contacts-table
+    (real "Row actions" titled group), image (schema-converted),
+    breadcrumb, messaging-tag-list, speech-bubble, tractor-nav.
+  - Verified by driving the app headless and screenshotting tractor-nav,
+    blog-post-list, and admin-support-form — panels fill their width in
+    columns; no orphans; no cropped options. Screenshots on the
+    operator's Desktop ("AFTER - …").

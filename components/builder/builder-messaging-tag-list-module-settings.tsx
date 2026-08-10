@@ -58,20 +58,18 @@ export function BuilderMessagingTagListModuleSettings({
               <option value="custom">Custom</option>
             </select>
           )
-        }
-      ],
-      [
+        },
+        // D3: Destination + its dependent fields share one strip — the
+        // visibleWhen pair pattern. Page URL narrowed full → text-md.
         {
           key: "targetPageUrl",
           label: "Page URL",
-          width: "full",
+          width: "text-md",
           control: "text",
           placeholder: DESTINATION_DEFAULTS[destinationType] ?? "/blog-search-results",
           visibleWhen: (settings) => resolveDestinationType(settings) !== "none",
           rendersVia: "builder-template-preview messaging-tag-list"
-        }
-      ],
-      [
+        },
         {
           key: "filterParam",
           label: "URL Param",

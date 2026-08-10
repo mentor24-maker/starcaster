@@ -28,9 +28,7 @@ const SCHEMA: BuilderSettingsSchema = {
         placeholder: "Sign In",
         fallback: "Sign In",
         rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
-      }
-    ],
-    [
+      },
       {
         key: "showForgotPassword",
         label: "Forgot password",
