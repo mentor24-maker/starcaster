@@ -302,6 +302,16 @@ App.projectContext = (function projectContextModule() {
     s.acquireYoutubeComments = [];
     s.promoLeads = [];
     s.promoFields = [];
+    // Messaging topics are project-scoped and cached in core.js. Without this
+    // the previous project's topic list survives the switch.
+    if (App.ui && typeof App.ui.resetMessagingTopicsCache === 'function') {
+      App.ui.resetMessagingTopicsCache();
+    } else {
+      s.cachedTopics = [];
+      s.cachedTopicsLoaded = false;
+      s.cachedTopicsPromise = null;
+      s.cachedTopicsEpoch = (s.cachedTopicsEpoch || 0) + 1;
+    }
   }
 
   async function notifyModulesProjectSwitched(projectId) {

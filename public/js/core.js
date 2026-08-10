@@ -1010,27 +1010,64 @@ App.iconButtonMarkup = function iconButtonMarkup(iconKey, label, className = '')
 
 App.ui = App.ui || {};
 
+/**
+ * Drop the cached messaging topics. Called on every project switch —
+ * the topic list is project-scoped, and an in-flight fetch started under the
+ * previous project must not be allowed to land in the new project's cache
+ * (hence the epoch bump).
+ */
+App.ui.resetMessagingTopicsCache = function resetMessagingTopicsCache() {
+  App.state.cachedTopics = [];
+  App.state.cachedTopicsLoaded = false;
+  App.state.cachedTopicsPromise = null;
+  App.state.cachedTopicsEpoch = (App.state.cachedTopicsEpoch || 0) + 1;
+};
+
 App.ui.ensureMessagingTopicsLoaded = async function() {
-  if (Array.isArray(App.state.cachedTopics) && App.state.cachedTopics.length) {
+  // A loaded flag, not a length check: "this project has no topics" is a real
+  // answer and must be cached, or every caller refetches forever.
+  if (App.state.cachedTopicsLoaded && Array.isArray(App.state.cachedTopics)) {
     return App.state.cachedTopics;
   }
-  try {
-    const res = await App.api('/api/messaging/topics?limit=5000');
-    if (res && res.error) throw new Error(typeof res.error === 'string' ? res.error : res.error.message);
-    const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-    const flatTopics = topics
-      .map(item => String(item?.topic || item?.category || '').trim())
-      .filter(Boolean)
-      .filter((value, index, arr) => arr.indexOf(value) === index)
-      .sort((a, b) => a.localeCompare(b));
-    if (flatTopics.length > 0) {
-      App.state.cachedTopics = flatTopics;
-    }
-    return flatTopics;
-  } catch (err) {
-    console.error('Failed to pre-fetch cached topics:', err);
-    return Array.isArray(App.state.cachedTopics) ? App.state.cachedTopics : [];
+  // Callers fire without awaiting each other (one per topic dropdown, one
+  // dropdown per table row), so they all arrive before the first response.
+  // Hand every concurrent caller the same in-flight promise.
+  if (App.state.cachedTopicsPromise) {
+    return App.state.cachedTopicsPromise;
   }
+
+  const epoch = App.state.cachedTopicsEpoch || 0;
+  const isCurrent = () => (App.state.cachedTopicsEpoch || 0) === epoch;
+
+  App.state.cachedTopicsPromise = (async () => {
+    try {
+      const res = await App.api('/api/messaging/topics?limit=5000');
+      if (res && res.error) throw new Error(typeof res.error === 'string' ? res.error : res.error.message);
+      const topics = Array.isArray(res?.topics) ? res.topics : Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+      const flatTopics = topics
+        .map(item => String(item?.topic || item?.category || '').trim())
+        .filter(Boolean)
+        .filter((value, index, arr) => arr.indexOf(value) === index)
+        .sort((a, b) => a.localeCompare(b));
+      // Stale response from before a project switch: return it to the callers
+      // that asked for it, but do not seed the new project's cache.
+      if (isCurrent()) {
+        App.state.cachedTopics = flatTopics;
+        App.state.cachedTopicsLoaded = true;
+      }
+      return flatTopics;
+    } catch (err) {
+      // Deliberately not cached — a failed fetch should retry on next call.
+      console.error('Failed to pre-fetch cached topics:', err);
+      return Array.isArray(App.state.cachedTopics) ? App.state.cachedTopics : [];
+    } finally {
+      if (isCurrent()) {
+        App.state.cachedTopicsPromise = null;
+      }
+    }
+  })();
+
+  return App.state.cachedTopicsPromise;
 };
 
 App.ui.populateTopicsDropdown = async function(selectId, defaultLabel = 'Select Topic', defaultOptionValue = '', forceSelectedValue = null) {
