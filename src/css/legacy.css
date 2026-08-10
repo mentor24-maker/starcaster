@@ -7949,9 +7949,73 @@ button.builder-inline-asset-status-btn:focus-visible {
 /* No pixel floor: the toolbar wraps now (T10), so the cell no longer has to
    reserve a full row's worth of width — the 350px floor was helping push
    this table past its container. */
-.youtube-repository-bulk-actions-cell {
-  max-width: 450px;
+/* T0/T7 for the two YouTube CRUDs. Both were bare <table> elements, so they
+   inherited `table-layout: auto` and sized their columns to the longest
+   value in them — a transcript or a reply draft dragged the table hundreds
+   of pixels past its container and it fell back to scrolling sideways
+   (rung 12: 359px and 303px hidden at 1280, measured by
+   `npm run check:screens` on 2026-08-10).
+
+   Fixed layout with shares of the table is rung 4: the columns stop chasing
+   the content, and the prose wraps into the space it is given (rung 11)
+   rather than the table growing. Prose is what these columns are for, so
+   wrapping beats truncating here — an operator reviewing comments has to
+   read them. */
+.youtube-runs-table,
+.youtube-comments-table {
+  table-layout: fixed;
+  width: 100%;
 }
+
+.youtube-runs-table col,
+.youtube-comments-table col {
+  /* widths live on the th rules below; colgroups are not used here */
+}
+
+.youtube-runs-table th:nth-child(1) { width: 3%; }
+.youtube-runs-table th:nth-child(2) { width: 9%; }
+.youtube-runs-table th:nth-child(3) { width: 19%; }
+.youtube-runs-table th:nth-child(4) { width: 13%; }
+.youtube-runs-table th:nth-child(5) { width: 10%; }
+.youtube-runs-table th:nth-child(6) { width: 14%; }
+.youtube-runs-table th:nth-child(7) { width: 14%; }
+.youtube-runs-table th:nth-child(8) { width: 18%; }
+
+.youtube-comments-table th:nth-child(1) { width: 3%; }
+.youtube-comments-table th:nth-child(2) { width: 12%; }
+.youtube-comments-table th:nth-child(3) { width: 10%; }
+.youtube-comments-table th:nth-child(4) { width: 9%; }
+.youtube-comments-table th:nth-child(5) { width: 22%; }
+.youtube-comments-table th:nth-child(6) { width: 15%; }
+.youtube-comments-table th:nth-child(7) { width: 18%; }
+.youtube-comments-table th:nth-child(8) { width: 11%; }
+
+/* Six row-action icons need ~314px on one line; in a 149px Actions column
+   they spilled 165px past the table and it scrolled to hide them (measured
+   2026-08-10). Icons are chrome, not data — there is nothing to truncate,
+   so they wrap onto a second line (T7 rung 11) in a column wide enough to
+   take three across. */
+.youtube-runs-table td:nth-child(8) .table-actions-row,
+.youtube-runs-table td:nth-child(8) {
+  white-space: normal;
+}
+
+.youtube-runs-table td:nth-child(8) .table-actions-row {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Long values must be allowed to break, or a single unbroken token (a URL,
+   a hashtag run) reintroduces the overflow fixed layout just removed. */
+.youtube-runs-table td,
+.youtube-comments-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The toolbar has its own full-width row now, so neither a floor nor a cap
+   applies — capping it would re-crush the controls it was moved out of the
+   Actions column to escape. */
 
 /* Layout from .crud-bulk-actions-row (_tables.css, T10). */
 
