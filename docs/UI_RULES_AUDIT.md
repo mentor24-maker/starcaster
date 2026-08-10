@@ -569,3 +569,33 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
     rather than changing them.
   - Next: decide which settings across the 38 modules are theme-backed
     and move them, per the operator's sequencing.
+
+- **2026-08-10 (operator feedback on the Advanced screenshot — 5 items,
+  all applied):**
+  1. **Headings bold, a step larger, dark blue** — plus new rule **R9**:
+     high contrast between text and background, every heading inside an
+     editor the same dark blue. Tokens `--builder-editor-heading` /
+     `--builder-editor-label` so the pair moves together.
+  2. **Field labels** take that same dark colour and weight at normal
+     size. (Two stale muted rules of my own were overriding the new one —
+     removed, so a single rule governs.)
+  3. **Advanced is now PER AXIS**: each axis may declare its own
+     `advanced` strips, and the Advanced region uses the SAME column
+     tracks as the basic row, so an advanced control sits under its own
+     heading. Axes with nothing advanced hold their position but render
+     no heading. Below 1100px the tracks collapse and wrap.
+  4. **Rule W7 — the four spacing controls have exactly four names**:
+     Vertical Margin, Horizontal Margin, Vertical Padding, Horizontal
+     Padding. `spacingFields()` emits them so labels cannot drift;
+     `marginFields` relabelled. Navigation's "Pad V/Pad H/Menu V Margin"
+     updated.
+  5. **Rule A5 — offsets live under Placement → Advanced.** Applied to
+     heading as the worked example.
+  - Two defects caught by screenshotting the result: the longer canonical
+    labels **cropped** at the fixed 116px label track (L4 violation I had
+    just introduced) — the track now sizes to its longest label, exactly
+    as W5 says L4 outranks uniformity; and three labels stayed muted
+    because of my own earlier CSS.
+  - Still to sweep: canonical spacing names and offsets-to-Advanced
+    across the remaining modules, and deciding which settings are
+    theme-backed (A1) module by module.

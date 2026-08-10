@@ -4,6 +4,7 @@ import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
   marginFields,
+  spacingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 
@@ -42,14 +43,30 @@ describe("BuilderSchemaModuleSettings", () => {
     expect(html).toContain("builder-module-field--select-sm");
   });
 
-  it("marginFields yields H and V margin adjacent in one strip (E4)", () => {
+  it("marginFields yields both margins adjacent in one strip, canonical names (E4/W7)", () => {
     const html = render({ layout: [[...marginFields("getModuleOuterSpacingStyle")]] }, { horizontalMargin: "10", verticalMargin: "20" });
-    const h = html.indexOf("H Margin");
-    const v = html.indexOf("V Margin");
-    expect(h).toBeGreaterThanOrEqual(0);
-    expect(v).toBeGreaterThan(h);
+    const v = html.indexOf("Vertical Margin");
+    const h = html.indexOf("Horizontal Margin");
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(h).toBeGreaterThan(v);
     // Same strip: no strip boundary between the two labels.
-    expect(html.slice(h, v)).not.toContain("builder-module-field-strip");
+    expect(html.slice(v, h)).not.toContain("builder-module-field-strip");
+    // W7 forbids the old abbreviations.
+    expect(html).not.toContain(">V Margin<");
+    expect(html).not.toContain(">H Margin<");
+  });
+
+  it("spacingFields emits only the keys a module honours, in canonical order (W7)", () => {
+    const html = render({
+      layout: [[...spacingFields("getModuleOuterSpacingStyle", { verticalPadding: "padY", horizontalPadding: "padX" })]]
+    });
+    const vp = html.indexOf("Vertical Padding");
+    const hp = html.indexOf("Horizontal Padding");
+    expect(vp).toBeGreaterThanOrEqual(0);
+    expect(hp).toBeGreaterThan(vp);
+    // Nothing invented for keys the module did not declare.
+    expect(html).not.toContain("Vertical Margin");
+    expect(html).not.toContain("Horizontal Margin");
   });
 
   it("renders advanced strips inside a hanging details block", () => {
@@ -231,5 +248,51 @@ describe("logical axes (D8)", () => {
     expect(html).toContain("StructMark");
     expect(html).not.toContain("FrameMark");
     expect(html).not.toContain("Frame</div>");
+  });
+});
+
+describe("per-axis Advanced (operator 8/10)", () => {
+  const axis = (title: string, extra: Record<string, unknown> = {}) => ({
+    title,
+    strips: [[{ key: `${title}-basic`, label: `${title}Basic`, width: "num" as const, control: "number" as const, min: 0, max: 9 }]],
+    ...extra
+  });
+
+  it("renders an axis's advanced controls under its own heading", () => {
+    const html = render({
+      axes: [
+        axis("Structure"),
+        axis("Placement", {
+          advanced: [[{ key: "offset", label: "OffsetMark", width: "num", control: "number", min: 0, max: 9 }]]
+        })
+      ]
+    });
+    expect(html).toContain("OffsetMark");
+    // The advanced region carries the Placement heading, not a generic one.
+    const advancedStart = html.indexOf("hanging-details");
+    expect(html.slice(advancedStart)).toContain("Placement");
+    // Structure has no advanced controls, so it contributes no heading there.
+    expect(html.slice(advancedStart)).not.toContain("StructureBasic");
+  });
+
+  it("renders no Advanced region at all when no axis declares one", () => {
+    const html = render({ axes: [axis("Structure"), axis("Text")] });
+    expect(html).not.toContain("hanging-details");
+  });
+
+  it("counts theme overrides across axes in the Advanced summary (A3)", () => {
+    const schema: BuilderSettingsSchema = {
+      axes: [
+        axis("Text", {
+          advanced: [[{ key: "c1", label: "C1", width: "color", control: "theme-color", themeDefault: "#000000", dialogLabel: "c" }]]
+        }),
+        axis("Frame", {
+          advanced: [[{ key: "c2", label: "C2", width: "color", control: "theme-color", themeDefault: "#111111", dialogLabel: "c" }]]
+        })
+      ]
+    };
+    expect(render(schema)).not.toContain("overriding the theme");
+    expect(render(schema, { c1: "#ff0000" })).toContain("1 overriding the theme");
+    expect(render(schema, { c1: "#ff0000", c2: "#00ff00" })).toContain("2 overriding the theme");
   });
 });

@@ -516,6 +516,23 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: var(--space-4, 12px) var(--space-6, 24px);
 }
 
+/*
+ * When the panel declares its axis count, both the basic row and the
+ * Advanced row use the SAME fixed tracks, so an advanced control lands
+ * directly under its own axis heading (operator 8/10). Below 1100px the
+ * tracks collapse and the columns wrap instead of cramping.
+ */
+.builder-react-root .builder-schema-panel-columns[style*="--builder-axis-count"] {
+  display: grid;
+  grid-template-columns: repeat(var(--builder-axis-count, 1), minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .builder-react-root .builder-schema-panel-columns[style*="--builder-axis-count"] {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
 .builder-react-root .builder-schema-panel-column {
   flex: 1 1 260px;
   min-width: 0;
@@ -539,11 +556,37 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: var(--space-3, 8px);
 }
 
+/*
+ * Headings and labels, per the operator (8/10): headings bold and a step
+ * larger; every heading inside an editor the same dark blue; field labels
+ * the same dark colour and weight at normal size. The muted grey they had
+ * been failed his contrast rule (R9) — grey-on-blue is exactly the
+ * low-contrast pairing he called out.
+ */
 .builder-react-root .builder-schema-group-title {
-  font-size: var(--text-sm, 0.82rem);
+  font-size: var(--text-lg, 1.1rem);
   font-weight: 700;
-  color: var(--ink-secondary, #475569);
-  margin: var(--space-2, 6px) 0 var(--space-1, 4px);
+  color: var(--builder-editor-heading, #0b2a4a);
+  margin: var(--space-2, 6px) 0 var(--space-3, 8px);
+}
+
+.builder-react-root .builder-schema-advanced > summary {
+  font-size: var(--text-lg, 1.1rem);
+  font-weight: 700;
+  color: var(--builder-editor-heading, #0b2a4a);
+}
+
+/* Field labels: same dark colour and weight, normal size. */
+.builder-react-root .builder-module-editor .builder-module-field-label,
+.builder-react-root .builder-module-field-label,
+.builder-react-root .builder-module-editor .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-module-chrome .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-floating-image-module-chrome .builder-setting-label {
+  font-size: var(--text-base, 0.9rem);
+  font-weight: 700;
+  color: var(--builder-editor-label, #12395f);
 }
 
 .builder-react-root .builder-module-field {
@@ -696,7 +739,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-schema-panel-column .builder-module-field {
   display: grid;
-  grid-template-columns: 116px minmax(0, 1fr);
+  /*
+   * The label track sizes to the longest label in the column rather than
+   * a fixed width — the canonical spacing names (W7: "Horizontal
+   * Padding") are long, and L4 (never crop a word) outranks W2's
+   * uniformity, exactly as W5 says.
+   */
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3, 8px);
 }
@@ -713,7 +762,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-schema-panel-column .builder-setting-row,
 .builder-react-root .builder-schema-panel-column .builder-setting-row-full {
   display: grid;
-  grid-template-columns: 116px minmax(0, 1fr);
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3, 8px);
   margin: 0 0 var(--space-2, 6px);
@@ -721,9 +770,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-editor .builder-schema-panel-column .builder-setting-label,
 .builder-react-root .builder-schema-panel-column .builder-setting-label {
-  font-size: var(--text-sm, 0.82rem);
-  font-weight: 700;
-  color: var(--muted, #445465);
   white-space: nowrap;
   text-align: left;
 }
@@ -786,9 +832,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-label {
-  font-size: var(--text-sm, 0.82rem);
-  font-weight: 700;
-  color: var(--muted, #445465);
   white-space: nowrap;
 }
 

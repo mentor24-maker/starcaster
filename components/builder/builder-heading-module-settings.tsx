@@ -300,7 +300,7 @@ export function BuilderHeadingModuleSettings({
             // legacy value.
             {
               key: "marginTop",
-              label: "Top Margin",
+              label: "Margin Top",
               width: "num",
               control: "custom",
               rendersVia: "getModuleMarginStyle",
@@ -316,7 +316,7 @@ export function BuilderHeadingModuleSettings({
             },
             {
               key: "marginBottom",
-              label: "Bottom Margin",
+              label: "Margin Bottom",
               width: "num",
               control: "custom",
               rendersVia: "getModuleMarginStyle",
@@ -334,7 +334,7 @@ export function BuilderHeadingModuleSettings({
             // (UI_RULES.md S2 audit item). Pairs with the Top/Bottom split above.
             {
               key: "horizontalMargin",
-              label: "H Margin",
+              label: "Horizontal Margin",
               width: "num",
               control: "number",
               min: 0,
@@ -342,9 +342,12 @@ export function BuilderHeadingModuleSettings({
               fallback: "0",
               rendersVia: "getModuleMarginStyle"
             }
-          ],
+          ]
+        ],
+        // A5: offsets are nudges, not everyday placement — Placement's own
+        // Advanced section. They still render in BOTH compact and full mode.
+        advanced: [
           [
-            // Offsets render in BOTH compact and full mode.
             {
               key: "horizontalOffset",
               label: "Offsets",

@@ -238,19 +238,19 @@ export function BuilderNavigationModuleSettings({
                       ariaLabel="Menu item alignment inside the nav"
                     />
                   </BuilderModuleField>
-                  <BuilderModuleField label="Pad V" width="num">
+                  <BuilderModuleField label="Vertical Padding" width="num">
                     <BuilderNumberSelectControl
                       value={String(padV)} min={0} max={40} fallback="8"
                       onChange={(v) => updatePadding(Number(v), padH)}
                     />
                   </BuilderModuleField>
-                  <BuilderModuleField label="Pad H" width="num">
+                  <BuilderModuleField label="Horizontal Padding" width="num">
                     <BuilderNumberSelectControl
                       value={String(padH)} min={0} max={60} fallback="12"
                       onChange={(v) => updatePadding(padV, Number(v))}
                     />
                   </BuilderModuleField>
-                  <BuilderModuleField label="Menu V Margin" width="num">
+                  <BuilderModuleField label="Vertical Margin" width="num">
                     <BuilderNumberSelectControl
                       value={module.settings.navMarginV ?? "0"}
                       min={0} max={80} fallback="0"

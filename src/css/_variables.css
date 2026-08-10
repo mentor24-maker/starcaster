@@ -56,6 +56,16 @@
   --leading-tight: 1.25; /* headings, single-line UI */
   --leading-normal: 1.5; /* body copy */
 
+  /*
+   * Builder editor typography (operator ruling 2026-08-10): every heading
+   * inside a module editor is the same dark blue, and field labels share
+   * that colour and weight at normal size. Named tokens rather than
+   * literals so a theme can move them together — and so rule R9's
+   * contrast requirement has something to point at.
+   */
+  --builder-editor-heading: #0b2a4a;
+  --builder-editor-label: #12395f;
+
   /* Aliases for legacy CSS */
   --text: var(--ink-primary);
   --subtext: var(--ink-secondary);

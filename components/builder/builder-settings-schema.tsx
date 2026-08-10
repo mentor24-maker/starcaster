@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderAlignmentIconGroup, type BuilderModuleAlignment } from "./builder-alignment-icon-group";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
@@ -154,6 +154,15 @@ export type BuilderSchemaGroup =
 export type BuilderSchemaAxis = {
   title: string;
   strips: BuilderSchemaStrip[];
+  /**
+   * This axis's Advanced controls — theme overrides (A1) and genuinely
+   * rare settings. They render in the shared Advanced region BELOW the
+   * basic columns, in this axis's own column, so an advanced control
+   * sits under the heading it belongs to (operator 8/10: "all controls
+   * in the Advanced section should fall under the same columns as the
+   * basic settings"). An axis with none contributes no heading.
+   */
+  advanced?: BuilderSchemaStrip[];
 };
 
 export const MAX_AXES = 4;
@@ -286,9 +295,45 @@ function splitIntoColumns(strips: BuilderSchemaStrip[], columns: number): Builde
  */
 export function marginFields(rendersVia: string, max = 80): BuilderSchemaField[] {
   return [
-    { key: "horizontalMargin", label: "H Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia },
-    { key: "verticalMargin", label: "V Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia }
+    { key: "verticalMargin", label: "Vertical Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia },
+    { key: "horizontalMargin", label: "Horizontal Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia }
   ];
+}
+
+/**
+ * The four spacing controls, with the only names they are allowed to have
+ * (master rule W7, operator 8/10): Vertical Margin, Horizontal Margin,
+ * Vertical Padding, Horizontal Padding. Pass only the keys a module
+ * actually honours — a control wired to nothing is a C6 violation.
+ */
+export function spacingFields(
+  rendersVia: string,
+  keys: Partial<{
+    verticalMargin: string;
+    horizontalMargin: string;
+    verticalPadding: string;
+    horizontalPadding: string;
+  }>,
+  max = 160
+): BuilderSchemaField[] {
+  const labels: Record<string, string> = {
+    verticalMargin: "Vertical Margin",
+    horizontalMargin: "Horizontal Margin",
+    verticalPadding: "Vertical Padding",
+    horizontalPadding: "Horizontal Padding"
+  };
+  return (["verticalMargin", "horizontalMargin", "verticalPadding", "horizontalPadding"] as const)
+    .filter((name) => keys[name])
+    .map((name) => ({
+      key: keys[name] as string,
+      label: labels[name],
+      width: "num" as const,
+      control: "number" as const,
+      min: 0,
+      max,
+      fallback: "0",
+      rendersVia
+    }));
 }
 
 function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext): ReactNode {
@@ -495,14 +540,30 @@ export function BuilderSchemaModuleSettings({
           .join(", ")}). The ceiling is ${MAX_AXES} — a fifth axis is a design question for the operator, not a cramped column.`
       );
     }
+    const axes = schema.axes;
+    const visibleStrips = (strips: BuilderSchemaStrip[] | undefined) =>
+      (strips ?? []).filter((strip) =>
+        strip.some((field) => !field.visibleWhen || field.visibleWhen(ctx.settings))
+      );
+
+    // The Advanced region uses the SAME column track count as the basic
+    // row, so an advanced control sits under its own axis heading rather
+    // than in a separate full-width block (operator 8/10).
+    const axisCount = axes.length;
+    const advancedByAxis = axes.map((axis) => visibleStrips(axis.advanced));
+    const hasAdvanced = advancedByAxis.some((strips) => strips.length > 0);
+    const overrides = advancedByAxis.reduce(
+      (total, strips) => total + countThemeOverrides(strips, ctx.settings),
+      0
+    );
+    const trackStyle = { "--builder-axis-count": String(axisCount) } as CSSProperties;
+
     return (
       <>
-        <div className="builder-schema-panel-columns">
-          {schema.axes.map((axis) => {
-            const visible = axis.strips.filter((strip) =>
-              strip.some((field) => !field.visibleWhen || field.visibleWhen(ctx.settings))
-            );
-            if (!visible.length) return null;
+        <div className="builder-schema-panel-columns" style={trackStyle}>
+          {axes.map((axis) => {
+            const visible = visibleStrips(axis.strips);
+            if (!visible.length) return <div className="builder-schema-panel-column" key={axis.title} />;
             return (
               <div className="builder-schema-panel-column" key={axis.title}>
                 <div className="builder-schema-group-title">{axis.title}</div>
@@ -511,6 +572,32 @@ export function BuilderSchemaModuleSettings({
             );
           })}
         </div>
+
+        {hasAdvanced ? (
+          <details className="hanging-details builder-schema-advanced">
+            <summary>
+              {advancedLabel}
+              {overrides > 0 ? (
+                <span className="builder-schema-override-count">{overrides} overriding the theme</span>
+              ) : null}
+            </summary>
+            <div className="builder-schema-panel-columns" style={trackStyle}>
+              {axes.map((axis, index) => {
+                const strips = advancedByAxis[index];
+                // Only axes WITH advanced controls get a heading; the rest
+                // hold their column position so the grid stays aligned.
+                if (!strips.length) return <div className="builder-schema-panel-column" key={axis.title} />;
+                return (
+                  <div className="builder-schema-panel-column" key={axis.title}>
+                    <div className="builder-schema-group-title">{axis.title}</div>
+                    {renderStrips(strips, ctx)}
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        ) : null}
+
         {renderGroup("advanced")}
       </>
     );

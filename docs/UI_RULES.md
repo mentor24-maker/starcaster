@@ -175,6 +175,9 @@ deliberately, and says so.*
   module that ignores a themed restyle explains itself instead of
   looking like a theme bug. — **[auto-ish]** (the generator renders the
   count)
+- **A5.** **Offsets live under Placement → Advanced.** Vertical Offset
+  and Horizontal Offset are nudges, not everyday placement — they sit in
+  the Placement axis's Advanced section. *(operator 8/10)* — **[eye]**
 - **A4.** Advanced is for theme overrides and genuinely rare settings —
   **not** a place to hide controls that did not fit a column. If a
   control belongs to an axis, it goes on the axis. *(guard against A1
@@ -183,6 +186,13 @@ deliberately, and says so.*
 *Status:* the infrastructure is in (control, badge, rule). Which
 settings across the 38 modules are theme-backed — and therefore move to
 Advanced — is the follow-on pass the operator sequenced after this.
+
+- **W7.** The spacing controls are exactly these four, with these
+  names: **Vertical Margin**, **Horizontal Margin**, **Vertical
+  Padding**, **Horizontal Padding**. No "Pad V", no "V Margin", no
+  per-module invention. *(operator 8/10)* — **[eye]**
+  Helper: `spacingFields()` in the settings schema emits the pair(s) so
+  the labels cannot drift.
 
 ## C — Controls: pick the right one
 
@@ -359,6 +369,16 @@ is ever wider than the screen.*
   — **[eye]**
 - **R4.** Hover states are designed, never accidental. *(7/1 "on mouseover
   we get a white background. I don't want that")* — **[eye]**
+
+- **R9.** **High contrast between text and its background, always** —
+  and every heading inside an editor is the **same dark blue**
+  (`--builder-editor-heading`). Field labels share that colour and weight
+  at normal size (`--builder-editor-label`). Muted grey on the builder's
+  blue panels is the low-contrast pairing this rule exists to stop.
+  *(operator 8/10: "we require high contrast between the background and
+  the fonts. All headings within the editors should have the same dark
+  blue color")* — **[eye]**, tokens are **[type]**-adjacent (named in
+  `_variables.css`, so a drift is visible in one place)
 
 ## S — System and structure
 
