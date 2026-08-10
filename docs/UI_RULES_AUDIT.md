@@ -459,3 +459,32 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
   C1/C2 status: page/form targets clear; remaining C2 items (post-card /
   related-posts per-item post fills, blog-post slug-from-title, toc
   anchors-from-headings) are richer derivations — future work, noted.
+
+- **2026-08-10 (F13 — chrome-gap repair, nav dedupe, reminder placement):**
+  - **The mechanism, found and fixed:** the universal chrome (Background /
+    Alignment / H+V Margin) was the ELSE branch of the ~30-way
+    settings-editor ternary in `builder-module-card.tsx`. The day a module
+    gained its own settings component it silently stopped offering that
+    chrome — while the renderer kept honouring the settings
+    (`getModuleOuterSpacingStyle` + `getBuilderBackgroundStyle`). Extracted
+    the chrome to `sharedModuleChrome` and rendered it for the 26 affected
+    modules (breadcrumb, 16 blog, 2 messaging, crm-contacts-table, 6
+    admin). C7/S2 for those: clear.
+  - **Deliberate non-members** (documented in code): current-poll / social /
+    crm-form (own background+margins), heading / floating-image (own chrome
+    blocks), button / table / poll-category-list / reminder (bespoke or
+    opted out), tractor-nav / confetti (fixed-position overlays).
+  - **Navigation dedupe:** `navMarginH` removed (written, read by nothing —
+    C6); its second Background `<details>` removed (edited the SAME keys as
+    the chrome's control — E6; `NavigationModulePreview` reads them
+    directly, which is why the wrapper skips them). `navAlignment` and
+    `navMarginV` KEPT — verified live at builder-template-preview.tsx:5103
+    -5104 and scoped to the menu inside the nav, not the module box —
+    relabelled "Menu Alignment" / "Menu V Margin" so the two live scopes
+    read differently (L7). Its three full-width colour rows became one
+    strip (D1/W1).
+  - **Reminder placement wired (C7):** `resolveReminderStripPlacement` has
+    always honoured `stripPlacement`, but `buildReminderModuleMetadata`
+    never wrote it — Builder strips were locked to the top of the screen.
+    Threaded through the record type, parser, factories, serializer and
+    metadata, with a strip-only "Placement" control and 3 round-trip tests.

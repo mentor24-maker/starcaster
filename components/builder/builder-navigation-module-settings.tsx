@@ -1,15 +1,13 @@
 import { useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
-import type { BackgroundSettings, BuilderTemplateModule } from "@/lib/builder-template";
+import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import { BuilderAlignmentIconGroup, type BuilderModuleAlignment } from "./builder-alignment-icon-group";
-import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
-import { BuilderThemeColorSettingRow } from "./builder-theme-color-field";
-import { getModuleBackgroundSettings } from "./builder-utils";
+import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 /**
  * Navigation settings editor.
@@ -67,17 +65,11 @@ function parseNavPadding(navPadding: string): { v: number; h: number } {
 export function BuilderNavigationModuleSettings({
   module,
   onUpdateModule,
-  onUpdateModuleBackground,
-  themeColors = [],
-  themeBackgroundColor,
-  themePrimaryColor
+  themeColors = []
 }: {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
-  onUpdateModuleBackground: (updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
   themeColors?: Array<{ label: string; hex: string }>;
-  themeBackgroundColor?: string;
-  themePrimaryColor?: string;
 }) {
   const [styleCollapsed, setStyleCollapsed] = useState(false);
   const [linksCollapsed, setLinksCollapsed] = useState(false);
@@ -200,12 +192,27 @@ export function BuilderNavigationModuleSettings({
               </BuilderModuleFieldStrip>
             )}
 
+            {/*
+              F13 dedupe: this module ALSO wears the universal chrome
+              (Background / Alignment / H+V Margin), so two of the controls
+              that lived here were duplicates and one was dead:
+                • navMarginH — written here, read by no renderer. Removed.
+                • the Background <details> below — edited the SAME keys as
+                  the chrome's Background control. Removed; the chrome's is
+                  the one that survives (NavigationModulePreview reads those
+                  keys directly, which is why the wrapper skips them).
+              Menu Alignment and Menu V Margin are NOT duplicates: they
+              position the menu items INSIDE the nav, while the chrome's
+              alignment/margins position the module box on the page. Both
+              are live on tenant sites — relabelled so the scopes read
+              differently (L7) rather than removed.
+            */}
             <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Alignment" width="align">
+              <BuilderModuleField label="Menu Alignment" width="align">
                 <BuilderAlignmentIconGroup
                   value={(module.settings.navAlignment ?? "center") as BuilderModuleAlignment}
                   onChange={(alignment) => updateSetting("navAlignment", alignment)}
-                  ariaLabel="Navigation alignment"
+                  ariaLabel="Menu item alignment inside the nav"
                 />
               </BuilderModuleField>
               <BuilderModuleField label="Pad V" width="num">
@@ -227,14 +234,7 @@ export function BuilderNavigationModuleSettings({
                   onChange={(v) => updateSetting("navBorderRadius", v)}
                 />
               </BuilderModuleField>
-              <BuilderModuleField label="H Margin" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navMarginH ?? "0"}
-                  min={0} max={80} fallback="0"
-                  onChange={(v) => updateSetting("navMarginH", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="V Margin" width="num">
+              <BuilderModuleField label="Menu V Margin" width="num">
                 <BuilderNumberSelectControl
                   value={module.settings.navMarginV ?? "0"}
                   min={0} max={80} fallback="0"
@@ -243,38 +243,37 @@ export function BuilderNavigationModuleSettings({
               </BuilderModuleField>
             </BuilderModuleFieldStrip>
 
-            <BuilderThemeColorSettingRow
-              label="Text"
-              fallback="#163a5e"
-              themeColors={themeColors}
-              value={module.settings.navColor ?? ""}
-              onChange={(v) => updateSetting("navColor", v)}
-            />
-            <BuilderThemeColorSettingRow
-              label="Hover text"
-              fallback="#0a8fc4"
-              themeColors={themeColors}
-              value={module.settings.navHoverColor ?? ""}
-              onChange={(v) => updateSetting("navHoverColor", v)}
-            />
-            <BuilderThemeColorSettingRow
-              label="Hover bg"
-              fallback="#d0f0fb"
-              themeColors={themeColors}
-              value={module.settings.navHoverBackground ?? ""}
-              onChange={(v) => updateSetting("navHoverBackground", v)}
-            />
-            <details className="hanging-details">
-              <summary>Background</summary>
-              <BuilderBackgroundControls
-                label="Background"
-                background={getModuleBackgroundSettings(module.settings)}
-                onChange={onUpdateModuleBackground}
-                themeBackgroundColor={themeBackgroundColor}
-                themeColors={themeColors}
-                themePrimaryColor={themePrimaryColor}
-              />
-            </details>
+            {/* D1/W1: three full-width color rows became one strip of
+                content-sized swatches. Same keys, same fallbacks. */}
+            <BuilderModuleFieldStrip>
+              <BuilderModuleField label="Text" width="color">
+                <BuilderThemeColorField
+                  dialogLabel="Menu text color"
+                  fallback="#163a5e"
+                  themeColors={themeColors}
+                  value={module.settings.navColor ?? ""}
+                  onChange={(v) => updateSetting("navColor", v)}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Hover text" width="color">
+                <BuilderThemeColorField
+                  dialogLabel="Menu hover text color"
+                  fallback="#0a8fc4"
+                  themeColors={themeColors}
+                  value={module.settings.navHoverColor ?? ""}
+                  onChange={(v) => updateSetting("navHoverColor", v)}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Hover bg" width="color">
+                <BuilderThemeColorField
+                  dialogLabel="Menu hover background color"
+                  fallback="#d0f0fb"
+                  themeColors={themeColors}
+                  value={module.settings.navHoverBackground ?? ""}
+                  onChange={(v) => updateSetting("navHoverBackground", v)}
+                />
+              </BuilderModuleField>
+            </BuilderModuleFieldStrip>
           </div>
         )}
       </div>

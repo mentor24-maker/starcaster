@@ -40,6 +40,12 @@ export type BuilderReminderRecord = {
   offsetX: string;
   offsetY: string;
   zIndex: string;
+  /**
+   * Where a "strip" reminder sits on screen. The player display has always
+   * honoured this (resolveReminderStripPlacement) but nothing ever wrote
+   * it, so Builder reminders were locked to "top" — audit fix F13/C7.
+   */
+  stripPlacement: string;
 };
 
 const LEGACY_MODULE_SETTING_KEYS = [
@@ -209,7 +215,8 @@ function normalizeReminderRecord(raw: unknown, fallbackIndex: number): BuilderRe
     containerWidth: String(entry.containerWidth ?? "520"),
     offsetX: String(entry.offsetX ?? "0"),
     offsetY: String(entry.offsetY ?? "0"),
-    zIndex: String(entry.zIndex ?? "46")
+    zIndex: String(entry.zIndex ?? "46"),
+    stripPlacement: String(entry.stripPlacement ?? "top") === "bottom" ? "bottom" : "top"
   };
 }
 
@@ -238,7 +245,8 @@ export function createSignupNudgeReminderRecord(id?: string): BuilderReminderRec
     containerWidth: "520",
     offsetX: "0",
     offsetY: "0",
-    zIndex: "46"
+    zIndex: "46",
+    stripPlacement: "top"
   };
 }
 
@@ -264,7 +272,8 @@ export function createDefaultReminderRecord(): BuilderReminderRecord {
     containerWidth: "520",
     offsetX: "0",
     offsetY: "0",
-    zIndex: "46"
+    zIndex: "46",
+    stripPlacement: "top"
   };
 }
 
@@ -287,7 +296,8 @@ function legacyModuleToReminderRecord(module: BuilderTemplateModule): BuilderRem
     containerWidth: module.settings.containerWidth ?? "520",
     offsetX: module.settings.offsetX ?? "0",
     offsetY: module.settings.offsetY ?? "0",
-    zIndex: module.settings.zIndex ?? "46"
+    zIndex: module.settings.zIndex ?? "46",
+    stripPlacement: module.settings.stripPlacement === "bottom" ? "bottom" : "top"
   };
 }
 
@@ -358,7 +368,8 @@ export function serializeReminderRecords(
         containerWidth: record.containerWidth,
         offsetX: record.offsetX,
         offsetY: record.offsetY,
-        zIndex: record.zIndex
+        zIndex: record.zIndex,
+        stripPlacement: record.stripPlacement
       };
     })
   );
@@ -400,7 +411,8 @@ export function reminderRecordToEvaluable(moduleId: string, record: BuilderRemin
     containerWidth: record.containerWidth,
     offsetX: record.offsetX,
     offsetY: record.offsetY,
-    zIndex: record.zIndex
+    zIndex: record.zIndex,
+    stripPlacement: record.stripPlacement
   };
 
   return {
@@ -450,7 +462,8 @@ export function buildReminderModuleMetadata(
     containerWidth: settings.containerWidth ?? "520",
     offsetX: settings.offsetX ?? "0",
     offsetY: settings.offsetY ?? "0",
-    zIndex: settings.zIndex ?? "46"
+    zIndex: settings.zIndex ?? "46",
+    stripPlacement: settings.stripPlacement ?? "top"
   };
 }
 
