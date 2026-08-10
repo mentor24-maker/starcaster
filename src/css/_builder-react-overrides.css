@@ -504,6 +504,48 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: 10px 14px;
 }
 
+/*
+ * Schema panel/group columns (master rules D2/D4/D5, added 2026-08-09).
+ * Flex-basis columns so narrow panels (table-cell editors, popups) wrap
+ * to fewer columns instead of cropping — L4/W5 outrank the column count.
+ */
+.builder-react-root .builder-schema-panel-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-schema-panel-column {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-schema-group-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-schema-group-column {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 8px);
+}
+
+.builder-react-root .builder-schema-group-title {
+  font-size: var(--text-sm, 0.82rem);
+  font-weight: 700;
+  color: var(--ink-secondary, #475569);
+  margin: var(--space-2, 6px) 0 var(--space-1, 4px);
+}
+
 .builder-react-root .builder-module-field {
   display: inline-flex;
   align-items: center;
@@ -537,13 +579,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   max-width: min(230px, 100%);
 }
 
+/*
+ * Select tokens are MINIMUMS, not fixed widths (changed 2026-08-09,
+ * master rule L4/W5): the fixed ch widths were mechanically cropping
+ * real option labels ("Section Heading", "Hide (read-only)", "Power
+ * Curve" — see UI_RULES_AUDIT.md). A select auto-sizes to its longest
+ * option; the token only stops it collapsing below a sane floor.
+ */
 .builder-react-root .builder-module-field--select-sm .builder-module-field-control select {
-  width: 7.5ch;
+  width: auto;
   min-width: 7.5ch;
 }
 
 .builder-react-root .builder-module-field--select-md .builder-module-field-control select {
-  width: 9.5ch;
+  width: auto;
   min-width: 9.5ch;
 }
 
@@ -569,6 +618,58 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
       var(--numeric-select-padding-inline)
   );
   max-width: 100%;
+}
+
+/*
+ * Sliders get a bounded width (master rule W4, 2026-08-09): range inputs
+ * had NO width rule anywhere, so tractor-nav's three sliders spanned the
+ * whole panel. Bounded here for every strip field at once.
+ */
+.builder-react-root .builder-module-field-control input[type="range"] {
+  width: 200px;
+  max-width: 100%;
+}
+
+/*
+ * The inline number select stretched flex:1 to half the row under 2-3
+ * digit values (master rule W3; table/slider/slideshow/social-share).
+ * The rule it overrides lives in regenerated _builder-react.css.
+ */
+.builder-react-root .builder-inline-number-field select {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+/*
+ * F3 (UI_RULES_AUDIT.md): these grid classes were referenced by four
+ * inline editors (slider, slideshow, social-share, headline-rotator)
+ * but DEFINED NOWHERE — the editors have rendered as accidental
+ * single-column stacks of full-width fields since birth. Real grids:
+ * auto-fit columns bound each field to a column width (W1) and use the
+ * panel's full width (D2), wrapping to one column on narrow panels.
+ */
+.builder-react-root .builder-slider-design-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3, 8px) var(--space-5, 16px);
+  align-items: start;
+}
+
+.builder-react-root .builder-slider-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-slider-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2, 6px) var(--space-5, 16px);
+  align-items: start;
+}
+
+.builder-react-root .builder-slider-item-grid-full {
+  grid-column: 1 / -1;
 }
 
 .builder-react-root .builder-module-background-details {
@@ -1430,6 +1531,111 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .tw-candidate h3 { font-size: 15px; margin: 0 0 8px; }
 .tw-rationale { font-size: 13px; line-height: 1.5; }
 
+/* Role-palette rail: one chip per background/text pair. The "Aa" renders in
+ * the pair's own text colour on its own background, so an unreadable pair is
+ * visible at a glance. */
+.tw-palette-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.tw-palette-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tw-palette-chip-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(9, 16, 24, 0.18);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tw-palette-chip-name {
+  font-size: 11px;
+  color: var(--ink-secondary, #43566d);
+}
+
+/* The gallery-picker button renders into arbitrary containers (setting rows,
+ * asset groups, wizard panels). In flex/grid rows the generated
+ * `.builder-gallery-button { min-width: 0 }` lets the pill shrink smaller than
+ * its own label ("Choose From Gallery" overflowing its container — doctrine
+ * §2 Buttons: the container yields, never the label). */
+.builder-react-root .builder-image-picker-field-button {
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+
+/* Themes editor: colour-role pairs and helper notes. */
+.builder-themes-col-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary, #43566d);
+  margin: 2px 0 8px;
+  line-height: 1.4;
+}
+.builder-themes-role-pair {
+  border-bottom: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.builder-themes-role-pair:last-child {
+  border-bottom: none;
+}
+
+/* Hero banner slots on the start screen. */
+.tw-hero-panel {
+  border: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+  margin: 4px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tw-hero-panel legend {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  padding: 0 4px;
+}
+.tw-hero-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tw-hero-slot-label {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary, #43566d);
+  white-space: nowrap;
+}
+.tw-hero-slot > div {
+  flex: 1 1 auto;
+}
+
+/* The run's starting point, in full, with a copy affordance. */
+.tw-seed {
+  margin: 4px 0 10px;
+  font-size: var(--text-sm);
+}
+.tw-seed-text {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--border-light, rgba(9, 16, 24, 0.16));
+  background: var(--bg-hover);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* A real page, scaled to thumbnail size. */
 /* Clickable to open full size (spec section 8 screen 3). A real <button> so it
  * is keyboard reachable; the scaled page inside keeps pointer-events: none so a
@@ -1605,3 +1811,58 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-radius: 10px;
 }
 .tw-preview-full { width: 100%; }
+
+/* ---------------------------------------------------------------------------
+ * Item grid — titled-column item managers (UI_RULES L6).
+ *
+ * The generic successor to the Navigation Links grid: a header row of column
+ * titles, one compact row per item, actions column last. Column tracks are
+ * declared per manager via a --<manager> modifier; a field that cannot fit a
+ * column (image picker, multi-line text) renders as a .builder-item-grid-sub
+ * row spanning the grid under its item's primary row. Columns use minmax(...,
+ * 1fr) so they expand rather than crop (L4/W5). Adopted by: breadcrumb,
+ * feature-cards. New managers add a modifier here rather than a new system.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .builder-item-grid {
+  display: grid;
+  align-items: center;
+  column-gap: var(--space-3, 8px);
+  row-gap: var(--space-2, 6px);
+  margin: var(--space-3, 8px) 0 var(--space-2, 6px);
+}
+.builder-react-root .builder-item-grid--crumbs {
+  grid-template-columns: minmax(12ch, 1fr) minmax(12ch, 1.4fr) max-content;
+}
+.builder-react-root .builder-item-grid--cards {
+  grid-template-columns: minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+}
+.builder-react-root .builder-item-grid--cards.builder-item-grid--cards-icons {
+  grid-template-columns: 6ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+}
+.builder-react-root .builder-item-grid > input,
+.builder-react-root .builder-item-grid > select {
+  width: 100%;
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-header {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--muted, #888888);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.builder-react-root .builder-item-grid-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+}
+.builder-react-root .builder-item-grid-sub {
+  grid-column: 1 / -1;
+  padding-bottom: var(--space-2, 6px);
+  border-bottom: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+}
+.builder-react-root .builder-item-grid-sub:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}

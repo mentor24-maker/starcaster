@@ -4,7 +4,7 @@ import type { BuilderTemplateModule } from "@/lib/builder-template";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
-import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { useState } from "react";
 
 type Props = {
@@ -23,6 +23,11 @@ const SECTION_LABELS: Record<Section, string> = {
   display:  "Display",
 };
 
+const SHOW_HIDE_OPTIONS = [
+  { value: "true", label: "Show" },
+  { value: "false", label: "Hide" }
+];
+
 export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richTextGallery }: Props) {
   const s = module.settings;
   const [section, setSection] = useState<Section>("content");
@@ -36,6 +41,18 @@ export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richText
 
   function setBody(value: string) {
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, body: value } }));
+  }
+
+  function showHideField(key: string, label: string, fallback: string) {
+    return (
+      <BuilderModuleField label={label} width="select-md">
+        <select value={s[key] ?? fallback} onChange={(e) => set(key, e.target.value)}>
+          {SHOW_HIDE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </BuilderModuleField>
+    );
   }
 
   const statusColors: Record<string, string> = {
@@ -99,98 +116,111 @@ export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richText
       {/* ── Content ── */}
       {section === "content" ? (
         <>
-          <BuilderSettingRow label="Title" fullWidth>
-            <input
-              type="text"
-              value={s.title ?? ""}
-              onChange={(e) => set("title", e.target.value)}
-              placeholder="Post title"
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Title" width="full">
+              <input
+                type="text"
+                value={s.title ?? ""}
+                onChange={(e) => set("title", e.target.value)}
+                placeholder="Post title"
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
 
-          <BuilderSettingRow label="Body" fullWidth>
-            <BuilderRichTextEditor
-              value={s.body ?? ""}
-              onChange={setBody}
-              placeholder="Write your post here…"
-              {...richTextGallery}
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Body" width="full">
+              <BuilderRichTextEditor
+                value={s.body ?? ""}
+                onChange={setBody}
+                placeholder="Write your post here…"
+                {...richTextGallery}
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
         </>
       ) : null}
 
       {/* ── Meta ── */}
       {section === "meta" ? (
         <>
-          <BuilderSettingRow label="Slug" fullWidth>
-            <input
-              type="text"
-              value={s.slug ?? ""}
-              onChange={(e) => set("slug", e.target.value)}
-              placeholder="my-post-title"
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Slug" width="text-md">
+              <input
+                type="text"
+                value={s.slug ?? ""}
+                onChange={(e) => set("slug", e.target.value)}
+                placeholder="my-post-title"
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Author" width="text-md">
+              <input
+                type="text"
+                value={s.author ?? ""}
+                onChange={(e) => set("author", e.target.value)}
+                placeholder="Author name"
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Publish Date" width="text-md">
+              <input
+                type="text"
+                value={s.publishDate ?? ""}
+                onChange={(e) => set("publishDate", e.target.value)}
+                placeholder="Jun 22, 2026"
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
 
-          <BuilderSettingRow label="Author" fullWidth>
-            <input
-              type="text"
-              value={s.author ?? ""}
-              onChange={(e) => set("author", e.target.value)}
-              placeholder="Author name"
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Image" width="full">
+              <BuilderImagePickerField
+                value={s.featuredImageUrl ?? ""}
+                onChange={(url) => set("featuredImageUrl", url)}
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
 
-          <BuilderSettingRow label="Publish date" fullWidth>
-            <input
-              type="text"
-              value={s.publishDate ?? ""}
-              onChange={(e) => set("publishDate", e.target.value)}
-              placeholder="Jun 22, 2026"
-            />
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Featured image" fullWidth>
-            <BuilderImagePickerField
-              value={s.featuredImageUrl ?? ""}
-              onChange={(url) => set("featuredImageUrl", url)}
-            />
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Excerpt" fullWidth>
-            <textarea
-              value={s.excerpt ?? ""}
-              onChange={(e) => set("excerpt", e.target.value)}
-              placeholder="A short summary shown in post cards and feeds…"
-              rows={3}
-              style={{ resize: "vertical" }}
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Excerpt" width="full">
+              <textarea
+                className="builder-textarea"
+                value={s.excerpt ?? ""}
+                onChange={(e) => set("excerpt", e.target.value)}
+                placeholder="A short summary shown in post cards and feeds…"
+                rows={3}
+                style={{ resize: "vertical" }}
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
         </>
       ) : null}
 
       {/* ── Taxonomy ── */}
       {section === "taxonomy" ? (
         <>
-          <BuilderSettingRow label="Categories" fullWidth>
-            <input
-              type="text"
-              value={s.categories ?? ""}
-              onChange={(e) => set("categories", e.target.value)}
-              placeholder="technology, design, ai"
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Categories" width="full">
+              <input
+                type="text"
+                value={s.categories ?? ""}
+                onChange={(e) => set("categories", e.target.value)}
+                placeholder="technology, design, ai"
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
           <p style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 12px", lineHeight: 1.4 }}>
             Comma-separated slugs matching your Category Filter module.
           </p>
 
-          <BuilderSettingRow label="Tags" fullWidth>
-            <input
-              type="text"
-              value={s.tags ?? ""}
-              onChange={(e) => set("tags", e.target.value)}
-              placeholder="react, typescript, tutorial"
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Tags" width="full">
+              <input
+                type="text"
+                value={s.tags ?? ""}
+                onChange={(e) => set("tags", e.target.value)}
+                placeholder="react, typescript, tutorial"
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
           <p style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 0", lineHeight: 1.4 }}>
             Comma-separated tags.
           </p>
@@ -200,24 +230,29 @@ export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richText
       {/* ── SEO ── */}
       {section === "seo" ? (
         <>
-          <BuilderSettingRow label="SEO title" fullWidth>
-            <input
-              type="text"
-              value={s.seoTitle ?? ""}
-              onChange={(e) => set("seoTitle", e.target.value)}
-              placeholder={s.title || "SEO page title"}
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="SEO Title" width="full">
+              <input
+                type="text"
+                value={s.seoTitle ?? ""}
+                onChange={(e) => set("seoTitle", e.target.value)}
+                placeholder={s.title || "SEO page title"}
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
 
-          <BuilderSettingRow label="SEO description" fullWidth>
-            <textarea
-              value={s.seoDescription ?? ""}
-              onChange={(e) => set("seoDescription", e.target.value)}
-              placeholder="150–160 character description for search results…"
-              rows={3}
-              style={{ resize: "vertical" }}
-            />
-          </BuilderSettingRow>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="SEO Description" width="full">
+              <textarea
+                className="builder-textarea"
+                value={s.seoDescription ?? ""}
+                onChange={(e) => set("seoDescription", e.target.value)}
+                placeholder="150–160 character description for search results…"
+                rows={3}
+                style={{ resize: "vertical" }}
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
 
           {s.seoDescription ? (
             <p style={{
@@ -233,52 +268,14 @@ export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richText
 
       {/* ── Display ── */}
       {section === "display" ? (
-        <div className="builder-button-setting-columns">
-          <div className="builder-button-setting-column">
-            <BuilderSettingRow label="Featured image">
-              <select value={s.showFeaturedImage ?? "true"} onChange={(e) => set("showFeaturedImage", e.target.value)}>
-                <option value="true">Show</option>
-                <option value="false">Hide</option>
-              </select>
-            </BuilderSettingRow>
-
-            <BuilderSettingRow label="Excerpt">
-              <select value={s.showExcerpt ?? "true"} onChange={(e) => set("showExcerpt", e.target.value)}>
-                <option value="true">Show</option>
-                <option value="false">Hide</option>
-              </select>
-            </BuilderSettingRow>
-
-            <BuilderSettingRow label="Author">
-              <select value={s.showAuthor ?? "true"} onChange={(e) => set("showAuthor", e.target.value)}>
-                <option value="true">Show</option>
-                <option value="false">Hide</option>
-              </select>
-            </BuilderSettingRow>
-          </div>
-          <div className="builder-button-setting-column">
-            <BuilderSettingRow label="Date">
-              <select value={s.showDate ?? "true"} onChange={(e) => set("showDate", e.target.value)}>
-                <option value="true">Show</option>
-                <option value="false">Hide</option>
-              </select>
-            </BuilderSettingRow>
-
-            <BuilderSettingRow label="Categories">
-              <select value={s.showCategories ?? "true"} onChange={(e) => set("showCategories", e.target.value)}>
-                <option value="true">Show</option>
-                <option value="false">Hide</option>
-              </select>
-            </BuilderSettingRow>
-
-            <BuilderSettingRow label="Tags">
-              <select value={s.showTags ?? "false"} onChange={(e) => set("showTags", e.target.value)}>
-                <option value="false">Hide</option>
-                <option value="true">Show</option>
-              </select>
-            </BuilderSettingRow>
-          </div>
-        </div>
+        <BuilderModuleFieldStrip>
+          {showHideField("showFeaturedImage", "Image", "true")}
+          {showHideField("showExcerpt", "Excerpt", "true")}
+          {showHideField("showAuthor", "Author", "true")}
+          {showHideField("showDate", "Date", "true")}
+          {showHideField("showCategories", "Categories", "true")}
+          {showHideField("showTags", "Tags", "false")}
+        </BuilderModuleFieldStrip>
       ) : null}
     </div>
   );

@@ -1,130 +1,170 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderSchemaModuleSettings, type BuilderSettingsSchema } from "./builder-settings-schema";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
 };
 
+const SHOW_HIDE_OPTIONS = [
+  { value: "true", label: "Show" },
+  { value: "false", label: "Hide" }
+];
+
+/**
+ * Three titled groups for the panel's three concerns (D5): contact block,
+ * form, request history. All three are content semantically — the layout
+ * and style SLOTS are borrowed only for their position in the fixed group
+ * order, so the panel reads Contact → Form → Request history. The lone
+ * layout select rides in the Form group's last strip (D1/D3).
+ * `panelColumns` puts Contact beside Form + Request history so the panel
+ * fills its width (D2).
+ */
+const SCHEMA: BuilderSettingsSchema = {
+  content: {
+    title: "Contact",
+    strips: [
+      [
+        {
+          key: "showContact",
+          label: "Contact details",
+          width: "select-sm",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        },
+        {
+          key: "contactHeading",
+          label: "Contact heading",
+          width: "text-md",
+          control: "text",
+          placeholder: "Need a hand with your website?",
+          fallback: "Need a hand with your website?",
+          visibleWhen: (s) => (s.showContact ?? "true") === "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        }
+      ],
+      [
+        {
+          key: "contactIntro",
+          label: "Contact intro",
+          width: "full",
+          control: "text",
+          placeholder: "Optional line above the email and phone",
+          visibleWhen: (s) => (s.showContact ?? "true") === "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        }
+      ]
+    ]
+  },
+  layout: {
+    title: "Form",
+    strips: [
+      [
+        {
+          key: "showTitle",
+          label: "Show title",
+          width: "select-sm",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        },
+        {
+          key: "formTitle",
+          label: "Title text",
+          width: "text-md",
+          control: "text",
+          placeholder: "Request Support",
+          fallback: "Request Support",
+          visibleWhen: (s) => (s.showTitle ?? "true") === "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        }
+      ],
+      [
+        {
+          key: "defaultPriority",
+          label: "Default priority",
+          width: "select-md",
+          control: "select",
+          options: [
+            { value: "low", label: "Low" },
+            { value: "normal", label: "Normal" },
+            { value: "high", label: "High" },
+            { value: "urgent", label: "Urgent" }
+          ],
+          fallback: "normal",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        },
+        {
+          key: "showScreenshot",
+          label: "Screenshot upload",
+          width: "select-sm",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        },
+        {
+          key: "buttonText",
+          label: "Button text",
+          width: "text-md",
+          control: "text",
+          placeholder: "Send Request",
+          fallback: "Send Request",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        },
+        {
+          key: "layout",
+          label: "Layout",
+          width: "select-md",
+          control: "select",
+          options: [
+            { value: "two-column", label: "Two columns" },
+            { value: "stacked", label: "One column" }
+          ],
+          fallback: "two-column",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        }
+      ]
+    ]
+  },
+  style: {
+    title: "Request history",
+    strips: [
+      [
+        {
+          key: "showHistory",
+          label: "Past requests",
+          width: "select-sm",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        },
+        {
+          key: "historyTitle",
+          label: "Past requests title",
+          width: "text-md",
+          control: "text",
+          placeholder: "Your Recent Requests",
+          fallback: "Your Recent Requests",
+          visibleWhen: (s) => (s.showHistory ?? "true") === "true",
+          rendersVia: "AdminSupportFormPreview (builder-template-preview.tsx)"
+        }
+      ]
+    ]
+  },
+  panelColumns: [["content"], ["layout", "style"]]
+};
+
 export function BuilderAdminSupportFormModuleSettings({ module, onUpdateModule }: Props) {
-  const s = module.settings;
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
-
-  const showTitle = (s.showTitle ?? "true") === "true";
-  const showHistory = (s.showHistory ?? "true") === "true";
-  const showContact = (s.showContact ?? "true") === "true";
-
   return (
     <div className="builder-crm-contacts-table-settings">
-      <BuilderSettingRow label="Contact details">
-        <select value={s.showContact ?? "true"} onChange={(e) => set("showContact", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      {showContact && (
-        <>
-          <BuilderSettingRow label="Contact heading" fullWidth>
-            <input
-              type="text"
-              value={s.contactHeading ?? "Need a hand with your website?"}
-              onChange={(e) => set("contactHeading", e.target.value)}
-              placeholder="Need a hand with your website?"
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Contact intro" fullWidth>
-            <input
-              type="text"
-              value={s.contactIntro ?? ""}
-              onChange={(e) => set("contactIntro", e.target.value)}
-              placeholder="Optional line above the email and phone"
-            />
-          </BuilderSettingRow>
-        </>
-      )}
-
-      <BuilderSettingRow label="Layout">
-        <select value={s.layout ?? "two-column"} onChange={(e) => set("layout", e.target.value)}>
-          <option value="two-column">Two columns</option>
-          <option value="stacked">One column</option>
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Show title">
-        <select value={s.showTitle ?? "true"} onChange={(e) => set("showTitle", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      {showTitle && (
-        <BuilderSettingRow label="Title text" fullWidth>
-          <input
-            type="text"
-            value={s.formTitle ?? "Request Support"}
-            onChange={(e) => set("formTitle", e.target.value)}
-            placeholder="Request Support"
-          />
-        </BuilderSettingRow>
-      )}
-
-      <BuilderSettingRow label="Default priority">
-        <select
-          value={s.defaultPriority ?? "normal"}
-          onChange={(e) => set("defaultPriority", e.target.value)}
-        >
-          <option value="low">Low</option>
-          <option value="normal">Normal</option>
-          <option value="high">High</option>
-          <option value="urgent">Urgent</option>
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Screenshot upload">
-        <select
-          value={s.showScreenshot ?? "true"}
-          onChange={(e) => set("showScreenshot", e.target.value)}
-        >
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Button text" fullWidth>
-        <input
-          type="text"
-          value={s.buttonText ?? "Send Request"}
-          onChange={(e) => set("buttonText", e.target.value)}
-          placeholder="Send Request"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Past requests">
-        <select value={s.showHistory ?? "true"} onChange={(e) => set("showHistory", e.target.value)}>
-          <option value="true">Show</option>
-          <option value="false">Hide</option>
-        </select>
-      </BuilderSettingRow>
-
-      {showHistory && (
-        <BuilderSettingRow label="Past requests title" fullWidth>
-          <input
-            type="text"
-            value={s.historyTitle ?? "Your Recent Requests"}
-            onChange={(e) => set("historyTitle", e.target.value)}
-            placeholder="Your Recent Requests"
-          />
-        </BuilderSettingRow>
-      )}
+      <BuilderSchemaModuleSettings schema={SCHEMA} module={module} onUpdateModule={onUpdateModule} />
     </div>
   );
 }

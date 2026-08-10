@@ -612,6 +612,10 @@ async function handle(req, res, pathname, method) {
       stylesPageBackground,
       pageBackground: stylesPageBackground,
       typography,
+      palette: body.palette && typeof body.palette === 'object' ? body.palette : null,
+      treatments: body.treatments && typeof body.treatments === 'object' ? body.treatments : null,
+      heroBanner: body.heroBanner && typeof body.heroBanner === 'object' ? body.heroBanner : null,
+      heroBanners: Array.isArray(body.heroBanners) ? body.heroBanners : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
     if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
@@ -709,6 +713,10 @@ async function handle(req, res, pathname, method) {
       stylesPageBackground,
       pageBackground: stylesPageBackground,
       typography,
+      palette: body.palette && typeof body.palette === 'object' ? body.palette : null,
+      treatments: body.treatments && typeof body.treatments === 'object' ? body.treatments : null,
+      heroBanner: body.heroBanner && typeof body.heroBanner === 'object' ? body.heroBanner : null,
+      heroBanners: Array.isArray(body.heroBanners) ? body.heroBanners : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
     if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});

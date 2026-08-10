@@ -206,11 +206,129 @@ export type BuilderThemeTypography = {
     bottomMargin?: number;
     sideMargins?: number;
   };
+  /** Role palette storage home (see BuilderThemePalette) — no DB column needed. */
+  palette?: BuilderThemePalette;
+  /** Design-treatments storage home (see BuilderThemeTreatments). */
+  treatments?: BuilderThemeTreatments;
+  /** Hero-banner storage home (see BuilderThemeHeroBanner). */
+  heroBanner?: BuilderThemeHeroBanner;
+  /** Up to three saved banner options (the wizard keys one look on each). */
+  heroBanners?: string[];
 };
 
 export type BuilderTheme = {
   typography: BuilderThemeTypography;
 };
+
+/**
+ * Role palette — the multi-surface colour system a designed site actually uses,
+ * as opposed to the single `backgroundColor` wash. Five background/text pairs:
+ *
+ *   surface  — the main content section ground (usually white or near-white)
+ *   band     — the alternating tinted section that separates content bands
+ *   inverse  — the dark statement band (weighty sections, big footers)
+ *   header   — the site header / navigation chrome
+ *   button   — the primary call-to-action fill
+ *
+ * Stored inside the theme's `typography` JSONB as `typography.palette` (the
+ * same no-migration home `pageLayout` margins use) and surfaced as a top-level
+ * `palette` field on the theme summary. Values are hex strings; absent role =
+ * inherit the pre-theme default.
+ */
+export type BuilderThemePaletteRole =
+  | "surface"
+  | "surfaceText"
+  | "band"
+  | "bandText"
+  | "inverse"
+  | "inverseText"
+  | "header"
+  | "headerText"
+  | "button"
+  | "buttonText";
+
+export type BuilderThemePalette = Partial<Record<BuilderThemePaletteRole, string>>;
+
+export const THEME_PALETTE_ROLE_KEYS: BuilderThemePaletteRole[] = [
+  "surface", "surfaceText",
+  "band", "bandText",
+  "inverse", "inverseText",
+  "header", "headerText",
+  "button", "buttonText",
+];
+
+/**
+ * Design treatments — the layout-adjacent styling moves that make a themed
+ * page read as designed rather than repainted, all of them styling on top of
+ * content the operator supplied (never content itself):
+ *
+ *   heroOverlay/-Opacity — a tint laid over any section whose background is an
+ *     image, with light (inverseText) text on top, so a photo section reads as
+ *     a hero instead of text fighting a photograph.
+ *   cardOverlap — a feature-cards section directly after an image section
+ *     pulls up over its bottom edge.
+ *   footerInverse — the last plain section takes the inverse role: the dark
+ *     closing band big footers use.
+ *
+ * Same storage home as the palette: `typography.treatments` on the theme.
+ */
+export type BuilderThemeTreatments = {
+  heroOverlay?: string;
+  /** 0–0.75; a full blackout would defeat the photo. */
+  heroOverlayOpacity?: number;
+  cardOverlap?: boolean;
+  footerInverse?: boolean;
+};
+
+/** Hero banner: the image the site's top band wears. Operator-chosen URL. */
+export type BuilderThemeHeroBanner = {
+  url: string;
+};
+
+export function normalizeThemeHeroBanner(raw: unknown): BuilderThemeHeroBanner | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const url = String((raw as Record<string, unknown>).url || "").trim();
+  return /^https?:\/\//i.test(url) ? { url } : null;
+}
+
+/** Up to three saved banner options — the bank the wizard's three looks key on.
+ * The first non-empty one is what pages actually wear. */
+export function normalizeThemeHeroBanners(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const urls = raw
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^https?:\/\//i.test(value))
+    .slice(0, 3);
+  return urls.length ? urls : null;
+}
+
+export function normalizeThemeTreatments(raw: unknown): BuilderThemeTreatments | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const treatments: BuilderThemeTreatments = {};
+  if (typeof source.heroOverlay === "string" && source.heroOverlay.trim()) {
+    treatments.heroOverlay = source.heroOverlay.trim();
+  }
+  const opacity = Number(source.heroOverlayOpacity);
+  if (Number.isFinite(opacity)) {
+    treatments.heroOverlayOpacity = Math.min(0.75, Math.max(0, opacity));
+  }
+  if (typeof source.cardOverlap === "boolean") treatments.cardOverlap = source.cardOverlap;
+  if (typeof source.footerInverse === "boolean") treatments.footerInverse = source.footerInverse;
+  return Object.keys(treatments).length ? treatments : null;
+}
+
+/** Keep known roles with non-empty string values; null when nothing usable. */
+export function normalizeThemePalette(raw: unknown): BuilderThemePalette | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const palette: BuilderThemePalette = {};
+  for (const role of THEME_PALETTE_ROLE_KEYS) {
+    const value = source[role];
+    if (typeof value === "string" && value.trim()) palette[role] = value.trim();
+  }
+  return Object.keys(palette).length ? palette : null;
+}
 
 /** Lightweight reference to a saved theme in the builder_themes table. */
 export type BuilderThemeSummary = {
@@ -236,6 +354,14 @@ export type BuilderThemeSummary = {
   /** @deprecated Use stylesPageBackground — kept for API compatibility. */
   pageBackground?: BackgroundSettings;
   typography?: BuilderThemeTypography;
+  /** Multi-role colour palette (surface/band/inverse/header/button pairs). */
+  palette?: BuilderThemePalette;
+  /** Design treatments (hero overlay, card overlap, inverse footer). */
+  treatments?: BuilderThemeTreatments;
+  /** The image the site's top band wears (with the hero overlay on it). */
+  heroBanner?: BuilderThemeHeroBanner;
+  /** Up to three saved banner options (the wizard keys one look on each). */
+  heroBanners?: string[];
 };
 
 export type BuilderTemplateSection = {
@@ -1455,6 +1581,7 @@ export function normalizeBuilderModuleSettingsForType(
     const legacy = settings.verticalMargin;
     settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacy, "0");
     settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacy, "0");
+    settings.horizontalMargin = normalizeSpacingValue(settings.horizontalMargin, "0", 0, 160);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     settings.fontFamily = HEADING_FONT_KEYS.has(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";

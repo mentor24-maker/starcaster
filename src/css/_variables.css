@@ -21,6 +21,41 @@
   --radius-container: 20px;
   --radius-input: 8px;
 
+  /*
+   * Spacing scale (doctrine 1b, docs/MODULE_UI_DOCTRINE.md §4 prerequisite).
+   * Steps chosen from measured usage 2026-08-08: 4/6/8/12/16/24 are the
+   * values the hand-authored CSS already clusters on, so substituting a
+   * token is usually a zero-visual-change edit. Off-scale values (5px,
+   * 9px, 10px, 14px…) round to the nearest step when the rule is next
+   * touched — boy-scout, not big-bang.
+   */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /*
+   * Type scale. Canonizes today's two dominant sizes (0.82rem and 0.9rem —
+   * 55 and 51 uses respectively when measured) rather than inventing an
+   * ideal nobody uses. The 20+ one-off sizes (0.72, 0.78, 0.85, 0.86,
+   * 0.875, 0.88, 0.92, 0.95…) map to the nearest step when touched.
+   */
+  --text-xs: 0.75rem;   /* 12px — badges, counts, micro labels */
+  --text-sm: 0.82rem;   /* ~13px — table cells, field labels, secondary UI */
+  --text-base: 0.9rem;  /* ~14.4px — default admin control/body text */
+  --text-md: 1rem;      /* 16px — emphasized body, inputs that mirror site text */
+  --text-lg: 1.1rem;    /* ~18px — panel/section headings */
+  --text-xl: 1.25rem;   /* 20px — page headings */
+  --text-2xl: 1.5rem;   /* 24px — hero/stat numbers */
+  --text-3xl: 2rem;     /* 32px — largest display text */
+
+  --leading-tight: 1.25; /* headings, single-line UI */
+  --leading-normal: 1.5; /* body copy */
+
   /* Aliases for legacy CSS */
   --text: var(--ink-primary);
   --subtext: var(--ink-secondary);

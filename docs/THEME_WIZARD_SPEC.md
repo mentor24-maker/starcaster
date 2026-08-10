@@ -233,6 +233,57 @@ design, but the client must check `stop_reason` before reading content, and
 should opt into server-side fallback so a declined request re-runs on Opus 5
 automatically instead of failing the round.
 
+### 6.7 The role palette (added 2026-08-08)
+A designed page is a system of bands, not one wash of colour — the observation
+that motivated this: wizard output read as "monochrome" next to a reference
+design that was really five colour roles working together. Each candidate
+therefore carries a `palette` of five background/text pairs alongside the four
+legacy colours:
+
+| Role | Meaning |
+|---|---|
+| `surface` / `surfaceText` | Main content section ground, usually near-white |
+| `band` / `bandText` | Alternating tinted section — a quiet shift, not a statement |
+| `inverse` / `inverseText` | The dark statement band (weighty sections, big footers) |
+| `header` / `headerText` | Site header / navigation chrome |
+| `button` / `buttonText` | Primary call-to-action fill |
+
+Storage: inside the theme's `typography` JSONB as `typography.palette` (the
+same no-migration home `pageLayout` uses), surfaced as a top-level `palette`
+field on theme records and `themeShell`. Rendering: `getThemePaletteRoleVars`
+emits `--lp-surface`, `--lp-surface-text`, `--lp-band`, `--lp-band-text`,
+`--lp-inverse`, `--lp-inverse-text`, `--lp-header-bg`, `--lp-header-text`,
+`--lp-button-bg`, `--lp-button-text` on the preview shell root (one render
+path: Builder canvas and published sites both get them). Consumers opt in with
+`var(--lp-…, <their pre-theme default>)`, so an unset role changes nothing.
+
+Validation: every pair is contrast-checked (WCAG ratio). Below 3.0:1 the
+candidate FAILS — an unreadable pair is a broken design, not a bold one.
+Between 3.0 and 4.5 it renders with a recorded warning.
+
+Consumption (shipped 2026-08-09): backgroundless sections alternate
+surface/band; the nav follows the header role via the pre-existing
+`--site-nav-*` vars; buttons follow the button role (web only — the shared
+style object is inlined into email, where `var()` resolves to nothing);
+feature cards fill from surface.
+
+### 6.8 Design treatments (added 2026-08-09)
+Styling moves applied to content the site already has — never content itself
+(images stay the operator's choice; the wizard styles whatever they supply):
+
+- `heroOverlay` + `heroOverlayOpacity` (capped 0.75) — a tint over any section
+  whose background is an image, with inverseText text on top, so a photo
+  section reads as a hero.
+- `cardOverlap` — a feature-cards section directly following an image section
+  pulls up over its bottom edge.
+- `footerInverse` — the last plain section takes the inverse role (only when
+  the page has more than one plain section).
+
+Stored as `typography.treatments` (same home as the palette), surfaced as
+`treatments` on theme records and `themeShell`, carried to the renderer on
+`themeStyles`. No treatments = no change — the pre-treatment render is the
+fallback everywhere.
+
 ---
 
 ## 7. API surface

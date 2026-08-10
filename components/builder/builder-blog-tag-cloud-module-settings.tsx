@@ -1,11 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import type { BuilderThemePalette } from "./builder-theme-color-field";
 
 export type CloudTag = { id: string; label: string; slug: string; count?: number };
 
@@ -34,16 +34,8 @@ export function BuilderBlogTagCloudModuleSettings({
   onUpdateModule,
   themeColors = []
 }: Props) {
-  const s = module.settings;
-  const tags = parseCloudTags(s);
-  const isCloud = (s.layout ?? "cloud") === "cloud";
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
+  const tags = parseCloudTags(module.settings);
+  const isCloud = (module.settings.layout ?? "cloud") === "cloud";
 
   function persist(next: CloudTag[]) {
     onUpdateModule((current) => ({
@@ -74,159 +66,218 @@ export function BuilderBlogTagCloudModuleSettings({
     persist([...tags, { id: `tag-${Date.now()}`, label: "", slug: "", count: 1 }]);
   }
 
+  const schema: BuilderSettingsSchema = {
+    content: [
+      [
+        {
+          key: "tags",
+          label: "Tags",
+          width: "full",
+          control: "custom",
+          bare: true,
+          rendersVia: "BlogTagCloudPreview",
+          render: () => (
+            <>
+              <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>Tags</div>
+              <div className="builder-slider-items">
+                {tags.map((tag, index) => (
+                  <div key={tag.id} className="builder-slider-item-card">
+                    <div className="builder-slider-item-header">
+                      <strong>{tag.label || `Tag ${index + 1}`}</strong>
+                      <div className="builder-section-actions">
+                        <button type="button" className="builder-icon-button" onClick={() => moveTag(tag.id, -1)}>↑</button>
+                        <button type="button" className="builder-icon-button" onClick={() => moveTag(tag.id, 1)}>↓</button>
+                        <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeTag(tag.id)}>✕</button>
+                      </div>
+                    </div>
+                    <div className="builder-slider-item-grid">
+                      <label className="field">
+                        <span>Label</span>
+                        <input
+                          type="text"
+                          value={tag.label}
+                          onChange={(e) => updateTag(tag.id, "label", e.target.value)}
+                          placeholder="react"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Slug</span>
+                        <input
+                          type="text"
+                          value={tag.slug}
+                          onChange={(e) => updateTag(tag.id, "slug", e.target.value)}
+                          placeholder="react"
+                        />
+                      </label>
+                      {isCloud ? (
+                        <label className="field">
+                          <span>Count</span>
+                          <input
+                            type="number" min={1} max={999}
+                            value={tag.count ?? 1}
+                            onChange={(e) => updateTag(tag.id, "count", parseInt(e.target.value, 10) || 1)}
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="secondary-button" onClick={addTag}>
+                Add Tag
+              </button>
+            </>
+          )
+        }
+      ]
+    ],
+    layout: [
+      [
+        {
+          key: "layout",
+          label: "Layout",
+          width: "auto",
+          control: "select",
+          options: [
+            { value: "cloud", label: "Cloud (sized by count)" },
+            { value: "pills", label: "Pills (uniform)" },
+            { value: "list", label: "List" }
+          ],
+          fallback: "cloud",
+          rendersVia: "BlogTagCloudPreview"
+        },
+        {
+          key: "alignment",
+          label: "Alignment",
+          width: "select-md",
+          control: "select",
+          options: [
+            { value: "left", label: "Left" },
+            { value: "center", label: "Center" }
+          ],
+          fallback: "left",
+          rendersVia: "BlogTagCloudPreview"
+        },
+        {
+          key: "gap",
+          label: "Gap",
+          width: "num",
+          control: "number",
+          min: 4,
+          max: 24,
+          step: 2,
+          fallback: "8",
+          rendersVia: "BlogTagCloudPreview"
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "showCounts",
+          label: "Counts",
+          width: "select-md",
+          control: "select",
+          options: [
+            { value: "false", label: "Hide" },
+            { value: "true", label: "Show" }
+          ],
+          fallback: "false",
+          rendersVia: "BlogTagCloudPreview"
+        },
+        {
+          key: "minFontSize",
+          label: "Min Font",
+          width: "num",
+          control: "number",
+          min: 10,
+          max: 18,
+          step: 1,
+          fallback: "12",
+          rendersVia: "BlogTagCloudPreview",
+          visibleWhen: (settings) => (settings.layout ?? "cloud") === "cloud"
+        },
+        {
+          key: "maxFontSize",
+          label: "Max Font",
+          width: "num",
+          control: "number",
+          min: 14,
+          max: 36,
+          step: 2,
+          fallback: "22",
+          rendersVia: "BlogTagCloudPreview",
+          visibleWhen: (settings) => (settings.layout ?? "cloud") === "cloud"
+        }
+      ],
+      [
+        {
+          key: "inactiveColor",
+          label: "Tag Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Tag color",
+          fallback: "#587592",
+          rendersVia: "BlogTagCloudPreview"
+        },
+        {
+          key: "inactiveBg",
+          label: "Tag Bg",
+          width: "color",
+          control: "color",
+          dialogLabel: "Tag background",
+          fallback: "#f0f4f8",
+          rendersVia: "BlogTagCloudPreview"
+        },
+        {
+          key: "activeColor",
+          label: "Active Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Active tag color",
+          fallback: "#0f4f8f",
+          rendersVia: "BlogTagCloudPreview"
+        }
+      ]
+    ],
+    advanced: [
+      [
+        {
+          key: "filterParam",
+          label: "URL Param",
+          width: "text-md",
+          control: "custom",
+          rendersVia: "builder-template.ts blog-tag-cloud renderer",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.filterParam ?? "tag"}
+              onChange={(e) => set("filterParam", e.target.value)}
+              placeholder="tag"
+            />
+          )
+        },
+        {
+          key: "targetPageUrl",
+          label: "Target Page",
+          width: "text-md",
+          control: "text",
+          placeholder: "Leave blank to filter on the current page",
+          rendersVia: "builder-template.ts blog-tag-cloud renderer"
+        }
+      ]
+    ]
+  };
+
   return (
     <div className="builder-blog-tag-cloud-settings">
-
-      {/* Display */}
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Layout">
-            <select value={s.layout ?? "cloud"} onChange={(e) => set("layout", e.target.value)}>
-              <option value="cloud">Cloud (sized by count)</option>
-              <option value="pills">Pills (uniform)</option>
-              <option value="list">List</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Show counts">
-            <select value={s.showCounts ?? "false"} onChange={(e) => set("showCounts", e.target.value)}>
-              <option value="false">Hide</option>
-              <option value="true">Show</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Alignment">
-            <select value={s.alignment ?? "left"} onChange={(e) => set("alignment", e.target.value)}>
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Gap (px)">
-            <input
-              type="number" min={4} max={24} step={2}
-              value={s.gap ?? "8"}
-              onChange={(e) => set("gap", e.target.value)}
-            />
-          </BuilderSettingRow>
-        </div>
-
-        <div className="builder-button-setting-column">
-          {isCloud ? (
-            <>
-              <BuilderSettingRow label="Min font (px)">
-                <input
-                  type="number" min={10} max={18} step={1}
-                  value={s.minFontSize ?? "12"}
-                  onChange={(e) => set("minFontSize", e.target.value)}
-                />
-              </BuilderSettingRow>
-              <BuilderSettingRow label="Max font (px)">
-                <input
-                  type="number" min={14} max={36} step={2}
-                  value={s.maxFontSize ?? "22"}
-                  onChange={(e) => set("maxFontSize", e.target.value)}
-                />
-              </BuilderSettingRow>
-            </>
-          ) : null}
-
-          <BuilderThemeColorSettingRow
-            fallback="#587592"
-            label="Tag color"
-            themeColors={themeColors}
-            value={s.inactiveColor ?? "#587592"}
-            onChange={(inactiveColor) => set("inactiveColor", inactiveColor)}
-          />
-
-          <BuilderThemeColorSettingRow
-            fallback="#f0f4f8"
-            label="Tag bg"
-            themeColors={themeColors}
-            value={s.inactiveBg ?? "#f0f4f8"}
-            onChange={(inactiveBg) => set("inactiveBg", inactiveBg)}
-          />
-
-          <BuilderThemeColorSettingRow
-            fallback="#0f4f8f"
-            label="Active color"
-            themeColors={themeColors}
-            value={s.activeColor ?? "#0f4f8f"}
-            onChange={(activeColor) => set("activeColor", activeColor)}
-          />
-        </div>
-      </div>
-
-      {/* Routing */}
-      <BuilderSettingRow label="URL param" fullWidth>
-        <input
-          type="text"
-          value={s.filterParam ?? "tag"}
-          onChange={(e) => set("filterParam", e.target.value)}
-          placeholder="tag"
-        />
-      </BuilderSettingRow>
-
-      <BuilderSettingRow label="Target page" fullWidth>
-        <input
-          type="text"
-          value={s.targetPageUrl ?? ""}
-          onChange={(e) => set("targetPageUrl", e.target.value)}
-          placeholder="Leave blank to filter on the current page"
-        />
-      </BuilderSettingRow>
-
-      {/* Tag list */}
-      <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>Tags</div>
-
-      <div className="builder-slider-items">
-        {tags.map((tag, index) => (
-          <div key={tag.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>{tag.label || `Tag ${index + 1}`}</strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveTag(tag.id, -1)}>↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveTag(tag.id, 1)}>↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeTag(tag.id)}>✕</button>
-              </div>
-            </div>
-            <div className="builder-slider-item-grid">
-              <label className="field">
-                <span>Label</span>
-                <input
-                  type="text"
-                  value={tag.label}
-                  onChange={(e) => updateTag(tag.id, "label", e.target.value)}
-                  placeholder="react"
-                />
-              </label>
-              <label className="field">
-                <span>Slug</span>
-                <input
-                  type="text"
-                  value={tag.slug}
-                  onChange={(e) => updateTag(tag.id, "slug", e.target.value)}
-                  placeholder="react"
-                />
-              </label>
-              {isCloud ? (
-                <label className="field">
-                  <span>Count / weight</span>
-                  <input
-                    type="number" min={1} max={999}
-                    value={tag.count ?? 1}
-                    onChange={(e) => updateTag(tag.id, "count", parseInt(e.target.value, 10) || 1)}
-                  />
-                </label>
-              ) : null}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <button type="button" className="secondary-button" onClick={addTag}>
-        Add Tag
-      </button>
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
+        themeColors={themeColors}
+        advancedLabel="Linking"
+      />
     </div>
   );
 }

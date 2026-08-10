@@ -6,7 +6,7 @@ import {
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
-import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderBackgroundControlsProps = {
@@ -95,94 +95,114 @@ export function BuilderBackgroundControls({
   ) : null;
 
   if (horizontal) {
+    // One wrapping field strip — mode and its dependent controls share a
+    // row instead of stacking full-width rows down the panel. This is the
+    // chrome every module wears, so master rules W1/W3/D1/D2 apply here
+    // with maximum leverage (rebuilt 2026-08-09; the old markup rendered
+    // single-column because its "horizontal" CSS only existed in a
+    // social-module-only scope).
     return (
       <div className="builder-background-controls builder-background-controls-horizontal">
-        {!hideModeRow ? (
-          <BuilderSettingRow label={label} fullWidth>
-            <select
-              value={background.mode}
-              onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
-            >
-              <option value="none">None</option>
-              <option value="color">Color</option>
-              <option value="gradient">Gradient</option>
-              <option value="image">Image</option>
-              <option value="style">Style</option>
-            </select>
-          </BuilderSettingRow>
-        ) : null}
+        <BuilderModuleFieldStrip>
+          {!hideModeRow ? (
+            <BuilderModuleField label={label} width="select-md">
+              <select
+                value={background.mode}
+                onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
+              >
+                <option value="none">None</option>
+                <option value="color">Color</option>
+                <option value="gradient">Gradient</option>
+                <option value="image">Image</option>
+                <option value="style">Style</option>
+              </select>
+            </BuilderModuleField>
+          ) : null}
 
-        {background.mode === "color" || background.mode === "gradient" ? (
-          <BuilderSettingRow label="Primary color" fullWidth>
-            <BuilderThemeColorField
-              fallback="#ffffff"
-              themeColors={themeColors}
-              value={background.color}
-              opacity={background.opacity}
-              onChangeOpacity={(opacity) => onChange((current) => ({ ...current, opacity }))}
-              onClear={() => onChange(() => createDefaultBackgroundSettings())}
-              onChange={(color) =>
-                onChange((current) => ({
-                  ...current,
-                  color
-                }))
-              }
-            />
-          </BuilderSettingRow>
-        ) : null}
+          {background.mode === "color" || background.mode === "gradient" ? (
+            <BuilderModuleField label="Color" width="color">
+              <BuilderThemeColorField
+                fallback="#ffffff"
+                themeColors={themeColors}
+                value={background.color}
+                opacity={background.opacity}
+                onChangeOpacity={(opacity) => onChange((current) => ({ ...current, opacity }))}
+                onClear={() => onChange(() => createDefaultBackgroundSettings())}
+                onChange={(color) =>
+                  onChange((current) => ({
+                    ...current,
+                    color
+                  }))
+                }
+              />
+            </BuilderModuleField>
+          ) : null}
 
-        {background.mode === "gradient" ? (
-          <BuilderSettingRow label="Secondary color" fullWidth>
-            <BuilderThemeColorField
-              fallback="#eaf4ff"
-              themeColors={themeColors}
-              value={background.color2}
-              onChange={(color2) =>
-                onChange((current) => ({
-                  ...current,
-                  color2
-                }))
-              }
-            />
-          </BuilderSettingRow>
-        ) : null}
+          {background.mode === "gradient" ? (
+            <BuilderModuleField label="Color 2" width="color">
+              <BuilderThemeColorField
+                fallback="#eaf4ff"
+                themeColors={themeColors}
+                value={background.color2}
+                onChange={(color2) =>
+                  onChange((current) => ({
+                    ...current,
+                    color2
+                  }))
+                }
+              />
+            </BuilderModuleField>
+          ) : null}
 
-        {background.mode === "style" ? (
-          <BuilderSettingRow label="Style" fullWidth>
-            <select
-              value={background.styleKey}
-              onChange={(event) =>
-                onChange((current) => ({
-                  ...current,
-                  styleKey: event.target.value as BackgroundSettings["styleKey"]
-                }))
-              }
-            >
-              <option value="">Choose a style</option>
-              {BACKGROUND_STYLE_PRESETS.map((style) => (
-                <option key={style.value} value={style.value}>
-                  {style.label}
-                </option>
-              ))}
-            </select>
-          </BuilderSettingRow>
-        ) : null}
-
-        {background.mode === "image" ? (
-          <>
-            <BuilderSettingRow label="Background image URL" fullWidth>
-              <input
-                type="text"
-                value={background.imageUrl}
+          {background.mode === "style" ? (
+            <BuilderModuleField label="Style" width="auto">
+              <select
+                value={background.styleKey}
                 onChange={(event) =>
                   onChange((current) => ({
                     ...current,
-                    imageUrl: normalizeBuilderAssetUrl(event.target.value)
+                    styleKey: event.target.value as BackgroundSettings["styleKey"]
                   }))
                 }
-                placeholder="https://... or /api/admin/media-file/..."
-              />
-            </BuilderSettingRow>
+              >
+                <option value="">Choose a style</option>
+                {BACKGROUND_STYLE_PRESETS.map((style) => (
+                  <option key={style.value} value={style.value}>
+                    {style.label}
+                  </option>
+                ))}
+              </select>
+            </BuilderModuleField>
+          ) : null}
+
+          {!hideClear && background.mode !== "none" ? (
+            <button
+              className="secondary-button builder-background-clear-button"
+              onClick={() => onChange(() => createDefaultBackgroundSettings())}
+              type="button"
+            >
+              Clear
+            </button>
+          ) : null}
+        </BuilderModuleFieldStrip>
+
+        {background.mode === "image" ? (
+          <>
+            <BuilderModuleFieldStrip>
+              <BuilderModuleField label="Image URL" width="full">
+                <input
+                  type="text"
+                  value={background.imageUrl}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      imageUrl: normalizeBuilderAssetUrl(event.target.value)
+                    }))
+                  }
+                  placeholder="https://... or /api/admin/media-file/..."
+                />
+              </BuilderModuleField>
+            </BuilderModuleFieldStrip>
             <div className="builder-media-actions">
               {renderBackgroundGalleryAction()}
               {onUploadImage ? (
@@ -202,18 +222,6 @@ export function BuilderBackgroundControls({
             </div>
             {fallbackGallery}
           </>
-        ) : null}
-
-        {!hideClear && background.mode !== "none" ? (
-          <BuilderSettingRow label="Clear background">
-            <button
-              className="secondary-button"
-              onClick={() => onChange(() => createDefaultBackgroundSettings())}
-              type="button"
-            >
-              Clear
-            </button>
-          </BuilderSettingRow>
         ) : null}
       </div>
     );

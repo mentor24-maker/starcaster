@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   createBuilderCardItem,
@@ -76,112 +77,105 @@ export function BuilderFeatureCardsModuleSettings({
 
   return (
     <>
-      {/* Content */}
-      <div className="builder-slider-items">
+      {/* Content — titled-column item grid (UI_RULES L6); the fields that
+          cannot fit a column (image picker, alt text, description) render as
+          a secondary row spanning the grid under each card's primary row. */}
+      <div className={`builder-item-grid builder-item-grid--cards${showIcons ? " builder-item-grid--cards-icons" : ""}`}>
+        {showIcons ? <span className="builder-item-grid-header">Icon</span> : null}
+        <span className="builder-item-grid-header">Title</span>
+        <span className="builder-item-grid-header">Link</span>
+        <span className="builder-item-grid-header">Link Text</span>
+        <span className="builder-item-grid-header">Action</span>
         {cards.map((card, index) => (
-          <div key={card.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>{card.title || `Card ${index + 1}`}</strong>
-              <div className="builder-section-actions">
-                <button
-                  type="button"
-                  className="builder-icon-button"
-                  onClick={() => moveCard(card.id, -1)}
-                  aria-label={`Move ${card.title || `card ${index + 1}`} up`}
-                  title="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="builder-icon-button"
-                  onClick={() => moveCard(card.id, 1)}
-                  aria-label={`Move ${card.title || `card ${index + 1}`} down`}
-                  title="Move down"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="builder-icon-button builder-icon-button-danger"
-                  onClick={() => removeCard(card.id)}
-                  aria-label={`Delete ${card.title || `card ${index + 1}`}`}
-                  title="Delete card"
-                >
-                  ✕
-                </button>
-              </div>
+          <Fragment key={card.id}>
+            {showIcons ? (
+              <input
+                type="text"
+                value={card.icon}
+                maxLength={3}
+                onChange={(event) => updateCard(card.id, { icon: event.target.value })}
+                placeholder="★"
+                aria-label={`Card ${index + 1} icon`}
+              />
+            ) : null}
+            <input
+              type="text"
+              value={card.title}
+              onChange={(event) => updateCard(card.id, { title: event.target.value })}
+              placeholder={`Card ${index + 1}`}
+              aria-label={`Card ${index + 1} title`}
+            />
+            <input
+              type="text"
+              value={card.linkUrl}
+              onChange={(event) => updateCard(card.id, { linkUrl: event.target.value })}
+              placeholder="/path-or-url"
+              aria-label={`Card ${index + 1} link`}
+            />
+            <input
+              type="text"
+              value={card.linkLabel}
+              onChange={(event) => updateCard(card.id, { linkLabel: event.target.value })}
+              placeholder={module.settings.linkLabel || "Learn More"}
+              aria-label={`Card ${index + 1} link text`}
+            />
+            <div className="builder-item-grid-actions">
+              <button
+                type="button"
+                className="builder-icon-button"
+                onClick={() => moveCard(card.id, -1)}
+                aria-label={`Move ${card.title || `card ${index + 1}`} up`}
+                title="Move up"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="builder-icon-button"
+                onClick={() => moveCard(card.id, 1)}
+                aria-label={`Move ${card.title || `card ${index + 1}`} down`}
+                title="Move down"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="builder-icon-button builder-icon-button-danger"
+                onClick={() => removeCard(card.id)}
+                aria-label={`Delete ${card.title || `card ${index + 1}`}`}
+                title="Delete card"
+              >
+                ✕
+              </button>
             </div>
-
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Image" width="full">
-                <BuilderImagePickerField
-                  value={card.imageUrl}
-                  onChange={(imageUrl) => updateCard(card.id, { imageUrl })}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Alt text" width="full">
-                <input
-                  type="text"
-                  value={card.imageAlt}
-                  onChange={(event) => updateCard(card.id, { imageAlt: event.target.value })}
-                  placeholder="Describe the image for screen readers"
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Title" width="text-md">
-                <input
-                  type="text"
-                  value={card.title}
-                  onChange={(event) => updateCard(card.id, { title: event.target.value })}
-                />
-              </BuilderModuleField>
-              {showIcons ? (
-                <BuilderModuleField label="Icon" width="select-sm">
-                  <input
-                    type="text"
-                    value={card.icon}
-                    maxLength={3}
-                    onChange={(event) => updateCard(card.id, { icon: event.target.value })}
-                    placeholder="★"
+            <div className="builder-item-grid-sub">
+              <BuilderModuleFieldStrip>
+                <BuilderModuleField label="Image" width="full">
+                  <BuilderImagePickerField
+                    value={card.imageUrl}
+                    onChange={(imageUrl) => updateCard(card.id, { imageUrl })}
                   />
                 </BuilderModuleField>
-              ) : null}
-            </BuilderModuleFieldStrip>
-
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Description" width="full">
-                <textarea
-                  className="builder-textarea"
-                  rows={3}
-                  value={card.body}
-                  onChange={(event) => updateCard(card.id, { body: event.target.value })}
-                  placeholder={"Copy for this card.\nStart every line with “- ” to make a bullet list."}
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Link" width="text-md">
-                <input
-                  type="text"
-                  value={card.linkUrl}
-                  onChange={(event) => updateCard(card.id, { linkUrl: event.target.value })}
-                  placeholder="/path-or-url"
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Link Text" width="text-md">
-                <input
-                  type="text"
-                  value={card.linkLabel}
-                  onChange={(event) => updateCard(card.id, { linkLabel: event.target.value })}
-                  placeholder={module.settings.linkLabel || "Learn More"}
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-          </div>
+                <BuilderModuleField label="Alt text" width="text-md">
+                  <input
+                    type="text"
+                    value={card.imageAlt}
+                    onChange={(event) => updateCard(card.id, { imageAlt: event.target.value })}
+                    placeholder="Describe the image"
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Description" width="full">
+                  <textarea
+                    className="builder-textarea"
+                    rows={3}
+                    value={card.body}
+                    onChange={(event) => updateCard(card.id, { body: event.target.value })}
+                    placeholder={"Copy for this card.\nStart every line with “- ” to make a bullet list."}
+                  />
+                </BuilderModuleField>
+              </BuilderModuleFieldStrip>
+            </div>
+          </Fragment>
         ))}
       </div>
       <button type="button" className="secondary-button" onClick={addCard}>

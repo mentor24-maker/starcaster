@@ -1,11 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderSettingRow } from "./builder-setting-row";
 import {
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+  BuilderSchemaModuleSettings,
+  type BuilderSettingsSchema
+} from "./builder-settings-schema";
+import type { BuilderThemePalette } from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
@@ -13,133 +13,195 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
+const SHOW_HIDE_OPTIONS = [
+  { value: "true", label: "Show" },
+  { value: "false", label: "Hide" }
+];
+
+const YES_NO_OPTIONS = [
+  { value: "true", label: "Yes" },
+  { value: "false", label: "No" }
+];
+
 export function BuilderBlogPostTagsModuleSettings({
   module,
   onUpdateModule,
   themeColors = []
 }: Props) {
-  const s = module.settings;
-
-  function set(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
+  const schema: BuilderSettingsSchema = {
+    content: [
+      [
+        {
+          key: "tags",
+          label: "Tags",
+          width: "full",
+          control: "text",
+          placeholder: "react, typescript, tutorial",
+          rendersVia: "BlogPostTagsPreview"
+        }
+      ],
+      [
+        {
+          key: "tagsNote",
+          label: "",
+          width: "full",
+          control: "custom",
+          bare: true,
+          render: () => (
+            <p style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 12px", lineHeight: 1.4 }}>
+              Comma-separated. On a post template these come from the Blog Post module&apos;s Taxonomy tab.
+            </p>
+          )
+        }
+      ],
+      [
+        {
+          key: "showPrefix",
+          label: "Prefix",
+          width: "select-md",
+          control: "select",
+          options: SHOW_HIDE_OPTIONS,
+          fallback: "true",
+          rendersVia: "BlogPostTagsPreview"
+        },
+        {
+          key: "prefix",
+          label: "Prefix Text",
+          width: "text-md",
+          control: "custom",
+          rendersVia: "BlogPostTagsPreview",
+          visibleWhen: (settings) => (settings.showPrefix ?? "true") === "true",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.prefix ?? "Tags:"}
+              onChange={(e) => set("prefix", e.target.value)}
+              placeholder="Tags:"
+            />
+          )
+        }
+      ]
+    ],
+    layout: [
+      [
+        {
+          key: "layout",
+          label: "Layout",
+          width: "auto",
+          control: "select",
+          options: [
+            { value: "pills", label: "Pills" },
+            { value: "inline", label: "Inline text" }
+          ],
+          fallback: "pills",
+          rendersVia: "BlogPostTagsPreview"
+        },
+        {
+          key: "gap",
+          label: "Gap",
+          width: "num",
+          control: "number",
+          min: 2,
+          max: 16,
+          step: 2,
+          fallback: "6",
+          rendersVia: "BlogPostTagsPreview"
+        }
+      ]
+    ],
+    style: [
+      [
+        {
+          key: "color",
+          label: "Tag Color",
+          width: "color",
+          control: "color",
+          dialogLabel: "Tag color",
+          fallback: "#587592",
+          rendersVia: "BlogPostTagsPreview"
+        },
+        {
+          key: "bgColor",
+          label: "Tag Bg",
+          width: "color",
+          control: "color",
+          dialogLabel: "Tag background",
+          fallback: "#f0f4f8",
+          rendersVia: "BlogPostTagsPreview"
+        },
+        {
+          key: "borderRadius",
+          label: "Radius",
+          width: "num",
+          control: "number",
+          min: 0,
+          max: 20,
+          step: 2,
+          fallback: "4",
+          rendersVia: "BlogPostTagsPreview"
+        },
+        {
+          key: "fontSize",
+          label: "Font Size",
+          width: "num",
+          control: "number",
+          min: 10,
+          max: 18,
+          step: 1,
+          fallback: "12",
+          rendersVia: "BlogPostTagsPreview"
+        }
+      ]
+    ],
+    advanced: [
+      [
+        {
+          key: "linkToFilter",
+          label: "Link to Filter",
+          width: "select-md",
+          control: "select",
+          options: YES_NO_OPTIONS,
+          fallback: "true",
+          rendersVia: "builder-template.ts blog-post-tags renderer"
+        },
+        {
+          key: "filterParam",
+          label: "URL Param",
+          width: "text-md",
+          control: "custom",
+          rendersVia: "builder-template.ts blog-post-tags renderer",
+          visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true",
+          render: ({ settings, set }) => (
+            <input
+              type="text"
+              value={settings.filterParam ?? "tag"}
+              onChange={(e) => set("filterParam", e.target.value)}
+              placeholder="tag"
+            />
+          )
+        },
+        {
+          key: "targetPageUrl",
+          label: "Target Page",
+          width: "text-md",
+          control: "text",
+          placeholder: "Leave blank for current page",
+          rendersVia: "builder-template.ts blog-post-tags renderer",
+          visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true"
+        }
+      ]
+    ]
+  };
 
   return (
     <div className="builder-blog-post-tags-settings">
-
-      <BuilderSettingRow label="Tags" fullWidth>
-        <input
-          type="text"
-          value={s.tags ?? ""}
-          onChange={(e) => set("tags", e.target.value)}
-          placeholder="react, typescript, tutorial"
-        />
-      </BuilderSettingRow>
-      <p style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 12px", lineHeight: 1.4 }}>
-        Comma-separated. On a post template these come from the Blog Post module's Taxonomy tab.
-      </p>
-
-      <div className="builder-button-setting-columns">
-        <div className="builder-button-setting-column">
-          <BuilderSettingRow label="Layout">
-            <select value={s.layout ?? "pills"} onChange={(e) => set("layout", e.target.value)}>
-              <option value="pills">Pills</option>
-              <option value="inline">Inline text</option>
-            </select>
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Prefix label">
-            <select value={s.showPrefix ?? "true"} onChange={(e) => set("showPrefix", e.target.value)}>
-              <option value="true">Show</option>
-              <option value="false">Hide</option>
-            </select>
-          </BuilderSettingRow>
-
-          {(s.showPrefix ?? "true") === "true" ? (
-            <BuilderSettingRow label="Prefix text" fullWidth>
-              <input
-                type="text"
-                value={s.prefix ?? "Tags:"}
-                onChange={(e) => set("prefix", e.target.value)}
-                placeholder="Tags:"
-              />
-            </BuilderSettingRow>
-          ) : null}
-
-          <BuilderSettingRow label="Link to filter">
-            <select value={s.linkToFilter ?? "true"} onChange={(e) => set("linkToFilter", e.target.value)}>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </BuilderSettingRow>
-
-          {(s.linkToFilter ?? "true") === "true" ? (
-            <>
-              <BuilderSettingRow label="URL param" fullWidth>
-                <input
-                  type="text"
-                  value={s.filterParam ?? "tag"}
-                  onChange={(e) => set("filterParam", e.target.value)}
-                  placeholder="tag"
-                />
-              </BuilderSettingRow>
-              <BuilderSettingRow label="Target page" fullWidth>
-                <input
-                  type="text"
-                  value={s.targetPageUrl ?? ""}
-                  onChange={(e) => set("targetPageUrl", e.target.value)}
-                  placeholder="Leave blank for current page"
-                />
-              </BuilderSettingRow>
-            </>
-          ) : null}
-        </div>
-
-        <div className="builder-button-setting-column">
-          <BuilderThemeColorSettingRow
-            fallback="#587592"
-            label="Tag color"
-            themeColors={themeColors}
-            value={s.color ?? "#587592"}
-            onChange={(color) => set("color", color)}
-          />
-
-          <BuilderThemeColorSettingRow
-            fallback="#f0f4f8"
-            label="Tag background"
-            themeColors={themeColors}
-            value={s.bgColor ?? "#f0f4f8"}
-            onChange={(bgColor) => set("bgColor", bgColor)}
-          />
-
-          <BuilderSettingRow label="Border radius (px)">
-            <input
-              type="number" min={0} max={20} step={2}
-              value={s.borderRadius ?? "4"}
-              onChange={(e) => set("borderRadius", e.target.value)}
-            />
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Font size (px)">
-            <input
-              type="number" min={10} max={18} step={1}
-              value={s.fontSize ?? "12"}
-              onChange={(e) => set("fontSize", e.target.value)}
-            />
-          </BuilderSettingRow>
-
-          <BuilderSettingRow label="Gap (px)">
-            <input
-              type="number" min={2} max={16} step={2}
-              value={s.gap ?? "6"}
-              onChange={(e) => set("gap", e.target.value)}
-            />
-          </BuilderSettingRow>
-        </div>
-      </div>
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
+        themeColors={themeColors}
+        advancedLabel="Linking"
+      />
     </div>
   );
 }

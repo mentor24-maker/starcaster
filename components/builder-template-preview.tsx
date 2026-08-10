@@ -13,6 +13,7 @@ import {
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
+import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
@@ -1209,6 +1210,68 @@ export function BuilderTemplatePreview({
   const pageOverlaySections = layoutSections.filter(sectionHasOnlyPageOverlayImageModules);
   const mainSections = layoutSections.filter((section) => !sectionHasOnlyPageOverlayImageModules(section));
 
+  /**
+   * Alternating bands are what make a page read as designed rather than as one
+   * wash of colour, so sections that set no background of their own take turns
+   * between the theme's `surface` and `band` roles.
+   *
+   * Only those sections: one with a background the operator chose keeps it, and
+   * a navigation row is chrome rather than a band. The roles resolve through
+   * `var(--lp-…, transparent)`, so a theme with no palette paints nothing at
+   * all and every existing page renders exactly as it did.
+   */
+  const themeTreatments = themeStyles?.treatments || null;
+
+  const sectionBandRoles = new Map<string, "surface" | "band" | "inverse">();
+  let plainSectionIndex = 0;
+  let lastPlainSectionId = "";
+  for (const section of mainSections) {
+    const hasOwnBackground = Boolean(section.background && section.background.mode !== "none");
+    const isNavigationRow = section.modules.length > 0
+      && section.modules.every((module) => module.type === "navigation");
+    if (hasOwnBackground || isNavigationRow) continue;
+    sectionBandRoles.set(section.id, plainSectionIndex % 2 === 0 ? "surface" : "band");
+    plainSectionIndex += 1;
+    lastPlainSectionId = section.id;
+  }
+  // The closing dark band big footers use — only when there is more than one
+  // plain section, so a single-section page does not go entirely dark.
+  if (themeTreatments?.footerInverse && lastPlainSectionId && plainSectionIndex > 1) {
+    sectionBandRoles.set(lastPlainSectionId, "inverse");
+  }
+
+  // The theme's hero banner: the first plain section wears it as an image
+  // background (the hero overlay then applies on top). The operator chose the
+  // image; the theme decides how the top band wears it. A section that already
+  // has its own background — including its own image — always wins.
+  const themeHeroBannerUrl = String(themeStyles?.heroBanner?.url || "");
+  let heroBannerSectionId = "";
+  if (themeHeroBannerUrl) {
+    for (const section of mainSections) {
+      const isNavigationRow = section.modules.length > 0
+        && section.modules.every((module) => module.type === "navigation");
+      if (isNavigationRow) continue;
+      if (!section.background || section.background.mode === "none") heroBannerSectionId = section.id;
+      break;
+    }
+  }
+
+  // A feature-cards section directly after an image section pulls up over the
+  // hero's bottom edge (the blazefish overlap). Identified here because it
+  // needs the previous section, which the section renderer cannot see.
+  const overlapSectionIds = new Set<string>();
+  if (themeTreatments?.cardOverlap) {
+    for (let i = 1; i < mainSections.length; i += 1) {
+      const previous = mainSections[i - 1];
+      const current = mainSections[i];
+      const previousIsImage = (previous.background?.mode === "image" && Boolean(previous.background?.imageUrl))
+        || previous.id === heroBannerSectionId;
+      const currentLeadsWithCards = current.modules.some((module) => module.type === "feature-cards")
+        && (!current.background || current.background.mode === "none");
+      if (previousIsImage && currentLeadsWithCards) overlapSectionIds.add(current.id);
+    }
+  }
+
   return (
     <div
       className={
@@ -1248,8 +1311,13 @@ export function BuilderTemplatePreview({
         <div className={contentClassName} style={themeMarginStyle}>
           {mainSections.map((section) => (
             <BuilderSectionPreview
+              bandRole={sectionBandRoles.get(section.id)}
               emailPreview={emailPreview}
+              heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
+              heroOverlay={themeTreatments?.heroOverlay}
+              heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
               key={section.id}
+              overlapsHero={overlapSectionIds.has(section.id)}
               previewMode={previewMode}
               section={section}
               sitePlayerRegistered={sitePlayerRegistered}
@@ -1261,8 +1329,13 @@ export function BuilderTemplatePreview({
       ) : (
         mainSections.map((section) => (
           <BuilderSectionPreview
+            bandRole={sectionBandRoles.get(section.id)}
             emailPreview={emailPreview}
+            heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
+            heroOverlay={themeTreatments?.heroOverlay}
+            heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
             key={section.id}
+            overlapsHero={overlapSectionIds.has(section.id)}
             previewMode={previewMode}
             section={section}
             sitePlayerRegistered={sitePlayerRegistered}
@@ -1284,7 +1357,12 @@ function BuilderSectionPreview({
   projectId = "",
   sitePlayerRegistered = false,
   theme,
-  themePalette
+  themePalette,
+  bandRole,
+  heroBannerUrl,
+  heroOverlay,
+  heroOverlayOpacity,
+  overlapsHero = false
 }: {
   section: BuilderTemplateSection;
   emailPreview?: boolean;
@@ -1293,8 +1371,62 @@ function BuilderSectionPreview({
   sitePlayerRegistered?: boolean;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** Theme palette role this backgroundless section takes its band from. */
+  bandRole?: "surface" | "band" | "inverse";
+  /** The theme's hero banner image, when this is the section that wears it. */
+  heroBannerUrl?: string;
+  /** Treatment: tint laid over an image-background section (hex + opacity). */
+  heroOverlay?: string;
+  heroOverlayOpacity?: number;
+  /** Treatment: this section pulls up over the previous image section. */
+  overlapsHero?: boolean;
 }) {
   const sectionStyle = getBuilderBackgroundStyle(section.background);
+  // `transparent` and `inherit` are the no-palette answers, so a theme without
+  // one leaves this section exactly as it renders today.
+  const bandStyle: CSSProperties | undefined = bandRole
+    ? {
+        background: `var(--lp-${bandRole}, transparent)`,
+        color: `var(--lp-${bandRole}-text, inherit)`,
+        paddingTop: "var(--lp-band-padding, 0px)",
+        paddingBottom: "var(--lp-band-padding, 0px)"
+      }
+    : undefined;
+
+  // Hero treatment: a tint over an image background so text can sit on the
+  // photo, with the inverse text colour on top. Layered as a gradient IN FRONT
+  // of the image, so the photo still reads through.
+  const isImageSection = section.background?.mode === "image" && Boolean(section.background?.imageUrl);
+  // A theme hero banner turns a plain section into an image section; it always
+  // gets an overlay (defaulting to a dark neutral) because text sits on it.
+  const bannerImage = !isImageSection && heroBannerUrl ? `url("${heroBannerUrl}")` : "";
+  const heroImageSource = bannerImage || (isImageSection ? String(sectionStyle?.backgroundImage || "") : "");
+  const heroTint = normalizeBuilderHexColor(heroOverlay || (bannerImage ? "#101820" : ""));
+  const heroStyle: CSSProperties | undefined =
+    heroImageSource && heroTint
+      ? (() => {
+          const opacity = Math.min(0.75, Math.max(0, heroOverlayOpacity ?? 0.45));
+          const [r, g, b] = [1, 3, 5].map((offset) => parseInt(heroTint.slice(offset, offset + 2), 16));
+          const tint = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+          return {
+            backgroundImage: `linear-gradient(${tint}, ${tint}), ${heroImageSource}`,
+            ...(bannerImage
+              ? {
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  paddingTop: "72px",
+                  paddingBottom: "72px"
+                }
+              : {}),
+            color: "var(--lp-inverse-text, #ffffff)"
+          };
+        })()
+      : undefined;
+
+  // Overlap treatment: ride up over the hero's bottom edge, above its tint.
+  const overlapStyle: CSSProperties | undefined = overlapsHero
+    ? { marginTop: "-56px", position: "relative", zIndex: 2 }
+    : undefined;
   const columnKeys = getLayoutColumns(section.layout);
   const isNavigationSection = section.modules.length > 0 && section.modules.every((module) => module.type === "navigation");
   const hasNavigationModule = section.modules.some((module) => module.type === "navigation");
@@ -1306,7 +1438,13 @@ function BuilderSectionPreview({
   );
   const rowBorderWidth = Number(section.rowBorderWidth ?? "0");
   const gridStyle: CSSProperties = {
+    // Band first: a section carrying its own background never gets one, so
+    // this cannot overwrite an operator's choice.
+    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
     ...(isNavigationSection ? {} : sectionStyle),
+    // Hero tint and overlap layer on top of the section's own background.
+    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
+    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
     ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionWidthStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
@@ -1553,7 +1691,7 @@ function BuilderModulePreview({
 
   if (module.type === "button") {
     const s = module.settings;
-    const btnStyle = getButtonModuleStyle(s);
+    const btnStyle = getButtonModuleStyle(s, { followThemePalette: !emailPreview });
     const href = emailPreview
       ? resolveEmailMergeTokensForPreview(module.settings.href || "#")
       : module.settings.href || "#";
@@ -1882,7 +2020,13 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const layout = settings.layout || "grid";
   const cols = Math.max(1, parseInt(settings.columns || "3", 10) || 3);
   const postsPerPage = Math.max(1, parseInt(settings.postsPerPage || "9", 10) || 9);
-  const postPageUrl = (settings.postPageUrl || "").trim() || defaultBlogPostViewPath();
+  // postSlug names the post-view page (operator 6/28: the slug field
+  // replaces the page-URL field). Legacy postPageUrl still wins when set
+  // so no saved page changes behavior.
+  const postSlug = (settings.postSlug || "").trim().replace(/^\/+/, "");
+  const postPageUrl =
+    (settings.postPageUrl || "").trim() || (postSlug ? `/${postSlug}` : defaultBlogPostViewPath());
+  const listTitle = (settings.postTitle || "").trim();
 
   // Card template — migrate from API (supports both old elements[] and new rows[] format)
   const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
@@ -1991,6 +2135,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
   return (
     <div>
+      {listTitle ? <h2 style={{ margin: "0 0 1rem" }}>{listTitle}</h2> : null}
       {hasFilterBar ? (
         <div style={{
           display: "flex", flexWrap: "wrap", gap: "0.625rem",
@@ -5244,7 +5389,7 @@ function FeatureCardsModulePreview({
           "--feature-card-columns": String(columns),
           "--feature-card-gap": `${gap}px`,
           "--feature-card-radius": `${radius}px`,
-          "--feature-card-bg": module.settings.cardBackground || "#ffffff",
+          "--feature-card-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
           "--feature-card-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #e1e8f0)",
           "--feature-card-accent": iconColor,
           "--feature-card-aspect": aspect
