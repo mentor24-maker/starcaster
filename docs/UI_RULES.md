@@ -232,10 +232,18 @@ is ever wider than the screen.*
   not name it `*-actions-cell` — that suffix is caught by the actions-column
   selector and centred, which is exactly how the Builder: Pages toolbar
   drifted out over the Updated column.
-  *Known non-compliant (2026-08-10):* Acquire's YouTube repository
-  (`youtube-repository-bulk-actions-cell`) and YouTube comments
-  (`youtube-comment-bulk-actions-row`), and Assets
-  (`assets-bulk-action-row`) — three hand-rolled variants of this one idea.
+  Where a CRUD's bulk bar sits *above* its table rather than in a filter row
+  (Acquire's YouTube Research panel, the AI Video Library), the same class
+  applies: check-all on the left, actions right-aligned over the Actions
+  column. The position differs; the alignment does not.
+  *Swept 2026-08-10 — all six toolbars in the app now use this:* Builder
+  Pages, Assets (filter + bulk), Acquire YouTube research / repository /
+  comments, plus BlueSky discovery. Verified in the running app at 1440:
+  every one right-aligned, none overflowing its cell, no page scrolling
+  sideways. Two of those tables (YouTube repository and comments) still sit
+  at T7 rung 12 — they scroll inside their own container — which is legal
+  but means the earlier rungs were skipped; they are the next candidates
+  for the ladder.
 - **T8.** Every flex/grid ancestor of a table sets **`min-width: 0`**. A
   grid or flex child defaults to `min-content` and will happily push its
   container past the viewport — this is the most common cause of a CRUD

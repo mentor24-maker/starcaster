@@ -184,14 +184,15 @@
                     <option value="unused">Not used</option>
                   </select>
                 </th>
-                <th></th>
-                <th colspan="2">
-                  <div id="assetsFilterActionRow" class="assets-bulk-action-row">
+                <!-- Spans Create Date + Size + Actions so the toolbar has room
+                     to sit on one line instead of stacking (T10). -->
+                <th class="crud-bulk-actions" colspan="3">
+                  <div id="assetsFilterActionRow" class="crud-bulk-actions-row assets-bulk-action-row">
                     <button id="assetsApplyFilterBtn" type="button" class="btn">Filter</button>
                     <button id="assetsClearFilterBtn" type="button" class="btn">Clear</button>
                     <button id="assetsInlineCreateVideoBtn" type="button" class="btn btn-primary hidden" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
                   </div>
-                  <div id="assetsBulkActionRow" class="assets-bulk-action-row hidden">
+                  <div id="assetsBulkActionRow" class="crud-bulk-actions-row assets-bulk-action-row hidden">
                     <button id="assetsBulkEditBtn" type="button" class="btn" disabled>Edit All</button>
                     <button id="assetsBulkResizeBtn" type="button" class="btn" disabled>Resize Images</button>
                     <button id="assetsBulkDeleteBtn" type="button" class="btn" disabled>Delete All</button>
@@ -797,7 +798,7 @@
                 <div class="youtube-comment-bulk-checkall">
                   <input id="generationHistorySelectAll" type="checkbox" aria-label="Select all jobs" onchange="App.assetsVideo.toggleAllGenerations(this)" />
                 </div>
-                <div class="youtube-comment-bulk-actions">
+                <div class="crud-bulk-actions-row youtube-comment-bulk-actions">
                   <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()" class="btn">Delete Selected</button>
                   &nbsp;&nbsp;|&nbsp;&nbsp;
                   <select id="generationHistoryAssignTopicSelect" class="form-input" style="max-width: 150px; display: inline-block;">
