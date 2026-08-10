@@ -51,6 +51,17 @@ export async function launch({ width = 1440, height = 1000, headless = true } = 
   assertLocal(BASE_URL);
   const browser = await chromium.launch({ headless });
   const page = await browser.newPage({ viewport: { width, height } });
+
+  /**
+   * Count throttled responses. A long sweep can exhaust the app's global
+   * rate limit (500 requests), after which screens render half their data
+   * and every measurement taken from then on describes a broken app while
+   * looking exactly like a clean result. Callers must surface this — a
+   * throttled run is not a valid run.
+   */
+  page.rateLimited = 0;
+  page.on('response', (res) => { if (res.status() === 429) page.rateLimited += 1; });
+
   return { browser, page };
 }
 
@@ -178,12 +189,34 @@ export async function measureActiveScreen(page) {
     };
     if (!sec) return out;
 
+    // A table with no id or class still has to be nameable, or the report
+    // says "(unnamed table) scrolls 359px" and nobody can act on it. Fall
+    // back to the nearest heading above it, then to its column headings.
+    const describeTable = (tbl) => {
+      if (tbl.id) return tbl.id;
+      if (tbl.className) return String(tbl.className).slice(0, 46);
+      let node = tbl;
+      while (node && node !== sec) {
+        let sib = node.previousElementSibling;
+        while (sib) {
+          const heading = sib.matches('h1,h2,h3,h4') ? sib : sib.querySelector('h1,h2,h3,h4');
+          const text = heading && heading.textContent.trim();
+          if (text) return `under "${text.slice(0, 34)}"`;
+          sib = sib.previousElementSibling;
+        }
+        node = node.parentElement;
+      }
+      const cols = [...tbl.querySelectorAll('thead tr:last-child th')]
+        .map((th) => th.textContent.trim()).filter(Boolean).slice(0, 3);
+      return cols.length ? `columns: ${cols.join('/')}` : '(unnamed table)';
+    };
+
     sec.querySelectorAll('table').forEach((tbl) => {
       const r = tbl.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return;
       const wrap = tbl.closest('.table-wrap, .table-shell');
       out.tables.push({
-        id: tbl.id || tbl.className.slice(0, 46) || '(unnamed table)',
+        id: describeTable(tbl),
         width: Math.round(r.width),
         containerWidth: wrap ? wrap.clientWidth : null,
         hiddenPx: wrap ? Math.max(0, wrap.scrollWidth - wrap.clientWidth) : 0,

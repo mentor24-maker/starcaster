@@ -880,7 +880,7 @@
             </button>
             <div id="youtubeMinerRepositoryBody" class="youtube-miner-collapsible-body">
               <div class="table-wrap">
-                <table>
+                <table class="youtube-runs-table">
                   <thead>
                     <tr class="contacts-filter-row">
                       <th>
@@ -916,7 +916,14 @@
                           <option value="failed">Failed</option>
                         </select>
                       </th>
-                      <th class="crud-bulk-actions youtube-repository-bulk-actions-cell">
+                      <th></th>
+                    </tr>
+                    <!-- Own full-width row: a topic picker plus four verbs need
+                         ~700px, and squeezed into the Actions column they spilled
+                         243px past the table (T0). Spanning to the right edge
+                         keeps them right-aligned over Actions per T10. -->
+                    <tr>
+                      <th class="crud-bulk-actions youtube-repository-bulk-actions-cell" colspan="8">
                         <div class="crud-bulk-actions-row youtube-repository-bulk-actions">
                           <form id="youtubeRunsBulkTopicForm" style="display:inline-flex; align-items:center; gap:0.5rem; margin:0;">
                             <label for="youtubeRunsBulkEditTopicSelect" style="white-space:nowrap; margin:0;">Change Topic to:</label>
@@ -1012,7 +1019,7 @@
               </div>
 
               <div class="table-wrap">
-                <table>
+                <table class="youtube-comments-table">
                   <thead>
                     <tr>
                       <th colspan="8" class="youtube-comment-filter-row">

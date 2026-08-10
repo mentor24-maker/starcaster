@@ -69,6 +69,7 @@ const failures = [];
 const notes = [];
 let checked = 0;
 let skipped = 0;
+let throttled = 0;
 
 console.log(`Checking ${BASE_URL} at ${WIDTHS.join(', ')}px\n`);
 
@@ -150,8 +151,18 @@ try {
       }
     }
   }
+  throttled = page.rateLimited || 0;
 } finally {
   await browser.close();
+}
+
+if (throttled > 0) {
+  console.log(
+    `\nWARNING: ${throttled} request(s) were rate-limited (HTTP 429) during this run.\n` +
+    '  Screens load partial data once that starts, so later measurements describe a\n' +
+    '  broken app while looking like clean results. Restart `npm run dev` and re-run;\n' +
+    '  treat everything above as unreliable.'
+  );
 }
 
 console.log(`\n${checked} screen-width combination(s) checked, ${skipped} skipped, ${failures.length} failing.`);
