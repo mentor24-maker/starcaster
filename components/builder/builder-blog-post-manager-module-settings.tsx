@@ -25,7 +25,10 @@ export function BuilderBlogPostManagerModuleSettings({
           key: "editPageUrl",
           label: "Edit Page URL",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Auto",
           placeholder: "/builder-preview.html?slug=blog-post-edit",
           rendersVia: "BlogPostManagerPreview"
         },
@@ -33,7 +36,10 @@ export function BuilderBlogPostManagerModuleSettings({
           key: "viewPageUrl",
           label: "View Page URL",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Auto",
           placeholder: "/builder-preview.html?slug=blog-post-view",
           rendersVia: "BlogPostManagerPreview"
         }

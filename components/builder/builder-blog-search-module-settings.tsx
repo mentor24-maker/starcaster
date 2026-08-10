@@ -40,8 +40,11 @@ export function BuilderBlogSearchModuleSettings({
           key: "targetPageUrl",
           label: "Results Page URL",
           width: "text-md",
-          control: "text",
-          placeholder: "/blog (blank = current page)",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Current page",
+          placeholder: "/blog",
           rendersVia: "BlogSearchPreview"
         }
       ],

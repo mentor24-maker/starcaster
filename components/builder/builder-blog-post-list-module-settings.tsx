@@ -51,7 +51,10 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
           key: "postSlug",
           label: "Post Page",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "pages",
+          valueKind: "slug",
+          noneLabel: "Default (blog-post-view)",
           placeholder: "blog-post-view",
           rendersVia: "BlogPostListPreview postPageUrl resolution"
         }

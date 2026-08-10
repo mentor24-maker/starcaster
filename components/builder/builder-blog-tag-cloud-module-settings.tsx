@@ -257,8 +257,11 @@ export function BuilderBlogTagCloudModuleSettings({
           key: "targetPageUrl",
           label: "Target Page",
           width: "text-md",
-          control: "text",
-          placeholder: "Leave blank to filter on the current page",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Current page",
+          placeholder: "/blog",
           rendersVia: "builder-template.ts blog-tag-cloud renderer"
         }
       ]

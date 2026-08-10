@@ -24,7 +24,9 @@ const SCHEMA: BuilderSettingsSchema = {
         key: "linkHref",
         label: "Link URL",
         width: "text-md",
-        control: "text",
+        control: "picker",
+        source: "pages",
+        valueKind: "path",
         placeholder: "/admin-login",
         fallback: "/admin-login",
         rendersVia: "AdminNavLinkPreview (builder-template-preview.tsx)"

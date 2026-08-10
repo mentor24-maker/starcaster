@@ -45,7 +45,9 @@ const SCHEMA: BuilderSettingsSchema = {
         key: "successRedirect",
         label: "Redirect on success",
         width: "full",
-        control: "text",
+        control: "picker",
+        source: "pages",
+        valueKind: "path",
         placeholder: "/admin-dashboard",
         fallback: "/admin-dashboard",
         rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
