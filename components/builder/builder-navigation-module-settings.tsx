@@ -7,7 +7,7 @@ import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
-import { BuilderThemeColorField } from "./builder-theme-color-field";
+import { BuilderThemeColorControlWithDefault } from "./builder-theme-color-field";
 
 /**
  * Navigation settings editor.
@@ -75,6 +75,10 @@ export function BuilderNavigationModuleSettings({
   const [linksCollapsed, setLinksCollapsed] = useState(false);
   const items = parseNavItems(module.settings);
   const { v: padV, h: padH } = parseNavPadding(module.settings.navPadding ?? "");
+  // A3: how many of this module's theme-backed settings are overridden.
+  const navThemeOverrideCount = ["navColor", "navHoverColor", "navHoverBackground"].filter(
+    (key) => (module.settings[key] ?? "") !== ""
+  ).length;
   const topLevelWidthTotal = items
     .filter((i) => !i.parentId)
     .reduce((sum, i) => sum + (parseFloat(i.width ?? "") || 0), 0);
@@ -127,153 +131,200 @@ export function BuilderNavigationModuleSettings({
         />
         {!styleCollapsed && (
           <div className="builder-nav-style-body">
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Font" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navFontSize ?? "16"}
-                  min={10} max={48} fallback="16"
-                  onChange={(v) => updateSetting("navFontSize", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Bold" width="check">
-                <input
-                  type="checkbox"
-                  checked={module.settings.navBold === "true"}
-                  onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Direction" width="select-md">
-                <select
-                  value={module.settings.navDirection ?? "horizontal"}
-                  onChange={(e) => updateSetting("navDirection", e.target.value)}
-                >
-                  <option value="horizontal">Horizontal</option>
-                  <option value="vertical">Vertical</option>
-                </select>
-              </BuilderModuleField>
-              <BuilderModuleField label="Levels" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navLevels ?? "2"}
-                  min={1} max={3} fallback="2"
-                  onChange={(v) => updateSetting("navLevels", v)}
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
+            {/*
+              D8 axes (operator's own grouping for this module, 8/10):
+              Structure / Text / Placement / Frame. Same controls, same
+              keys — only which column they live in changed. Frame holds
+              just Radius today and empties entirely when border settings
+              move to Themes, at which point this drops to three axes.
 
-            {module.settings.navDirection !== "vertical" && (
-              <BuilderModuleFieldStrip>
-                <BuilderModuleField label="Dropdown" width="select-md">
-                  <select
-                    value={module.settings.navDropdownStyle ?? "list"}
-                    onChange={(e) => updateSetting("navDropdownStyle", e.target.value)}
-                  >
-                    <option value="list">List</option>
-                    <option value="mega">Mega Panel</option>
-                  </select>
-                </BuilderModuleField>
-                {module.settings.navDropdownStyle === "mega" && (
-                  <>
-                    <BuilderModuleField label="Columns" width="num">
-                      <BuilderNumberSelectControl
-                        value={module.settings.navMegaColumns ?? "3"}
-                        min={1} max={5} fallback="3"
-                        onChange={(v) => updateSetting("navMegaColumns", v)}
-                      />
+              F13 dedupe note kept: this module ALSO wears the universal
+              chrome (Background / Alignment / H+V Margin). navMarginH was
+              dead and was removed; the duplicate Background block was
+              removed. "Menu Alignment"/"Menu V Margin" are NOT duplicates
+              — they position items INSIDE the nav, not the module box.
+            */}
+            <div className="builder-schema-panel-columns">
+              <div className="builder-schema-panel-column">
+                <div className="builder-schema-group-title">Structure</div>
+                <BuilderModuleFieldStrip>
+                  <BuilderModuleField label="Direction" width="select-md">
+                    <select
+                      value={module.settings.navDirection ?? "horizontal"}
+                      onChange={(e) => updateSetting("navDirection", e.target.value)}
+                    >
+                      <option value="horizontal">Horizontal</option>
+                      <option value="vertical">Vertical</option>
+                    </select>
+                  </BuilderModuleField>
+                  <BuilderModuleField label="Levels" width="num">
+                    <BuilderNumberSelectControl
+                      value={module.settings.navLevels ?? "2"}
+                      min={1} max={3} fallback="2"
+                      onChange={(v) => updateSetting("navLevels", v)}
+                    />
+                  </BuilderModuleField>
+                  <BuilderModuleField label="Sizing" width="select-md">
+                    <select
+                      value={module.settings.navItemSizing ?? "auto"}
+                      onChange={(e) => updateSetting("navItemSizing", e.target.value)}
+                    >
+                      <option value="auto">Auto</option>
+                      <option value="equal">Equal</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </BuilderModuleField>
+                </BuilderModuleFieldStrip>
+                {module.settings.navDirection !== "vertical" && (
+                  <BuilderModuleFieldStrip>
+                    <BuilderModuleField label="Dropdown" width="select-md">
+                      <select
+                        value={module.settings.navDropdownStyle ?? "list"}
+                        onChange={(e) => updateSetting("navDropdownStyle", e.target.value)}
+                      >
+                        <option value="list">List</option>
+                        <option value="mega">Mega Panel</option>
+                      </select>
                     </BuilderModuleField>
-                    <BuilderModuleField label="Panel Width" width="num">
-                      <BuilderNumberSelectControl
-                        value={module.settings.navMegaWidth ?? "1040"}
-                        min={320} max={1600} step={40} fallback="1040"
-                        onChange={(v) => updateSetting("navMegaWidth", v)}
-                      />
-                    </BuilderModuleField>
-                  </>
+                    {module.settings.navDropdownStyle === "mega" && (
+                      <>
+                        <BuilderModuleField label="Columns" width="num">
+                          <BuilderNumberSelectControl
+                            value={module.settings.navMegaColumns ?? "3"}
+                            min={1} max={5} fallback="3"
+                            onChange={(v) => updateSetting("navMegaColumns", v)}
+                          />
+                        </BuilderModuleField>
+                        <BuilderModuleField label="Panel Width" width="num">
+                          <BuilderNumberSelectControl
+                            value={module.settings.navMegaWidth ?? "1040"}
+                            min={320} max={1600} step={40} fallback="1040"
+                            onChange={(v) => updateSetting("navMegaWidth", v)}
+                          />
+                        </BuilderModuleField>
+                      </>
+                    )}
+                  </BuilderModuleFieldStrip>
                 )}
-              </BuilderModuleFieldStrip>
-            )}
+              </div>
+
+              <div className="builder-schema-panel-column">
+                <div className="builder-schema-group-title">Text</div>
+                <BuilderModuleFieldStrip>
+                  <BuilderModuleField label="Font" width="num">
+                    <BuilderNumberSelectControl
+                      value={module.settings.navFontSize ?? "16"}
+                      min={10} max={48} fallback="16"
+                      onChange={(v) => updateSetting("navFontSize", v)}
+                    />
+                  </BuilderModuleField>
+                  <BuilderModuleField label="Bold" width="check">
+                    <input
+                      type="checkbox"
+                      checked={module.settings.navBold === "true"}
+                      onChange={(e) => updateSetting("navBold", e.target.checked ? "true" : "false")}
+                    />
+                  </BuilderModuleField>
+                </BuilderModuleFieldStrip>
+              </div>
+
+              <div className="builder-schema-panel-column">
+                <div className="builder-schema-group-title">Placement</div>
+                <BuilderModuleFieldStrip>
+                  <BuilderModuleField label="Menu Alignment" width="align">
+                    <BuilderAlignmentIconGroup
+                      value={(module.settings.navAlignment ?? "center") as BuilderModuleAlignment}
+                      onChange={(alignment) => updateSetting("navAlignment", alignment)}
+                      ariaLabel="Menu item alignment inside the nav"
+                    />
+                  </BuilderModuleField>
+                  <BuilderModuleField label="Vertical Padding" width="num">
+                    <BuilderNumberSelectControl
+                      value={String(padV)} min={0} max={40} fallback="8"
+                      onChange={(v) => updatePadding(Number(v), padH)}
+                    />
+                  </BuilderModuleField>
+                  <BuilderModuleField label="Horizontal Padding" width="num">
+                    <BuilderNumberSelectControl
+                      value={String(padH)} min={0} max={60} fallback="12"
+                      onChange={(v) => updatePadding(padV, Number(v))}
+                    />
+                  </BuilderModuleField>
+                  <BuilderModuleField label="Vertical Margin" width="num">
+                    <BuilderNumberSelectControl
+                      value={module.settings.navMarginV ?? "0"}
+                      min={0} max={80} fallback="0"
+                      onChange={(v) => updateSetting("navMarginV", v)}
+                    />
+                  </BuilderModuleField>
+                </BuilderModuleFieldStrip>
+              </div>
+
+              <div className="builder-schema-panel-column">
+                <div className="builder-schema-group-title">Frame</div>
+                <BuilderModuleFieldStrip>
+                  <BuilderModuleField label="Radius" width="num">
+                    <BuilderNumberSelectControl
+                      value={module.settings.navBorderRadius ?? "0"}
+                      min={0} max={48} fallback="0"
+                      onChange={(v) => updateSetting("navBorderRadius", v)}
+                    />
+                  </BuilderModuleField>
+                </BuilderModuleFieldStrip>
+              </div>
+            </div>
 
             {/*
-              F13 dedupe: this module ALSO wears the universal chrome
-              (Background / Alignment / H+V Margin), so two of the controls
-              that lived here were duplicates and one was dead:
-                • navMarginH — written here, read by no renderer. Removed.
-                • the Background <details> below — edited the SAME keys as
-                  the chrome's Background control. Removed; the chrome's is
-                  the one that survives (NavigationModulePreview reads those
-                  keys directly, which is why the wrapper skips them).
-              Menu Alignment and Menu V Margin are NOT duplicates: they
-              position the menu items INSIDE the nav, while the chrome's
-              alignment/margins position the module box on the page. Both
-              are live on tenant sites — relabelled so the scopes read
-              differently (L7) rather than removed.
+              A1: theme overrides live in Advanced. Empty means "follow the
+              theme" — the renderer does `navColor || undefined`, so an empty
+              value lets the theme's CSS decide — so these sit collapsed
+              rather than in the Text column inviting an override.
+              A3: the summary counts active overrides, because a collapsed
+              override that quietly ignores a themed restyle otherwise looks
+              like a theme bug.
             */}
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Menu Alignment" width="align">
-                <BuilderAlignmentIconGroup
-                  value={(module.settings.navAlignment ?? "center") as BuilderModuleAlignment}
-                  onChange={(alignment) => updateSetting("navAlignment", alignment)}
-                  ariaLabel="Menu item alignment inside the nav"
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Pad V" width="num">
-                <BuilderNumberSelectControl
-                  value={String(padV)} min={0} max={40} fallback="8"
-                  onChange={(v) => updatePadding(Number(v), padH)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Pad H" width="num">
-                <BuilderNumberSelectControl
-                  value={String(padH)} min={0} max={60} fallback="12"
-                  onChange={(v) => updatePadding(padV, Number(v))}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Radius" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navBorderRadius ?? "0"}
-                  min={0} max={48} fallback="0"
-                  onChange={(v) => updateSetting("navBorderRadius", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Menu V Margin" width="num">
-                <BuilderNumberSelectControl
-                  value={module.settings.navMarginV ?? "0"}
-                  min={0} max={80} fallback="0"
-                  onChange={(v) => updateSetting("navMarginV", v)}
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-
-            {/* D1/W1: three full-width color rows became one strip of
-                content-sized swatches. Same keys, same fallbacks. */}
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Text" width="color">
-                <BuilderThemeColorField
-                  dialogLabel="Menu text color"
-                  fallback="#163a5e"
-                  themeColors={themeColors}
-                  value={module.settings.navColor ?? ""}
-                  onChange={(v) => updateSetting("navColor", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Hover text" width="color">
-                <BuilderThemeColorField
-                  dialogLabel="Menu hover text color"
-                  fallback="#0a8fc4"
-                  themeColors={themeColors}
-                  value={module.settings.navHoverColor ?? ""}
-                  onChange={(v) => updateSetting("navHoverColor", v)}
-                />
-              </BuilderModuleField>
-              <BuilderModuleField label="Hover bg" width="color">
-                <BuilderThemeColorField
-                  dialogLabel="Menu hover background color"
-                  fallback="#d0f0fb"
-                  themeColors={themeColors}
-                  value={module.settings.navHoverBackground ?? ""}
-                  onChange={(v) => updateSetting("navHoverBackground", v)}
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
+            <details className="hanging-details builder-schema-advanced">
+              <summary>
+                Advanced
+                {navThemeOverrideCount > 0 ? (
+                  <span className="builder-schema-override-count">
+                    {navThemeOverrideCount} overriding the theme
+                  </span>
+                ) : null}
+              </summary>
+              <BuilderModuleFieldStrip>
+                <BuilderModuleField label="Color" width="color">
+                  <BuilderThemeColorControlWithDefault
+                    dialogLabel="Menu text color"
+                    defaultColor="#163a5e"
+                    hint="theme"
+                    themeColors={themeColors}
+                    value={module.settings.navColor ?? ""}
+                    onChange={(v) => updateSetting("navColor", v)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Hover text" width="color">
+                  <BuilderThemeColorControlWithDefault
+                    dialogLabel="Menu hover text color"
+                    defaultColor="#0a8fc4"
+                    hint="theme"
+                    themeColors={themeColors}
+                    value={module.settings.navHoverColor ?? ""}
+                    onChange={(v) => updateSetting("navHoverColor", v)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Hover bg" width="color">
+                  <BuilderThemeColorControlWithDefault
+                    dialogLabel="Menu hover background color"
+                    defaultColor="#d0f0fb"
+                    hint="theme"
+                    themeColors={themeColors}
+                    value={module.settings.navHoverBackground ?? ""}
+                    onChange={(v) => updateSetting("navHoverBackground", v)}
+                  />
+                </BuilderModuleField>
+              </BuilderModuleFieldStrip>
+            </details>
           </div>
         )}
       </div>
@@ -286,18 +337,6 @@ export function BuilderNavigationModuleSettings({
         />
         {!linksCollapsed && (
           <>
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Sizing" width="select-md">
-                <select
-                  value={module.settings.navItemSizing ?? "auto"}
-                  onChange={(e) => updateSetting("navItemSizing", e.target.value)}
-                >
-                  <option value="auto">Auto</option>
-                  <option value="equal">Equal</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
             <div className="builder-nav-items-header builder-nav-item-row">
               <div className="builder-nav-item-fields">
                 <span>Parent Page</span>

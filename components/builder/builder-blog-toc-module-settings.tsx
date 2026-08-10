@@ -66,161 +66,180 @@ export function BuilderBlogTocModuleSettings({
   }
 
   const schema: BuilderSettingsSchema = {
-    content: [
-      [
-        {
-          key: "showTitle",
-          label: "Title",
-          width: "select-md",
-          control: "select",
-          options: [
-            { value: "true", label: "Show" },
-            { value: "false", label: "Hide" }
+    // D8 axes (master rule D8, docs/UI_RULES.md): Content / Structure / Text.
+    // Same keys, fallbacks and visibleWhen rules — only the column each
+    // control sits in changed. "Style" (marker) and "Indent H3s" describe how
+    // the list is arranged, so they are Structure, not typography.
+    axes: [
+      {
+        title: "Content",
+        strips: [
+          [
+            {
+              key: "showTitle",
+              label: "Title",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "true", label: "Show" },
+                { value: "false", label: "Hide" }
+              ],
+              fallback: "true",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            },
+            {
+              key: "title",
+              label: "Title Text",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "builder-module-card.tsx blog-toc preview",
+              visibleWhen: (settings) => (settings.showTitle ?? "true") === "true",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.title ?? "In This Article"}
+                  onChange={(e) => set("title", e.target.value)}
+                  placeholder="In This Article"
+                />
+              )
+            }
           ],
-          fallback: "true",
-          rendersVia: "builder-module-card.tsx blog-toc preview"
-        },
-        {
-          key: "title",
-          label: "Title Text",
-          width: "text-md",
-          control: "custom",
-          rendersVia: "builder-module-card.tsx blog-toc preview",
-          visibleWhen: (settings) => (settings.showTitle ?? "true") === "true",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.title ?? "In This Article"}
-              onChange={(e) => set("title", e.target.value)}
-              placeholder="In This Article"
-            />
-          )
-        }
-      ],
-      [
-        {
-          key: "items",
-          label: "Headings",
-          width: "full",
-          control: "custom",
-          bare: true,
-          rendersVia: "builder-module-card.tsx blog-toc preview",
-          render: () => (
-            <>
-              <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
-                Headings — H3s indent under the nearest H2
-              </div>
-              <div className="builder-slider-items">
-                {items.map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="builder-slider-item-card"
-                    style={{ marginLeft: item.depth === 2 ? 16 : 0 }}
-                  >
-                    <div className="builder-slider-item-header">
-                      <strong style={{ color: item.depth === 2 ? "#8ba9be" : undefined }}>
-                        {item.depth === 2 ? "H3" : "H2"} {item.label || `Heading ${index + 1}`}
-                      </strong>
-                      <div className="builder-section-actions">
-                        <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-                        <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-                        <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
-                      </div>
-                    </div>
-                    <div className="builder-slider-item-grid">
-                      <label className="field">
-                        <span>Label</span>
-                        <input
-                          type="text"
-                          value={item.label}
-                          onChange={(e) => updateItem(item.id, "label", e.target.value)}
-                          placeholder="Section heading text"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Anchor ID</span>
-                        <input
-                          type="text"
-                          value={item.anchor}
-                          onChange={(e) => updateItem(item.id, "anchor", e.target.value)}
-                          placeholder="section-slug"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Level</span>
-                        <select
-                          value={item.depth}
-                          onChange={(e) => updateItem(item.id, "depth", Number(e.target.value) as 1 | 2)}
-                        >
-                          <option value={1}>H2</option>
-                          <option value={2}>H3 (sub)</option>
-                        </select>
-                      </label>
-                    </div>
+          [
+            {
+              key: "items",
+              label: "Headings",
+              width: "full",
+              control: "custom",
+              bare: true,
+              rendersVia: "builder-module-card.tsx blog-toc preview",
+              render: () => (
+                <>
+                  <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
+                    Headings — H3s indent under the nearest H2
                   </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                <button type="button" className="secondary-button" onClick={() => addItem(1)}>
-                  + H2
-                </button>
-                <button type="button" className="secondary-button" onClick={() => addItem(2)}>
-                  + H3
-                </button>
-              </div>
-            </>
-          )
-        }
-      ]
-    ],
-    style: [
-      [
-        {
-          key: "style",
-          label: "Style",
-          width: "select-md",
-          control: "select",
-          options: [
-            { value: "default", label: "Default" },
-            { value: "numbered", label: "Numbered" },
-            { value: "dotted", label: "Dotted" }
-          ],
-          fallback: "default",
-          rendersVia: "builder-module-card.tsx blog-toc preview"
-        },
-        {
-          key: "indentSubheadings",
-          label: "Indent H3s",
-          width: "select-md",
-          control: "select",
-          options: [
-            { value: "true", label: "Yes" },
-            { value: "false", label: "No" }
-          ],
-          fallback: "true",
-          rendersVia: "builder-module-card.tsx blog-toc preview"
-        },
-        {
-          key: "fontSize",
-          label: "Font Size",
-          width: "num",
-          control: "number",
-          min: 11,
-          max: 20,
-          step: 1,
-          fallback: "14",
-          rendersVia: "builder-module-card.tsx blog-toc preview"
-        },
-        {
-          key: "color",
-          label: "Link Color",
-          width: "color",
-          control: "color",
-          dialogLabel: "Link color",
-          fallback: "#0f4f8f",
-          rendersVia: "builder-module-card.tsx blog-toc preview"
-        }
-      ]
+                  <div className="builder-slider-items">
+                    {items.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className="builder-slider-item-card"
+                        style={{ marginLeft: item.depth === 2 ? 16 : 0 }}
+                      >
+                        <div className="builder-slider-item-header">
+                          <strong style={{ color: item.depth === 2 ? "#8ba9be" : undefined }}>
+                            {item.depth === 2 ? "H3" : "H2"} {item.label || `Heading ${index + 1}`}
+                          </strong>
+                          <div className="builder-section-actions">
+                            <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
+                            <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
+                            <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Remove">✕</button>
+                          </div>
+                        </div>
+                        <div className="builder-slider-item-grid">
+                          <label className="field">
+                            <span>Label</span>
+                            <input
+                              type="text"
+                              value={item.label}
+                              onChange={(e) => updateItem(item.id, "label", e.target.value)}
+                              placeholder="Section heading text"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Anchor ID</span>
+                            <input
+                              type="text"
+                              value={item.anchor}
+                              onChange={(e) => updateItem(item.id, "anchor", e.target.value)}
+                              placeholder="section-slug"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Level</span>
+                            <select
+                              value={item.depth}
+                              onChange={(e) => updateItem(item.id, "depth", Number(e.target.value) as 1 | 2)}
+                            >
+                              <option value={1}>H2</option>
+                              <option value={2}>H3 (sub)</option>
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button type="button" className="secondary-button" onClick={() => addItem(1)}>
+                      + H2
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => addItem(2)}>
+                      + H3
+                    </button>
+                  </div>
+                </>
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
+          [
+            {
+              key: "style",
+              label: "Style",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "default", label: "Default" },
+                { value: "numbered", label: "Numbered" },
+                { value: "dotted", label: "Dotted" }
+              ],
+              fallback: "default",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            },
+            {
+              key: "indentSubheadings",
+              label: "Indent H3s",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" }
+              ],
+              fallback: "true",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Text",
+        strips: [
+          [
+            {
+              key: "fontSize",
+              label: "Font Size",
+              width: "num",
+              control: "number",
+              min: 11,
+              max: 20,
+              step: 1,
+              fallback: "14",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            },
+            {
+              key: "color",
+              label: "Link Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Link color",
+              fallback: "#0f4f8f",
+              rendersVia: "builder-module-card.tsx blog-toc preview"
+            }
+          ]
+        ]
+      }
     ]
   };
 

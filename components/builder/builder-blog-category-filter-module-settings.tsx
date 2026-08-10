@@ -66,7 +66,15 @@ export function BuilderBlogCategoryFilterModuleSettings({
   }
 
   const schema: BuilderSettingsSchema = {
-    content: [
+    // D8 logical axes: Content / Structure / Text / Frame — the ceiling,
+    // reached honestly. The pill's own text colours live on Text (D8:
+    // "font, size, weight, transform, text colour"); the box behind it —
+    // backgrounds and radius — lives on Frame. Advanced keeps the URL
+    // param + target page below, full width.
+    axes: [
+      {
+        title: "Content",
+        strips: [
       [
         // C3: was a Yes/No select — same "true"/"false" stored values.
         {
@@ -145,8 +153,11 @@ export function BuilderBlogCategoryFilterModuleSettings({
           )
         }
       ]
-    ],
-    layout: [
+        ]
+      },
+      {
+        title: "Structure",
+        strips: [
       [
         {
           key: "layout",
@@ -170,18 +181,30 @@ export function BuilderBlogCategoryFilterModuleSettings({
         },
         { key: "gap", label: "Gap", width: "num", control: "number", min: 4, max: 24, step: 2, fallback: "8" }
       ]
-    ],
-    style: [
+        ]
+      },
+      {
+        title: "Text",
+        strips: [
       [
+        { key: "fontSize", label: "Font Size", width: "num", control: "number", min: 10, max: 20, step: 1, fallback: "13" },
         { key: "activeColor", label: "Active", width: "color", control: "color", dialogLabel: "Active color", fallback: "#0f4f8f" },
+        { key: "inactiveColor", label: "Inactive", width: "color", control: "color", dialogLabel: "Inactive color", fallback: "#587592" }
+      ]
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
+      [
         { key: "activeBg", label: "Active BG", width: "color", control: "color", dialogLabel: "Active background", fallback: "#e8f6fc" },
-        { key: "inactiveColor", label: "Inactive", width: "color", control: "color", dialogLabel: "Inactive color", fallback: "#587592" },
         { key: "inactiveBg", label: "Inactive BG", width: "color", control: "color", dialogLabel: "Inactive background", fallback: "#f0f4f8" }
       ],
       [
-        { key: "borderRadius", label: "Radius", width: "num", control: "number", min: 0, max: 32, step: 2, fallback: "20" },
-        { key: "fontSize", label: "Font Size", width: "num", control: "number", min: 10, max: 20, step: 1, fallback: "13" }
+        { key: "borderRadius", label: "Radius", width: "num", control: "number", min: 0, max: 32, step: 2, fallback: "20" }
       ]
+        ]
+      }
     ],
     advanced: [
       // D3: one strip, not two single-field rows. Target Page narrowed

@@ -9,74 +9,84 @@ type Props = {
 };
 
 /**
- * "Row actions" is a proper titled group (D5) — it borrows the layout SLOT
- * only for its position in the fixed group order; the toggles are content
- * semantically. Replaces the old hand-rolled bare-custom divider.
+ * D8 logical axes (docs/UI_RULES.md): Content / Structure.
+ *
+ * PAIRING RULE — do not re-split: a toggle that gates ONE specific sibling
+ * field (`showTitle` → `tableTitle`, `showAddButton` → `addButtonLabel`) is
+ * one control pair and stays adjacent in the same strip, toggle first, on the
+ * axis where the field belongs. Only toggles gating a whole region with no
+ * sibling field (`showEditButton`, `showDeleteButton`) stay on Structure.
+ * Keys, fallbacks and visibleWhen are unchanged.
  */
 const SCHEMA: BuilderSettingsSchema = {
-  content: [
-    [
-      {
-        key: "showTitle",
-        label: "Show title",
-        width: "check",
-        control: "checkbox",
-        fallback: "true",
-        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
-      },
-      {
-        key: "tableTitle",
-        label: "Title text",
-        width: "text-md",
-        control: "text",
-        placeholder: "Team Members",
-        fallback: "Team Members",
-        visibleWhen: (s) => (s.showTitle ?? "true") === "true",
-        rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
-      }
-    ]
-  ],
-  layout: {
-    title: "Row actions",
-    strips: [
-      [
-        {
-          key: "showEditButton",
-          label: "Edit button",
-          width: "check",
-          control: "checkbox",
-          fallback: "true",
-          rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
-        },
-        {
-          key: "showDeleteButton",
-          label: "Delete button",
-          width: "check",
-          control: "checkbox",
-          fallback: "true",
-          rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
-        },
-        {
-          key: "showAddButton",
-          label: "Add button",
-          width: "check",
-          control: "checkbox",
-          fallback: "true",
-          rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
-        },
-        {
-          key: "addButtonLabel",
-          label: "Add button label",
-          width: "text-md",
-          control: "text",
-          placeholder: "Add Team Member",
-          fallback: "Add Team Member",
-          visibleWhen: (s) => (s.showAddButton ?? "true") === "true",
-          rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
-        }
+  axes: [
+    {
+      title: "Content",
+      strips: [
+        [
+          {
+            key: "showTitle",
+            label: "Show title",
+            width: "check",
+            control: "checkbox",
+            fallback: "true",
+            rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+          },
+          {
+            key: "tableTitle",
+            label: "Title text",
+            width: "text-md",
+            control: "text",
+            placeholder: "Team Members",
+            fallback: "Team Members",
+            visibleWhen: (s) => (s.showTitle ?? "true") === "true",
+            rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+          },
+          {
+            key: "showAddButton",
+            label: "Add button",
+            width: "check",
+            control: "checkbox",
+            fallback: "true",
+            rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+          },
+          {
+            key: "addButtonLabel",
+            label: "Add button label",
+            width: "text-md",
+            control: "text",
+            placeholder: "Add Team Member",
+            fallback: "Add Team Member",
+            visibleWhen: (s) => (s.showAddButton ?? "true") === "true",
+            rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+          }
+        ]
       ]
-    ]
-  }
+    },
+    {
+      title: "Structure",
+      strips: [
+        [
+          {
+            key: "showEditButton",
+            label: "Edit button",
+            width: "check",
+            control: "checkbox",
+            fallback: "true",
+            rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+          },
+          {
+            key: "showDeleteButton",
+            label: "Delete button",
+            width: "check",
+            control: "checkbox",
+            fallback: "true",
+            rendersVia: "AdminTeamUsersPreview (builder-template-preview.tsx)"
+          }
+        ]
+      ]
+    }
+  ]
 };
 
 export function BuilderAdminTeamUsersModuleSettings({ module, onUpdateModule }: Props) {

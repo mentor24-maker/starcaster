@@ -32,51 +32,70 @@ export function BuilderCurrentPollModuleSettings({
   themeBackgroundColor,
   themePrimaryColor
 }: BuilderCurrentPollModuleSettingsProps) {
+  // D8 axes (2026-08-10): Structure / Placement / Frame. The poll draws its
+  // own body, so this editor only ever positions and dresses the shell —
+  // Frame carries the background surface, and empties if background moves to
+  // Themes.
   const schema: BuilderSettingsSchema = {
-    layout: [
-      [
-        {
-          key: "size",
-          label: "Width",
-          width: "select-sm",
-          control: "select",
-          options: POLL_CONTENT_WIDTH_OPTIONS.map((width) => ({ value: String(width), label: `${width}%` })),
-          fallback: "100",
-          rendersVia: "getCurrentPollModuleShellStyle"
-        },
-        {
-          key: "alignment",
-          label: "Alignment",
-          width: "align",
-          control: "align",
-          ariaLabel: "Poll alignment",
-          rendersVia: "getModuleAlignment"
-        },
-        ...marginFields("getCurrentPollModuleShellStyle", 160)
-      ]
-    ],
-    style: [
-      [
-        {
-          key: "background",
-          label: "Background",
-          width: "full",
-          control: "custom",
-          bare: true,
-          rendersVia: "getCurrentPollModuleShellStyle",
-          render: () => (
-            <BuilderBackgroundControls
-              label="Background"
-              background={getModuleBackgroundSettings(module.settings)}
-              horizontal
-              onChange={onUpdateModuleBackground}
-              themeBackgroundColor={themeBackgroundColor}
-              themeColors={themeColors}
-              themePrimaryColor={themePrimaryColor}
-            />
-          )
-        }
-      ]
+    axes: [
+      {
+        title: "Structure",
+        strips: [
+          [
+            {
+              key: "size",
+              label: "Width",
+              width: "select-sm",
+              control: "select",
+              options: POLL_CONTENT_WIDTH_OPTIONS.map((width) => ({ value: String(width), label: `${width}%` })),
+              fallback: "100",
+              rendersVia: "getCurrentPollModuleShellStyle"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [
+          [
+            {
+              key: "alignment",
+              label: "Alignment",
+              width: "align",
+              control: "align",
+              ariaLabel: "Poll alignment",
+              rendersVia: "getModuleAlignment"
+            },
+            ...marginFields("getCurrentPollModuleShellStyle", 160)
+          ]
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
+          [
+            {
+              key: "background",
+              label: "Background",
+              width: "full",
+              control: "custom",
+              bare: true,
+              rendersVia: "getCurrentPollModuleShellStyle",
+              render: () => (
+                <BuilderBackgroundControls
+                  label="Background"
+                  background={getModuleBackgroundSettings(module.settings)}
+                  horizontal
+                  onChange={onUpdateModuleBackground}
+                  themeBackgroundColor={themeBackgroundColor}
+                  themeColors={themeColors}
+                  themePrimaryColor={themePrimaryColor}
+                />
+              )
+            }
+          ]
+        ]
+      }
     ]
   };
 

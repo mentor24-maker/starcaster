@@ -28,92 +28,104 @@ export function BuilderConfettiModuleSettings({
   const settings = normalizeConfettiModuleSettings(module.settings);
 
   const schema: BuilderSettingsSchema = {
-    // D2: three short strips would stack down the left edge — arrange the
-    // groups side by side so the panel fills its width.
-    panelColumns: [["content", "layout"], ["style"]],
-    content: [
-      [
-        {
-          key: "particleCount",
-          label: "Particles",
-          width: "num",
-          control: "number",
-          min: 1,
-          max: 500,
-          fallback: CONFETTI_EFFECT_DEFAULTS.particleCount,
-          rendersVia: "buildConfettiEffectOptions"
-        },
-        {
-          key: "spread",
-          label: "Spread",
-          width: "num",
-          control: "number",
-          min: 0,
-          max: 180,
-          fallback: CONFETTI_EFFECT_DEFAULTS.spread,
-          rendersVia: "buildConfettiEffectOptions"
-        }
-      ]
-    ],
-    layout: [
-      [
-        {
-          key: "originX",
-          label: "Origin X",
-          width: "select-sm",
-          control: "select",
-          options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
-          rendersVia: "buildConfettiEffectOptions"
-        },
-        {
-          key: "originY",
-          label: "Origin Y",
-          width: "select-sm",
-          control: "select",
-          options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
-          rendersVia: "buildConfettiEffectOptions"
-        },
-        {
-          key: "zIndex",
-          label: "Z-Index",
-          width: "auto",
-          control: "custom",
-          rendersVia: "buildConfettiEffectOptions",
-          render: (ctx) => (
-            <input
-              max={999999}
-              min={1}
-              onChange={(event) => ctx.set("zIndex", event.target.value)}
-              step={1}
-              type="number"
-              value={ctx.settings.zIndex}
-            />
-          )
-        }
-      ]
-    ],
-    style: [
-      [
-        {
-          key: "sound",
-          label: "Sound",
-          width: "select-md",
-          control: "select",
-          options: CONFETTI_SOUND_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
-          rendersVia: "resolveConfettiSound"
-        },
-        {
-          key: "popVolume",
-          label: "Volume",
-          width: "num",
-          control: "number",
-          min: 0,
-          max: 100,
-          fallback: CONFETTI_EFFECT_DEFAULTS.popVolume,
-          visibleWhen: (settings) => settings.sound !== "off",
-          rendersVia: "resolveConfettiSound"
-        }
-      ]
+    // D8 axes (2026-08-10): Structure / Placement / Behavior. The burst has
+    // no text and no frame — the counts shape it, the origin places it, and
+    // the sound is what it does. (Replaces the D2 panelColumns pairing: three
+    // short strips no longer stack down the left edge either way.)
+    axes: [
+      {
+        title: "Structure",
+        strips: [
+          [
+            {
+              key: "particleCount",
+              label: "Particles",
+              width: "num",
+              control: "number",
+              min: 1,
+              max: 500,
+              fallback: CONFETTI_EFFECT_DEFAULTS.particleCount,
+              rendersVia: "buildConfettiEffectOptions"
+            },
+            {
+              key: "spread",
+              label: "Spread",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 180,
+              fallback: CONFETTI_EFFECT_DEFAULTS.spread,
+              rendersVia: "buildConfettiEffectOptions"
+            }
+          ]
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [
+          [
+            {
+              key: "originX",
+              label: "Origin X",
+              width: "select-sm",
+              control: "select",
+              options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
+              rendersVia: "buildConfettiEffectOptions"
+            },
+            {
+              key: "originY",
+              label: "Origin Y",
+              width: "select-sm",
+              control: "select",
+              options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
+              rendersVia: "buildConfettiEffectOptions"
+            },
+            {
+              key: "zIndex",
+              label: "Z-Index",
+              width: "auto",
+              control: "custom",
+              rendersVia: "buildConfettiEffectOptions",
+              render: (ctx) => (
+                <input
+                  max={999999}
+                  min={1}
+                  onChange={(event) => ctx.set("zIndex", event.target.value)}
+                  step={1}
+                  type="number"
+                  value={ctx.settings.zIndex}
+                />
+              )
+            }
+          ]
+        ]
+      },
+      {
+        title: "Behavior",
+        strips: [
+          [
+            {
+              key: "sound",
+              label: "Sound",
+              width: "select-md",
+              control: "select",
+              options: CONFETTI_SOUND_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+              rendersVia: "resolveConfettiSound"
+            },
+            {
+              key: "popVolume",
+              label: "Volume",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 100,
+              fallback: CONFETTI_EFFECT_DEFAULTS.popVolume,
+              visibleWhen: (settings) => settings.sound !== "off",
+              rendersVia: "resolveConfettiSound"
+            }
+          ]
+        ]
+      }
     ]
   };
 

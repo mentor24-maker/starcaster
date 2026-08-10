@@ -516,6 +516,23 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: var(--space-4, 12px) var(--space-6, 24px);
 }
 
+/*
+ * When the panel declares its axis count, both the basic row and the
+ * Advanced row use the SAME fixed tracks, so an advanced control lands
+ * directly under its own axis heading (operator 8/10). Below 1100px the
+ * tracks collapse and the columns wrap instead of cramping.
+ */
+.builder-react-root .builder-schema-panel-columns[style*="--builder-axis-count"] {
+  display: grid;
+  grid-template-columns: repeat(var(--builder-axis-count, 1), minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .builder-react-root .builder-schema-panel-columns[style*="--builder-axis-count"] {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
 .builder-react-root .builder-schema-panel-column {
   flex: 1 1 260px;
   min-width: 0;
@@ -539,11 +556,37 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: var(--space-3, 8px);
 }
 
+/*
+ * Headings and labels, per the operator (8/10): headings bold and a step
+ * larger; every heading inside an editor the same dark blue; field labels
+ * the same dark colour and weight at normal size. The muted grey they had
+ * been failed his contrast rule (R9) — grey-on-blue is exactly the
+ * low-contrast pairing he called out.
+ */
 .builder-react-root .builder-schema-group-title {
-  font-size: var(--text-sm, 0.82rem);
+  font-size: var(--text-lg, 1.1rem);
   font-weight: 700;
-  color: var(--ink-secondary, #475569);
-  margin: var(--space-2, 6px) 0 var(--space-1, 4px);
+  color: var(--builder-editor-heading, #0b2a4a);
+  margin: var(--space-2, 6px) 0 var(--space-3, 8px);
+}
+
+.builder-react-root .builder-schema-advanced > summary {
+  font-size: var(--text-lg, 1.1rem);
+  font-weight: 700;
+  color: var(--builder-editor-heading, #0b2a4a);
+}
+
+/* Field labels: same dark colour and weight, normal size. */
+.builder-react-root .builder-module-editor .builder-module-field-label,
+.builder-react-root .builder-module-field-label,
+.builder-react-root .builder-module-editor .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-module-chrome .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-label,
+.builder-react-root .builder-module-editor .builder-floating-image-module-chrome .builder-setting-label {
+  font-size: var(--text-base, 0.9rem);
+  font-weight: 700;
+  color: var(--builder-editor-label, #12395f);
 }
 
 .builder-react-root .builder-module-field {
@@ -670,6 +713,164 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-slider-item-grid-full {
   grid-column: 1 / -1;
+}
+
+/*
+ * B2, ratified 2026-08-10: inside a panel column, every control starts at
+ * the same x. Each field becomes a two-track grid — a fixed label column
+ * plus its control — so the eye reads a clean vertical edge instead of the
+ * ragged one the operator called out on Navigation.
+ *
+ * auto-fill, not a forced single column: a narrow axis column holds one
+ * label+control pair, while a wider column (a panel with only one or two
+ * axes) fills its room with two instead of stranding it — alignment
+ * without giving up D2.
+ *
+ * Scoped to panel columns on purpose: the universal chrome above them
+ * stays a single flowing row (it is one line of module-level settings,
+ * not a form), and item-manager grids keep their own column system.
+ */
+.builder-react-root .builder-schema-panel-column .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-2, 6px) var(--space-5, 16px);
+  align-items: center;
+}
+
+.builder-react-root .builder-schema-panel-column .builder-module-field {
+  display: grid;
+  /*
+   * The label track sizes to the longest label in the column rather than
+   * a fixed width — the canonical spacing names (W7: "Horizontal
+   * Padding") are long, and L4 (never crop a word) outranks W2's
+   * uniformity, exactly as W5 says.
+   */
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3, 8px);
+}
+
+/*
+ * Legacy BuilderSettingRow blocks inside an axis column (drop shadow, the
+ * offset fields, heading's alignment) rendered with big dark labels that
+ * overlapped their inputs — they were built for a full-width two-column
+ * grid, not a 300px column. Inside panel columns they wear the same
+ * compact label + bounded control treatment as a field strip, so an axis
+ * column reads as one thing (2026-08-10, caught by screenshotting the
+ * converted heading panel).
+ */
+.builder-react-root .builder-schema-panel-column .builder-setting-row,
+.builder-react-root .builder-schema-panel-column .builder-setting-row-full {
+  display: grid;
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3, 8px);
+  margin: 0 0 var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-editor .builder-schema-panel-column .builder-setting-label,
+.builder-react-root .builder-schema-panel-column .builder-setting-label {
+  white-space: nowrap;
+  text-align: left;
+}
+
+.builder-react-root .builder-schema-panel-column .builder-setting-value {
+  min-width: 0;
+}
+
+.builder-react-root .builder-schema-panel-column .builder-setting-value > input[type="number"],
+.builder-react-root .builder-schema-panel-column .builder-setting-value > input[type="text"],
+.builder-react-root .builder-schema-panel-column .builder-setting-value > select {
+  width: 100%;
+  max-width: 180px;
+}
+
+/* Hint text under a control keeps the control's column, not the label's. */
+.builder-react-root .builder-schema-panel-column .builder-module-offset-hint {
+  grid-column: 2;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--muted, #445465);
+}
+
+/* Checkboxes and icon groups sit at the start of their track, beside the
+   label, instead of drifting into the middle of a wide cell. */
+.builder-react-root .builder-schema-panel-column .builder-module-field--check .builder-module-field-control,
+.builder-react-root .builder-schema-panel-column .builder-module-field--align .builder-module-field-control,
+.builder-react-root .builder-schema-panel-column .builder-module-field--color .builder-module-field-control {
+  justify-self: start;
+}
+
+/* A full-width field spans both tracks — long text keeps the room. */
+.builder-react-root .builder-schema-panel-column .builder-module-field--full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * The universal chrome flows instead of stacking (D1/D2, 2026-08-10).
+ * Label, Background and the Alignment/H+V-Margin strip were three grid
+ * rows hugging the left edge — on EVERY module, above every panel. They
+ * are all short, so they share a wrapping row and only break when they
+ * genuinely run out of width. The image-mode URL row still takes its own
+ * line (it is a `full` field inside its own strip).
+ */
+.builder-react-root .builder-module-chrome,
+.builder-react-root .builder-heading-module-chrome,
+.builder-react-root .builder-floating-image-module-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3, 8px) var(--space-6, 24px);
+}
+
+/* Their inner rows are compact too, not full-width label/value grids. */
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-row,
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-row-full {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3, 8px);
+  margin: 0;
+}
+
+.builder-react-root .builder-module-editor .builder-heading-module-chrome .builder-setting-label {
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-module-chrome > * {
+  margin: 0;
+}
+
+/*
+ * Advanced = where theme overrides live (master rule A1). The badge makes
+ * a collapsed override visible: without it, a module quietly ignoring a
+ * themed restyle looks like a theme bug.
+ */
+.builder-react-root .builder-schema-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 8px);
+}
+
+/* Swatch + "theme" hint (or reset ✕) need air between them. */
+.builder-react-root .builder-nav-color-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-nav-color-hint {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--muted, #445465);
+}
+
+.builder-react-root .builder-schema-override-count {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--ink-secondary, #475569);
+  background: var(--bg-hover, #f1f5f9);
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: var(--radius-btn, 10px);
+  padding: 2px var(--space-3, 8px);
+  white-space: nowrap;
 }
 
 /* F6: the project-data picker — select + optional Custom input share a row. */

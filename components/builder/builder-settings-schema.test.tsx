@@ -4,6 +4,7 @@ import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
   marginFields,
+  spacingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 
@@ -42,14 +43,30 @@ describe("BuilderSchemaModuleSettings", () => {
     expect(html).toContain("builder-module-field--select-sm");
   });
 
-  it("marginFields yields H and V margin adjacent in one strip (E4)", () => {
+  it("marginFields yields both margins adjacent in one strip, canonical names (E4/W7)", () => {
     const html = render({ layout: [[...marginFields("getModuleOuterSpacingStyle")]] }, { horizontalMargin: "10", verticalMargin: "20" });
-    const h = html.indexOf("H Margin");
-    const v = html.indexOf("V Margin");
-    expect(h).toBeGreaterThanOrEqual(0);
-    expect(v).toBeGreaterThan(h);
+    const v = html.indexOf("Vertical Margin");
+    const h = html.indexOf("Horizontal Margin");
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(h).toBeGreaterThan(v);
     // Same strip: no strip boundary between the two labels.
-    expect(html.slice(h, v)).not.toContain("builder-module-field-strip");
+    expect(html.slice(v, h)).not.toContain("builder-module-field-strip");
+    // W7 forbids the old abbreviations.
+    expect(html).not.toContain(">V Margin<");
+    expect(html).not.toContain(">H Margin<");
+  });
+
+  it("spacingFields emits only the keys a module honours, in canonical order (W7)", () => {
+    const html = render({
+      layout: [[...spacingFields("getModuleOuterSpacingStyle", { verticalPadding: "padY", horizontalPadding: "padX" })]]
+    });
+    const vp = html.indexOf("Vertical Padding");
+    const hp = html.indexOf("Horizontal Padding");
+    expect(vp).toBeGreaterThanOrEqual(0);
+    expect(hp).toBeGreaterThan(vp);
+    // Nothing invented for keys the module did not declare.
+    expect(html).not.toContain("Vertical Margin");
+    expect(html).not.toContain("Horizontal Margin");
   });
 
   it("renders advanced strips inside a hanging details block", () => {
@@ -139,5 +156,143 @@ describe("BuilderSchemaModuleSettings", () => {
     }, { on: "1" });
     expect(html).toMatch(/<option value="50" selected(="")?>/);
     expect(html).toMatch(/<input type="checkbox" checked/);
+  });
+});
+
+describe("columns by default (D2 — the opt-in that got forgotten)", () => {
+  it("derives side-by-side columns when two or more narrow groups exist", () => {
+    const html = render({
+      content: [[{ key: "a", label: "AMark", width: "text-md", control: "text" }]],
+      layout: [[{ key: "b", label: "BMark", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]]
+    });
+    expect((html.match(/builder-schema-panel-column"/g) ?? []).length).toBe(2);
+    expect(html.indexOf("AMark")).toBeLessThan(html.indexOf("BMark"));
+  });
+
+  it("leaves a lone group full width — nothing to sit beside", () => {
+    const html = render({ content: [[{ key: "a", label: "AMark", width: "text-md", control: "text" }]] });
+    expect(html).not.toContain("builder-schema-panel-columns");
+  });
+
+  it("keeps wide groups (full-width fields, bare blocks) out of the columns", () => {
+    const html = render({
+      content: [[{ key: "a", label: "Wide", width: "full", control: "textarea" }]],
+      layout: [[{ key: "b", label: "Narrow", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]]
+    });
+    // Only one narrow group remains, so no columns are forced on the wide one.
+    expect(html).not.toContain("builder-schema-panel-columns");
+  });
+
+  it("never reorders groups to make columns — a wide group holds its place (E3)", () => {
+    const html = render({
+      content: [[{ key: "a", label: "ContentMark", width: "full", control: "textarea" }]],
+      layout: [[{ key: "b", label: "LayoutMark", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]],
+      style: [[{ key: "c", label: "StyleMark", width: "color", control: "color", dialogLabel: "c" }]]
+    });
+    const order = ["ContentMark", "LayoutMark", "StyleMark"].map((m) => html.indexOf(m));
+    expect(order).toEqual([...order].sort((x, y) => x - y));
+    // layout + style are both narrow and adjacent, so they pair up.
+    expect((html.match(/builder-schema-panel-column"/g) ?? []).length).toBe(2);
+  });
+
+  it("an explicit panelColumns still wins, including an empty opt-out", () => {
+    const schema: BuilderSettingsSchema = {
+      content: [[{ key: "a", label: "AMark", width: "text-md", control: "text" }]],
+      layout: [[{ key: "b", label: "BMark", width: "text-md", control: "text" }]]
+    };
+    expect(render({ ...schema, panelColumns: [] })).not.toContain("builder-schema-panel-columns");
+    expect((render({ ...schema, panelColumns: [["content", "layout"]] }).match(/builder-schema-panel-column"/g) ?? []).length).toBe(1);
+  });
+});
+
+describe("logical axes (D8)", () => {
+  it("renders each axis as a titled column in declaration order", () => {
+    const html = render({
+      axes: [
+        { title: "Structure", strips: [[{ key: "a", label: "StructMark", width: "select-sm", control: "select", options: [{ value: "1", label: "1" }] }]] },
+        { title: "Text", strips: [[{ key: "b", label: "TextMark", width: "num", control: "number", min: 0, max: 9 }]] },
+        { title: "Placement", strips: [[{ key: "c", label: "PlaceMark", width: "align", control: "align", ariaLabel: "a" }]] }
+      ]
+    });
+    expect((html.match(/builder-schema-panel-column"/g) ?? []).length).toBe(3);
+    const order = ["Structure", "Text", "Placement"].map((t) => html.indexOf(t));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(html.indexOf("StructMark")).toBeLessThan(html.indexOf("TextMark"));
+  });
+
+  it("throws on a fifth axis rather than rendering a cramped column", () => {
+    const axis = (title: string) => ({
+      title,
+      strips: [[{ key: title, label: title, width: "num" as const, control: "number" as const, min: 0, max: 9 }]]
+    });
+    expect(() => render({ axes: [axis("A"), axis("B"), axis("C"), axis("D"), axis("E")] })).toThrow(/ceiling is 4/);
+    expect(() => render({ axes: [axis("A"), axis("B"), axis("C"), axis("D")] })).not.toThrow();
+  });
+
+  it("keeps advanced below the axes, full width", () => {
+    const html = render({
+      axes: [{ title: "Structure", strips: [[{ key: "a", label: "StructMark", width: "num", control: "number", min: 0, max: 9 }]] }],
+      advanced: [[{ key: "z", label: "AdvMark", width: "num", control: "number", min: 0, max: 9 }]]
+    });
+    expect(html.indexOf("AdvMark")).toBeGreaterThan(html.indexOf("StructMark"));
+    expect(html).toContain("hanging-details");
+  });
+
+  it("drops an axis whose every field is hidden by visibleWhen", () => {
+    const html = render({
+      axes: [
+        { title: "Structure", strips: [[{ key: "a", label: "StructMark", width: "num", control: "number", min: 0, max: 9 }]] },
+        { title: "Frame", strips: [[{ key: "b", label: "FrameMark", width: "num", control: "number", min: 0, max: 9, visibleWhen: () => false }]] }
+      ]
+    });
+    expect(html).toContain("StructMark");
+    expect(html).not.toContain("FrameMark");
+    expect(html).not.toContain("Frame</div>");
+  });
+});
+
+describe("per-axis Advanced (operator 8/10)", () => {
+  const axis = (title: string, extra: Record<string, unknown> = {}) => ({
+    title,
+    strips: [[{ key: `${title}-basic`, label: `${title}Basic`, width: "num" as const, control: "number" as const, min: 0, max: 9 }]],
+    ...extra
+  });
+
+  it("renders an axis's advanced controls under its own heading", () => {
+    const html = render({
+      axes: [
+        axis("Structure"),
+        axis("Placement", {
+          advanced: [[{ key: "offset", label: "OffsetMark", width: "num", control: "number", min: 0, max: 9 }]]
+        })
+      ]
+    });
+    expect(html).toContain("OffsetMark");
+    // The advanced region carries the Placement heading, not a generic one.
+    const advancedStart = html.indexOf("hanging-details");
+    expect(html.slice(advancedStart)).toContain("Placement");
+    // Structure has no advanced controls, so it contributes no heading there.
+    expect(html.slice(advancedStart)).not.toContain("StructureBasic");
+  });
+
+  it("renders no Advanced region at all when no axis declares one", () => {
+    const html = render({ axes: [axis("Structure"), axis("Text")] });
+    expect(html).not.toContain("hanging-details");
+  });
+
+  it("counts theme overrides across axes in the Advanced summary (A3)", () => {
+    const schema: BuilderSettingsSchema = {
+      axes: [
+        axis("Text", {
+          advanced: [[{ key: "c1", label: "C1", width: "color", control: "theme-color", themeDefault: "#000000", dialogLabel: "c" }]]
+        }),
+        axis("Frame", {
+          advanced: [[{ key: "c2", label: "C2", width: "color", control: "theme-color", themeDefault: "#111111", dialogLabel: "c" }]]
+        })
+      ]
+    };
+    expect(render(schema)).not.toContain("overriding the theme");
+    expect(render(schema, { c1: "#ff0000" })).toContain("1 overriding the theme");
+    expect(render(schema, { c1: "#ff0000", c2: "#00ff00" })).toContain("2 overriding the theme");
   });
 });

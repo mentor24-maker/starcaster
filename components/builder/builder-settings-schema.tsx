@@ -1,11 +1,15 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderAlignmentIconGroup, type BuilderModuleAlignment } from "./builder-alignment-icon-group";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip, type BuilderModuleFieldWidth } from "./builder-module-field";
-import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
+import {
+  BuilderThemeColorControlWithDefault,
+  BuilderThemeColorField,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
 
 /**
  * Declarative settings schema — doctrine §4 prerequisite 3
@@ -59,6 +63,19 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
     | { control: "color"; dialogLabel: string }
     | { control: "align"; ariaLabel: string }
     | { control: "image" }
+    | {
+        /**
+         * A THEME OVERRIDE (master rule A1): empty means "follow the
+         * theme", and the control shows the theme's value with a reset.
+         * These belong in the `advanced` group — the theme should be the
+         * path of least resistance, not something every panel invites you
+         * to override up front.
+         */
+        control: "theme-color";
+        /** The value the theme supplies when this setting is empty. */
+        themeDefault: string;
+        dialogLabel: string;
+      }
     | {
         /**
          * Pick from project data (pages / posts / CRM forms) and store the
@@ -116,11 +133,52 @@ export type BuilderSchemaGroup =
     };
 
 /**
+ * A logical axis — one titled column of related controls (master rule D8,
+ * ratified 2026-08-10). The operator's framing, on Navigation: "the four
+ * columns/axes could be Structure / Text / Orientation / Border".
+ *
+ * Use the canonical titles so a control sits in the same place in every
+ * module — that familiarity is the whole point:
+ *
+ *   Content     what the module shows (text, items, images, links)
+ *   Structure   how it is arranged (layout mode, levels, columns, counts)
+ *   Text        typography — font, size, weight, transform, text colour
+ *   Placement   alignment, padding, margin, offsets
+ *   Frame       border width/radius/colour, shadow
+ *   Behavior    triggers, destinations, params (usually `advanced` instead)
+ *
+ * Four axes is the ceiling; a module that genuinely needs a fifth is a
+ * design question for the operator, so the generator throws rather than
+ * silently rendering a cramped fifth column.
+ */
+export type BuilderSchemaAxis = {
+  title: string;
+  strips: BuilderSchemaStrip[];
+  /**
+   * This axis's Advanced controls — theme overrides (A1) and genuinely
+   * rare settings. They render in the shared Advanced region BELOW the
+   * basic columns, in this axis's own column, so an advanced control
+   * sits under the heading it belongs to (operator 8/10: "all controls
+   * in the Advanced section should fall under the same columns as the
+   * basic settings"). An axis with none contributes no heading.
+   */
+  advanced?: BuilderSchemaStrip[];
+};
+
+export const MAX_AXES = 4;
+
+/**
  * Groups render in doctrine order (E3) no matter how the object is written:
  * content → layout → style → advanced. `advanced` renders inside
  * `<details class="hanging-details">`.
  */
 export type BuilderSettingsSchema = {
+  /**
+   * Logical axes (D8) — each becomes a column, in declaration order.
+   * Supersedes the content/layout/style trio for converted modules;
+   * `advanced` still renders below, full width.
+   */
+  axes?: BuilderSchemaAxis[];
   content?: BuilderSchemaGroup;
   layout?: BuilderSchemaGroup;
   style?: BuilderSchemaGroup;
@@ -132,6 +190,10 @@ export type BuilderSettingsSchema = {
    * render stacked below the columns; `advanced` always renders last,
    * full width. This is the mechanism that restores the operator's 6/28
    * blog-post-list three-column layout.
+   *
+   * Omitted, the generator DERIVES a sensible arrangement (see
+   * derivePanelColumns) — columns are the default, not an opt-in. Pass
+   * `[]` to force the old single-column stack.
    */
   panelColumns?: Array<Array<"content" | "layout" | "style">>;
 };
@@ -145,6 +207,74 @@ function normalizeGroup(group: BuilderSchemaGroup | undefined): { title?: string
   const normalized = Array.isArray(group) ? { strips: group, columns: 1 as const } : { columns: 1 as const, ...group };
   if (!normalized.strips?.length) return null;
   return normalized;
+}
+
+/**
+ * A group is "wide" when squeezing it into a column would hurt: it holds a
+ * `full`-width field (long text, textarea) or a bare custom block (item
+ * managers, notes). Wide groups keep the full panel width; only narrow
+ * groups become columns.
+ */
+function groupIsWide(group: BuilderSchemaGroup | undefined): boolean {
+  const normalized = normalizeGroup(group);
+  if (!normalized) return false;
+  return normalized.strips.some((strip) =>
+    strip.some((field) => field.width === "full" || (field.control === "custom" && field.bare))
+  );
+}
+
+/**
+ * Columns by default (master rule D2 — "no wasted right side").
+ *
+ * Written 2026-08-10 after the operator, looking at a panel that still hugged
+ * the left edge, pointed out the obvious: the layout wave had BUILT the
+ * column capability and then applied it to 8 panels out of 38. An opt-in
+ * layout rule gets forgotten; a default cannot be. Explicit `panelColumns`
+ * still wins, and genuinely wide groups stay full width.
+ */
+type DerivedBlock =
+  | { kind: "columns"; names: Array<"content" | "layout" | "style"> }
+  | { kind: "full"; name: "content" | "layout" | "style" };
+
+function derivePanelBlocks(schema: BuilderSettingsSchema): DerivedBlock[] {
+  const blocks: DerivedBlock[] = [];
+  let run: Array<"content" | "layout" | "style"> = [];
+
+  // Doctrine order is not negotiable (E3): walk content → layout → style and
+  // group CONSECUTIVE narrow groups into a columns row. A wide group flushes
+  // the run and takes the full width in its own place, so nothing is ever
+  // reordered to make columns happen.
+  const flush = () => {
+    if (run.length >= 2) blocks.push({ kind: "columns", names: run });
+    else if (run.length === 1) blocks.push({ kind: "full", name: run[0] });
+    run = [];
+  };
+
+  for (const name of ["content", "layout", "style"] as const) {
+    if (!normalizeGroup(schema[name])) continue;
+    if (groupIsWide(schema[name])) {
+      flush();
+      blocks.push({ kind: "full", name });
+      continue;
+    }
+    run.push(name);
+  }
+  flush();
+
+  return blocks;
+}
+
+
+/**
+ * How many settings in a group are currently overriding the theme — a
+ * theme-override field counts when it holds a value (empty means "follow
+ * the theme"). Drives the Advanced summary badge (master rule A1).
+ */
+export function countThemeOverrides(strips: BuilderSchemaStrip[], settings: SettingsRecord): number {
+  return strips
+    .flat()
+    .filter((field) => field.control === "theme-color" && (settings[field.key] ?? "") !== "")
+    .length;
 }
 
 /** Split strips into N contiguous runs — order reads down each column. */
@@ -165,9 +295,45 @@ function splitIntoColumns(strips: BuilderSchemaStrip[], columns: number): Builde
  */
 export function marginFields(rendersVia: string, max = 80): BuilderSchemaField[] {
   return [
-    { key: "horizontalMargin", label: "H Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia },
-    { key: "verticalMargin", label: "V Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia }
+    { key: "verticalMargin", label: "Vertical Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia },
+    { key: "horizontalMargin", label: "Horizontal Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia }
   ];
+}
+
+/**
+ * The four spacing controls, with the only names they are allowed to have
+ * (master rule W7, operator 8/10): Vertical Margin, Horizontal Margin,
+ * Vertical Padding, Horizontal Padding. Pass only the keys a module
+ * actually honours — a control wired to nothing is a C6 violation.
+ */
+export function spacingFields(
+  rendersVia: string,
+  keys: Partial<{
+    verticalMargin: string;
+    horizontalMargin: string;
+    verticalPadding: string;
+    horizontalPadding: string;
+  }>,
+  max = 160
+): BuilderSchemaField[] {
+  const labels: Record<string, string> = {
+    verticalMargin: "Vertical Margin",
+    horizontalMargin: "Horizontal Margin",
+    verticalPadding: "Vertical Padding",
+    horizontalPadding: "Horizontal Padding"
+  };
+  return (["verticalMargin", "horizontalMargin", "verticalPadding", "horizontalPadding"] as const)
+    .filter((name) => keys[name])
+    .map((name) => ({
+      key: keys[name] as string,
+      label: labels[name],
+      width: "num" as const,
+      control: "number" as const,
+      min: 0,
+      max,
+      fallback: "0",
+      rendersVia
+    }));
 }
 
 function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext): ReactNode {
@@ -246,6 +412,17 @@ function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext
           onChange={(url) => ctx.set(field.key, url)}
         />
       );
+    case "theme-color":
+      return (
+        <BuilderThemeColorControlWithDefault
+          dialogLabel={field.dialogLabel}
+          defaultColor={field.themeDefault}
+          themeColors={ctx.themeColors}
+          hint="theme"
+          value={ctx.settings[field.key] ?? ""}
+          onChange={(next) => ctx.set(field.key, next)}
+        />
+      );
     case "picker":
       return (
         <BuilderProjectDataPicker
@@ -314,9 +491,22 @@ export function BuilderSchemaModuleSettings({
     const group = normalizeGroup(schema[name]);
     if (!group) return null;
     if (name === "advanced") {
+      // Advanced is where THEME OVERRIDES live (master rule A1). It is
+      // collapsed, so an override could hide silently and leave the
+      // operator wondering why a themed restyle skipped this module —
+      // the summary therefore says how many settings are currently
+      // overriding the theme.
+      const overrides = countThemeOverrides(group.strips, ctx.settings);
       return (
-        <details className="hanging-details" key={name}>
-          <summary>{group.title ?? advancedLabel}</summary>
+        <details className="hanging-details builder-schema-advanced" key={name}>
+          <summary>
+            {group.title ?? advancedLabel}
+            {overrides > 0 ? (
+              <span className="builder-schema-override-count">
+                {overrides} overriding the theme
+              </span>
+            ) : null}
+          </summary>
           {renderStrips(group.strips, ctx)}
         </details>
       );
@@ -341,23 +531,119 @@ export function BuilderSchemaModuleSettings({
     );
   }
 
-  const columnNames = schema.panelColumns?.flat() ?? [];
-  const stackedGroups = GROUP_ORDER.filter(
-    (name) => name === "advanced" || !columnNames.includes(name as Exclude<BuilderSchemaGroupName, "advanced">)
-  );
+  // Axes (D8) win when declared: each is a column, in declaration order.
+  if (schema.axes?.length) {
+    if (schema.axes.length > MAX_AXES) {
+      throw new Error(
+        `Settings schema declares ${schema.axes.length} axes (${schema.axes
+          .map((axis) => axis.title)
+          .join(", ")}). The ceiling is ${MAX_AXES} — a fifth axis is a design question for the operator, not a cramped column.`
+      );
+    }
+    const axes = schema.axes;
+    const visibleStrips = (strips: BuilderSchemaStrip[] | undefined) =>
+      (strips ?? []).filter((strip) =>
+        strip.some((field) => !field.visibleWhen || field.visibleWhen(ctx.settings))
+      );
+
+    // The Advanced region uses the SAME column track count as the basic
+    // row, so an advanced control sits under its own axis heading rather
+    // than in a separate full-width block (operator 8/10).
+    const axisCount = axes.length;
+    const advancedByAxis = axes.map((axis) => visibleStrips(axis.advanced));
+    const hasAdvanced = advancedByAxis.some((strips) => strips.length > 0);
+    const overrides = advancedByAxis.reduce(
+      (total, strips) => total + countThemeOverrides(strips, ctx.settings),
+      0
+    );
+    const trackStyle = { "--builder-axis-count": String(axisCount) } as CSSProperties;
+
+    return (
+      <>
+        <div className="builder-schema-panel-columns" style={trackStyle}>
+          {axes.map((axis) => {
+            const visible = visibleStrips(axis.strips);
+            if (!visible.length) return <div className="builder-schema-panel-column" key={axis.title} />;
+            return (
+              <div className="builder-schema-panel-column" key={axis.title}>
+                <div className="builder-schema-group-title">{axis.title}</div>
+                {renderStrips(visible, ctx)}
+              </div>
+            );
+          })}
+        </div>
+
+        {hasAdvanced ? (
+          <details className="hanging-details builder-schema-advanced">
+            <summary>
+              {advancedLabel}
+              {overrides > 0 ? (
+                <span className="builder-schema-override-count">{overrides} overriding the theme</span>
+              ) : null}
+            </summary>
+            <div className="builder-schema-panel-columns" style={trackStyle}>
+              {axes.map((axis, index) => {
+                const strips = advancedByAxis[index];
+                // Only axes WITH advanced controls get a heading; the rest
+                // hold their column position so the grid stays aligned.
+                if (!strips.length) return <div className="builder-schema-panel-column" key={axis.title} />;
+                return (
+                  <div className="builder-schema-panel-column" key={axis.title}>
+                    <div className="builder-schema-group-title">{axis.title}</div>
+                    {renderStrips(strips, ctx)}
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        ) : null}
+
+        {renderGroup("advanced")}
+      </>
+    );
+  }
+
+  function renderColumns(names: Array<"content" | "layout" | "style">, key: string | number) {
+    return (
+      <div className="builder-schema-panel-columns" key={key}>
+        {names.map((name) => (
+          <div className="builder-schema-panel-column" key={name}>
+            {renderGroup(name)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // An explicit panelColumns keeps its documented shape: the named columns
+  // first, then anything unnamed, then advanced.
+  if (schema.panelColumns) {
+    const columnNames = schema.panelColumns.flat();
+    const stacked = GROUP_ORDER.filter(
+      (name) => name === "advanced" || !columnNames.includes(name as Exclude<BuilderSchemaGroupName, "advanced">)
+    );
+    return (
+      <>
+        {schema.panelColumns.length ? (
+          <div className="builder-schema-panel-columns">
+            {schema.panelColumns.map((names, index) => (
+              <div className="builder-schema-panel-column" key={index}>
+                {names.map((name) => renderGroup(name))}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {stacked.map((name) => renderGroup(name))}
+      </>
+    );
+  }
 
   return (
     <>
-      {schema.panelColumns?.length ? (
-        <div className="builder-schema-panel-columns">
-          {schema.panelColumns.map((names, index) => (
-            <div className="builder-schema-panel-column" key={index}>
-              {names.map((name) => renderGroup(name))}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {stackedGroups.map((name) => renderGroup(name))}
+      {derivePanelBlocks(schema).map((block, index) =>
+        block.kind === "columns" ? renderColumns(block.names, index) : renderGroup(block.name)
+      )}
+      {renderGroup("advanced")}
     </>
   );
 }
