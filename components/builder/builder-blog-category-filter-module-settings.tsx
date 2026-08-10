@@ -205,8 +205,11 @@ export function BuilderBlogCategoryFilterModuleSettings({
           key: "targetPageUrl",
           label: "Target Page",
           width: "text-md",
-          control: "text",
-          placeholder: "blank = current page"
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Current page",
+          placeholder: "/blog"
         }
       ]
     ]

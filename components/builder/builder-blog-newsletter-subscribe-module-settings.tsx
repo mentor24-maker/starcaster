@@ -29,9 +29,12 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
       [
         {
           key: "crmFormId",
-          label: "CRM Form ID",
+          label: "CRM Form",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "crm-forms",
+          valueKind: "id",
+          noneLabel: "None",
           placeholder: "Paste Form ID from Builder › CRM"
         },
         {
@@ -59,26 +62,10 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
           render: () => (
             <div className="builder-module-runtime-note">
               <p>
-                Create an email-capture form in <strong>Builder › CRM</strong> and paste the Form ID above.
+                Create an email-capture form in <strong>Builder › CRM</strong> and choose it above.
                 The form's fields, submit label, and success message are configured there.
               </p>
             </div>
-          )
-        }
-      ],
-      [
-        {
-          key: "headline",
-          label: "Headline",
-          width: "full",
-          control: "custom",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.headline ?? "Stay in the loop"}
-              onChange={(e) => set("headline", e.target.value)}
-              placeholder="Stay in the loop"
-            />
           )
         }
       ],

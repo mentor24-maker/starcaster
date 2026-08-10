@@ -172,8 +172,11 @@ export function BuilderBlogPostTagsModuleSettings({
           key: "targetPageUrl",
           label: "Target Page",
           width: "text-md",
-          control: "text",
-          placeholder: "Leave blank for current page",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Current page",
+          placeholder: "/blog",
           rendersVia: "builder-template.ts blog-post-tags renderer",
           visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true"
         }

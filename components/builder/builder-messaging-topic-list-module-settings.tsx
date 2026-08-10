@@ -3,6 +3,7 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
   BuilderThemeColorField,
@@ -139,11 +140,14 @@ export function BuilderMessagingTopicListModuleSettings({
       </BuilderModuleFieldStrip>
 
       <BuilderSettingRow label="Post feed URL" fullWidth>
-        <input
-          type="text"
+        <BuilderProjectDataPicker
+          source="pages"
+          valueKind="path"
           value={s.targetPageUrl ?? ""}
-          onChange={(e) => set("targetPageUrl", e.target.value)}
+          onChange={(targetPageUrl) => set("targetPageUrl", targetPageUrl)}
+          noneLabel="None"
           placeholder="/builder-preview.html?slug=blog"
+          ariaLabel="Post feed URL"
         />
       </BuilderSettingRow>
 

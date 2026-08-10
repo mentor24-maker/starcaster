@@ -34,7 +34,10 @@ export function BuilderBlogSearchResultsModuleSettings({ module, onUpdateModule 
           key: "postPageUrl",
           label: "Post Page URL",
           width: "text-md",
-          control: "text",
+          control: "picker",
+          source: "pages",
+          valueKind: "path",
+          noneLabel: "Default (/blog-post-view)",
           placeholder: "/blog-post-view",
           rendersVia: "BlogSearchResultsPreview"
         },
