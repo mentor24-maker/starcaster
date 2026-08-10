@@ -36,9 +36,14 @@ as a rule first, then gets a checker where one is possible.
 - **L3.** Labels carry **no redundant or unnecessary words** — "Border",
   not "Border thickness in pixels". If a label needs a sentence, the
   control is wrong. *(8/9 example; doctrine E5)* — **[eye]**
-- **L4.** **Never crop a word** — not in a label, a value, an option, or a
-  column heading. Widen the container instead. *(8/9 example; 6/28 "the
-  labels … are all cut off by the fields")* — **[TODO-check]**
+- **L4.** **Never crop a word** — not in a label, an option, or a column
+  heading. Widen the container instead. *(8/9 example; 6/28 "the labels …
+  are all cut off by the fields")* — **[TODO-check]**
+  **Carve-out 8/10:** *data values in table cells* are the one exception,
+  and only there — a cell may truncate at T7 rung 10 provided the full
+  value is one hover or click away. Labels, options and headings keep the
+  absolute rule: a cropped heading is fixed by rewording it (T7 rung 6),
+  never by cutting it off.
 - **L5.** Labels never **overlap** their controls or neighbors. *(6/28
   "Ensure that none of the labels overlap with the forms")* — **[eye]**
 - **L6.** Item-grid columns get **header titles** — and this **applies to
@@ -104,6 +109,9 @@ screen allows.*
 - **W5.** Columns and fields **may expand to avoid wrapping or cropping**
   (L2/L4 outrank W2's uniformity). *(8/9 example "Allow columns to expand
   width to avoid wrapping")* — **[eye]**
+  Scope: settings-panel fields and their label columns. It is **not** a
+  licence to widen a table past the viewport — inside a CRUD, T0 outranks
+  it and the T7 ladder says how to buy the width back.
 - **W6.** A field must never push another field out of view. *(7/1 "Page
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
@@ -159,8 +167,9 @@ is ever wider than the screen.*
   order and **stop at the first rung that makes it fit**. The order is by
   what each step costs the operator: the early rungs cost nothing, the late
   ones cost visibility, and rung 12 is an admission that the earlier rungs
-  were skipped. *(rungs 1, 4, 6 and 9 are the operator's own 8/10 list, in
-  his stated order; the rest fill in around them)* — **[eye]**
+  were skipped. *(rungs 1, 4, 6 and 11 are the operator's own 8/10 list; the
+  rest fill in around them. Ladder ratified 8/10, with truncation moved
+  above wrapping by his ruling.)* — **[eye]**
 
   1. **Cut columns that are not needed.** *(operator step 1)* Costs nothing
      — the column was carrying no decision.
@@ -181,13 +190,18 @@ is ever wider than the screen.*
      precision stays in the tooltip.
   8. **Turn enumerated values into icons or badges** — visibility, status,
      type — each with a tooltip and an accessible label.
-  9. **Wrap, never crop.** *(operator step 4)* A long value takes two lines
-     rather than losing characters. Costs row height, which is cheap;
-     upholds L4.
-  10. **Hide the least important columns at narrow breakpoints**, restoring
-      them when there is room. Costs data on small screens only.
-  11. **Truncate, with the full value one hover or click away** — only once
-      wrapping has already failed. Costs cropped text; see T2.
+  9. **Hide the least important columns at narrow breakpoints**, restoring
+     them when there is room. Costs data on small screens only.
+  10. **Truncate, with the full value one hover or click away.** Costs a
+      cropped line of text and nothing else — the value is still one hover
+      from the operator, which is why this outranks wrapping. The hover is
+      not optional; a truncation with no way to read the rest is a bug.
+      *(operator ruling 8/10)*
+  11. **Wrap onto a second line.** *(operator step 4)* For values that must
+      be readable at a glance rather than on hover. Below truncation
+      deliberately — ragged row heights cost scannability on every row,
+      while truncation costs one hover on the rare long value. *(operator
+      ruling 8/10 moved this from rung 9 to here)*
   12. **Let the table's own container scroll sideways**, with the
       identifier column frozen. The last resort, and never the page body.
 
@@ -211,13 +225,13 @@ is ever wider than the screen.*
   *(8/6 "truncate the slug column so we can fit the whole table on the
   page"; doctrine R1)* — **[auto]** for the scroll container, **[eye]** for
   the rest.
-  **Amended 8/10:** truncation is no longer the first tool for making a
-  table fit — it is rung 11 of the T7 ladder, reached only after wrapping
-  has failed, and always with the full value a hover or click away. The 8/6
-  statement ("truncate the slug column") and the 8/10 statement ("don't
-  truncate text") are reconciled as **wrap before you crop**. *Flagged for
-  operator confirmation — this weakens a recorded rule, which per "How this
-  list grows" needs his explicit ruling.*
+  **Confirmed 8/10:** truncation stands, and it outranks wrapping — it is
+  rung 10 of the T7 ladder, above wrap at 11. The one condition is that the
+  full value stays reachable: *"Truncating is acceptable with the additional
+  hover you suggested."* A truncated cell with no hover or click to the full
+  value is a bug, not a fitted table. This closes the apparent conflict with
+  the 8/10 "don't truncate" step, which the operator resolved in favor of
+  truncate-then-wrap.
 - **T3.** Every CRUD row carries its **full action set** with the standard
   icons — view, edit, delete; no missing verbs. *(7/22 "the whole Saved
   Cells CRUD doesn't have an edit icon")* — **[eye]**
