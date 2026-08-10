@@ -7082,14 +7082,45 @@ button.builder-inline-asset-status-btn:focus-visible {
   color: #ffffff;
 }
 
+/* T0: this CRUD fits the screen. `width: max-content` asked the table to be
+   as wide as its longest single-line row and nothing capped it — with an
+   imported page title of ~100 characters the table rendered 2058px wide at
+   every viewport, 858px of it off-screen at 1280 (measured 2026-08-10). */
+/* `table-layout: fixed` is load-bearing, not cosmetic: with auto layout a
+   column is as wide as its widest cell, so a long page title drags the
+   table past the viewport no matter what max-width says, and the JS
+   clamp below ends up measuring a box whose width depends on the very
+   text it is trying to shorten. Fixed layout decides the columns from
+   these widths alone, so the text is cropped to the column instead of the
+   column stretching to the text. */
 #builderManagePagesPage .builder-pages-crud-table {
-  width: max-content;
-  min-width: 100%;
-  table-layout: auto;
+  width: 100%;
+  table-layout: fixed;
 }
 
+/* Short, single-token values stay on one line; the two long-text columns
+   opt out below and clamp instead (T7 rung 10). */
 #builderManagePagesPage .builder-pages-crud-table th,
 #builderManagePagesPage .builder-pages-crud-table td {
+  white-space: nowrap;
+}
+
+#builderManagePagesPage .builder-pages-crud-table td.builder-pages-col-name,
+#builderManagePagesPage .builder-pages-crud-table td.builder-pages-col-slug {
+  white-space: normal;
+}
+
+/* One line, cropped BETWEEN words — never through one (L4). No
+   `text-overflow: ellipsis` and no `-webkit-line-clamp`: both cut at
+   whatever character lands on the boundary ("Junior Tenni…"). The ellipsis
+   is placed by clampCellTextToBoundary() in public/js/builder.js, which
+   drops whole words until the text fits. The full value stays in `title`,
+   which T7 rung 10 makes mandatory. */
+#builderManagePagesPage .builder-pages-name-text,
+#builderManagePagesPage .builder-pages-slug-link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   white-space: nowrap;
 }
 
@@ -7097,27 +7128,24 @@ button.builder-inline-asset-status-btn:focus-visible {
   width: 2.75rem;
 }
 
+/* Column widths under `table-layout: fixed`. The two long-text columns take
+   percentages so they absorb whatever the screen gives; everything else is
+   sized to its own content once (T7 rung 4) and never grows. */
 #builderManagePagesPage .builder-pages-col-name {
-  min-width: 9rem;
+  width: 30%;
 }
 
 #builderManagePagesPage .builder-pages-col-template {
-  min-width: 8rem;
+  width: 9rem;
 }
 
 #builderManagePagesPage .builder-pages-col-slug {
-  min-width: 7rem;
-  /* Imported pages carry very long slugs — truncate so the table fits the
-     screen; the full slug lives in the link's title tooltip. */
-  max-width: 16rem;
+  /* Imported pages carry very long slugs — cropped between hyphens so the
+     table fits; the full slug lives in the link's title tooltip. */
+  width: 18%;
 }
 
 #builderManagePagesPage .builder-pages-slug-link {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   text-decoration: none;
 }
 
@@ -7125,21 +7153,26 @@ button.builder-inline-asset-status-btn:focus-visible {
   text-decoration: underline;
 }
 
+/* Floor is set by the filter select above the column ("All Visibility"),
+   not by the values below it — at 5.25rem the select's own label cropped
+   (L4). Same reason the template column keeps 8rem. */
 #builderManagePagesPage .builder-pages-col-visibility {
-  min-width: 5.25rem;
+  width: 8rem;
 }
 
 #builderManagePagesPage .builder-pages-col-published {
-  min-width: 4.75rem;
+  width: 5.5rem;
   text-align: center;
 }
 
+/* T7 rung 7 — the value shortened from "8/9/2026, 9:07:50 PM" to "Aug 9,
+   2026"; the exact timestamp moved to the cell's title. */
 #builderManagePagesPage .builder-pages-col-updated {
-  min-width: 12.5rem;
+  width: 7rem;
 }
 
 #builderManagePagesPage .builder-pages-col-actions {
-  min-width: 7.5rem;
+  width: 7.5rem;
 }
 
 #builderManagePagesPage .builder-pages-col-published .standard-form-checkbox {

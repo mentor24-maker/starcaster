@@ -195,9 +195,10 @@
                     <option value="unset">Unset</option>
                   </select>
                 </th>
-                <th></th>
-                <th></th>
-                <th class="builder-pages-bulk-actions-cell">
+                <!-- Spans Published + Updated + Actions: the three bulk
+                     buttons need ~230px and the Actions column is 7.5rem,
+                     so confining them to it pushed the table off-screen. -->
+                <th class="builder-pages-bulk-actions-cell" colspan="3">
                   <div class="table-actions-row builder-pages-bulk-actions-row">
                     <button id="builderPagesBulkPublishBtn" class="btn" type="button" disabled>Publish</button>
                     <button id="builderPagesBulkArchiveBtn" class="btn" type="button" disabled>Archive</button>
