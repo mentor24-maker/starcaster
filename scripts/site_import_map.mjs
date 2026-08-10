@@ -33,6 +33,8 @@
  *   doppler run --config prd -- node scripts/site_import_map.mjs --job <id> --apply
  *   doppler run --config prd -- node scripts/site_import_map.mjs --job <id> --nav [--nav-replace]
  *   ... --force-section <sectionId>   (repeatable)   ... --allow-local
+ *   ... --nav-master <savedSectionId> pin which header master --nav writes
+ *       to (default: the one the most pages reference)
  */
 
 import path from 'node:path';
@@ -112,6 +114,7 @@ const { mapSite, reportReconciles } = require('./lib/site-import/dist/map.js');
 const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
+const NAV_MASTER_ID = flagValue('--nav-master');
 const FORCED_SECTIONS = new Set(flagValues('--force-section'));
 const NO_CARDS_PATHS = flagValues('--no-cards');
 const NO_CARDS_ALL = flag('--no-cards') && NO_CARDS_PATHS.length === 0;
@@ -431,9 +434,40 @@ async function runNav(job, scope, out) {
     return;
   }
   const savedSections = must(await savedSectionsStore.listSavedSections(1000, scope), 'list saved sections');
-  let master = savedSections.find((s) =>
+  // Which master is the SITE actually using? Saved sections list
+  // newest-updated first, so "first one with a nav module" silently picks
+  // a half-built spare over the header every page carries — the write
+  // succeeds, the site does not change, and nothing reports a problem.
+  // Delray had exactly that pair on 2026-08-09. Page references are the
+  // ground truth; the name/order heuristics are only a fresh-import
+  // fallback, when no page references anything yet.
+  const allPages = must(await pagesStore.listPages(5000, scope), 'list pages for nav master');
+  const refCount = new Map();
+  for (const p of allPages) {
+    for (const s of p.layoutSections || []) {
+      if (!s.savedSectionId) continue;
+      refCount.set(s.savedSectionId, (refCount.get(s.savedSectionId) || 0) + 1);
+    }
+  }
+  const navMasters = savedSections.filter((s) =>
     (s.section?.modules || []).some((m) => m.type === 'navigation')
-  ) || savedSections.find((s) => /header/i.test(s.name || ''));
+  );
+  const byUsage = [...navMasters].sort(
+    (a, b) => (refCount.get(b.id) || 0) - (refCount.get(a.id) || 0)
+  );
+  let master;
+  if (NAV_MASTER_ID) {
+    master = savedSections.find((s) => s.id === NAV_MASTER_ID);
+    if (!master) throw new Error(`--nav-master ${NAV_MASTER_ID}: no such saved section in this project.`);
+  } else {
+    master = (refCount.get(byUsage[0]?.id) ? byUsage[0] : null)
+      || navMasters[0]
+      || savedSections.find((s) => /header/i.test(s.name || ''));
+  }
+  if (navMasters.length > 1) {
+    log(`--nav: ${navMasters.length} masters carry a nav module; chose "${master?.name}" (${master?.id}, ${refCount.get(master?.id) || 0} page reference(s)).`);
+    log(`--nav: override with --nav-master <id>. Others: ${navMasters.filter((s) => s.id !== master?.id).map((s) => `${s.name} (${s.id}, ${refCount.get(s.id) || 0} ref)`).join('; ')}`);
+  }
 
   mkdirSync(BACKUP_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');

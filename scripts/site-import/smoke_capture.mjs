@@ -29,12 +29,23 @@ const PAGE = `<!DOCTYPE html>
   body { margin: 0; font-family: Arial, sans-serif; }
   .hero { background-color: rgb(13, 148, 136); padding: 40px; }
   .hero h1 { color: rgb(255, 255, 255); font-size: 40px; }
+  /* Screen-reader-only text: clipped to nothing but still boxed, so only
+     computed style tells it apart from real content. */
+  .sr-clip { position: absolute; clip: rect(1px, 1px, 1px, 1px); }
+  .sr-inset { position: absolute; clip-path: inset(50%); }
+  /* A dropdown submenu, hidden until hover. Must SURVIVE capture — this is
+     the imported site's menu. */
+  .submenu { display: none; }
 </style></head>
 <body>
 <div id="page">
+  <a class="sr-clip" href="#main">Skip to main content</a>
+  <a class="sr-inset" href="#nav">Skip to navigation</a>
   <header><nav><ul>
     <li><a href="/">Home</a></li>
-    <li><a href="/about">About</a></li>
+    <li><a href="/about">About</a>
+      <ul class="submenu"><li><a href="/about/team">Our Team</a></li></ul>
+    </li>
   </ul></nav></header>
   <main>
     <section class="hero">
@@ -147,6 +158,20 @@ try {
   );
   check(!ir.pages[0].sections.some((s) => s.elements.some((e) => e.html.includes('data-scim'))),
     'no data-scim markers in emitted HTML');
+  // Screen-reader-only text keeps its layout box; if it survives capture it
+  // becomes visible body copy once the site's CSS is gone.
+  const allText = elements.map((e) => `${e.text || ''} ${e.html || ''}`).join(' ');
+  for (const hidden of ['Skip to main content', 'Skip to navigation']) {
+    check(!allText.includes(hidden), `screen-reader-only text dropped: "${hidden}"`);
+  }
+  check(allText.includes('Smoke Test Headline'), 'visible text still captured');
+  // display:none is how submenus wait for a hover — dropping it would
+  // delete the imported site's menu, so it must survive.
+  const navItems = ir.taxonomy.navs[0]?.items || [];
+  check(
+    navItems.some((i) => (i.children || []).some((c) => /Our Team/.test(c.label || ''))),
+    'display:none submenu survives capture'
+  );
 } finally {
   await provider.close();
   server.close();

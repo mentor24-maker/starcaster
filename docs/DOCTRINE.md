@@ -298,6 +298,62 @@ Two tests broke on ambient conditions, not on defects:
 
 **Do this:** make such tests skip explicitly, or remove the dependence.
 
+### 5.6 A budgeted crawl must spend its budget on what the site links to
+
+Site Import captured 42 of delraytennis.com's pages and still missed every
+page in the client's own menu. The sitemap was seeded first and a WordPress
+sitemap index lists all 110 blog posts ahead of the 20 real pages, so a
+15-minute browser budget went entirely to posts. The site looked imported;
+every menu item led to "Coming soon" (2026-08-09).
+
+**Do this:** when a budget decides how much of a job gets done, order the
+work by importance before the budget starts spending. A site's own
+navigation is its statement of what matters — capture that first, sitemap
+backlog second.
+
+### 5.7 Only the post-redirect URL can dedupe a page
+
+`/Fees`, `/course/fees/`, and `http://…/contact-us/directions` are three
+distinct URLs a queue cannot merge; the server merges them by redirecting.
+Capturing each one separately imported the same page three times, the
+copies slug-suffixed `-imported`.
+
+**Do this:** dedupe captures on the URL the browser actually landed on
+(`finalUrl`), not the one requested — and check it before doing any work
+that the duplicate would waste.
+
+### 5.8 "First match wins" silently picks the wrong one once there are two
+
+`--nav` wrote the imported menu to "the first saved section with a
+navigation module". Saved sections list newest-updated first, so a
+half-built spare header created that morning outranked the header all 42
+pages actually carried. The write succeeds, the site does not change, and
+nothing reports a problem.
+
+**Do this:** when several records could match, rank by what the system
+actually references (page reference counts), not by list order or name.
+Log the choice and the runners-up, and give the operator an explicit
+override flag.
+
+### 5.9 "Invisible" is a computed style, not a zero-size box
+
+Every imported Delray page opened with "Skip to primary navigation Skip to
+main content". Screen-reader-only text is hidden by *clipping* it, which
+leaves the layout box intact — so the capture's width/height test called it
+visible, and once the import dropped the source CSS it became ordinary body
+copy.
+
+The fix has a sharp edge worth keeping: it drops **only** the clip
+techniques (`clip: rect(1px…)`, `clip-path: inset(50%)`). `display:none`
+and off-screen positioning look equally "invisible" and are how themes park
+dropdown submenus until hover — dropping those would delete the imported
+site's menu. The smoke test asserts both halves: sr-only text goes, a
+`display:none` submenu stays.
+
+**Do this:** when filtering out what a visitor "cannot see", enumerate why
+each thing is hidden. Hidden-forever and hidden-until-interaction are
+opposite cases wearing the same costume.
+
 ---
 
 ## 6. Working in this repo

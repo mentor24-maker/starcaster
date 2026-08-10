@@ -121,6 +121,28 @@ function pageScan(args: PageScanArgs): PageScanResult {
     return r.width > 0 && r.height > 0;
   }
 
+  /**
+   * True for the "sr-only" pattern: text hidden from sighted visitors but
+   * left in the accessibility tree by clipping it to nothing. The element
+   * keeps its layout box, so every geometry test calls it visible, and the
+   * text rides into the import as ordinary body copy once the source CSS
+   * is gone — every imported Delray page opened with "Skip to primary
+   * navigation Skip to main content" (2026-08-09).
+   *
+   * Deliberately ONLY the clip techniques, matched on computed style so it
+   * holds across themes (screen-reader-text, sr-only, visually-hidden,
+   * screen-reader-shortcut…). `display:none` and off-screen positioning
+   * are NOT included: that is how themes park dropdown submenus until
+   * hover, and dropping those would delete the imported site's menu.
+   */
+  function isScreenReaderOnly(el: Element): boolean {
+    const cs = getComputedStyle(el);
+    const clip = (cs.clip || "").replace(/\s+/g, "");
+    if (/^rect\((0(px)?|1px),/.test(clip)) return true;
+    const clipPath = (cs.clipPath || "").replace(/\s+/g, "");
+    return /^inset\((50|100)%/.test(clipPath);
+  }
+
   function elementChildren(el: Element): Element[] {
     const out: Element[] = [];
     for (let i = 0; i < el.children.length; i++) {
@@ -157,6 +179,22 @@ function pageScan(args: PageScanArgs): PageScanResult {
     }
     if (cur !== body) return null;
     return "body/" + segments.join("/");
+  }
+
+  // --- Drop screen-reader-only text ---------------------------------------
+  // Before anything is stamped, pathed, or serialized, so data-scim keys,
+  // domPaths and the emitted HTML all agree. Removing it cannot change a
+  // screenshot: it was clipped to nothing on screen to begin with.
+  {
+    const all = body.querySelectorAll("*");
+    const doomed: Element[] = [];
+    for (let i = 0; i < all.length; i++) {
+      if (isScreenReaderOnly(all[i])) doomed.push(all[i]);
+    }
+    for (let i = 0; i < doomed.length; i++) {
+      const parent = doomed[i].parentNode;
+      if (parent) parent.removeChild(doomed[i]);
+    }
   }
 
   // --- Stamp + styles + fonts (desktop only) ------------------------------
