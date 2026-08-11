@@ -12640,12 +12640,14 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
-  gap: 4px;
-  padding: 8px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(15, 79, 143, 0.12);
-  box-shadow: 0 10px 28px rgba(15, 55, 90, 0.08);
+  /* Same variables the React layer reads (_builder-react.css), so the base
+     and the override can no longer disagree about what a setting does. */
+  gap: var(--site-nav-gap, 4px);
+  padding: var(--site-nav-padding, 8px);
+  border-radius: var(--site-nav-radius, 20px);
+  background: var(--site-nav-bg, rgba(255, 255, 255, 0.82));
+  border: var(--site-nav-border, 1px solid rgba(15, 79, 143, 0.12));
+  box-shadow: var(--site-nav-shadow, 0 10px 28px rgba(15, 55, 90, 0.08));
 }
 
 .site-nav--vertical {
@@ -12833,12 +12835,16 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  min-height: 40px;
+  min-height: var(--site-nav-link-height, 40px);
   padding: var(--site-nav-link-padding, 8px 12px);
   border-radius: var(--site-nav-link-radius, 12px);
   color: var(--site-nav-link-color, #173c61);
-  text-decoration: none;
-  font-weight: 600;
+  font-weight: var(--site-nav-link-weight, 600);
+  font-style: var(--site-nav-link-style, normal);
+  text-transform: var(--site-nav-link-transform, none);
+  letter-spacing: var(--site-nav-link-spacing, 0px);
+  text-decoration: var(--site-nav-link-decoration, none);
+  text-shadow: var(--site-nav-link-text-shadow, none);
   white-space: nowrap;
   box-sizing: border-box;
   transition: background 140ms ease, color 140ms ease, transform 140ms ease;
@@ -12848,7 +12854,11 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
 .site-nav-link:focus-visible {
   background: var(--site-nav-link-hover-bg, #e8f4ff);
   color: var(--site-nav-link-hover-color, #0b82d4);
-  transform: translateY(-1px);
+  text-decoration: var(--site-nav-link-hover-decoration, none);
+}
+
+.site-nav-link-active {
+  color: var(--site-nav-link-active-color, var(--site-nav-link-hover-color, #0b82d4));
 }
 
 .site-nav-submenu-indicator {
@@ -12886,10 +12896,12 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  min-width: 160px;
-  background: var(--site-nav-bg, rgba(255, 255, 255, 0.94));
+  /* Menu Width / Panel Fill / Radius, from the Dropdown section of the
+     module's Structure column. See lib/builder-client/builder-nav-style.ts. */
+  min-width: var(--site-nav-dropdown-width, 160px);
+  background: var(--site-nav-dropdown-bg, rgba(255, 255, 255, 0.94));
   border: 1px solid rgba(9, 16, 24, 0.08);
-  border-radius: 14px;
+  border-radius: var(--site-nav-dropdown-radius, 14px);
   box-shadow: 0 6px 24px rgba(9, 16, 24, 0.12);
   backdrop-filter: blur(12px);
   z-index: 200;
@@ -12910,6 +12922,7 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   justify-content: flex-start;
   padding: 0 12px;
   white-space: nowrap;
+  color: var(--site-nav-dropdown-color, var(--site-nav-link-color, #173c61));
 }
 
 .site-nav--vertical .site-nav-link {

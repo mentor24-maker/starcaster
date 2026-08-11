@@ -1649,6 +1649,53 @@ export function normalizeBuilderModuleSettingsForType(
     if (!settings.menuLocation) settings.menuLocation = "primary";
     if (!settings.navDirection) settings.navDirection = "horizontal";
     if (!settings.navItemSizing) settings.navItemSizing = "auto";
+
+    /*
+     * Style overhaul, 2026-08-11. Three old keys are replaced by keys the
+     * new panel can actually control; each migrates once and only when the
+     * new key is still unset, so an operator's later choice always wins.
+     *
+     * Run on load AND on save, which is what makes it safe to do here: a
+     * page nobody re-saves still renders from migrated values.
+     */
+
+    // "8px 12px" was one text field for two numbers, and only the live site
+    // read it as link padding — the builder applied it to the whole bar.
+    if (settings.navPadding && !settings.navLinkPaddingV && !settings.navLinkPaddingH) {
+      const parts = settings.navPadding.trim().split(/\s+/);
+      const vertical = Number.parseInt(parts[0] ?? "", 10);
+      const horizontal = Number.parseInt(parts[1] ?? parts[0] ?? "", 10);
+      if (Number.isFinite(vertical)) {
+        settings.navLinkPaddingV = normalizeSpacingValue(String(vertical), "0", 0, 40);
+      }
+      if (Number.isFinite(horizontal)) {
+        settings.navLinkPaddingH = normalizeSpacingValue(String(horizontal), "14", 0, 60);
+      }
+    }
+    delete settings.navPadding;
+
+    // Bold never reached a link — `.site-nav-link` hardcoded font-weight 700
+    // over it. Anyone who ticked it got what they wanted anyway; anyone who
+    // unticked it kept bold links. Weight honours both answers from now on.
+    if (settings.navBold !== undefined && !settings.navWeight) {
+      settings.navWeight = settings.navBold === "true" ? "700" : "500";
+    }
+    delete settings.navBold;
+
+    // The nav had its own margin pair alongside the module's, both live, both
+    // labelled "Vertical Margin". One survives, and it is the standard key
+    // every other module uses (doctrine W7/E4).
+    if (settings.navMarginV && !settings.verticalMargin) {
+      settings.verticalMargin = normalizeSpacingValue(settings.navMarginV, "0", 0, 160);
+    }
+    if (settings.navMarginH && !settings.horizontalMargin) {
+      settings.horizontalMargin = normalizeSpacingValue(settings.navMarginH, "0", 0, 160);
+    }
+    delete settings.navMarginV;
+    delete settings.navMarginH;
+
+    settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
+    settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
   }
 
   if (type === "image") {
