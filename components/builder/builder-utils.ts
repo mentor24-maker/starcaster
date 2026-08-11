@@ -287,6 +287,38 @@ export function getTextModuleWidthStyle(settings: Record<string, string>): CSSPr
   };
 }
 
+/**
+ * Type styling for the Simple Text module (the `plain` text variant).
+ *
+ * Every property is omitted unless the operator set it, so an untouched
+ * Simple Text block keeps inheriting size, colour, and weight from the section
+ * it sits in — which is the behaviour the module shipped with, and what makes
+ * it sit flush. Setting one is an opt-in override, exactly like the heading's
+ * theme-colour field.
+ *
+ * Deliberately a subset of `getHeadingModuleStyle`'s vocabulary, using the
+ * same setting keys, so the two editors read the same way.
+ */
+export function getPlainTextModuleStyle(settings: Record<string, string>): CSSProperties | undefined {
+  const fontSize = Number.parseInt(settings.fontSize ?? "", 10);
+  const fontWeight = Number.parseInt(settings.fontWeight ?? "", 10);
+  const lineHeight = Number.parseFloat(settings.lineHeight ?? "");
+  const letterSpacing = Number.parseFloat(settings.letterSpacing ?? "");
+  const color = settings.color || undefined;
+
+  const style: CSSProperties = {
+    ...(color ? { color } : {}),
+    ...(Number.isFinite(fontSize) && fontSize > 0 ? { fontSize: `${fontSize}px` } : {}),
+    ...(Number.isFinite(fontWeight) && fontWeight > 0 ? { fontWeight } : {}),
+    ...(Number.isFinite(lineHeight) && lineHeight > 0 ? { lineHeight } : {}),
+    // 0 is a real value here — it removes inherited tracking — so this one
+    // checks only that the number parsed.
+    ...(Number.isFinite(letterSpacing) ? { letterSpacing: `${letterSpacing}px` } : {})
+  };
+
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
 export function getImageModuleStyle(settings: Record<string, string>): CSSProperties {
   const borderThickness = Number.parseInt(settings.borderThickness ?? "0", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "18", 10);

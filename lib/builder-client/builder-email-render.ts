@@ -14,6 +14,7 @@ import {
   getHeadingModuleStyle,
   getModuleAlignment,
   getModuleMarginStyle,
+  getPlainTextModuleStyle,
   getSectionMarginStyle
 } from "@/components/builder/builder-utils";
 import { applyAuthEmailMergeFields, type AuthEmailMergeContext } from "@/lib/supabase-auth-email";
@@ -94,11 +95,17 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // Standard 11, decided 2026-08-11: Simple Text renders in email. It is
     // plain copy in a table cell — the only difference from Paragraph is the
     // missing <p>, and every mail client handles a bare text node with <br>.
-    const html = isPlainTextVariant(module.settings)
+    const isPlainText = isPlainTextVariant(module.settings);
+    const html = isPlainText
       ? formatEmailPlainTextContent(module.text)
       : formatEmailRichTextContent(module.text);
 
-    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#3d5a73;${marginStyle}">${html}</td></tr>`;
+    // Standard 13: Simple Text's type overrides are honoured here too, or the
+    // controls would silently do nothing in email. They come last so they win
+    // over the cell's defaults, and an unset override emits nothing at all.
+    const typeStyle = isPlainText ? cssPropertiesToInline(getPlainTextModuleStyle(module.settings)) : "";
+
+    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#3d5a73;${marginStyle}${typeStyle ? `${typeStyle};` : ""}">${html}</td></tr>`;
   }
 
   if (module.type === "speech-bubble") {

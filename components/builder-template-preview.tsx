@@ -82,6 +82,7 @@ import {
   getSectionWidthStyle,
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
+  getPlainTextModuleStyle,
   getTextModuleWidthStyle,
   getVerticalMarginStyle,
   getVideoEmbedSource,
@@ -1665,15 +1666,20 @@ function BuilderModulePreview({
 
   if (module.type === "text") {
     // Simple Text keeps every other text-module behaviour (alignment, width,
-    // background) and changes only how the copy itself is turned into HTML.
-    const html = isPlainTextVariant(module.settings)
+    // background) and changes only how the copy itself is turned into HTML —
+    // plus the type overrides, which are its own since it has no type scale.
+    const isPlainText = isPlainTextVariant(module.settings);
+    const html = isPlainText
       ? formatPlainTextContent(module.text)
       : formatRichTextContent(module.text);
 
     return (
       <div
         className={`builder-preview-text builder-preview-text-${variant || "default"}`}
-        style={getTextModuleWidthStyle(module.settings)}
+        style={{
+          ...getTextModuleWidthStyle(module.settings),
+          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+        }}
         dangerouslySetInnerHTML={{ __html: html || "" }}
       />
     );

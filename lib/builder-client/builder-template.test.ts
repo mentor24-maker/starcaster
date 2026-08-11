@@ -124,6 +124,23 @@ describe("formatPlainTextContent", () => {
     expect(html).toContain("<em>line</em>");
   });
 
+  it("lets typed character entities through", () => {
+    // Regression: escaping every `&` turned a typed &nbsp; into the six
+    // literal characters on the page. Reported 2026-08-11 — entities are the
+    // only way to type a space HTML will not collapse.
+    const html = formatPlainTextContent("Wide&nbsp;&nbsp;&nbsp;gap");
+    expect(html).not.toContain("&amp;nbsp;");
+    // DOMPurify may re-serialize the entity or emit the character itself;
+    // either one renders as a space, and neither is the literal text.
+    expect(/&nbsp;| /.test(html)).toBe(true);
+    expect(formatPlainTextContent("Ten&#8212;dash")).not.toContain("&amp;#8212;");
+  });
+
+  it("still escapes a bare ampersand", () => {
+    expect(formatPlainTextContent("Salt & Pepper")).toContain("&amp;");
+    expect(formatPlainTextContent("Tom & Jerry & Co")).not.toContain("&amp;amp;");
+  });
+
   it("leaves block-level markup to lay itself out", () => {
     const html = formatPlainTextContent("<h3>Title</h3>\n<div>Body</div>");
     expect(html.toLowerCase()).not.toContain("<br");

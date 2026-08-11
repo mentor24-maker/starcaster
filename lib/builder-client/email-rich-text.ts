@@ -46,6 +46,9 @@ export function formatEmailRichTextContent(value: unknown): string {
 const BLOCK_LEVEL_TAG =
   /<\s*(p|div|h[1-6]|ul|ol|li|dl|blockquote|pre|table|thead|tbody|tr|td|th|section|article|aside|header|footer|figure|figcaption|hr)\b/i;
 
+/** See `escapePlainTextPreservingEntities` in builder-template.ts. */
+const BARE_AMPERSAND = /&(?!#\d+;|#x[0-9a-fA-F]+;|[a-zA-Z][a-zA-Z0-9]{1,31};)/g;
+
 export function formatEmailPlainTextContent(value: unknown): string {
   const text = String(value ?? "").trim();
 
@@ -53,7 +56,9 @@ export function formatEmailPlainTextContent(value: unknown): string {
     return "";
   }
 
-  const escaped = looksLikeHtml(text) ? text : escapeHtmlText(text);
+  const escaped = looksLikeHtml(text)
+    ? text
+    : text.replace(BARE_AMPERSAND, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const html = BLOCK_LEVEL_TAG.test(text) ? escaped : escaped.replace(/\n/g, "<br />");
 
   return stripDangerousEmailHtml(html);
