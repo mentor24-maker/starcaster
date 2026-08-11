@@ -192,6 +192,34 @@ export function BuilderSectionControls({
             }
           />
         </BuilderSettingRow>
+        <BuilderSettingRow label="Top Padding">
+          <BuilderNumberSelectControl
+            value={section.paddingTop ?? "18"}
+            min={0}
+            max={160}
+            fallback="18"
+            onChange={(paddingTop) =>
+              onUpdateSection((current) => ({
+                ...current,
+                paddingTop
+              }))
+            }
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Bottom Padding">
+          <BuilderNumberSelectControl
+            value={section.paddingBottom ?? "18"}
+            min={0}
+            max={160}
+            fallback="18"
+            onChange={(paddingBottom) =>
+              onUpdateSection((current) => ({
+                ...current,
+                paddingBottom
+              }))
+            }
+          />
+        </BuilderSettingRow>
         <BuilderSettingRow label="Border Width">
           <BuilderNumberSelectControl
             value={section.rowBorderWidth ?? "0"}

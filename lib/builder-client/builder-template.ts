@@ -227,6 +227,13 @@ export type BuilderThemeTypography = {
     topMargin?: number;
     bottomMargin?: number;
     sideMargins?: number;
+    /**
+     * Site-wide reading width. Every row centres its CONTENT to this many
+     * pixels while its background still spans edge to edge, so a contact
+     * strip, a header and a hero all start at the same left edge without
+     * anyone hand-matching cell padding row by row. 0 = off (full bleed).
+     */
+    contentWidth?: number;
   };
   /** Role palette storage home (see BuilderThemePalette) — no DB column needed. */
   palette?: BuilderThemePalette;
@@ -419,6 +426,14 @@ export type BuilderTemplateSection = {
   alignment: "left" | "center" | "right";
   marginTop: string;
   marginBottom: string;
+  /**
+   * Breathing room INSIDE the row, above and below its columns — the space
+   * that used to be a hard-coded 18px in CSS with no way to reach it, which
+   * is why every band (a contact strip especially) rendered far taller than
+   * its own text. Defaults to "18" so untouched rows do not move.
+   */
+  paddingTop: string;
+  paddingBottom: string;
   rowBorderWidth: string;
   rowBorderColor: string;
   rowBorderStyle: string;
@@ -2039,6 +2054,8 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
           0,
           160
         ),
+        paddingTop: normalizeSpacingValue(normalizedSection.paddingTop, "18", 0, 160),
+        paddingBottom: normalizeSpacingValue(normalizedSection.paddingBottom, "18", 0, 160),
         rowBorderWidth: normalizeSpacingValue(normalizedSection.rowBorderWidth, "0", 0, 20),
         rowBorderColor: normalizeBuilderHexColor(
           typeof normalizedSection.rowBorderColor === "string" ? normalizedSection.rowBorderColor : ""
@@ -2108,6 +2125,8 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     alignment: "left",
     marginTop: "0",
     marginBottom: "0",
+    paddingTop: "18",
+    paddingBottom: "18",
     rowBorderWidth: "0",
     rowBorderColor: "#000000",
     rowBorderStyle: "solid",

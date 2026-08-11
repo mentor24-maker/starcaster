@@ -245,8 +245,12 @@
   min-height: 240px;
 }
 
+/* The floor keeps an EMPTY row big enough to aim a module at. A row that
+   already holds something sizes to what it holds — the preview publishes
+   --builder-section-min-height: 0 once modules are present. Left on, it
+   forced a one-line contact strip to 56px of content box plus padding. */
 .builder-preview-section {
-  min-height: 56px;
+  min-height: var(--builder-section-min-height, 56px);
 }
 
 @media (max-width: 1100px) {

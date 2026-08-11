@@ -38,6 +38,7 @@ type DevelopThemeRecord = {
   topMargin: number;
   bottomMargin: number;
   sideMargins: number;
+  contentWidth: number;
   logoWideId: string;
   logoSquareId: string;
   featureImageId: string;
@@ -74,6 +75,7 @@ function defaultDraft(): DevelopThemeRecord {
     topMargin: 0,
     bottomMargin: 0,
     sideMargins: 0,
+    contentWidth: 0,
     logoWideId: "",
     logoSquareId: "",
     featureImageId: "",
@@ -117,6 +119,7 @@ function buildPayload(draft: DevelopThemeRecord) {
     topMargin: draft.topMargin,
     bottomMargin: draft.bottomMargin,
     sideMargins: draft.sideMargins,
+    contentWidth: draft.contentWidth,
     logoWideId: draft.logoWideId,
     logoSquareId: draft.logoSquareId,
     featureImageId: draft.featureImageId,
@@ -139,6 +142,9 @@ function buildPayload(draft: DevelopThemeRecord) {
         topMargin: draft.topMargin,
         bottomMargin: draft.bottomMargin,
         sideMargins: draft.sideMargins,
+        // No DB column for this one — the typography JSON is its only home,
+        // so dropping it from this payload is how it would get erased.
+        contentWidth: draft.contentWidth,
       },
     },
   };
@@ -232,6 +238,9 @@ export function BuilderThemesPage() {
       found
         ? {
             ...found,
+            // Themes saved before Content Width existed come back without the
+            // key; the slider is controlled, so undefined would break it.
+            contentWidth: Number(found.contentWidth) || 0,
             stylesPageBackground: themeStylesPageBackgroundFromRecord(found),
             typography: found.typography ?? { ...DEFAULT_TYPOGRAPHY },
           }
@@ -270,6 +279,7 @@ export function BuilderThemesPage() {
       const savedStyles = themeStylesPageBackgroundFromRecord(saved);
       setDraft({
         ...saved,
+        contentWidth: Number(saved.contentWidth) || 0,
         stylesPageBackground:
           savedStyles.mode !== "none"
             ? savedStyles
@@ -481,6 +491,19 @@ export function BuilderThemesPage() {
               max={80}
               onChange={(v) => updateDraft({ sideMargins: v })}
             />
+            <SliderRow
+              label="Content Width"
+              value={draft.contentWidth}
+              min={0}
+              max={1600}
+              step={20}
+              onChange={(v) => updateDraft({ contentWidth: v })}
+            />
+            <p className="builder-themes-slider-note">
+              0 = off. Any other number centres every row&rsquo;s content to that many
+              pixels wide, while row backgrounds still run edge to edge — so the
+              contact strip, the header and the hero all start on the same left edge.
+            </p>
             <SliderRow
               label="Border thickness"
               value={draft.borderThickness}
