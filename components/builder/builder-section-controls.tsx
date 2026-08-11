@@ -11,6 +11,8 @@ import { BuilderThemeColorField } from "./builder-theme-color-field";
 type BuilderSectionControlsProps = {
   section: BuilderTemplateSection;
   editorDevice: "browser" | "mobile";
+  /** False for the very first row, which has nothing above it to join. */
+  canJoinPrevious?: boolean;
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onOpenSectionBackgroundGallery?: () => void;
   onUploadSectionBackgroundMedia?: (file: File | null) => void;
@@ -29,6 +31,7 @@ function updateSectionBackground(
 export function BuilderSectionControls({
   section,
   editorDevice,
+  canJoinPrevious = false,
   onUpdateSection,
   onOpenSectionBackgroundGallery,
   onUploadSectionBackgroundMedia,
@@ -117,6 +120,23 @@ export function BuilderSectionControls({
             <option value="50">50% (centered)</option>
           </select>
         </BuilderSettingRow>
+        {canJoinPrevious ? (
+          <BuilderSettingRow label="Share background" fullWidth>
+            <label className="builder-join-previous-toggle">
+              <input
+                type="checkbox"
+                checked={section.joinWithPrevious === true}
+                onChange={(event) =>
+                  onUpdateSection((current) => ({ ...current, joinWithPrevious: event.target.checked }))
+                }
+              />
+              <span>
+                Share the background of the row above — one image or colour spans both rows.
+                This row&rsquo;s own background is set aside while this is ticked.
+              </span>
+            </label>
+          </BuilderSettingRow>
+        ) : null}
         <BuilderSettingRow label="Alignment">
           <select
             value={section.alignment}

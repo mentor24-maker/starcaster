@@ -2150,3 +2150,42 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: inherit;
   line-height: inherit;
 }
+
+/*
+ * Joined rows — one background across several rows.
+ *
+ * A row with "Share background" ticked renders inside a wrapper together with
+ * the run above it, and the wrapper carries that run's background. That is the
+ * whole trick: the image belongs to the group, not to any one row, so it spans
+ * all of them with no seam. The wrapper stacks its rows on the same 18px
+ * rhythm .builder-preview-shell-content uses between ordinary rows.
+ */
+.builder-react-root .builder-preview-joined-rows {
+  display: grid;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/*
+ * The tick reads as a sentence rather than a bare control, so it sits beside
+ * wrapping explanatory text instead of inside the settings grid's narrow
+ * value column.
+ */
+.builder-react-root .builder-join-previous-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.builder-react-root .builder-join-previous-toggle input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}

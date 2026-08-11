@@ -495,6 +495,7 @@ export function BuilderSectionCard({
         <>
           <BuilderSectionControls
             section={section}
+            canJoinPrevious={sectionIndex > 0}
             editorDevice={editorDevice}
             onUpdateSection={onUpdateSection}
             onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}

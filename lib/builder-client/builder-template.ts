@@ -409,6 +409,13 @@ export type BuilderTemplateSection = {
    * when widthMode is "full-width", which spans edge to edge.
    */
   widthPercent: string;
+  /**
+   * When true, this row joins the run of rows above it: the group renders
+   * inside one wrapper that carries the FIRST row's background, so a single
+   * image can span several rows. The joined row's own background is ignored
+   * while it is joined — unjoin it and the background comes straight back.
+   */
+  joinWithPrevious: boolean;
   alignment: "left" | "center" | "right";
   marginTop: string;
   marginBottom: string;
@@ -1964,6 +1971,8 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         widthPercent: normalizeSpacingValue(normalizedSection.widthPercent, "100", 25, 100),
         locked: normalizedSection.locked === true,
         isPrivate: normalizedSection.isPrivate === true,
+        // The first row can never join upward — there is nothing above it.
+        joinWithPrevious: sectionIndex > 0 && normalizedSection.joinWithPrevious === true,
         alignment: normalizeAlignment(normalizedSection.alignment),
         marginTop: normalizeSpacingValue(
           normalizedSection.marginTop ?? normalizedSection.verticalMargin,
@@ -2010,12 +2019,36 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
     .filter((section): section is BuilderTemplateSection => Boolean(section));
 }
 
+/**
+ * Split rows into the runs that share one background. A row with
+ * `joinWithPrevious` extends the run above it; every other row starts a new
+ * one. A run of one is the ordinary case — a row standing on its own — so
+ * callers can render every group the same way.
+ */
+export function groupJoinedSections(sections: BuilderTemplateSection[]): BuilderTemplateSection[][] {
+  const groups: BuilderTemplateSection[][] = [];
+
+  sections.forEach((section) => {
+    const openGroup = groups[groups.length - 1];
+
+    if (section.joinWithPrevious && openGroup) {
+      openGroup.push(section);
+      return;
+    }
+
+    groups.push([section]);
+  });
+
+  return groups;
+}
+
 export function createEmptySection(layout: BuilderTemplateLayout = "single"): BuilderTemplateSection {
   return {
     id: createLocalId("section"),
     title: "",
     locked: false,
     isPrivate: false,
+    joinWithPrevious: false,
     layout,
     widthMode: "contained",
     widthPercent: "100",

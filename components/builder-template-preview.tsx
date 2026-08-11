@@ -6,11 +6,13 @@ import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
+  createDefaultBackgroundSettings,
   formatPlainTextContent,
   formatRichTextContent,
   getBuilderBackgroundStyle,
   getLayoutColumns,
   getLayoutGridTemplate,
+  groupJoinedSections,
   isPlainTextVariant,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
@@ -1274,6 +1276,54 @@ export function BuilderTemplatePreview({
     }
   }
 
+  /**
+   * Rows joined to the one above render inside a single wrapper that carries
+   * the first row's background, which is how one image spans several rows.
+   * Members drop their own background and stop bleeding edge to edge on their
+   * own — the wrapper does both for the whole group — but keep every other
+   * setting, so a joined row still has its own layout, width and margins.
+   */
+  const renderMainSection = (section: BuilderTemplateSection, joined: boolean) => (
+    <BuilderSectionPreview
+      bandRole={joined ? undefined : sectionBandRoles.get(section.id)}
+      emailPreview={emailPreview}
+      heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
+      heroOverlay={themeTreatments?.heroOverlay}
+      heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
+      key={section.id}
+      overlapsHero={overlapSectionIds.has(section.id)}
+      previewMode={previewMode}
+      section={
+        joined
+          ? { ...section, background: createDefaultBackgroundSettings(), widthMode: "contained" }
+          : section
+      }
+      sitePlayerRegistered={sitePlayerRegistered}
+      theme={theme}
+      themePalette={themePalette}
+    />
+  );
+
+  const mainSectionNodes = groupJoinedSections(mainSections).map((group) => {
+    const [lead] = group;
+
+    if (group.length === 1) {
+      return renderMainSection(lead, false);
+    }
+
+    return (
+      <div
+        className={`builder-preview-joined-rows${
+          lead.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
+        }`}
+        key={`joined-${lead.id}`}
+        style={getBuilderBackgroundStyle(lead.background)}
+      >
+        {group.map((section) => renderMainSection(section, true))}
+      </div>
+    );
+  });
+
   return (
     <div
       className={
@@ -1311,40 +1361,10 @@ export function BuilderTemplatePreview({
       ) : null}
       {contentClassName ? (
         <div className={contentClassName} style={themeMarginStyle}>
-          {mainSections.map((section) => (
-            <BuilderSectionPreview
-              bandRole={sectionBandRoles.get(section.id)}
-              emailPreview={emailPreview}
-              heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
-              heroOverlay={themeTreatments?.heroOverlay}
-              heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
-              key={section.id}
-              overlapsHero={overlapSectionIds.has(section.id)}
-              previewMode={previewMode}
-              section={section}
-              sitePlayerRegistered={sitePlayerRegistered}
-              theme={theme}
-              themePalette={themePalette}
-            />
-          ))}
+          {mainSectionNodes}
         </div>
       ) : (
-        mainSections.map((section) => (
-          <BuilderSectionPreview
-            bandRole={sectionBandRoles.get(section.id)}
-            emailPreview={emailPreview}
-            heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
-            heroOverlay={themeTreatments?.heroOverlay}
-            heroOverlayOpacity={themeTreatments?.heroOverlayOpacity}
-            key={section.id}
-            overlapsHero={overlapSectionIds.has(section.id)}
-            previewMode={previewMode}
-            section={section}
-            sitePlayerRegistered={sitePlayerRegistered}
-            theme={theme}
-            themePalette={themePalette}
-          />
-        ))
+        mainSectionNodes
       )}
       {shellClassName ? <GameModuleOverlayHosts /> : null}
       {shellClassName ? <BuilderReminderRuntime layoutSections={layoutSections} /> : null}
