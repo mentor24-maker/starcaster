@@ -5135,6 +5135,13 @@ App.builder = (function () {
     { value: 'navigation', label: 'Navigation', fieldKey: null },
   ];
 
+  /**
+   * This editor's grid is six spans wide, so it cannot express the quarters
+   * and fifths the React builder now offers. Each of those maps to the
+   * nearest legacy row WITH THE SAME COLUMN COUNT — count is what matters,
+   * because a three-column section resolved to a two-column legacy row
+   * drops its centre column's modules on the floor.
+   */
   const NORMIE_LAYOUT_TO_LEGACY = {
     single: '6',
     banner: '6',
@@ -5146,6 +5153,18 @@ App.builder = (function () {
     'two-four': '2-4',
     'one-five': '1-5',
     'five-one': '5-1',
+    // Two columns, no exact sixths equivalent.
+    'one-three': '2-4',
+    'three-one': '4-2',
+    'two-three': '2-4',
+    'three-two': '4-2',
+    // Three columns.
+    'one-two-one': '1-4-1',
+    'one-three-one': '1-4-1',
+    'two-one-one': '2-2-2',
+    'one-one-two': '2-2-2',
+    'three-one-one': '2-2-2',
+    'one-one-three': '2-2-2',
   };
 
   const LEGACY_TO_NORMIE_LAYOUT = {
@@ -5419,18 +5438,12 @@ App.builder = (function () {
 
   function getModularPageLayoutMeta(layout) {
     const normalized = safeText(layout).toLowerCase();
+    // NORMIE_LAYOUT_TO_LEGACY carries every React layout; this adds only the
+    // aliases that never had a React name. Two copies of the same table is
+    // how `one-four-one` ends up correct in one place and not the other.
     const legacyMap = {
-      banner: '6',
-      single: '6',
+      ...NORMIE_LAYOUT_TO_LEGACY,
       'hero-form-right': '4-2',
-      'hero-split': '4-2',
-      'two-column': '3-3',
-      'three-column': '2-2-2',
-      'one-four-one': '1-4-1',
-      'four-two': '4-2',
-      'two-four': '2-4',
-      'one-five': '1-5',
-      'five-one': '5-1',
       'feature-grid-2': '3-3',
     };
     const resolved = legacyMap[normalized] || normalized;

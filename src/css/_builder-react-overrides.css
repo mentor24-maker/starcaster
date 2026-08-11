@@ -2086,3 +2086,52 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding-bottom: 0;
   border-bottom: 0;
 }
+
+/* ============================================================== */
+/* ROW LAYOUT TILES — the icon must show the layout it adds        */
+/* ============================================================== */
+/*
+ * legacy.css is imported after _builder-react.css, and its unscoped
+ * `.builder-layout-tile { justify-items: center; align-items: center }`
+ * (written for the vanilla builder's toolbar) also matched the React
+ * tiles. Nothing in the React layer sets those properties, so they won
+ * by default — the icon, a grid item whose tracks are empty `fr` units,
+ * collapsed to zero width. Every tile then rendered as the same narrow
+ * vertical pill: the icon's own rounded border, squeezed shut, with the
+ * bars invisible inside it. Seven different layouts, one identical
+ * picture. Stretch the icon back out and the inline
+ * grid-template-columns (`2fr 4fr`, `1fr 4fr 1fr`, …) draws itself.
+ */
+.builder-react-root .builder-layout-tile {
+  justify-items: stretch !important;
+  align-items: stretch !important;
+}
+
+.builder-react-root .builder-layout-icon {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.builder-react-root .builder-layout-bar {
+  min-width: 0 !important;
+}
+
+/*
+ * The tile row was pinned to `repeat(7, …)` — exactly the number of
+ * layouts that existed the day it was written, so the eighth wrapped
+ * onto a row of its own. Fit to the available width instead, which
+ * holds as the layout set grows.
+ */
+.builder-react-root .builder-layout-toolbar {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)) !important;
+}
+
+/*
+ * The Saved Section picker shares the tile row's grid. With a fixed
+ * seven-column track list it fell to a row of its own by accident; on an
+ * auto-fit track list it lands in whatever slot is left over and gets
+ * squeezed. Give it the whole row explicitly.
+ */
+.builder-react-root .builder-layout-toolbar > .builder-saved-section-group {
+  grid-column: 1 / -1 !important;
+}
