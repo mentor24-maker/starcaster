@@ -7,6 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PORTABLE_BUILD_ARGS } from './esbuild-common.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -22,6 +23,7 @@ const args = [
   `--tsconfig=${path.join(root, 'tsconfig.json')}`,
   `--alias:@/lib/current-poll-module=${path.join(root, 'lib/builder/current-poll-stub.js')}`,
   `--alias:@/lib/builder-asset-url=${path.join(root, 'lib/builder/asset-url-stub.js')}`,
+  ...PORTABLE_BUILD_ARGS,
 ];
 
 execFileSync('npx', ['esbuild', ...args], { stdio: 'inherit', cwd: root });

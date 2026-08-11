@@ -27,10 +27,12 @@ runSync('npm', ['run', 'build:html']);
 console.log('[dev] Building builder bundle…');
 runSync('npm', ['run', 'build:builder']);
 
+// Each build script owns its own esbuild args — see scripts/esbuild-common.mjs
+// for why watch mode must not respell them here.
 const watchers = [
-  ['npx', ['esbuild', 'react-entry.js', '--bundle', '--outfile=public/bundle.js', '--loader:.js=jsx', '--watch']],
+  ['node', ['scripts/build_app_bundle.mjs', '--watch']],
   ['node', ['scripts/build_builder_bundle.mjs', '--watch']],
-  ['npx', ['esbuild', 'src/css/main.css', '--bundle', '--outfile=public/styles.css', '--watch']],
+  ['node', ['scripts/build_styles.mjs', '--watch']],
   ['node', ['scripts/pin_asset_versions.cjs', '--watch']],
 ];
 

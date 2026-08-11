@@ -21,10 +21,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** [label, command, args] — each writes one hash-pinned artifact. */
+/**
+ * [label, command, args] — each writes one hash-pinned artifact.
+ *
+ * Every entry delegates to the one script that owns that artifact's esbuild
+ * args. Spelling the args out here as well is how they drift: the flag that
+ * keeps a build reproducible across worktrees (see scripts/esbuild-common.mjs)
+ * would land in one copy and not the other, and the mismatch only surfaces in
+ * CI, on files the change never touched.
+ */
 const BUILDS = [
-  ['styles.css', 'npx', ['esbuild', 'src/css/main.css', '--bundle', '--outfile=public/styles.css']],
-  ['bundle.js', 'npx', ['esbuild', 'react-entry.js', '--bundle', '--outfile=public/bundle.js', '--loader:.js=jsx']],
+  ['styles.css', 'node', ['scripts/build_styles.mjs']],
+  ['bundle.js', 'node', ['scripts/build_app_bundle.mjs']],
   ['builder-bundle.js', 'node', ['scripts/build_builder_bundle.mjs']],
   ['js/richtext-vendor.js', 'node', ['scripts/build_richtext_bundle.mjs']],
 ];
