@@ -82,10 +82,27 @@ describe("the control that turns joining on", () => {
     const html = renderControls(true);
 
     expect(html).toContain("Share background");
-    expect(html).toContain("builder-join-previous-toggle");
   });
 
   it("hides it on the first row, which has nothing above it to share with", () => {
-    expect(renderControls(false)).not.toContain("builder-join-previous-toggle");
+    expect(renderControls(false)).not.toContain("Share background");
+  });
+
+  /**
+   * The label/checkbox pair has to look like every other setting in this
+   * panel. The first attempt wrapped the checkbox in a full-width label with
+   * a sentence of explanation, which the three-column settings grid had no
+   * column for: the tick floated to the top of the panel and the sentence
+   * spilled down the right edge as one letter per line (operator screenshot,
+   * 2026-08-11). Keeping the markup identical to a plain row is the fix.
+   */
+  it("uses the same plain label-and-control markup as the Locked row", () => {
+    const html = renderControls(true);
+    const shareRow = html.slice(html.indexOf("Share background"));
+    const lockedRow = html.slice(html.indexOf("Locked"));
+
+    expect(shareRow).toContain('<div class="builder-setting-value"><input type="checkbox"');
+    expect(lockedRow).toContain('<div class="builder-setting-value"><input type="checkbox"');
+    expect(html).not.toContain("builder-setting-row-full");
   });
 });

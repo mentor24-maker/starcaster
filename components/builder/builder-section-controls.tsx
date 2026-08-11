@@ -121,20 +121,15 @@ export function BuilderSectionControls({
           </select>
         </BuilderSettingRow>
         {canJoinPrevious ? (
-          <BuilderSettingRow label="Share background" fullWidth>
-            <label className="builder-join-previous-toggle">
-              <input
-                type="checkbox"
-                checked={section.joinWithPrevious === true}
-                onChange={(event) =>
-                  onUpdateSection((current) => ({ ...current, joinWithPrevious: event.target.checked }))
-                }
-              />
-              <span>
-                Share the background of the row above — one image or colour spans both rows.
-                This row&rsquo;s own background is set aside while this is ticked.
-              </span>
-            </label>
+          <BuilderSettingRow label="Share background">
+            <input
+              type="checkbox"
+              checked={section.joinWithPrevious === true}
+              onChange={(event) =>
+                onUpdateSection((current) => ({ ...current, joinWithPrevious: event.target.checked }))
+              }
+              title="Use the background of the row above, so one image or colour spans both rows. This row's own background is set aside while this is ticked."
+            />
           </BuilderSettingRow>
         ) : null}
         <BuilderSettingRow label="Alignment">
