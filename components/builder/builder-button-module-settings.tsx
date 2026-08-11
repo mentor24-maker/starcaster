@@ -67,14 +67,21 @@ const BUTTON_SIZE_PRESETS: Record<string, string> = {
  * rather than `*-module-settings.tsx`, no checker ever looked at it.
  *
  * D8 axes (master rule D8): Content / Text / Placement / Frame. Frame holds
- * the pill itself — its fill, its border, its shadow — which is where a
- * button's "background" belongs; every other axis carries the same controls
- * it carries in every other module.
+ * the pill itself — its fill and its border — which is where a button's
+ * "background" belongs; every other axis carries the same controls it
+ * carries in every other module. The drop shadow is NOT on Frame: A7 files a
+ * shadow by what it shadows, and getButtonModuleStyle renders this one as
+ * `text-shadow`, so it sits on Text.
  *
- * A1 sort: the plain colour overrides sit in their own axis's Advanced
- * section — text colour under Text, border colour and hover fill under
- * Frame. The Background picker stays basic: it carries gradient / image /
- * preset-style modes that no theme supplies, so it is not a theme override.
+ * A0: no Advanced section. Every setting is on its axis, in the open. The
+ * theme-backed colours keep their `theme-color` control (A2) — empty reads
+ * "theme" until you change it, which is what protected the theme all along;
+ * the collapse only concealed it.
+ *
+ * D9 order within each axis — blast radius, descending. Text runs size →
+ * weight/style → colour → shadow: changing the size resizes the button,
+ * changing the shadow blur is the last 2%. Frame runs fill → border colour →
+ * border width/style → radius. Placement runs alignment → padding → margins.
  *
  * Not converted to `control: "theme-color"` (A2's empty-means-theme): the
  * three bespoke pickers each carry state a flat hex cannot — background
@@ -123,33 +130,12 @@ export function BuilderButtonModuleSettings({
         title: "Content",
         strips: [
           [
-            {
-              key: "text",
-              // NOT "Label" — the module chrome above every panel already
-              // uses that word for the internal name, and two "Label" rows on
-              // one screen is exactly the unclear wording L7 calls a bug.
-              label: "Text",
-              width: "full",
-              control: "custom",
-              rendersVia: "BuilderTemplatePreview",
-              // Edits module.text, not a settings key.
-              render: (ctx) => (
-                <input
-                  type="text"
-                  value={ctx.module.text}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({ ...current, text: event.target.value }))
-                  }
-                  placeholder="Button text"
-                />
-              )
-            }
-          ],
-          [
-            // C2 — the destination is picked from the project's real pages and
-            // the path is written for us; "Custom…" is still there for an
-            // external URL. Email templates keep a plain field, because their
-            // href is a Supabase merge token, not a page.
+            // D9 rung 1 — the destination leads the axis. Change where the
+            // button points and it does something else entirely; change its
+            // wording and it says something else. C2: the path is picked from
+            // the project's real pages and written for us, with "Custom…" for
+            // an external URL. Email templates keep a plain field, because
+            // their href is a Supabase merge token, not a page.
             {
               key: "href",
               label: "Link",
@@ -170,6 +156,29 @@ export function BuilderButtonModuleSettings({
               placeholder: "{{ .ConfirmationURL }}",
               visibleWhen: () => isEmailTemplate,
               rendersVia: "BuilderTemplatePreview"
+            }
+          ],
+          [
+            {
+              key: "text",
+              // NOT "Label" — the module chrome above every panel already
+              // uses that word for the internal name, and two "Label" rows on
+              // one screen is exactly the unclear wording L7 calls a bug.
+              label: "Text",
+              width: "full",
+              control: "custom",
+              rendersVia: "BuilderTemplatePreview",
+              // Edits module.text, not a settings key.
+              render: (ctx) => (
+                <input
+                  type="text"
+                  value={ctx.module.text}
+                  onChange={(event) =>
+                    onUpdateModule((current) => ({ ...current, text: event.target.value }))
+                  }
+                  placeholder="Button text"
+                />
+              )
             }
           ],
           [
@@ -294,9 +303,9 @@ export function BuilderButtonModuleSettings({
             }
           ],
           [
-            // A6: text colour is BASIC. It keeps the theme-color control, so
-            // empty still means "follow the theme" (`--lp-button-text`) — being
-            // basic does not pre-fill an override nobody chose.
+            // A6/A0: text colour is basic and, since A0, so is everything —
+            // it keeps the theme-color control, so empty still reads "theme"
+            // (`--lp-button-text`) rather than a pre-filled override (A2).
             {
               key: "textColor",
               label: "Text Color",
@@ -305,14 +314,7 @@ export function BuilderButtonModuleSettings({
               dialogLabel: "Button text color",
               themeDefault: "#ffffff",
               rendersVia: "getButtonModuleStyle"
-            }
-          ]
-        ],
-        // A6: the effect layer. A7: this shadow is a `text-shadow` in
-        // getButtonModuleStyle — it shadows the letters — so it is a Text
-        // control, not a Frame one, exactly as on the Heading module.
-        advanced: [
-          [
+            },
             {
               key: "textHoverColor",
               label: "Text Hover",
@@ -323,6 +325,8 @@ export function BuilderButtonModuleSettings({
               rendersVia: "getButtonModuleStyle"
             }
           ],
+          // D9 rung 6 — the last 2%, so it closes the axis. A7 put it here:
+          // getButtonModuleStyle renders dropShadow* as `text-shadow`.
           dropShadowFields("getButtonModuleStyle", { visibleWhen: () => !compact })
         ]
       },
@@ -465,9 +469,28 @@ export function BuilderButtonModuleSettings({
               )
             }
           ],
-          // Border Style takes its own strip: measured at a 1180-wide
-          // screen, the three of them on one row put 6px of the last
-          // control outside a table-cell modal, which clips (D7/L4).
+          [
+            {
+              key: "buttonHoverColor",
+              label: "Hover Fill",
+              width: "color",
+              control: "custom",
+              rendersVia: "getButtonModuleStyle",
+              render: (ctx) => (
+                <BuilderThemeColorField
+                  dialogLabel="Button hover color"
+                  fallback="#0f4f8f"
+                  themeColors={ctx.themeColors}
+                  value={ctx.settings.buttonHoverColor ?? "#0f4f8f"}
+                  onChange={(color) => ctx.set("buttonHoverColor", color)}
+                />
+              )
+            }
+          ],
+          // The border, in the order the A0 sweep settled on everywhere else:
+          // style (the mode) → width → colour → radius (D9's rung 6, the last
+          // 2%). Each on its own strip — measured at 1180, three of these on
+          // one row put the last control outside a table-cell modal (D7/L4).
           [
             {
               key: "borderStyle",
@@ -489,41 +512,9 @@ export function BuilderButtonModuleSettings({
               max: 12,
               fallback: "2",
               rendersVia: "getButtonModuleStyle"
-            },
-            {
-              key: "borderRadius",
-              label: "Radius",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 80,
-              fallback: "0",
-              rendersVia: "getButtonModuleStyle"
             }
-          ]
-        ],
-        // A1/A6: the hover fill is an effect and the border colour a theme
-        // value (`--lp-button-hover`, `--lp-button-bg`) — both advanced. The
-        // drop shadow is NOT here: it is a text-shadow, so A7 files it on the
-        // Text axis.
-        advanced: [
+          ],
           [
-            {
-              key: "buttonHoverColor",
-              label: "Hover Fill",
-              width: "color",
-              control: "custom",
-              rendersVia: "getButtonModuleStyle",
-              render: (ctx) => (
-                <BuilderThemeColorField
-                  dialogLabel="Button hover color"
-                  fallback="#0f4f8f"
-                  themeColors={ctx.themeColors}
-                  value={ctx.settings.buttonHoverColor ?? "#0f4f8f"}
-                  onChange={(color) => ctx.set("buttonHoverColor", color)}
-                />
-              )
-            },
             {
               key: "borderColor",
               label: "Border Color",
@@ -543,6 +534,18 @@ export function BuilderButtonModuleSettings({
                   />
                 );
               }
+            }
+          ],
+          [
+            {
+              key: "borderRadius",
+              label: "Radius",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 80,
+              fallback: "0",
+              rendersVia: "getButtonModuleStyle"
             }
           ]
         ]
