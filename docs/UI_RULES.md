@@ -127,7 +127,55 @@ layout would avoid.*
 ## W — Field and control widths
 
 *Umbrella: a control is as wide as its content needs — never as wide as the
-screen allows.*
+screen allows. Within one panel, though, "as wide as it needs" is settled
+ONCE for the whole panel (W0), not re-decided field by field.*
+
+- **W0. THE LATTICE RULE — one label width, one field width, per panel.**
+  Every label in a settings panel occupies **the same width**. Every field
+  occupies **the same width**. Therefore every label starts at the same
+  x-position and every field starts at the same x-position, in every
+  column. One control per row: two label/field pairs never share a line.
+  *(operator 8/12, on the Table panel: "The form Labels column must be the
+  same width so that the form fields all start in the same place. Even when
+  you set up columns, you randomly stagger the placement of the fields so
+  it looks very sloppy. Also, make all the fields the same length so they
+  look neat and tidy. You always either shorten fields to the minimum
+  length or just assign a random width. Every label should take up the
+  same width, and every field should take up the same width.")* —
+  **[browser-check]** `npm run check:panels`
+  (`scripts/ui/check_panels.mjs` — measures the running app at 1440/1600 and
+  fails on differing label widths, differing field start positions, differing
+  field widths, or a label wider than its track. Verified to FAIL when the old
+  `max-content` tracks are put back: 7 label widths, 7 start positions, 6 field
+  widths. Not in CI — CI has no browsers — so run it before shipping panel
+  work, like `check:screens`.)
+
+  **This outranks W1/W2/W3 wherever they disagree, and they do disagree.**
+  W3's per-type width tokens are what produced the stagger: each field was
+  sized to its own content, so a 2-digit number select and a "Full width"
+  dropdown ended up different lengths on adjacent rows, and each field's
+  label track was sized to *its own* label, so the fields started at
+  different x-positions down a single column. Tidiness across the panel
+  beats tightness on any one row.
+
+  **What W1 still means.** W1 forbids stretching a field to the *widest
+  available* width — a field that fills the panel. It has never asked for
+  minimum-width fields. A single moderate shared width satisfies both: not
+  the width of the screen, not the width of the content, one width for the
+  panel.
+
+  **Controls that cannot stretch** — checkbox, colour swatch, alignment
+  icon group — keep their natural size and sit at the **start** of the
+  field slot. The slot is still the standard width, so the next column
+  still lines up.
+
+  **Widths are set in one place** (`--builder-field-label-w` /
+  `--builder-field-control-w` in `src/css/_variables.css`). Changing the
+  look of every panel is changing those two numbers. Never set a width on
+  an individual field.
+
+  *Rolled out: Table (8/12). Every other module follows — the tokens are
+  shared, so the remaining work is deleting per-field width overrides.*
 
 - **W1.** **Never stretch a field to the widest possible width.** *(7/1
   "I've begged and pleaded with every AI model I've used again and again …
@@ -136,9 +184,14 @@ screen allows.*
 - **W2.** Fields of the same kind in the same group get **uniform widths**.
   *(6/28 "making all the form fields in the 3x3 sections the same width";
   6/24 "Make the two columns the same width")* — **[TODO-check]**
-- **W3.** Width follows content type: number inputs sized to their digits,
-  percent selects small, text inputs medium, URLs/paths long. *(doctrine
-  E2 width tokens)* — **[type]**
+- **W3.** ~~Width follows content type: number inputs sized to their digits,
+  percent selects small, text inputs medium, URLs/paths long.~~
+  **SUPERSEDED BY W0 inside settings panels (operator 8/12).** Sizing each
+  control to its own content is exactly what made panels look staggered and
+  sloppy. The width tokens survive as *names* on the markup — they still
+  say what a field is — but inside a panel they no longer set the width.
+  W3 still governs field widths **outside** settings panels (CRUD filter
+  bars, page forms), where there is no lattice to hold. *(doctrine E2)*
 - **W4.** Sliders and other stretchy controls get a **bounded width** —
   never a full row. *(consequence of W1; violation observed in tractor-nav
   2026-08-09: Inner Opacity and Transition sliders span the panel)* —

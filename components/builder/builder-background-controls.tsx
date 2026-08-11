@@ -175,14 +175,23 @@ export function BuilderBackgroundControls({
             </BuilderModuleField>
           ) : null}
 
+          {/*
+            W0: Clear goes through BuilderModuleField like every other
+            control, so it lands in the field slot rather than floating
+            loose under the strip. It was a bare <button> child of the
+            strip until 2026-08-12, which made it an orphan sitting at a
+            width and an indent nothing else shared.
+          */}
           {!hideClear && background.mode !== "none" ? (
-            <button
-              className="secondary-button builder-background-clear-button"
-              onClick={() => onChange(() => createDefaultBackgroundSettings())}
-              type="button"
-            >
-              Clear
-            </button>
+            <BuilderModuleField label="" width="auto">
+              <button
+                className="secondary-button builder-background-clear-button"
+                onClick={() => onChange(() => createDefaultBackgroundSettings())}
+                type="button"
+              >
+                Clear
+              </button>
+            </BuilderModuleField>
           ) : null}
         </BuilderModuleFieldStrip>
 
