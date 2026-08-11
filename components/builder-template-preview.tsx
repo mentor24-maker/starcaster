@@ -20,6 +20,13 @@ import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
+import {
+  getNavMegaColumnCount,
+  getNavModuleClassNames,
+  getNavModuleStyle,
+  isNavMegaMenu,
+  showsNavDropdownArrow
+} from "@/lib/builder-nav-style";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
 import {
   buildCrmFormRenderContext,
@@ -84,6 +91,7 @@ import {
   getSectionPaddingStyle,
   getSectionWidthStyle,
   getModuleMarginStyle,
+  getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
@@ -1467,7 +1475,13 @@ function BuilderSectionPreview({
     // Band first: a section carrying its own background never gets one, so
     // this cannot overwrite an operator's choice.
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
-    ...(isNavigationSection ? {} : sectionStyle),
+    // A menu-only row used to throw its own background away, which is half of
+    // the operator's "the style controls of the container have no effect"
+    // (2026-08-11) — he set a header strip's colour and nothing happened.
+    // Honoured now: it is `undefined` until he picks one, so a row he never
+    // touched still renders flush. The automatic treatments above and below
+    // (band, hero tint, overlap) stay off — those are not his controls.
+    ...(isOverlayLayoutCollapsed ? {} : sectionStyle),
     // Hero tint and overlap layer on top of the section's own background.
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
@@ -1479,14 +1493,15 @@ function BuilderSectionPreview({
     // EMPTY row is still big enough to drop a module onto, and keeping it on
     // filled rows was padding every contact strip out to nearly triple height.
     ...(section.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
-    ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionWidthStyle(section)),
+    // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
+    ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
       : hasNavigationModule
       ? { position: "relative", zIndex: 10 }
       : {}),
-    ...(rowBorderWidth > 0 && !isNavigationSection && !isOverlayLayoutCollapsed
+    ...(rowBorderWidth > 0 && !isOverlayLayoutCollapsed
       ? {
           border: `${rowBorderWidth}px ${section.rowBorderStyle ?? "solid"} ${section.rowBorderColor ?? "#000000"}`,
           borderRadius: `${section.rowBorderRadius ?? "0"}px`
@@ -1523,20 +1538,29 @@ function BuilderSectionPreview({
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
         const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
         const columnStyle: CSSProperties = {
-          ...(isNavigationColumn || !columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
+          // The cell's own fill, honoured on menu cells too — see the row
+          // background above. `columnBackground` is falsy until the operator
+          // sets one, so an untouched menu cell is unchanged.
+          ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
           ...(isPageOverlayFlowColumn || isSectionOverlayColumn ? {} : getVerticalMarginStyle(verticalMargin)),
           ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
           ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
           ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
             ? { "--builder-cell-padding": `${padding}px` }
             : {}),
+          // Cell padding stays off for menu cells, and this one is deliberate:
+          // it defaults to 18px, so honouring it would push every live header
+          // down without anybody asking. The menu module carries its own
+          // Vertical/Horizontal Padding now (Placement axis), which is the
+          // control that should move a menu inside its cell.
           padding: isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${padding}px`,
           border:
             isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
               ? undefined
               : `${borderWidth}px solid ${borderColor}`,
           borderRadius: isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${borderRadius}px`,
-          ...(isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+          // {} at the left/top default, so only a cell he aligned moves.
+          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
             ? {}
             : getCellContentAlignmentStyle(
                 section.cellHAlign?.[columnKey] ?? "left",
@@ -5140,15 +5164,14 @@ function NavigationModulePreview({
   const topLevelItems = navItems.filter((item) => !item.parentId);
   const childrenOf = (parentId: string) => navItems.filter((item) => item.parentId === parentId);
 
-  const fontSize = module.settings.navFontSize ? `${module.settings.navFontSize}px` : undefined;
-  const fontWeight = module.settings.navBold === "true" ? 700 : undefined;
-  const borderRadius = module.settings.navBorderRadius ? `${module.settings.navBorderRadius}px` : undefined;
-  const padding = module.settings.navPadding || undefined;
+  // Every visual setting resolves in one place — lib/builder-client/builder-nav-style.ts.
+  // It used to resolve here, differently from how the published page resolved
+  // it: `navPadding` and `navBorderRadius` mean the LINK on a live site and
+  // were being applied to the whole bar by this component.
+  const navStyle = getNavModuleStyle(module.settings);
   const moduleBackgroundStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? {};
-  const color = module.settings.navColor || undefined;
-  const hoverColor = module.settings.navHoverColor || undefined;
-  const hoverBackground = module.settings.navHoverBackground || undefined;
-  const marginV = module.settings.navMarginV ? `${module.settings.navMarginV}px` : undefined;
+  const nudgeTransform = getModuleNudgeTransform(module.settings);
+  const showsArrow = showsNavDropdownArrow(module.settings);
   const rawAlignment = module.settings.navAlignment ?? "center";
   const flexAlign = rawAlignment === "left" ? "flex-start" : rawAlignment === "right" ? "flex-end" : "center";
   const isVertical = module.settings.navDirection === "vertical";
@@ -5159,13 +5182,12 @@ function NavigationModulePreview({
   // Backward compatibility is a hard requirement on this module (live tenant
   // sites run it): anything other than an explicit "mega" keeps the exact
   // dropdown markup that shipped before.
-  const isMega = module.settings.navDropdownStyle === "mega" && !isVertical;
-  const megaColumnCount = Math.min(5, Math.max(1, Number.parseInt(module.settings.navMegaColumns ?? "3", 10) || 3));
-  const megaWidth = Math.min(1600, Math.max(320, Number.parseInt(module.settings.navMegaWidth ?? "1040", 10) || 1040));
+  const isMega = isNavMegaMenu(module.settings);
+  const megaColumnCount = getNavMegaColumnCount(module.settings);
 
   return (
     <nav
-      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}${isMega ? " site-nav--mega" : ""}`}
+      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}${isMega ? " site-nav--mega" : ""} ${getNavModuleClassNames(module.settings)}`}
       aria-label="Main navigation"
       onKeyDown={
         isMega
@@ -5180,19 +5202,13 @@ function NavigationModulePreview({
       }
       style={
         {
+          ...navStyle,
+          // The operator's Background wins over the bar's default fill —
+          // it is a real declaration, not a variable, so it lands last.
           ...moduleBackgroundStyle,
-          fontSize,
-          fontWeight,
-          borderRadius,
-          padding,
-          color,
           ...(isVertical ? { alignItems: flexAlign } : {}),
           ...(isVertical ? {} : { justifyContent: flexAlign }),
-          ...(marginV ? { marginTop: marginV, marginBottom: marginV } : {}),
-          "--site-nav-link-color": color,
-          "--site-nav-link-hover-color": hoverColor,
-          "--site-nav-link-hover-bg": hoverBackground,
-          ...(isMega ? { "--site-nav-mega-width": `${megaWidth}px` } : {})
+          ...(nudgeTransform ? { transform: nudgeTransform } : {})
         } as CSSProperties
       }
     >
@@ -5264,7 +5280,7 @@ function NavigationModulePreview({
               onClick={() => setMobileOpen(false)}
             >
               {item.label}
-              {!isVertical && <span className="site-nav-dropdown-arrow" aria-hidden>▾</span>}
+              {!isVertical && showsArrow && <span className="site-nav-dropdown-arrow" aria-hidden>▾</span>}
             </Link>
             <div className="site-nav-dropdown-menu">
               {children.map((child) => {

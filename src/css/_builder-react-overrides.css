@@ -584,6 +584,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--builder-editor-heading, #0b2a4a);
 }
 
+/*
+ * A titled sub-section inside an axis column (Navigation's "Dropdown").
+ * One step down from the axis heading and separated by a hairline, so the
+ * eye reads "still Structure, but a different subject" rather than "a new
+ * column started here".
+ */
+.builder-react-root .builder-schema-axis-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+  padding-top: var(--space-3, 8px);
+  border-top: 1px solid var(--builder-editor-hairline, rgba(11, 42, 74, 0.12));
+}
+
+.builder-react-root .builder-schema-group-subtitle {
+  font-size: var(--text-base, 0.95rem);
+  font-weight: 700;
+  color: var(--builder-editor-heading, #0b2a4a);
+  margin: 0;
+}
+
 /* Field labels: same dark colour and weight, normal size. */
 .builder-react-root .builder-module-editor .builder-module-field-label,
 .builder-react-root .builder-module-field-label,
@@ -1377,8 +1398,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   z-index: 40;
   width: min(var(--site-nav-mega-width, 1040px), 92vw);
   padding: 26px;
-  border-radius: 0 0 18px 18px;
-  background: #ffffff;
+  /* Panel Fill / Radius from the module's Dropdown section. The top corners
+     stay square: the panel hangs off the bar and a rounded top edge reads as
+     a detached card. */
+  border-radius: 0 0 var(--site-nav-dropdown-radius, 18px) var(--site-nav-dropdown-radius, 18px);
+  background: var(--site-nav-dropdown-bg, #ffffff);
   color: var(--ink-primary, #18324a);
   box-shadow: 0 24px 60px rgba(3, 29, 62, 0.22);
 }
@@ -1415,7 +1439,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .site-nav-mega-link {
   display: block;
   padding: 5px 0;
-  color: var(--ink-secondary, #334861);
+  color: var(--site-nav-dropdown-color, var(--ink-secondary, #334861));
   font-size: 0.86rem;
   text-decoration: none;
 }
@@ -2258,4 +2282,157 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     padding-top: var(--builder-section-padding-top, 10px);
     padding-bottom: var(--builder-section-padding-bottom, 10px);
   }
+}
+
+/* ---------------------------------------------------------------------
+   Top Menu (the Navigation module) — the bar and its links.
+
+   Written 2026-08-11, after the operator: "The top menu module currently
+   has no style control. The style controls of the container have no
+   effect, and the menu styles need to be completely overhauled."
+
+   Every value below was hardcoded in the GENERATED `_builder-react.css`,
+   which is why no control could reach it. These rules restate the same
+   selectors here — this file is imported after that one, so at equal
+   specificity these win, and they survive the next regeneration. That is
+   also why the rules are repeated rather than edited in place: R2 (see
+   scripts/check_conventions.cjs) exists because a hand edit to the
+   generated file was silently erased once already.
+
+   The variables are written by getNavModuleStyle() in
+   lib/builder-client/builder-nav-style.ts. Each var() fallback repeats
+   that file's default on purpose, so a menu rendered without inline vars
+   still looks like it always did — NAV_STYLE_DEFAULTS is unit-tested
+   against these numbers.
+   --------------------------------------------------------------------- */
+.builder-react-root .site-nav {
+  gap: var(--site-nav-gap, 0px);
+  padding: var(--site-nav-padding, 8px 8px);
+  border-radius: var(--site-nav-radius, 26px);
+  border: var(--site-nav-border-width, 1px) var(--site-nav-border-style, solid)
+    var(--site-nav-border-color, #e6ecf2);
+  box-shadow: var(--site-nav-shadow, 0 16px 40px rgba(10, 73, 112, 0.12));
+}
+
+.builder-react-root .site-nav-link {
+  min-height: var(--site-nav-link-height, 48px);
+  border-radius: var(--site-nav-link-radius, 18px);
+  padding: var(--site-nav-link-padding, 0px 14px);
+  /* Bold was a dead control for as long as the generated rule said
+     `font-weight: 700`: the setting wrote font-weight onto the <nav> and
+     that rule overrode the inherited value on every link. */
+  font-weight: var(--site-nav-link-weight, 700);
+  font-style: var(--site-nav-link-style, normal);
+  text-transform: var(--site-nav-link-transform, none);
+  letter-spacing: var(--site-nav-link-spacing, 0px);
+  text-decoration: var(--site-nav-link-decoration, none);
+  text-shadow: var(--site-nav-link-text-shadow, none);
+  transition: background 140ms ease, transform 140ms ease, color 140ms ease,
+    opacity 140ms ease;
+}
+
+.builder-react-root .site-nav-link:hover,
+.builder-react-root .site-nav-link:focus-visible {
+  text-decoration: var(--site-nav-link-hover-decoration, none);
+  /* The lift moved to a hover-effect class; without this reset the
+     generated rule would keep applying it under every other effect. */
+  transform: none;
+}
+
+/* The current page reads as its own state now — it followed hover exactly,
+   so there was no way to tell "you are here" from "your mouse is here". */
+.builder-react-root .site-nav-link-active {
+  color: var(--site-nav-link-active-color, var(--site-nav-link-hover-color, #0a8fc4));
+  text-decoration: var(--site-nav-link-hover-decoration, none);
+  transform: none;
+}
+
+/* Hover effects. A transform is a rule, not a value, so these are classes
+   rather than another variable — getNavModuleClassNames() picks one.
+   `lift` is the default because it is what the bar always did. */
+.builder-react-root .site-nav--hover-lift .site-nav-link:hover,
+.builder-react-root .site-nav--hover-lift .site-nav-link:focus-visible {
+  transform: translateY(-1px);
+}
+
+.builder-react-root .site-nav--hover-grow .site-nav-link:hover,
+.builder-react-root .site-nav--hover-grow .site-nav-link:focus-visible {
+  transform: scale(1.06);
+}
+
+.builder-react-root .site-nav--hover-fade .site-nav-link:hover,
+.builder-react-root .site-nav--hover-fade .site-nav-link:focus-visible {
+  opacity: 0.65;
+}
+
+/* An underline that grows out of the centre. */
+.builder-react-root .site-nav--hover-underline .site-nav-link {
+  position: relative;
+}
+
+.builder-react-root .site-nav--hover-underline .site-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  right: 50%;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: left 160ms ease, right 160ms ease;
+}
+
+.builder-react-root .site-nav--hover-underline .site-nav-link:hover::after,
+.builder-react-root .site-nav--hover-underline .site-nav-link:focus-visible::after,
+.builder-react-root .site-nav--hover-underline .site-nav-link-active::after {
+  left: 14%;
+  right: 14%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .builder-react-root .site-nav-link,
+  .builder-react-root .site-nav--hover-underline .site-nav-link::after {
+    transition: none;
+  }
+
+  .builder-react-root .site-nav--hover-lift .site-nav-link:hover,
+  .builder-react-root .site-nav--hover-grow .site-nav-link:hover {
+    transform: none;
+  }
+}
+
+/*
+ * Narrow screens: the generated stylesheet redecides padding and radius at
+ * three breakpoints, which is the same "the control has no effect" bug just
+ * below 900px. Restate them from the variables so the operator's numbers
+ * hold at every width. Gap, flex-basis and font-size stay as generated —
+ * those are genuine narrow-screen adjustments, not settings.
+ */
+@media (max-width: 900px) {
+  .builder-react-root .site-nav {
+    padding: var(--site-nav-padding, 6px);
+    border-radius: var(--site-nav-radius, 20px);
+  }
+}
+
+@media (max-width: 560px) {
+  .builder-react-root .site-nav {
+    padding: var(--site-nav-padding, 5px);
+    border-radius: var(--site-nav-radius, 16px);
+  }
+
+  .builder-react-root .site-nav-link {
+    border-radius: var(--site-nav-link-radius, 12px);
+    padding: var(--site-nav-link-padding, 0 8px);
+  }
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav {
+  padding: var(--site-nav-padding, 5px);
+  border-radius: var(--site-nav-radius, 16px);
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav-link {
+  border-radius: var(--site-nav-link-radius, 12px);
+  padding: var(--site-nav-link-padding, 0 8px);
 }

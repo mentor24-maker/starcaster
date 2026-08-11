@@ -2958,6 +2958,7 @@ export function BuilderModuleCard({
     const isHeadingModule = module.type === "heading";
     const isCurrentPollModule = module.type === "current-poll";
     const isConfettiModule = module.type === "confetti";
+    const isNavigationModule = module.type === "navigation";
     const isTractorNavModule  = module.type === "tractor-nav";
     const isSocialModule = module.type === "social";
     const isPollCategoryListModule = module.type === "poll-category-list";
@@ -3004,12 +3005,18 @@ export function BuilderModuleCard({
      * unreachable. These modules render the same chrome the else branch
      * does, after their own editor.
      *
-     * Deliberately NOT here: current-poll / social / crm-form (their own
-     * editors offer background + margins), heading / floating-image (own
-     * chrome blocks), navigation (has chrome AND duplicates — deduped
-     * separately), button / table / poll-category-list / reminder (bespoke
-     * or opted out), tractor-nav / confetti (fixed-position overlays where
-     * wrapper margins are meaningless).
+     * Deliberately NOT here: current-poll / social / crm-form / navigation
+     * (their own editors offer background + margins), heading /
+     * floating-image (own chrome blocks), button / table /
+     * poll-category-list / reminder (bespoke or opted out), tractor-nav /
+     * confetti (fixed-position overlays where wrapper margins are
+     * meaningless).
+     *
+     * Navigation moved out of the else branch on 2026-08-11 (E6): its
+     * Structure axis now carries Background and its Placement axis carries
+     * alignment and the H+V margin pair, so the shared chrome underneath was
+     * a second copy of all three — and the operator had two Alignment
+     * controls doing different things.
      */
     const needsRestoredChrome =
       isBreadcrumbModule ||
@@ -3413,7 +3420,7 @@ export function BuilderModuleCard({
                   />
                 </BuilderSettingRow>
               </div>
-            ) : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
+            ) : isNavigationModule ? null : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
               <div className="builder-floating-image-module-chrome">
                 <BuilderBackgroundControls
                   background={getModuleBackgroundSettings(module.settings)}
@@ -3647,7 +3654,10 @@ export function BuilderModuleCard({
             <BuilderNavigationModuleSettings
               module={module}
               onUpdateModule={onUpdateModule}
+              onUpdateModuleBackground={onUpdateModuleBackground}
+              themeBackgroundColor={themeBackgroundColor}
               themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
             />
           )}
           {module.type === "headline-rotator" && (

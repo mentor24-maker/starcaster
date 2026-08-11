@@ -155,6 +155,18 @@ export type BuilderSchemaAxis = {
   title: string;
   strips: BuilderSchemaStrip[];
   /**
+   * Titled sub-sections inside the axis, rendered below its own strips in
+   * declaration order. Added 2026-08-11 for Navigation, where the operator
+   * asked for a "Dropdown" header partway down the Structure column: the
+   * dropdown controls belong to Structure, but they only describe one of
+   * the menu types, and an unheaded run of them reads as more of the same.
+   *
+   * A section whose every field is hidden by `visibleWhen` renders nothing —
+   * heading included. Otherwise switching a menu back to List would leave a
+   * "Dropdown" heading standing over an empty gap.
+   */
+  sections?: Array<{ title: string; strips: BuilderSchemaStrip[] }>;
+  /**
    * This axis's Advanced controls — theme overrides (A1) and genuinely
    * rare settings. They render in the shared Advanced region BELOW the
    * basic columns, in this axis's own column, so an advanced control
@@ -563,11 +575,22 @@ export function BuilderSchemaModuleSettings({
         <div className="builder-schema-panel-columns" style={trackStyle}>
           {axes.map((axis) => {
             const visible = visibleStrips(axis.strips);
-            if (!visible.length) return <div className="builder-schema-panel-column" key={axis.title} />;
+            const sections = (axis.sections ?? [])
+              .map((section) => ({ title: section.title, strips: visibleStrips(section.strips) }))
+              .filter((section) => section.strips.length > 0);
+            if (!visible.length && !sections.length) {
+              return <div className="builder-schema-panel-column" key={axis.title} />;
+            }
             return (
               <div className="builder-schema-panel-column" key={axis.title}>
                 <div className="builder-schema-group-title">{axis.title}</div>
                 {renderStrips(visible, ctx)}
+                {sections.map((section) => (
+                  <div className="builder-schema-axis-section" key={section.title}>
+                    <div className="builder-schema-group-subtitle">{section.title}</div>
+                    {renderStrips(section.strips, ctx)}
+                  </div>
+                ))}
               </div>
             );
           })}

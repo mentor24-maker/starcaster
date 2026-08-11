@@ -71,6 +71,69 @@ describe("normalizeBuilderModuleSettingsForType", () => {
   });
 });
 
+describe("navigation style migration", () => {
+  const ctx = { id: "nav-1", type: "navigation" as const, column: "main", name: "", text: "" };
+  const nav = (settings: Record<string, string>) =>
+    normalizeBuilderModuleSettingsForType("navigation", settings, ctx);
+
+  it("splits the old single navPadding string into the two link padding numbers", () => {
+    const settings = nav({ navPadding: "6px 20px" });
+
+    expect(settings.navLinkPaddingV).toBe("6");
+    expect(settings.navLinkPaddingH).toBe("20");
+    expect(settings.navPadding).toBeUndefined();
+  });
+
+  it("uses one value for both when the old string carried only one", () => {
+    const settings = nav({ navPadding: "10px" });
+
+    expect(settings.navLinkPaddingV).toBe("10");
+    expect(settings.navLinkPaddingH).toBe("10");
+  });
+
+  it("never overwrites padding the operator has already set on the new keys", () => {
+    const settings = nav({ navPadding: "6px 20px", navLinkPaddingV: "2", navLinkPaddingH: "40" });
+
+    expect(settings.navLinkPaddingV).toBe("2");
+    expect(settings.navLinkPaddingH).toBe("40");
+  });
+
+  it("turns Bold into a weight, honouring the answer the old control could not deliver", () => {
+    expect(nav({ navBold: "true" }).navWeight).toBe("700");
+    expect(nav({ navBold: "false" }).navWeight).toBe("500");
+    expect(nav({ navBold: "true" }).navBold).toBeUndefined();
+  });
+
+  it("folds the nav's own margins into the standard module margin keys", () => {
+    const settings = nav({ navMarginV: "24", navMarginH: "12" });
+
+    expect(settings.verticalMargin).toBe("24");
+    expect(settings.horizontalMargin).toBe("12");
+    expect(settings.navMarginV).toBeUndefined();
+    expect(settings.navMarginH).toBeUndefined();
+  });
+
+  it("leaves an existing module margin alone rather than clobbering it", () => {
+    const settings = nav({ navMarginV: "24", verticalMargin: "8" });
+    expect(settings.verticalMargin).toBe("8");
+  });
+
+  it("is idempotent — a second pass changes nothing", () => {
+    const once = nav({ navPadding: "6px 20px", navBold: "false", navMarginV: "24" });
+    const twice = nav({ ...once });
+
+    expect(twice).toEqual(once);
+  });
+
+  it("leaves a menu that was never styled with nothing to migrate", () => {
+    const settings = nav({});
+
+    expect(settings.navLinkPaddingV).toBeUndefined();
+    expect(settings.navWeight).toBeUndefined();
+    expect(settings.verticalMargin).toBeUndefined();
+  });
+});
+
 describe("table border width round-trip", () => {
   const ctx = { id: "t-1", type: "table" as const, column: "main", name: "", text: "" };
 
