@@ -2438,61 +2438,98 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ============================================================== */
-/* THE LATTICE — master rule W0 (operator 8/12)                    */
+/* THE LATTICE — master rule W0 (operator 8/12, refined 8/13)      */
 /* ============================================================== */
 
 /*
- * One label width and one field width for the WHOLE panel. Every label
- * starts at the same x, every field starts at the same x, one control per
- * row — in every column, and in the shared chrome above the columns too.
+ * Within a column: one label width, one field width, both sized to the
+ * longest string in that column plus 40px of room.
  *
- * What it replaces, and why that was wrong: each field used to be its own
- * grid with `minmax(84px, max-content)` for the label track, so every row
- * measured its own label and put its field wherever that label happened to
- * end. "Columns" and "Column Heads" therefore started their fields at
- * different x-positions in the same column. On top of that the per-type
- * width tokens (--num sized to digits, --select-md to its longest option,
- * --text-md to 280px) meant no two fields were the same length. That is the
- * "randomly staggered / random width" the operator has been looking at
- * since the D8 axis work landed.
+ * The operator's rule, in two goes. 8/12: "Every label should take up the
+ * same width, and every field should take up the same width." 8/13, on how
+ * to pick that width: "Fields width is 40px more than the longest string …
+ * For the fields, I'd like to make it similarly flexible", scoped per
+ * column rather than per panel so a short column stays tight instead of
+ * inheriting the panel's longest label.
  *
- * Fixed tracks, not max-content, is the whole fix. Nothing below may go
- * back to sizing a field or its label by its own content.
+ * HOW IT WORKS, because the mechanism is the whole point:
+ * THE COLUMN is the grid — not each field. Every strip and every field
+ * inside it is `display: contents`, so their boxes vanish and the labels
+ * and controls become direct children of ONE grid. Two `max-content`
+ * tracks then measure the longest label and the longest control ACROSS THE
+ * WHOLE COLUMN, and every row shares that measurement.
  *
- * SCOPE — `.is-lattice` is applied per module editor, not globally, because
- * the operator asked to settle the rule on Table before it reaches the
- * other 52 panels. **Rolling out is deleting the LATTICE_MODULE_TYPES gate
- * in builder-module-card.tsx**; every rule below is already written to
- * cover any panel, and the two widths live in _variables.css.
+ * That sharing is the entire fix. Before 8/12 each field was its own grid,
+ * so `max-content` measured one row at a time and each row put its field
+ * wherever its own label happened to end — 7 different label widths and 7
+ * different field positions in a single panel. Between 8/12 and 8/13 the
+ * tracks were two hardcoded pixel values, which was uniform but arbitrary.
+ * One grid per column is both: shared AND sized to real content.
+ *
+ * NEVER give a field its own width. That is the bug this rule exists to
+ * stop, and `npm run check:panels` fails on it.
  */
 
-.builder-react-root .is-lattice .builder-module-field-strip {
+.builder-react-root .is-lattice .builder-schema-panel-column {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2, 6px);
+  grid-template-columns: max-content max-content;
   align-items: center;
-}
-
-.builder-react-root .is-lattice .builder-module-field,
-.builder-react-root .is-lattice .builder-setting-row,
-.builder-react-root .is-lattice .builder-setting-row-full {
-  display: grid;
-  grid-template-columns: var(--builder-field-label-w) var(--builder-field-control-w);
-  align-items: center;
-  gap: var(--builder-field-gap, 10px);
-  margin: 0;
+  row-gap: var(--space-2, 6px);
+  column-gap: 0;
 }
 
 /*
- * The field slot is the width; the control fills it. Every per-type width
- * set further up this file is beaten here, on purpose. The width tokens
- * stay on the markup as NAMES — they still say what a field is, and the
- * panel check reads them — they just stop deciding width inside a panel.
+ * Flatten everything between the column and its labels/controls so they all
+ * land in the column's grid. Without this each strip would be its own
+ * formatting context and the tracks could not be shared.
  */
-.builder-react-root .is-lattice .builder-module-field-control {
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-field-strip,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-field,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-setting-row,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-setting-row-full,
+/* A bare custom block (the background picker) and its own horizontal
+   wrapper flatten too, so ITS label/control pairs join the column's lattice
+   instead of laying themselves out separately. Without these two the
+   wrapper occupied one grid cell and every row below it lost its pairing —
+   Frame's Background sat on a line of its own under its label. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-background-controls-horizontal {
+  display: contents;
+}
+
+/* Anything inside the background block that is NOT a field pair — the image
+   picker and its media actions — takes a full row rather than a cell. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-background-controls-horizontal > *:not(.builder-module-field-strip) {
+  grid-column: 1 / -1;
+}
+
+/* The axis title is not a row of the lattice — it spans both tracks. */
+.builder-react-root .is-lattice .builder-schema-panel-column > .builder-schema-group-title {
+  grid-column: 1 / -1;
+}
+
+/*
+ * The 40px lives on the label as trailing room, so the track measures
+ * "longest label + 40" exactly as the rule says.
+ */
+.builder-react-root .is-lattice .builder-module-field-label,
+.builder-react-root .is-lattice .builder-setting-label {
+  padding-right: var(--builder-field-room, 40px);
+  white-space: nowrap;
+}
+
+/*
+ * Same 40px for the control, as internal room rather than a wider box with
+ * the text rattling around at the left. A select's own max-content already
+ * covers its longest option and its arrow; this adds the operator's margin
+ * on top, and because the track is shared every control in the column ends
+ * up at the widest one.
+ */
+.builder-react-root .is-lattice .builder-module-field-control,
+.builder-react-root .is-lattice .builder-setting-value {
   display: flex;
-  width: 100%;
   min-width: 0;
+  width: 100%;
 }
 
 .builder-react-root .is-lattice .builder-module-field-control > select,
@@ -2506,14 +2543,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   width: 100%;
   min-width: 0;
   max-width: none;
+  padding-right: calc(var(--builder-field-room, 40px) / 2);
 }
 
 /*
  * The one exception: a checkbox, a colour swatch and an alignment icon
  * group have a natural size, and stretching them would look worse rather
  * than tidier. They keep it and sit at the START of the field slot — the
- * slot is still the standard width, so the row still lines up with every
- * other row, which is what the rule is really protecting.
+ * slot is still the column's shared width, so the row still lines up with
+ * every other row, which is what the rule is really protecting.
  */
 .builder-react-root .is-lattice .builder-module-field--check .builder-module-field-control,
 .builder-react-root .is-lattice .builder-module-field--align .builder-module-field-control,
@@ -2524,7 +2562,58 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* Long text (URLs, textareas) spans both tracks — it keeps the room. */
 .builder-react-root .is-lattice .builder-module-field--full {
-  grid-template-columns: minmax(0, 1fr);
+  grid-column: 1 / -1;
+}
+
+/*
+ * Chrome above the columns (the module Label row) has no axis column to
+ * live in, so its strip is the grid instead — same two tracks, same rule,
+ * measured over that strip.
+ */
+.builder-react-root .is-lattice .builder-module-chrome .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+}
+
+.builder-react-root .is-lattice .builder-module-chrome .builder-module-field {
+  display: contents;
+}
+
+/*
+ * Compact forms, generous gaps (operator 8/13): "when the full width
+ * available is wider than the sum of the form columns, the difference
+ * should be spread equally between the spaces between the sections … the
+ * forms should stay comfortably compact, with just the 40px padding
+ * between columns."
+ *
+ * So the axis columns are sized to their CONTENT (each one is its own
+ * lattice, as wide as its longest label + longest control + 40px), and all
+ * the leftover width goes into the gaps between them, split equally.
+ * `space-between` does exactly that: first column flush left, last flush
+ * right, free space shared by the gaps in between.
+ *
+ * This replaces `repeat(axis-count, minmax(0, 1fr))`, which gave every
+ * column an equal SHARE of the panel whether it needed it or not — which is
+ * where the trailing space after "Rows" and "Border" came from.
+ *
+ * The 40px column-gap is a FLOOR, not the final gap: flexbox adds the
+ * distributed free space on top, and falls back to the floor when the
+ * columns wrap on a narrow panel.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-columns,
+.builder-react-root .is-lattice .builder-schema-panel-columns[style*="--builder-axis-count"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  column-gap: var(--builder-field-room, 40px);
+  row-gap: var(--space-5, 16px);
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column {
+  flex: 0 0 auto;
 }
 
 /* ============================================================== */

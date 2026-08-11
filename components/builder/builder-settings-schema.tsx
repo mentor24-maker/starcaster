@@ -563,7 +563,11 @@ function renderStrips(strips: BuilderSchemaStrip[], ctx: BuilderSchemaFieldConte
       if (visible.length > 1) {
         throw new Error(`Schema strip ${stripIndex}: a bare custom field must be alone in its strip`);
       }
-      return <div key={stripIndex}>{bare.render(ctx)}</div>;
+      // Named so the lattice (W0) can flatten it. An unclassed wrapper here
+      // landed in the column grid as a single cell and knocked every row
+      // after it out of its label/control pairing — visible as Frame's
+      // Background dropping onto its own line below its label.
+      return <div className="builder-schema-bare" key={stripIndex}>{bare.render(ctx)}</div>;
     }
     return (
       <BuilderModuleFieldStrip key={stripIndex}>

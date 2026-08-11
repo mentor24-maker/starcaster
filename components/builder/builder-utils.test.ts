@@ -34,6 +34,7 @@ import {
   readThemeStylesPageBackground,
   coerceThemeShellBackgroundSource,
   getThemeShellBackgroundSeedColor,
+  seedThemeStylesPageBackground,
   sectionHasOnlyPageOverlayImageModules,
   sectionHasOnlySectionScopedOverlayModules,
   isSectionScopedOverlayDecor,
@@ -836,6 +837,39 @@ describe("getThemeShellBackgroundSeedColor", () => {
         backgroundColor: "#f5fbff",
       })
     ).toBe("#f5fbff");
+  });
+});
+
+describe("seedThemeStylesPageBackground", () => {
+  const unset = {
+    mode: "none" as const,
+    color: "#ffffff",
+    color2: "#eaf4ff",
+    imageUrl: "",
+    imageAssetId: "",
+    styleKey: "" as const,
+    opacity: 100,
+  };
+
+  it("shows the palette Background while no page background is saved", () => {
+    expect(seedThemeStylesPageBackground(unset, { backgroundColor: "#ff0000" }).color).toBe("#ff0000");
+  });
+
+  it("keeps an opacity-only edit on the palette colour instead of white", () => {
+    const seeded = seedThemeStylesPageBackground(unset, { backgroundColor: "#ff0000" });
+    // What the picker commits when the operator drags opacity and nothing else.
+    const committed = finalizeThemeStylesPageBackground({ ...seeded, mode: "color", opacity: 70 });
+    expect(committed.color).toBe("#ff0000");
+    expect(committed.opacity).toBe(70);
+  });
+
+  it("leaves a saved page background alone", () => {
+    const saved = { ...unset, mode: "color" as const, color: "#00ff00" };
+    expect(seedThemeStylesPageBackground(saved, { backgroundColor: "#ff0000" })).toBe(saved);
+  });
+
+  it("falls back to the default palette background when the theme has no colour", () => {
+    expect(seedThemeStylesPageBackground(unset, { backgroundColor: "" }).color).toBe("#f5fbff");
   });
 });
 
