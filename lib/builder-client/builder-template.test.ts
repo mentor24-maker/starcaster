@@ -6,6 +6,7 @@ import {
   finalizeThemeStylesPageBackground,
   formatPlainTextContent,
   formatRichTextContent,
+  groupJoinedSections,
   isPlainTextVariant,
   PLAIN_TEXT_VARIANT,
   prepareRichTextHtmlForStorage,
@@ -481,5 +482,56 @@ describe("promoteThemeStylesPageBackground", () => {
     });
     expect(saved.mode).toBe("color");
     expect(saved.color).toBe("#ceedf8");
+  });
+});
+
+describe("joined rows", () => {
+  const row = (id: string, joinWithPrevious: boolean) => ({
+    id,
+    title: id,
+    layout: "single",
+    joinWithPrevious,
+    modules: []
+  });
+
+  it("keeps a joined row's flag through normalization", () => {
+    const sections = normalizeLayoutSections([row("a", false), row("b", true)]);
+
+    expect(sections[0]?.joinWithPrevious).toBe(false);
+    expect(sections[1]?.joinWithPrevious).toBe(true);
+  });
+
+  it("refuses to join the first row, which has nothing above it", () => {
+    const sections = normalizeLayoutSections([row("a", true), row("b", false)]);
+
+    expect(sections[0]?.joinWithPrevious).toBe(false);
+  });
+
+  it("defaults to not joined, so every existing page renders as it did", () => {
+    const sections = normalizeLayoutSections([{ id: "a", layout: "single", modules: [] }]);
+
+    expect(sections[0]?.joinWithPrevious).toBe(false);
+  });
+
+  it("gathers a run of joined rows under the row that carries the background", () => {
+    const sections = normalizeLayoutSections([
+      row("a", false),
+      row("b", true),
+      row("c", true),
+      row("d", false)
+    ]);
+
+    const groups = groupJoinedSections(sections);
+
+    expect(groups.map((group) => group.map((section) => section.id))).toEqual([
+      ["a", "b", "c"],
+      ["d"]
+    ]);
+  });
+
+  it("puts every unjoined row in a group of its own", () => {
+    const sections = normalizeLayoutSections([row("a", false), row("b", false)]);
+
+    expect(groupJoinedSections(sections)).toHaveLength(2);
   });
 });
