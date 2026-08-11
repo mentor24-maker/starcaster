@@ -1,4 +1,6 @@
+import { useId } from "react";
 import type { BuilderTheme } from "@/lib/builder-template";
+import { BuilderColorWheelInput } from "./builder-color-wheel-input";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BUILDER_HEADING_FONTS } from "./builder-utils";
 
@@ -28,6 +30,39 @@ const COLOR_PLACEHOLDERS = {
   radioLabel: "#214c71",
   fieldFocus: "#22c55e"
 } as const;
+
+type ThemeColorRowProps = {
+  label: string;
+  /** "" means the role is unset and inherits. */
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+};
+
+/** One color role: wheel + Reset, with the label wired to the wheel. */
+function ThemeColorRow({ label, value, placeholder, onChange }: ThemeColorRowProps) {
+  const inputId = useId();
+
+  return (
+    <BuilderSettingRow label={label} labelFor={inputId}>
+      <span className="builder-theme-color-control">
+        <BuilderColorWheelInput
+          ariaLabel={label}
+          id={inputId}
+          value={value || placeholder}
+          onChange={onChange}
+        />
+        {value ? (
+          <button className="builder-theme-color-reset" type="button" onClick={() => onChange("")}>
+            Reset
+          </button>
+        ) : (
+          <span className="builder-theme-color-inherit">Inherit</span>
+        )}
+      </span>
+    </BuilderSettingRow>
+  );
+}
 
 export function BuilderThemeTypographySettings({ theme, onChange }: BuilderThemeTypographySettingsProps) {
   const { fonts, colors, scale, forms = {} } = theme.typography;
@@ -116,26 +151,13 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             ["linkHover", "Link hover"]
           ] as Array<["text" | "heading" | "link" | "linkHover", string]>
         ).map(([role, label]) => (
-          <BuilderSettingRow key={role} label={label}>
-            <span className="builder-theme-color-control">
-              <input
-                type="color"
-                value={colors[role] || COLOR_PLACEHOLDERS[role]}
-                onChange={(event) => updateColor(role, event.target.value)}
-              />
-              {colors[role] ? (
-                <button
-                  className="builder-theme-color-reset"
-                  type="button"
-                  onClick={() => updateColor(role, "")}
-                >
-                  Reset
-                </button>
-              ) : (
-                <span className="builder-theme-color-inherit">Inherit</span>
-              )}
-            </span>
-          </BuilderSettingRow>
+          <ThemeColorRow
+            key={role}
+            label={label}
+            placeholder={COLOR_PLACEHOLDERS[role]}
+            value={colors[role] || ""}
+            onChange={(value) => updateColor(role, value)}
+          />
         ))}
         <BuilderSettingRow label="Link underline">
           <label className="builder-theme-checkbox-label">
@@ -267,26 +289,13 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             ["fieldFocus", "Field focus ring"]
           ] as Array<[keyof Pick<typeof COLOR_PLACEHOLDERS, "radioAccent" | "radioLabel" | "fieldFocus">, string]>
         ).map(([role, label]) => (
-          <BuilderSettingRow key={role} label={label}>
-            <span className="builder-theme-color-control">
-              <input
-                type="color"
-                value={forms[role] || COLOR_PLACEHOLDERS[role]}
-                onChange={(event) => updateFormColor(role, event.target.value)}
-              />
-              {forms[role] ? (
-                <button
-                  className="builder-theme-color-reset"
-                  type="button"
-                  onClick={() => updateFormColor(role, "")}
-                >
-                  Reset
-                </button>
-              ) : (
-                <span className="builder-theme-color-inherit">Inherit</span>
-              )}
-            </span>
-          </BuilderSettingRow>
+          <ThemeColorRow
+            key={role}
+            label={label}
+            placeholder={COLOR_PLACEHOLDERS[role]}
+            value={forms[role] || ""}
+            onChange={(value) => updateFormColor(role, value)}
+          />
         ))}
       </div>
 
