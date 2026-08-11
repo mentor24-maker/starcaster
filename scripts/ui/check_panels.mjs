@@ -99,9 +99,27 @@ async function openPanels(page) {
 
 function measure(page, nonStretch) {
   return page.evaluate((exempt) => {
+    /** Width of an element's rendered text, ignoring its padding. */
+    function textWidth(el) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const r = range.getBoundingClientRect();
+      range.detach?.();
+      return r.width;
+    }
+
     const panels = [...document.querySelectorAll('.builder-module-editor.is-lattice')];
-    return panels.map((panel, index) => {
-      const fields = [...panel.querySelectorAll('.builder-module-field')].map((f) => {
+    return panels.flatMap((panel, index) => {
+      // W0 is scoped PER COLUMN (operator 8/13): each column sizes to its own
+      // longest label and longest control. Checking per panel would demand
+      // that Structure and Placement match, which the rule deliberately does
+      // not ask for. Chrome outside any axis column is its own group.
+      const groups = [...panel.querySelectorAll('.builder-schema-panel-column')];
+      const loose = [...panel.querySelectorAll('.builder-module-chrome .builder-module-field-strip')];
+      return [...groups, ...loose].map((group, gi) => {
+      const groupName = ((group.querySelector('.builder-schema-group-title') || {}).textContent || '').trim()
+        || `chrome strip ${gi}`;
+      const fields = [...group.querySelectorAll('.builder-module-field')].map((f) => {
         const label = f.querySelector('.builder-module-field-label');
         const control = f.querySelector('.builder-module-field-control');
         if (!label || !control) return null;
@@ -114,9 +132,7 @@ function measure(page, nonStretch) {
           .map((c) => c.replace('builder-module-field--', ''))
           .find((c) => c !== 'builder-module-field') || '';
 
-        // Column origin: the axis column if there is one, else the panel.
-        const origin = f.closest('.builder-schema-panel-column') || panel;
-        const or = origin.getBoundingClientRect();
+        const or = group.getBoundingClientRect();
         const lr = label.getBoundingClientRect();
         const cr = control.getBoundingClientRect();
 
@@ -124,13 +140,17 @@ function measure(page, nonStretch) {
           name: (label.textContent || '').trim() || '(unlabelled)',
           kind,
           labelW: Math.round(lr.width),
-          labelScrollW: Math.round(label.scrollWidth),
+          // The TEXT width, not the box. scrollWidth counts padding, and the
+          // 40px of room IS padding — using it here would compare the box to
+          // itself and the room assertion would always pass.
+          labelTextW: Math.round(textWidth(label)),
           fieldX: Math.round(cr.left - or.left),
           fieldW: Math.round(cr.width),
           stretchable: !exempt.includes(kind)
         };
       }).filter(Boolean);
-      return { index, fields };
+      return { index, group: groupName, fields };
+      });
     });
   }, nonStretch);
 }
@@ -141,7 +161,7 @@ function assertLattice(panels, width) {
   for (const panel of panels) {
     const { fields } = panel;
     if (!fields.length) continue;
-    const where = `${width}px panel #${panel.index}`;
+    const where = `${width}px panel #${panel.index} / ${panel.group}`;
 
     const labelWidths = [...new Set(fields.map((f) => f.labelW))];
     if (labelWidths.length > 1) {
@@ -170,14 +190,26 @@ function assertLattice(panels, width) {
       );
     }
 
+    // The room the operator asked for: "40px more than the longest string".
+    // Without this the check would pass on tracks that fit the text exactly,
+    // which is the cramped look the rule was written against.
+    const room = fields.map((f) => f.labelW - f.labelTextW).filter((n) => Number.isFinite(n));
+    const tight = room.filter((r) => r < 30);
+    if (tight.length) {
+      failures.push(
+        `${where}: label track is only ${Math.min(...room)}px wider than its longest label — ` +
+        'the rule asks for 40px of room (--builder-field-room)'
+      );
+    }
+
     // L4: a label wider than its track is a cropped word, which the lattice
     // must never buy. The answer is a shorter label or a wider token — never
     // a per-field override.
     for (const f of fields) {
-      if (f.labelScrollW > f.labelW + 1) {
+      if (f.labelTextW > f.labelW + 1) {
         failures.push(
-          `${where}: label "${f.name}" needs ${f.labelScrollW}px but its track is ${f.labelW}px — ` +
-          'shorten the label or raise --builder-field-label-w (never widen one field)'
+          `${where}: label "${f.name}" text needs ${f.labelTextW}px but its track is ${f.labelW}px ` +
+          '(L4, cropped word) — the track should have grown to fit it, so a fixed width has crept back in'
         );
       }
     }
