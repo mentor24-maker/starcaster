@@ -35,7 +35,16 @@ import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
-const PAGE_NAME = process.env.UI_HARNESS_PANEL_PAGE || 'Table Overhaul Check';
+/*
+ * Seeded by `npm run seed:ui-fixture`, which is the point: this used to
+ * default to a page somebody had built by hand in their own local database,
+ * so what the check measured depended on the machine. On 2026-08-11 Heading
+ * joined the lattice and this reported a clean pass over six TABLE panels
+ * without ever seeing a heading. Re-seed after pulling — the seeder now
+ * rewrites this page's modules every run so it is always what the fixture
+ * says it is.
+ */
+const PAGE_NAME = process.env.UI_HARNESS_PANEL_PAGE || 'Panel Lattice Check';
 const WIDTHS = (process.env.UI_HARNESS_WIDTHS || '1440,1600').split(',').map(Number);
 
 /** Field kinds whose control keeps its natural size (W0's stated exception). */
