@@ -283,8 +283,32 @@ to a file and check the real code, or the gate is theatre.
 - **A locally-built bundle hash must not be committed** — it ships a
   cache-buster nobody can reproduce (landmine 8).
 
+- **The folder's own layout can leak into the hash.** esbuild stamps each
+  bundled module's path into the output as a comment and resolves symlinks to
+  their real location first, so a worktree whose `node_modules` was a symlink
+  to the main checkout emitted `// ../../../node_modules/...` and pinned a hash
+  no clean build could reproduce. On 2026-08-10 (PR #149) that failed CI on
+  `richtext-vendor.js` and `bundle.js` — two artifacts the change never
+  touched. **It was misdiagnosed as dependency drift first, and the wrong fix
+  "worked" for the wrong reason** (`npm ci` happened to replace the symlink
+  with a real folder). The tell is `ls -ld node_modules`, not `npm ls`; the
+  installed tree was correct all along, and the ~97 packages that look missing
+  in `node_modules/.package-lock.json` are optional other-platform binaries npm
+  skips on macOS.
+
+  **Do this:** every esbuild call shares `scripts/esbuild-common.mjs`
+  (`--preserve-symlinks`), and each artifact has exactly one script owning its
+  args — the same command spelled out in `package.json`, `dev.mjs` and
+  `build_pinned_assets.mjs` is how a flag lands in one copy and not the others.
+  `scripts/check_build_paths.cjs` enforces the **outcome** (no built artifact
+  may reference a path outside the repo), so a new build script that forgets
+  the shared settings is caught even though nothing checks for the flag itself.
+
 On a merge conflict in `src/layout.html`, take the incoming file and rebuild.
 Never resolve pins by hand.
+
+**When CI rejects pins on files your change never touched, suspect the folder
+before the change.** Run `npm run check:build-paths`.
 
 ### 5.5 Tests must not depend on ambient state
 

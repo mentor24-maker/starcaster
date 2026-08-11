@@ -19,4 +19,10 @@ cd "$ROOT" || exit 0
 # Never block a checkout: it has already happened by the time this runs.
 node scripts/build_pinned_assets.mjs >/dev/null 2>&1 \
   || echo "[post-checkout] Could not rebuild assets (run 'npm install' then 'npm run build:assets')."
+
+# Warn (never block) if this folder builds from dependencies living elsewhere —
+# the earliest possible signal, rather than letting it surface as a rejected
+# commit or a red CI run later. pre-commit is where it actually stops you.
+node scripts/check_build_paths.cjs >/dev/null 2>&1 \
+  || echo "[post-checkout] Heads up: this folder's bundles point outside it. Run 'npm run check:build-paths' for the fix."
 exit 0

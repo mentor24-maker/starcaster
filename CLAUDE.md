@@ -91,6 +91,15 @@ hashes pinned by `npm run pin:assets` — editing them is fine.
    one) or surfaces as "unrelated" modified HTML in someone else's commit.
    Pre-commit now runs `npm run build:assets` first, and CI fails if a clean
    build changes any committed HTML. Never hand-edit a `?v=` value.
+   The same hash also breaks if the FOLDER reaches its dependencies oddly:
+   esbuild stamps each bundled module's path into the output as a comment, so
+   a worktree whose `node_modules` is a symlink to another checkout emitted
+   `../../../node_modules/...` and pinned a hash no clean build could
+   reproduce (PR #149). Every build script now shares
+   `scripts/esbuild-common.mjs` (`--preserve-symlinks`), and
+   `npm run check:build-paths` fails the commit if any artifact still points
+   outside the repo. If CI rejects pins on files you never touched, run that
+   check — the answer is almost always your folder, not your change.
 9. **`public/js/` is parsed by nothing but the browser.** It is excluded from
    `tsconfig.json`, has no linter, and loads as plain `<script src>` tags
    rather than being bundled — so unlike `components/` (bundled) and
@@ -128,6 +137,13 @@ cd .claude/worktrees/<topic> && npm ci
 `git worktree list` shows every active thread; `git worktree remove
 .claude/worktrees/<topic>` cleans one up. Caveat: `.git/hooks` is **shared**
 across worktrees, so `npm install` in one reinstalls hooks for all of them.
+
+Run the real `npm ci` — **never symlink `node_modules` to another checkout**
+to save the ~270MB. Builds are supposed to be a function of the source, and a
+symlink leaks the folder's layout into the bundle bytes (landmine 8).
+`--preserve-symlinks` now absorbs it and `npm run check:build-paths` catches
+what slips through, but a real install is still the setup everything else
+assumes.
 
 ## Definition of done
 

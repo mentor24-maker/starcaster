@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PORTABLE_BUILD_ARGS } from './esbuild-common.mjs';
 
 const require = createRequire(import.meta.url);
 const { pinAssetVersions } = require('./pin_asset_versions.cjs');
@@ -23,6 +24,7 @@ const args = [
   '--jsx=automatic',
   '--loader:.js=jsx',
   '--tsconfig=tsconfig.json',
+  ...PORTABLE_BUILD_ARGS,
 ];
 if (watch) args.push('--watch');
 else args.push('--minify');

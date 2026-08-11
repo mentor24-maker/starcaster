@@ -49,6 +49,11 @@ jobs:
       # this source does not actually build to. That ships a stale
       # cache-buster: browsers keep serving the old CSS/JS to returning
       # visitors even though the new file deployed fine.
+      # Runs before the pin comparison so a path-leak is reported as itself
+      # rather than as a confusing hash mismatch on untouched files.
+      - name: Build output references only in-repo paths
+        run: node scripts/check_build_paths.cjs
+
       - name: Asset pins match a clean build
         run: |
           if ! git diff --exit-code -- '*.html'; then
