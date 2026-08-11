@@ -41,9 +41,11 @@ describe("getNavModuleStyle — an untouched menu keeps the look it had when the
     const vars = style();
 
     expect(vars["--site-nav-link-color"]).toBeUndefined();
+    expect(vars["--site-nav-link-bg"]).toBeUndefined();
     expect(vars["--site-nav-link-hover-color"]).toBeUndefined();
     expect(vars["--site-nav-link-hover-bg"]).toBeUndefined();
     expect(vars["--site-nav-link-active-color"]).toBeUndefined();
+    expect(vars["--site-nav-link-active-bg"]).toBeUndefined();
     expect(vars.color).toBeUndefined();
   });
 
@@ -99,6 +101,27 @@ describe("getNavModuleStyle — the controls that used to do nothing", () => {
   it("falls back rather than emitting NaN for junk", () => {
     expect(style({ navFontSize: "abc" }).fontSize).toBe("16px");
     expect(style({ navPaddingV: "", navPaddingH: "" })["--site-nav-padding"]).toBe("8px 8px");
+  });
+});
+
+describe("the colours that had no control at all", () => {
+  it("gives the labels a resting fill — there was neither a setting nor a CSS rule", () => {
+    expect(style({ navLinkBackground: "#0b2a4a" })["--site-nav-link-bg"]).toBe("#0b2a4a");
+  });
+
+  it("gives the current page its own fill instead of silently borrowing hover's", () => {
+    expect(style({ navActiveBackground: "#ffcc00" })["--site-nav-link-active-bg"]).toBe("#ffcc00");
+  });
+
+  it("still falls back to the hover fill, which is what the current page always was", () => {
+    expect(style({ navHoverBackground: "#00ff00" })["--site-nav-link-active-bg"]).toBe("#00ff00");
+  });
+
+  it("lets the current page differ from hover once both are set", () => {
+    const vars = style({ navHoverBackground: "#00ff00", navActiveBackground: "#ff0000" });
+
+    expect(vars["--site-nav-link-hover-bg"]).toBe("#00ff00");
+    expect(vars["--site-nav-link-active-bg"]).toBe("#ff0000");
   });
 });
 

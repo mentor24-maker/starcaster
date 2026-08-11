@@ -2901,7 +2901,7 @@ function HeadlineRotatorModuleEditor({
  * check:panels` is the only thing that knows whether a panel obeys it.
  * Add a type here, then run that check against a page carrying one.
  */
-const LATTICE_MODULE_TYPES = new Set<BuilderTemplateModuleType>(["table", "heading"]);
+const LATTICE_MODULE_TYPES = new Set<BuilderTemplateModuleType>(["table", "heading", "navigation"]);
 
 function ModuleEditorWrapper({
   isPopped,

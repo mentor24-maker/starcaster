@@ -12845,6 +12845,7 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   letter-spacing: var(--site-nav-link-spacing, 0px);
   text-decoration: var(--site-nav-link-decoration, none);
   text-shadow: var(--site-nav-link-text-shadow, none);
+  background: var(--site-nav-link-bg, transparent);
   white-space: nowrap;
   box-sizing: border-box;
   transition: background 140ms ease, color 140ms ease, transform 140ms ease;
@@ -12859,6 +12860,7 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
 
 .site-nav-link-active {
   color: var(--site-nav-link-active-color, var(--site-nav-link-hover-color, #0b82d4));
+  background: var(--site-nav-link-active-bg, var(--site-nav-link-hover-bg, #e8f4ff));
 }
 
 .site-nav-submenu-indicator {

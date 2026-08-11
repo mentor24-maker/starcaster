@@ -360,9 +360,23 @@ export function spacingFields(
     }));
 }
 
-/** A drop shadow is on for both the current value and the legacy `"on"`. */
-export function dropShadowIsOn(settings: SettingsRecord): boolean {
-  return settings.dropShadow === "true" || settings.dropShadow === "on";
+/**
+ * A drop shadow is on for both the current value and the legacy `"on"`.
+ *
+ * `prefix` names which shadow — a module may have more than one (Navigation
+ * casts a `box-shadow` from the bar and a `text-shadow` from the links, and
+ * A7 files those on different axes). `defaultOn` is for a shadow that was
+ * painted before it was controllable: the menu bar's, which must stay on
+ * when the setting is absent or every live menu loses it.
+ */
+export function dropShadowIsOn(
+  settings: SettingsRecord,
+  prefix = "dropShadow",
+  defaultOn = false
+): boolean {
+  const value = settings[prefix];
+  if (value === undefined || value === "") return defaultOn;
+  return value === "true" || value === "on";
 }
 
 /**
@@ -384,14 +398,36 @@ export function dropShadowIsOn(settings: SettingsRecord): boolean {
  */
 export function dropShadowFields(
   rendersVia: string,
-  options: { visibleWhen?: (settings: SettingsRecord) => boolean } = {}
+  options: {
+    visibleWhen?: (settings: SettingsRecord) => boolean;
+    /**
+     * Key prefix, for a module with more than one shadow. `dropShadow` (the
+     * default) keeps every existing caller on its existing keys; Navigation
+     * passes `navShadow` for the bar and `navTextShadow` for the links.
+     */
+    prefix?: string;
+    /** Overrides "Drop Shadow" when a panel carries two of these. */
+    label?: string;
+    /** On when the setting is absent — for a shadow that predates its control. */
+    defaultOn?: boolean;
+    /** Per-part overrides, so a bar shadow can reach further than a letter's. */
+    range?: { offset?: number; blur?: number };
+    defaults?: { x?: string; y?: string; blur?: string; color?: string };
+  } = {}
 ): BuilderSchemaField[] {
   const gate = options.visibleWhen ?? (() => true);
-  const detailVisible = (settings: SettingsRecord) => gate(settings) && dropShadowIsOn(settings);
+  const prefix = options.prefix ?? "dropShadow";
+  const defaultOn = options.defaultOn ?? false;
+  const offset = options.range?.offset ?? 20;
+  const blur = options.range?.blur ?? 30;
+  const defaults = options.defaults ?? {};
+  const detailVisible = (settings: SettingsRecord) =>
+    gate(settings) && dropShadowIsOn(settings, prefix, defaultOn);
+
   return [
     {
-      key: "dropShadow",
-      label: "Drop Shadow",
+      key: prefix,
+      label: options.label ?? "Drop Shadow",
       width: "check",
       control: "custom",
       rendersVia,
@@ -399,51 +435,51 @@ export function dropShadowFields(
       render: (ctx) => (
         <input
           type="checkbox"
-          checked={dropShadowIsOn(ctx.settings)}
-          onChange={(event) => ctx.set("dropShadow", event.target.checked ? "true" : "false")}
+          checked={dropShadowIsOn(ctx.settings, prefix, defaultOn)}
+          onChange={(event) => ctx.set(prefix, event.target.checked ? "true" : "false")}
         />
       )
     },
     {
-      key: "dropShadowColor",
+      key: `${prefix}Color`,
       label: "Shadow Color",
       width: "color",
       control: "color",
       dialogLabel: "Drop shadow color",
-      fallback: "#000000",
+      fallback: defaults.color ?? "#000000",
       rendersVia,
       visibleWhen: detailVisible
     },
     {
-      key: "dropShadowX",
+      key: `${prefix}X`,
       label: "Shadow X",
       width: "num",
       control: "number",
-      min: -20,
-      max: 20,
-      fallback: "3",
+      min: -offset,
+      max: offset,
+      fallback: defaults.x ?? "3",
       rendersVia,
       visibleWhen: detailVisible
     },
     {
-      key: "dropShadowY",
+      key: `${prefix}Y`,
       label: "Shadow Y",
       width: "num",
       control: "number",
-      min: -20,
-      max: 20,
-      fallback: "3",
+      min: -offset,
+      max: offset,
+      fallback: defaults.y ?? "3",
       rendersVia,
       visibleWhen: detailVisible
     },
     {
-      key: "dropShadowBlur",
+      key: `${prefix}Blur`,
       label: "Shadow Blur",
       width: "num",
       control: "number",
       min: 0,
-      max: 30,
-      fallback: "2",
+      max: blur,
+      fallback: defaults.blur ?? "2",
       rendersVia,
       visibleWhen: detailVisible
     }
