@@ -2526,3 +2526,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .is-lattice .builder-module-field--full {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* ============================================================== */
+/* AXIS COLUMNS INSIDE A CENTERED MODAL                            */
+/* ============================================================== */
+
+/*
+ * A table-cell module edits inside BuilderCenteredModal, and the axis grid
+ * picks its track count from the VIEWPORT (`@media (max-width: 1100px)`),
+ * not from the box it is actually in. On a 1920px screen a four-axis panel
+ * inside a 960px modal therefore kept four fixed tracks and cropped —
+ * D7 (a form modal never scrolls sideways) and L4 (never crop a word).
+ *
+ * Inside the modal the tracks fit themselves to the modal instead, wrapping
+ * to two rows of columns rather than shrinking below a usable width. Base
+ * layer, not a breakpoint, so it holds at every screen size (rule R1).
+ */
+.builder-react-root .builder-centered-modal .builder-schema-panel-columns[style*="--builder-axis-count"] {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
