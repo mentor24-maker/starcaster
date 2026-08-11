@@ -6,10 +6,12 @@ import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
+  formatPlainTextContent,
   formatRichTextContent,
   getBuilderBackgroundStyle,
   getLayoutColumns,
   getLayoutGridTemplate,
+  isPlainTextVariant,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
@@ -1642,11 +1644,17 @@ function BuilderModulePreview({
   }
 
   if (module.type === "text") {
+    // Simple Text keeps every other text-module behaviour (alignment, width,
+    // background) and changes only how the copy itself is turned into HTML.
+    const html = isPlainTextVariant(module.settings)
+      ? formatPlainTextContent(module.text)
+      : formatRichTextContent(module.text);
+
     return (
       <div
         className={`builder-preview-text builder-preview-text-${variant || "default"}`}
         style={getTextModuleWidthStyle(module.settings)}
-        dangerouslySetInnerHTML={{ __html: formatRichTextContent(module.text) || "" }}
+        dangerouslySetInnerHTML={{ __html: html || "" }}
       />
     );
   }

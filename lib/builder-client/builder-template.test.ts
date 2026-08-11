@@ -4,7 +4,10 @@ import {
   finalizeBackgroundSettings,
   promoteThemeStylesPageBackground,
   finalizeThemeStylesPageBackground,
+  formatPlainTextContent,
   formatRichTextContent,
+  isPlainTextVariant,
+  PLAIN_TEXT_VARIANT,
   prepareRichTextHtmlForStorage,
   normalizeBuilderAssetUrl,
   normalizeBuilderDocument,
@@ -83,6 +86,71 @@ describe("formatRichTextContent", () => {
     const html = formatRichTextContent("<p>Safe</p><img src=x onerror=alert(1) />");
     expect(html).toContain("Safe");
     expect(html.toLowerCase()).not.toContain("onerror");
+  });
+});
+
+describe("formatPlainTextContent", () => {
+  it("never wraps text in a paragraph", () => {
+    const html = formatPlainTextContent("Hello");
+    expect(html).toBe("Hello");
+    expect(html).not.toContain("<p>");
+  });
+
+  it("keeps line breaks as <br> instead of paragraphs", () => {
+    const html = formatPlainTextContent("Hello\nWorld");
+    expect(html).not.toContain("<p>");
+    expect(html.toLowerCase()).toContain("<br");
+    expect(html).toContain("Hello");
+    expect(html).toContain("World");
+  });
+
+  it("escapes angle brackets in plain text", () => {
+    expect(formatPlainTextContent("3 < 5")).toContain("&lt;");
+  });
+
+  it("passes inline markup through the sanitizer", () => {
+    const html = formatPlainTextContent('Serving <em>Provo</em> <img src=x onerror=alert(1) />');
+    expect(html).toContain("<em>Provo</em>");
+    expect(html).not.toContain("<p>");
+    expect(html.toLowerCase()).not.toContain("onerror");
+  });
+
+  it("keeps line breaks even when the text also contains an inline tag", () => {
+    // Regression: `looksLikeHtml` sees one <em> and calls the whole value HTML,
+    // which used to drop every newline in it. Found in the browser, 2026-08-11.
+    const html = formatPlainTextContent("First line\nsecond <em>line</em>");
+    expect(html.toLowerCase()).toContain("<br");
+    expect(html).toContain("<em>line</em>");
+  });
+
+  it("leaves block-level markup to lay itself out", () => {
+    const html = formatPlainTextContent("<h3>Title</h3>\n<div>Body</div>");
+    expect(html.toLowerCase()).not.toContain("<br");
+    expect(html).toContain("<h3>Title</h3>");
+  });
+
+  it("returns an empty string for empty content", () => {
+    expect(formatPlainTextContent("")).toBe("");
+    expect(formatPlainTextContent(null)).toBe("");
+    expect(formatPlainTextContent("   ")).toBe("");
+  });
+});
+
+describe("isPlainTextVariant", () => {
+  it("recognizes the Simple Text palette entry and nothing else", () => {
+    expect(isPlainTextVariant({ variant: PLAIN_TEXT_VARIANT })).toBe(true);
+    expect(isPlainTextVariant({ variant: "paragraph" })).toBe(false);
+    expect(isPlainTextVariant({})).toBe(false);
+    expect(isPlainTextVariant(undefined)).toBe(false);
+  });
+
+  it("survives a save/load round trip through the normalizer", () => {
+    const [module] = normalizeBuilderModules([
+      { id: "m1", type: "text", text: "Flush copy", settings: { variant: PLAIN_TEXT_VARIANT } }
+    ]);
+
+    expect(module.type).toBe("text");
+    expect(isPlainTextVariant(module.settings)).toBe(true);
   });
 });
 

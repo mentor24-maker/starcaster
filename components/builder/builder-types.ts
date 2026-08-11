@@ -7,6 +7,7 @@ import type {
   BuilderTemplateRecord,
   BuilderTheme
 } from "@/lib/builder-template";
+import { PLAIN_TEXT_VARIANT } from "@/lib/builder-template";
 import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BUILDER_CAPABILITIES } from "@/lib/capabilities";
@@ -261,6 +262,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: { variant: "paragraph" }
+  },
+  {
+    id: "text-simple",
+    type: "text",
+    group: "text",
+    label: "Simple Text",
+    icon: "T",
+    description: "Bare text with no paragraph tag, so it sits flush against what surrounds it.",
+    name: "",
+    text: "",
+    settings: { variant: PLAIN_TEXT_VARIANT }
   },
   {
     id: "text-intro",
