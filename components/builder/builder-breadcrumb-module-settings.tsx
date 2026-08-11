@@ -118,6 +118,12 @@ export function BuilderBreadcrumbModuleSettings({
     // whose themeDefault is their old fallback (A2). Size (a font SIZE) and
     // Bold stay on Text's basic row; the trail items, Separator and Align are
     // the module's own settings and stay basic (A4).
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
@@ -201,10 +207,7 @@ export function BuilderBreadcrumbModuleSettings({
               fallback: "false",
               rendersVia: "builder-module-card breadcrumb preview"
             }
-          ]
-        ],
-        // A1: both trail colours override the theme.
-        advanced: [
+          ],
           [
             {
               key: "color",
@@ -225,7 +228,8 @@ export function BuilderBreadcrumbModuleSettings({
               rendersVia: "builder-module-card breadcrumb preview"
             }
           ]
-        ]
+        ],
+        // A2 theme overrides; colour sorts after size and weight on Text (D9).
       }
     ]
   };

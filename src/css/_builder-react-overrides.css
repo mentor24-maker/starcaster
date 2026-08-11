@@ -2493,14 +2493,60 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    wrapper occupied one grid cell and every row below it lost its pairing —
    Frame's Background sat on a line of its own under its label. */
 .builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare,
-.builder-react-root .is-lattice .builder-schema-panel-column .builder-background-controls-horizontal {
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-background-controls-horizontal,
+/* The offsets block is the same species, found when Heading joined the
+   lattice (2026-08-11): two BuilderSettingRows inside their own wrapper,
+   each with its control in a `-value-stack` alongside a hint. Unflattened,
+   the wrapper took one cell and both rows laid themselves out inside it —
+   label above field, nothing lining up with the column. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields {
   display: contents;
+}
+
+/*
+ * The offsets go one level deeper than the background block: their control
+ * sits in a `-value-stack` inside the `-value` wrapper. Flattening only the
+ * stack is not enough — `-value` is a flex box under the lattice, so the
+ * input and its hint became flex SIBLINGS, the sentence took the room and
+ * the number input was crushed to a sliver. Both wrappers have to go for
+ * the label, the input and the hint to reach the column's grid.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields .builder-setting-value,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields .builder-setting-value-stack {
+  display: contents;
+}
+
+/* The input is a bare grid item now, so it fills its track like any other
+   control rather than sitting at its browser-default width. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  padding-right: calc(var(--builder-field-room, 40px) / 2);
 }
 
 /* Anything inside the background block that is NOT a field pair — the image
    picker and its media actions — takes a full row rather than a cell. */
 .builder-react-root .is-lattice .builder-schema-panel-column .builder-background-controls-horizontal > *:not(.builder-module-field-strip) {
   grid-column: 1 / -1;
+}
+
+/*
+ * A hint is a sentence, and the control track is `max-content`. Left in
+ * that track the sentence would BE the track's width, dragging every
+ * control in the column out to the length of "Positive moves right;
+ * negative moves left." So the hint takes its own full-width row instead.
+ *
+ * `width: min-content` is what keeps it from widening the tracks anyway:
+ * a spanning item still contributes to intrinsic track sizing, so its
+ * contribution is held down to its longest word, and `min-width: 100%`
+ * lets it fill the row once the tracks have actually been resolved.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-hint {
+  grid-column: 1 / -1;
+  width: min-content;
+  min-width: 100%;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--muted, #445465);
 }
 
 /* The axis title is not a row of the lattice — it spans both tracks. */
@@ -2511,9 +2557,28 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /*
  * The 40px lives on the label as trailing room, so the track measures
  * "longest label + 40" exactly as the rule says.
+ *
+ * NOT in the heading/floating-image chrome. That bar is one flowing line
+ * of module-level settings (D1/D2), not a lattice column — it has no
+ * tracks to line up, so trailing room and a stretched control buy nothing
+ * and cost correctness: when Heading joined the lattice (2026-08-11) the
+ * Background select stretched to 100% of the bar and the word "Alignment"
+ * printed on top of it (L5). The shared `.builder-module-chrome` is NOT
+ * excluded — check_panels measures it as a lattice group by design.
  */
-.builder-react-root .is-lattice .builder-module-field-label,
-.builder-react-root .is-lattice .builder-setting-label {
+.builder-react-root .is-lattice
+  :is(.builder-module-field-label, .builder-setting-label):not(
+    .builder-heading-module-chrome *,
+    .builder-floating-image-module-chrome *
+  ) {
+  /* padding-left: 0 matters. `.builder-setting-label` carries `padding:
+     4px 12px` from the base sheet while `.builder-module-field-label`
+     carries none, so a legacy row inside a lattice column started its
+     label 12px right of every field label above it — the offsets sat
+     visibly indented under Placement, and check_panels could not see it
+     because it only measured `.builder-module-field`. It measures both
+     now; this is what it caught. */
+  padding-left: 0;
   padding-right: var(--builder-field-room, 40px);
   white-space: nowrap;
 }
@@ -2525,21 +2590,24 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * on top, and because the track is shared every control in the column ends
  * up at the widest one.
  */
-.builder-react-root .is-lattice .builder-module-field-control,
-.builder-react-root .is-lattice .builder-setting-value {
+.builder-react-root .is-lattice
+  :is(.builder-module-field-control, .builder-setting-value):not(
+    .builder-heading-module-chrome *,
+    .builder-floating-image-module-chrome *
+  ) {
   display: flex;
   min-width: 0;
   width: 100%;
 }
 
-.builder-react-root .is-lattice .builder-module-field-control > select,
-.builder-react-root .is-lattice .builder-module-field-control > input[type="text"],
-.builder-react-root .is-lattice .builder-module-field-control > input[type="number"],
-.builder-react-root .is-lattice .builder-module-field-control > input[type="url"],
-.builder-react-root .is-lattice .builder-module-field-control > .builder-number-select-control,
-.builder-react-root .is-lattice .builder-setting-value > select,
-.builder-react-root .is-lattice .builder-setting-value > input[type="text"],
-.builder-react-root .is-lattice .builder-setting-value > input[type="number"] {
+/* Same exclusion as above — a control in the flowing chrome bar keeps its
+   own size instead of filling the bar. */
+.builder-react-root .is-lattice
+  :is(.builder-module-field-control, .builder-setting-value):not(
+    .builder-heading-module-chrome *,
+    .builder-floating-image-module-chrome *
+  )
+  > :is(select, input[type="text"], input[type="number"], input[type="url"], .builder-number-select-control) {
   width: 100%;
   min-width: 0;
   max-width: none;

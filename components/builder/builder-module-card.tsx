@@ -2890,7 +2890,18 @@ function HeadlineRotatorModuleEditor({
  * Table before it reaches the other 52 panels; it is a sequencing device,
  * not a design decision.
  */
-const LATTICE_MODULE_TYPES = new Set<BuilderTemplateModuleType>(["table"]);
+/*
+ * Which panels are on the lattice (W0). Table settled the rule; Heading
+ * joined 2026-08-11 on the operator's word, looking at an Eyebrow heading:
+ * "It also hasn't received the new 'Alignment Protocol', so let's apply
+ * that one here, too."
+ *
+ * The gate still exists because the remaining 50 panels have not been
+ * looked at one by one, and W0 is a browser-measured rule — `npm run
+ * check:panels` is the only thing that knows whether a panel obeys it.
+ * Add a type here, then run that check against a page carrying one.
+ */
+const LATTICE_MODULE_TYPES = new Set<BuilderTemplateModuleType>(["table", "heading"]);
 
 function ModuleEditorWrapper({
   isPopped,

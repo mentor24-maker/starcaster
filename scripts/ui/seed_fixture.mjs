@@ -53,6 +53,60 @@ const must = (res, what) => {
   return res.data ?? res;
 };
 
+/**
+ * The page `check_panels.mjs` measures. It has to be SEEDED, not hand-built:
+ * until 2026-08-11 the lattice check ran against a page somebody had made by
+ * hand in their own local database, so "does Heading obey W0?" could only be
+ * answered on that one machine — and when Heading joined the lattice the
+ * check reported a confident pass across six Table panels while measuring no
+ * heading at all. A browser-checked rule with an unreproducible fixture is
+ * the honour system with extra steps.
+ *
+ * One module per lattice type, in one section, so a single run covers them
+ * all. Adding a type to LATTICE_MODULE_TYPES means adding a module here.
+ */
+const PANEL_CHECK_SECTION = {
+  id: 'section-panel-lattice-check',
+  title: 'Panel Lattice Check',
+  layout: 'single',
+  locked: false,
+  alignment: 'left',
+  widthMode: 'contained',
+  modules: [
+    {
+      id: 'module-panel-check-table',
+      name: 'Contact Strip',
+      text: '',
+      type: 'table',
+      column: 'main',
+      settings: {
+        columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
+        tableData: '{"headers":["Phone","Hours","Status"],"cells":{},"rowCount":1}',
+        borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
+        cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
+        backgroundColor: '#ffffff', mobileHidden: 'false', desktopHidden: 'false',
+      },
+    },
+    {
+      // An EYEBROW heading with its shadow on: the longest labels in the
+      // panel ("Horizontal Margin", "Shadow Blur") and the offsets block,
+      // which is where the lattice broke when Heading first joined it.
+      id: 'module-panel-check-heading',
+      name: 'Eyebrow Heading',
+      text: 'Delray Beach • Public Tennis • Two Locations',
+      type: 'heading',
+      column: 'main',
+      settings: {
+        variant: 'eyebrow', level: 'h6', fontSize: '14', fontWeight: '800',
+        textAlign: 'left', textTransform: 'uppercase', lineHeight: '1.2', letterSpacing: '0',
+        dropShadow: 'true', dropShadowColor: '#0b2a4a',
+        dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
+        mobileHidden: 'false', desktopHidden: 'false',
+      },
+    },
+  ],
+};
+
 /** Content chosen to break layouts, not to look plausible. */
 const PAGES = [
   ['Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray',
@@ -64,6 +118,7 @@ const PAGES = [
   ['', 'empty-name-row'],
   ['Short', 's'],
   ['Court Fees', 'course-fees'],
+  ['Panel Lattice Check', 'panel-lattice-check', [PANEL_CHECK_SECTION]],
 ];
 
 async function findOwnerUserId() {
@@ -119,15 +174,31 @@ if (CLEAN) {
   process.exit(0);
 }
 
-const have = new Set(existing.map((r) => r.slug));
+const bySlug = new Map(existing.map((r) => [r.slug, r]));
 let created = 0;
-for (const [name, slug] of PAGES) {
-  if (have.has(slug)) continue;
+let refreshed = 0;
+for (const [name, slug, sections = []] of PAGES) {
+  const row = bySlug.get(slug);
+  if (row) {
+    // A page that carries modules is REWRITTEN on every seed. The empty
+    // pages exist only to be listed, so leaving them alone protects any
+    // hand-made edits; the check page is a fixture and must be exactly
+    // what this file says, or the panel check silently measures something
+    // else — which is how Heading went unmeasured on 2026-08-11.
+    if (!sections.length) continue;
+    const res = await sbQuery({
+      method: 'PATCH', table: pagesTable, query: `id=eq.${row.id}`,
+      body: { layout_sections: sections, updated_at: new Date().toISOString() },
+    });
+    if (!res.ok) { console.error(`  failed to refresh ${slug}: ${res.error}`); continue; }
+    refreshed += 1;
+    continue;
+  }
   const res = await sbQuery({
     method: 'POST', table: pagesTable, query: 'select=id',
     body: {
       name, slug, project_id: project.id, template_kind: 'modular',
-      is_published: true, layout_sections: [], updated_at: new Date().toISOString(),
+      is_published: true, layout_sections: sections, updated_at: new Date().toISOString(),
     },
     headers: { Prefer: 'return=representation' },
   });
@@ -135,5 +206,8 @@ for (const [name, slug] of PAGES) {
   created += 1;
 }
 
-console.log(`fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ${existing.length} already present.`);
+console.log(
+  `fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ` +
+  `${refreshed} refreshed, ${existing.length} already present.`
+);
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

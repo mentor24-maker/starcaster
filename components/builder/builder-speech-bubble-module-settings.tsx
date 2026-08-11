@@ -46,6 +46,12 @@ export function BuilderSpeechBubbleModuleSettings({
    * (A2) would change what an empty setting MEANS — that conversion needs
    * the runtime to learn "empty = follow the theme" first.
    * Content, Width and Height are the module's own settings (A4).
+   *
+   * SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+   * Everything above that "moved into Advanced" now sits LAST on the axis it
+   * already names, ordered by D9 (blast radius, descending). The axis
+   * assignments and the A2 theme-colour semantics are unchanged — only the
+   * collapsing is gone. Kept rather than rewritten: the reasoning is the record.
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -115,10 +121,7 @@ export function BuilderSpeechBubbleModuleSettings({
       },
       {
         title: "Placement",
-        strips: [],
-        // A5: offsets and the stacking order they travel with are nudges,
-        // not everyday placement — the hint moves with the fields it explains.
-        advanced: [
+        strips: [
           [
             {
               key: "offsetX",
@@ -189,14 +192,13 @@ export function BuilderSpeechBubbleModuleSettings({
               )
             }
           ]
-        ]
+        ],
+        // A5: offsets and the stacking order they travel with are nudges,
+        // not everyday placement — the hint moves with the fields it explains.
       },
       {
         title: "Frame",
-        strips: [],
-        // A1: three colours and a border thickness — all theme values. Left
-        // as `custom` renders on purpose; see the note at the top of the file.
-        advanced: [
+        strips: [
           [
             {
               key: "backgroundColor",
@@ -257,7 +259,9 @@ export function BuilderSpeechBubbleModuleSettings({
               )
             }
           ]
-        ]
+        ],
+        // A2 theme values, sorted last on Frame (D9). Left
+        // as `custom` renders on purpose; see the note at the top of the file.
       }
     ]
   };

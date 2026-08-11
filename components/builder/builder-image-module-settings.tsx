@@ -43,6 +43,12 @@ const EFFECT_OPTIONS: { value: string; label: string }[] = [
  * old fallback (A2). Effect stays basic: it is an appearance mode the
  * theme knows nothing about, not an override. Alt text and Width are the
  * module's own settings and stay basic (A4).
+ *
+ * SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+ * Everything above that "moved into Advanced" now sits LAST on the axis it
+ * already names, ordered by D9 (blast radius, descending). The axis
+ * assignments and the A2 theme-colour semantics are unchanged — only the
+ * collapsing is gone. Kept rather than rewritten: the reasoning is the record.
  */
 export function BuilderImageModuleSettings({
   module,
@@ -95,10 +101,7 @@ export function BuilderImageModuleSettings({
               options: EFFECT_OPTIONS,
               rendersVia: "getImageModuleStyle"
             }
-          ]
-        ],
-        // A1: the border's thickness, corners and colour are all theme values.
-        advanced: [
+          ],
           [
             {
               key: "borderThickness",
@@ -110,7 +113,16 @@ export function BuilderImageModuleSettings({
               fallback: "0",
               rendersVia: "getImageModuleStyle"
             },
-            {
+                        {
+              key: "borderColor",
+              label: "Border Color",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Image border color",
+              themeDefault: "#0f4f8f",
+              rendersVia: "getImageModuleStyle"
+            },
+{
               key: "borderRadius",
               label: "Radius",
               width: "num",
@@ -119,18 +131,10 @@ export function BuilderImageModuleSettings({
               max: 80,
               fallback: "18",
               rendersVia: "getImageModuleStyle"
-            },
-            {
-              key: "borderColor",
-              label: "Border Color",
-              width: "color",
-              control: "theme-color",
-              dialogLabel: "Image border color",
-              themeDefault: "#0f4f8f",
-              rendersVia: "getImageModuleStyle"
             }
           ]
-        ]
+        ],
+        // A2 theme overrides. Frame's order is width, colour, then radius (D9).
       }
     ]
   };

@@ -23,6 +23,12 @@ export function BuilderBlogPostCardModuleSettings({ module, onUpdateModule }: Pr
     // their own axis's `advanced`. Here that is Radius (a border radius —
     // theme-backed) under Frame. Card Style stays basic: it picks a card
     // preset (a layout mode), not a theme value to override.
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
@@ -126,16 +132,13 @@ export function BuilderBlogPostCardModuleSettings({ module, onUpdateModule }: Pr
                 { value: "shadow", label: "Shadow" }
               ]
             }
-          ]
-        ],
-        // A1: border radius is a theme value — overriding it is deliberate,
-        // so it lives under Frame's own Advanced rather than beside the
-        // everyday card controls. Same key, same fallback, same control.
-        advanced: [
+          ],
           [
             { key: "cardBorderRadius", label: "Radius", width: "num", control: "number", min: 0, max: 32, step: 2, fallback: "12" }
           ]
-        ]
+        ],
+        // A2 theme override, and the finest adjustment on Frame — so it sorts
+        // last here (D9) instead of behind a collapse. Same key and control.
       }
     ]
   };

@@ -42,6 +42,12 @@ export function BuilderTractorNavModuleSettings({
    * Placement › Advanced per A5; Position X/Y stay basic, because they are
    * where the rings SIT rather than a nudge off that position (the note on
    * Structure still explains their units).
+   *
+   * SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+   * Everything above that "moved into Advanced" now sits LAST on the axis it
+   * already names, ordered by D9 (blast radius, descending). The axis
+   * assignments and the A2 theme-colour semantics are unchanged — only the
+   * collapsing is gone. Kept rather than rewritten: the reasoning is the record.
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -213,10 +219,7 @@ export function BuilderTractorNavModuleSettings({
                 />
               )
             }
-          ]
-        ],
-        // A5: stacking order is a nudge, not everyday placement.
-        advanced: [
+          ],
           [
             {
               key: "zIndex",
@@ -235,7 +238,9 @@ export function BuilderTractorNavModuleSettings({
               )
             }
           ]
-        ]
+        ],
+        // A5 withdrawn with Advanced (A0): a nudge is now sorted last on
+            // Placement rather than hidden — same de-emphasis, one glance away.
       },
       {
         title: "Frame",
@@ -305,16 +310,7 @@ export function BuilderTractorNavModuleSettings({
                 </span>
               )
             }
-          ]
-        ],
-        // A1: the ring colour and the dot's hover colour are theme values.
-        // Both stay `color` controls rather than becoming `theme-color` (A2):
-        // normalizeBuilderModuleSettingsForType backfills an empty color /
-        // dotHoverColor with its hex on EVERY load, so "give it back to the
-        // theme" would appear to work and silently revert on the next reload.
-        // The A2 conversion needs those two backfill lines in
-        // lib/builder-client/builder-template.ts to go first.
-        advanced: [
+          ],
           [
             {
               key: "color",
@@ -335,7 +331,14 @@ export function BuilderTractorNavModuleSettings({
               rendersVia: "BuilderTractorNavModule"
             }
           ]
-        ]
+        ],
+        // A2 theme values, sorted last on Frame (D9).
+        // Both stay `color` controls rather than becoming `theme-color` (A2):
+        // normalizeBuilderModuleSettingsForType backfills an empty color /
+        // dotHoverColor with its hex on EVERY load, so "give it back to the
+        // theme" would appear to work and silently revert on the next reload.
+        // The A2 conversion needs those two backfill lines in
+        // lib/builder-client/builder-template.ts to go first.
       }
     ]
   };
