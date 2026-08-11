@@ -2571,6 +2571,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     .builder-heading-module-chrome *,
     .builder-floating-image-module-chrome *
   ) {
+  /* padding-left: 0 matters. `.builder-setting-label` carries `padding:
+     4px 12px` from the base sheet while `.builder-module-field-label`
+     carries none, so a legacy row inside a lattice column started its
+     label 12px right of every field label above it — the offsets sat
+     visibly indented under Placement, and check_panels could not see it
+     because it only measured `.builder-module-field`. It measures both
+     now; this is what it caught. */
+  padding-left: 0;
   padding-right: var(--builder-field-room, 40px);
   white-space: nowrap;
 }

@@ -250,18 +250,16 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   "Alignment" printed on top of it (L5). The SHARED `.builder-module-chrome`
   is **not** excluded — `check_panels` measures it as a lattice group.
 
-  **Known gap, now visible:** a panel with an **Advanced** section renders
-  it as a second row of columns. Under fixed widths the two rows lined up
-  by construction; under per-column content sizing each row measures
-  itself, so an advanced control sits out of line with the axis it belongs
-  to. Table has no Advanced section, so this was invisible until Heading
-  joined on 8/11 — its Advanced "Text" column now starts ~150px left of
-  the basic "Text" column above it. `check_panels` does not catch it: W0
-  is scoped per column (8/13) and each column is internally correct. Each
-  block is tidy on its own; the two blocks do not agree. **This is the
-  next thing to settle** — and it is a design question, because the fix
-  is either one grid spanning both rows or moving each axis's Advanced
-  controls inside its own column.
+  ~~**Known gap:** a panel with an Advanced section renders it as a second
+  row of columns, which under per-column sizing measures itself
+  independently, so an advanced control sits out of line with its axis.~~
+  **Closed by A0 (8/13), which deleted the Advanced section rather than
+  aligning it.** Heading is where the gap became visible — its Advanced
+  "Text" column sat ~150px left of the basic "Text" column above it — and
+  it is the reason A0 gives for deleting rather than fixing: "That made
+  Advanced the single blocker to rolling the lattice out across 22 of the
+  32 schema-driven panels." One row of columns per panel, so there is
+  nothing left to line up.
 
 - **W1.** **Never stretch a field to the widest possible width.** *(7/1
   "I've begged and pleaded with every AI model I've used again and again …
