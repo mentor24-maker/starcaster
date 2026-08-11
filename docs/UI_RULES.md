@@ -138,11 +138,31 @@ layout would avoid.*
 screen allows. Within one panel, though, "as wide as it needs" is settled
 ONCE for the whole panel (W0), not re-decided field by field.*
 
-- **W0. THE LATTICE RULE — one label width, one field width, per panel.**
-  Every label in a settings panel occupies **the same width**. Every field
-  occupies **the same width**. Therefore every label starts at the same
-  x-position and every field starts at the same x-position, in every
-  column. One control per row: two label/field pairs never share a line.
+- **W0. THE LATTICE RULE — one label width, one field width, per column,
+  each sized to the longest string in that column plus 40px.**
+  Inside an axis column every label occupies **the same width** and every
+  field occupies **the same width**, so labels start at the same x and
+  fields start at the same x. One control per row: two label/field pairs
+  never share a line.
+
+  **How the width is chosen (refined 8/13).** Not a hardcoded number —
+  the column measures its own longest label and its own longest control
+  and adds 40px of room: *"Fields width is 40px more than the longest
+  string … For the fields, I'd like to make it similarly flexible."*
+  **Per column, not per panel** (operator's choice, 8/13): a short column
+  like Structure stays tight instead of inheriting the width of the
+  panel's longest label.
+
+  **The columns themselves are compact; the GAPS take the slack.**
+  *(8/13: "when the full width available is wider than the sum of the form
+  columns, the difference should be spread equally between the spaces
+  between the sections … the forms should stay comfortably compact, with
+  just the 40px padding between columns.")* Each axis column is as wide as
+  its own lattice needs, and all remaining width is split equally between
+  the columns — first flush left, last flush right. This replaced
+  `repeat(axis-count, 1fr)`, which handed every column an equal share
+  whether it needed it or not; that is where the trailing space after
+  short rows came from.
   *(operator 8/12, on the Table panel: "The form Labels column must be the
   same width so that the form fields all start in the same place. Even when
   you set up columns, you randomly stagger the placement of the fields so
@@ -177,13 +197,26 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   field slot. The slot is still the standard width, so the next column
   still lines up.
 
-  **Widths are set in one place** (`--builder-field-label-w` /
-  `--builder-field-control-w` in `src/css/_variables.css`). Changing the
-  look of every panel is changing those two numbers. Never set a width on
-  an individual field.
+  **The mechanism is the point: the COLUMN is the grid, not the field.**
+  Every strip and field inside it is `display: contents`, so the labels and
+  controls become direct children of one grid and two `max-content` tracks
+  measure the whole column at once. When each field was its own grid,
+  `max-content` measured one row at a time — which is exactly how a single
+  panel ended up with 7 label widths and 7 field positions.
+  The one number left is `--builder-field-room` (40px) in
+  `src/css/_variables.css`. **Never set a width on an individual field.**
 
-  *Rolled out: Table (8/12). Every other module follows — the tokens are
-  shared, so the remaining work is deleting per-field width overrides.*
+  *Rolled out: Table (8/12, refined 8/13). Every other module follows —
+  the CSS already covers any panel, so rolling out is deleting the
+  `LATTICE_MODULE_TYPES` gate in `builder-module-card.tsx`.*
+
+  **Known gap, not yet solved:** a panel with an **Advanced** section
+  renders it as a second row of columns. Under fixed widths the two rows
+  lined up by construction; under per-column content sizing each row
+  measures itself, so an advanced control can sit out of line with the
+  axis it belongs to. Table has no Advanced section, so this is not
+  visible yet — it must be settled before the rollout reaches a module
+  that does (Navigation is the first).
 
 - **W1.** **Never stretch a field to the widest possible width.** *(7/1
   "I've begged and pleaded with every AI model I've used again and again …
