@@ -16,10 +16,21 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// A folder with no dependencies of its own must NOT build. npx would resolve
+// esbuild by walking up to the parent checkout and bundle against ITS
+// node_modules, writing artifacts full of ../../../ paths that then look
+// committable. That is exactly what a brand-new worktree hit: post-checkout
+// fires before `npm ci` has run, so the folder was born with poisoned bundles.
+if (!fs.existsSync(path.join(root, 'node_modules'))) {
+  console.log('[build:assets] Skipped — no node_modules in this folder yet. Run `npm ci` first.');
+  process.exit(0);
+}
 
 /**
  * [label, command, args] — each writes one hash-pinned artifact.
