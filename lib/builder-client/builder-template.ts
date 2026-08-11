@@ -1831,10 +1831,36 @@ export function normalizeBuilderModuleSettingsForType(
 
   // StarCaster: table modules keep border/padding/grid counts in sync.
   if (type === "table") {
-    const borderThickness = normalizeSpacingValue(settings.borderThickness ?? settings.borderWidth, "1", 0, 24);
-    settings.borderThickness = borderThickness;
+    /**
+     * `borderWidth` is the key. The editor writes it and both renderers read
+     * it; `borderThickness` is a mirror kept for older saved modules and for
+     * nothing else — no table renderer has ever read it.
+     *
+     * The precedence used to be `borderThickness ?? borderWidth`, which made
+     * the mirror authoritative and silently reverted every border change: the
+     * first normalization pass set borderThickness from borderWidth, and from
+     * then on it shadowed whatever the operator picked. Border COLOUR worked
+     * because it has no mirror — which is exactly how the bug was reported
+     * (2026-08-11, "the border color setting works, but not the size").
+     *
+     * `??` is the whole guard: normalizeModuleSettings above has already run
+     * every present borderWidth through normalizeSpacingValue, so if the key
+     * exists it holds a usable number — including "0", which is a deliberate
+     * borderless table and must not be mistaken for "unset".
+     */
+    const borderThickness = normalizeSpacingValue(
+      settings.borderWidth ?? settings.borderThickness,
+      "1",
+      0,
+      24
+    );
     settings.borderWidth = borderThickness;
+    settings.borderThickness = borderThickness;
     settings.cellPadding = normalizeSpacingValue(settings.cellPadding, "14", 0, 40);
+    // `columnsCount` / `rowsCount` are vestigial: the grid's real shape lives
+    // in `tableData` (headers.length and rowCount), which is what the editor
+    // and both renderers use. Nothing reads these two. Kept only so older
+    // saved modules round-trip unchanged; do not wire a control to them (C6).
     settings.columnsCount = normalizeSpacingValue(settings.columnsCount ?? settings.columns, "3", 1, 8);
     settings.rowsCount = normalizeSpacingValue(settings.rowsCount, "4", 1, 20);
   }

@@ -74,7 +74,7 @@ test('serializeBuilderDocument preserves 1-4-1 module column placement', () => {
   );
 });
 
-test('serializeBuilderDocument preserves table borderThickness zero', () => {
+function serializeTableSettings(settings) {
   const serialized = serializeBuilderDocument({
     layoutSections: [{
       id: 'section_1',
@@ -84,19 +84,38 @@ test('serializeBuilderDocument preserves table borderThickness zero', () => {
         type: 'table',
         column: 'main',
         name: 'Table',
-        settings: {
-          borderThickness: '0',
-          borderWidth: '1',
-          columnsCount: '3',
-          rowsCount: '2',
-          tableContents: '[]',
-        },
+        settings: { columnsCount: '3', rowsCount: '2', tableContents: '[]', ...settings },
       }],
     }],
   });
-  const settings = serialized.sections[0].modules[0].settings;
-  assert.equal(settings.borderThickness, '0');
+  return serialized.sections[0].modules[0].settings;
+}
+
+test('serializeBuilderDocument keeps a borderless table borderless', () => {
+  // The requirement this has always protected: 0 is an answer, not an absence,
+  // and must not be coerced back to the 1px default.
+  const settings = serializeTableSettings({ borderWidth: '0' });
   assert.equal(settings.borderWidth, '0');
+  assert.equal(settings.borderThickness, '0');
+});
+
+test('serializeBuilderDocument takes the table border width the editor wrote', () => {
+  // Until 2026-08-11 this asserted the opposite — that `borderThickness` won
+  // over `borderWidth`. That precedence WAS the bug the operator reported
+  // ("the border color setting works, but not the size"): the editor writes
+  // borderWidth, so making the mirror authoritative meant every size change
+  // was reverted on the next load. The old fixture's split state
+  // (borderThickness 0, borderWidth 1) is not one the app can produce — no
+  // table path seeds borderThickness, and normalization writes both keys to
+  // the same value — so it was testing the mechanism, not a real requirement.
+  const settings = serializeTableSettings({ borderThickness: '1', borderWidth: '4' });
+  assert.equal(settings.borderWidth, '4');
+  assert.equal(settings.borderThickness, '4');
+});
+
+test('serializeBuilderDocument still reads the legacy mirror when it is all there is', () => {
+  const settings = serializeTableSettings({ borderThickness: '3' });
+  assert.equal(settings.borderWidth, '3');
 });
 
 test('migrateLegacyLayoutSections maps 1-4-1 to one-four-one', () => {

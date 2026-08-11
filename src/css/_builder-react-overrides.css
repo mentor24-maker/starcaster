@@ -597,10 +597,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   max-width: 100%;
 }
 
+/* Layout only. This rule used to carry `color: var(--muted)` and a 0.8rem
+   size, and because it sits BELOW the R9 block above at the same specificity
+   it quietly won — every field label in every module panel rendered muted
+   grey on the builder's blue, which is the exact pairing R9 was written to
+   stop. Colour and size belong to the R9 block; do not re-add them here. */
 .builder-react-root .builder-module-field-label {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--muted);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -2194,4 +2196,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  */
 .builder-react-root .builder-preview-section-full-width + .builder-preview-section-full-width {
   margin-top: 0;
+}
+
+/*
+ * Table's grid sits below the D8 axis columns under its own "Content"
+ * heading, so it needs the gap the axis columns get from the panel grid.
+ * (Its old `.builder-table-design-grid` / `.builder-table-structure-actions`
+ * rules in _builder-react.css are now dead — the schema generator owns that
+ * layout. They are left in place because that file is regeneration-guarded;
+ * sweeping them is a separate, deliberate pass.)
+ */
+.builder-react-root .builder-table-module-settings > .builder-schema-group-title {
+  margin-top: 18px;
 }

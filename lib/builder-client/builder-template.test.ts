@@ -71,6 +71,58 @@ describe("normalizeBuilderModuleSettingsForType", () => {
   });
 });
 
+describe("table border width round-trip", () => {
+  const ctx = { id: "t-1", type: "table" as const, column: "main", name: "", text: "" };
+
+  it("keeps the width the editor wrote instead of the mirror key", () => {
+    // The reported bug (2026-08-11): border colour changed, border size did
+    // not. `borderThickness` is a mirror nothing reads, but it used to take
+    // precedence — so the first save stamped it from the default and every
+    // later change to borderWidth was overwritten on the next load.
+    const settings = normalizeBuilderModuleSettingsForType(
+      "table",
+      { borderWidth: "4", borderThickness: "1" },
+      ctx
+    );
+
+    expect(settings.borderWidth).toBe("4");
+    expect(settings.borderThickness).toBe("4");
+  });
+
+  it("survives a second pass, which is where the revert used to happen", () => {
+    const once = normalizeBuilderModuleSettingsForType("table", { borderWidth: "6" }, ctx);
+    const twice = normalizeBuilderModuleSettingsForType("table", { ...once }, ctx);
+    expect(twice.borderWidth).toBe("6");
+  });
+
+  it("still reads the mirror for a module that only ever had one", () => {
+    const settings = normalizeBuilderModuleSettingsForType("table", { borderThickness: "3" }, ctx);
+    expect(settings.borderWidth).toBe("3");
+  });
+
+  it("keeps a deliberate borderless table at 0 rather than the default", () => {
+    const settings = normalizeBuilderModuleSettingsForType(
+      "table",
+      { borderWidth: "0", borderThickness: "1" },
+      ctx
+    );
+    expect(settings.borderWidth).toBe("0");
+  });
+
+  it("never sees a blank width — the generic sanitizer coerces it first", () => {
+    // normalizeModuleSettings runs ahead of the per-type branch and puts every
+    // present borderWidth through normalizeSpacingValue, so "" arrives as the
+    // default and the mirror never gets a look-in. Pinned because it is the
+    // reason the table branch needs `??` and not an empty-string guard.
+    const settings = normalizeBuilderModuleSettingsForType(
+      "table",
+      { borderWidth: "", borderThickness: "5" },
+      ctx
+    );
+    expect(settings.borderWidth).toBe("1");
+  });
+});
+
 describe("formatRichTextContent", () => {
   it("wraps plain text in paragraphs", () => {
     const html = formatRichTextContent("Hello\n\nWorld");

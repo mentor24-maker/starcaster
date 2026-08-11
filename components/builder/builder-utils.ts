@@ -156,6 +156,36 @@ export function getModuleOuterSpacingStyle(settings: Record<string, string>): CS
   };
 }
 
+/** The Table module's Max Width, clamped, or undefined for "full width". */
+export function getTableMaxWidth(settings: Record<string, string>): number | undefined {
+  if (!settings.tableMaxWidth) return undefined;
+  return Math.min(2000, Math.max(0, Number.parseInt(settings.tableMaxWidth, 10) || 0));
+}
+
+/**
+ * Where a Table sits in its column.
+ *
+ * Alignment only has anything to move while Max Width holds the table in from
+ * the full width — a 100%-wide table is already flush on both sides, which is
+ * why the shared `is-align-*` classes were suppressed for tables and the
+ * control was missing from the editor entirely (S2/C7, fixed 2026-08-11).
+ * Those classes work on `justify-self`/`text-align`, neither of which moves a
+ * block-level wrapper, so this does it with auto margins instead.
+ *
+ * Shared by both table surfaces — the page renderer (TableModulePreview) and
+ * the module card's thumbnail — so the card cannot drift from the page.
+ */
+export function getTableWrapStyle(settings: Record<string, string>): CSSProperties {
+  const maxWidth = getTableMaxWidth(settings);
+  const style: CSSProperties = maxWidth ? { maxWidth: `${maxWidth}px` } : {};
+  if (!maxWidth) return style;
+
+  const alignment = getModuleAlignment(settings);
+  if (alignment === "center") return { ...style, marginLeft: "auto", marginRight: "auto" };
+  if (alignment === "right") return { ...style, marginLeft: "auto" };
+  return style;
+}
+
 export function getButtonModuleOuterSpacingStyle(settings: Record<string, string>): CSSProperties {
   const legacyVertical = settings.verticalMargin;
   const legacyHorizontal = settings.horizontalMargin;
