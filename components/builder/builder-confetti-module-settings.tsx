@@ -40,6 +40,12 @@ export function BuilderConfettiModuleSettings({
     // other modules put in Placement › Advanced, and D8's whole point is that
     // a control sits in the same place everywhere. Particles, Spread, the
     // origins, Sound and Volume are the module's own settings (A4).
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Structure",
@@ -88,10 +94,7 @@ export function BuilderConfettiModuleSettings({
               options: ORIGIN_OPTIONS.map((value) => ({ value, label: value })),
               rendersVia: "buildConfettiEffectOptions"
             }
-          ]
-        ],
-        // A5: stacking order is a nudge, not everyday placement.
-        advanced: [
+          ],
           [
             {
               key: "zIndex",
@@ -111,7 +114,9 @@ export function BuilderConfettiModuleSettings({
               )
             }
           ]
-        ]
+        ],
+        // A5 withdrawn with Advanced (A0): a nudge is now sorted last on
+            // Placement rather than hidden — same de-emphasis, one glance away.
       },
       {
         title: "Behavior",

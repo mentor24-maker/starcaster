@@ -24,12 +24,35 @@ type Props = {
  * or font-family control to move. Every basic control stays basic (A4). The
  * existing `advanced` group holds the success redirect, which is a rare
  * behaviour setting rather than a theme override, so it stays put.
+ *
+ * SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+ * Everything above that "moved into Advanced" now sits LAST on the axis it
+ * already names, ordered by D9 (blast radius, descending). The axis
+ * assignments and the A2 theme-colour semantics are unchanged — only the
+ * collapsing is gone. Kept rather than rewritten: the reasoning is the record.
  */
 const SCHEMA: BuilderSettingsSchema = {
   axes: [
     {
       title: "Content",
       strips: [
+        // D9 rung 1: where a successful login LANDS is the most consequential
+        // setting in this panel, so it leads Content — ahead of the form copy.
+        // It sat on Structure only because that is the axis whose Advanced
+        // section happened to hold it (A0 retired that section).
+        [
+          {
+            key: "successRedirect",
+            label: "Redirect on success",
+            width: "full",
+            control: "picker",
+            source: "pages",
+            valueKind: "path",
+            placeholder: "/admin-dashboard",
+            fallback: "/admin-dashboard",
+            rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
+          }
+        ],
         [
           {
             key: "formTitle",
@@ -68,21 +91,6 @@ const SCHEMA: BuilderSettingsSchema = {
       ]
     }
   ],
-  advanced: [
-    [
-      {
-        key: "successRedirect",
-        label: "Redirect on success",
-        width: "full",
-        control: "picker",
-        source: "pages",
-        valueKind: "path",
-        placeholder: "/admin-dashboard",
-        fallback: "/admin-dashboard",
-        rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
-      }
-    ]
-  ]
 };
 
 export function BuilderAdminLoginModuleSettings({ module, onUpdateModule }: Props) {

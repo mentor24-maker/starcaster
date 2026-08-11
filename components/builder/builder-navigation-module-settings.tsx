@@ -435,23 +435,21 @@ export function BuilderNavigationModuleSettings({
                   fallback: NAV_STYLE_DEFAULTS.dropdownBackground,
                   rendersVia: RENDERS_VIA
                 }
+              ],
+              [
+                {
+                  key: "navDropdownTextColor",
+                  label: "Panel Text",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#334861",
+                  dialogLabel: "Dropdown link color",
+                  rendersVia: RENDERS_VIA
+                }
               ]
             ]
           }
         ],
-        advanced: [
-          [
-            {
-              key: "navDropdownTextColor",
-              label: "Panel Text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#334861",
-              dialogLabel: "Dropdown link color",
-              rendersVia: RENDERS_VIA
-            }
-          ]
-        ]
       },
       {
         title: "Placement",
@@ -672,15 +670,7 @@ export function BuilderNavigationModuleSettings({
               fallback: String(NAV_STYLE_DEFAULTS.linkHeight),
               rendersVia: RENDERS_VIA
             }
-          ]
-        ],
-        /*
-         * A1: theme overrides live in Advanced. Empty means "follow the
-         * theme" — the renderer emits the variable only when a value is set,
-         * so an empty one lets the theme's CSS decide. They sit collapsed
-         * rather than in the Text column inviting an override.
-         */
-        advanced: [
+          ],
           [
             {
               key: "navColor",
@@ -723,7 +713,13 @@ export function BuilderNavigationModuleSettings({
               rendersVia: RENDERS_VIA
             }
           ]
-        ]
+        ],
+        /*
+         * A1: theme overrides live in Advanced. Empty means "follow the
+         * theme" — the renderer emits the variable only when a value is set,
+         * so an empty one lets the theme's CSS decide. They sit collapsed
+         * rather than in the Text column inviting an override.
+         */
       },
       {
         title: "Border",
