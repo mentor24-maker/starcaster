@@ -2878,25 +2878,45 @@ function HeadlineRotatorModuleEditor({
   );
 }
 
+/**
+ * Module types whose settings panel is on THE LATTICE (master rule W0,
+ * operator 8/12): one label width and one field width for the whole panel,
+ * so labels start at the same x and fields start at the same x.
+ *
+ * ROLLING OUT IS DELETING THIS LIST — replace the lookup below with a
+ * constant `true`. The CSS in _builder-react-overrides.css is already
+ * written to cover any panel, and the two widths live in _variables.css.
+ * The gate exists only because the operator asked to settle the rule on
+ * Table before it reaches the other 52 panels; it is a sequencing device,
+ * not a design decision.
+ */
+const LATTICE_MODULE_TYPES = new Set<BuilderTemplateModuleType>(["table"]);
+
 function ModuleEditorWrapper({
   isPopped,
+  moduleType,
   title,
   onClose,
   children
 }: {
   isPopped: boolean;
+  moduleType: BuilderTemplateModuleType;
   title: string;
   onClose: () => void;
   children: ReactNode;
 }) {
+  const className = LATTICE_MODULE_TYPES.has(moduleType)
+    ? "builder-module-editor is-lattice"
+    : "builder-module-editor";
+
   if (isPopped) {
     return (
       <BuilderCenteredModal title={title} onClose={onClose} maxWidth={680}>
-        <div className="builder-module-editor">{children}</div>
+        <div className={className}>{children}</div>
       </BuilderCenteredModal>
     );
   }
-  return <div className="builder-module-editor">{children}</div>;
+  return <div className={className}>{children}</div>;
 }
 
 export function BuilderModuleCard({
@@ -3231,7 +3251,7 @@ export function BuilderModuleCard({
       ) : null}
 
       {(isExpanded || isPopped) ? (
-        <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
+        <ModuleEditorWrapper isPopped={isPopped} moduleType={module.type} title={module.name || module.type} onClose={() => setIsPopped(false)}>
           {module.type !== "social" && module.type !== "blog-post-list" ? (
             // Content-sized, not full-panel — this row tops every module,
             // so master rule W1 applies here with maximum leverage.
@@ -3241,7 +3261,10 @@ export function BuilderModuleCard({
                   type="text"
                   value={module.name}
                   onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
-                  placeholder="Optional internal label"
+                  // W0: the field is the standard width, so the placeholder is
+                  // written to fit it. This used to run the other way round —
+                  // the copy set the width and the row went its own length.
+                  placeholder="Internal label"
                 />
               </BuilderModuleField>
             </BuilderModuleFieldStrip>

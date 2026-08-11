@@ -1,0 +1,232 @@
+/**
+ * THE LATTICE CHECK — master rule W0 (docs/UI_RULES.md, operator 8/12).
+ *
+ * "Every label should take up the same width, and every field should take up
+ * the same width."
+ *
+ * WHY THIS EXISTS AS A BROWSER CHECK AND NOT A REVIEW NOTE
+ * A written rule alone has already failed here twice. R9 (label colour) sat
+ * in the doctrine for two days while a duplicate CSS rule quietly overrode
+ * it in every panel in the app, and nobody could see it from the source. W0
+ * is geometry — it cannot be read off the CSS at all, because the old
+ * stagger came from `max-content` tracks resolving differently per row. The
+ * only way to know is to measure the running app.
+ *
+ * WHAT IT ASSERTS, per panel carrying `.is-lattice`:
+ *   1. every field label has the SAME width
+ *   2. every field starts at the SAME x-offset inside its column
+ *   3. every stretchable control (select / text / number) has the SAME width
+ *   4. no label overflows its track (which would crop a word — rule L4)
+ *
+ * Controls that cannot stretch — checkbox, colour swatch, alignment icon
+ * group — are exempt from (3) by design: they keep their natural size at the
+ * start of the slot. They are still bound by (1) and (2).
+ *
+ * Not in CI (CI has no browsers). Run it before shipping panel work, like
+ * check_screens.mjs.
+ *
+ *   npm run dev                       # in another shell
+ *   npm run seed:ui-fixture           # once
+ *   npm run check:panels
+ */
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
+const PAGE_NAME = process.env.UI_HARNESS_PANEL_PAGE || 'Table Overhaul Check';
+const WIDTHS = (process.env.UI_HARNESS_WIDTHS || '1440,1600').split(',').map(Number);
+
+/** Field kinds whose control keeps its natural size (W0's stated exception). */
+const NON_STRETCH = ['check', 'align', 'color'];
+
+if (!PROJECT_ID) {
+  console.error(
+    'Set UI_HARNESS_PROJECT_ID first — `npm run seed:ui-fixture` prints it.\n' +
+    'Without a project the builder renders an empty page and every assertion\n' +
+    'passes on zero panels, which is worse than failing.'
+  );
+  process.exit(2);
+}
+
+/** Walk from the pages list into an expanded module panel. */
+async function openPanels(page) {
+  await page.goto(`${BASE_URL}/#page=builderPagesPage`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(5000);
+
+  const opened = await page.evaluate((name) => {
+    const row = [...document.querySelectorAll('tr')].find((tr) => (tr.textContent || '').includes(name));
+    if (!row) return `no row named "${name}"`;
+    const edit = [...row.querySelectorAll('button, a')].find((el) =>
+      /edit/i.test(el.getAttribute('title') || el.getAttribute('aria-label') || '')
+    );
+    if (!edit) return 'row has no edit action';
+    edit.click();
+    return null;
+  }, PAGE_NAME);
+  if (opened) return opened;
+  await page.waitForTimeout(8000);
+
+  // Workspace → every section → every module. Each starts collapsed, and a
+  // collapsed panel has no layout to measure.
+  await page.evaluate(() => {
+    const t = [...document.querySelectorAll('button.builder-panel-toggle')]
+      .find((b) => /^workspace$/i.test((b.textContent || '').trim()));
+    if (t) t.click();
+  });
+  await page.waitForTimeout(3000);
+
+  await page.evaluate(() => {
+    document.querySelectorAll('.builder-section-card').forEach((card) => {
+      const b = [...card.querySelectorAll('button')]
+        .find((x) => /expand section/i.test(x.getAttribute('title') || ''));
+      if (b) b.click();
+    });
+  });
+  await page.waitForTimeout(3000);
+
+  await page.evaluate(() => {
+    document.querySelectorAll('.builder-module-card').forEach((card) => {
+      const b = [...card.querySelectorAll('button')]
+        .find((x) => /expand module/i.test(x.getAttribute('title') || ''));
+      if (b) b.click();
+    });
+  });
+  await page.waitForTimeout(4000);
+  return null;
+}
+
+function measure(page, nonStretch) {
+  return page.evaluate((exempt) => {
+    const panels = [...document.querySelectorAll('.builder-module-editor.is-lattice')];
+    return panels.map((panel, index) => {
+      const fields = [...panel.querySelectorAll('.builder-module-field')].map((f) => {
+        const label = f.querySelector('.builder-module-field-label');
+        const control = f.querySelector('.builder-module-field-control');
+        if (!label || !control) return null;
+
+        // A `full`-width field spans both tracks by design — it is long text
+        // keeping the room, not a staggered row. Out of scope for W0.
+        if (f.classList.contains('builder-module-field--full')) return null;
+
+        const kind = [...f.classList]
+          .map((c) => c.replace('builder-module-field--', ''))
+          .find((c) => c !== 'builder-module-field') || '';
+
+        // Column origin: the axis column if there is one, else the panel.
+        const origin = f.closest('.builder-schema-panel-column') || panel;
+        const or = origin.getBoundingClientRect();
+        const lr = label.getBoundingClientRect();
+        const cr = control.getBoundingClientRect();
+
+        return {
+          name: (label.textContent || '').trim() || '(unlabelled)',
+          kind,
+          labelW: Math.round(lr.width),
+          labelScrollW: Math.round(label.scrollWidth),
+          fieldX: Math.round(cr.left - or.left),
+          fieldW: Math.round(cr.width),
+          stretchable: !exempt.includes(kind)
+        };
+      }).filter(Boolean);
+      return { index, fields };
+    });
+  }, nonStretch);
+}
+
+function assertLattice(panels, width) {
+  const failures = [];
+
+  for (const panel of panels) {
+    const { fields } = panel;
+    if (!fields.length) continue;
+    const where = `${width}px panel #${panel.index}`;
+
+    const labelWidths = [...new Set(fields.map((f) => f.labelW))];
+    if (labelWidths.length > 1) {
+      const worst = fields
+        .map((f) => `${f.name}=${f.labelW}px`)
+        .join(', ');
+      failures.push(
+        `${where}: labels are ${labelWidths.length} different widths (${labelWidths.join('/')}px) — ${worst}`
+      );
+    }
+
+    const fieldXs = [...new Set(fields.map((f) => f.fieldX))];
+    if (fieldXs.length > 1) {
+      failures.push(
+        `${where}: fields start at ${fieldXs.length} different x-positions (${fieldXs.join('/')}px) — ` +
+        fields.map((f) => `${f.name}@${f.fieldX}`).join(', ')
+      );
+    }
+
+    const stretch = fields.filter((f) => f.stretchable);
+    const fieldWidths = [...new Set(stretch.map((f) => f.fieldW))];
+    if (fieldWidths.length > 1) {
+      failures.push(
+        `${where}: stretchable fields are ${fieldWidths.length} different widths (${fieldWidths.join('/')}px) — ` +
+        stretch.map((f) => `${f.name}=${f.fieldW}`).join(', ')
+      );
+    }
+
+    // L4: a label wider than its track is a cropped word, which the lattice
+    // must never buy. The answer is a shorter label or a wider token — never
+    // a per-field override.
+    for (const f of fields) {
+      if (f.labelScrollW > f.labelW + 1) {
+        failures.push(
+          `${where}: label "${f.name}" needs ${f.labelScrollW}px but its track is ${f.labelW}px — ` +
+          'shorten the label or raise --builder-field-label-w (never widen one field)'
+        );
+      }
+    }
+  }
+
+  return failures;
+}
+
+const allFailures = [];
+let panelsSeen = 0;
+
+for (const width of WIDTHS) {
+  const { browser, page } = await launch({ width, height: 1400, headless: true });
+  try {
+    await signIn(page);
+    await activateProject(page, PROJECT_ID);
+    const problem = await openPanels(page);
+    if (problem) {
+      allFailures.push(`${width}px: could not open a panel — ${problem}`);
+      continue;
+    }
+    const panels = measure(page, NON_STRETCH);
+    const measured = await panels;
+    panelsSeen += measured.length;
+    allFailures.push(...assertLattice(measured, width));
+  } finally {
+    await browser.close();
+  }
+}
+
+if (panelsSeen === 0) {
+  console.error(
+    'No panels carrying `.is-lattice` were found.\n' +
+    'That is a FAILURE, not a pass: either the page has no modules whose type\n' +
+    'is in LATTICE_MODULE_TYPES (builder-module-card.tsx), or the navigation\n' +
+    'above stopped working. Zero assertions is never a green result.'
+  );
+  process.exit(1);
+}
+
+if (allFailures.length) {
+  console.error(`\n[check:panels] W0 (the lattice) FAILED — ${allFailures.length} problem(s):\n`);
+  for (const f of allFailures) console.error(`  ✗ ${f}`);
+  console.error(
+    '\nW0: one label width and one field width per panel. The two numbers live in\n' +
+    'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
+    'Fix them there — never by putting a width on one field.\n'
+  );
+  process.exit(1);
+}
+
+console.log(`[check:panels] OK — W0 holds across ${panelsSeen} panel(s) at ${WIDTHS.join('/')}px.`);

@@ -66,6 +66,26 @@
   --builder-editor-heading: #0b2a4a;
   --builder-editor-label: #12395f;
 
+  /*
+   * THE LATTICE (master rule W0, operator 8/12). One label width and one
+   * field width for every settings panel in the app, so labels start at the
+   * same x and fields start at the same x — in every column, in every
+   * module. "Every label should take up the same width, and every field
+   * should take up the same width."
+   *
+   * These two numbers ARE the panel layout. Changing how every panel looks
+   * is changing them here. Never set a width on an individual field: that
+   * is the per-field sizing that made panels look staggered and sloppy in
+   * the first place, and `npm run check:panels` fails on it.
+   *
+   * The label width fits the longest canonical label — "Horizontal Margin"
+   * (W7 fixes those names, so it cannot get longer by accident) — with room
+   * to spare, because L2 says labels never wrap and L4 says never crop.
+   */
+  --builder-field-label-w: 150px;
+  --builder-field-control-w: 160px;
+  --builder-field-gap: 10px;
+
   /* Aliases for legacy CSS */
   --text: var(--ink-primary);
   --subtext: var(--ink-secondary);
