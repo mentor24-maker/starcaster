@@ -81,6 +81,7 @@ import {
   getModuleBackgroundSettings,
   getTableWrapStyle,
   getSectionMarginStyle,
+  getSectionPaddingStyle,
   getSectionWidthStyle,
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
@@ -1471,6 +1472,13 @@ function BuilderSectionPreview({
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
+    // Navigation-only rows already render flush by design; overlay slots are
+    // not really rows at all. Everything else honours the operator's number.
+    ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(section)),
+    // A row with content sizes to that content. The 56px floor exists so an
+    // EMPTY row is still big enough to drop a module onto, and keeping it on
+    // filled rows was padding every contact strip out to nearly triple height.
+    ...(section.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
     ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionWidthStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot

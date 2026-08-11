@@ -448,6 +448,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary);
 }
 
+/* Explanatory line under a slider whose units are not self-evident. */
+.builder-react-root .builder-themes-slider-note {
+  margin: -2px 0 10px;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
 /* Asset groups: label stacked above input + button */
 .builder-react-root .builder-themes-asset-group {
   display: flex;
@@ -2208,4 +2216,46 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  */
 .builder-react-root .builder-table-module-settings > .builder-schema-group-title {
   margin-top: 18px;
+}
+
+/*
+ * Row spacing: the vertical is the operator's, the horizontal is the site's.
+ *
+ * `_builder-react.css` sets `padding-block: 18px` on every row and the two
+ * mobile breakpoints replace it with a `padding` shorthand. Both are in the
+ * regeneration-guarded file, so the operator's Top/Bottom Padding lands here
+ * instead — and it has to be a custom property rather than inline padding on
+ * the element, because an inline value would outrank those media rules and
+ * freeze desktop spacing onto phones. The 18/14/10px fallbacks are each
+ * breakpoint's original number, so a row saved before the control existed
+ * renders exactly as it did.
+ *
+ * `--builder-section-padding-inline` is Themes → Styles → Content Width.
+ * Padding sits INSIDE the row's background box, so the background still runs
+ * edge to edge while every row centres its content on the same column — the
+ * one thing that makes a contact strip, a header and a hero share a left
+ * edge without matching cell padding by hand on each. Content Width off
+ * publishes `--bx-content-width: 100%`, and the centring maths then resolves
+ * to a zero inset with no special case.
+ */
+.builder-react-root .builder-preview-section {
+  --builder-section-padding-inline: max(0px, calc((100% - var(--bx-content-width, 100%)) / 2));
+  padding-top: var(--builder-section-padding-top, var(--builder-section-padding-block));
+  padding-bottom: var(--builder-section-padding-bottom, var(--builder-section-padding-block));
+}
+
+@media (max-width: 900px) {
+  .builder-react-root .builder-preview-section {
+    padding-inline: 14px;
+    padding-top: var(--builder-section-padding-top, 14px);
+    padding-bottom: var(--builder-section-padding-bottom, 14px);
+  }
+}
+
+@media (max-width: 560px) {
+  .builder-react-root .builder-preview-section {
+    padding-inline: 10px;
+    padding-top: var(--builder-section-padding-top, 10px);
+    padding-bottom: var(--builder-section-padding-bottom, 10px);
+  }
 }

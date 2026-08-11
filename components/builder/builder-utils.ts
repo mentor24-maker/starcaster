@@ -239,6 +239,21 @@ export function getSectionMarginStyle(section: BuilderTemplateSection): CSSPrope
 }
 
 /**
+ * Space inside the row, above and below its columns. Emitted as a custom
+ * property rather than a plain `padding-block` on purpose: the mobile
+ * stylesheet still overrides the shorthand under 900px, which an inline
+ * padding would silently outrank and freeze desktop spacing onto phones.
+ */
+export function getSectionPaddingStyle(section: BuilderTemplateSection): CSSProperties {
+  const top = normalizeSpacingValue(section.paddingTop, "18", 0, 160);
+  const bottom = normalizeSpacingValue(section.paddingBottom, "18", 0, 160);
+  return {
+    "--builder-section-padding-top": `${top}px`,
+    "--builder-section-padding-bottom": `${bottom}px`
+  } as CSSProperties;
+}
+
+/**
  * Narrows a contained section to its widthPercent and centers it within the
  * page. Returns {} for full-width sections (which escape the page margins
  * entirely) and for the 100% default, so untouched sections keep full content
@@ -1044,6 +1059,8 @@ export type BuilderThemeStyles = {
   topMargin?: number;
   bottomMargin?: number;
   sideMargins?: number;
+  /** Site-wide reading width in px; 0 = off (rows run full bleed). */
+  contentWidth?: number;
   /** Role palette (surface/band/inverse/header/button pairs). */
   palette?: BuilderThemePalette | null;
   /** Design treatments (hero overlay, card overlap, inverse footer). */
@@ -1073,11 +1090,12 @@ type ThemePageLayoutMargins = {
   topMargin?: number;
   bottomMargin?: number;
   sideMargins?: number;
+  contentWidth?: number;
 };
 
 function readThemeMarginColumn(
   theme: Record<string, unknown>,
-  camel: "topMargin" | "bottomMargin" | "sideMargins",
+  camel: "topMargin" | "bottomMargin" | "sideMargins" | "contentWidth",
   snake: string
 ): number | undefined {
   if (theme[snake] !== undefined && theme[snake] !== null) {
@@ -1136,6 +1154,13 @@ export function buildBuilderThemeStyles(
     sideMargins: resolveThemeMarginValue(
       readThemeMarginColumn(row, "sideMargins", "side_margins"),
       pageLayout?.sideMargins
+    ),
+    // No DB column for this one — it lives in the typography JSON, so the
+    // column read is the forward-compatible half and pageLayout is the
+    // one that actually carries a value today.
+    contentWidth: resolveThemeMarginValue(
+      readThemeMarginColumn(row, "contentWidth", "content_width"),
+      pageLayout?.contentWidth
     ),
     palette:
       normalizeThemePalette(row.palette)
@@ -1263,13 +1288,14 @@ function readBuilderThemeMargins(styles: BuilderThemeStyles | undefined) {
     topMargin: Math.max(0, safeThemeNumber(styles?.topMargin, 0)),
     bottomMargin: Math.max(0, safeThemeNumber(styles?.bottomMargin, 0)),
     sideMargins: Math.max(0, safeThemeNumber(styles?.sideMargins, 0)),
+    contentWidth: Math.max(0, safeThemeNumber(styles?.contentWidth, 0)),
   };
 }
 
 /** Page margin tokens for the preview content wrapper (Themes → Styles). */
 export function getBuilderThemePageMarginStyle(styles: BuilderThemeStyles | undefined): CSSProperties {
   if (!styles) return {};
-  const { topMargin, bottomMargin, sideMargins } = readBuilderThemeMargins(styles);
+  const { topMargin, bottomMargin, sideMargins, contentWidth } = readBuilderThemeMargins(styles);
   return {
     paddingTop: `${topMargin}px`,
     paddingBottom: `${bottomMargin}px`,
@@ -1278,6 +1304,10 @@ export function getBuilderThemePageMarginStyle(styles: BuilderThemeStyles | unde
     "--bx-theme-padding-top": `${topMargin}px`,
     "--bx-theme-padding-bottom": `${bottomMargin}px`,
     "--bx-theme-padding-inline": `${sideMargins}px`,
+    // 0 means "off". Publishing 100% then makes every row's centring maths
+    // resolve to a zero inset, so the token can stay unconditional and the
+    // stylesheet never needs to know whether the operator set one.
+    "--bx-content-width": contentWidth > 0 ? `${contentWidth}px` : "100%",
   } as CSSProperties;
 }
 
