@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { type CSSProperties, type DragEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
-import { getAnchoredModalStyle, type BuilderModalAnchor } from "@/lib/builder-anchored-modal";
+import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
@@ -98,8 +98,8 @@ import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderImagePreview } from "./builder-image-preview";
-import { modulePaletteGroups, modulePaletteItems } from "./builder-types";
 import type { ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
+import { BuilderModulePaletteModal } from "./builder-module-palette-modal";
 import {
   getAlignmentClass,
   getHeadingModuleStyle,
@@ -2236,80 +2236,13 @@ function cloneTableCellModule(module: BuilderTemplateModule, suffix: string): Bu
   };
 }
 
-/* ---------- Inline palette for table cells ---------- */
+/* ---------- Module palette for table cells ---------- */
 
-function TableCellInlinePalette({
-  onSelect,
-  onClose,
-  anchor
-}: {
-  onSelect: (item: ModulePaletteItem) => void;
-  onClose: () => void;
-  anchor: BuilderModalAnchor;
-}) {
-  const [group, setGroup] = useState<ModulePaletteGroup | null>(null);
-  const groups = modulePaletteGroups.filter((g) => g.value !== "table" && g.value !== "contact-form" && g.value !== "crm-form");
-  const items = group ? modulePaletteItems.filter((item) => item.group === group) : [];
-  // Keep the popup on-screen even when the cell sits at the far edge of the
-  // workspace (matches the .builder-table-inline-palette CSS box: 260×340).
-  const style = getAnchoredModalStyle(anchor, { width: 260, height: 340, align: "start", gap: 4 });
-
-  return (
-    <div
-      className="builder-table-inline-palette"
-      onClick={(e) => e.stopPropagation()}
-      style={style}
-    >
-      <div className="builder-table-palette-header">
-        <strong>{group ? "Choose a module" : "Choose a group"}</strong>
-        <button type="button" className="builder-icon-button" onClick={onClose}>✕</button>
-      </div>
-      {group ? (
-        <>
-          <div className="builder-table-palette-tabs">
-            {groups.map((g) => (
-              <button
-                key={g.value}
-                type="button"
-                className={`builder-table-palette-tab ${group === g.value ? "is-active" : ""}`}
-                onClick={() => setGroup(g.value)}
-              >
-                {g.icon} {g.label}
-              </button>
-            ))}
-          </div>
-          <div className="builder-table-palette-items">
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="builder-table-palette-item"
-                onClick={() => onSelect(item)}
-              >
-                <span className="builder-module-item-icon">{item.icon}</span>
-                <strong>{item.label}</strong>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="builder-table-palette-groups">
-          {groups.map((g) => (
-            <button
-              key={g.value}
-              type="button"
-              className="builder-table-palette-group-btn"
-              onClick={() => setGroup(g.value)}
-            >
-              <span className="builder-module-group-card-icon">{g.icon}</span>
-              <strong>{g.label}</strong>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+/**
+ * Categories a table cell cannot host: another table (nested grids), and the
+ * two form modules whose submit flow needs to own the section it sits in.
+ */
+const TABLE_CELL_EXCLUDED_PALETTE_GROUPS: ModulePaletteGroup[] = ["table", "contact-form", "crm-form"];
 
 /* ---------- Table cell module list ---------- */
 
@@ -2327,15 +2260,19 @@ function TableCellModules({
   onUpdate: (cellKey: string, modules: BuilderTemplateModule[]) => void;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteGroup, setPaletteGroup] = useState<ModulePaletteGroup | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [paletteAnchor, setPaletteAnchor] = useState<BuilderModalAnchor>({ x: 0, y: 0 });
-  const addBtnRef = useRef<HTMLButtonElement | null>(null);
 
   function addModule(item: ModulePaletteItem) {
     const mod = createEmptyModule(item.type, "");
     const newMod = { ...mod, name: item.name, text: item.text, settings: { ...mod.settings, ...item.settings } };
     onUpdate(cellKey, [...modules, newMod]);
+    closePalette();
+  }
+
+  function closePalette() {
     setPaletteOpen(false);
+    setPaletteGroup(null);
   }
 
   function removeModule(id: string) {
@@ -2531,26 +2468,28 @@ function TableCellModules({
       ))}
       <div className="builder-table-cell-add-wrap">
         <button
-          ref={(el) => { addBtnRef.current = el; }}
           type="button"
           className="builder-table-cell-add"
           onClick={(e) => {
             e.stopPropagation();
-            if (!paletteOpen && addBtnRef.current) {
-              const rect = addBtnRef.current.getBoundingClientRect();
-              setPaletteAnchor({ x: rect.left, y: rect.bottom });
+            if (paletteOpen) {
+              closePalette();
+            } else {
+              setPaletteGroup(null);
+              setPaletteOpen(true);
             }
-            setPaletteOpen(!paletteOpen);
           }}
           title="Add module to this cell"
         >
           ⊕
         </button>
         {paletteOpen && (
-          <TableCellInlinePalette
-            onSelect={addModule}
-            onClose={() => setPaletteOpen(false)}
-            anchor={paletteAnchor}
+          <BuilderModulePaletteModal
+            activeGroup={paletteGroup}
+            excludeGroups={TABLE_CELL_EXCLUDED_PALETTE_GROUPS}
+            onSelectGroup={setPaletteGroup}
+            onSelectItem={addModule}
+            onClose={closePalette}
           />
         )}
       </div>
