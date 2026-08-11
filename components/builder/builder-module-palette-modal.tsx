@@ -27,6 +27,12 @@ type BuilderModulePaletteModalProps = {
   activeGroup: ModulePaletteGroup | null;
   anchor?: ModulePaletteAnchor | null;
   cellModules?: BuilderCellModuleRecord[];
+  /**
+   * Categories to hide from browsing AND search. Used where a module cannot
+   * legally nest inside its host — a table cell can't hold another table, or a
+   * form whose submit handler would be trapped inside the cell.
+   */
+  excludeGroups?: ModulePaletteGroup[];
   onSelectGroup: (group: ModulePaletteGroup | null) => void;
   onSelectItem: (item: ModulePaletteItem) => void;
   onSelectSavedModule?: (cellModuleId: string) => void;
@@ -109,6 +115,7 @@ function readPopularitySortPreference(): boolean {
 export function BuilderModulePaletteModal({
   activeGroup,
   cellModules = [],
+  excludeGroups,
   onSelectGroup,
   onSelectItem,
   onSelectSavedModule,
@@ -118,9 +125,26 @@ export function BuilderModulePaletteModal({
   const [sortCategoriesAz, setSortCategoriesAz] = useState(false);
   const [sortCategoriesPopularity, setSortCategoriesPopularity] = useState(false);
   const [query, setQuery] = useState("");
+  // Joined into a string so a caller passing a fresh array literal each render
+  // doesn't re-run every memo below.
+  const excludedKey = (excludeGroups ?? []).join("|");
+  const availableGroups = useMemo(
+    () => {
+      const blocked = new Set(excludedKey ? excludedKey.split("|") : []);
+      return modulePaletteGroups.filter((group) => !blocked.has(group.value));
+    },
+    [excludedKey]
+  );
+  const availableItems = useMemo(
+    () => {
+      const blocked = new Set(excludedKey ? excludedKey.split("|") : []);
+      return modulePaletteItems.filter((item) => !blocked.has(item.group));
+    },
+    [excludedKey]
+  );
   const displayGroups = useMemo(
-    () => sortModulePaletteGroups(modulePaletteGroups, sortCategoriesAz, sortCategoriesPopularity),
-    [sortCategoriesAz, sortCategoriesPopularity]
+    () => sortModulePaletteGroups(availableGroups, sortCategoriesAz, sortCategoriesPopularity),
+    [availableGroups, sortCategoriesAz, sortCategoriesPopularity]
   );
 
   const groupLabelFor = (group: string) =>
@@ -135,12 +159,12 @@ export function BuilderModulePaletteModal({
     if (!query.trim()) return [];
 
     return searchModulePalette(query, {
-      groups: modulePaletteGroups.map((group) => ({
+      groups: availableGroups.map((group) => ({
         value: group.value,
         label: group.label,
         description: group.description
       })),
-      items: modulePaletteItems.map((item) => ({
+      items: availableItems.map((item) => ({
         id: item.id,
         label: item.label,
         description: item.description,
@@ -156,7 +180,7 @@ export function BuilderModulePaletteModal({
           groupLabel: "Saved Modules"
         }))
     });
-  }, [query, cellModules]);
+  }, [query, cellModules, availableGroups, availableItems]);
 
   const isSearching = query.trim().length > 0;
   const starterModules = activeGroup ? getStarterModulesForPaletteGroup(activeGroup) : [];
