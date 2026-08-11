@@ -1251,6 +1251,29 @@ export function getThemeShellBackgroundSeedColor(theme: ThemeShellBackgroundSour
   return String(theme?.backgroundColor ?? "").trim();
 }
 
+/**
+ * What the theme's own Styles → Page Background picker should show while no
+ * page background has been saved yet.
+ *
+ * Without this the picker opens on the settings default — plain white — even
+ * though the palette Background right above it is what the page is actually
+ * wearing. Touching anything in the picker (the opacity slider alone is
+ * enough) then commits that white as a real page background, which outranks
+ * the palette colour on every page using the theme: the operator sets a
+ * colour, sees white, and only the opacity appears to work.
+ */
+export function seedThemeStylesPageBackground(
+  background: BackgroundSettings,
+  theme: ThemeShellBackgroundSource
+): BackgroundSettings {
+  if (background.mode !== "none") return background;
+  const seed = getThemeShellBackgroundSeedColor(theme);
+  return {
+    ...background,
+    color: normalizeBuilderHexColor(seed, DEFAULT_THEME_PALETTE_BACKGROUND),
+  };
+}
+
 export function getShellPageBackgroundStyle(
   pageBackground: BackgroundSettings | undefined,
   theme: ThemeShellBackgroundSource

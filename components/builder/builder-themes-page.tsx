@@ -20,7 +20,7 @@ import { BuilderThemeTypographySettings } from "./builder-theme-typography-setti
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderButtonBackgroundPicker } from "./builder-button-background-picker";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
-import { buildBuilderThemePaletteColors } from "./builder-utils";
+import { buildBuilderThemePaletteColors, seedThemeStylesPageBackground } from "./builder-utils";
 import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 import { BuilderThemeWizard } from "@/components/builder/builder-theme-wizard";
 
@@ -463,7 +463,7 @@ export function BuilderThemesPage() {
             <h3 className="builder-themes-col-heading">Styles</h3>
             <BuilderSettingRow label="Page Background">
               <BuilderButtonBackgroundPicker
-                background={draft.stylesPageBackground}
+                background={seedThemeStylesPageBackground(draft.stylesPageBackground, draft)}
                 onChange={(stylesPageBackground) => updateDraft({ stylesPageBackground })}
                 onChooseImage={() => setIsBackgroundGalleryOpen(true)}
                 themeColors={themeColors}
