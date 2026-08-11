@@ -9,29 +9,14 @@
  * branch, a file, or anything on GitHub.
  */
 
-const { execFileSync } = require('child_process');
-const path = require('path');
-
-const root = path.join(__dirname, '..');
-const MAIN = 'main';
-
-function git(args, fallback = '') {
-  try {
-    // stderr ignored: several probes below are expected to fail on refs that
-    // do not exist, and their noise would clutter the report.
-    return execFileSync('git', args, {
-      cwd: root,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return fallback;
-  }
-}
-
-function lines(value) {
-  return value.split('\n').map((line) => line.trim()).filter(Boolean);
-}
+const {
+  MAIN,
+  git,
+  lines,
+  mergeBase,
+  branchInventory,
+  classifyBranch,
+} = require('./lib/repo_state.cjs');
 
 function count(args) {
   const value = git(args, '');
@@ -70,9 +55,7 @@ const onMain = current === MAIN;
 
 // Compare against origin/main when we have it — that is what a branch will
 // actually merge into, and the local copy of main may be out of date.
-const base = git(['rev-parse', '--verify', '--quiet', `origin/${MAIN}`], '')
-  ? `origin/${MAIN}`
-  : MAIN;
+const base = mergeBase();
 
 out.push(heading('YOU ARE HERE'));
 if (onMain) {
@@ -102,33 +85,6 @@ if (!dirty.length) {
 
 // --- What is waiting to ship ------------------------------------------------
 
-/**
- * Every branch anywhere — on this Mac, on GitHub, or both. A branch that
- * lives only on GitHub is still unshipped work; listing local branches
- * alone hides it.
- */
-function branchInventory() {
-  const local = lines(git(['for-each-ref', '--format=%(refname:short)', 'refs/heads/'], ''));
-  // Full refnames, not short ones: the short name of refs/remotes/origin/HEAD
-  // is plain "origin", which would otherwise show up as a branch.
-  const remote = lines(git(['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/'], ''))
-    .map((ref) => ref.replace(/^refs\/remotes\/origin\//, ''))
-    .filter((name) => name && name !== 'HEAD');
-
-  const names = Array.from(new Set([...local, ...remote])).filter((name) => name !== MAIN);
-  return names.sort().map((name) => {
-    const onMac = local.includes(name);
-    const onGitHub = remote.includes(name);
-    return {
-      name,
-      onMac,
-      onGitHub,
-      ref: onMac ? name : `origin/${name}`,
-      where: onMac && onGitHub ? 'on your Mac and GitHub' : (onMac ? 'on your Mac only' : 'on GitHub only'),
-    };
-  });
-}
-
 const branches = hasMain ? branchInventory() : [];
 
 out.push(heading('OTHER WORK IN PROGRESS'));
@@ -140,13 +96,9 @@ if (!hasMain) {
   branches.forEach((branch) => {
     const here = branch.name === current ? '  <- you are here' : '';
 
-    // `git cherry` marks a commit "-" when the same change already exists on
-    // main under a different commit id. Those branches look unshipped to
-    // `--merged` but hold nothing new.
-    const cherry = lines(git(['cherry', base, branch.ref], ''));
-    const fresh = cherry.filter((line) => line.startsWith('+'));
+    const { state, fresh } = classifyBranch(branch, base);
 
-    if (!cherry.length) {
+    if (state === 'empty') {
       const note = branch.name === current
         ? 'nothing committed here yet.'
         : 'already shipped, safe to delete.';
@@ -154,7 +106,7 @@ if (!hasMain) {
       return;
     }
 
-    if (!fresh.length) {
+    if (state === 'shipped') {
       out.push(bullet(`${branch.name} — its work is already live, safe to delete (${branch.where}).${here}`));
       out.push(indent('(Applied to main as a separate commit, so git still calls it unmerged.)'));
       return;

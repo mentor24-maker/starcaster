@@ -1,0 +1,16 @@
+#!/bin/sh
+# After a pull that brings merged work down, delete the local branches whose
+# commits are now on main. Squash-merging rewrites the commit, so `git branch
+# -d` refuses on work that is demonstrably live — which is why nothing was ever
+# deleted and 41 local branches accumulated over six weeks.
+#
+# Branches only. Removing a WORKTREE is left to an explicit `npm run tidy`,
+# because a folder may hold a session that is mid-task, and a pull is not
+# consent to close someone's workspace.
+#
+# Never blocks: the merge has already happened by the time this runs.
+ROOT="$(git rev-parse --show-toplevel)" || exit 0
+cd "$ROOT" || exit 0
+
+node scripts/repo_tidy.cjs --branches-only --quiet 2>/dev/null || true
+exit 0

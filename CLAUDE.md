@@ -127,12 +127,40 @@ uncommitted edits ride along in the other's commits. The symptom is
 "unrelated" modified files you never touched.
 
 Give every thread its own worktree — a separate folder with its own branch,
-sharing the same repo history:
+sharing the same repo history. **Use the command, not the raw git:**
+
+```
+npm run thread <topic>     # tidy first, branch off CURRENT origin/main, npm ci, build
+npm run map                # what exists, what is shipped, what is still live work
+npm run tidy               # delete shipped branches, remove finished worktrees
+```
+
+`npm run thread` exists because each hand-rolled step had already cost time:
+branching off a stale local `main` (forces a rebase later, which is where the
+asset-stamp conflicts come from), skipping `npm ci`, and never cleaning up —
+41 local branches and 10 worktrees accumulated in six weeks. The equivalent
+by hand, if you ever need it:
 
 ```
 git worktree add .claude/worktrees/<topic> -b <topic> origin/main
-cd .claude/worktrees/<topic> && npm ci
+cd .claude/worktrees/<topic> && npm ci && npm run build:assets
 ```
+
+Order matters in that second line: creating the worktree fires `post-checkout`,
+which cannot build before `npm ci` has run — so build the assets afterwards or
+the folder keeps whatever the failed build left behind.
+
+Cleanup is automatic now and should never need thinking about: GitHub deletes
+each branch as its PR merges, `post-merge` deletes the local copy once its work
+is live, and `npm run thread` tidies before it starts. `npm run tidy` never
+touches uncommitted work, a locked worktree, the folder you are in, or a branch
+with unshipped commits; deletions are logged with restore commands in
+`.git/tidy-restore.log`.
+
+**Squash-merging is why `git branch -d` is useless here.** It rewrites the
+commit, so `-d` calls shipped work "not fully merged" and refuses. `git cherry`
+(patch equivalence) is the only correct test — that is what `map` and `tidy`
+both use, from one shared module so they can never disagree.
 
 `git worktree list` shows every active thread; `git worktree remove
 .claude/worktrees/<topic>` cleans one up. Caveat: `.git/hooks` is **shared**

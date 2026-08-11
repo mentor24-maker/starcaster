@@ -14,7 +14,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const root = path.join(__dirname, '..');
-const HOOKS = ['pre-commit', 'pre-push', 'post-checkout'];
+const HOOKS = ['pre-commit', 'pre-push', 'post-checkout', 'post-merge'];
 
 if (!fs.existsSync(path.join(root, '.git'))) {
   console.log('[hooks] Skipped — not a git checkout (.git missing).');
@@ -47,3 +47,4 @@ for (const name of HOOKS) {
 console.log('[hooks] Installed pre-commit    → rebuilds pinned assets, pins ?v=, runs convention checks.');
 console.log('[hooks] Installed pre-push     → blocks branches carrying another branch\'s commits.');
 console.log('[hooks] Installed post-checkout → rebuilds pinned assets so they match the branch you switched to.');
+console.log('[hooks] Installed post-merge    → deletes local branches whose work is now live.');

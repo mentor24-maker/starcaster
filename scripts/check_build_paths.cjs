@@ -102,11 +102,17 @@ if (isSymlink) {
   console.error('  Fix — give this folder its own copy (takes a minute, ~270MB):\n');
   console.error('      rm node_modules && npm ci && npm run build\n');
 } else {
+  // Order matters: stale artifacts are far more common than a missing flag.
+  // A folder built before `npm ci` finished resolves esbuild from the PARENT
+  // checkout, so its bundles carry ../../../ paths even though node_modules
+  // is perfectly fine by the time anyone looks.
+  console.error('  Most likely these were built before this folder had its own\n');
+  console.error('  dependencies. Rebuild them:\n');
+  console.error('      npm run build:assets\n');
   console.error(
-    '  node_modules is a real folder here, so a build script is likely missing\n' +
-      '  the shared settings in scripts/esbuild-common.mjs. Add\n' +
-      '  PORTABLE_BUILD_ARGS (CLI) or PORTABLE_BUILD_OPTIONS (JS API) to it,\n' +
-      '  then re-run: npm run build\n'
+    '  If that does not clear it, a build script is missing the shared settings\n' +
+      '  in scripts/esbuild-common.mjs — add PORTABLE_BUILD_ARGS (CLI) or\n' +
+      '  PORTABLE_BUILD_OPTIONS (JS API) to it, then re-run: npm run build\n'
   );
 }
 
