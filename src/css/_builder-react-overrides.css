@@ -2436,3 +2436,93 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-radius: var(--site-nav-link-radius, 12px);
   padding: var(--site-nav-link-padding, 0 8px);
 }
+
+/* ============================================================== */
+/* THE LATTICE — master rule W0 (operator 8/12)                    */
+/* ============================================================== */
+
+/*
+ * One label width and one field width for the WHOLE panel. Every label
+ * starts at the same x, every field starts at the same x, one control per
+ * row — in every column, and in the shared chrome above the columns too.
+ *
+ * What it replaces, and why that was wrong: each field used to be its own
+ * grid with `minmax(84px, max-content)` for the label track, so every row
+ * measured its own label and put its field wherever that label happened to
+ * end. "Columns" and "Column Heads" therefore started their fields at
+ * different x-positions in the same column. On top of that the per-type
+ * width tokens (--num sized to digits, --select-md to its longest option,
+ * --text-md to 280px) meant no two fields were the same length. That is the
+ * "randomly staggered / random width" the operator has been looking at
+ * since the D8 axis work landed.
+ *
+ * Fixed tracks, not max-content, is the whole fix. Nothing below may go
+ * back to sizing a field or its label by its own content.
+ *
+ * SCOPE — `.is-lattice` is applied per module editor, not globally, because
+ * the operator asked to settle the rule on Table before it reaches the
+ * other 52 panels. **Rolling out is deleting the LATTICE_MODULE_TYPES gate
+ * in builder-module-card.tsx**; every rule below is already written to
+ * cover any panel, and the two widths live in _variables.css.
+ */
+
+.builder-react-root .is-lattice .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2, 6px);
+  align-items: center;
+}
+
+.builder-react-root .is-lattice .builder-module-field,
+.builder-react-root .is-lattice .builder-setting-row,
+.builder-react-root .is-lattice .builder-setting-row-full {
+  display: grid;
+  grid-template-columns: var(--builder-field-label-w) var(--builder-field-control-w);
+  align-items: center;
+  gap: var(--builder-field-gap, 10px);
+  margin: 0;
+}
+
+/*
+ * The field slot is the width; the control fills it. Every per-type width
+ * set further up this file is beaten here, on purpose. The width tokens
+ * stay on the markup as NAMES — they still say what a field is, and the
+ * panel check reads them — they just stop deciding width inside a panel.
+ */
+.builder-react-root .is-lattice .builder-module-field-control {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.builder-react-root .is-lattice .builder-module-field-control > select,
+.builder-react-root .is-lattice .builder-module-field-control > input[type="text"],
+.builder-react-root .is-lattice .builder-module-field-control > input[type="number"],
+.builder-react-root .is-lattice .builder-module-field-control > input[type="url"],
+.builder-react-root .is-lattice .builder-module-field-control > .builder-number-select-control,
+.builder-react-root .is-lattice .builder-setting-value > select,
+.builder-react-root .is-lattice .builder-setting-value > input[type="text"],
+.builder-react-root .is-lattice .builder-setting-value > input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+/*
+ * The one exception: a checkbox, a colour swatch and an alignment icon
+ * group have a natural size, and stretching them would look worse rather
+ * than tidier. They keep it and sit at the START of the field slot — the
+ * slot is still the standard width, so the row still lines up with every
+ * other row, which is what the rule is really protecting.
+ */
+.builder-react-root .is-lattice .builder-module-field--check .builder-module-field-control,
+.builder-react-root .is-lattice .builder-module-field--align .builder-module-field-control,
+.builder-react-root .is-lattice .builder-module-field--color .builder-module-field-control {
+  justify-self: start;
+  width: auto;
+}
+
+/* Long text (URLs, textareas) spans both tracks — it keeps the room. */
+.builder-react-root .is-lattice .builder-module-field--full {
+  grid-template-columns: minmax(0, 1fr);
+}
