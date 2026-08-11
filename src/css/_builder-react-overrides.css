@@ -2157,12 +2157,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * A row with "Share background" ticked renders inside a wrapper together with
  * the run above it, and the wrapper carries that run's background. That is the
  * whole trick: the image belongs to the group, not to any one row, so it spans
- * all of them with no seam. The wrapper stacks its rows on the same 18px
- * rhythm .builder-preview-shell-content uses between ordinary rows.
+ * all of them with no seam. Like the page itself the wrapper adds no gap of
+ * its own — spacing inside the group is the rows' own margins.
  */
 .builder-react-root .builder-preview-joined-rows {
   display: grid;
-  gap: 18px;
+  gap: 0;
   position: relative;
   z-index: 1;
   min-width: 0;
@@ -2170,4 +2170,28 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+/*
+ * Rows are spaced by their own Top/Bottom Margin and by nothing else.
+ *
+ * .builder-preview-shell shares one `display: grid; gap: 18px` declaration in
+ * _builder-react.css with the EDITOR's own stacks (.builder-sections,
+ * .builder-module-list, .builder-add-section), where 18px between cards is
+ * right. On the rendered page it is not: it laid 18px under every row, so a
+ * row set to 0 margin still showed 18px of page above it and the control
+ * looked broken. The editor keeps its rhythm; the page loses it.
+ */
+.builder-react-root .builder-preview-shell {
+  gap: 0;
+}
+
+/*
+ * The full-width band hack existed only to cancel that 18px. With the gap gone
+ * it would pull two adjacent full-width rows into a real 18px overlap, so it
+ * has to go with it. Adjacent full-width rows now sit flush because nothing
+ * separates them in the first place.
+ */
+.builder-react-root .builder-preview-section-full-width + .builder-preview-section-full-width {
+  margin-top: 0;
 }
