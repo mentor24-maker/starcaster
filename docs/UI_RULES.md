@@ -106,9 +106,17 @@ layout would avoid.*
   |---|---|
   | **Content** | what the module shows — text, items, images, links |
   | **Structure** | how it is arranged — layout mode, levels, columns, counts, sizing |
-  | **Text** | typography — font, size, weight, transform, text colour |
+  | **Text** | typography — font, size, weight, transform, text colour, text shadow |
   | **Placement** | alignment, padding, margin, offsets |
-  | **Frame** | border width / radius / colour, shadow |
+  | **Frame** | border width / radius / colour, box shadow |
+
+  "Shadow" is split on purpose — see A7. A shadow cast by the letters is a
+  Text control; a shadow cast by a box is a Frame control. The unqualified
+  word in this table used to read as "all shadows are Frame", which is how
+  the Heading module ended up with a `text-shadow` filed under Frame.
+
+  **An axis with nothing on it is not an axis.** Drop the column rather
+  than render a titled empty space to keep a grid aligned.
 
   One, two or three axes is fine; **four is the ceiling**. A module that
   genuinely needs a fifth is a design question for the operator — the
@@ -235,6 +243,26 @@ deliberately, and says so.*
   **not** a place to hide controls that did not fit a column. If a
   control belongs to an axis, it goes on the axis. *(guard against A1
   becoming a junk drawer)* — **[eye]**
+- **A6.** **Text colour is basic. Effects are advanced.** A1 is amended:
+  being theme-backed is not by itself enough to collapse a control out of
+  sight. The colour of a piece of text is the most ordinary thing anyone
+  changes about it, so it sits on the **Text** axis with size and weight.
+  What goes to Advanced is the *effect* layer — drop shadow, hover
+  treatments, outlines-as-decoration and their like. Colour keeps its
+  `theme-color` control (A2): empty still means "follow the theme", so
+  promoting it does not pre-fill an override nobody chose.
+  *(operator 8/11: "Don't put text color under Advanced. That is basic.
+  Hover effects, dropshadows, etc. are advance.")* — **[eye]**
+- **A7.** **A shadow belongs to the axis it actually shadows.** A
+  `text-shadow` is a Text control; a `box-shadow` on a frame or card is a
+  Frame control. Do not file a drop shadow under Frame because "shadows
+  live on Frame" — read the renderer first.
+  *(operator 8/11: "dropshadows should OBVIOUSLY go under text, not
+  Frame. Not sure how you figured that." The Heading module had it on
+  Frame while `getHeadingModuleStyle` rendered it as `text-shadow` — and
+  the mistake cost more than a heading: it left Frame as the module's only
+  reason for a fourth axis, and that empty fourth column is what squeezed
+  the drop-shadow controls into an unusable width.)* — **[eye]**
 
 *Status:* the infrastructure is in (control, badge, rule). Which
 settings across the 38 modules are theme-backed — and therefore move to

@@ -138,6 +138,12 @@ So the controls someone reaches for most are nearest the top.
 3. **Style** — border, radius, colour, effect
 4. **Advanced** — rarely-touched settings, inside `<details class="hanging-details">`
 
+Advanced holds theme overrides (master rule A1) and **effects** — drop
+shadow, hover treatments. It does **not** hold text colour: that is basic
+and belongs on the Text axis (master rule A6, operator 8/11). And a shadow
+is filed by what it shadows, not by habit — `text-shadow` is Text,
+`box-shadow` is Frame (A7).
+
 #### E4. H and V margin are always offered together, adjacent `[auto]`
 
 `horizontalMargin` and `verticalMargin`, in the same strip, side by side. Never
