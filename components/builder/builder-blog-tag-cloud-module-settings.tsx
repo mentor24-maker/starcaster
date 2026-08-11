@@ -87,10 +87,46 @@ export function BuilderBlogTagCloudModuleSettings({
     // they stay basic; Gap keeps its name and its place (W7 exempts it).
     // Layout, Alignment, Counts and the tag manager are the module's own
     // settings and stay basic (A4).
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
         strips: [
+          // D9 rung 1: a destination changes what the whole module does, so it
+          // leads the Content axis — ahead of the labels it decorates.
+          [
+            {
+              key: "filterParam",
+              label: "URL Param",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "builder-template.ts blog-tag-cloud renderer",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.filterParam ?? "tag"}
+                  onChange={(e) => set("filterParam", e.target.value)}
+                  placeholder="tag"
+                />
+              )
+            },
+            {
+              key: "targetPageUrl",
+              label: "Target Page",
+              width: "text-md",
+              control: "picker",
+              source: "pages",
+              valueKind: "path",
+              noneLabel: "Current page",
+              placeholder: "/blog",
+              rendersVia: "builder-template.ts blog-tag-cloud renderer"
+            }
+          ],
           [
             {
               key: "tags",
@@ -164,38 +200,6 @@ export function BuilderBlogTagCloudModuleSettings({
             }
           ]
         ],
-        // A1: where a tag click goes, and the param it sets — the former
-        // top-level "Linking" group, folded in so the panel has one Advanced.
-        advanced: [
-          [
-            {
-              key: "filterParam",
-              label: "URL Param",
-              width: "text-md",
-              control: "custom",
-              rendersVia: "builder-template.ts blog-tag-cloud renderer",
-              render: ({ settings, set }) => (
-                <input
-                  type="text"
-                  value={settings.filterParam ?? "tag"}
-                  onChange={(e) => set("filterParam", e.target.value)}
-                  placeholder="tag"
-                />
-              )
-            },
-            {
-              key: "targetPageUrl",
-              label: "Target Page",
-              width: "text-md",
-              control: "picker",
-              source: "pages",
-              valueKind: "path",
-              noneLabel: "Current page",
-              placeholder: "/blog",
-              rendersVia: "builder-template.ts blog-tag-cloud renderer"
-            }
-          ]
-        ]
       },
       {
         title: "Structure",
@@ -257,10 +261,7 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "BlogTagCloudPreview",
               visibleWhen: (settings) => (settings.layout ?? "cloud") === "cloud"
             }
-          ]
-        ],
-        // A1: tag colours override the theme.
-        advanced: [
+          ],
           [
             {
               key: "inactiveColor",
@@ -281,7 +282,8 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "BlogTagCloudPreview"
             }
           ]
-        ]
+        ],
+        // A2 theme overrides; colour sorts after size on Text (D9).
       },
       {
         title: "Frame",
@@ -298,10 +300,7 @@ export function BuilderBlogTagCloudModuleSettings({
               fallback: "8",
               rendersVia: "BlogTagCloudPreview"
             }
-          ]
-        ],
-        // A1: the pill background overrides the theme.
-        advanced: [
+          ],
           [
             {
               key: "inactiveBg",
@@ -313,7 +312,8 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "BlogTagCloudPreview"
             }
           ]
-        ]
+        ],
+        // A2 theme override; colour sorts after the spacing on Frame (D9).
       }
     ]
   };

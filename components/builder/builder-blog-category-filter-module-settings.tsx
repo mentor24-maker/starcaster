@@ -85,121 +85,125 @@ export function BuilderBlogCategoryFilterModuleSettings({
     // the old fallback is now themeDefault. Font Size stays basic (font SIZE
     // is not theme-backed); Frame's basic row empties, and the axis stays
     // declared so its Advanced controls keep their column.
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
         strips: [
-      [
-        // C3: was a Yes/No select — same "true"/"false" stored values.
-        {
-          key: "showAll",
-          label: "Show 'All'",
-          width: "check",
-          control: "checkbox",
-          fallback: "true"
-        },
-        {
-          key: "allLabel",
-          label: "'All' Label",
-          width: "text-md",
-          control: "custom",
-          visibleWhen: (settings) => (settings.showAll ?? "true") === "true",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.allLabel ?? "All"}
-              onChange={(e) => set("allLabel", e.target.value)}
-              placeholder="All"
-            />
-          )
-        }
-      ],
-      [
-        {
-          key: "categories",
-          label: "Categories",
-          width: "full",
-          control: "custom",
-          bare: true,
-          render: () => (
-            <>
-              <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
-                Categories
-              </div>
-              <div className="builder-slider-items">
-                {categories.map((cat, index) => (
-                  <div key={cat.id} className="builder-slider-item-card">
-                    <div className="builder-slider-item-header">
-                      <strong>{cat.label || `Category ${index + 1}`}</strong>
-                      <div className="builder-section-actions">
-                        <button type="button" className="builder-icon-button" onClick={() => moveCat(cat.id, -1)} title="Move left">↑</button>
-                        <button type="button" className="builder-icon-button" onClick={() => moveCat(cat.id, 1)} title="Move right">↓</button>
-                        <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeCat(cat.id)} title="Remove">✕</button>
-                      </div>
-                    </div>
-                    <div className="builder-slider-item-grid">
-                      <label className="field">
-                        <span>Label</span>
-                        <input
-                          type="text"
-                          value={cat.label}
-                          onChange={(e) => updateCat(cat.id, "label", e.target.value)}
-                          placeholder="Technology"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Slug</span>
-                        <input
-                          type="text"
-                          value={cat.slug}
-                          onChange={(e) => updateCat(cat.id, "slug", e.target.value)}
-                          placeholder="technology"
-                        />
-                      </label>
-                    </div>
+          // D9 rung 1: a destination changes what the whole module does, so it
+          // leads the Content axis — ahead of the labels it decorates.
+          [
+            {
+              key: "filterParam",
+              label: "URL Param",
+              width: "text-md",
+              control: "custom",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.filterParam ?? "category"}
+                  onChange={(e) => set("filterParam", e.target.value)}
+                  placeholder="category"
+                />
+              )
+            },
+            {
+              key: "targetPageUrl",
+              label: "Target Page",
+              width: "text-md",
+              control: "picker",
+              source: "pages",
+              valueKind: "path",
+              noneLabel: "Current page",
+              placeholder: "/blog"
+            }
+          ],
+          [
+            // C3: was a Yes/No select — same "true"/"false" stored values.
+            {
+              key: "showAll",
+              label: "Show 'All'",
+              width: "check",
+              control: "checkbox",
+              fallback: "true"
+            },
+            {
+              key: "allLabel",
+              label: "'All' Label",
+              width: "text-md",
+              control: "custom",
+              visibleWhen: (settings) => (settings.showAll ?? "true") === "true",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.allLabel ?? "All"}
+                  onChange={(e) => set("allLabel", e.target.value)}
+                  placeholder="All"
+                />
+              )
+            }
+          ],
+          [
+            {
+              key: "categories",
+              label: "Categories",
+              width: "full",
+              control: "custom",
+              bare: true,
+              render: () => (
+                <>
+                  <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
+                    Categories
                   </div>
-                ))}
-              </div>
-              <button type="button" className="secondary-button" onClick={addCat}>
-                Add Category
-              </button>
-            </>
-          )
-        }
-      ]
+                  <div className="builder-slider-items">
+                    {categories.map((cat, index) => (
+                      <div key={cat.id} className="builder-slider-item-card">
+                        <div className="builder-slider-item-header">
+                          <strong>{cat.label || `Category ${index + 1}`}</strong>
+                          <div className="builder-section-actions">
+                            <button type="button" className="builder-icon-button" onClick={() => moveCat(cat.id, -1)} title="Move left">↑</button>
+                            <button type="button" className="builder-icon-button" onClick={() => moveCat(cat.id, 1)} title="Move right">↓</button>
+                            <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeCat(cat.id)} title="Remove">✕</button>
+                          </div>
+                        </div>
+                        <div className="builder-slider-item-grid">
+                          <label className="field">
+                            <span>Label</span>
+                            <input
+                              type="text"
+                              value={cat.label}
+                              onChange={(e) => updateCat(cat.id, "label", e.target.value)}
+                              placeholder="Technology"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Slug</span>
+                            <input
+                              type="text"
+                              value={cat.slug}
+                              onChange={(e) => updateCat(cat.id, "slug", e.target.value)}
+                              placeholder="technology"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" className="secondary-button" onClick={addCat}>
+                    Add Category
+                  </button>
+                </>
+              )
+            }
+          ]
         ],
-        // A1: where a category click goes, and the param it sets — the former
-        // top-level advanced group, folded in so the panel has one Advanced.
         // D3: one strip, not two single-field rows. Target Page narrowed
         // full → text-md so they can share; placeholder shortened to fit.
-        advanced: [
-      [
-        {
-          key: "filterParam",
-          label: "URL Param",
-          width: "text-md",
-          control: "custom",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.filterParam ?? "category"}
-              onChange={(e) => set("filterParam", e.target.value)}
-              placeholder="category"
-            />
-          )
-        },
-        {
-          key: "targetPageUrl",
-          label: "Target Page",
-          width: "text-md",
-          control: "picker",
-          source: "pages",
-          valueKind: "path",
-          noneLabel: "Current page",
-          placeholder: "/blog"
-        }
-      ]
-        ]
       },
       {
         title: "Structure",
@@ -232,29 +236,26 @@ export function BuilderBlogCategoryFilterModuleSettings({
       {
         title: "Text",
         strips: [
-      [
-        { key: "fontSize", label: "Font Size", width: "num", control: "number", min: 10, max: 20, step: 1, fallback: "13" }
-      ]
+          [
+            { key: "fontSize", label: "Font Size", width: "num", control: "number", min: 10, max: 20, step: 1, fallback: "13" }
+          ],
+          [
+            { key: "activeColor", label: "Active", width: "color", control: "theme-color", dialogLabel: "Active color", themeDefault: "#0f4f8f" },
+            { key: "inactiveColor", label: "Inactive", width: "color", control: "theme-color", dialogLabel: "Inactive color", themeDefault: "#587592" }
+          ]
         ],
-        advanced: [
-      [
-        { key: "activeColor", label: "Active", width: "color", control: "theme-color", dialogLabel: "Active color", themeDefault: "#0f4f8f" },
-        { key: "inactiveColor", label: "Inactive", width: "color", control: "theme-color", dialogLabel: "Inactive color", themeDefault: "#587592" }
-      ]
-        ]
       },
       {
         title: "Frame",
-        strips: [],
-        advanced: [
-      [
-        { key: "activeBg", label: "Active BG", width: "color", control: "theme-color", dialogLabel: "Active background", themeDefault: "#e8f6fc" },
-        { key: "inactiveBg", label: "Inactive BG", width: "color", control: "theme-color", dialogLabel: "Inactive background", themeDefault: "#f0f4f8" }
-      ],
-      [
-        { key: "borderRadius", label: "Radius", width: "num", control: "number", min: 0, max: 32, step: 2, fallback: "20" }
-      ]
-        ]
+        strips: [
+          [
+            { key: "activeBg", label: "Active BG", width: "color", control: "theme-color", dialogLabel: "Active background", themeDefault: "#e8f6fc" },
+            { key: "inactiveBg", label: "Inactive BG", width: "color", control: "theme-color", dialogLabel: "Inactive background", themeDefault: "#f0f4f8" }
+          ],
+          [
+            { key: "borderRadius", label: "Radius", width: "num", control: "number", min: 0, max: 32, step: 2, fallback: "20" }
+          ]
+        ],
       }
     ]
   };

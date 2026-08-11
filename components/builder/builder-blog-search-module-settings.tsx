@@ -31,26 +31,20 @@ export function BuilderBlogSearchModuleSettings({
     // themeDefault is its old fallback (A2). Frame's basic row is therefore
     // empty; the column holds its place so the Advanced grid stays aligned.
     // Everything on Content is the module's own copy and stays basic (A4).
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
         strips: [
+          // D9 rung 1: the results page and the URL param decide where a search
+          // GOES — change them and the module does something else. The placeholder
+          // and button wording only decorate it, so they follow (D9 rung 3).
           [
-            {
-              key: "placeholder",
-              label: "Placeholder",
-              width: "text-md",
-              control: "custom",
-              rendersVia: "BlogSearchPreview",
-              render: ({ settings, set }) => (
-                <input
-                  type="text"
-                  value={settings.placeholder ?? "Search posts…"}
-                  onChange={(e) => set("placeholder", e.target.value)}
-                  placeholder="Search posts…"
-                />
-              )
-            },
             {
               key: "targetPageUrl",
               label: "Results Page URL",
@@ -61,23 +55,6 @@ export function BuilderBlogSearchModuleSettings({
               noneLabel: "Current page",
               placeholder: "/blog",
               rendersVia: "BlogSearchPreview"
-            }
-          ],
-          [
-            {
-              key: "buttonLabel",
-              label: "Button Label",
-              width: "text-md",
-              control: "custom",
-              rendersVia: "BlogSearchPreview",
-              render: ({ settings, set }) => (
-                <input
-                  type="text"
-                  value={settings.buttonLabel ?? "Search"}
-                  onChange={(e) => set("buttonLabel", e.target.value)}
-                  placeholder="Search"
-                />
-              )
             },
             {
               key: "searchParam",
@@ -96,18 +73,50 @@ export function BuilderBlogSearchModuleSettings({
             }
           ],
           [
+                      {
+                        key: "searchParamNote",
+                        label: "",
+                        width: "full",
+                        control: "custom",
+                        bare: true,
+                        render: () => (
+                          <div className="builder-module-runtime-note">
+                            <p>
+                              The search param must match the one set on the paired <strong>Blog Search Results</strong> module.
+                            </p>
+                          </div>
+                        )
+                      }
+                    ],
+          [
             {
-              key: "searchParamNote",
-              label: "",
-              width: "full",
+              key: "placeholder",
+              label: "Placeholder",
+              width: "text-md",
               control: "custom",
-              bare: true,
-              render: () => (
-                <div className="builder-module-runtime-note">
-                  <p>
-                    The search param must match the one set on the paired <strong>Blog Search Results</strong> module.
-                  </p>
-                </div>
+              rendersVia: "BlogSearchPreview",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.placeholder ?? "Search posts…"}
+                  onChange={(e) => set("placeholder", e.target.value)}
+                  placeholder="Search posts…"
+                />
+              )
+            },
+            {
+              key: "buttonLabel",
+              label: "Button Label",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "BlogSearchPreview",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.buttonLabel ?? "Search"}
+                  onChange={(e) => set("buttonLabel", e.target.value)}
+                  placeholder="Search"
+                />
               )
             }
           ]
@@ -115,9 +124,7 @@ export function BuilderBlogSearchModuleSettings({
       },
       {
         title: "Frame",
-        strips: [],
-        // A1: the button's fill and its corner radius are both theme-backed.
-        advanced: [
+        strips: [
           [
             {
               key: "accentColor",
@@ -139,7 +146,8 @@ export function BuilderBlogSearchModuleSettings({
               rendersVia: "BlogSearchPreview"
             }
           ]
-        ]
+        ],
+        // A2 theme overrides; colour then radius, the finest last (D9).
       }
     ]
   };
