@@ -23,7 +23,9 @@ import type {
 import {
   createEmptyModule,
   getBuilderBackgroundStyle,
+  isPlainTextVariant,
   normalizeBuilderAssetUrl,
+  formatPlainTextContent,
   formatRichTextContent
 } from "@/lib/builder-template";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
@@ -141,6 +143,11 @@ import {
   BuilderInlineNumberSelectRow,
   BuilderNumberSelectControl
 } from "./builder-inline-number-select";
+
+// Simple Text gets a bare typing box rather than the rich-text toolbar: the
+// editor can only produce paragraph blocks, which is the one thing this module
+// exists to avoid. The placeholder shows what the box accepts.
+const PLAIN_TEXT_PLACEHOLDER = "Plain text. Line breaks are kept, and inline tags like <em> or <a href=\"…\"> work.";
 
 type BuilderModuleCardProps = {
   module: BuilderTemplateModule;
@@ -2101,11 +2108,17 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  const isPlainText = module.type === "text" && isPlainTextVariant(module.settings);
+
   return (
     <div
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
       style={getTextModuleWidthStyle(module.settings)}
-      dangerouslySetInnerHTML={{ __html: formatRichTextContent(module.text) || "<p>Text block</p>" }}
+      dangerouslySetInnerHTML={{
+        __html: isPlainText
+          ? formatPlainTextContent(module.text) || "Simple text"
+          : formatRichTextContent(module.text) || "<p>Text block</p>"
+      }}
     />
   );
 }
@@ -2357,7 +2370,17 @@ function TableCellModules({
               {mod.type === "text" && (
                 <label className="field">
                   <span>Content</span>
-                  <BuilderRichTextEditor value={mod.text} onChange={(value) => updateModuleField(mod.id, "text", value)} />
+                  {isPlainTextVariant(mod.settings) ? (
+                    <textarea
+                      className="builder-textarea"
+                      value={mod.text}
+                      onChange={(event) => updateModuleField(mod.id, "text", event.target.value)}
+                      placeholder={PLAIN_TEXT_PLACEHOLDER}
+                      rows={3}
+                    />
+                  ) : (
+                    <BuilderRichTextEditor value={mod.text} onChange={(value) => updateModuleField(mod.id, "text", value)} />
+                  )}
                 </label>
               )}
 
@@ -4287,7 +4310,7 @@ export function BuilderModuleCard({
           module.type !== "admin-nav-link" ? (
             <label className="field">
               <span>Content</span>
-              {module.type === "text" ? (
+              {module.type === "text" && !isPlainTextVariant(module.settings) ? (
                 <BuilderRichTextEditor
                   value={module.text}
                   onChange={(value) => onUpdateModule((current) => ({ ...current, text: value }))}
@@ -4296,7 +4319,12 @@ export function BuilderModuleCard({
                   {...richTextGalleryProps}
                 />
               ) : (
-                <textarea className="builder-textarea" value={module.text} onChange={(event) => onUpdateModule((current) => ({ ...current, text: event.target.value }))} placeholder="Enter content" />
+                <textarea
+                  className="builder-textarea"
+                  value={module.text}
+                  onChange={(event) => onUpdateModule((current) => ({ ...current, text: event.target.value }))}
+                  placeholder={module.type === "text" ? PLAIN_TEXT_PLACEHOLDER : "Enter content"}
+                />
               )}
             </label>
           ) : null}

@@ -558,6 +558,57 @@ export function prepareRichTextHtmlForEditor(value: unknown) {
   return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(html), "editor");
 }
 
+/**
+ * The Simple Text variant of the `text` module — a `text` module whose
+ * `settings.variant` is this value. Paragraph / Intro Copy / Caption all run
+ * through `formatRichTextContent`, which wraps bare typing in `<p>`; the
+ * paragraph's own margins then push whatever sits above and below it away, and
+ * a `<p>` cannot legally contain a block element. Simple Text exists for copy
+ * that has to sit flush against its neighbours or carry the operator's own
+ * markup, so it skips the wrapper entirely.
+ */
+export const PLAIN_TEXT_VARIANT = "plain";
+
+export function isPlainTextVariant(settings: Record<string, string> | undefined) {
+  return settings?.variant === PLAIN_TEXT_VARIANT;
+}
+
+/**
+ * Text that already lays itself out. Markup like `<p>` / `<div>` / `<h2>` /
+ * `<ul>` carries its own line structure, so the newlines *between* those tags
+ * are the author's formatting, not content.
+ */
+export const BLOCK_LEVEL_TAG =
+  /<\s*(p|div|h[1-6]|ul|ol|li|dl|blockquote|pre|table|thead|tbody|tr|td|th|section|article|aside|header|footer|figure|figcaption|hr)\b/i;
+
+/**
+ * Simple Text rendering: no `<p>` wrapper, ever.
+ *
+ * Line breaks the operator typed are content and survive as `<br />` —
+ * including next to inline markup like `<em>` or `<a>`, which is the whole
+ * reason this doesn't simply reuse `formatRichTextContent`'s HTML branch: a
+ * single `<em>` anywhere in the value used to make the entire thing "HTML" and
+ * silently swallow every newline in it.
+ *
+ * The exception is a value containing block-level tags. There the markup
+ * governs its own layout, and converting the newlines between tags would
+ * inject gaps nobody asked for — so it passes through untouched.
+ *
+ * Everything still goes through the sanitizer either way (Standard 9).
+ */
+export function formatPlainTextContent(value: unknown) {
+  const text = String(value ?? "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const escaped = looksLikeHtml(text) ? text : escapeHtmlText(text);
+  const html = BLOCK_LEVEL_TAG.test(text) ? escaped : escaped.replace(/\n/g, "<br />");
+
+  return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(html), "display");
+}
+
 // A trailing empty block (an otherwise-empty <p> or heading whose only
 // contents are whitespace, non-breaking spaces, or <br>). The editor keeps
 // an empty line at the end for a comfortable typing cursor, but we do not

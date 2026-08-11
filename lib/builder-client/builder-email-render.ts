@@ -2,12 +2,13 @@ import type { CSSProperties } from "react";
 import {
   getBuilderBackgroundStyle,
   getLayoutColumns,
+  isPlainTextVariant,
   type BackgroundSettings,
   type BuilderTemplateModule,
   type BuilderTemplateRecord,
   type BuilderTemplateSection
 } from "@/lib/builder-template";
-import { formatEmailRichTextContent } from "@/lib/email-rich-text";
+import { formatEmailPlainTextContent, formatEmailRichTextContent } from "@/lib/email-rich-text";
 import {
   getButtonModuleStyle,
   getHeadingModuleStyle,
@@ -90,7 +91,12 @@ function renderEmailModule(module: BuilderTemplateModule): string {
   }
 
   if (module.type === "text") {
-    const html = formatEmailRichTextContent(module.text);
+    // Standard 11, decided 2026-08-11: Simple Text renders in email. It is
+    // plain copy in a table cell — the only difference from Paragraph is the
+    // missing <p>, and every mail client handles a bare text node with <br>.
+    const html = isPlainTextVariant(module.settings)
+      ? formatEmailPlainTextContent(module.text)
+      : formatEmailRichTextContent(module.text);
 
     return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#3d5a73;${marginStyle}">${html}</td></tr>`;
   }

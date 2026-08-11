@@ -2135,3 +2135,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-layout-toolbar > .builder-saved-section-group {
   grid-column: 1 / -1 !important;
 }
+
+/*
+ * Simple Text — the `plain` variant of the text module. It renders no <p>,
+ * and by the same intent carries no type scale of its own: size, colour and
+ * line height come from the section it is dropped into, so the copy sits
+ * flush against whatever is above and below it. Paragraph / Intro Copy /
+ * Caption keep their own scale; this one deliberately has none.
+ */
+.builder-react-root .builder-module-preview-text-plain,
+.builder-react-root .builder-preview-text-plain {
+  margin: 0;
+  font-size: inherit;
+  color: inherit;
+  line-height: inherit;
+}
