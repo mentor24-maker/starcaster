@@ -49,14 +49,40 @@ export type BuilderDraft = {
   layoutSections: import("@/lib/builder-template").BuilderTemplateSection[];
 };
 
+/**
+ * The row-layout picker: the Workspace tiles that add a row, and the Layout
+ * dropdown that changes one. Ordered equal columns first, then unequal two-
+ * column, then unequal three-column — the order Divi uses, so the tiles read
+ * as a progression rather than a pile.
+ *
+ * Labels are fractions of the row, which is what the `fr` ratios in
+ * LAYOUT_SPECS actually mean; the values keep their ratio names because they
+ * are persisted on every saved section. See docs/SECTION_LAYOUTS.md.
+ */
 export const layoutOptions: Array<{ value: BuilderTemplateLayout; label: string }> = [
-  { value: "single", label: "Single Column" },
-  { value: "two-column", label: "Two Column" },
-  { value: "three-column", label: "Three Column" },
-  { value: "two-four", label: "2 / 4 Split" },
-  { value: "four-two", label: "4 / 2 Split" },
-  { value: "one-five", label: "1 / 5 Split" },
-  { value: "five-one", label: "5 / 1 Split" }
+  // Not "Full Width" — the section has a separate Width control whose
+  // options are Contained / Full-width, and two things called full width
+  // on one settings row is a trap.
+  { value: "single", label: "1 Column" },
+  { value: "two-column", label: "1/2 + 1/2" },
+  { value: "three-column", label: "1/3 + 1/3 + 1/3" },
+
+  { value: "two-four", label: "1/3 + 2/3" },
+  { value: "four-two", label: "2/3 + 1/3" },
+  { value: "one-three", label: "1/4 + 3/4" },
+  { value: "three-one", label: "3/4 + 1/4" },
+  { value: "two-three", label: "2/5 + 3/5" },
+  { value: "three-two", label: "3/5 + 2/5" },
+  { value: "one-five", label: "1/6 + 5/6" },
+  { value: "five-one", label: "5/6 + 1/6" },
+
+  { value: "one-two-one", label: "1/4 + 1/2 + 1/4" },
+  { value: "one-three-one", label: "1/5 + 3/5 + 1/5" },
+  { value: "one-four-one", label: "1/6 + 2/3 + 1/6" },
+  { value: "two-one-one", label: "1/2 + 1/4 + 1/4" },
+  { value: "one-one-two", label: "1/4 + 1/4 + 1/2" },
+  { value: "three-one-one", label: "3/5 + 1/5 + 1/5" },
+  { value: "one-one-three", label: "1/5 + 1/5 + 3/5" }
 ];
 
 export const modulePaletteGroups: Array<{

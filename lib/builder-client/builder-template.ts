@@ -20,15 +20,37 @@ import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 
+/**
+ * Section (row) column structures. Values are named for their `fr` ratio;
+ * see docs/SECTION_LAYOUTS.md for the fractions each one means and how the
+ * set tracks Divi's.
+ *
+ * Adding a member here is a compile error until it also gets an entry in
+ * LAYOUT_SPECS below — which is the point. A layout with no column keys and
+ * no grid template does not fail loudly; it renders as one full-width
+ * column, which reads as the builder ignoring the click.
+ */
 export type BuilderTemplateLayout =
   | "single"
+  // Two columns.
   | "two-column"
-  | "three-column"
   | "two-four"
   | "four-two"
   | "one-five"
   | "five-one"
-  | "one-four-one";
+  | "one-three"
+  | "three-one"
+  | "two-three"
+  | "three-two"
+  // Three columns.
+  | "three-column"
+  | "one-four-one"
+  | "one-three-one"
+  | "one-two-one"
+  | "two-one-one"
+  | "one-one-two"
+  | "three-one-one"
+  | "one-one-three";
 
 export type BackgroundStylePreset = "blue-yellow-circles";
 
@@ -568,22 +590,57 @@ export function createLocalId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const SINGLE_COLUMN = ["main"] as const;
+const TWO_COLUMNS = ["left", "right"] as const;
+const THREE_COLUMNS = ["left", "center", "right"] as const;
+
+/**
+ * The one table every layout is defined in: which column keys it exposes,
+ * and how its tracks are sized. `Record<BuilderTemplateLayout, …>` makes a
+ * missing entry a compile error rather than a section that quietly renders
+ * as one full-width column.
+ *
+ * Column keys are persisted — on `module.column` and as the key of every
+ * `cellBackgrounds` / `cellPadding` / … record — so the vocabulary is fixed
+ * at main / left / center / right. Layouts sharing a key set (all the
+ * three-column ones, say) keep their cell styling when swapped between.
+ *
+ * Track sizes are ratios, not widths: `2fr 3fr` is Divi's 2/5 + 3/5.
+ */
+const LAYOUT_SPECS: Record<
+  BuilderTemplateLayout,
+  { columns: readonly string[]; grid: string }
+> = {
+  single: { columns: SINGLE_COLUMN, grid: "1fr" },
+
+  "two-column": { columns: TWO_COLUMNS, grid: "1fr 1fr" },
+  "two-four": { columns: TWO_COLUMNS, grid: "2fr 4fr" },
+  "four-two": { columns: TWO_COLUMNS, grid: "4fr 2fr" },
+  "one-five": { columns: TWO_COLUMNS, grid: "1fr 5fr" },
+  "five-one": { columns: TWO_COLUMNS, grid: "5fr 1fr" },
+  "one-three": { columns: TWO_COLUMNS, grid: "1fr 3fr" },
+  "three-one": { columns: TWO_COLUMNS, grid: "3fr 1fr" },
+  "two-three": { columns: TWO_COLUMNS, grid: "2fr 3fr" },
+  "three-two": { columns: TWO_COLUMNS, grid: "3fr 2fr" },
+
+  "three-column": { columns: THREE_COLUMNS, grid: "1fr 1fr 1fr" },
+  "one-four-one": { columns: THREE_COLUMNS, grid: "1fr 4fr 1fr" },
+  "one-three-one": { columns: THREE_COLUMNS, grid: "1fr 3fr 1fr" },
+  "one-two-one": { columns: THREE_COLUMNS, grid: "1fr 2fr 1fr" },
+  "two-one-one": { columns: THREE_COLUMNS, grid: "2fr 1fr 1fr" },
+  "one-one-two": { columns: THREE_COLUMNS, grid: "1fr 1fr 2fr" },
+  "three-one-one": { columns: THREE_COLUMNS, grid: "3fr 1fr 1fr" },
+  "one-one-three": { columns: THREE_COLUMNS, grid: "1fr 1fr 3fr" }
+};
+
+function getLayoutSpec(layout: BuilderTemplateLayout) {
+  return LAYOUT_SPECS[layout] ?? LAYOUT_SPECS.single;
+}
+
 export function getLayoutColumns(layout: BuilderTemplateLayout) {
-  if (
-    layout === "two-column" ||
-    layout === "two-four" ||
-    layout === "four-two" ||
-    layout === "one-five" ||
-    layout === "five-one"
-  ) {
-    return ["left", "right"];
-  }
-
-  if (layout === "three-column" || layout === "one-four-one") {
-    return ["left", "center", "right"];
-  }
-
-  return ["main"];
+  // A copy: callers have always received a fresh array, and the specs are
+  // shared across every section on the page.
+  return [...getLayoutSpec(layout).columns];
 }
 
 /**
@@ -620,11 +677,11 @@ export function resolveModuleColumnForLayout(column: unknown, layout: unknown): 
     main: "main"
   };
   const map =
-    normalizedLayout === "single"
-      ? legacyMapSingle
-      : normalizedLayout === "three-column" || normalizedLayout === "one-four-one"
-        ? legacyMapThree
-        : legacyMapTwo;
+    allowedColumns.length === 3
+      ? legacyMapThree
+      : allowedColumns.length === 2
+        ? legacyMapTwo
+        : legacyMapSingle;
   const mapped = map[raw];
 
   if (mapped && allowedColumns.includes(mapped)) {
@@ -635,35 +692,7 @@ export function resolveModuleColumnForLayout(column: unknown, layout: unknown): 
 }
 
 export function getLayoutGridTemplate(layout: BuilderTemplateLayout) {
-  if (layout === "four-two") {
-    return "4fr 2fr";
-  }
-
-  if (layout === "two-four") {
-    return "2fr 4fr";
-  }
-
-  if (layout === "one-five") {
-    return "1fr 5fr";
-  }
-
-  if (layout === "five-one") {
-    return "5fr 1fr";
-  }
-
-  if (layout === "two-column") {
-    return "1fr 1fr";
-  }
-
-  if (layout === "three-column") {
-    return "1fr 1fr 1fr";
-  }
-
-  if (layout === "one-four-one") {
-    return "1fr 4fr 1fr";
-  }
-
-  return "1fr";
+  return getLayoutSpec(layout).grid;
 }
 
 export function normalizeLayout(value: unknown): BuilderTemplateLayout {
@@ -689,16 +718,8 @@ export function normalizeLayout(value: unknown): BuilderTemplateLayout {
     return legacyLayoutMap[layout];
   }
 
-  if (
-    layout === "two-column" ||
-    layout === "three-column" ||
-    layout === "two-four" ||
-    layout === "four-two" ||
-    layout === "one-five" ||
-    layout === "five-one" ||
-    layout === "one-four-one"
-  ) {
-    return layout;
+  if (Object.prototype.hasOwnProperty.call(LAYOUT_SPECS, layout)) {
+    return layout as BuilderTemplateLayout;
   }
 
   return "single";
