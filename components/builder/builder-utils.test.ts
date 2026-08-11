@@ -12,6 +12,7 @@ import {
   getImageModuleShellStyle,
   getModuleWidthShellStyle,
   getModuleWidthStyle,
+  getPlainTextModuleStyle,
   getTextModuleWidthStyle,
   getSectionWidthStyle,
   getOverlayFlowCollapsedModuleStyle,
@@ -919,5 +920,53 @@ describe("getButtonModuleStyle email safety", () => {
       expect(String(value)).not.toContain("var(");
     }
     expect(style.background).toBe("#214c71");
+  });
+});
+
+describe("getPlainTextModuleStyle", () => {
+  it("returns nothing when the operator has set nothing", () => {
+    // Simple Text inherits by default — that is what makes it sit flush.
+    // Emitting even one property here would change every module already saved.
+    expect(getPlainTextModuleStyle({})).toBeUndefined();
+    expect(getPlainTextModuleStyle({ variant: "plain", alignment: "left" })).toBeUndefined();
+  });
+
+  it("emits only the properties that carry a value", () => {
+    const style = getPlainTextModuleStyle({ fontSize: "24" }) as Record<string, unknown>;
+    expect(style).toEqual({ fontSize: "24px" });
+  });
+
+  it("maps each setting to its CSS property", () => {
+    const style = getPlainTextModuleStyle({
+      color: "#ff0000",
+      fontSize: "18",
+      fontWeight: "700",
+      lineHeight: "1.4",
+      letterSpacing: "2.5"
+    }) as Record<string, unknown>;
+
+    expect(style).toEqual({
+      color: "#ff0000",
+      fontSize: "18px",
+      fontWeight: 700,
+      lineHeight: 1.4,
+      letterSpacing: "2.5px"
+    });
+  });
+
+  it("keeps a zero letter spacing, which removes inherited tracking", () => {
+    expect(getPlainTextModuleStyle({ letterSpacing: "0" })).toEqual({ letterSpacing: "0px" });
+  });
+
+  it("ignores unparseable values rather than emitting broken CSS", () => {
+    expect(getPlainTextModuleStyle({ fontSize: "", fontWeight: "", lineHeight: "" })).toBeUndefined();
+    expect(getPlainTextModuleStyle({ fontSize: "abc" })).toBeUndefined();
+  });
+
+  it("stays free of var() so it survives being inlined into email", () => {
+    const style = getPlainTextModuleStyle({ color: "#123456", fontSize: "20" }) as Record<string, string>;
+    for (const value of Object.values(style)) {
+      expect(String(value)).not.toContain("var(");
+    }
   });
 });

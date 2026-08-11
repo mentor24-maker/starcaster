@@ -111,6 +111,7 @@ import {
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
   getButtonModuleOuterSpacingStyle,
+  getPlainTextModuleStyle,
   getTextModuleWidthStyle,
   getVerticalMarginStyle,
   getButtonModuleStyle,
@@ -119,6 +120,7 @@ import {
 } from "./builder-utils";
 import { BuilderButtonDesignSettings } from "./builder-button-design-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
+import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
 import {
   BuilderThemeColorField,
   BuilderThemeColorFieldWithDefault,
@@ -2113,7 +2115,10 @@ function renderModulePreview(module: BuilderTemplateModule) {
   return (
     <div
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
-      style={getTextModuleWidthStyle(module.settings)}
+      style={{
+        ...getTextModuleWidthStyle(module.settings),
+        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+      }}
       dangerouslySetInnerHTML={{
         __html: isPlainText
           ? formatPlainTextContent(module.text) || "Simple text"
@@ -2349,6 +2354,17 @@ function TableCellModules({
 
               {mod.type === "heading" ? (
                 <BuilderHeadingModuleSettings
+                  compact
+                  module={mod}
+                  themeColors={themeColors}
+                  onUpdateModule={(updater) => {
+                    onUpdate(cellKey, modules.map((item) => (item.id === mod.id ? updater(item) : item)));
+                  }}
+                />
+              ) : null}
+
+              {mod.type === "text" && isPlainTextVariant(mod.settings) ? (
+                <BuilderSimpleTextModuleSettings
                   compact
                   module={mod}
                   themeColors={themeColors}
@@ -4162,6 +4178,10 @@ export function BuilderModuleCard({
 
           {module.type === "heading" ? (
             <BuilderHeadingModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          ) : null}
+
+          {module.type === "text" && isPlainTextVariant(module.settings) ? (
+            <BuilderSimpleTextModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
           ) : null}
 
           {module.type === "table" && (

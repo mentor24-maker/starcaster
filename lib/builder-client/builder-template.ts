@@ -589,6 +589,33 @@ export const BLOCK_LEVEL_TAG =
   /<\s*(p|div|h[1-6]|ul|ol|li|dl|blockquote|pre|table|thead|tbody|tr|td|th|section|article|aside|header|footer|figure|figcaption|hr)\b/i;
 
 /**
+ * An `&` that does not already open a character entity — `&amp;`, `&#160;`,
+ * `&#xA0;`. Those are the operator's own escapes and must survive verbatim.
+ */
+const BARE_AMPERSAND = /&(?!#\d+;|#x[0-9a-fA-F]+;|[a-zA-Z][a-zA-Z0-9]{1,31};)/g;
+
+/**
+ * Escape for Simple Text, which — unlike the rich-text editor's output — is
+ * typed by hand.
+ *
+ * `escapeHtmlText` turns every `&` into `&amp;`, so an operator who typed
+ * `&nbsp;` to add a space got the six literal characters back on the page
+ * (reported 2026-08-11). Entities are the only way to type a space HTML will
+ * not collapse, so in a plain typing box they are content, not an accident.
+ * Bare ampersands are still escaped; `<` and `>` always are.
+ *
+ * Quotes are deliberately left alone: this value becomes text content, never
+ * an attribute, and `&quot;` in body text only makes the editor's markup
+ * harder to read.
+ */
+function escapePlainTextPreservingEntities(text: string) {
+  return text
+    .replace(BARE_AMPERSAND, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
  * Simple Text rendering: no `<p>` wrapper, ever.
  *
  * Line breaks the operator typed are content and survive as `<br />` —
@@ -610,7 +637,7 @@ export function formatPlainTextContent(value: unknown) {
     return "";
   }
 
-  const escaped = looksLikeHtml(text) ? text : escapeHtmlText(text);
+  const escaped = looksLikeHtml(text) ? text : escapePlainTextPreservingEntities(text);
   const html = BLOCK_LEVEL_TAG.test(text) ? escaped : escaped.replace(/\n/g, "<br />");
 
   return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(html), "display");
