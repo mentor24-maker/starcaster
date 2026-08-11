@@ -155,13 +155,15 @@ held everywhere it applied.
   background picker vs the standard background controls. Fixes F8, F2.
 
 ### T3/T5 — full action set, standard icons
-- **Violations:** table rows have clone but no per-row delete; tag-cloud
-  manager icons lack the title/aria labels sibling managers carry.
+- **Violations:** ~~table rows have clone but no per-row delete~~ (fixed
+  2026-08-11, PR #154); tag-cloud manager icons lack the title/aria
+  labels sibling managers carry.
 
 ### S1/S2 — one shared system; universal chrome universal
-- **Violations:** six editors still inline in the 4,300-line card file
-  (table, slider, slideshow, headline-rotator, poll-category-list,
-  social-share) — S1; table and poll-category-list skip the shared
+- **Violations:** ~~six~~ **five** editors still inline in the card file
+  (slider, slideshow, headline-rotator, poll-category-list,
+  social-share) — S1; table was the sixth until 2026-08-11 (PR #154);
+  ~~table and~~ poll-category-list skips the shared
   Alignment/H-Margin/V-Margin strip entirely (no margins at all), button
   suppresses it and re-rolls four bespoke margin rows — S2; heading
   offers Top/Bottom but no horizontal margin (the renderer doesn't
@@ -292,9 +294,23 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
   background" orphan), W3 (mode select stretched). EXEMPLAR: the
   Alignment/H-Margin/V-Margin strip is exactly right — the rest of the
   chrome should look like it.
-- **table** — FAIL C8 (bespoke background picker), W3 (stretched Max
+- ~~**table** — FAIL C8 (bespoke background picker), W3 (stretched Max
   Width), T3 (no per-row delete), **S2 (excluded from chrome: no
-  alignment or margins at all)**, S1.
+  alignment or margins at all)**, S1.~~ **CONFORMING 2026-08-11 (PR
+  #154)** — extracted to `builder-table-module-settings.tsx` on the
+  schema generator with D8 axes Structure / Placement / Frame and the
+  grid full-width below them. All five closed: shared
+  BuilderBackgroundControls (C8), Max Width as a preset dropdown (C1/W3),
+  per-row delete beside clone (T3), Alignment + the W7-named margin pair
+  (S2/C7 — the renderer had honoured `verticalMargin`/`horizontalMargin`
+  the whole time via `getModuleOuterSpacingStyle`), schema-generated (S1).
+  Also fixed while in there: alignment now does something on a
+  Max-Width-constrained table (`getTableWrapStyle`, unit-tested), the
+  background no longer paints twice (outer wrapper **and** the `<table>`,
+  which spread the fill across the full column behind a narrow table),
+  and both table surfaces share one `parseTableData` — the renderer's
+  copy did not migrate the legacy `rows` format, so a table saved before
+  the cell-modules rewrite edited fine and published empty.
 - **slider** — FAIL **D4 (vapor CSS: its grid classes exist nowhere)**,
   D2, W1, W3, S1.
 - **slideshow** — FAIL D3, D4 (vapor CSS), W1, W3, L3, S1.
@@ -381,6 +397,45 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
 ---
 
 ## Progress log
+
+- **2026-08-11 (Table — and what its screenshot exposed):** the operator
+  sent a screenshot of the Table panel and asked whether that was what
+  "conforming" looks like. It was not: Table is one of the six editors
+  that were never extracted from `builder-module-card.tsx`, so the D8
+  axis sweep of 2026-08-10 — recorded here as "~38 modules converted" —
+  passed it by entirely. **The number counts extracted editors, not
+  module types.** Six of 53 types never had a file to convert. Anyone
+  reading "every module conforms" should read it as "every module with
+  its own settings file".
+  - **Table converted** (see its §3 entry) — axes Structure / Placement /
+    Frame, grid full-width below, five FAILs closed.
+  - **R9 was defeated app-wide by a duplicate CSS rule.** The block that
+    gives field labels `--builder-editor-label` (#12395f) sits ABOVE a
+    second `.builder-module-field-label` rule carrying `color:
+    var(--muted)` at the same specificity, so the later one won and
+    every field label in every module panel rendered muted grey on the
+    builder's blue — the exact pairing R9 names. Colour and size removed
+    from the layout rule; verified in the running app (computed
+    `rgb(18, 57, 95)`). This is why "we swept it" and "it looks swept"
+    are different claims: nothing here was auto-checkable.
+  - **W7 was true only of generated panels.** `builder-settings-schema`
+    has a test asserting the generator never emits "V Margin"/"H Margin",
+    but three hand-written surfaces still did — the shared module chrome
+    (so, every module that uses it), social, and crm-form. All three
+    renamed to Vertical/Horizontal Margin in `marginFields()` order.
+  - **Left behind, deliberately:** `.builder-table-design-grid` and
+    `.builder-table-structure-actions` in `_builder-react.css` are now
+    dead (the schema generator owns that layout), but that file is
+    regeneration-guarded by `check_conventions.cjs` after commit 2bd3018
+    silently deleted the CRM modal styles. Not worth a bypass for dead
+    rules that harm nothing — sweep them in a pass that owns the guard.
+  - **Candidate checks this suggests**, in the spirit of "assertions only
+    check what someone thought to assert": (a) a check that every module
+    TYPE resolves to a schema-generated editor, which would have made
+    Table's absence loud; (b) extend the existing W7 test beyond the
+    generator to the whole `components/builder` tree; (c) a duplicate-
+    selector lint for the CSS overrides file, which is what let R9 be
+    silently overridden.
 
 - **2026-08-09 (operator rulings, same day as audit):**
   - **L6→card managers (ruled: yes):** breadcrumb + feature-cards

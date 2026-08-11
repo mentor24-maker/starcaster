@@ -14,6 +14,7 @@ import {
   getModuleWidthStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
+  getTableWrapStyle,
   getSectionWidthStyle,
   getOverlayFlowCollapsedModuleStyle,
   getOverlayFlowCollapsedSectionStyle,
@@ -968,5 +969,45 @@ describe("getPlainTextModuleStyle", () => {
     for (const value of Object.values(style)) {
       expect(String(value)).not.toContain("var(");
     }
+  });
+});
+
+describe("getTableWrapStyle", () => {
+  it("leaves a full-width table alone — there is nothing to align", () => {
+    // Alignment was suppressed for tables precisely because a 100%-wide table
+    // is already flush both sides; the control only earns its place once Max
+    // Width holds the table in.
+    expect(getTableWrapStyle({ alignment: "center" })).toEqual({});
+    expect(getTableWrapStyle({ alignment: "right" })).toEqual({});
+  });
+
+  it("centres a constrained table with auto margins, not text-align", () => {
+    // The shared is-align-* classes use justify-self/text-align, neither of
+    // which moves a block-level wrapper — this is why the table needed its own.
+    expect(getTableWrapStyle({ tableMaxWidth: "600", alignment: "center" })).toEqual({
+      maxWidth: "600px",
+      marginLeft: "auto",
+      marginRight: "auto"
+    });
+  });
+
+  it("pushes a right-aligned table over with one auto margin", () => {
+    expect(getTableWrapStyle({ tableMaxWidth: "600", alignment: "right" })).toEqual({
+      maxWidth: "600px",
+      marginLeft: "auto"
+    });
+  });
+
+  it("adds no margins when the table is left-aligned or unset", () => {
+    expect(getTableWrapStyle({ tableMaxWidth: "600" })).toEqual({ maxWidth: "600px" });
+    expect(getTableWrapStyle({ tableMaxWidth: "600", alignment: "left" })).toEqual({ maxWidth: "600px" });
+  });
+
+  it("clamps Max Width the same way the two inline renderers did", () => {
+    expect(getTableWrapStyle({ tableMaxWidth: "9999" })).toEqual({ maxWidth: "2000px" });
+    // Garbage parses to 0, which falls back to full width rather than
+    // collapsing the table to nothing. Both old copies did this too.
+    expect(getTableWrapStyle({ tableMaxWidth: "abc" })).toEqual({});
+    expect(getTableWrapStyle({ tableMaxWidth: "0" })).toEqual({});
   });
 });

@@ -21,7 +21,6 @@ import type {
   BuilderTemplateModuleType
 } from "@/lib/builder-template";
 import {
-  createEmptyModule,
   getBuilderBackgroundStyle,
   isPlainTextVariant,
   normalizeBuilderAssetUrl,
@@ -51,7 +50,6 @@ import {
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderBackgroundControls } from "./builder-background-controls";
-import { BuilderButtonBackgroundPicker } from "./builder-button-background-picker";
 import { MerchModuleEditor } from "./builder-merch-module-editor";
 import { BuilderCodeEmbed } from "./builder-code-embed";
 import { BuilderFloatingImageModuleSettings } from "./builder-floating-image-module-settings";
@@ -89,6 +87,9 @@ import { BuilderBlogSearchResultsModuleSettings } from "./builder-blog-search-re
 import { BuilderMessagingTopicListModuleSettings } from "./builder-messaging-topic-list-module-settings";
 import { BuilderMessagingTagListModuleSettings } from "./builder-messaging-tag-list-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
+import { BuilderTableModuleSettings } from "./builder-table-module-settings";
+import { PLAIN_TEXT_PLACEHOLDER } from "./builder-types";
+import { parseTableData } from "@/lib/builder-table-data";
 import { BuilderCrmFormModuleSettings } from "./builder-crm-form-module-settings";
 import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-module-settings";
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
@@ -100,8 +101,6 @@ import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderImagePreview } from "./builder-image-preview";
-import type { ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
-import { BuilderModulePaletteModal } from "./builder-module-palette-modal";
 import {
   getAlignmentClass,
   getHeadingModuleStyle,
@@ -110,6 +109,7 @@ import {
   isPollCategoryListPanelTransparent,
   getModuleMarginStyle,
   getModuleOuterSpacingStyle,
+  getTableWrapStyle,
   getButtonModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
@@ -149,7 +149,6 @@ import {
 // Simple Text gets a bare typing box rather than the rich-text toolbar: the
 // editor can only produce paragraph blocks, which is the one thing this module
 // exists to avoid. The placeholder shows what the box accepts.
-const PLAIN_TEXT_PLACEHOLDER = "Plain text. Line breaks are kept, and inline tags like <em> or <a href=\"…\"> work.";
 
 type BuilderModuleCardProps = {
   module: BuilderTemplateModule;
@@ -572,10 +571,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const borderC = module.settings.borderColor || "#cccccc";
     const cellPad = Number.parseInt(module.settings.cellPadding || "8", 10);
     const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? { background: "transparent" };
-    const tableMaxWidth = module.settings.tableMaxWidth ? Math.min(2000, Math.max(0, Number.parseInt(module.settings.tableMaxWidth, 10) || 0)) : undefined;
 
     return (
-      <div className="builder-module-preview-table-wrap" style={tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}}>
+      <div className="builder-module-preview-table-wrap" style={getTableWrapStyle(module.settings)}>
         <table
           className="builder-module-preview-table"
           style={{
@@ -2128,12 +2126,6 @@ function renderModulePreview(module: BuilderTemplateModule) {
   );
 }
 
-type ParsedTableData = {
-  headers: string[];
-  cells: Record<string, BuilderTemplateModule[]>;
-  rowCount: number;
-};
-
 /** Shared with the Feature Cards module — see lib/builder-client/builder-card-items.ts */
 type SliderItem = BuilderCardItem;
 
@@ -2153,10 +2145,6 @@ function parseHeadlineItems(settings: Record<string, string>): HeadlineItem[] {
 
 function serializeHeadlineItems(items: HeadlineItem[]) {
   return serializeHeadlineRotatorEntries(items);
-}
-
-function renderCompactCellModulePreview(module: BuilderTemplateModule) {
-  return <div className="builder-table-cell-module-preview">{renderModulePreview(module)}</div>;
 }
 
 type SlideshowSlide = { id: string; url: string; alt: string };
@@ -2203,555 +2191,6 @@ function parseSocialItems(settings: Record<string, string>): SocialItem[] {
   } catch {
     return [];
   }
-}
-
-function parseTableData(settings: Record<string, string>): ParsedTableData {
-  try {
-    const data = JSON.parse(settings.tableData || "{}");
-    const headers: string[] = Array.isArray(data.headers) ? data.headers : [];
-
-    if (data.cells && typeof data.rowCount === "number") {
-      const cells: Record<string, BuilderTemplateModule[]> = {};
-      for (const [key, mods] of Object.entries(data.cells)) {
-        cells[key] = Array.isArray(mods) ? (mods as BuilderTemplateModule[]) : [];
-      }
-      return { headers, cells, rowCount: data.rowCount };
-    }
-
-    if (Array.isArray(data.rows)) {
-      const cells: Record<string, BuilderTemplateModule[]> = {};
-      for (let ri = 0; ri < data.rows.length; ri++) {
-        const row = data.rows[ri];
-        if (!Array.isArray(row)) continue;
-        for (let ci = 0; ci < row.length; ci++) {
-          const text = String(row[ci] || "");
-          if (text) {
-            const mod = createEmptyModule("text", "");
-            mod.text = text;
-            mod.name = "Text";
-            cells[`${ri}-${ci}`] = [mod];
-          }
-        }
-      }
-      return { headers, cells, rowCount: data.rows.length };
-    }
-
-    return { headers, cells: {}, rowCount: Math.max(Number(data.rowCount) || 0, 1) };
-  } catch {
-    return { headers: [], cells: {}, rowCount: 1 };
-  }
-}
-
-function serializeTableData(td: ParsedTableData): string {
-  return JSON.stringify({ headers: td.headers, cells: td.cells, rowCount: td.rowCount });
-}
-
-function cloneTableCellModule(module: BuilderTemplateModule, suffix: string): BuilderTemplateModule {
-  return {
-    ...module,
-    id: `${module.type}-${Date.now()}-${suffix}`,
-    settings: { ...module.settings }
-  };
-}
-
-/* ---------- Module palette for table cells ---------- */
-
-/**
- * Categories a table cell cannot host: another table (nested grids), and the
- * two form modules whose submit flow needs to own the section it sits in.
- */
-const TABLE_CELL_EXCLUDED_PALETTE_GROUPS: ModulePaletteGroup[] = ["table", "contact-form", "crm-form"];
-
-/* ---------- Table cell module list ---------- */
-
-function TableCellModules({
-  cellKey,
-  modules,
-  pages = [],
-  themeColors = [],
-  onUpdate
-}: {
-  cellKey: string;
-  modules: BuilderTemplateModule[];
-  pages?: BuilderPageRecord[];
-  themeColors?: BuilderThemePalette;
-  onUpdate: (cellKey: string, modules: BuilderTemplateModule[]) => void;
-}) {
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [paletteGroup, setPaletteGroup] = useState<ModulePaletteGroup | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  function addModule(item: ModulePaletteItem) {
-    const mod = createEmptyModule(item.type, "");
-    const newMod = { ...mod, name: item.name, text: item.text, settings: { ...mod.settings, ...item.settings } };
-    onUpdate(cellKey, [...modules, newMod]);
-    closePalette();
-  }
-
-  function closePalette() {
-    setPaletteOpen(false);
-    setPaletteGroup(null);
-  }
-
-  function removeModule(id: string) {
-    onUpdate(cellKey, modules.filter((m) => m.id !== id));
-    if (editingId === id) setEditingId(null);
-  }
-
-  function moveModule(id: string, direction: -1 | 1) {
-    const index = modules.findIndex((m) => m.id === id);
-    const targetIndex = index + direction;
-    if (index < 0 || targetIndex < 0 || targetIndex >= modules.length) return;
-    const nextModules = [...modules];
-    const [moved] = nextModules.splice(index, 1);
-    nextModules.splice(targetIndex, 0, moved);
-    onUpdate(cellKey, nextModules);
-  }
-
-  function updateModuleField(id: string, field: string, value: string) {
-    onUpdate(cellKey, modules.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
-  }
-
-  function updateModuleSettings(id: string, updates: Record<string, string>) {
-    onUpdate(
-      cellKey,
-      modules.map((m) =>
-        m.id === id ? { ...m, settings: { ...m.settings, ...updates } } : m
-      )
-    );
-  }
-
-  function updateCellModule(id: string, updater: (current: BuilderTemplateModule) => BuilderTemplateModule) {
-    onUpdate(cellKey, modules.map((m) => (m.id === id ? updater(m) : m)));
-  }
-
-  return (
-    <div className="builder-table-cell-modules" onClick={(e) => e.stopPropagation()}>
-      {modules.map((mod) => (
-        <div key={mod.id} className="builder-table-cell-module">
-          <div className="builder-table-cell-module-header">
-            <button
-              aria-expanded={editingId === mod.id}
-              type="button"
-              className="builder-table-cell-module-toggle"
-              onClick={() => setEditingId(editingId === mod.id ? null : mod.id)}
-            >
-              <span className="builder-table-cell-module-label">{mod.name || mod.type}</span>
-              <span className="builder-collapse-chevron"><BuilderCollapseIcon expanded={editingId === mod.id} /></span>
-            </button>
-            <button type="button" className="builder-icon-button" onClick={() => moveModule(mod.id, -1)} title="Move up">↑</button>
-            <button type="button" className="builder-icon-button" onClick={() => moveModule(mod.id, 1)} title="Move down">↓</button>
-            <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeModule(mod.id)} title="Remove">✕</button>
-          </div>
-          {renderCompactCellModulePreview(mod)}
-          {editingId === mod.id && (
-            <BuilderCenteredModal title={mod.name || mod.type} onClose={() => setEditingId(null)}>
-            <div className="builder-table-cell-module-editor">
-              <label className="field">
-                <span>Module label</span>
-                <input type="text" value={mod.name} onChange={(e) => updateModuleField(mod.id, "name", e.target.value)} placeholder="Optional internal label" />
-              </label>
-
-              {mod.type === "heading" ? (
-                <BuilderHeadingModuleSettings
-                  compact
-                  module={mod}
-                  themeColors={themeColors}
-                  onUpdateModule={(updater) => {
-                    onUpdate(cellKey, modules.map((item) => (item.id === mod.id ? updater(item) : item)));
-                  }}
-                />
-              ) : null}
-
-              {mod.type === "text" && isPlainTextVariant(mod.settings) ? (
-                <BuilderSimpleTextModuleSettings
-                  compact
-                  module={mod}
-                  themeColors={themeColors}
-                  onUpdateModule={(updater) => {
-                    onUpdate(cellKey, modules.map((item) => (item.id === mod.id ? updater(item) : item)));
-                  }}
-                />
-              ) : null}
-
-              {(mod.type === "text" || mod.type === "heading") && (
-                <BuilderSettingRow label="Alignment" fullWidth>
-                  <BuilderAlignmentIconGroup
-                    value={getModuleAlignment(mod.settings)}
-                    onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
-                  />
-                </BuilderSettingRow>
-              )}
-
-              {mod.type === "text" && (
-                <label className="field">
-                  <span>Content</span>
-                  {isPlainTextVariant(mod.settings) ? (
-                    <textarea
-                      className="builder-textarea"
-                      value={mod.text}
-                      onChange={(event) => updateModuleField(mod.id, "text", event.target.value)}
-                      placeholder={PLAIN_TEXT_PLACEHOLDER}
-                      rows={3}
-                    />
-                  ) : (
-                    <BuilderRichTextEditor value={mod.text} onChange={(value) => updateModuleField(mod.id, "text", value)} />
-                  )}
-                </label>
-              )}
-
-              {mod.type === "quote" && (
-                <label className="field">
-                  <span>Content</span>
-                  <textarea className="builder-textarea" value={mod.text} onChange={(e) => updateModuleField(mod.id, "text", e.target.value)} placeholder="Enter content" rows={2} />
-                </label>
-              )}
-
-              {mod.type === "button" && (
-                <div className="builder-table-cell-button-settings">
-                  <BuilderSettingRow label="Button label" fullWidth>
-                    <input
-                      type="text"
-                      value={mod.text}
-                      onChange={(e) => updateModuleField(mod.id, "text", e.target.value)}
-                      placeholder="Button text"
-                    />
-                  </BuilderSettingRow>
-                  <BuilderSettingRow label="Link" fullWidth>
-                    <input
-                      type="text"
-                      value={mod.settings.href ?? ""}
-                      onChange={(e) => updateModuleSettings(mod.id, { href: e.target.value })}
-                      placeholder="/path-or-url"
-                    />
-                  </BuilderSettingRow>
-                  <BuilderSettingRow label="Button color">
-                    <BuilderThemeColorField
-                      dialogLabel="Button color"
-                      fallback="#214c71"
-                      themeColors={themeColors}
-                      value={mod.settings.buttonColor ?? "#214c71"}
-                      onChange={(buttonColor) => updateModuleSettings(mod.id, { buttonColor })}
-                    />
-                  </BuilderSettingRow>
-                  <BuilderSettingRow label="Text color">
-                    <BuilderThemeColorField
-                      dialogLabel="Button text color"
-                      fallback="#ffffff"
-                      themeColors={themeColors}
-                      value={mod.settings.textColor ?? "#ffffff"}
-                      onChange={(textColor) => updateModuleSettings(mod.id, { textColor })}
-                    />
-                  </BuilderSettingRow>
-                </div>
-              )}
-
-              {mod.type === "image" && (
-                <>
-                  <label className="field">
-                    <span>Media URL</span>
-                    <BuilderImagePickerField
-                      value={mod.settings.url ?? ""}
-                      onChange={(url) => updateModuleSettings(mod.id, { url })}
-                    />
-                  </label>
-                  <BuilderSettingRow label="Alignment" fullWidth>
-                    <BuilderAlignmentIconGroup
-                      value={getModuleAlignment(mod.settings)}
-                      onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
-                    />
-                  </BuilderSettingRow>
-                  <label className="field">
-                    <span>Link</span>
-                    <div className="builder-image-link-row">
-                      {pages.length > 0 && (
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) updateModuleSettings(mod.id, { linkUrl: e.target.value });
-                          }}
-                        >
-                          <option value="">— Page —</option>
-                          {pages.map((p) => (
-                            <option key={p.id} value={`/${p.slug}`}>{p.name}</option>
-                          ))}
-                        </select>
-                      )}
-                      <input
-                        type="text"
-                        value={mod.settings.linkUrl ?? ""}
-                        onChange={(e) => updateModuleSettings(mod.id, { linkUrl: normalizeBuilderAssetUrl(e.target.value) })}
-                        placeholder="/path-or-url"
-                      />
-                    </div>
-                  </label>
-                  <label className="field builder-checkbox-field">
-                    <span>New Tab</span>
-                    <input
-                      type="checkbox"
-                      checked={mod.settings.newTab === "true"}
-                      onChange={(e) => updateModuleSettings(mod.id, { newTab: e.target.checked ? "true" : "false" })}
-                    />
-                  </label>
-                  <BuilderImageModuleSettings
-                    module={mod}
-                    themeColors={themeColors}
-                    onUpdateModule={(updater) => updateCellModule(mod.id, updater)}
-                  />
-                </>
-              )}
-            </div>
-            </BuilderCenteredModal>
-          )}
-        </div>
-      ))}
-      <div className="builder-table-cell-add-wrap">
-        <button
-          type="button"
-          className="builder-table-cell-add"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (paletteOpen) {
-              closePalette();
-            } else {
-              setPaletteGroup(null);
-              setPaletteOpen(true);
-            }
-          }}
-          title="Add module to this cell"
-        >
-          ⊕
-        </button>
-        {paletteOpen && (
-          <BuilderModulePaletteModal
-            activeGroup={paletteGroup}
-            excludeGroups={TABLE_CELL_EXCLUDED_PALETTE_GROUPS}
-            onSelectGroup={setPaletteGroup}
-            onSelectItem={addModule}
-            onClose={closePalette}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Table module editor ---------- */
-
-function TableModuleEditor({
-  module,
-  pages = [],
-  themeColors = [],
-  onUpdateModule
-}: {
-  module: BuilderTemplateModule;
-  pages?: BuilderPageRecord[];
-  themeColors?: BuilderThemePalette;
-  onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
-}) {
-  const td = parseTableData(module.settings);
-  const colCount = td.headers.length;
-
-  function persist(newTd: ParsedTableData) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, tableData: serializeTableData(newTd) } }));
-  }
-
-  function updateSetting(key: string, value: string) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
-  }
-
-  function updateModuleBackground(background: BackgroundSettings) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: {
-        ...current.settings,
-        backgroundMode: background.mode,
-        backgroundColor: background.color,
-        backgroundColor2: background.color2,
-        backgroundImageUrl: background.imageUrl,
-        backgroundStyleKey: background.styleKey
-      }
-    }));
-  }
-
-  function addColumn() {
-    if (colCount >= 10) return;
-    persist({ ...td, headers: [...td.headers, `Column ${colCount + 1}`] });
-  }
-
-  function removeColumn() {
-    if (colCount <= 1) return;
-    const newCells = { ...td.cells };
-    for (let r = 0; r < td.rowCount; r++) delete newCells[`${r}-${colCount - 1}`];
-    persist({ headers: td.headers.slice(0, -1), cells: newCells, rowCount: td.rowCount });
-  }
-
-  function addRow() {
-    if (td.rowCount >= 100) return;
-    persist({ ...td, rowCount: td.rowCount + 1 });
-  }
-
-  function cloneRow(rowIndex: number) {
-    if (td.rowCount >= 100) return;
-
-    const nextCells: ParsedTableData["cells"] = {};
-
-    for (const [key, modules] of Object.entries(td.cells)) {
-      const [rawRow, rawCol] = key.split("-");
-      const sourceRow = Number.parseInt(rawRow, 10);
-
-      if (!Number.isFinite(sourceRow)) {
-        nextCells[key] = modules;
-        continue;
-      }
-
-      if (sourceRow <= rowIndex) {
-        nextCells[key] = modules;
-      } else {
-        nextCells[`${sourceRow + 1}-${rawCol}`] = modules;
-      }
-    }
-
-    for (let col = 0; col < colCount; col++) {
-      const sourceModules = td.cells[`${rowIndex}-${col}`] || [];
-      nextCells[`${rowIndex + 1}-${col}`] = sourceModules.map((mod, moduleIndex) =>
-        cloneTableCellModule(mod, `${rowIndex + 1}-${col}-${moduleIndex}`)
-      );
-    }
-
-    persist({ ...td, cells: nextCells, rowCount: td.rowCount + 1 });
-  }
-
-  function removeRow() {
-    if (td.rowCount <= 1) return;
-    const newCells = { ...td.cells };
-    for (let c = 0; c < colCount; c++) delete newCells[`${td.rowCount - 1}-${c}`];
-    persist({ ...td, cells: newCells, rowCount: td.rowCount - 1 });
-  }
-
-  function updateHeader(index: number, value: string) {
-    const newHeaders = [...td.headers];
-    newHeaders[index] = value;
-    persist({ ...td, headers: newHeaders });
-  }
-
-  function updateCellModules(cellKey: string, modules: BuilderTemplateModule[]) {
-    persist({ ...td, cells: { ...td.cells, [cellKey]: modules } });
-  }
-
-  return (
-    <>
-      <BuilderSettingRow label="Background">
-        <BuilderButtonBackgroundPicker
-          background={getModuleBackgroundSettings(module.settings)}
-          onChange={updateModuleBackground}
-          themeColors={themeColors}
-          dialogTitle="Table Background"
-        />
-      </BuilderSettingRow>
-      <div className="builder-table-design-grid">
-        <div className="builder-table-border-row">
-          <BuilderInlineNumberSelect
-            label="Border"
-            value={module.settings.borderWidth ?? "1"}
-            min={0}
-            max={6}
-            fallback="1"
-            onChange={(value) => updateSetting("borderWidth", value)}
-          />
-          <label className="builder-table-color-field">
-            <span>Color</span>
-            <BuilderThemeColorField
-              dialogLabel="Table border color"
-              fallback="#cccccc"
-              themeColors={themeColors}
-              value={module.settings.borderColor || "#cccccc"}
-              onChange={(borderColor) => updateSetting("borderColor", borderColor)}
-            />
-          </label>
-        </div>
-        <BuilderInlineNumberSelect
-          label="Padding"
-          value={module.settings.cellPadding ?? "8"}
-          min={2}
-          max={24}
-          fallback="8"
-          onChange={(value) => updateSetting("cellPadding", value)}
-        />
-        <label className="field builder-checkbox-field">
-          <span>Column heads</span>
-          <input
-            type="checkbox"
-            checked={module.settings.showColumnHeads !== "false"}
-            onChange={(e) => updateSetting("showColumnHeads", e.target.checked ? "true" : "false")}
-          />
-        </label>
-        <BuilderSettingRow label="Max Width (px)" fullWidth>
-          <input
-            type="number"
-            min={0}
-            max={2000}
-            value={module.settings.tableMaxWidth ?? ""}
-            placeholder="Full width"
-            onChange={(e) => {
-              const raw = e.target.value;
-              if (raw === "") { updateSetting("tableMaxWidth", ""); return; }
-              const n = Math.min(2000, Math.max(0, Number.parseInt(raw, 10) || 0));
-              updateSetting("tableMaxWidth", String(n));
-            }}
-          />
-        </BuilderSettingRow>
-      </div>
-      <div className="builder-table-structure-actions">
-        <div className="builder-table-structure-row">
-          <span>Columns: {colCount}</span>
-          <button type="button" className="secondary-button" onClick={addColumn} disabled={colCount >= 10}>+ Col</button>
-          <button type="button" className="secondary-button" onClick={removeColumn} disabled={colCount <= 1}>− Col</button>
-        </div>
-        <div className="builder-table-structure-row">
-          <span>Rows: {td.rowCount}</span>
-          <button type="button" className="secondary-button" onClick={addRow} disabled={td.rowCount >= 100}>+ Row</button>
-          <button type="button" className="secondary-button" onClick={removeRow} disabled={td.rowCount <= 1}>− Row</button>
-        </div>
-      </div>
-      <div className="builder-table-editor-scroll">
-        <table className="builder-table-editor builder-table-editor-modules">
-          <thead>
-            <tr>
-              <th className="builder-table-row-action-heading">Row</th>
-              {td.headers.map((h, i) => (
-                <th key={i}>
-                  <input type="text" value={h} onChange={(e) => updateHeader(i, e.target.value)} placeholder={`Header ${i + 1}`} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: td.rowCount }, (_, ri) => (
-              <tr key={ri}>
-                <td className="builder-table-row-actions">
-                  <button type="button" className="builder-icon-button" onClick={() => cloneRow(ri)} disabled={td.rowCount >= 100} title="Clone row">
-                    ⧉
-                  </button>
-                </td>
-                {td.headers.map((_, ci) => (
-                  <td key={ci} className="builder-table-editor-cell">
-                    <TableCellModules
-                      cellKey={`${ri}-${ci}`}
-                      modules={td.cells[`${ri}-${ci}`] || []}
-                      pages={pages}
-                      themeColors={themeColors}
-                      onUpdate={updateCellModules}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
 }
 
 function SlideshowModuleEditor({
@@ -3627,21 +3066,10 @@ export function BuilderModuleCard({
               }
             />
           </BuilderModuleField>
-          <BuilderModuleField label="H Margin" width="num">
-            <BuilderNumberSelectControl
-              fallback="0"
-              max={160}
-              min={0}
-              value={module.settings.horizontalMargin ?? "0"}
-              onChange={(horizontalMargin) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, horizontalMargin }
-                }))
-              }
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="V Margin" width="num">
+          {/* W7: these are the only names these two controls may carry, and
+              the order matches marginFields() in the schema generator, so the
+              pair reads the same on hand-written and generated panels. */}
+          <BuilderModuleField label="Vertical Margin" width="num">
             <BuilderNumberSelectControl
               fallback="0"
               max={160}
@@ -3651,6 +3079,20 @@ export function BuilderModuleCard({
                 onUpdateModule((current) => ({
                   ...current,
                   settings: { ...current.settings, verticalMargin }
+                }))
+              }
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Horizontal Margin" width="num">
+            <BuilderNumberSelectControl
+              fallback="0"
+              max={160}
+              min={0}
+              value={module.settings.horizontalMargin ?? "0"}
+              onChange={(horizontalMargin) =>
+                onUpdateModule((current) => ({
+                  ...current,
+                  settings: { ...current.settings, horizontalMargin }
                 }))
               }
             />
@@ -4185,7 +3627,16 @@ export function BuilderModuleCard({
           ) : null}
 
           {module.type === "table" && (
-            <TableModuleEditor module={module} pages={pages} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            <BuilderTableModuleSettings
+              module={module}
+              onUpdateModule={onUpdateModule}
+              onUpdateModuleBackground={onUpdateModuleBackground}
+              pages={pages}
+              renderCellPreview={renderModulePreview}
+              themeBackgroundColor={themeBackgroundColor}
+              themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
+            />
           )}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
           {module.type === "slideshow" && <SlideshowModuleEditor module={module} onUpdateModule={onUpdateModule} />}

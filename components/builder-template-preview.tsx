@@ -16,6 +16,7 @@ import {
   isPlainTextVariant,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
+import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
@@ -78,6 +79,7 @@ import {
   getCrmThemePaletteVars,
   getModuleAlignment,
   getModuleBackgroundSettings,
+  getTableWrapStyle,
   getSectionMarginStyle,
   getSectionWidthStyle,
   getModuleMarginStyle,
@@ -1565,7 +1567,11 @@ function BuilderSectionPreview({
                     isSectionOverlayModule ? " builder-preview-module-overlay-slot" : ""
                   }${isCurrentPollModule ? " builder-preview-module-current-poll" : ""}`}
                   style={{
+                    // Table paints its own background on the <table>, which is
+                    // where Max Width constrains it. Painting it here too put
+                    // the fill across the full column behind a narrow table.
                     ...(module.type === "navigation" ||
+                    module.type === "table" ||
                     isPageOverlayFlowModule ||
                     isSectionOverlayModule ||
                     module.type === "button" ||
@@ -5277,37 +5283,15 @@ function NavigationModulePreview({
   );
 }
 
-type ParsedTableData = {
-  headers: string[];
-  cells: Record<string, import("@/lib/builder-template").BuilderTemplateModule[]>;
-  rowCount: number;
-};
-
-function parseTableData(settings: Record<string, string>): ParsedTableData {
-  try {
-    const data = JSON.parse(settings.tableData || "{}");
-    const headers: string[] = Array.isArray(data.headers) ? data.headers : [];
-
-    if (data.cells && typeof data.rowCount === "number") {
-      return { headers, cells: data.cells as Record<string, import("@/lib/builder-template").BuilderTemplateModule[]>, rowCount: data.rowCount };
-    }
-
-    return { headers, cells: {}, rowCount: 1 };
-  } catch {
-    return { headers: [], cells: {}, rowCount: 1 };
-  }
-}
-
 function TableModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
   const td = parseTableData(module.settings);
   const borderW = Number.parseInt(module.settings.borderWidth || "1", 10);
   const borderC = module.settings.borderColor || "#cccccc";
   const cellPad = Number.parseInt(module.settings.cellPadding || "8", 10);
   const tableBgStyle = getBuilderBackgroundStyle(getModuleBackgroundSettings(module.settings)) ?? { background: "transparent" };
-  const tableMaxWidth = module.settings.tableMaxWidth ? Math.min(2000, Math.max(0, Number.parseInt(module.settings.tableMaxWidth, 10) || 0)) : undefined;
 
   return (
-    <div className="builder-preview-table-wrap" style={tableMaxWidth ? { maxWidth: `${tableMaxWidth}px` } : {}}>
+    <div className="builder-preview-table-wrap" style={getTableWrapStyle(module.settings)}>
       <table
         className="builder-preview-table"
         style={{ borderCollapse: "collapse", width: "100%", border: `${borderW}px solid ${borderC}`, ...tableBgStyle }}

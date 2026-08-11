@@ -229,22 +229,23 @@ export function BuilderCrmFormModuleSettings({
             onChange={(alignment) => updateModuleSetting("alignment", alignment)}
           />
         </BuilderModuleField>
-        <BuilderModuleField label="H Margin" width="num">
-          <BuilderNumberSelectControl
-            fallback="0"
-            max={160}
-            min={0}
-            value={s.horizontalMargin ?? "0"}
-            onChange={(horizontalMargin) => updateModuleSetting("horizontalMargin", horizontalMargin)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="V Margin" width="num">
+        {/* W7 names, in marginFields() order. */}
+        <BuilderModuleField label="Vertical Margin" width="num">
           <BuilderNumberSelectControl
             fallback="0"
             max={160}
             min={0}
             value={s.verticalMargin ?? "0"}
             onChange={(verticalMargin) => updateModuleSetting("verticalMargin", verticalMargin)}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Horizontal Margin" width="num">
+          <BuilderNumberSelectControl
+            fallback="0"
+            max={160}
+            min={0}
+            value={s.horizontalMargin ?? "0"}
+            onChange={(horizontalMargin) => updateModuleSetting("horizontalMargin", horizontalMargin)}
           />
         </BuilderModuleField>
       </BuilderModuleFieldStrip>

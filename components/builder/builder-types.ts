@@ -12,6 +12,14 @@ import type { BuilderEmailFunction } from "@/lib/builder-email-template";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BUILDER_CAPABILITIES } from "@/lib/capabilities";
 
+/**
+ * Placeholder for a Simple Text editor. Lives here rather than beside one of
+ * its two call sites because both the module card and the Table cell editor
+ * offer the same field — a copy string with two homes drifts.
+ */
+export const PLAIN_TEXT_PLACEHOLDER =
+  "Plain text. Line breaks are kept, and inline tags like <em> or <a href=\"…\"> work.";
+
 export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog" | "admin";
 
 export type GalleryTarget =

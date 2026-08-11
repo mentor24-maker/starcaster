@@ -247,22 +247,23 @@ export function BuilderSocialModuleSettings({
               onChange={(alignment) => updateSetting("alignment", alignment)}
             />
           </BuilderModuleField>
-          <BuilderModuleField label="H Margin" width="num">
-            <BuilderNumberSelectControl
-              value={module.settings.horizontalMargin ?? "0"}
-              min={0}
-              max={160}
-              fallback="0"
-              onChange={(horizontalMargin) => updateSetting("horizontalMargin", horizontalMargin)}
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="V Margin" width="num">
+          {/* W7 names, in marginFields() order. */}
+          <BuilderModuleField label="Vertical Margin" width="num">
             <BuilderNumberSelectControl
               value={module.settings.verticalMargin ?? "0"}
               min={0}
               max={160}
               fallback="0"
               onChange={(verticalMargin) => updateSetting("verticalMargin", verticalMargin)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Horizontal Margin" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.horizontalMargin ?? "0"}
+              min={0}
+              max={160}
+              fallback="0"
+              onChange={(horizontalMargin) => updateSetting("horizontalMargin", horizontalMargin)}
             />
           </BuilderModuleField>
         </BuilderModuleFieldStrip>
