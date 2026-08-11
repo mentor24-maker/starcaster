@@ -27,8 +27,12 @@ Tests: `npm run test:builder-ui`.
 - **H / V Margin:** always offer both (`horizontalMargin` /
   `verticalMargin`), adjacent in the same strip — never a lone "Margin".
 - **Labels never wrap** (`white-space: nowrap`); shorten text instead.
-- **Advanced blocks** (border, shadow, rarely-edited groups) go in
-  `<details class="hanging-details">`.
+- **Advanced blocks** (border, effects, rarely-edited groups) go in
+  `<details class="hanging-details">`. **Text colour does not** — it is
+  basic (master rule A6). A drop shadow is filed by what it shadows:
+  `text-shadow` on the Text axis, `box-shadow` on Frame (A7). Use
+  `dropShadowFields()` from the settings schema rather than the Button
+  panel's bespoke block.
 - Legacy `.builder-module-form-row` grids may remain on old modules;
   use field strips for all new work.
 - Styles live in `src/css/_builder-react-overrides.css` and

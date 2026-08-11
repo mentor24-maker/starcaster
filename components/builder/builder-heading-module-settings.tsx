@@ -1,11 +1,11 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { BuilderButtonDropShadowSettings } from "./builder-button-drop-shadow-settings";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import {
   BuilderSchemaModuleSettings,
+  dropShadowFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import {
@@ -29,32 +29,30 @@ export function BuilderHeadingModuleSettings({
   compact = false,
   themeColors = []
 }: BuilderHeadingModuleSettingsProps) {
-  function updateSetting(key: string, value: string) {
-    onUpdateModule((current) => ({
-      ...current,
-      settings: { ...current.settings, [key]: value }
-    }));
-  }
-
   /*
-   * D8 axes (master rule D8, 2026-08-10): Content / Text / Placement /
-   * Frame. The richest editor in this batch — it wants five columns and
-   * gets four. Level is a heading-only control, so it rides the Text axis
-   * rather than taking a Structure column of its own; that keeps Drop
-   * Shadow on Frame, where a shadow lives in every other module.
+   * D8 axes (master rule D8, 2026-08-10): Content / Text / Placement.
+   * Level is a heading-only control, so it rides the Text axis rather than
+   * taking a Structure column of its own.
    *
-   * Compact mode hides exactly the controls it always hid, so a
-   * table-cell heading renders Content / Text / Placement and the Frame
-   * column disappears along with its only field.
+   * Compact mode hides exactly the controls it always hid, so a table-cell
+   * heading renders the same three axes with fewer fields in them.
    *
-   * A1 sort (2026-08-10): the theme-backed settings dropped into their own
-   * axis's Advanced section — Colour and Font family under Text (Colour
-   * became a `theme-color` override whose themeDefault is its old fallback,
-   * A2), Drop Shadow under Frame, joining the offsets already under
-   * Placement (A5). Frame's basic row is therefore empty; the column holds
-   * its place so the Advanced grid stays aligned. Level, Size, Weight, the
-   * type toggles, alignment and the margins are the module's own settings
-   * and stay basic (A4) — font SIZE is not a theme override.
+   * A1/A6 sort (revised 2026-08-11, operator ruling). Two things moved:
+   *
+   *   - **Colour came OUT of Advanced.** It is the most basic thing about a
+   *     piece of text, and collapsing it behind a disclosure made the one
+   *     control everybody reaches for the hardest one to find. Rule A6 now
+   *     says so: text colour is basic, effects are advanced. It keeps the
+   *     `theme-color` control either way (A2) — empty means "follow the
+   *     theme", so being basic does not make it a pre-filled override.
+   *   - **Drop Shadow moved from Frame to Text**, which is where it always
+   *     belonged: `getHeadingModuleStyle` renders it as `text-shadow`, not
+   *     `box-shadow`. It shadows the letters. With it gone the Frame axis
+   *     held nothing at all, so the module is three axes now.
+   *
+   * Font family stays in Advanced — it IS a theme value (A1). Level, Size,
+   * Weight, the type toggles, alignment and the margins are the module's
+   * own settings and stay basic (A4).
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -182,6 +180,17 @@ export function BuilderHeadingModuleSettings({
                   <option value="900">Black (900)</option>
                 </select>
               )
+            },
+            // A6: text colour is basic. It stays a theme override (A2) —
+            // empty follows the theme — it just is not hidden any more.
+            {
+              key: "color",
+              label: "Color",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Heading color",
+              themeDefault: "#18324a",
+              rendersVia: "getHeadingModuleStyle"
             }
           ],
           [
@@ -267,19 +276,12 @@ export function BuilderHeadingModuleSettings({
             }
           ]
         ],
-        // A1: the heading's colour and its typeface are theme values — the
-        // theme should restyle them, so overriding one is the deliberate act.
+        // A1: the typeface is a theme value — the theme should restyle it,
+        // so overriding it is the deliberate act. A6: the drop shadow is an
+        // effect, and it is a TEXT effect — text-shadow on the letters, not
+        // a box-shadow on a frame — so it belongs to this axis.
         advanced: [
           [
-            {
-              key: "color",
-              label: "Color",
-              width: "color",
-              control: "theme-color",
-              dialogLabel: "Heading color",
-              themeDefault: "#18324a",
-              rendersVia: "getHeadingModuleStyle"
-            },
             {
               key: "fontFamily",
               label: "Font",
@@ -289,7 +291,8 @@ export function BuilderHeadingModuleSettings({
               fallback: "",
               rendersVia: "getHeadingFontStack"
             }
-          ]
+          ],
+          dropShadowFields("getModuleDropShadowStyle", { visibleWhen: () => !compact })
         ]
       },
       {
@@ -376,32 +379,6 @@ export function BuilderHeadingModuleSettings({
                   verticalOffset={ctx.settings.verticalOffset ?? "0"}
                   onHorizontalOffsetChange={(horizontalOffset) => ctx.set("horizontalOffset", horizontalOffset)}
                   onVerticalOffsetChange={(verticalOffset) => ctx.set("verticalOffset", verticalOffset)}
-                />
-              )
-            }
-          ]
-        ]
-      },
-      {
-        title: "Frame",
-        strips: [],
-        // A1: a drop shadow is a theme value, so the whole block sits in
-        // Frame's own Advanced section — and, as before, never in compact.
-        advanced: [
-          [
-            {
-              key: "dropShadow",
-              label: "Drop Shadow",
-              width: "full",
-              control: "custom",
-              bare: true,
-              visibleWhen: () => !compact,
-              rendersVia: "getModuleDropShadowStyle",
-              render: (ctx) => (
-                <BuilderButtonDropShadowSettings
-                  settings={ctx.settings}
-                  themeColors={themeColors}
-                  onUpdateSetting={updateSetting}
                 />
               )
             }

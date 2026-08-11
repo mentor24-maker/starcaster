@@ -67,9 +67,14 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
         /**
          * A THEME OVERRIDE (master rule A1): empty means "follow the
          * theme", and the control shows the theme's value with a reset.
-         * These belong in the `advanced` group — the theme should be the
-         * path of least resistance, not something every panel invites you
-         * to override up front.
+         * Most of these belong in the `advanced` group — the theme should
+         * be the path of least resistance, not something every panel
+         * invites you to override up front.
+         *
+         * TEXT COLOUR IS THE EXCEPTION (master rule A6, operator 8/11):
+         * it is basic, and it goes on the Text axis with size and weight.
+         * The control is the same either way — empty still follows the
+         * theme — so being basic does not make it a pre-filled override.
          */
         control: "theme-color";
         /** The value the theme supplies when this setting is empty. */
@@ -142,14 +147,21 @@ export type BuilderSchemaGroup =
  *
  *   Content     what the module shows (text, items, images, links)
  *   Structure   how it is arranged (layout mode, levels, columns, counts)
- *   Text        typography — font, size, weight, transform, text colour
+ *   Text        typography — font, size, weight, transform, colour, TEXT shadow
  *   Placement   alignment, padding, margin, offsets
- *   Frame       border width/radius/colour, shadow
+ *   Frame       border width/radius/colour, BOX shadow
  *   Behavior    triggers, destinations, params (usually `advanced` instead)
+ *
+ * "Shadow" is split between Text and Frame on purpose (master rule A7):
+ * a shadow cast by the letters is typography, a shadow cast by a box is
+ * the frame. Read the renderer before filing one — the Heading module's
+ * `text-shadow` sat under Frame for a day because this list once said
+ * "shadow" unqualified.
  *
  * Four axes is the ceiling; a module that genuinely needs a fifth is a
  * design question for the operator, so the generator throws rather than
- * silently rendering a cramped fifth column.
+ * silently rendering a cramped fifth column. An axis with nothing on it
+ * is not an axis — drop it rather than declare a titled empty column.
  */
 export type BuilderSchemaAxis = {
   title: string;
@@ -346,6 +358,96 @@ export function spacingFields(
       fallback: "0",
       rendersVia
     }));
+}
+
+/** A drop shadow is on for both the current value and the legacy `"on"`. */
+export function dropShadowIsOn(settings: SettingsRecord): boolean {
+  return settings.dropShadow === "true" || settings.dropShadow === "on";
+}
+
+/**
+ * The drop-shadow controls, as ordinary schema fields (master rule C8 — one
+ * control for one concept, everywhere).
+ *
+ * They used to come from `BuilderButtonDropShadowSettings`, a bespoke block
+ * built for the Button panel's full width: a two-column grid of
+ * label/value rows. Dropped into an axis column it laid out as Colour · Y /
+ * X · Blur — scrambled reading order, and Blur's input sat outside the
+ * panel entirely, unreachable (operator, 2026-08-11: "the dropshadow
+ * controls are currently unusable"). Real fields carry width tokens, so
+ * they wrap instead of overflowing (E2/W1).
+ *
+ * The toggle is a `custom` checkbox rather than a plain `checkbox` field
+ * for one reason: headings saved before this control wrote `"on"`, and a
+ * declarative checkbox would render those unchecked while the page still
+ * painted the shadow.
+ */
+export function dropShadowFields(
+  rendersVia: string,
+  options: { visibleWhen?: (settings: SettingsRecord) => boolean } = {}
+): BuilderSchemaField[] {
+  const gate = options.visibleWhen ?? (() => true);
+  const detailVisible = (settings: SettingsRecord) => gate(settings) && dropShadowIsOn(settings);
+  return [
+    {
+      key: "dropShadow",
+      label: "Drop Shadow",
+      width: "check",
+      control: "custom",
+      rendersVia,
+      visibleWhen: gate,
+      render: (ctx) => (
+        <input
+          type="checkbox"
+          checked={dropShadowIsOn(ctx.settings)}
+          onChange={(event) => ctx.set("dropShadow", event.target.checked ? "true" : "false")}
+        />
+      )
+    },
+    {
+      key: "dropShadowColor",
+      label: "Shadow Color",
+      width: "color",
+      control: "color",
+      dialogLabel: "Drop shadow color",
+      fallback: "#000000",
+      rendersVia,
+      visibleWhen: detailVisible
+    },
+    {
+      key: "dropShadowX",
+      label: "Shadow X",
+      width: "num",
+      control: "number",
+      min: -20,
+      max: 20,
+      fallback: "3",
+      rendersVia,
+      visibleWhen: detailVisible
+    },
+    {
+      key: "dropShadowY",
+      label: "Shadow Y",
+      width: "num",
+      control: "number",
+      min: -20,
+      max: 20,
+      fallback: "3",
+      rendersVia,
+      visibleWhen: detailVisible
+    },
+    {
+      key: "dropShadowBlur",
+      label: "Shadow Blur",
+      width: "num",
+      control: "number",
+      min: 0,
+      max: 30,
+      fallback: "2",
+      rendersVia,
+      visibleWhen: detailVisible
+    }
+  ];
 }
 
 function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext): ReactNode {
