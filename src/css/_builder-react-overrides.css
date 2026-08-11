@@ -2171,21 +2171,3 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   background-position: center;
   background-repeat: no-repeat;
 }
-
-/*
- * The tick reads as a sentence rather than a bare control, so it sits beside
- * wrapping explanatory text instead of inside the settings grid's narrow
- * value column.
- */
-.builder-react-root .builder-join-previous-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  line-height: 1.35;
-  min-width: 0;
-}
-
-.builder-react-root .builder-join-previous-toggle input {
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
