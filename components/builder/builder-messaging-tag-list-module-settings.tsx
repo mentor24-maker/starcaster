@@ -63,6 +63,12 @@ export function BuilderMessagingTagListModuleSettings({
    * per-module decision, not a brand token. Layout, Gap, Max Tags, Alignment
    * and the whole Content axis are structural or content, so they stay basic
    * too (A4).
+   *
+   * SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+   * Everything above that "moved into Advanced" now sits LAST on the axis it
+   * already names, ordered by D9 (blast radius, descending). The axis
+   * assignments and the A2 theme-colour semantics are unchanged — only the
+   * collapsing is gone. Kept rather than rewritten: the reasoning is the record.
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -185,14 +191,7 @@ export function BuilderMessagingTagListModuleSettings({
               fallback: "22",
               rendersVia: "builder-template-preview messaging-tag-list"
             }
-          ]
-        ],
-        // A1/A2: theme overrides, under the Text heading they belong to.
-        // Each themeDefault is the hex that used to be the field's fallback,
-        // so the control shows the same colour it always did — the difference
-        // is that the stored value now starts EMPTY and means "follow the
-        // theme" instead of pre-filling an override nobody chose.
-        advanced: [
+          ],
           [
             {
               key: "activeColor",
@@ -222,7 +221,12 @@ export function BuilderMessagingTagListModuleSettings({
               rendersVia: "builder-template-preview messaging-tag-list"
             }
           ]
-        ]
+        ],
+        // A2 theme overrides, under the Text heading they belong to (D9: after size).
+        // Each themeDefault is the hex that used to be the field's fallback,
+        // so the control shows the same colour it always did — the difference
+        // is that the stored value now starts EMPTY and means "follow the
+        // theme" instead of pre-filling an override nobody chose.
       },
       {
         title: "Placement",

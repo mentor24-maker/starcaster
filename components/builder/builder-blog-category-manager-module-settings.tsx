@@ -47,13 +47,18 @@ export function BuilderBlogCategoryManagerModuleSettings({
         // Frame's own `advanced` as a `theme-color` (A2 — empty means
         // "follow the theme"; the old fallback is now themeDefault). The
         // axis stays declared so the control keeps its column heading.
+        //
+        // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+        // Everything above that "moved into Advanced" now sits LAST on the axis it
+        // already names, ordered by D9 (blast radius, descending). The axis
+        // assignments and the A2 theme-colour semantics are unchanged — only the
+        // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
         title: "Frame",
-        strips: [],
-        advanced: [
+        strips: [
           [
             { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" }
           ]
-        ]
+        ],
       }
     ]
   };

@@ -30,6 +30,12 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
     // row empties and they move to Frame › Advanced as `theme-color` (A2 —
     // empty means "follow the theme", the old fallback becomes themeDefault).
     // The axis stays declared so its Advanced controls keep their column.
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
@@ -137,13 +143,12 @@ export function BuilderBlogNewsletterSubscribeModuleSettings({
       },
       {
         title: "Frame",
-        strips: [],
-        advanced: [
-      [
-        { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" },
-        { key: "bgColor", label: "Background", width: "color", control: "theme-color", dialogLabel: "Background color", themeDefault: "#eaf4ff" }
-      ]
-        ]
+        strips: [
+          [
+            { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" },
+            { key: "bgColor", label: "Background", width: "color", control: "theme-color", dialogLabel: "Background color", themeDefault: "#eaf4ff" }
+          ]
+        ],
       }
     ]
   };

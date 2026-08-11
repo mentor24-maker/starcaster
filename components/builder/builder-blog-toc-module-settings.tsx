@@ -76,6 +76,12 @@ export function BuilderBlogTocModuleSettings({
     // override whose themeDefault is its old fallback (A2). Font Size is a
     // SIZE, not a theme override, so it stays basic — as do the title, the
     // heading manager and the two Structure selects (A4).
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
@@ -234,10 +240,7 @@ export function BuilderBlogTocModuleSettings({
               fallback: "14",
               rendersVia: "builder-module-card.tsx blog-toc preview"
             }
-          ]
-        ],
-        // A1: the link colour overrides the theme.
-        advanced: [
+          ],
           [
             {
               key: "color",
@@ -249,7 +252,8 @@ export function BuilderBlogTocModuleSettings({
               rendersVia: "builder-module-card.tsx blog-toc preview"
             }
           ]
-        ]
+        ],
+        // A2 theme override; colour sorts after size on Text (D9).
       }
     ]
   };

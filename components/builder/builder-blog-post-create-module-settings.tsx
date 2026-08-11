@@ -30,98 +30,112 @@ export function BuilderBlogPostCreateModuleSettings({
     // old fallback is now themeDefault). Nothing else here overrides the
     // theme: labels, buttons, destinations and the field bank are the
     // module's own settings, so they stay basic (A4).
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
         strips: [
-      [
-        // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
-        { key: "showFormTitle", label: "Form Title", width: "check", control: "checkbox", fallback: "true" },
-        {
-          key: "formTitle",
-          label: "Title Text",
-          width: "text-md",
-          control: "custom",
-          visibleWhen: (settings) => (settings.showFormTitle ?? "true") === "true",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.formTitle ?? "Create New Post"}
-              onChange={(e) => set("formTitle", e.target.value)}
-              placeholder="Create New Post"
-            />
-          )
-        }
-      ],
-      [
-        {
-          key: "submitLabel",
-          label: "Publish Button",
-          width: "text-md",
-          control: "custom",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.submitLabel ?? "Publish Post"}
-              onChange={(e) => set("submitLabel", e.target.value)}
-              placeholder="Publish Post"
-            />
-          )
-        },
-        {
-          key: "draftLabel",
-          label: "Draft Button",
-          width: "text-md",
-          control: "custom",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.draftLabel ?? "Save as Draft"}
-              onChange={(e) => set("draftLabel", e.target.value)}
-              placeholder="Save as Draft"
-            />
-          )
-        }
-      ],
-      [
-        {
-          key: "afterSubmitHeader",
-          label: "After Submit",
-          width: "full",
-          control: "custom",
-          bare: true,
-          render: () => (
-            <div className="builder-breadcrumb-items-label" style={{ marginTop: 12, marginBottom: 6 }}>
-              After submit
-            </div>
-          )
-        }
-      ],
-      [
-        {
-          key: "successMessage",
-          label: "Success Message",
-          width: "full",
-          control: "custom",
-          render: ({ settings, set }) => (
-            <input
-              type="text"
-              value={settings.successMessage ?? "Post created successfully."}
-              onChange={(e) => set("successMessage", e.target.value)}
-              placeholder="Post created successfully."
-            />
-          )
-        }
-      ],
-      [
-        {
-          key: "redirectAfterCreate",
-          label: "Redirect To",
-          width: "full",
-          control: "text",
-          placeholder: "/admin/posts  (leave blank to stay on this page)"
-        }
-      ]
+          // D9 rung 1: where the author LANDS after creating a post outranks the
+          // wording of the form, so the destination leads Content.
+
+          
+          [
+            {
+              key: "redirectAfterCreate",
+              label: "Redirect To",
+              width: "full",
+              control: "text",
+              placeholder: "/admin/posts  (leave blank to stay on this page)"
+            }
+          ],
+          
+          [
+            // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
+            { key: "showFormTitle", label: "Form Title", width: "check", control: "checkbox", fallback: "true" },
+            {
+              key: "formTitle",
+              label: "Title Text",
+              width: "text-md",
+              control: "custom",
+              visibleWhen: (settings) => (settings.showFormTitle ?? "true") === "true",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.formTitle ?? "Create New Post"}
+                  onChange={(e) => set("formTitle", e.target.value)}
+                  placeholder="Create New Post"
+                />
+              )
+            }
+          ],
+          
+          [
+            {
+              key: "submitLabel",
+              label: "Publish Button",
+              width: "text-md",
+              control: "custom",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.submitLabel ?? "Publish Post"}
+                  onChange={(e) => set("submitLabel", e.target.value)}
+                  placeholder="Publish Post"
+                />
+              )
+            },
+            {
+              key: "draftLabel",
+              label: "Draft Button",
+              width: "text-md",
+              control: "custom",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.draftLabel ?? "Save as Draft"}
+                  onChange={(e) => set("draftLabel", e.target.value)}
+                  placeholder="Save as Draft"
+                />
+              )
+            }
+          ],
+          
+          [
+            {
+              key: "afterSubmitHeader",
+              label: "After Submit",
+              width: "full",
+              control: "custom",
+              bare: true,
+              render: () => (
+                <div className="builder-breadcrumb-items-label" style={{ marginTop: 12, marginBottom: 6 }}>
+                  After submit
+                </div>
+              )
+            }
+          ],
+          
+          [
+            {
+              key: "successMessage",
+              label: "Success Message",
+              width: "full",
+              control: "custom",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.successMessage ?? "Post created successfully."}
+                  onChange={(e) => set("successMessage", e.target.value)}
+                  placeholder="Post created successfully."
+                />
+              )
+            }
+          ]
         ]
       },
       {
@@ -199,12 +213,11 @@ export function BuilderBlogPostCreateModuleSettings({
       },
       {
         title: "Frame",
-        strips: [],
-        advanced: [
-      [
-        { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" }
-      ]
-        ]
+        strips: [
+          [
+            { key: "accentColor", label: "Accent", width: "color", control: "theme-color", dialogLabel: "Accent color", themeDefault: "#0f4f8f" }
+          ]
+        ],
       }
     ]
   };
