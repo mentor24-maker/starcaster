@@ -234,17 +234,32 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   The one number left is `--builder-field-room` (40px) in
   `src/css/_variables.css`. **Never set a width on an individual field.**
 
-  *Rolled out: Table (8/12, refined 8/13). Every other module follows —
-  the CSS already covers any panel, so rolling out is deleting the
-  `LATTICE_MODULE_TYPES` gate in `builder-module-card.tsx`.*
+  *Rolled out: Table (8/12, refined 8/13), Heading (8/11, on the operator's
+  word: "It also hasn't received the new 'Alignment Protocol', so let's
+  apply that one here, too"). Every other module follows — the CSS already
+  covers any panel, so rolling out is adding the type to
+  `LATTICE_MODULE_TYPES` in `builder-module-card.tsx` and re-running
+  `npm run check:panels`.*
 
-  **Known gap, not yet solved:** a panel with an **Advanced** section
-  renders it as a second row of columns. Under fixed widths the two rows
-  lined up by construction; under per-column content sizing each row
-  measures itself, so an advanced control can sit out of line with the
-  axis it belongs to. Table has no Advanced section, so this is not
-  visible yet — it must be settled before the rollout reaches a module
-  that does (Navigation is the first).
+  **The chrome bar is not a lattice column.** The flowing row of
+  module-level settings above a panel (`.builder-heading-module-chrome`,
+  `.builder-floating-image-module-chrome`) is one line by design (D1/D2) —
+  it has no tracks to line up, so it is excluded from the label room and
+  the control stretch. Leaving it in was not cosmetic: on 8/11 the
+  Background select stretched to the full width of the bar and the word
+  "Alignment" printed on top of it (L5). The SHARED `.builder-module-chrome`
+  is **not** excluded — `check_panels` measures it as a lattice group.
+
+  ~~**Known gap:** a panel with an Advanced section renders it as a second
+  row of columns, which under per-column sizing measures itself
+  independently, so an advanced control sits out of line with its axis.~~
+  **Closed by A0 (8/13), which deleted the Advanced section rather than
+  aligning it.** Heading is where the gap became visible — its Advanced
+  "Text" column sat ~150px left of the basic "Text" column above it — and
+  it is the reason A0 gives for deleting rather than fixing: "That made
+  Advanced the single blocker to rolling the lattice out across 22 of the
+  32 schema-driven panels." One row of columns per panel, so there is
+  nothing left to line up.
 
 - **W1.** **Never stretch a field to the widest possible width.** *(7/1
   "I've begged and pleaded with every AI model I've used again and again …

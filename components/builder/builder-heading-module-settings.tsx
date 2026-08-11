@@ -34,25 +34,31 @@ export function BuilderHeadingModuleSettings({
    * Level is a heading-only control, so it rides the Text axis rather than
    * taking a Structure column of its own.
    *
-   * Compact mode hides exactly the controls it always hid, so a table-cell
-   * heading renders the same three axes with fewer fields in them.
+   * SUPERSEDED, kept because the axis assignments it made are still the
+   * ones in force — only the hiding is gone. The 2026-08-11 A1/A6 sort
+   * moved Colour out of Advanced ("text colour is basic") and moved Drop
+   * Shadow from Frame to Text, which is where it always belonged:
+   * `getHeadingModuleStyle` renders it as `text-shadow`, not `box-shadow`.
+   * It shadows the letters. With it gone the Frame axis held nothing at
+   * all, so the module dropped to three axes (A7).
    *
-   * A1/A6 sort (revised 2026-08-11, operator ruling). Two things moved:
+   * A0 (operator 8/13): there is no Advanced section any more. Font family
+   * and the drop-shadow block came out of it onto the Text axis, and the
+   * offsets onto Placement — the axes they already belonged to, now in the
+   * open. A2 is what protects the theme, not the hiding: Colour and Font
+   * are still empty-means-theme controls wherever they sit.
    *
-   *   - **Colour came OUT of Advanced.** It is the most basic thing about a
-   *     piece of text, and collapsing it behind a disclosure made the one
-   *     control everybody reaches for the hardest one to find. Rule A6 now
-   *     says so: text colour is basic, effects are advanced. It keeps the
-   *     `theme-color` control either way (A2) — empty means "follow the
-   *     theme", so being basic does not make it a pre-filled override.
-   *   - **Drop Shadow moved from Frame to Text**, which is where it always
-   *     belonged: `getHeadingModuleStyle` renders it as `text-shadow`, not
-   *     `box-shadow`. It shadows the letters. With it gone the Frame axis
-   *     held nothing at all, so the module is three axes now.
+   * D9 orders each axis by blast radius, descending:
    *
-   * Font family stays in Advanced — it IS a theme value (A1). Level, Size,
-   * Weight, the type toggles, alignment and the margins are the module's
-   * own settings and stay basic (A4).
+   *   Text        Level and Font decide what the thing IS (rungs 2) →
+   *               Size, Weight, Transform (4) → Colour (5) → the
+   *               decorations, the metrics, and last of all the shadow,
+   *               which is the definition of the last 2% (6).
+   *   Placement   Align (2) → the margins (4) → offsets, nudges by
+   *               construction, last (6).
+   *
+   * Compact mode still hides exactly the controls it always hid, so a
+   * table-cell heading renders the same three axes with fewer fields.
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -143,6 +149,21 @@ export function BuilderHeadingModuleSettings({
               fallback: "h2",
               rendersVia: "getHeadingModuleLevel"
             },
+            // D9 rung 2, beside Level: the typeface is the other setting
+            // that changes what the heading IS rather than how much of it
+            // there is. Still a theme override (A2) — empty follows the
+            // theme — it is just not hidden any more (A0).
+            {
+              key: "fontFamily",
+              label: "Font",
+              width: "auto",
+              control: "select",
+              options: BUILDER_HEADING_FONTS.map((font) => ({ value: font.key, label: font.label })),
+              fallback: "",
+              rendersVia: "getHeadingFontStack"
+            }
+          ],
+          [
             {
               key: "fontSize",
               label: "Size",
@@ -181,8 +202,25 @@ export function BuilderHeadingModuleSettings({
                 </select>
               )
             },
-            // A6: text colour is basic. It stays a theme override (A2) —
-            // empty follows the theme — it just is not hidden any more.
+            {
+              key: "textTransform",
+              label: "Transform",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "none", label: "None" },
+                { value: "uppercase", label: "UPPERCASE" },
+                { value: "capitalize", label: "Capitalize" },
+                { value: "lowercase", label: "lowercase" }
+              ],
+              fallback: "none",
+              visibleWhen: () => !compact,
+              rendersVia: "getHeadingModuleStyle"
+            }
+          ],
+          // D9 rung 5. A6: text colour is basic — it was never a candidate
+          // for hiding even while Advanced existed.
+          [
             {
               key: "color",
               label: "Color",
@@ -218,21 +256,6 @@ export function BuilderHeadingModuleSettings({
               width: "check",
               control: "checkbox",
               fallback: "false",
-              visibleWhen: () => !compact,
-              rendersVia: "getHeadingModuleStyle"
-            },
-            {
-              key: "textTransform",
-              label: "Transform",
-              width: "select-md",
-              control: "select",
-              options: [
-                { value: "none", label: "None" },
-                { value: "uppercase", label: "UPPERCASE" },
-                { value: "capitalize", label: "Capitalize" },
-                { value: "lowercase", label: "lowercase" }
-              ],
-              fallback: "none",
               visibleWhen: () => !compact,
               rendersVia: "getHeadingModuleStyle"
             }
@@ -274,24 +297,11 @@ export function BuilderHeadingModuleSettings({
                 />
               )
             }
-          ]
-        ],
-        // A1: the typeface is a theme value — the theme should restyle it,
-        // so overriding it is the deliberate act. A6: the drop shadow is an
-        // effect, and it is a TEXT effect — text-shadow on the letters, not
-        // a box-shadow on a frame — so it belongs to this axis.
-        advanced: [
-          [
-            {
-              key: "fontFamily",
-              label: "Font",
-              width: "auto",
-              control: "select",
-              options: BUILDER_HEADING_FONTS.map((font) => ({ value: font.key, label: font.label })),
-              fallback: "",
-              rendersVia: "getHeadingFontStack"
-            }
           ],
+          // D9 rung 6, last on the axis: a drop shadow is the last 2% of a
+          // heading, and A0 says that is expressed by sorting it last
+          // rather than by hiding it. It is a TEXT effect — `text-shadow`
+          // on the letters, not a `box-shadow` on a frame (A7).
           dropShadowFields("getModuleDropShadowStyle", { visibleWhen: () => !compact })
         ]
       },
@@ -360,11 +370,11 @@ export function BuilderHeadingModuleSettings({
               fallback: "0",
               rendersVia: "getModuleMarginStyle"
             }
-          ]
-        ],
-        // A5: offsets are nudges, not everyday placement — Placement's own
-        // Advanced section. They still render in BOTH compact and full mode.
-        advanced: [
+          ],
+          // D9 rung 6, last on the axis. A5 used to put these in
+          // Placement's own Advanced section for exactly this reason —
+          // "nudges, not everyday placement" — and A0 keeps the judgement
+          // while dropping the collapse. They render in compact too.
           [
             {
               key: "horizontalOffset",

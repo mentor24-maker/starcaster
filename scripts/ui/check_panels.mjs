@@ -35,7 +35,16 @@ import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
-const PAGE_NAME = process.env.UI_HARNESS_PANEL_PAGE || 'Table Overhaul Check';
+/*
+ * Seeded by `npm run seed:ui-fixture`, which is the point: this used to
+ * default to a page somebody had built by hand in their own local database,
+ * so what the check measured depended on the machine. On 2026-08-11 Heading
+ * joined the lattice and this reported a clean pass over six TABLE panels
+ * without ever seeing a heading. Re-seed after pulling — the seeder now
+ * rewrites this page's modules every run so it is always what the fixture
+ * says it is.
+ */
+const PAGE_NAME = process.env.UI_HARNESS_PANEL_PAGE || 'Panel Lattice Check';
 const WIDTHS = (process.env.UI_HARNESS_WIDTHS || '1440,1600').split(',').map(Number);
 
 /** Field kinds whose control keeps its natural size (W0's stated exception). */
@@ -119,14 +128,34 @@ function measure(page, nonStretch) {
       return [...groups, ...loose].map((group, gi) => {
       const groupName = ((group.querySelector('.builder-schema-group-title') || {}).textContent || '').trim()
         || `chrome strip ${gi}`;
-      const fields = [...group.querySelectorAll('.builder-module-field')].map((f) => {
-        const label = f.querySelector('.builder-module-field-label');
-        const control = f.querySelector('.builder-module-field-control');
+      // Legacy BuilderSettingRow pairs are measured too. They were not,
+      // and on 2026-08-11 the heading panel's offsets sat 12px right of
+      // every field label above them while this reported a clean pass —
+      // `.builder-setting-label` carries a left padding `.builder-module-
+      // field-label` does not. A control the check cannot see is a control
+      // the rule does not cover.
+      const pairs = [
+        ...group.querySelectorAll('.builder-module-field'),
+        ...group.querySelectorAll('.builder-setting-row, .builder-setting-row-full'),
+      ];
+      const fields = pairs.map((f) => {
+        const label = f.querySelector('.builder-module-field-label, .builder-setting-label');
+        let control = f.querySelector('.builder-module-field-control, .builder-setting-value');
         if (!label || !control) return null;
 
         // A `full`-width field spans both tracks by design — it is long text
         // keeping the room, not a staggered row. Out of scope for W0.
         if (f.classList.contains('builder-module-field--full')) return null;
+
+        // A wrapper flattened into the column grid (`display: contents`) has
+        // NO BOX, so its rect is 0×0 at 0,0 — measuring it would report a
+        // field starting a few hundred pixels left of the panel and fail on
+        // a row that is actually fine. Descend to the first thing that has
+        // a box; that is the control the operator sees.
+        while (control && control.getBoundingClientRect().width === 0 && control.firstElementChild) {
+          control = control.firstElementChild;
+        }
+        if (!control || control.getBoundingClientRect().width === 0) return null;
 
         const kind = [...f.classList]
           .map((c) => c.replace('builder-module-field--', ''))
@@ -144,6 +173,13 @@ function measure(page, nonStretch) {
           // 40px of room IS padding — using it here would compare the box to
           // itself and the room assertion would always pass.
           labelTextW: Math.round(textWidth(label)),
+          // Where the label's TEXT starts, not its box. The boxes are grid
+          // cells and are equal by construction, so they cannot detect a
+          // label indented by its own padding — which is exactly how the
+          // heading offsets sat 12px right of every label above them while
+          // this check passed.
+          labelTextX: Math.round(label.getBoundingClientRect().left
+            + parseFloat(getComputedStyle(label).paddingLeft || '0') - or.left),
           fieldX: Math.round(cr.left - or.left),
           fieldW: Math.round(cr.width),
           stretchable: !exempt.includes(kind)
@@ -170,6 +206,15 @@ function assertLattice(panels, width) {
         .join(', ');
       failures.push(
         `${where}: labels are ${labelWidths.length} different widths (${labelWidths.join('/')}px) — ${worst}`
+      );
+    }
+
+    const labelTextXs = [...new Set(fields.map((f) => f.labelTextX))];
+    if (labelTextXs.length > 1) {
+      failures.push(
+        `${where}: label text starts at ${labelTextXs.length} different x-positions ` +
+        `(${labelTextXs.join('/')}px) — ` + fields.map((f) => `${f.name}@${f.labelTextX}`).join(', ') +
+        ' (a label indented by its own padding; the grid cells are equal, the words are not)'
       );
     }
 
