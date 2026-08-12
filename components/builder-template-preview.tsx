@@ -5906,6 +5906,9 @@ function FeatureCardsModulePreview({
     ? (module.settings.iconShape as string)
     : "circle";
   const iconInFront = module.settings.iconFront !== "false";
+  // Anything but an explicit "image" is a symbol — every module saved before
+  // image icons existed carries no `iconType` at all.
+  const iconIsImage = module.settings.iconType === "image";
 
   const className = [
     "builder-preview-feature-cards",
@@ -5951,13 +5954,21 @@ function FeatureCardsModulePreview({
 
         return (
           <article className="builder-preview-feature-card" key={card.id}>
-            {showIcons && card.icon ? (
+            {showIcons && (iconIsImage ? card.iconImageUrl : card.icon) ? (
               <span
                 className="builder-preview-feature-card-badge"
                 style={{ background: iconShape === "plain" ? "transparent" : badgeColor, color: glyphColor }}
                 aria-hidden="true"
               >
-                {card.icon}
+                {iconIsImage ? (
+                  // Decorative, like the glyph it replaces — the badge is
+                  // aria-hidden, so the picture carries an empty alt rather
+                  // than repeating the card title to a screen reader.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="" className="builder-preview-feature-card-badge-img" src={card.iconImageUrl} />
+                ) : (
+                  card.icon
+                )}
               </span>
             ) : null}
 

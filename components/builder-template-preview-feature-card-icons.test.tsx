@@ -14,8 +14,24 @@ import { BuilderTemplatePreview } from "./builder-template-preview";
  * (an icon that used to paint behind the card image) cannot regress.
  */
 const CARDS = JSON.stringify([
-  { id: "c1", title: "Courts", body: "Clay courts.", icon: "★", imageUrl: "/a.jpg", imageAlt: "Courts" },
-  { id: "c2", title: "Juniors", body: "Camps.", icon: "●", imageUrl: "/b.jpg", imageAlt: "Juniors" }
+  {
+    id: "c1",
+    title: "Courts",
+    body: "Clay courts.",
+    icon: "★",
+    iconImageUrl: "/icons/racquet.svg",
+    imageUrl: "/a.jpg",
+    imageAlt: "Courts"
+  },
+  {
+    id: "c2",
+    title: "Juniors",
+    body: "Camps.",
+    icon: "●",
+    iconImageUrl: "/icons/ball.svg",
+    imageUrl: "/b.jpg",
+    imageAlt: "Juniors"
+  }
 ]);
 
 function renderCards(settings: Record<string, string>) {
@@ -98,5 +114,61 @@ describe("feature card icons", () => {
     expect(module.settings.iconAlign).toBe("center");
     expect(module.settings.iconShape).toBe("circle");
     expect(module.settings.iconFront).toBe("true");
+    expect(module.settings.iconType).toBe("symbol");
+  });
+
+  it("renders the picture instead of the glyph when the icon type is image", () => {
+    const html = renderCards({ iconType: "image" });
+
+    expect(html).toContain('src="/icons/racquet.svg"');
+    expect(html).toContain("builder-preview-feature-card-badge-img");
+    expect(html).not.toContain("★");
+  });
+
+  it("keeps the glyph for a module saved before image icons existed", () => {
+    // No `iconType` at all is the state of every module built before
+    // 2026-08-12 — it has to keep reading as "symbol", not as empty.
+    const html = renderCards({});
+
+    expect(html).toContain("★");
+    expect(html).not.toContain("builder-preview-feature-card-badge-img");
+  });
+
+  it("keeps the badge, and its shape settings, around an image icon", () => {
+    // The picture sits inside the same badge as the glyph, which is what
+    // lets shape/size/placement keep working without a second set of rules.
+    const html = renderCards({ iconType: "image", iconShape: "square", iconSize: "72" });
+
+    expect(html).toContain("builder-preview-feature-card-badge");
+    expect(html).toContain("builder-preview-feature-cards-icon-shape-square");
+    expect(html).toContain("--feature-card-icon-size:72px");
+  });
+
+  it("hides the badge on a card with no icon picture, rather than an empty disc", () => {
+    const html = renderToStaticMarkup(
+      <BuilderTemplatePreview
+        layoutSections={normalizeLayoutSections([
+          {
+            id: "row-1",
+            layout: "single",
+            background: { mode: "color", color: "#ffffff" },
+            modules: [
+              {
+                id: "m1",
+                type: "feature-cards",
+                column: "main",
+                // A card with a glyph but no picture: switching the module to
+                // image icons must not leave a coloured disc with nothing in it.
+                settings: { cards: JSON.stringify([{ id: "c1", title: "Courts", icon: "★" }]), iconType: "image" }
+              }
+            ]
+          }
+        ])}
+        pageBackground={createDefaultBackgroundSettings()}
+        showShell={false}
+      />
+    );
+
+    expect(html).not.toContain("builder-preview-feature-card-badge");
   });
 });

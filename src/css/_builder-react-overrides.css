@@ -1236,6 +1236,25 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-size: calc(var(--feature-card-icon-size, 48px) * 0.72);
 }
 
+/* An image icon sits INSIDE the same badge as the glyph it replaces, so
+   every shape, size, placement and alignment setting keeps working with no
+   second set of rules. It is inset from the disc edge — a square logo
+   dropped flush into a circle loses its corners — and `contain` keeps a
+   non-square icon in proportion instead of stretching it to the badge's
+   square box. */
+.builder-preview-feature-card-badge-img {
+  width: 68%;
+  height: 68%;
+  object-fit: contain;
+}
+
+/* No disc means no edge to clear, so the icon takes the whole space the
+   disc would have held — the same trade the glyph makes above. */
+.builder-preview-feature-cards-icon-shape-plain .builder-preview-feature-card-badge-img {
+  width: 100%;
+  height: 100%;
+}
+
 /* Placement — where the badge sits relative to the card.
    "above" overhangs the top edge (the original look). "on-image" tucks it
    inside the card's top padding, over the picture. "inline" drops it back

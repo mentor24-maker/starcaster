@@ -35,6 +35,17 @@ const ICON_PLACEMENT_OPTIONS: { value: string; label: string }[] = [
   { value: "inline", label: "Above The Title" }
 ];
 
+/* Symbol or picture. The two are stored in different card fields (`icon`
+   and `iconImageUrl`), so this only decides which one renders and which
+   control the card list offers — flipping it back restores the other. */
+const ICON_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "symbol", label: "Symbol" },
+  { value: "image", label: "Image" }
+];
+
+/** The gallery category the icon picker opens filtered to. */
+const ICON_GALLERY_CATEGORY = "Icon";
+
 const ICON_SHAPE_OPTIONS: { value: string; label: string }[] = [
   { value: "circle", label: "Circle" },
   { value: "square", label: "Rounded Square" },
@@ -130,6 +141,10 @@ export function BuilderFeatureCardsModuleSettings({
   const addCard = () => persist([...cards, createBuilderCardItem(cards.length + 1)]);
 
   const showIcons = module.settings.showIcons !== "false";
+  // Anything but an explicit "image" is a symbol — every module built before
+  // image icons existed has no `iconType` at all.
+  const iconType = module.settings.iconType === "image" ? "image" : "symbol";
+  const showSymbolColumn = showIcons && iconType === "symbol";
 
   // Empty color settings follow the site theme (the renderer resolves them
   // to --crm-theme-* vars). The swatch previews the same theme color the
@@ -252,6 +267,18 @@ export function BuilderFeatureCardsModuleSettings({
         </BuilderModuleField>
         {showIcons ? (
           <>
+            {/* First on the axis (D9): it decides which per-card field the
+                card list even shows. Symbol and image are stored in separate
+                fields, so switching between them is reversible. */}
+            <BuilderModuleField label="Icon Type" width="select-md">
+              <select value={iconType} onChange={(event) => set("iconType", event.target.value)}>
+                {ICON_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </BuilderModuleField>
             <BuilderModuleField label="Place" width="select-md">
               <select
                 value={module.settings.iconPlacement ?? "above"}
@@ -370,15 +397,19 @@ export function BuilderFeatureCardsModuleSettings({
           each card's primary row. */}
       <div className="builder-cards-panel-items">
       <div className="builder-cards-panel-heading">Feature Cards</div>
-      <div className={`builder-item-grid builder-item-grid--cards${showIcons ? " builder-item-grid--cards-icons" : ""}`}>
-        {showIcons ? <span className="builder-item-grid-header">Icon</span> : null}
+      {/* Only the SYMBOL icon gets a column of its own. An image icon is a
+          URL plus a Gallery button — the same shape as the card image, which
+          is why it renders in the sub-row with the other pickers rather than
+          being squeezed into a column that cannot hold it. */}
+      <div className={`builder-item-grid builder-item-grid--cards${showSymbolColumn ? " builder-item-grid--cards-icons" : ""}`}>
+        {showSymbolColumn ? <span className="builder-item-grid-header">Icon</span> : null}
         <span className="builder-item-grid-header">Title</span>
         <span className="builder-item-grid-header">Link</span>
         <span className="builder-item-grid-header">Link Text</span>
         <span className="builder-item-grid-header">Action</span>
         {cards.map((card, index) => (
           <Fragment key={card.id}>
-            {showIcons ? (
+            {showSymbolColumn ? (
               <select
                 className="builder-item-grid-icon-select"
                 value={card.icon}
@@ -451,6 +482,17 @@ export function BuilderFeatureCardsModuleSettings({
             </div>
             <div className="builder-item-grid-sub">
               <BuilderModuleFieldStrip>
+                {showIcons && iconType === "image" ? (
+                  <BuilderModuleField label="Icon Image" width="full">
+                    <BuilderImagePickerField
+                      value={card.iconImageUrl}
+                      onChange={(iconImageUrl) => updateCard(card.id, { iconImageUrl })}
+                      galleryCategory={ICON_GALLERY_CATEGORY}
+                      buttonLabel="Choose Icon"
+                      placeholder="Pick an icon from the gallery"
+                    />
+                  </BuilderModuleField>
+                ) : null}
                 <BuilderModuleField label="Image" width="full">
                   <BuilderImagePickerField
                     value={card.imageUrl}
