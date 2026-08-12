@@ -3006,16 +3006,26 @@ function HeadlineRotatorModuleEditor({
 
 function ModuleEditorWrapper({
   isPopped,
+  moduleType,
   title,
   onClose,
   children
 }: {
   isPopped: boolean;
+  /**
+   * Stamped on the editor as a modifier class so a panel can lay out its own
+   * chrome. Only Feature Cards uses it today: its editor is two columns, and
+   * the Label / Background / Margins rows are the editor's children rather
+   * than the panel's, so the panel alone cannot place them. A type hook is
+   * the smallest thing that lets CSS reach them — the alternative was moving
+   * the chrome into every settings component.
+   */
+  moduleType: string;
   title: string;
   onClose: () => void;
   children: ReactNode;
 }) {
-  const className = "builder-module-editor is-lattice";
+  const className = `builder-module-editor is-lattice builder-module-editor--${moduleType}`;
 
   // No width cap: popping a module out is how the operator escapes a narrow
   // column, so the editor takes the room its panel needs (D7).
@@ -3347,7 +3357,19 @@ export function BuilderModuleCard({
       ) : null}
 
       {(isExpanded || isPopped) ? (
-        <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
+        <ModuleEditorWrapper
+          isPopped={isPopped}
+          moduleType={module.type}
+          title={module.name || module.type}
+          onClose={() => setIsPopped(false)}
+        >
+          {/* Feature Cards runs its chrome down the left column beside the
+              card list, so that column needs a name at the top of it. Every
+              other module keeps the chrome full-width and has no columns to
+              label. */}
+          {module.type === "feature-cards" ? (
+            <div className="builder-cards-panel-heading">Settings</div>
+          ) : null}
           {module.type !== "social" && module.type !== "blog-post-list" ? (
             // Content-sized, not full-panel — this row tops every module,
             // so master rule W1 applies here with maximum leverage.

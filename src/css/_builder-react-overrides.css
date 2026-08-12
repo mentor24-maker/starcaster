@@ -2190,7 +2190,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * Below 1000px the panel is too narrow to hold both without cropping the card
  * rows, so it stacks — settings first, cards under them.
  * ------------------------------------------------------------------------ */
-.builder-react-root .builder-cards-panel {
+/* The GRID IS THE WHOLE EDITOR, not just the settings panel (operator,
+   2026-08-12: "align the Feature Cards column to the top"). Label,
+   Background, Alignment and the four margins are children of the editor
+   rather than of the panel, so a grid scoped to the panel left them
+   spanning the full width with a column of dead space beside them. Here
+   every editor child falls into column 1 and the card list is pulled up
+   to row 1 of column 2, level with the Label row.
+
+   `.builder-cards-panel` flattens to `display: contents` so its two halves
+   become items of THIS grid instead of a nested one — that is what lets a
+   panel child sit in the same column track as the chrome above it. */
+.builder-react-root .builder-module-editor--feature-cards {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2200,6 +2211,38 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-4, 12px) var(--space-6, 24px);
   align-items: start;
+}
+
+.builder-react-root .builder-module-editor--feature-cards > * {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel {
+  display: contents;
+}
+
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
+  grid-column: 1;
+}
+
+/* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
+   implicit grid resolves to the explicit grid's only line, which collapses
+   the column to a single row. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
+  grid-column: 2;
+  grid-row: 1 / span 100;
+  align-self: start;
+}
+
+/* The two column names. Bigger than a group title (operator: "make the
+   column headings larger font") — they name a whole column, while Layout,
+   Card, Icons and Link name a group inside one. */
+.builder-react-root .builder-cards-panel-heading {
+  font-size: var(--text-xl, 1.25rem);
+  font-weight: 700;
+  color: var(--builder-editor-heading, #0b2a4a);
+  margin: 0 0 var(--space-2, 6px);
 }
 
 .builder-react-root .builder-cards-panel-settings,
@@ -2258,9 +2301,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-self: flex-start;
 }
 
+/* Narrow: one column, chrome and settings above the cards. The card list
+   has to give up its row-1 placement too, or it would sit above the Label
+   row it is supposed to follow. */
 @media (max-width: 1000px) {
-  .builder-react-root .builder-cards-panel {
+  .builder-react-root .builder-module-editor--feature-cards {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 
