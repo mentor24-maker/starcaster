@@ -114,16 +114,26 @@ App.settings = (function () {
     }, 0);
   }
 
+  let openingProjectsPage = false;
+
   function openProjectsPage() {
-    projectCtx()?.clearViewContext?.();
-    setProjectsCreateVisible(false);
-    // Render from the already-auth-filtered state.projects before the page is
-    // visible so stale DOM from a previous user's session never flashes.
-    renderProjectSelector();
-    renderProjectLists();
-    renderProjectsTable();
-    renderProjectDetails();
-    App.setActivePage('settingsProjectsPage');
+    // Re-entrancy guard: the render calls below can indirectly navigate, and a
+    // second entry here would restart the same render chain on top of itself.
+    if (openingProjectsPage) return;
+    openingProjectsPage = true;
+    try {
+      projectCtx()?.clearViewContext?.();
+      setProjectsCreateVisible(false);
+      // Render from the already-auth-filtered state.projects before the page is
+      // visible so stale DOM from a previous user's session never flashes.
+      renderProjectSelector();
+      renderProjectLists();
+      renderProjectsTable();
+      renderProjectDetails();
+      App.setActivePage('settingsProjectsPage');
+    } finally {
+      openingProjectsPage = false;
+    }
     refreshProjectContext().catch((err) => notify(err.message || 'Could not load projects', true));
   }
 
@@ -890,7 +900,16 @@ App.settings = (function () {
     if (!showPanel) {
       const card = document.getElementById('settingsProjectMembersCard');
       if (card) card.classList.add('hidden');
-      if (onDetailPage) openProjectsPage();
+      if (onDetailPage) {
+        // Leave the detail page directly instead of calling openProjectsPage().
+        // That helper renders BEFORE it switches page, so it would re-enter
+        // renderProjectSelector -> renderProjectDetails with activePage still
+        // 'settingsProjectDetailPage' and recurse until the stack blew up
+        // ("Could not load projects: Maximum call stack size exceeded").
+        projectCtx()?.clearViewContext?.({ silent: true });
+        setProjectsCreateVisible(false);
+        App.setActivePage('settingsProjectsPage');
+      }
       return;
     }
 
