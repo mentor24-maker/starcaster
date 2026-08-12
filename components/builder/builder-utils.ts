@@ -151,6 +151,24 @@ export function getHorizontalMarginStyle(value: unknown): CSSProperties {
   };
 }
 
+export function getVerticalPaddingStyle(value: unknown): CSSProperties {
+  const padding = normalizeSpacingValue(value, "0", 0, 160);
+
+  return {
+    paddingTop: `${padding}px`,
+    paddingBottom: `${padding}px`
+  };
+}
+
+export function getHorizontalPaddingStyle(value: unknown): CSSProperties {
+  const padding = normalizeSpacingValue(value, "0", 0, 160);
+
+  return {
+    paddingLeft: `${padding}px`,
+    paddingRight: `${padding}px`
+  };
+}
+
 export function getModuleOuterSpacingStyle(settings: Record<string, string>): CSSProperties {
   return {
     ...getVerticalMarginStyle(settings.verticalMargin),
@@ -473,6 +491,13 @@ export function getImageModuleStyle(settings: Record<string, string>): CSSProper
 
   return {
     ...getModuleWidthStyle(settings),
+    // Padding sits INSIDE the frame — between the border and the picture —
+    // which is the half of "all margin and padding" the image module never
+    // had (operator, 2026-08-11). Margin, the space outside the frame, comes
+    // from the shared chrome's H/V Margin pair. `box-sizing: border-box`
+    // above keeps Width honest: a padded image narrows, the frame does not.
+    ...getVerticalPaddingStyle(settings.verticalPadding),
+    ...getHorizontalPaddingStyle(settings.horizontalPadding),
     border: `${Math.max(Number.isFinite(borderThickness) ? borderThickness : 0, 0)}px solid ${
       settings.borderColor || "#0f4f8f"
     }`,

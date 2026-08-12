@@ -1773,6 +1773,8 @@ export function normalizeBuilderModuleSettingsForType(
     stripOverlayOnlyImageSettings(settings);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    settings.verticalPadding = normalizeSpacingValue(settings.verticalPadding, "0", 0, 160);
+    settings.horizontalPadding = normalizeSpacingValue(settings.horizontalPadding, "0", 0, 160);
   }
 
   if (type === "floating-image") {
@@ -1783,6 +1785,8 @@ export function normalizeBuilderModuleSettingsForType(
     settings.offsetY = normalizeSignedOffsetValue(settings.offsetY, "0");
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    settings.verticalPadding = normalizeSpacingValue(settings.verticalPadding, "0", 0, 160);
+    settings.horizontalPadding = normalizeSpacingValue(settings.horizontalPadding, "0", 0, 160);
     settings.zIndex = normalizeSpacingValue(settings.zIndex, "20", -999, 999999);
 
     const trigger = normalizeModuleTrigger(settings[MODULE_TRIGGER_SETTING_KEY]);
