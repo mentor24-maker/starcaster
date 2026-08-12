@@ -119,6 +119,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [pageSlug, setPageSlug] = useState("");
   const [pageTemplateId, setPageTemplateId] = useState("");
   const [pageVisibility, setPageVisibility] = useState<PageVisibility>("public");
+  const [pageSearchPriority, setPageSearchPriority] = useState<string>("normal");
   const [draft, setDraft] = useState(createDraftFromTemplate(null));
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
   const [newSectionOpenFocusId, setNewSectionOpenFocusId] = useState<string | null>(null);
@@ -464,6 +465,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setPageTemplateId(page?.templateId ?? "");
     setPageThemeId(page?.themeId ?? "");
     setPageVisibility(pageVisibilityFromRecord(page));
+    // Pages saved before the column existed have nothing here; "normal" is
+    // what unset means everywhere else too.
+    setPageSearchPriority(page?.searchPriority || "normal");
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
 
@@ -1482,6 +1486,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setPageTemplateId("");
     setPageThemeId("");
     setPageVisibility("public");
+    setPageSearchPriority("normal");
     setDraft(createDraftFromPage(null));
     setMessage(null);
     setError(null);
@@ -1793,6 +1798,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           templateId: pageTemplateId,
           themeId: pageThemeId || null,
           ...pageVisibilityToFlags(pageVisibility),
+          searchPriority: pageSearchPriority,
           pageBackground: draft.pageBackground,
           theme: draft.theme,
           layoutSections: draft.layoutSections
@@ -2315,6 +2321,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onSavePage={() => void savePage()}
           pageVisibility={pageVisibility}
           onSetPageVisibility={setPageVisibility}
+          pageSearchPriority={pageSearchPriority}
+          onSetPageSearchPriority={setPageSearchPriority}
           autoNewPage={autoNewPage}
           autoOpenPageDetails={Boolean(initialRecordId && initialMode === "pages")}
           snapshots={snapshots}

@@ -458,13 +458,21 @@ has on something he has already said yes to.
 template.** When he has SQL to run, do not print the statements. Emit exactly
 this block and nothing else in its place:
 
-```
 #################### RUN SQL IN SUPABASE ####################
 
 [github url]
 
 ##########################################################
-```
+
+**Emit it as plain text, not inside a code fence** (operator, 2026-08-12:
+"can you make that link clickable?"). A fenced block renders the URL as dead
+text and he cannot click it — which defeats a handoff whose entire job is to
+get him to that file. Outside a fence the terminal linkifies it, and a markdown
+link works too.
+
+The banner itself survives being unfenced: an ATX heading takes at most six
+`#`, so a run of twenty renders as the literal text it looks like. Do not
+shorten the rules to six or fewer or they will turn into a heading.
 
 The URL is the file on **its branch**, not on `main`:
 `https://github.com/mentor24-maker/starcaster/blob/<branch>/docs/SQL/<file>.sql`

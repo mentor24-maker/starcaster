@@ -553,6 +553,8 @@ export type BuilderPageRecord = {
   updatedAt: string;
   isPublished: boolean;
   isPrivate: boolean;
+  /** Site Search ranking. Optional: pages saved before it exists read as "normal". */
+  searchPriority?: string;
 };
 
 export type BuilderCellModuleRecord = {
