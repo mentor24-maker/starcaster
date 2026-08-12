@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync } from "node:fs";
+import { existsSync, writeFileSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -30,7 +30,16 @@ function variant(id: string, settings: Record<string, string>) {
     ) + `</div>`;
 }
 
-it("writes the control matrix for check:nav-controls", () => {
+/*
+ * `public/styles.css` is a gitignored build artifact, and CI runs the unit
+ * tests without building it — this file asked for it and failed the whole
+ * suite on PR 180. It is a fixture generator, not an assertion, so it stands
+ * down when the stylesheet is not there. `npm run check:nav-controls` builds
+ * the stylesheet before invoking this, so the real check never skips.
+ */
+const STYLESHEET = "public/styles.css";
+
+it.skipIf(!existsSync(STYLESHEET))("writes the control matrix for check:nav-controls", () => {
   const blocks: string[] = [];
   for (const c of CONTROLS as Array<Record<string, any>>) {
     const base = { ...NAV_BASE, ...(c.base ?? {}) };
@@ -40,7 +49,7 @@ it("writes the control matrix for check:nav-controls", () => {
     blocks.push(variant(`${id}::base`, base));
     blocks.push(variant(`${id}::set`, { ...base, [c.key]: c.value, ...(c.extra ?? {}) }));
   }
-  const css = readFileSync("public/styles.css", "utf8");
+  const css = readFileSync(STYLESHEET, "utf8");
   writeFileSync(`${OUT}.html`,
     `<!doctype html><meta charset="utf-8"><style>${css}</style><body style="margin:0;background:#fff">${blocks.join("")}</body>`);
 });

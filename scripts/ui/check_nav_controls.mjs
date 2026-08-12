@@ -43,7 +43,11 @@ const { CONTROLS } = await import(path.join(ROOT, 'scripts/ui/nav-control-matrix
 
 const F = process.env.NAV_MATRIX_OUT || path.join(os.tmpdir(), 'starcaster-nav-control-matrix');
 
-// Render the fixture first, so the check can never measure a stale one.
+// The fixture inlines the compiled stylesheet, which is a gitignored build
+// artifact — build it first so this command works on a fresh clone.
+execFileSync('npm', ['run', 'build:styles'], { cwd: ROOT, stdio: 'ignore' });
+
+// Render the fixture second, so the check can never measure a stale one.
 execFileSync('npx', ['vitest', 'run', 'components/builder/nav-control-matrix.fixture.test.tsx'],
   { cwd: ROOT, stdio: 'ignore', env: { ...process.env, NAV_MATRIX_OUT: F } });
 
