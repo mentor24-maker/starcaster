@@ -93,9 +93,12 @@ layout would avoid.*
 - **D6.** Rarely-touched settings collapse into **Advanced**; they never
   crowd the everyday controls. *(doctrine E3)* — **[eye]**
 - **D7.** Windows and modals size to their content — wide when the content
-  is wide *(7/2 "Let that window expand to 80% the width of the screen")* —
-  and form modals **never scroll internally**, especially sideways
-  *(doctrine §2)*. — **[eye]**
+  is wide *(7/2 "Let that window expand to 80% the width of the screen";
+  8/11 "these editors can take up 75% of the screen … ensure none are
+  unnecessarily constraining the content")* — and form modals **never scroll
+  internally**, especially sideways *(doctrine §2)*. Concretely: a floor it
+  never opens below, content sizing above that, and a 75% ceiling — never a
+  bare px width. Enforced by `checkDialogWidths`. — **[auto]**
 
 - **D8.** Panel controls are organized into **logical axes** — up to four
   titled columns, each holding the controls that belong to one aspect of

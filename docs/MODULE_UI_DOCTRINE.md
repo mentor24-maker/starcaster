@@ -350,8 +350,28 @@ They are reproduced here with honest tags.
   `.standard-form-checkbox`; radios `.sc-radio-group` / `.sc-radio-option`
   (input left, label right, stacked). Inputs size to content or a declared width
   class — don't stretch to fill a wide container.
-- **Modals `[eye]`** — no scrollbars in form modals, especially horizontal.
-  Widen the modal instead.
+- **Modals and popup editors size to their content `[auto]`** — a dialog
+  declares a **floor** (never opens narrower than this), grows to fit whatever
+  is inside it, and stops at **75% of the screen**. In CSS that is
+  `width: max-content; min-width: min(<floor>px, 100%); max-width: min(75vw, 100%)`;
+  a React shell inlines the same three values. What a dialog must never carry
+  is a lone `width`/`max-width` in px — that is a guess about content someone
+  made once, and it is why an editor ends up cropped or scrolling sideways.
+  Prose declares its own reading measure (`.c-modal__body > p` is capped at
+  56ch) so a message dialog stays narrow while a form or table grows.
+
+  *Incident (2026-08-11):* the operator reported, for at least the fourth
+  time, an editor squeezed into too small a box — this round the popped-out
+  module editor, which capped at 680px and stacked its axis columns while
+  two thirds of the screen sat empty. The sweep found the same guess
+  everywhere: `BuilderEditorPopup` at a flat 360, `BuilderCenteredModal` at
+  560 with call sites re-capping at 680 and 1200, and `.c-modal__dialog` —
+  the shell **every** vanilla-admin modal inherits — at 520. Popping the
+  heading editor out now opens at 1189px on a 1900px screen (was 730), three
+  axis columns across, nothing cropped. `checkDialogWidths` in
+  `scripts/check_ui_doctrine.cjs` fails any new dialog selector that caps
+  itself in px, and any `minWidth`/`maxWidth` number handed to a modal
+  component at a call site.
 - **Feedback `[eye]`** — transient → `App.components.Toast` (`.c-toast`
   variants); sticky status → `App.notify(text, isError)`.
 - **Accordions `[eye]`** — toggle `aria-expanded` only; never rewrite a button's
@@ -396,6 +416,7 @@ They are reproduced here with honest tags.
 | R6 accessibility floor | `[eye]` | state it in the PR |
 | R7 sanitized HTML | `[eye]` | state it in the PR |
 | §2 tables / `<th>` | `[auto]` | `node scripts/check_conventions.cjs` |
+| §2 dialogs size to content | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
 | §2 remainder, §3 | `[eye]` | state it in the PR |
 
 Everything `[auto]` runs automatically at **pre-commit** (staged changes) and in
