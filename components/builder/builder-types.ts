@@ -954,8 +954,10 @@ export const modulePaletteItems: ModulePaletteItem[] = [
       showButton: "true",
       accentColor: "",
       borderRadius: "8",
-      horizontalMargin: "0",
-      verticalMargin: "0"
+      marginTop: "0",
+      marginBottom: "0",
+      marginLeft: "0",
+      marginRight: "0"
     }
   },
   {
@@ -979,8 +981,10 @@ export const modulePaletteItems: ModulePaletteItem[] = [
       buttonLabel: "Search",
       accentColor: "",
       borderRadius: "8",
-      horizontalMargin: "0",
-      verticalMargin: "0"
+      marginTop: "0",
+      marginBottom: "0",
+      marginLeft: "0",
+      marginRight: "0"
     }
   },
   {

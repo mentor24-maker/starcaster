@@ -18,7 +18,7 @@ describe("getNavModuleStyle — an untouched menu keeps the look it had when the
   it("reproduces the old bar", () => {
     const vars = style();
 
-    expect(vars["--site-nav-padding"]).toBe("8px 8px");
+    expect(vars["--site-nav-padding"]).toBe("8px 8px 8px 8px");
     expect(vars["--site-nav-radius"]).toBe("26px");
     expect(vars["--site-nav-border-width"]).toBe("1px");
     expect(vars["--site-nav-border-style"]).toBe("solid");
@@ -29,7 +29,7 @@ describe("getNavModuleStyle — an untouched menu keeps the look it had when the
   it("reproduces the old links", () => {
     const vars = style();
 
-    expect(vars["--site-nav-link-padding"]).toBe("0px 14px");
+    expect(vars["--site-nav-link-padding"]).toBe("0px 14px 0px 14px");
     expect(vars["--site-nav-link-radius"]).toBe("18px");
     expect(vars["--site-nav-link-weight"]).toBe("700");
     expect(vars["--site-nav-link-decoration"]).toBe("none");
@@ -64,10 +64,19 @@ describe("getNavModuleStyle — the controls that used to do nothing", () => {
   });
 
   it("bar padding and link padding are separate quantities", () => {
-    const vars = style({ navPaddingV: "20", navPaddingH: "30", navLinkPaddingV: "6", navLinkPaddingH: "22" });
+    const vars = style({
+      navPaddingTop: "20",
+      navPaddingBottom: "20",
+      navPaddingLeft: "30",
+      navPaddingRight: "30",
+      navLinkPaddingTop: "6",
+      navLinkPaddingBottom: "6",
+      navLinkPaddingLeft: "22",
+      navLinkPaddingRight: "22"
+    });
 
-    expect(vars["--site-nav-padding"]).toBe("20px 30px");
-    expect(vars["--site-nav-link-padding"]).toBe("6px 22px");
+    expect(vars["--site-nav-padding"]).toBe("20px 30px 20px 30px");
+    expect(vars["--site-nav-link-padding"]).toBe("6px 22px 6px 22px");
   });
 
   it("bar radius and link radius are separate quantities", () => {
@@ -97,7 +106,7 @@ describe("getNavModuleStyle — the controls that used to do nothing", () => {
 
   it("falls back rather than emitting NaN for junk", () => {
     expect(style({ navFontSize: "abc" }).fontSize).toBe("16px");
-    expect(style({ navPaddingV: "", navPaddingH: "" })["--site-nav-padding"]).toBe("8px 8px");
+    expect(style({ navPaddingTop: "", navPaddingLeft: "" })["--site-nav-padding"]).toBe("8px 8px 8px 8px");
   });
 });
 

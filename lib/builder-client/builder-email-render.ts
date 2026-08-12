@@ -8,12 +8,16 @@ import {
   type BuilderTemplateRecord,
   type BuilderTemplateSection
 } from "@/lib/builder-template";
-import { formatEmailPlainTextContent, formatEmailRichTextContent } from "@/lib/email-rich-text";
+import {
+  formatEmailHeadingContent,
+  formatEmailPlainTextContent,
+  formatEmailRichTextContent
+} from "@/lib/email-rich-text";
 import {
   getButtonModuleStyle,
   getHeadingModuleStyle,
   getModuleAlignment,
-  getModuleMarginStyle,
+  getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getSectionMarginStyle
 } from "@/components/builder/builder-utils";
@@ -89,7 +93,7 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     return "";
   }
 
-  const marginStyle = cssPropertiesToInline(getModuleMarginStyle(module.settings));
+  const marginStyle = cssPropertiesToInline(getModuleOuterSpacingStyle(module.settings));
   const alignment = getModuleAlignment(module.settings);
   const alignAttr = alignment === "center" ? "center" : alignment === "right" ? "right" : "left";
 
@@ -97,7 +101,7 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     const level = module.settings.level || "h2";
     const style = cssPropertiesToInline(getHeadingModuleStyle(module.settings));
 
-    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><${level} style="margin:0;font-family:Arial,Helvetica,sans-serif;${style}">${escapeHtml(module.text || "")}</${level}></td></tr>`;
+    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><${level} style="margin:0;font-family:Arial,Helvetica,sans-serif;${style}">${formatEmailHeadingContent(module.text)}</${level}></td></tr>`;
   }
 
   if (module.type === "text") {

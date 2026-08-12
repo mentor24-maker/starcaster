@@ -13,6 +13,7 @@ import {
   BuilderNumberSelectControl
 } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
+import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
   BuilderThemeColorField,
@@ -247,25 +248,18 @@ export function BuilderSocialModuleSettings({
               onChange={(alignment) => updateSetting("alignment", alignment)}
             />
           </BuilderModuleField>
-          {/* W7 names, in marginFields() order. */}
-          <BuilderModuleField label="Vertical Margin" width="num">
-            <BuilderNumberSelectControl
-              value={module.settings.verticalMargin ?? "0"}
-              min={0}
-              max={160}
-              fallback="0"
-              onChange={(verticalMargin) => updateSetting("verticalMargin", verticalMargin)}
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="Horizontal Margin" width="num">
-            <BuilderNumberSelectControl
-              value={module.settings.horizontalMargin ?? "0"}
-              min={0}
-              max={160}
-              fallback="0"
-              onChange={(horizontalMargin) => updateSetting("horizontalMargin", horizontalMargin)}
-            />
-          </BuilderModuleField>
+          {/* W7 names and side order, from the same table marginFields() uses. */}
+          {MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => (
+            <BuilderModuleField key={key} label={label} width="num">
+              <BuilderNumberSelectControl
+                value={module.settings[key] ?? module.settings[legacy] ?? "0"}
+                min={0}
+                max={160}
+                fallback="0"
+                onChange={(next) => updateSetting(key, next)}
+              />
+            </BuilderModuleField>
+          ))}
         </BuilderModuleFieldStrip>
       </div>
 

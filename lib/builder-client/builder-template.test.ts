@@ -4,9 +4,12 @@ import {
   finalizeBackgroundSettings,
   promoteThemeStylesPageBackground,
   finalizeThemeStylesPageBackground,
+  formatHeadingContent,
   formatPlainTextContent,
   formatRichTextContent,
   groupJoinedSections,
+  headingHtmlFromEditor,
+  prepareHeadingHtmlForEditor,
   isPlainTextVariant,
   PLAIN_TEXT_VARIANT,
   prepareRichTextHtmlForStorage,
@@ -76,26 +79,40 @@ describe("navigation style migration", () => {
   const nav = (settings: Record<string, string>) =>
     normalizeBuilderModuleSettingsForType("navigation", settings, ctx);
 
-  it("splits the old single navPadding string into the two link padding numbers", () => {
+  it("splits the old single navPadding string onto the four link padding sides", () => {
     const settings = nav({ navPadding: "6px 20px" });
 
-    expect(settings.navLinkPaddingV).toBe("6");
-    expect(settings.navLinkPaddingH).toBe("20");
+    expect(settings.navLinkPaddingTop).toBe("6");
+    expect(settings.navLinkPaddingBottom).toBe("6");
+    expect(settings.navLinkPaddingLeft).toBe("20");
+    expect(settings.navLinkPaddingRight).toBe("20");
     expect(settings.navPadding).toBeUndefined();
   });
 
-  it("uses one value for both when the old string carried only one", () => {
+  it("uses one value for every side when the old string carried only one", () => {
     const settings = nav({ navPadding: "10px" });
 
-    expect(settings.navLinkPaddingV).toBe("10");
-    expect(settings.navLinkPaddingH).toBe("10");
+    expect(settings.navLinkPaddingTop).toBe("10");
+    expect(settings.navLinkPaddingLeft).toBe("10");
   });
 
   it("never overwrites padding the operator has already set on the new keys", () => {
     const settings = nav({ navPadding: "6px 20px", navLinkPaddingV: "2", navLinkPaddingH: "40" });
 
-    expect(settings.navLinkPaddingV).toBe("2");
-    expect(settings.navLinkPaddingH).toBe("40");
+    expect(settings.navLinkPaddingTop).toBe("2");
+    expect(settings.navLinkPaddingLeft).toBe("40");
+  });
+
+  it("gives a menu that was never styled the padding the CSS always drew", () => {
+    // The bar ships 8 on every side and the links 0 top/bottom, 14 beside.
+    // Migrating those to a flat 0 would have stripped the padding from every
+    // live menu on every site.
+    const settings = nav({});
+
+    expect(settings.navPaddingTop).toBe("8");
+    expect(settings.navPaddingLeft).toBe("8");
+    expect(settings.navLinkPaddingTop).toBe("0");
+    expect(settings.navLinkPaddingLeft).toBe("14");
   });
 
   it("turns Bold into a weight, honouring the answer the old control could not deliver", () => {
@@ -104,18 +121,20 @@ describe("navigation style migration", () => {
     expect(nav({ navBold: "true" }).navBold).toBeUndefined();
   });
 
-  it("folds the nav's own margins into the standard module margin keys", () => {
+  it("folds the nav's own margins onto the standard module margin sides", () => {
     const settings = nav({ navMarginV: "24", navMarginH: "12" });
 
-    expect(settings.verticalMargin).toBe("24");
-    expect(settings.horizontalMargin).toBe("12");
+    expect(settings.marginTop).toBe("24");
+    expect(settings.marginBottom).toBe("24");
+    expect(settings.marginLeft).toBe("12");
+    expect(settings.marginRight).toBe("12");
     expect(settings.navMarginV).toBeUndefined();
     expect(settings.navMarginH).toBeUndefined();
   });
 
   it("leaves an existing module margin alone rather than clobbering it", () => {
     const settings = nav({ navMarginV: "24", verticalMargin: "8" });
-    expect(settings.verticalMargin).toBe("8");
+    expect(settings.marginTop).toBe("8");
   });
 
   it("is idempotent — a second pass changes nothing", () => {
@@ -131,6 +150,7 @@ describe("navigation style migration", () => {
     expect(settings.navLinkPaddingV).toBeUndefined();
     expect(settings.navWeight).toBeUndefined();
     expect(settings.verticalMargin).toBeUndefined();
+    expect(settings.marginTop).toBe("0");
   });
 });
 
@@ -202,6 +222,86 @@ describe("formatRichTextContent", () => {
     const html = formatRichTextContent("<p>Safe</p><img src=x onerror=alert(1) />");
     expect(html).toContain("Safe");
     expect(html.toLowerCase()).not.toContain("onerror");
+  });
+});
+
+describe("formatHeadingContent", () => {
+  it("renders a plain heading exactly as it always did", () => {
+    expect(formatHeadingContent("Play Where Champions Play")).toBe("Play Where Champions Play");
+  });
+
+  it("escapes angle brackets and bare ampersands in a plain heading", () => {
+    expect(formatHeadingContent("Swim & Tennis")).toBe("Swim &amp; Tennis");
+    expect(formatHeadingContent("3 < 5")).toContain("&lt;");
+  });
+
+  it("keeps entities the operator typed", () => {
+    expect(formatHeadingContent("Book&nbsp;a&nbsp;Court")).toBe("Book&nbsp;a&nbsp;Court");
+  });
+
+  it("keeps a recoloured word", () => {
+    const html = formatHeadingContent('Play Where <span style="color:#4f9c3a">Champions</span> Play');
+    expect(html).toContain('style="color:#4f9c3a"');
+    expect(html).toContain("Champions");
+  });
+
+  it("keeps a resized word — the whole point of the module-level cap not applying", () => {
+    expect(formatHeadingContent('<span style="font-size:120px">PLAY</span>')).toContain("font-size:120px");
+  });
+
+  it("keeps line breaks", () => {
+    expect(formatHeadingContent("PLAY WHERE<br />CHAMPIONS PLAY").toLowerCase()).toContain("<br");
+    expect(formatHeadingContent("PLAY WHERE\nCHAMPIONS PLAY").toLowerCase()).toContain("<br");
+  });
+
+  it("unwraps block markup — nothing block-level can live inside a heading", () => {
+    const html = formatHeadingContent("<p>Champions</p>");
+    expect(html).toContain("Champions");
+    expect(html).not.toContain("<p>");
+  });
+
+  it("strips scripts and event handlers", () => {
+    const html = formatHeadingContent('Safe<script>alert(1)</script><span onclick="alert(1)">Hi</span>');
+    expect(html).toContain("Safe");
+    expect(html).not.toContain("script");
+    expect(html.toLowerCase()).not.toContain("onclick");
+  });
+
+  it("is empty for an empty heading", () => {
+    expect(formatHeadingContent("")).toBe("");
+    expect(formatHeadingContent(undefined)).toBe("");
+  });
+});
+
+describe("heading editor round trip", () => {
+  it("wraps stored markup in the paragraph the editor needs, and unwraps it again", () => {
+    const stored = 'Play Where <span style="color:#4f9c3a">Champions</span> Play';
+    const editorHtml = prepareHeadingHtmlForEditor(stored);
+
+    expect(editorHtml.startsWith("<p>")).toBe(true);
+    expect(headingHtmlFromEditor(editorHtml)).toBe(stored);
+  });
+
+  it("gives the editor a paragraph to type into when the heading is empty", () => {
+    expect(prepareHeadingHtmlForEditor("")).toBe("<p></p>");
+    expect(headingHtmlFromEditor("<p></p>")).toBe("");
+  });
+
+  it("turns a paragraph break into a line break", () => {
+    // The sanitizer is what emits the final tag, so it comes back as <br>.
+    expect(headingHtmlFromEditor("<p>PLAY WHERE</p><p>CHAMPIONS PLAY</p>").toLowerCase()).toBe(
+      "play where<br>champions play"
+    );
+  });
+
+  it("drops the trailing break the editor leaves under the cursor", () => {
+    expect(headingHtmlFromEditor("<p>Champions<br></p>")).toBe("Champions");
+  });
+
+  it("sanitizes markup typed into the HTML view", () => {
+    const html = headingHtmlFromEditor('<p>Safe<script>alert(1)</script></p>');
+    expect(html).toContain("Safe");
+    expect(html).not.toContain("script");
   });
 });
 
@@ -668,12 +768,12 @@ describe("joined rows", () => {
   });
 });
 
-describe("cell padding axes", () => {
+describe("cell spacing sides", () => {
   function firstSection(raw: unknown) {
     return normalizeBuilderDocument({ sections: [raw] }).layoutSections[0];
   }
 
-  it("seeds both axes from the legacy all-sides value, so an old row is unchanged", () => {
+  it("seeds every side from the legacy all-sides value, so an old row is unchanged", () => {
     const section = firstSection({
       id: "s1",
       layout: "two-column",
@@ -681,61 +781,137 @@ describe("cell padding axes", () => {
       modules: []
     });
 
-    expect(section.cellVerticalPadding.left).toBe("18");
-    expect(section.cellHorizontalPadding.left).toBe("18");
-    expect(section.cellVerticalPadding.right).toBe("30");
-    expect(section.cellHorizontalPadding.right).toBe("30");
+    expect(section.cellPaddingTop.left).toBe("18");
+    expect(section.cellPaddingBottom.left).toBe("18");
+    expect(section.cellPaddingLeft.left).toBe("18");
+    expect(section.cellPaddingRight.left).toBe("18");
+    expect(section.cellPaddingTop.right).toBe("30");
   });
 
-  it("lets one axis go to zero while the other keeps its value", () => {
-    const section = firstSection({
-      id: "s1",
-      layout: "two-column",
-      cellPadding: { left: "18" },
-      cellVerticalPadding: { left: "0" },
-      modules: []
-    });
-
-    expect(section.cellVerticalPadding.left).toBe("0");
-    expect(section.cellHorizontalPadding.left).toBe("18");
-  });
-
-  it("clamps each axis to the range the control offers", () => {
-    const section = firstSection({
-      id: "s1",
-      layout: "single",
-      cellVerticalPadding: { main: "9999" },
-      cellHorizontalPadding: { main: "-20" },
-      modules: []
-    });
-
-    expect(section.cellVerticalPadding.main).toBe("50");
-    expect(section.cellHorizontalPadding.main).toBe("0");
-  });
-
-  it("gives a cell nobody has set no padding at all, rather than an inset it never asked for", () => {
-    const section = firstSection({ id: "s1", layout: "single", modules: [] });
-
-    expect(section.cellPadding.main).toBe("0");
-    expect(section.cellVerticalPadding.main).toBe("0");
-    expect(section.cellHorizontalPadding.main).toBe("0");
-  });
-
-  it("leaves a cell that carries an explicit number exactly where it is", () => {
+  it("seeds every side from the vertical/horizontal pair that came between", () => {
     const section = firstSection({
       id: "s1",
       layout: "single",
       cellPadding: { main: "18" },
+      cellVerticalPadding: { main: "4" },
+      cellHorizontalPadding: { main: "40" },
       modules: []
     });
 
-    expect(section.cellVerticalPadding.main).toBe("18");
-    expect(section.cellHorizontalPadding.main).toBe("18");
+    expect(section.cellPaddingTop.main).toBe("4");
+    expect(section.cellPaddingBottom.main).toBe("4");
+    expect(section.cellPaddingLeft.main).toBe("40");
+    expect(section.cellPaddingRight.main).toBe("40");
   });
 
-  it("stops rounding a corner nobody asked to round", () => {
+  it("lets one side go to zero while the other three keep their value", () => {
+    const section = firstSection({
+      id: "s1",
+      layout: "single",
+      cellPadding: { main: "18" },
+      cellPaddingTop: { main: "0" },
+      modules: []
+    });
+
+    expect(section.cellPaddingTop.main).toBe("0");
+    expect(section.cellPaddingBottom.main).toBe("18");
+    expect(section.cellPaddingLeft.main).toBe("18");
+    expect(section.cellPaddingRight.main).toBe("18");
+  });
+
+  it("carries the cell's vertical margin onto its top and bottom sides", () => {
+    const section = firstSection({
+      id: "s1",
+      layout: "single",
+      cellVerticalMargin: { main: "30" },
+      modules: []
+    });
+
+    expect(section.cellMarginTop.main).toBe("30");
+    expect(section.cellMarginBottom.main).toBe("30");
+    // Left and right never existed before, so they start at nothing.
+    expect(section.cellMarginLeft.main).toBe("0");
+    expect(section.cellMarginRight.main).toBe("0");
+  });
+
+  it("clamps each side to the range its control offers", () => {
+    const section = firstSection({
+      id: "s1",
+      layout: "single",
+      cellPaddingTop: { main: "9999" },
+      cellPaddingLeft: { main: "-20" },
+      modules: []
+    });
+
+    expect(section.cellPaddingTop.main).toBe("50");
+    expect(section.cellPaddingLeft.main).toBe("0");
+  });
+
+  it("gives a cell nobody has set no spacing at all, rather than an inset it never asked for", () => {
     const section = firstSection({ id: "s1", layout: "single", modules: [] });
 
+    expect(section.cellPaddingTop.main).toBe("0");
+    expect(section.cellPaddingLeft.main).toBe("0");
+    expect(section.cellMarginTop.main).toBe("0");
     expect(section.cellBorderRadius.main).toBe("0");
+  });
+});
+
+/**
+ * The one promise this sweep makes: a page saved before 2026-08-11 renders to
+ * the same pixels afterwards. Every object carried its spacing as a
+ * vertical/horizontal pair (or, for a button, its own paddingX/paddingY);
+ * each side inherits from the pair it came from, so nothing moves until the
+ * operator moves it.
+ */
+describe("spacing migrates to four sides without moving anything", () => {
+  const ctx = { id: "m-1", name: "", text: "" };
+  const settingsFor = (type: string, settings: Record<string, string>) =>
+    normalizeBuilderModuleSettingsForType(type as never, settings, ctx as never);
+
+  it("spreads a module's margin pair across its four sides", () => {
+    const settings = settingsFor("text", { verticalMargin: "24", horizontalMargin: "12" });
+
+    expect(settings.marginTop).toBe("24");
+    expect(settings.marginBottom).toBe("24");
+    expect(settings.marginLeft).toBe("12");
+    expect(settings.marginRight).toBe("12");
+    expect(settings.verticalMargin).toBeUndefined();
+    expect(settings.horizontalMargin).toBeUndefined();
+  });
+
+  it("never lets a pair overwrite a side the operator already set", () => {
+    const settings = settingsFor("text", { verticalMargin: "24", marginTop: "4" });
+
+    expect(settings.marginTop).toBe("4");
+    expect(settings.marginBottom).toBe("24");
+  });
+
+  it("spreads an image's padding pair the same way", () => {
+    const settings = settingsFor("image", { verticalPadding: "8", horizontalPadding: "16" });
+
+    expect(settings.paddingTop).toBe("8");
+    expect(settings.paddingBottom).toBe("8");
+    expect(settings.paddingLeft).toBe("16");
+    expect(settings.paddingRight).toBe("16");
+  });
+
+  it("keeps a button the exact shape it shipped with", () => {
+    const untouched = settingsFor("button", {});
+    expect(untouched.paddingTop).toBe("12");
+    expect(untouched.paddingBottom).toBe("12");
+    expect(untouched.paddingLeft).toBe("24");
+    expect(untouched.paddingRight).toBe("24");
+
+    const styled = settingsFor("button", { paddingY: "6", paddingX: "40" });
+    expect(styled.paddingTop).toBe("6");
+    expect(styled.paddingLeft).toBe("40");
+    expect(styled.paddingX).toBeUndefined();
+    expect(styled.paddingY).toBeUndefined();
+  });
+
+  it("is idempotent — a second pass changes nothing", () => {
+    const once = settingsFor("image", { verticalMargin: "10", horizontalPadding: "5" });
+    expect(settingsFor("image", { ...once })).toEqual(once);
   });
 });

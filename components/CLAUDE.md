@@ -24,8 +24,12 @@ Tests: `npm run test:builder-ui`.
 - **Width tokens:** `label` (230px), `select-sm` / `select-md` (ch-based),
   `num` (digit-sized via `BuilderNumberSelectControl`), `align`, `color`,
   `check`, `text-md`, `full` (own line).
-- **H / V Margin:** always offer both (`horizontalMargin` /
-  `verticalMargin`), adjacent in the same strip — never a lone "Margin".
+- **Spacing is four sides:** `marginTop/Bottom/Left/Right` and
+  `paddingTop/Bottom/Left/Right`, in that order, adjacent in the same
+  strip — never a lone "Margin", never a vertical/horizontal pair. Build
+  them from `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES` (or the
+  `marginFields()` / `paddingFields()` helpers) so the names and the
+  order cannot drift.
 - **Labels never wrap** (`white-space: nowrap`); shorten text instead.
 - **No Advanced section** (master rule A0, 8/13). There is no
   `<details class="hanging-details">` in a module panel and no `advanced:`

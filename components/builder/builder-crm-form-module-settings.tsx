@@ -11,6 +11,7 @@ import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
+import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
 import {
   BuilderThemeColorSettingRow,
   type BuilderThemePalette
@@ -229,25 +230,18 @@ export function BuilderCrmFormModuleSettings({
             onChange={(alignment) => updateModuleSetting("alignment", alignment)}
           />
         </BuilderModuleField>
-        {/* W7 names, in marginFields() order. */}
-        <BuilderModuleField label="Vertical Margin" width="num">
-          <BuilderNumberSelectControl
-            fallback="0"
-            max={160}
-            min={0}
-            value={s.verticalMargin ?? "0"}
-            onChange={(verticalMargin) => updateModuleSetting("verticalMargin", verticalMargin)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Horizontal Margin" width="num">
-          <BuilderNumberSelectControl
-            fallback="0"
-            max={160}
-            min={0}
-            value={s.horizontalMargin ?? "0"}
-            onChange={(horizontalMargin) => updateModuleSetting("horizontalMargin", horizontalMargin)}
-          />
-        </BuilderModuleField>
+        {/* W7 names and side order, from the same table marginFields() uses. */}
+        {MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => (
+          <BuilderModuleField key={key} label={label} width="num">
+            <BuilderNumberSelectControl
+              fallback="0"
+              max={160}
+              min={0}
+              value={s[key] ?? s[legacy] ?? "0"}
+              onChange={(next) => updateModuleSetting(key, next)}
+            />
+          </BuilderModuleField>
+        ))}
       </BuilderModuleFieldStrip>
 
       {crmFormId ? (

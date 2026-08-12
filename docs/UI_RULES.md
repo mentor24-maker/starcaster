@@ -397,12 +397,20 @@ deliberately, and says so.*
 settings across the 38 modules are theme-backed — and therefore move to
 Advanced — is the follow-on pass the operator sequenced after this.
 
-- **W7.** The spacing controls are exactly these four, with these
-  names: **Vertical Margin**, **Horizontal Margin**, **Vertical
-  Padding**, **Horizontal Padding**. No "Pad V", no "V Margin", no
-  per-module invention. *(operator 8/10)* — **[eye]**
-  Helper: `spacingFields()` in the settings schema emits the pair(s) so
-  the labels cannot drift.
+- **W7.** Spacing is **four sides, never a pair**, on every object —
+  row, cell, module — for both quantities: **Top / Bottom / Left / Right
+  Margin** and **Top / Bottom / Left / Right Padding**, always in that
+  side order. No "Pad V", no "V Margin", no "Vertical Padding", no
+  per-module invention. *(operator 8/10, widened to four sides 8/11:
+  "standardize all objects on the Top/Bottom/Left/Right model")* —
+  **[auto]**
+  Helpers: `marginFields()` / `paddingFields()` in the settings schema,
+  both built from the `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES`
+  tables, so neither the names nor the order can drift.
+  *Rationale for four over two: a pair cannot express the common case.
+  A banner logo needed its top and bottom padding gone and its left
+  padding kept, and the single control that could reach it took all four
+  sides at once.*
 
 ## C — Controls: pick the right one
 
