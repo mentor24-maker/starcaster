@@ -107,6 +107,7 @@ describe("Site Search box — the operator's styles reach the page", () => {
     // that predates these controls renders exactly as it did before.
     for (const v of [
       "--site-search-field-basis",
+      "--site-search-field-shrink",
       "--site-search-btn-text",
       "--site-search-btn-size",
       "--site-search-btn-weight",
@@ -128,6 +129,18 @@ describe("Site Search box — the operator's styles reach the page", () => {
     const fluid = render("site-search", { fieldWidth: "0" });
     expect(fluid).not.toContain("--site-search-field-basis");
     expect(fluid).not.toContain("--site-search-field-grow");
+  });
+
+  it("stops a pinned field from shrinking, which is what wrapped the button", () => {
+    // Live bug: a module box shrink-wraps inside its column (a 713px column
+    // held a 302px box), so a field allowed to shrink collapsed to 302px and
+    // pushed the button onto its own line. Refusing to shrink makes the box
+    // grow instead. `max-width: 100%` in the stylesheet keeps that safe.
+    expect(render("site-search", { fieldWidth: "400" })).toContain("--site-search-field-shrink:0");
+    // An unpinned field must still shrink, or it cannot give way on a narrow
+    // column — so the variable is absent and the stylesheet's default of 1 wins.
+    expect(render("site-search", { fieldWidth: "0" })).not.toContain("--site-search-field-shrink");
+    expect(render("site-search")).not.toContain("--site-search-field-shrink");
   });
 
   it("sizes the field's height, and clamps a silly value", () => {
