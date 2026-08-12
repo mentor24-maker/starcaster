@@ -105,6 +105,9 @@ export function BuilderBlogSearchResultsModuleSettings({ module, onUpdateModule 
               control: "number",
               min: 60,
               max: 240,
+              // Fives, like every other width whose usual value is over 100px
+              // (operator, 2026-08-12). 181 options down to 37.
+              step: 5,
               fallback: "120",
               rendersVia: "BlogSearchResultsPreview"
             }

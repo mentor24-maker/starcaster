@@ -349,6 +349,114 @@ function checkMarginPairing(files) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// W8 — a size dropdown that spans past 100px counts in at least fives.
+//
+// Operator, 2026-08-12: "update any dropdown that lets you set the field width
+// of something that would typically be more than 100px to increment by 5px
+// instead of 1px." Site Search's Field Width ran 0–1200 in ones — 1,201
+// options, and scrolling it to 400 was the worst control in the panel.
+//
+// The rule is keyed on the KEY NAME rather than on the option count, because
+// a long list is not the problem by itself: `particleCount` (1–500) and
+// `spread` (0–180) are a count and an angle, where every value is meaningful.
+// Pixels above 100 are not — nobody sets a field width to the nearest pixel.
+//
+// Both steps that satisfy this today were set by hand, which is exactly why
+// the check exists: the next width control would have started at 1 again.
+// ---------------------------------------------------------------------------
+
+/** Keys that name a pixel measurement rather than a count, angle, or index. */
+const W8_SIZE_KEY = /(width|height|size)$/i;
+
+/** Where the schema declares fields — editors, plus shared field modules. */
+const W8_GLOB = /components\/builder\/.*\.tsx$/;
+
+/** Smallest acceptable step once a size dropdown reaches past 100px. */
+const W8_MIN_STEP = 5;
+
+// Every entry needs a reason. "It was already like that" is not a reason.
+const W8_ALLOW = new Map([]);
+
+/**
+ * Every `control: "number"` field in a source file, parsed from its OWN
+ * object literal.
+ *
+ * Brace-matched rather than regex-scanned: a flat regex reading forward from
+ * a `key:` happily walks past the end of its object and pairs a key with the
+ * next field's min/max. That is not hypothetical — it is how a first pass at
+ * this reported a Search Param with a range of 1–200.
+ */
+function w8NumberFields(src) {
+  const fields = [];
+  const marker = /control:\s*["']number["']/g;
+  let m;
+
+  while ((m = marker.exec(src))) {
+    // Walk back to the `{` that opens this field's object.
+    let depth = 0;
+    let start = -1;
+    for (let i = m.index; i >= 0; i--) {
+      const ch = src[i];
+      if (ch === '}') depth++;
+      else if (ch === '{') {
+        if (depth === 0) { start = i; break; }
+        depth--;
+      }
+    }
+    if (start < 0) continue;
+
+    // ...and forward to its matching `}`.
+    depth = 0;
+    let end = -1;
+    for (let i = start; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end < 0) continue;
+
+    const body = src.slice(start, end + 1);
+    const read = (name) => {
+      const hit = new RegExp(`\\b${name}:\\s*(-?\\d+)`).exec(body);
+      return hit ? Number(hit[1]) : null;
+    };
+    const key = /\bkey:\s*["']([\w-]+)["']/.exec(body)?.[1];
+    const max = read('max');
+    if (!key || max === null) continue;
+
+    fields.push({ key, min: read('min') ?? 0, max, step: read('step') ?? 1 });
+  }
+
+  return fields;
+}
+
+function checkSizeSelectStep(files) {
+  for (const file of files.filter((f) => W8_GLOB.test(f))) {
+    if (!fs.existsSync(file)) continue;
+
+    for (const field of w8NumberFields(fs.readFileSync(file, 'utf8'))) {
+      if (!W8_SIZE_KEY.test(field.key)) continue;
+      if (field.max <= 100) continue;
+      if (field.step >= W8_MIN_STEP) continue;
+      if (W8_ALLOW.has(field.key)) continue;
+
+      const options = Math.floor((field.max - field.min) / field.step) + 1;
+      failures.push(
+        `[W8] ${file} — \`${field.key}\` spans ${field.min}–${field.max}px in steps of ` +
+          `${field.step}, so its dropdown holds ${options} options.\n` +
+          `      A size past 100px counts in ${W8_MIN_STEP}s or coarser: add \`step: ${W8_MIN_STEP}\` ` +
+          `(that would be ${Math.floor((field.max - field.min) / W8_MIN_STEP) + 1} options).\n` +
+          `      Nobody sets a width to the nearest pixel. If this one genuinely needs every\n` +
+          `      value, add it to W8_ALLOW in this file with the reason.`
+      );
+    }
+  }
+}
+
 /** E6 — universal chrome is not duplicated inside a per-type editor. */
 function checkNoDuplicatedChrome(files) {
   for (const file of files.filter((f) => SETTINGS_GLOB.test(f))) {
@@ -527,6 +635,10 @@ function run({ all = false } = {}) {
     // controls; heading gained horizontal margin capability by operator
     // ruling (its Top/Bottom split satisfies the vertical side).
     checkMarginPairing(tracked);
+    // W8 is gated repo-wide from day one: the two controls that violated it
+    // were fixed in the same change that added this, so anything it catches
+    // is new.
+    checkSizeSelectStep(sh("git ls-files 'components/builder/*.tsx'").split('\n').filter(Boolean));
   } else {
     const files = stagedFiles();
     if (!files.length) return { failures, notes };
@@ -539,6 +651,7 @@ function run({ all = false } = {}) {
     checkMarginPairing(files);
     checkNoDuplicatedChrome(files);
     checkDialogWidths(files);
+    checkSizeSelectStep(files);
 
     if (isMerging()) {
       notes.push(
@@ -554,7 +667,10 @@ function run({ all = false } = {}) {
   return { failures, notes };
 }
 
-module.exports = { run };
+// w8NumberFields is exported for scripts/builder/uiDoctrineSizeStep.test.js —
+// the parser is the part with edge cases, and a checker nobody tests is a
+// checker that can silently stop catching things.
+module.exports = { run, w8NumberFields };
 
 if (require.main === module) {
   if (String(process.env.SKIP_CONVENTIONS || '') === '1') {

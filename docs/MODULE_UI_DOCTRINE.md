@@ -164,6 +164,39 @@ and the count hold by construction.
 **Checked by:** `check_ui_doctrine.cjs` fails a changed settings file that
 names some sides but not all four, or that still names the retired pair.
 
+#### W8. A size dropdown past 100px counts in fives `[auto]` *(added 2026-08-12)*
+
+A number control measuring **pixels** whose range goes above 100 declares
+`step: 5` or coarser. Sizes that stay small — a border, a font — keep their
+1px steps.
+
+*Why:* Site Search's Field Width ran 0–1200 in ones. That is 1,201 options,
+and getting to 400 meant scrolling past 399 numbers nobody would ever pick.
+The operator, 2026-08-12: "update any dropdown that lets you set the field
+width of something that would typically be more than 100px to increment by 5px
+instead of 1px."
+
+*Why keyed on the name, not the option count:* a long list is not the fault by
+itself. `particleCount` runs to 500 and `spread` to 180, and every value in
+both is meaningful — one is a count, the other an angle. Pixels above 100 are
+the case where the precision is noise, so the rule reads the key name
+(`*Width`, `*Height`, `*Size`) rather than the length of the list.
+
+*The trap that comes with it:* a stored value need not sit on the new grid. A
+width saved at 403 before the step changed would DISPLAY as 405 while 403 was
+still what the page used — the panel disagreeing with the live site and
+looking fine doing it. `resolveNumberSelectOptions` in
+`builder-inline-number-select.tsx` now inserts an off-grid value into the list
+and selects it, so raising a step can never quietly rewrite what an operator
+sees. This was already wrong for the six controls that stepped by more than
+one before this rule existed.
+
+**Checked by:** `check_ui_doctrine.cjs` (W8) fails a `control: "number"` field
+whose key ends in width/height/size, whose `max` is over 100, and whose step is
+under 5. A control that genuinely needs every value goes in `W8_ALLOW` with a
+reason. The field parser is covered by
+`scripts/builder/uiDoctrineSizeStep.test.js`.
+
 #### E5. Labels never wrap — shorten the text instead `[eye]`
 
 `white-space: nowrap` is set for you. "Border", not "Border thickness in
