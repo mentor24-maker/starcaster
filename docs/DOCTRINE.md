@@ -456,13 +456,22 @@ has on something he has already said yes to.
 
 **Standing instruction from the operator, 2026-08-12, given verbatim as a
 template.** When he has SQL to run, do not print the statements. Emit exactly
-this block and nothing else in its place:
+this block and nothing else in its place — spaced exactly as shown here:
+
 
 #################### RUN SQL IN SUPABASE ####################
 
 [github url]
 
 ##########################################################
+
+
+**Two blank lines above and below each banner** (operator, 2026-08-12: "add
+two paragraph breaks above and below each SQL set so they stand out clearly").
+A single break lets the banner sit flush against the sentence introducing it,
+and in a long reply the block stops reading as a block — which is the one
+thing it exists to do. Two breaks on each side, every time, including between
+two consecutive banners.
 
 **Emit it as plain text, not inside a code fence** (operator, 2026-08-12:
 "can you make that link clickable?"). A fenced block renders the URL as dead
