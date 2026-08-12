@@ -545,6 +545,14 @@ function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext
           themeColors={ctx.themeColors}
           value={value}
           onChange={(hex) => ctx.set(field.key, hex)}
+          /*
+           * Every colour in a panel can be emptied again (master rule C9,
+           * 2026-08-12). The picker has always supported a Clear button; the
+           * generator simply never passed one, so a colour could be set and
+           * never unset — "I can set it to any color I want. I just can't
+           * clear it." An empty value renders as transparent.
+           */
+          onClear={() => ctx.set(field.key, "")}
         />
       );
     case "align":

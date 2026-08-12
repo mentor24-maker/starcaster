@@ -2307,6 +2307,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    --------------------------------------------------------------------- */
 .builder-react-root .site-nav {
   gap: var(--site-nav-gap, 0px);
+  /* Cleared means CLEARED. The generated stylesheet falls back to an opaque
+     white pill here, which is what made the Background control one-way: you
+     could set a colour, and clearing it just uncovered the white again
+     (operator, 2026-08-12). A set background still wins — it arrives as an
+     inline `background:` declaration, which outranks this rule. */
+  background: var(--site-nav-bg, transparent);
   padding: var(--site-nav-padding, 8px 8px);
   border-radius: var(--site-nav-radius, 26px);
   border: var(--site-nav-border-width, 1px) var(--site-nav-border-style, solid)
@@ -2337,6 +2343,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .site-nav-link:hover,
 .builder-react-root .site-nav-link:focus-visible {
+  /* Same reason as the bar: the generated rule's hardcoded blue would show
+     through a hover fill the operator had cleared. */
+  background: var(--site-nav-link-hover-bg, transparent);
+  color: var(--site-nav-link-hover-color, var(--site-nav-link-color, #0a8fc4));
   text-decoration: var(--site-nav-link-hover-decoration, none);
   /* The lift moved to a hover-effect class; without this reset the
      generated rule would keep applying it under every other effect. */
@@ -2346,11 +2356,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* The current page reads as its own state now — it followed hover exactly,
    so there was no way to tell "you are here" from "your mouse is here". */
 .builder-react-root .site-nav-link-active {
-  color: var(--site-nav-link-active-color, var(--site-nav-link-hover-color, #0a8fc4));
+  /* Follows Text Color unless given its own. It used to end at a hardcoded
+     blue, so the page you were looking at was the one link that ignored the
+     Text Color control entirely. */
+  color: var(--site-nav-link-active-color, var(--site-nav-link-color, #0a8fc4));
   /* Falls back to the hover fill, which is what it silently WAS — but it is
      reachable now, so the one label that always looked different can be
      changed or switched off. */
-  background: var(--site-nav-link-active-bg, var(--site-nav-link-hover-bg, rgba(23, 183, 238, 0.12)));
+  background: var(--site-nav-link-active-bg, transparent);
   text-decoration: var(--site-nav-link-hover-decoration, none);
   transform: none;
 }
