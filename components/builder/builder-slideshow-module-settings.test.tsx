@@ -25,15 +25,29 @@ const SLIDES = JSON.stringify([
  * of `label.field` boxes that looked perfectly reasonable in TSX.
  */
 describe("Slideshow settings editor", () => {
-  it("is a two-column cards panel — settings left, slides right", () => {
+  it("renders only the right column — the left one is the module chrome", () => {
     const html = slideshowHtml({ slides: SLIDES });
     expect(html).toContain("builder-cards-panel");
-    expect(html).toContain("builder-cards-panel-settings");
     expect(html).toContain("builder-cards-panel-items");
-    // The settings half must come first, or the columns are the wrong way round.
-    expect(html.indexOf("builder-cards-panel-settings")).toBeLessThan(
-      html.indexOf("builder-cards-panel-items")
-    );
+    // Operator, 2026-08-12: Playback moved out of the left column, which left
+    // it holding nothing this component renders. A settings half here again
+    // means the split has drifted back.
+    expect(html).not.toContain("builder-cards-panel-settings");
+  });
+
+  it("puts Playback above the slides, both in the right column", () => {
+    const html = slideshowHtml({ slides: SLIDES });
+    const heading = html.indexOf("Slideshow</div>");
+    const playback = html.indexOf(">Playback<");
+    const slidesGroup = html.indexOf(">Slides<");
+    const grid = html.indexOf("builder-item-grid--slides");
+    expect(heading).toBeGreaterThan(-1);
+    expect(heading).toBeLessThan(playback);
+    expect(playback).toBeLessThan(slidesGroup);
+    expect(slidesGroup).toBeLessThan(grid);
+    // Playback's three fields sit in their own lattice column, not in the one
+    // that would swallow the item grid below them.
+    expect(html).toContain("builder-schema-panel-column");
   });
 
   it("puts the slides in a titled-column item grid, one row per slide", () => {

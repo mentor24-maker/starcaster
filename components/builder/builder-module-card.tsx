@@ -30,7 +30,8 @@ import {
   normalizeBuilderAssetUrl,
   formatHeadingContent,
   formatPlainTextContent,
-  formatRichTextContent
+  formatRichTextContent,
+  normalizeSignedOffsetValue
 } from "@/lib/builder-template";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -167,6 +168,20 @@ import {
  * selector list in `_builder-react-overrides.css`.
  */
 const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow"]);
+
+/**
+ * The two nudge controls, named and ordered like `MODULE_MARGIN_SIDES` so a
+ * strip that carries both reads as one list.
+ *
+ * The hint is a `title` rather than a line of text under the box: the same
+ * words `BuilderModuleOffsetFields` prints, but a chrome strip is one label
+ * track and one control track, and a caption in the control cell widens that
+ * track for every row above it.
+ */
+const MODULE_NUDGE_SIDES = [
+  { key: "horizontalOffset", label: "Horizontal Offset", hint: "Positive moves right; negative moves left." },
+  { key: "verticalOffset", label: "Vertical Offset", hint: "Positive moves up; negative moves down." }
+] as const;
 
 type BuilderModuleCardProps = {
   module: BuilderTemplateModule;
@@ -2996,6 +3011,7 @@ export function BuilderModuleCard({
     const mobileAlignment = module.settings.mobileAlignment ?? "";
     const isVideoModule = module.type === "video" || (module.type === "image" && module.settings.variant === "video");
     const isStandardImage = module.type === "image" && !isVideoModule;
+    const isSlideshowModule = module.type === "slideshow";
     const isFloatingImage = module.type === "floating-image";
     const isReminderModule = module.type === "reminder";
     const isTableModule = module.type === "table";
@@ -3141,6 +3157,41 @@ export function BuilderModuleCard({
               />
             </BuilderModuleField>
           ))}
+          {/* The nudge, in the strip rather than beside it (operator,
+              2026-08-12: "Add Vertical and Horizontal Offset to the left
+              column"). `BuilderModuleOffsetFields` — what the image module
+              uses — is its own grid, so dropped into a two-column editor its
+              labels and inputs started at their own x-positions, a stagger
+              W0 exists to stop and `check_panels` could not see because that
+              block sits outside every measured group. Inside the strip the
+              two fields are `display: contents` like every other chrome
+              field, so they share the one label track by construction.
+
+              Last on the strip by D9: a nudge is the finest adjustment here,
+              after the margins that move the whole module. */}
+          {isSlideshowModule
+            ? MODULE_NUDGE_SIDES.map(({ key, label, hint }) => (
+                <BuilderModuleField key={key} label={label} width="num">
+                  <input
+                    type="number"
+                    min={-500}
+                    max={500}
+                    step={1}
+                    title={hint}
+                    value={module.settings[key] ?? "0"}
+                    onChange={(event) =>
+                      onUpdateModule((current) => ({
+                        ...current,
+                        settings: {
+                          ...current.settings,
+                          [key]: normalizeSignedOffsetValue(event.target.value, "0")
+                        }
+                      }))
+                    }
+                  />
+                </BuilderModuleField>
+              ))
+            : null}
           {module.type === "text" ? (
             <BuilderModuleField label="Width" width="select-sm">
               <select
@@ -3495,6 +3546,10 @@ export function BuilderModuleCard({
               margins but whose own editor never offered them. */}
           {needsRestoredChrome ? sharedModuleChrome : null}
 
+          {/* Image keeps the standalone block — its editor is one full-width
+              column, where a captioned row costs nothing. Slideshow's two
+              nudge fields live in the chrome strip instead; see
+              MODULE_NUDGE_SIDES. */}
           {isStandardImage ? (
             <BuilderModuleOffsetFields
               horizontalOffset={module.settings.horizontalOffset ?? "0"}
@@ -3843,6 +3898,12 @@ export function BuilderModuleCard({
           module.type !== "button" &&
           module.type !== "heading" &&
           module.type !== "blog-post-list" &&
+          /* Nothing reads `module.text` on a slideshow — `SlideshowPreview`
+             renders from `settings.slides` alone — so this was an empty box
+             sitting under the Settings column with no effect on anything
+             (doctrine E7). Excluding it does not touch stored text; it just
+             stops offering a control that never did anything. */
+          module.type !== "slideshow" &&
           module.type !== "admin-nav-link" ? (
             <label className="field">
               <span>Content</span>

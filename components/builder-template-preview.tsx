@@ -5188,7 +5188,16 @@ function SlideshowPreview({
     return <div className="builder-preview-slideshow builder-preview-slideshow-empty">Add slides in the editor</div>;
   }
 
-  const frameStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
+  // The nudge (operator, 2026-08-12), the same two settings and the same
+  // helper the image and heading modules use, so an operator learns it once.
+  // `position: relative` only when there is a transform to apply: an
+  // unconditional one would become the containing block for any
+  // fixed-position overlay inside the slideshow.
+  const nudgeTransform = getModuleNudgeTransform(module.settings);
+  const frameStyle: CSSProperties = {
+    ...(heightPx > 0 ? { height: `${heightPx}px` } : {}),
+    ...(nudgeTransform ? { transform: nudgeTransform, position: "relative" as const } : {})
+  };
   return (
     <div
       className={`builder-preview-slideshow builder-preview-slideshow-${transition}`}

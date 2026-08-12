@@ -34,12 +34,19 @@ type BuilderSlideshowModuleSettingsProps = {
 /**
  * Settings editor for the Slideshow module.
  *
- * Two equal columns (operator, 2026-08-12), the same shape as Feature Cards:
- * every module-wide setting on the left, nothing but the slide list on the
- * right. Before this the whole editor was a single stacked column of
- * `label.field` boxes — the shape W0 is retiring — so a slide's image URL and
- * its alt text each ran the entire width of the panel, roughly 2,000px of
- * input for a field nobody types into by hand.
+ * Two equal columns (operator, 2026-08-12), the same shape as Feature Cards.
+ * Before this the whole editor was a single stacked column of `label.field`
+ * boxes — the shape W0 is retiring — so a slide's image URL and its alt text
+ * each ran the entire width of the panel, roughly 2,000px of input for a field
+ * nobody types into by hand.
+ *
+ * The split moved once, the same day (operator: "move Playback section into
+ * the second column"). The left column is now the module CHROME and nothing
+ * else — Label, Background, Alignment, the four margins and the two offsets,
+ * all of it rendered by `builder-module-card.tsx` rather than by this file —
+ * and the right column holds everything that is specifically a slideshow:
+ * Playback, then the slides. So this component renders only the right half;
+ * the left half fills itself.
  *
  * That is W9: no field spans its container. The slide rows are a titled-column
  * item grid (L6), so each field is bounded by its column, and the shared cap
@@ -82,54 +89,59 @@ export function BuilderSlideshowModuleSettings({
 
   return (
     <div className="builder-cards-panel">
-      {/* LEFT — everything that applies to the whole slideshow.
-          `builder-schema-panel-column` is the schema generator's own column
-          class, borrowed rather than reinvented: inside it a field strip
-          becomes one control per row with a shared label track, which is what
-          keeps a narrow column from running its fields off the edge. */}
-      <div className="builder-cards-panel-settings builder-schema-panel-column">
-        <div className="builder-schema-group-title">Playback</div>
-        <BuilderModuleFieldStrip>
-          <BuilderModuleField label="Transition" width="select-md">
-            <select
-              value={module.settings.transition === "fade" ? "fade" : "slide"}
-              onChange={(event) => set("transition", event.target.value)}
-            >
-              <option value="slide">Slide</option>
-              <option value="fade">Fade</option>
-            </select>
-          </BuilderModuleField>
-          <BuilderModuleField label="Interval (ms)" width="num">
-            <BuilderNumberSelectControl
-              value={module.settings.intervalMs ?? "5000"}
-              min={1000}
-              max={20000}
-              step={500}
-              fallback="5000"
-              onChange={(intervalMs) => set("intervalMs", intervalMs)}
-            />
-          </BuilderModuleField>
-          {/* 0 means "auto" — the slideshow takes its height from the image. */}
-          <BuilderModuleField label="Height (0 = auto)" width="num">
-            <BuilderNumberSelectControl
-              value={module.settings.heightPx || "0"}
-              min={0}
-              max={900}
-              step={20}
-              fallback="0"
-              onChange={(heightPx) => set("heightPx", heightPx === "0" ? "" : heightPx)}
-            />
-          </BuilderModuleField>
-        </BuilderModuleFieldStrip>
-      </div>
-
-      {/* RIGHT — the slides themselves. Titled-column item grid (UI_RULES L6):
-          the image picker and the alt text each get a column, so neither one
-          can stretch the way it did as a stacked `label.field`. */}
+      {/* RIGHT — everything that is specifically a slideshow. The left column
+          is the module chrome, which this file does not render. */}
       <div className="builder-cards-panel-items">
         {/* A column name, one step larger than a group title — it names the
             whole right-hand column, the way "Settings" names the left. */}
-        <div className="builder-cards-panel-heading">Slides</div>
+        <div className="builder-cards-panel-heading">Slideshow</div>
+
+        {/* The Playback fields get their own `builder-schema-panel-column` —
+            the schema generator's column class, borrowed rather than
+            reinvented: inside it a field strip becomes one control per row
+            with a shared label track. It wraps ONLY these three, not the whole
+            half, because that class is a two-track grid and the item grid
+            below would become a cell of it. */}
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Playback</div>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Transition" width="select-md">
+              <select
+                value={module.settings.transition === "fade" ? "fade" : "slide"}
+                onChange={(event) => set("transition", event.target.value)}
+              >
+                <option value="slide">Slide</option>
+                <option value="fade">Fade</option>
+              </select>
+            </BuilderModuleField>
+            <BuilderModuleField label="Interval (ms)" width="num">
+              <BuilderNumberSelectControl
+                value={module.settings.intervalMs ?? "5000"}
+                min={1000}
+                max={20000}
+                step={500}
+                fallback="5000"
+                onChange={(intervalMs) => set("intervalMs", intervalMs)}
+              />
+            </BuilderModuleField>
+            {/* 0 means "auto" — the slideshow takes its height from the image. */}
+            <BuilderModuleField label="Height (0 = auto)" width="num">
+              <BuilderNumberSelectControl
+                value={module.settings.heightPx || "0"}
+                min={0}
+                max={900}
+                step={20}
+                fallback="0"
+                onChange={(heightPx) => set("heightPx", heightPx === "0" ? "" : heightPx)}
+              />
+            </BuilderModuleField>
+          </BuilderModuleFieldStrip>
+        </div>
+
+        {/* The slides. Titled-column item grid (UI_RULES L6): the image picker
+            and the alt text each get a column, so neither one can stretch the
+            way it did as a stacked `label.field`. */}
+        <div className="builder-schema-group-title">Slides</div>
         <div className="builder-item-grid builder-item-grid--slides">
           <span className="builder-item-grid-header">Image</span>
           <span className="builder-item-grid-header">Alt text</span>
