@@ -122,7 +122,12 @@ function measure(page, nonStretch) {
       return r.width;
     }
 
-    const panels = [...document.querySelectorAll('.builder-module-editor.is-lattice')];
+    // Every lattice surface, not just module panels: the row (section) editor
+    // joined on 2026-08-13 and is measured by exactly the same rule. Selecting
+    // on `.is-lattice` rather than a specific container is what makes the next
+    // surface automatic instead of another thing to remember.
+    const panels = [...document.querySelectorAll('.is-lattice')]
+      .filter((el) => !el.parentElement?.closest('.is-lattice'));
     return panels.flatMap((panel, index) => {
       // W0 is scoped PER COLUMN (operator 8/13): each column sizes to its own
       // longest label and longest control. Checking per panel would demand
@@ -187,7 +192,16 @@ function measure(page, nonStretch) {
             + parseFloat(getComputedStyle(label).paddingLeft || '0') - or.left),
           fieldX: Math.round(cr.left - or.left),
           fieldW: Math.round(cr.width),
+          // Classify by the CONTROL, not only by a width-token class. Legacy
+          // BuilderSettingRow pairs (the row editor) carry no `--check`
+          // modifier, so a checkbox and a radio pair were being measured as
+          // stretchable and reported as "2 different widths" for doing
+          // exactly what W0's exception tells them to do: keep their natural
+          // size at the start of the slot.
           stretchable: !exempt.includes(kind)
+            && !control.querySelector(':scope > input[type="checkbox"], :scope > input[type="radio"]')
+            && !control.querySelector(':scope > .builder-radio-group')
+            && !control.querySelector(':scope > .builder-theme-color-field, :scope > .builder-color-swatch')
         };
       }).filter(Boolean);
       return { index, group: groupName, fields };

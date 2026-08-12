@@ -2297,16 +2297,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
-/* The row panel's number boxes (the two Offsets) are typed, not picked from a
-   list, so they are plain inputs among a grid of selects. Sized to match those
-   selects rather than stretching to fill the cell, which made a 3-character
-   value sit in a 500px box. */
-.builder-react-root .builder-section-settings-grid .builder-setting-value > input[type="number"] {
-  width: 5.5rem;
-}
-
 /* Column Widths: one small box per column, side by side, sized so a three
-   column row still fits the settings grid's third of the panel. */
+   column row still fits its axis of the lattice. The lattice's own
+   `.builder-setting-value > input` cap does not reach these — they sit one
+   level down, inside this wrapper. */
 .builder-react-root .builder-column-width-fields {
   display: flex;
   align-items: center;
@@ -2891,4 +2885,43 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    */
   width: min-content;
   min-width: 100%;
+}
+
+/*
+ * Row (section) editors use `.builder-setting-row`, which has no width-token
+ * modifier class — so W0's "a control that cannot stretch sits at the START
+ * of its slot" rule had nothing to hook onto here. A checkbox and a radio
+ * pair were being stretched across the field track and ending up adrift at
+ * its right-hand end, a long way from the label they belong to (L5's
+ * neighbourhood, if not its letter).
+ *
+ * `:has()` reads the control instead of a class, which is what these rows
+ * need: the value cell shrinks to its content and stays at the start, while
+ * every select and number box beside it still fills the shared track.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-setting-value:has(> input[type="checkbox"]),
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-setting-value:has(> .builder-radio-group) {
+  justify-self: start;
+  width: auto;
+}
+
+/*
+ * The radio pair itself: input left, label right, options stacked — the
+ * house form standard (src/css/CLAUDE.md). It was rendering as a bare
+ * inline run, so the dots floated away from their words and "Public" sat
+ * under a radio belonging to nothing in particular.
+ */
+.builder-react-root .is-lattice .builder-radio-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1, 4px);
+}
+
+.builder-react-root .is-lattice .builder-radio-group > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  margin: 0;
 }
