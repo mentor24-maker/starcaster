@@ -1,6 +1,7 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
+  spacingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { type BuilderThemePalette } from "./builder-theme-color-field";
@@ -85,7 +86,16 @@ export function BuilderImageModuleSettings({
               options: SIZE_OPTIONS.map((value) => ({ value, label: `${value}%` })),
               rendersVia: "getImageModuleStyle"
             }
-          ]
+          ],
+          // The margin half of W7 comes from the shared chrome (E6 — never a
+          // second copy). Padding had no control at all until 2026-08-11, so
+          // space between the frame and the picture was unreachable: the
+          // operator asked to "control all margin and padding around image
+          // objects" and only half of that existed.
+          spacingFields("getImageModuleStyle", {
+            verticalPadding: "verticalPadding",
+            horizontalPadding: "horizontalPadding"
+          })
         ]
       },
       {
