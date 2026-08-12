@@ -2178,8 +2178,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid--cards {
   grid-template-columns: minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
 }
+/* The Icon column was 6ch when it held a one-character text box. It is a
+   dropdown now — glyph plus name plus the browser's arrow — so the track is
+   sized to show the glyph and enough of the name to read it. The longest
+   names clip rather than widening the column: the glyph leads every option,
+   and it is the part being chosen. */
 .builder-react-root .builder-item-grid--cards.builder-item-grid--cards-icons {
-  grid-template-columns: 6ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+  grid-template-columns: 14ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
+}
+.builder-react-root .builder-item-grid-icon-select {
+  width: 100%;
+  min-width: 0;
 }
 /* Slideshow: a slide is an image and its alt text, nothing else, so both fit
    the primary row and there is no sub-row. The image column is wider because
