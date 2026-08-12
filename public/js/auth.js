@@ -7,12 +7,18 @@ window.App = window.App || {};
 // variable and written back onto App.auth AFTER the object is initialised below.
 App.auth = App.auth || {};
 let _detectedProjectInviteToken = null;
+let _detectedSignupInviteToken = null;
 (function detectProjectInviteHash() {
   try {
     const hash = String(window.location.hash || '');
     const m = hash.match(/[#&]project-invite=([^&]+)/);
-    if (m) {
-      _detectedProjectInviteToken = decodeURIComponent(m[1]);
+    if (m) _detectedProjectInviteToken = decodeURIComponent(m[1]);
+    // A sign-up invitation: the only way to reach the "create account" form
+    // once invitations are switched on. Different token, different table, and
+    // consumed at registration rather than after it.
+    const s = hash.match(/[#&]signup-invite=([^&]+)/);
+    if (s) _detectedSignupInviteToken = decodeURIComponent(s[1]);
+    if (m || s) {
       // Clean the token from the address bar so it isn't bookmarked or shared
       const clean = window.location.pathname + window.location.search;
       window.history.replaceState(null, '', clean);
@@ -32,6 +38,10 @@ App.auth = {
   // Preserved from detectProjectInviteHash above (the App.auth = {} below would have
   // wiped it if we stored directly on App.auth before the reassignment).
   _pendingProjectInviteToken: _detectedProjectInviteToken,
+  _signupInviteToken: _detectedSignupInviteToken,
+  // Null until /api/auth/registration-mode answers. Treated as "open" until
+  // then so a failed check can never hide the form from a legitimate invitee.
+  _registrationInviteOnly: null,
 };
 
 App.auth._els = {
@@ -113,6 +123,59 @@ App.auth._setMode = function _setMode(modeInput) {
   App.auth._setMessage('');
 };
 
+/**
+ * Decide whether the "Register" tab is offered at all, and set up the form
+ * when the visitor arrived on an invitation link.
+ *
+ * Fails open on purpose: if the mode check or the token check errors, the
+ * form stays as it was rather than vanishing. A gate that hides itself when
+ * the network hiccups turns a bad connection into "I can't sign up".
+ */
+App.auth._applyRegistrationMode = async function _applyRegistrationMode() {
+  const { authShowRegister } = App.auth._els;
+  const token = String(App.auth._signupInviteToken || '').trim();
+
+  try {
+    const res = await App.api('/api/auth/registration-mode', { method: 'GET' });
+    const data = res.data || res;
+    App.auth._registrationInviteOnly = Boolean(data.inviteOnly);
+  } catch (_) {
+    App.auth._registrationInviteOnly = null;
+  }
+
+  const inviteOnly = App.auth._registrationInviteOnly === true;
+  if (authShowRegister) authShowRegister.classList.toggle('hidden', inviteOnly && !token);
+
+  if (!token) return;
+
+  // Confirm the link before showing the form, so a dead or expired link says
+  // so immediately instead of after they have typed everything in.
+  try {
+    const res = await App.api(`/api/invitations/verify?token=${encodeURIComponent(token)}`, { method: 'GET' });
+    const invite = res.data || res;
+    const form = App.auth._els.authRegisterForm;
+    const emailInput = form ? form.querySelector('input[name="email"]') : null;
+    if (emailInput && invite.email) {
+      // The invitation is bound to this address server-side; letting them
+      // change it here would only produce a confusing rejection.
+      emailInput.value = invite.email;
+      emailInput.readOnly = true;
+    }
+    App.auth._setMode('register');
+    App.auth._setMessage(
+      invite.projectName
+        ? `You've been invited to ${invite.projectName}. Choose a password to finish.`
+        : 'Choose a password to finish setting up your account.',
+      false
+    );
+  } catch (err) {
+    App.auth._signupInviteToken = null;
+    if (authShowRegister) authShowRegister.classList.toggle('hidden', inviteOnly);
+    App.auth._setMode('login');
+    App.auth._setMessage(err.message || 'This invitation link is not valid.', true);
+  }
+};
+
 App.auth._showLanding = function _showLanding(mode = 'login') {
   const { appShell, authLanding, authLogoutButton, authWelcomeName } = App.auth._els;
   if (appShell) appShell.classList.add('hidden');
@@ -120,6 +183,12 @@ App.auth._showLanding = function _showLanding(mode = 'login') {
   if (authLogoutButton) authLogoutButton.classList.add('hidden');
   if (authWelcomeName) authWelcomeName.textContent = '';
   App.auth._setMode(mode);
+  // Once per visit: the answer cannot change while the page is open, and
+  // re-running it would stamp over a message the visitor is reading.
+  if (!App.auth._registrationModeApplied) {
+    App.auth._registrationModeApplied = true;
+    App.auth._applyRegistrationMode().catch(() => {});
+  }
 };
 
 App.auth._showApp = function _showApp() {
@@ -271,6 +340,8 @@ App.auth._register = async function _register(payload) {
     email: String(payload?.email || '').trim(),
     password: String(payload?.password || ''),
   };
+  const inviteToken = String(App.auth._signupInviteToken || '').trim();
+  if (inviteToken) body.inviteToken = inviteToken;
   const res = await App.api('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(body),
