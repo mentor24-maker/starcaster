@@ -44,6 +44,7 @@ const settings    = require('./settings');
 const acquire     = require('./acquire');
 const promoLeads  = require('./promoLeads');
 const assets      = require('./assets');
+const assetRenditions = require('./assetRenditions');
 const channels    = require('./channels');
 const contacts    = require('./contacts');
 const activityLog = require('./activityLog');
@@ -78,6 +79,10 @@ const ROUTE_MODULES = [
   settings,
   acquire,
   promoLeads,
+  // Ahead of `assets` on purpose: both claim '/api/assets/*'. `assets` falls
+  // through today on paths it does not recognise, but the day it grows a
+  // catch-all the sweep endpoints would start failing with nothing to point at.
+  assetRenditions,
   assets,
   associations,
   channels,
