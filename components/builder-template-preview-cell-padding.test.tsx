@@ -3,70 +3,110 @@ import { describe, expect, it } from "vitest";
 import { createDefaultBackgroundSettings, normalizeLayoutSections } from "@/lib/builder-template";
 import { BuilderTemplatePreview } from "./builder-template-preview";
 
-/**
- * Cell padding and radius reach the page as VARIABLES as well as inline
- * properties, which is what lets the narrow-screen rules honour them.
- *
- * Operator, 2026-08-12: "The buttons in the right column of the menu row are
- * set to have cellpadding of 4, but it is clearly much larger than that."
- * Below 560px the generated stylesheet forced `padding: 12px !important` on
- * every cell — and an `!important` in a stylesheet beats an ordinary inline
- * style, so the control did nothing at all on a phone.
- *
- * These assert the variables exist, because the fix in
- * _builder-react-overrides.css has nothing to read without them. The widths
- * themselves are a browser measurement (there is no layout in jsdom) — see
- * the numbers recorded in that CSS comment.
- */
-
-const NAV = JSON.stringify([{ id: "h", label: "Home", href: "/" }]);
-
-function render(cellPadding: Record<string, string>, extras: Record<string, unknown> = {}) {
+function renderRows(rows: unknown[]) {
   return renderToStaticMarkup(
     <BuilderTemplatePreview
-      layoutSections={normalizeLayoutSections([
-        {
-          id: "menu-row",
-          layout: "four-two",
-          cellPadding,
-          modules: [
-            { id: "nav", type: "navigation", column: "left", text: "", settings: { navItems: NAV } },
-            { id: "b1", type: "button", column: "right", text: "Book Now", settings: {} },
-          ],
-          ...extras,
-        },
-      ])}
+      layoutSections={normalizeLayoutSections(rows)}
       pageBackground={createDefaultBackgroundSettings()}
       showShell={false}
     />
   );
 }
 
-describe("a cell publishes its own padding, so no breakpoint can replace it", () => {
-  it("publishes the number the operator set", () => {
-    expect(render({ left: "4", right: "4" })).toContain("--builder-cell-padding:4px");
+/** A banner cell holding a logo — the shape that produced the split. */
+function bannerRow(cellRecords: Record<string, unknown>) {
+  return {
+    id: "banner",
+    title: "Menu Banner",
+    layout: "two-column",
+    modules: [
+      { id: "logo", type: "image", column: "left", settings: { url: "https://example.com/logo.png" } },
+      { id: "nav", type: "text", column: "right", text: "Menu" }
+    ],
+    ...cellRecords
+  };
+}
+
+describe("cell padding on the rendered page", () => {
+  it("keeps a row saved before the split rendering exactly as it did", () => {
+    const html = renderRows([bannerRow({ cellPadding: { left: "18", right: "18" } })]);
+
+    expect(html).toContain("padding:18px 18px");
+  });
+
+  it("drops the top and bottom without losing the left and right", () => {
+    const html = renderRows([
+      bannerRow({ cellPadding: { left: "18", right: "18" }, cellVerticalPadding: { left: "0" } })
+    ]);
+
+    expect(html).toContain("padding:0px 18px");
+  });
+
+  it("drops the left and right without losing the top and bottom", () => {
+    const html = renderRows([
+      bannerRow({ cellPadding: { left: "18", right: "18" }, cellHorizontalPadding: { left: "0" } })
+    ]);
+
+    expect(html).toContain("padding:18px 0px");
+  });
+});
+
+/**
+ * The cell publishes its numbers so no breakpoint can replace them.
+ *
+ * Operator, 2026-08-12: "set to have cellpadding of 4, but it is clearly much
+ * larger than that." Measured: 4px at 1440 and 900, but 12px at 560 and 480,
+ * where the generated stylesheet forces `padding: 12px !important` on every
+ * cell. An `!important` in a stylesheet beats an ordinary inline style, so
+ * below that width the control did nothing — on the live site too.
+ *
+ * The widths themselves are a browser measurement (jsdom has no layout);
+ * these assert the variables the fix in _builder-react-overrides.css reads,
+ * without which it has nothing to honour.
+ */
+describe("a cell publishes its padding, so no breakpoint can replace it", () => {
+  it("publishes both axes as one box value", () => {
+    const html = renderRows([bannerRow({ cellPadding: { left: "4", right: "4" } })]);
+
+    expect(html).toContain("--builder-cell-padding-box:4px 4px");
   });
 
   it("publishes zero as zero rather than leaving the variable unset", () => {
     // Unset was the bug: the narrow-screen rule had nothing to read and fell
-    // back to its hardcoded 12px.
-    expect(render({ left: "0", right: "0" })).toContain("--builder-cell-padding:0px");
+    // back to its own hardcoded 12px.
+    const html = renderRows([bannerRow({ cellPadding: { left: "0", right: "0" } })]);
+
+    expect(html).toContain("--builder-cell-padding-box:0px 0px");
+  });
+
+  it("keeps the two axes apart in the published value", () => {
+    const html = renderRows([
+      bannerRow({ cellPadding: { left: "18", right: "18" }, cellVerticalPadding: { left: "0" } })
+    ]);
+
+    expect(html).toContain("--builder-cell-padding-box:0px 18px");
+  });
+
+  it("agrees with the inline padding it sets — the two cannot drift", () => {
+    const html = renderRows([bannerRow({ cellPadding: { left: "7", right: "7" } })]);
+
+    expect(html).toContain("--builder-cell-padding-box:7px 7px");
+    expect(html).toContain("padding:7px 7px");
   });
 
   it("publishes the radius the same way", () => {
-    const html = render({ left: "4", right: "4" }, { cellBorderRadius: { left: "24", right: "24" } });
+    const html = renderRows([
+      bannerRow({ cellPadding: { left: "4", right: "4" }, cellBorderRadius: { left: "24", right: "24" } })
+    ]);
+
     expect(html).toContain("--builder-cell-radius:24px");
   });
 
-  it("agrees with the inline padding it sets — the two can never drift", () => {
-    const html = render({ left: "7", right: "7" });
-    expect(html).toContain("--builder-cell-padding:7px");
-    expect(html).toContain("padding:7px");
-  });
+  it("leaves PR 176's horizontal-axis variable alone", () => {
+    // Its consumer is a margin-inline rule on an overlay slot; the box value
+    // would be the wrong number there.
+    const html = renderRows([bannerRow({ cellPadding: { left: "9", right: "9" } })]);
 
-  it("still keeps a menu cell flush, by its own value", () => {
-    // The left column is navigation-only, so it publishes 0px rather than
-    // relying on a second rule to contradict the first.
-    expect(render({ left: "18", right: "18" })).toContain("--builder-cell-padding:0px");
+    expect(html).toContain("--builder-cell-padding:9px");
   });
 });

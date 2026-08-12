@@ -12,7 +12,6 @@ type BuilderCellStyleSettingsProps = {
   section: BuilderTemplateSection;
   editorDevice: "browser" | "mobile";
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
-  onUpdateCellPadding: (column: string, value: string) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -36,7 +35,6 @@ export function BuilderCellStyleSettings({
   section,
   editorDevice,
   onUpdateCellBackground,
-  onUpdateCellPadding,
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
@@ -68,6 +66,9 @@ export function BuilderCellStyleSettings({
   const hAlign = getCellExtra(column, "cellHAlign", "left");
   const vAlign = getCellExtra(column, "cellVAlign", "top");
   const borderDisabled = borderStyle === "none";
+  // What both padding axes read when neither has been set: the one number the
+  // cell used to carry for all four sides.
+  const legacyPadding = section.cellPadding?.[column] ?? "18";
 
   return (
     <div className="builder-cell-style-settings">
@@ -146,13 +147,29 @@ export function BuilderCellStyleSettings({
 
       <div className="builder-cell-style-group">
         <div className="builder-cell-style-group-label">Padding</div>
-        <BuilderSettingRow label="Size" fullWidth>
+        {/* W7: the two padding controls carry the only names they may carry,
+            and they replace a single "Size" that moved all four sides at once.
+            The dead end that produced the split: a banner logo sat 18px lower
+            than the menu beside it, and the only way to close that gap also
+            threw away the 18px holding the logo off the left edge (operator,
+            2026-08-11). Both fall back to the legacy all-sides value, so a
+            cell nobody has touched since reads exactly as it did. */}
+        <BuilderSettingRow label="Vertical Padding" fullWidth>
           <BuilderNumberSelectControl
-            value={section.cellPadding[column] ?? "18"}
+            value={getCellExtra(column, "cellVerticalPadding", legacyPadding)}
             min={0}
             max={50}
             fallback="18"
-            onChange={(value) => onUpdateCellPadding(column, value)}
+            onChange={(value) => onSetCellExtra(column, "cellVerticalPadding", value)}
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Horizontal Padding" fullWidth>
+          <BuilderNumberSelectControl
+            value={getCellExtra(column, "cellHorizontalPadding", legacyPadding)}
+            min={0}
+            max={50}
+            fallback="18"
+            onChange={(value) => onSetCellExtra(column, "cellHorizontalPadding", value)}
           />
         </BuilderSettingRow>
         <BuilderSettingRow label="Vertical Margin" fullWidth>

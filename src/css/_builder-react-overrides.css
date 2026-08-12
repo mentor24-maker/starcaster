@@ -2946,19 +2946,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    cannot reach is not a default, it is an unremovable value.
 
    These restate the same selectors reading the cell's own numbers, which
-   builder-template-preview.tsx now always publishes. The 12px/16px stay
+   builder-template-preview.tsx now always publishes as
+   `--builder-cell-padding-box`. Note that is a DIFFERENT variable from
+   `--builder-cell-padding`, which since the vertical/horizontal split
+   (PR 176) carries the horizontal axis alone for an overlay-slot rule. The 12px/16px stay
    as var() fallbacks, so anything that renders without the variables is
    unchanged. Both rules must keep `!important`: they are answering one.
    --------------------------------------------------------------------- */
 @media (max-width: 560px) {
   .builder-react-root .builder-preview-column {
-    padding: var(--builder-cell-padding, 12px) !important;
+    padding: var(--builder-cell-padding-box, 12px) !important;
     border-radius: var(--builder-cell-radius, 16px) !important;
   }
 }
 
 .builder-react-root .builder-preview-device-mobile .builder-preview-column {
-  padding: var(--builder-cell-padding, 12px) !important;
+  padding: var(--builder-cell-padding-box, 12px) !important;
   border-radius: var(--builder-cell-radius, 16px) !important;
 }
 

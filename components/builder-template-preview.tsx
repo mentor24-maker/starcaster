@@ -1548,7 +1548,15 @@ function BuilderSectionPreview({
         const columnModules = section.modules.filter((module) => module.column === columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
-        const padding = section.cellPadding?.[columnKey] ?? "0";
+        const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
+        const verticalPadding = section.cellVerticalPadding?.[columnKey] ?? legacyPadding;
+        const horizontalPadding = section.cellHorizontalPadding?.[columnKey] ?? legacyPadding;
+        // `--builder-cell-padding` feeds one rule only, and that rule is
+        // `margin-inline` — a full-bleed overlay slot reaching back out
+        // sideways (_builder-react.css). So it takes the HORIZONTAL axis;
+        // handing it the vertical one would pull the slot out by the wrong
+        // number the moment the two differ.
+        const padding = horizontalPadding;
         const verticalMargin = section.cellVerticalMargin?.[columnKey] ?? "0";
         const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
         const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
@@ -1557,17 +1565,33 @@ function BuilderSectionPreview({
           columnModules.length > 0 &&
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
         const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
-        // One answer each, used by the inline property AND by the variable the
-        // narrow-screen rules read, so the two can never drift apart.
+        /*
+         * The cell's own numbers, as one answer each, used BOTH by the inline
+         * properties below and by the variables the narrow-screen rules read.
+         *
+         * Operator, 2026-08-12: a cell set to 4 rendered 12 below 560px,
+         * because the generated stylesheet compacts every cell there with
+         * `padding: 12px !important` — and an `!important` in a stylesheet
+         * outranks an ordinary inline style, so the setting was never in the
+         * argument. Publishing the values lets those rules honour them
+         * instead of replacing them (see _builder-react-overrides.css).
+         *
+         * Deliberately NOT reusing `--builder-cell-padding`: since the
+         * vertical/horizontal split (PR 176) that one carries the horizontal
+         * axis alone, for a `margin-inline` rule that reaches an overlay slot
+         * back out sideways. It would be the wrong number here.
+         */
         const effectiveCellPadding =
-          isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${padding}px`;
+          isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? "0px"
+            : `${verticalPadding}px ${horizontalPadding}px`;
         const effectiveCellRadius =
           isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
 
         // Custom properties are not in the CSSProperties type, so they are
-        // built once and cast, rather than sprinkling casts through the block.
+        // built once and cast rather than sprinkling casts through the block.
         const cellVariables = {
-          "--builder-cell-padding": effectiveCellPadding,
+          "--builder-cell-padding-box": effectiveCellPadding,
           "--builder-cell-radius": effectiveCellRadius,
         } as CSSProperties;
 
@@ -1579,16 +1603,9 @@ function BuilderSectionPreview({
           ...(isPageOverlayFlowColumn || isSectionOverlayColumn ? {} : getVerticalMarginStyle(verticalMargin)),
           ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
           ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
-          /*
-           * The cell's own numbers, published as variables so the narrow-screen
-           * rules can honour them instead of replacing them.
-           *
-           * These used to be emitted only when padding was above zero, which
-           * left the breakpoint rules nothing to read — see
-           * _builder-react-overrides.css. Always emitting them is what lets a
-           * cell set to 4 stay 4 on a phone, and costs nothing: the value is
-           * identical to the inline padding this block already sets.
-           */
+          ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
+            ? { "--builder-cell-padding": `${padding}px` }
+            : {}),
           ...cellVariables,
           // Cell padding stays off for menu cells, and this one is deliberate:
           // it defaults to 18px, so honouring it would push every live header

@@ -667,3 +667,56 @@ describe("joined rows", () => {
     expect(groupJoinedSections(sections)).toHaveLength(2);
   });
 });
+
+describe("cell padding axes", () => {
+  function firstSection(raw: unknown) {
+    return normalizeBuilderDocument({ sections: [raw] }).layoutSections[0];
+  }
+
+  it("seeds both axes from the legacy all-sides value, so an old row is unchanged", () => {
+    const section = firstSection({
+      id: "s1",
+      layout: "two-column",
+      cellPadding: { left: "18", right: "30" },
+      modules: []
+    });
+
+    expect(section.cellVerticalPadding.left).toBe("18");
+    expect(section.cellHorizontalPadding.left).toBe("18");
+    expect(section.cellVerticalPadding.right).toBe("30");
+    expect(section.cellHorizontalPadding.right).toBe("30");
+  });
+
+  it("lets one axis go to zero while the other keeps its value", () => {
+    const section = firstSection({
+      id: "s1",
+      layout: "two-column",
+      cellPadding: { left: "18" },
+      cellVerticalPadding: { left: "0" },
+      modules: []
+    });
+
+    expect(section.cellVerticalPadding.left).toBe("0");
+    expect(section.cellHorizontalPadding.left).toBe("18");
+  });
+
+  it("clamps each axis to the range the control offers", () => {
+    const section = firstSection({
+      id: "s1",
+      layout: "single",
+      cellVerticalPadding: { main: "9999" },
+      cellHorizontalPadding: { main: "-20" },
+      modules: []
+    });
+
+    expect(section.cellVerticalPadding.main).toBe("50");
+    expect(section.cellHorizontalPadding.main).toBe("0");
+  });
+
+  it("defaults a row that has never carried padding at all to 18 on both axes", () => {
+    const section = firstSection({ id: "s1", layout: "single", modules: [] });
+
+    expect(section.cellVerticalPadding.main).toBe("18");
+    expect(section.cellHorizontalPadding.main).toBe("18");
+  });
+});

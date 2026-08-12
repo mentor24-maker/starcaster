@@ -43,7 +43,6 @@ type BuilderSectionCardProps = {
   onSaveSection: () => void;
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
-  onUpdateCellPadding: (column: string, value: string) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -114,7 +113,6 @@ export function BuilderSectionCard({
   onSaveSection,
   onUpdateSection,
   onUpdateCellBackground,
-  onUpdateCellPadding,
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
@@ -335,7 +333,9 @@ export function BuilderSectionCard({
     return {
       ...resolveBuilderDrillDownSurfaceBackground(section.cellBackgrounds[column], "column"),
       ...getVerticalMarginStyle(section.cellVerticalMargin?.[column] ?? "0"),
-      padding: `${section.cellPadding[column] ?? "18"}px`,
+      padding: `${section.cellVerticalPadding?.[column] ?? section.cellPadding[column] ?? "18"}px ${
+        section.cellHorizontalPadding?.[column] ?? section.cellPadding[column] ?? "18"
+      }px`,
       borderStyle: borderStyle === "none" ? "none" : borderStyle,
       borderWidth: borderStyle === "none" ? 0 : `${Math.max(Number.isFinite(borderWidth) ? borderWidth : 0, 0)}px`,
       borderColor: section.cellBorderColor[column] ?? "transparent",
@@ -541,7 +541,6 @@ export function BuilderSectionCard({
                         section={section}
                         editorDevice={editorDevice}
                         onUpdateCellBackground={onUpdateCellBackground}
-                        onUpdateCellPadding={onUpdateCellPadding}
                         onUpdateCellBorderWidth={onUpdateCellBorderWidth}
                         onUpdateCellBorderColor={onUpdateCellBorderColor}
                         onUpdateCellBorderRadius={onUpdateCellBorderRadius}
