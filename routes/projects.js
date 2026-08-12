@@ -71,6 +71,7 @@ async function handle(req, res, pathname, method) {
       requestedProjectId,
       sessionActiveProjectId,
       autoCreateDefault: true,
+      autoSelectFirst: true,
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
 
@@ -80,7 +81,7 @@ async function handle(req, res, pathname, method) {
     if (
       sessionToken
       && data.project?.id
-      && resolvedFrom === 'header'
+      && (resolvedFrom === 'header' || resolvedFrom === 'auto')
       && !sessionActiveProjectId
     ) {
       await setSessionActiveProject(sessionToken, data.project.id);
