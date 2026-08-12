@@ -11,7 +11,6 @@ import {
   formatRichTextContent,
   getBuilderBackgroundStyle,
   getLayoutColumns,
-  getLayoutGridTemplate,
   groupJoinedSections,
   isPlainTextVariant,
   resolvePublicBuilderAssetUrl
@@ -88,6 +87,11 @@ import {
   getModuleBackgroundSettings,
   getTableWrapStyle,
   getSectionMarginStyle,
+  getSectionColumnGapStyle,
+  getSectionGridTemplate,
+  getSectionHorizontalMarginStyle,
+  getSectionMinHeightStyle,
+  getSectionOffsetStyle,
   getSectionPaddingStyle,
   getSectionWidthStyle,
   getModuleMarginStyle,
@@ -1471,6 +1475,10 @@ function BuilderSectionPreview({
     (module) => module.type === "current-poll" || module.type === "previous-results"
   );
   const rowBorderWidth = Number(section.rowBorderWidth ?? "0");
+  // His own column proportions when he has set a complete set, the Layout
+  // preset otherwise. Both the grid and the token the mobile stylesheet reads
+  // take the same answer, so they cannot disagree.
+  const sectionGridTemplate = getSectionGridTemplate(section);
   const gridStyle: CSSProperties = {
     // Band first: a section carrying its own background never gets one, so
     // this cannot overwrite an operator's choice.
@@ -1486,6 +1494,7 @@ function BuilderSectionPreview({
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
+    ...(isOverlayLayoutCollapsed ? {} : getSectionHorizontalMarginStyle(section)),
     // Navigation-only rows already render flush by design; overlay slots are
     // not really rows at all. Everything else honours the operator's number.
     ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(section)),
@@ -1493,8 +1502,15 @@ function BuilderSectionPreview({
     // EMPTY row is still big enough to drop a module onto, and keeping it on
     // filled rows was padding every contact strip out to nearly triple height.
     ...(section.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
+    // ...unless the operator has asked for a taller band, which overrides both
+    // the floor and the release above it.
+    ...(isOverlayLayoutCollapsed ? {} : getSectionMinHeightStyle(section)),
     // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
     ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(section)),
+    // The operator's own nudge, after the layout styles it is nudging away
+    // from. {} until he sets one, and it deliberately sits BEFORE the overlay
+    // and navigation z-index rules below so those still win their stack.
+    ...(isOverlayLayoutCollapsed ? {} : getSectionOffsetStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
@@ -1508,9 +1524,9 @@ function BuilderSectionPreview({
         }
       : {}),
     display: "grid",
-    gridTemplateColumns: getLayoutGridTemplate(section.layout),
-    gap: isOverlayLayoutCollapsed ? 0 : "16px",
-    "--builder-layout-grid": getLayoutGridTemplate(section.layout)
+    gridTemplateColumns: sectionGridTemplate,
+    ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(section)),
+    "--builder-layout-grid": sectionGridTemplate
   } as CSSProperties;
 
   return (
@@ -1520,6 +1536,10 @@ function BuilderSectionPreview({
       }${isPageOverlayFlowSection ? " builder-preview-section-overlay-flow" : ""}${
         isSectionOverlaySlot ? " builder-preview-section-overlay-slot" : ""
       }${hasPollModules ? " builder-preview-section-poll-row" : ""}${
+        section.equalColumnHeights === "true" && !isOverlayLayoutCollapsed
+          ? " builder-preview-section-equal-columns"
+          : ""
+      }${
         section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
       }`}
       style={gridStyle}

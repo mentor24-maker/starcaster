@@ -2266,11 +2266,23 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   --builder-section-padding-inline: max(0px, calc((100% - var(--bx-content-width, 100%)) / 2));
   padding-top: var(--builder-section-padding-top, var(--builder-section-padding-block));
   padding-bottom: var(--builder-section-padding-bottom, var(--builder-section-padding-block));
+  /* Left/Right Padding ADDS to the centring inset above rather than replacing
+     it. Replacing it would break the shared left edge the inset exists to
+     create — the operator would set 40px of side padding on one row and that
+     row alone would stop lining up with every other row on the page. Both
+     tokens are absent until he sets one, so `+ 0px` is the untouched case. */
+  padding-left: calc(
+    var(--builder-section-padding-inline) + var(--builder-section-padding-left, 0px)
+  );
+  padding-right: calc(
+    var(--builder-section-padding-inline) + var(--builder-section-padding-right, 0px)
+  );
 }
 
 @media (max-width: 900px) {
   .builder-react-root .builder-preview-section {
-    padding-inline: 14px;
+    padding-left: calc(14px + var(--builder-section-padding-left, 0px));
+    padding-right: calc(14px + var(--builder-section-padding-right, 0px));
     padding-top: var(--builder-section-padding-top, 14px);
     padding-bottom: var(--builder-section-padding-bottom, 14px);
   }
@@ -2278,10 +2290,74 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 @media (max-width: 560px) {
   .builder-react-root .builder-preview-section {
-    padding-inline: 10px;
+    padding-left: calc(10px + var(--builder-section-padding-left, 0px));
+    padding-right: calc(10px + var(--builder-section-padding-right, 0px));
     padding-top: var(--builder-section-padding-top, 10px);
     padding-bottom: var(--builder-section-padding-bottom, 10px);
   }
+}
+
+/* Column Widths: one small box per column, side by side, sized so a three
+   column row still fits its axis of the lattice. The lattice's own
+   `.builder-setting-value > input` cap does not reach these — they sit one
+   level down, inside this wrapper. */
+.builder-react-root .builder-column-width-fields {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Digit-sized, like every other number in this panel — not stretched to fill
+   the cell, which would put three enormous boxes where three small ones read
+   as a ratio. */
+.builder-react-root .builder-column-width-fields input[type="number"] {
+  flex: 0 0 auto;
+  width: 4.5rem;
+  min-width: 0;
+  padding-inline: 6px;
+  text-align: center;
+}
+
+.builder-react-root .builder-column-width-fields .builder-column-width-unit {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* Match column heights (row setting, off by default).
+
+   Grid already stretches the COLUMNS to the tallest one — what stays ragged is
+   the module inside each column, which sizes to its own content, so a row of
+   three cards with different amounts of text has three different bottom edges.
+   These rules pass the column's full height down to the module and to the
+   module's own outer box, which is the element carrying the card's background
+   and border. Same shape as the poll row above, which solved this for one
+   module type before it was a control. */
+.builder-react-root .builder-preview-section-equal-columns {
+  align-items: stretch;
+}
+
+.builder-react-root .builder-preview-section-equal-columns > .builder-preview-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.builder-react-root .builder-preview-section-equal-columns > .builder-preview-column > .builder-preview-module {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.builder-react-root
+  .builder-preview-section-equal-columns
+  > .builder-preview-column
+  > .builder-preview-module
+  > * {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* ---------------------------------------------------------------------
