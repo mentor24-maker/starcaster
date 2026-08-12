@@ -4871,6 +4871,9 @@ function siteSearchFieldVars(
   const fieldWidth = siteSearchNumber(settings.fieldWidth, 0, 0, 1200);
   if (fieldWidth > 0) {
     vars["--site-search-field-grow"] = "0";
+    // Shrink off too, or the field collapses to whatever the shrink-wrapped
+    // module box happens to be and elbows the button onto the next line.
+    vars["--site-search-field-shrink"] = "0";
     vars["--site-search-field-basis"] = `${fieldWidth}px`;
   }
   vars["--site-search-field-height"] = `${siteSearchNumber(settings.fieldHeight, 40, 24, 96)}px`;

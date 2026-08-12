@@ -3093,8 +3093,25 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-site-search-input {
-  /* Field Width sets these two; unset means "grow to fill the row". */
-  flex: var(--site-search-field-grow, 1) 1 var(--site-search-field-basis, 12rem);
+  /*
+   * Field Width sets all three; unset means "grow to fill the row" (1 1 12rem).
+   *
+   * SHRINK IS THE ONE THAT MATTERS. A module box in a builder column is sized
+   * to its content, not to the column — the column is `display: flex;
+   * flex-direction: column; align-items: center`, so every module shrink-wraps.
+   * Measured on a live page: a 713px column held a module box only 302px wide.
+   * With shrink left at 1, a field asked to be 400px quietly gave up and became
+   * 302px, which left no room beside it and pushed the button onto its own
+   * line — reported as "I set 400px and the button wrapped, and there is
+   * plenty of space". There was plenty of space in the COLUMN; there was none
+   * in the box, and the box only grows if the field refuses to shrink.
+   *
+   * `max-width: 100%` below is what keeps refusing-to-shrink safe: a width
+   * larger than the column clamps to the column instead of escaping it
+   * (verified at 700px and 1000px inside a 713px column).
+   */
+  flex: var(--site-search-field-grow, 1) var(--site-search-field-shrink, 1)
+    var(--site-search-field-basis, 12rem);
   min-width: 0;
   max-width: 100%;
   height: var(--site-search-field-height, 40px);
@@ -3215,7 +3232,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Adjust only. The row, the growth, and the list are all set above. */
 @media (max-width: 560px) {
   /* Overrides Field Width on purpose: a field pinned to 320px would otherwise
-     stay 320px on a 390px phone and push the page sideways (Standard 7). */
+     stay 320px on a 390px phone and push the page sideways (Standard 7).
+     Restores shrink as well as grow — see the note on the base rule. */
   .builder-react-root .builder-site-search-input {
     flex: 1 1 100%;
   }
