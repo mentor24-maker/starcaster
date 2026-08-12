@@ -4,9 +4,12 @@ import {
   finalizeBackgroundSettings,
   promoteThemeStylesPageBackground,
   finalizeThemeStylesPageBackground,
+  formatHeadingContent,
   formatPlainTextContent,
   formatRichTextContent,
   groupJoinedSections,
+  headingHtmlFromEditor,
+  prepareHeadingHtmlForEditor,
   isPlainTextVariant,
   PLAIN_TEXT_VARIANT,
   prepareRichTextHtmlForStorage,
@@ -202,6 +205,86 @@ describe("formatRichTextContent", () => {
     const html = formatRichTextContent("<p>Safe</p><img src=x onerror=alert(1) />");
     expect(html).toContain("Safe");
     expect(html.toLowerCase()).not.toContain("onerror");
+  });
+});
+
+describe("formatHeadingContent", () => {
+  it("renders a plain heading exactly as it always did", () => {
+    expect(formatHeadingContent("Play Where Champions Play")).toBe("Play Where Champions Play");
+  });
+
+  it("escapes angle brackets and bare ampersands in a plain heading", () => {
+    expect(formatHeadingContent("Swim & Tennis")).toBe("Swim &amp; Tennis");
+    expect(formatHeadingContent("3 < 5")).toContain("&lt;");
+  });
+
+  it("keeps entities the operator typed", () => {
+    expect(formatHeadingContent("Book&nbsp;a&nbsp;Court")).toBe("Book&nbsp;a&nbsp;Court");
+  });
+
+  it("keeps a recoloured word", () => {
+    const html = formatHeadingContent('Play Where <span style="color:#4f9c3a">Champions</span> Play');
+    expect(html).toContain('style="color:#4f9c3a"');
+    expect(html).toContain("Champions");
+  });
+
+  it("keeps a resized word — the whole point of the module-level cap not applying", () => {
+    expect(formatHeadingContent('<span style="font-size:120px">PLAY</span>')).toContain("font-size:120px");
+  });
+
+  it("keeps line breaks", () => {
+    expect(formatHeadingContent("PLAY WHERE<br />CHAMPIONS PLAY").toLowerCase()).toContain("<br");
+    expect(formatHeadingContent("PLAY WHERE\nCHAMPIONS PLAY").toLowerCase()).toContain("<br");
+  });
+
+  it("unwraps block markup — nothing block-level can live inside a heading", () => {
+    const html = formatHeadingContent("<p>Champions</p>");
+    expect(html).toContain("Champions");
+    expect(html).not.toContain("<p>");
+  });
+
+  it("strips scripts and event handlers", () => {
+    const html = formatHeadingContent('Safe<script>alert(1)</script><span onclick="alert(1)">Hi</span>');
+    expect(html).toContain("Safe");
+    expect(html).not.toContain("script");
+    expect(html.toLowerCase()).not.toContain("onclick");
+  });
+
+  it("is empty for an empty heading", () => {
+    expect(formatHeadingContent("")).toBe("");
+    expect(formatHeadingContent(undefined)).toBe("");
+  });
+});
+
+describe("heading editor round trip", () => {
+  it("wraps stored markup in the paragraph the editor needs, and unwraps it again", () => {
+    const stored = 'Play Where <span style="color:#4f9c3a">Champions</span> Play';
+    const editorHtml = prepareHeadingHtmlForEditor(stored);
+
+    expect(editorHtml.startsWith("<p>")).toBe(true);
+    expect(headingHtmlFromEditor(editorHtml)).toBe(stored);
+  });
+
+  it("gives the editor a paragraph to type into when the heading is empty", () => {
+    expect(prepareHeadingHtmlForEditor("")).toBe("<p></p>");
+    expect(headingHtmlFromEditor("<p></p>")).toBe("");
+  });
+
+  it("turns a paragraph break into a line break", () => {
+    // The sanitizer is what emits the final tag, so it comes back as <br>.
+    expect(headingHtmlFromEditor("<p>PLAY WHERE</p><p>CHAMPIONS PLAY</p>").toLowerCase()).toBe(
+      "play where<br>champions play"
+    );
+  });
+
+  it("drops the trailing break the editor leaves under the cursor", () => {
+    expect(headingHtmlFromEditor("<p>Champions<br></p>")).toBe("Champions");
+  });
+
+  it("sanitizes markup typed into the HTML view", () => {
+    const html = headingHtmlFromEditor('<p>Safe<script>alert(1)</script></p>');
+    expect(html).toContain("Safe");
+    expect(html).not.toContain("script");
   });
 });
 
