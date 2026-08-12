@@ -67,6 +67,12 @@ export function BuilderFloatingImageModuleSettings({
    * nudge off that spot. Effect stays basic too — an appearance mode, not a
    * theme override. Duration, URL, media, alt text and Size are the
    * module's own settings (A4).
+   *
+   * SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+   * Everything above that "moved into Advanced" now sits LAST on the axis it
+   * already names, ordered by D9 (blast radius, descending). The axis
+   * assignments and the A2 theme-colour semantics are unchanged — only the
+   * collapsing is gone. Kept rather than rewritten: the reasoning is the record.
    */
   const schema: BuilderSettingsSchema = {
     axes: [
@@ -188,11 +194,7 @@ export function BuilderFloatingImageModuleSettings({
               fallback: "center",
               rendersVia: "getImageOverlayStyle"
             }
-          ]
-        ],
-        // A5: both offset systems are nudges, not everyday placement — they
-        // move into Placement's Advanced section together, as one block.
-        advanced: [
+          ],
           [
             {
               key: "offsetX",
@@ -250,7 +252,9 @@ export function BuilderFloatingImageModuleSettings({
               )
             }
           ]
-        ]
+        ],
+        // A5: both offset systems are nudges, not everyday placement — they
+        // move into Placement's Advanced section together, as one block.
       },
       {
         title: "Frame",
@@ -265,10 +269,7 @@ export function BuilderFloatingImageModuleSettings({
               fallback: "none",
               rendersVia: "getImageEffectClassName"
             }
-          ]
-        ],
-        // A1: the border's thickness, corners and colour are all theme values.
-        advanced: [
+          ],
           [
             {
               key: "borderThickness",
@@ -280,7 +281,16 @@ export function BuilderFloatingImageModuleSettings({
               fallback: "0",
               rendersVia: "getImageModuleStyle"
             },
-            {
+                        {
+              key: "borderColor",
+              label: "Border Color",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Border Color",
+              themeDefault: "#0f4f8f",
+              rendersVia: "getImageModuleStyle"
+            },
+{
               key: "borderRadius",
               label: "Radius",
               width: "num",
@@ -289,18 +299,10 @@ export function BuilderFloatingImageModuleSettings({
               max: 80,
               fallback: "18",
               rendersVia: "getImageModuleStyle"
-            },
-            {
-              key: "borderColor",
-              label: "Border Color",
-              width: "color",
-              control: "theme-color",
-              dialogLabel: "Border Color",
-              themeDefault: "#0f4f8f",
-              rendersVia: "getImageModuleStyle"
             }
           ]
-        ]
+        ],
+        // A2 theme overrides. Frame's order is width, colour, then radius (D9).
       }
     ]
   };

@@ -33,6 +33,7 @@ const require = createRequire(path.join(ROOT, 'package.json'));
 require('dotenv').config({ path: path.join(ROOT, '.env.local'), quiet: true });
 
 const { sbQuery, tableConfig } = require(path.join(ROOT, 'lib/supabase.js'));
+const { BUILDER_MODULE_TYPES, createEmptyModule } = require(path.join(ROOT, 'lib/builder/template.js'));
 const projectsStore = require(path.join(ROOT, 'lib/projectsStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
@@ -53,6 +54,89 @@ const must = (res, what) => {
   return res.data ?? res;
 };
 
+/**
+ * The page `check_panels.mjs` measures. It has to be SEEDED, not hand-built:
+ * until 2026-08-11 the lattice check ran against a page somebody had made by
+ * hand in their own local database, so "does Heading obey W0?" could only be
+ * answered on that one machine — and when Heading joined the lattice the
+ * check reported a confident pass across six Table panels while measuring no
+ * heading at all. A browser-checked rule with an unreproducible fixture is
+ * the honour system with extra steps.
+ *
+ * BUILT FROM THE TYPE LIST, not hand-listed (2026-08-13). The lattice is
+ * universal now, so the fixture must carry one module of EVERY type — and a
+ * hand-maintained roster is the same failure one step later: add a module
+ * type, forget the fixture, and the check passes on a panel it never saw.
+ * `BUILDER_MODULE_TYPES` is the single source; a type cannot exist without
+ * appearing here.
+ *
+ * TUNED[type] overrides the factory defaults where a module needs awkward
+ * content to be worth measuring — the longest labels, a shadow turned on,
+ * an offsets block. Everything else takes `createEmptyModule`.
+ */
+const TUNED = {
+  // Navigation's "Dropdown" sub-section is where the axis-section lattice
+  // broke when the menu joined it (its six fields started at x=0 while the
+  // rest of Structure started at 125). Also the widest labels in the app:
+  // "Horizontal Padding" and "Shadow Opacity".
+  navigation: {
+    name: 'Top Menu',
+    settings: {
+      navItems: JSON.stringify([
+        { id: 'home', label: 'Home', href: '/' },
+        { id: 'play', label: 'Play', href: '/play' },
+        { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+        { id: 'about', label: 'About', href: '/about' },
+      ]),
+      navDirection: 'horizontal', navDropdownStyle: 'list', navLevels: '2',
+      navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
+    },
+  },
+  table: {
+    name: 'Contact Strip',
+    settings: {
+      columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
+      tableData: '{"headers":["Phone","Hours","Status"],"cells":{},"rowCount":1}',
+      borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
+      cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
+      backgroundColor: '#ffffff',
+    },
+  },
+  // An EYEBROW heading with its shadow on: the longest labels in the panel
+  // ("Horizontal Margin", "Shadow Blur") and the offsets block, which is
+  // where the lattice broke when Heading first joined it.
+  heading: {
+    name: 'Eyebrow Heading',
+    text: 'Delray Beach • Public Tennis • Two Locations',
+    settings: {
+      variant: 'eyebrow', level: 'h6', fontSize: '14', fontWeight: '800',
+      textAlign: 'left', textTransform: 'uppercase', lineHeight: '1.2', letterSpacing: '0',
+      dropShadow: 'true', dropShadowColor: '#0b2a4a',
+      dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
+    },
+  },
+};
+
+const PANEL_CHECK_SECTION = {
+  id: 'section-panel-lattice-check',
+  title: 'Panel Lattice Check',
+  layout: 'single',
+  locked: false,
+  alignment: 'left',
+  widthMode: 'contained',
+  modules: BUILDER_MODULE_TYPES.map((type) => {
+    const base = createEmptyModule(type, 'main');
+    const tuned = TUNED[type] || {};
+    return {
+      ...base,
+      id: `module-panel-check-${type}`,
+      name: tuned.name ?? type,
+      text: tuned.text ?? base.text ?? '',
+      settings: { ...base.settings, ...(tuned.settings || {}) },
+    };
+  }),
+};
+
 /** Content chosen to break layouts, not to look plausible. */
 const PAGES = [
   ['Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray',
@@ -64,6 +148,7 @@ const PAGES = [
   ['', 'empty-name-row'],
   ['Short', 's'],
   ['Court Fees', 'course-fees'],
+  ['Panel Lattice Check', 'panel-lattice-check', [PANEL_CHECK_SECTION]],
 ];
 
 async function findOwnerUserId() {
@@ -119,15 +204,31 @@ if (CLEAN) {
   process.exit(0);
 }
 
-const have = new Set(existing.map((r) => r.slug));
+const bySlug = new Map(existing.map((r) => [r.slug, r]));
 let created = 0;
-for (const [name, slug] of PAGES) {
-  if (have.has(slug)) continue;
+let refreshed = 0;
+for (const [name, slug, sections = []] of PAGES) {
+  const row = bySlug.get(slug);
+  if (row) {
+    // A page that carries modules is REWRITTEN on every seed. The empty
+    // pages exist only to be listed, so leaving them alone protects any
+    // hand-made edits; the check page is a fixture and must be exactly
+    // what this file says, or the panel check silently measures something
+    // else — which is how Heading went unmeasured on 2026-08-11.
+    if (!sections.length) continue;
+    const res = await sbQuery({
+      method: 'PATCH', table: pagesTable, query: `id=eq.${row.id}`,
+      body: { layout_sections: sections, updated_at: new Date().toISOString() },
+    });
+    if (!res.ok) { console.error(`  failed to refresh ${slug}: ${res.error}`); continue; }
+    refreshed += 1;
+    continue;
+  }
   const res = await sbQuery({
     method: 'POST', table: pagesTable, query: 'select=id',
     body: {
       name, slug, project_id: project.id, template_kind: 'modular',
-      is_published: true, layout_sections: [], updated_at: new Date().toISOString(),
+      is_published: true, layout_sections: sections, updated_at: new Date().toISOString(),
     },
     headers: { Prefer: 'return=representation' },
   });
@@ -135,5 +236,8 @@ for (const [name, slug] of PAGES) {
   created += 1;
 }
 
-console.log(`fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ${existing.length} already present.`);
+console.log(
+  `fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ` +
+  `${refreshed} refreshed, ${existing.length} already present.`
+);
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

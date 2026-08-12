@@ -37,10 +37,56 @@ export function BuilderBlogPostTagsModuleSettings({
     // old fallback (A2). Gap stays basic on Frame — it is spacing, keeps its
     // name (W7), and keeps Frame's basic row from emptying. Font Size is a
     // SIZE and stays basic, as do the tags list, Prefix and Layout (A4).
+    //
+    // SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+    // Everything above that "moved into Advanced" now sits LAST on the axis it
+    // already names, ordered by D9 (blast radius, descending). The axis
+    // assignments and the A2 theme-colour semantics are unchanged — only the
+    // collapsing is gone. Kept rather than rewritten: the reasoning is the record.
     axes: [
       {
         title: "Content",
         strips: [
+          // D9 rung 1: a destination changes what the whole module does, so it
+          // leads the Content axis — ahead of the labels it decorates.
+          [
+            {
+              key: "linkToFilter",
+              label: "Link to Filter",
+              width: "check",
+              control: "checkbox",
+              fallback: "true",
+              rendersVia: "builder-template.ts blog-post-tags renderer"
+            },
+            {
+              key: "filterParam",
+              label: "URL Param",
+              width: "text-md",
+              control: "custom",
+              rendersVia: "builder-template.ts blog-post-tags renderer",
+              visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true",
+              render: ({ settings, set }) => (
+                <input
+                  type="text"
+                  value={settings.filterParam ?? "tag"}
+                  onChange={(e) => set("filterParam", e.target.value)}
+                  placeholder="tag"
+                />
+              )
+            },
+            {
+              key: "targetPageUrl",
+              label: "Target Page",
+              width: "text-md",
+              control: "picker",
+              source: "pages",
+              valueKind: "path",
+              noneLabel: "Current page",
+              placeholder: "/blog",
+              rendersVia: "builder-template.ts blog-post-tags renderer",
+              visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true"
+            }
+          ],
           [
             {
               key: "tags",
@@ -92,48 +138,6 @@ export function BuilderBlogPostTagsModuleSettings({
             }
           ]
         ],
-        // A1: where a tag click goes, and the param it sets — the former
-        // top-level "Linking" group, folded in so the panel has one Advanced.
-        advanced: [
-          [
-            {
-              key: "linkToFilter",
-              label: "Link to Filter",
-              width: "check",
-              control: "checkbox",
-              fallback: "true",
-              rendersVia: "builder-template.ts blog-post-tags renderer"
-            },
-            {
-              key: "filterParam",
-              label: "URL Param",
-              width: "text-md",
-              control: "custom",
-              rendersVia: "builder-template.ts blog-post-tags renderer",
-              visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true",
-              render: ({ settings, set }) => (
-                <input
-                  type="text"
-                  value={settings.filterParam ?? "tag"}
-                  onChange={(e) => set("filterParam", e.target.value)}
-                  placeholder="tag"
-                />
-              )
-            },
-            {
-              key: "targetPageUrl",
-              label: "Target Page",
-              width: "text-md",
-              control: "picker",
-              source: "pages",
-              valueKind: "path",
-              noneLabel: "Current page",
-              placeholder: "/blog",
-              rendersVia: "builder-template.ts blog-post-tags renderer",
-              visibleWhen: (settings) => (settings.linkToFilter ?? "true") === "true"
-            }
-          ]
-        ]
       },
       {
         title: "Structure",
@@ -169,10 +173,7 @@ export function BuilderBlogPostTagsModuleSettings({
               fallback: "12",
               rendersVia: "BlogPostTagsPreview"
             }
-          ]
-        ],
-        // A1: the tag text colour overrides the theme.
-        advanced: [
+          ],
           [
             {
               key: "color",
@@ -184,7 +185,8 @@ export function BuilderBlogPostTagsModuleSettings({
               rendersVia: "BlogPostTagsPreview"
             }
           ]
-        ]
+        ],
+        // A2 theme override; colour sorts after size on Text (D9).
       },
       {
         title: "Frame",
@@ -201,10 +203,7 @@ export function BuilderBlogPostTagsModuleSettings({
               fallback: "6",
               rendersVia: "BlogPostTagsPreview"
             }
-          ]
-        ],
-        // A1: the pill background and its corner radius are theme-backed.
-        advanced: [
+          ],
           [
             {
               key: "bgColor",
@@ -227,7 +226,8 @@ export function BuilderBlogPostTagsModuleSettings({
               rendersVia: "BlogPostTagsPreview"
             }
           ]
-        ]
+        ],
+        // A2 theme overrides; colour then radius, the finest last (D9).
       }
     ]
   };

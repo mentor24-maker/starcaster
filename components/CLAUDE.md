@@ -27,9 +27,17 @@ Tests: `npm run test:builder-ui`.
 - **H / V Margin:** always offer both (`horizontalMargin` /
   `verticalMargin`), adjacent in the same strip — never a lone "Margin".
 - **Labels never wrap** (`white-space: nowrap`); shorten text instead.
-- **Advanced blocks** (border, effects, rarely-edited groups) go in
-  `<details class="hanging-details">`. **Text colour does not** — it is
-  basic (master rule A6). A drop shadow is filed by what it shadows:
+- **No Advanced section** (master rule A0, 8/13). There is no
+  `<details class="hanging-details">` in a module panel and no `advanced:`
+  key on an axis. Every setting sits on the axis it belongs to; a
+  rarely-touched control is de-emphasised by sorting **last on its axis**
+  (D9), not by being hidden. Theme-backed settings keep the `theme-color`
+  control — empty still means "follow the theme" (A2) — they just live in
+  the open now.
+- **Field order within an axis: blast radius, descending** (D9).
+  Destination/source → mode/layout → what appears → size → colour → fine
+  adjustment. A toggle that gates one sibling field stays beside it.
+  Text colour is basic (A6). A drop shadow is filed by what it shadows:
   `text-shadow` on the Text axis, `box-shadow` on Frame (A7). Use
   `dropShadowFields()` from the settings schema rather than the Button
   panel's bespoke block.

@@ -51,12 +51,37 @@ export function BuilderMessagingTopicListModuleSettings({
    *    it was. Its colour is a `custom` render whose `||` fallback semantics
    *    would change under conversion, so per A2's escape hatch it moves
    *    nowhere and converts to nothing.
+   *
+   * SUPERSEDED 2026-08-13 (master rule A0): the Advanced section is retired.
+   * Everything above that "moved into Advanced" now sits LAST on the axis it
+   * already names, ordered by D9 (blast radius, descending). The axis
+   * assignments and the A2 theme-colour semantics are unchanged — only the
+   * collapsing is gone. Kept rather than rewritten: the reasoning is the record.
    */
   const schema: BuilderSettingsSchema = {
     axes: [
       {
         title: "Content",
         strips: [
+          
+          [
+            {
+              key: "filterParam",
+              label: "URL param",
+              width: "full",
+              control: "custom",
+              rendersVia: "MessagingTopicListPreview",
+              render: (ctx) => (
+                <input
+                  type="text"
+                  value={ctx.settings.filterParam ?? "topic"}
+                  onChange={(event) => ctx.set("filterParam", event.target.value)}
+                  placeholder="topic"
+                />
+              )
+            }
+          ],
+          
           [
             {
               key: "showAll",
@@ -67,6 +92,7 @@ export function BuilderMessagingTopicListModuleSettings({
               rendersVia: "MessagingTopicListPreview"
             }
           ],
+          
           [
             {
               key: "allLabel",
@@ -87,6 +113,7 @@ export function BuilderMessagingTopicListModuleSettings({
               )
             }
           ],
+          
           [
             {
               key: "targetPageUrl",
@@ -98,23 +125,6 @@ export function BuilderMessagingTopicListModuleSettings({
               noneLabel: "None",
               placeholder: "/builder-preview.html?slug=blog",
               rendersVia: "MessagingTopicListPreview"
-            }
-          ],
-          [
-            {
-              key: "filterParam",
-              label: "URL param",
-              width: "full",
-              control: "custom",
-              rendersVia: "MessagingTopicListPreview",
-              render: (ctx) => (
-                <input
-                  type="text"
-                  value={ctx.settings.filterParam ?? "topic"}
-                  onChange={(event) => ctx.set("filterParam", event.target.value)}
-                  placeholder="topic"
-                />
-              )
             }
           ]
         ]
@@ -161,11 +171,7 @@ export function BuilderMessagingTopicListModuleSettings({
               fallback: "left",
               rendersVia: "MessagingTopicListPreview"
             }
-          ]
-        ],
-        // A1: a border radius is theme-backed, so Pill Radius collapses into
-        // Structure's own Advanced rather than leaving the axis it belongs to.
-        advanced: [
+          ],
           [
             {
               key: "borderRadius",
@@ -179,7 +185,9 @@ export function BuilderMessagingTopicListModuleSettings({
               rendersVia: "MessagingTopicListPreview"
             }
           ]
-        ]
+        ],
+        // A fine adjustment, so it sorts last on Structure (D9) — still on the
+        // axis it belongs to, which is what mattered all along.
       },
       {
         title: "Text",
@@ -195,12 +203,7 @@ export function BuilderMessagingTopicListModuleSettings({
               fallback: "13",
               rendersVia: "MessagingTopicListPreview"
             }
-          ]
-        ],
-        // A1/A2: the pill colours are theme overrides. Empty now means
-        // "follow the theme"; themeDefault carries the old fallback hex, so
-        // the swatch shows what it always showed.
-        advanced: [
+          ],
           [
             {
               key: "activeColor",
@@ -239,7 +242,10 @@ export function BuilderMessagingTopicListModuleSettings({
               rendersVia: "MessagingTopicListPreview"
             }
           ]
-        ]
+        ],
+        // A2: the pill colours are theme overrides. Empty means
+        // "follow the theme"; themeDefault carries the old fallback hex, so
+        // the swatch shows what it always showed.
       },
       {
         /*
@@ -252,10 +258,19 @@ export function BuilderMessagingTopicListModuleSettings({
          * Structure and Frame takes the freed axis. Keys unchanged.
          */
         title: "Frame",
-        strips: [],
-        advanced: [
+        strips: [
           [
-            {
+                        {
+              key: "moduleBorderWidth",
+              label: "Width",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 8,
+              fallback: "0",
+              rendersVia: "MessagingTopicListPreview"
+            },
+{
               key: "moduleBorderColor",
               label: "Color",
               width: "color",
@@ -273,19 +288,9 @@ export function BuilderMessagingTopicListModuleSettings({
                   onChange={(moduleBorderColor) => ctx.set("moduleBorderColor", moduleBorderColor)}
                 />
               )
-            },
-            {
-              key: "moduleBorderWidth",
-              label: "Width",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 8,
-              fallback: "0",
-              rendersVia: "MessagingTopicListPreview"
             }
           ]
-        ]
+        ],
       }
     ]
   };

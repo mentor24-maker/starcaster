@@ -107,7 +107,9 @@ function oneOf<T extends string>(value: string | undefined, allowed: readonly T[
  */
 function flag(value: string | undefined, fallback: boolean): boolean {
   const trimmed = String(value ?? "").trim();
-  if (trimmed === "true") return true;
+  // "on" is the legacy truthy the shared dropShadowFields() control accepts;
+  // matching it here keeps the two halves of one checkbox in agreement.
+  if (trimmed === "true" || trimmed === "on") return true;
   if (trimmed === "false") return false;
   return fallback;
 }
@@ -185,6 +187,16 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
       60
     )}px`,
     "--site-nav-gap": `${num(settings.navGap, NAV_STYLE_DEFAULTS.gap, 0, 40)}px`,
+    /*
+     * The bar's fill when the Background control is set to None.
+     *
+     * A set background arrives as a real `background:` declaration from
+     * getBuilderBackgroundStyle and beats this, because an inline property
+     * outranks a stylesheet rule reading a variable. So this only ever
+     * decides what "cleared" looks like — and it has to be transparent, or
+     * clearing the control does nothing at all, which is what it did.
+     */
+    "--site-nav-bg": "transparent",
     "--site-nav-radius": `${num(settings.navBarRadius, NAV_STYLE_DEFAULTS.barRadius, 0, 80)}px`,
     // Three parts rather than one shorthand: the generated
     // `_builder-react.css` already uses `--site-nav-border` for a colour
@@ -223,12 +235,45 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     "--site-nav-link-hover-decoration": underline.hover,
     "--site-nav-link-text-shadow": getNavTextShadow(settings),
 
-    // Empty means "follow the theme" (master rule A1), so these stay
-    // undefined rather than freezing a hex into every menu.
+    /*
+     * EVERY COLOUR BELOW IS EMITTED, ALWAYS — even when the operator has
+     * cleared it. That is the whole point of this block.
+     *
+     * Operator, 2026-08-12: "All I want to do is clear the color of the
+     * background for the menu as well as the links themselves. The menu has a
+     * background setting and I can set it to any color I want. I just can't
+     * clear it."
+     *
+     * He was exactly right, and the reason was here. These used to be left
+     * `undefined` when empty, so the CSS `var(--x, <hardcoded>)` fallback
+     * painted instead — clearing a setting did not clear anything, it just
+     * revealed the colour baked into the stylesheet. Measured before the fix:
+     * clearing Background left the bar at rgba(255,255,255,0.74), and the
+     * current page's link stayed rgb(10,143,196) no matter what.
+     *
+     * So an empty value now resolves to `transparent`, which is what "cleared"
+     * has to mean, and the CSS fallbacks are only there for a menu rendered
+     * without inline vars at all.
+     */
     "--site-nav-link-color": linkColor,
-    "--site-nav-link-hover-color": hoverColor,
-    "--site-nav-link-hover-bg": color(settings.navHoverBackground),
-    "--site-nav-link-active-color": color(settings.navActiveColor) ?? hoverColor,
+    // The label's own fill, at rest. There was no such control and no CSS
+    // for it — a link only had a background while you hovered it, which is
+    // what the operator meant on 2026-08-11 by having no control over "the
+    // background colors of the labels".
+    "--site-nav-link-bg": color(settings.navLinkBackground) ?? "transparent",
+    "--site-nav-link-hover-color": hoverColor ?? linkColor,
+    "--site-nav-link-hover-bg": color(settings.navHoverBackground) ?? "transparent",
+    /*
+     * The current page follows Text Color unless it is given its own.
+     *
+     * It used to fall back to a hardcoded blue, which is why setting Text
+     * Color to white left the page you were looking at stubbornly blue — the
+     * one link on screen that ignored the control (operator, 2026-08-12: "it
+     * still won't render the text as white").
+     */
+    "--site-nav-link-active-color": color(settings.navActiveColor) ?? hoverColor ?? linkColor,
+    "--site-nav-link-active-bg":
+      color(settings.navActiveBackground) ?? color(settings.navHoverBackground) ?? "transparent",
 
     // --- the dropdown / mega panel ------------------------------------
     "--site-nav-dropdown-bg": color(settings.navDropdownBackground) ?? NAV_STYLE_DEFAULTS.dropdownBackground,

@@ -9,8 +9,9 @@ import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import {
   BuilderSchemaModuleSettings,
+  dropShadowFields,
+  dropShadowIsOn,
   marginFields,
-  type BuilderSchemaField,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { getModuleBackgroundSettings } from "./builder-utils";
@@ -97,117 +98,6 @@ const isVerticalMenu = (settings: Record<string, string>) => settings.navDirecti
 const isMegaMenu = (settings: Record<string, string>) =>
   settings.navDropdownStyle === "mega" && !isVerticalMenu(settings);
 const isListMenu = (settings: Record<string, string>) => !isMegaMenu(settings);
-
-/**
- * The shadow parts, collapsed behind their own on/off. Six controls for a
- * shadow is right for a Border axis asked to hold "all the regular settings",
- * and wrong for one that is switched off — so they hide with it.
- */
-function shadowFields(
-  keys: { toggle: string; x: string; y: string; blur: string; spread?: string; color: string; opacity: string },
-  defaults: { x: number; y: number; blur: number; color: string; opacity: number },
-  label: string,
-  /**
-   * Whether an untouched menu has this shadow. The bar's was on before it was
-   * controllable (turning it off by default would restyle every live menu);
-   * the text one is new, so it starts off. `whenOn` has to agree with that or
-   * the parts sit open under an unticked box — which is exactly how it looked
-   * the first time this was drawn.
-   */
-  defaultOn: boolean
-): BuilderSchemaField[][] {
-  const whenOn = (settings: Record<string, string>) =>
-    (settings[keys.toggle] ?? String(defaultOn)) === "true";
-
-  return [
-    [
-      {
-        key: keys.toggle,
-        label,
-        width: "check",
-        control: "checkbox",
-        fallback: String(defaultOn),
-        rendersVia: RENDERS_VIA
-      }
-    ],
-    [
-      {
-        key: keys.x,
-        label: "Shadow X",
-        width: "num",
-        control: "number",
-        min: -60,
-        max: 60,
-        fallback: String(defaults.x),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      },
-      {
-        key: keys.y,
-        label: "Shadow Y",
-        width: "num",
-        control: "number",
-        min: -60,
-        max: 60,
-        fallback: String(defaults.y),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      }
-    ],
-    [
-      {
-        key: keys.blur,
-        label: "Blur",
-        width: "num",
-        control: "number",
-        min: 0,
-        max: 120,
-        fallback: String(defaults.blur),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      },
-      ...(keys.spread
-        ? [
-            {
-              key: keys.spread,
-              label: "Spread",
-              width: "num" as const,
-              control: "number" as const,
-              min: -40,
-              max: 40,
-              fallback: "0",
-              visibleWhen: whenOn,
-              rendersVia: RENDERS_VIA
-            }
-          ]
-        : [])
-    ],
-    [
-      {
-        key: keys.color,
-        label: "Shadow Color",
-        width: "color",
-        control: "color",
-        dialogLabel: `${label} color`,
-        fallback: defaults.color,
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      },
-      {
-        key: keys.opacity,
-        label: "Opacity",
-        width: "num",
-        control: "number",
-        min: 0,
-        max: 100,
-        step: 5,
-        fallback: String(defaults.opacity),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      }
-    ]
-  ];
-}
 
 export function BuilderNavigationModuleSettings({
   module,
@@ -309,7 +199,9 @@ export function BuilderNavigationModuleSettings({
               max: 3,
               fallback: "2",
               rendersVia: "NavigationModulePreview"
-            },
+            }
+          ],
+          [
             {
               key: "navMegaWidth",
               label: "Panel Width",
@@ -336,7 +228,9 @@ export function BuilderNavigationModuleSettings({
                 { value: "custom", label: "Custom" }
               ],
               rendersVia: "NavigationModulePreview"
-            },
+            }
+          ],
+          [
             {
               key: "navGap",
               label: "Item Gap",
@@ -385,7 +279,9 @@ export function BuilderNavigationModuleSettings({
                   fallback: String(NAV_STYLE_DEFAULTS.megaColumns),
                   visibleWhen: isMegaMenu,
                   rendersVia: "buildMegaColumns (builder-nav-mega.ts)"
-                },
+                }
+              ],
+              [
                 {
                   // A mega panel is sized by Panel Width; a list dropdown by
                   // this. Only one of the two is ever on screen.
@@ -411,18 +307,6 @@ export function BuilderNavigationModuleSettings({
                   max: 40,
                   fallback: String(NAV_STYLE_DEFAULTS.dropdownRadius),
                   rendersVia: RENDERS_VIA
-                },
-                {
-                  // List only: a mega panel's ▾ is its open/close button, not
-                  // decoration — hiding it would strand every sub-link on a
-                  // phone, where the panel opens by tapping it.
-                  key: "navShowArrow",
-                  label: "Arrow",
-                  width: "check",
-                  control: "checkbox",
-                  fallback: "true",
-                  visibleWhen: isListMenu,
-                  rendersVia: "NavigationModulePreview"
                 }
               ],
               [
@@ -435,22 +319,36 @@ export function BuilderNavigationModuleSettings({
                   fallback: NAV_STYLE_DEFAULTS.dropdownBackground,
                   rendersVia: RENDERS_VIA
                 }
+              ],
+              [
+                {
+                  // A6: a text colour is basic wherever it lives. This one
+                  // was in Advanced, where nobody found it.
+                  key: "navDropdownTextColor",
+                  label: "Panel Text",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#334861",
+                  dialogLabel: "Dropdown link color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // List only: a mega panel's arrow is its open/close button,
+                  // not decoration — hiding it would strand every sub-link on
+                  // a phone, where the panel opens by tapping it.
+                  key: "navShowArrow",
+                  label: "Arrow",
+                  width: "check",
+                  control: "checkbox",
+                  fallback: "true",
+                  visibleWhen: isListMenu,
+                  rendersVia: "NavigationModulePreview"
+                }
               ]
             ]
           }
-        ],
-        advanced: [
-          [
-            {
-              key: "navDropdownTextColor",
-              label: "Panel Text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#334861",
-              dialogLabel: "Dropdown link color",
-              rendersVia: RENDERS_VIA
-            }
-          ]
         ]
       },
       {
@@ -469,7 +367,7 @@ export function BuilderNavigationModuleSettings({
               rendersVia: "NavigationModulePreview"
             }
           ],
-          [...marginFields("getModuleOuterSpacingStyle", 160)],
+          ...marginFields("getModuleOuterSpacingStyle", 160).map((field) => [field]),
           [
             {
               key: "navPaddingV",
@@ -480,7 +378,9 @@ export function BuilderNavigationModuleSettings({
               max: 60,
               fallback: String(NAV_STYLE_DEFAULTS.paddingV),
               rendersVia: RENDERS_VIA
-            },
+            }
+          ],
+          [
             {
               key: "navPaddingH",
               label: "Horizontal Padding",
@@ -490,30 +390,6 @@ export function BuilderNavigationModuleSettings({
               max: 60,
               fallback: String(NAV_STYLE_DEFAULTS.paddingH),
               rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "verticalOffset",
-              label: "Vertical Offset",
-              width: "num",
-              control: "number",
-              min: -100,
-              max: 100,
-              step: 5,
-              fallback: "0",
-              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
-            },
-            {
-              key: "horizontalOffset",
-              label: "Horizontal Offset",
-              width: "num",
-              control: "number",
-              min: -100,
-              max: 100,
-              step: 5,
-              fallback: "0",
-              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
             }
           ],
           [
@@ -530,7 +406,9 @@ export function BuilderNavigationModuleSettings({
               max: 40,
               fallback: String(NAV_STYLE_DEFAULTS.linkPaddingV),
               rendersVia: RENDERS_VIA
-            },
+            }
+          ],
+          [
             {
               key: "navLinkPaddingH",
               label: "Link H Padding",
@@ -541,11 +419,47 @@ export function BuilderNavigationModuleSettings({
               fallback: String(NAV_STYLE_DEFAULTS.linkPaddingH),
               rendersVia: RENDERS_VIA
             }
+          ],
+          // D9 puts the finest adjustment last on its axis. A0 retired the
+          // Advanced section these two used to sit in (A3, withdrawn) —
+          // sorting last is how a nudge is de-emphasised now.
+          [
+            {
+              key: "verticalOffset",
+              label: "Vertical Offset",
+              width: "num",
+              control: "number",
+              min: -100,
+              max: 100,
+              step: 5,
+              fallback: "0",
+              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+            }
+          ],
+          [
+            {
+              key: "horizontalOffset",
+              label: "Horizontal Offset",
+              width: "num",
+              control: "number",
+              min: -100,
+              max: 100,
+              step: 5,
+              fallback: "0",
+              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+            }
           ]
         ]
       },
       {
         title: "Text",
+        /*
+         * A6, in the operator's words (8/11): "Don't put text color under
+         * Advanced. That is basic. Hover effects, dropshadows, etc. are
+         * advance." Colour and the label's own fill were both in Advanced
+         * and both read as missing — he reported having no control over
+         * "the background colors of the labels ... and the font color".
+         */
         strips: [
           [
             {
@@ -557,7 +471,9 @@ export function BuilderNavigationModuleSettings({
               max: 48,
               fallback: String(NAV_STYLE_DEFAULTS.fontSize),
               rendersVia: RENDERS_VIA
-            },
+            }
+          ],
+          [
             {
               // Replaces the Bold checkbox, which never reached the links.
               key: "navWeight",
@@ -589,7 +505,9 @@ export function BuilderNavigationModuleSettings({
                 { value: "hover", label: "On Hover" }
               ],
               rendersVia: RENDERS_VIA
-            },
+            }
+          ],
+          [
             {
               key: "navItalic",
               label: "Italic",
@@ -612,7 +530,9 @@ export function BuilderNavigationModuleSettings({
                 { value: "capitalize", label: "Capitalize" }
               ],
               rendersVia: RENDERS_VIA
-            },
+            }
+          ],
+          [
             {
               key: "navLetterSpacing",
               label: "Spacing",
@@ -621,6 +541,99 @@ export function BuilderNavigationModuleSettings({
               min: -4,
               max: 12,
               fallback: String(NAV_STYLE_DEFAULTS.letterSpacing),
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navLinkHeight",
+              label: "Link Height",
+              width: "num",
+              control: "number",
+              min: 24,
+              max: 96,
+              step: 2,
+              fallback: String(NAV_STYLE_DEFAULTS.linkHeight),
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          /*
+           * The effect layer, sorted after the colours per D9 rather than
+           * hidden behind a collapse (A0 retired Advanced). A7 puts the TEXT
+           * shadow on this axis and the bar's BOX shadow on Border — two
+           * different shadows, which is why dropShadowFields() takes a
+           * key prefix.
+           */
+          [
+            {
+              key: "navColor",
+              label: "Text Color",
+              width: "color",
+              control: "theme-color",
+              themeDefault: "#163a5e",
+              dialogLabel: "Menu text color",
+              rendersVia: RENDERS_VIA
+            }
+          ],
+
+          [
+            {
+              // New. A link had no resting background and no CSS for one,
+              // so the labels could not be coloured at all.
+              key: "navLinkBackground",
+              label: "Label Fill",
+              width: "color",
+              control: "theme-color",
+              themeDefault: "transparent",
+              dialogLabel: "Menu label background",
+              rendersVia: RENDERS_VIA
+            }
+          ],
+
+          [
+            {
+              key: "navHoverColor",
+              label: "Hover Text",
+              width: "color",
+              control: "theme-color",
+              themeDefault: "#0a8fc4",
+              dialogLabel: "Menu hover text color",
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navHoverBackground",
+              label: "Hover Fill",
+              width: "color",
+              control: "theme-color",
+              themeDefault: "#d0f0fb",
+              dialogLabel: "Menu hover background color",
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navActiveColor",
+              label: "Current Text",
+              width: "color",
+              control: "theme-color",
+              themeDefault: "#0a8fc4",
+              dialogLabel: "Current page link color",
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              // New. The current page's pill WAS the hover fill, with no
+              // control of its own — one label in every menu looked
+              // different and nothing could change it.
+              key: "navActiveBackground",
+              label: "Current Fill",
+              width: "color",
+              control: "theme-color",
+              themeDefault: "#d0f0fb",
+              dialogLabel: "Current page background",
               rendersVia: RENDERS_VIA
             }
           ],
@@ -641,85 +654,28 @@ export function BuilderNavigationModuleSettings({
               rendersVia: "getNavModuleClassNames (builder-nav-style.ts)"
             }
           ],
-          ...shadowFields(
-            {
-              toggle: "navTextShadow",
-              x: "navTextShadowX",
-              y: "navTextShadowY",
-              blur: "navTextShadowBlur",
-              color: "navTextShadowColor",
-              opacity: "navTextShadowOpacity"
-            },
-            {
-              x: NAV_STYLE_DEFAULTS.textShadowX,
-              y: NAV_STYLE_DEFAULTS.textShadowY,
-              blur: NAV_STYLE_DEFAULTS.textShadowBlur,
-              color: NAV_STYLE_DEFAULTS.textShadowColor,
-              opacity: NAV_STYLE_DEFAULTS.textShadowOpacity
-            },
-            "Text Shadow",
-            false
-          ),
+          ...dropShadowFields(RENDERS_VIA, {
+            prefix: "navTextShadow",
+            label: "Text Shadow",
+            range: { offset: 20, blur: 40 },
+            defaults: {
+              x: String(NAV_STYLE_DEFAULTS.textShadowX),
+              y: String(NAV_STYLE_DEFAULTS.textShadowY),
+              blur: String(NAV_STYLE_DEFAULTS.textShadowBlur),
+              color: NAV_STYLE_DEFAULTS.textShadowColor
+            }
+          }).map((field) => [field]),
           [
             {
-              key: "navLinkHeight",
-              label: "Link Height",
+              key: "navTextShadowOpacity",
+              label: "Shadow Opacity",
               width: "num",
               control: "number",
-              min: 24,
-              max: 96,
-              step: 2,
-              fallback: String(NAV_STYLE_DEFAULTS.linkHeight),
-              rendersVia: RENDERS_VIA
-            }
-          ]
-        ],
-        /*
-         * A1: theme overrides live in Advanced. Empty means "follow the
-         * theme" — the renderer emits the variable only when a value is set,
-         * so an empty one lets the theme's CSS decide. They sit collapsed
-         * rather than in the Text column inviting an override.
-         */
-        advanced: [
-          [
-            {
-              key: "navColor",
-              label: "Color",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#163a5e",
-              dialogLabel: "Menu text color",
-              rendersVia: RENDERS_VIA
-            },
-            {
-              key: "navHoverColor",
-              label: "Hover text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#0a8fc4",
-              dialogLabel: "Menu hover text color",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navHoverBackground",
-              label: "Hover bg",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#d0f0fb",
-              dialogLabel: "Menu hover background color",
-              rendersVia: RENDERS_VIA
-            },
-            {
-              // The current page's link. Followed the hover colour before,
-              // with no way to tell the two apart.
-              key: "navActiveColor",
-              label: "Current page",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#0a8fc4",
-              dialogLabel: "Current page link color",
+              min: 0,
+              max: 100,
+              step: 5,
+              fallback: String(NAV_STYLE_DEFAULTS.textShadowOpacity),
+              visibleWhen: (settings) => dropShadowIsOn(settings, "navTextShadow", false),
               rendersVia: RENDERS_VIA
             }
           ]
@@ -738,7 +694,9 @@ export function BuilderNavigationModuleSettings({
               max: 20,
               fallback: String(NAV_STYLE_DEFAULTS.borderWidth),
               rendersVia: RENDERS_VIA
-            },
+            }
+          ],
+          [
             {
               key: "navBorderStyle",
               label: "Style",
@@ -776,7 +734,9 @@ export function BuilderNavigationModuleSettings({
               max: 80,
               fallback: String(NAV_STYLE_DEFAULTS.barRadius),
               rendersVia: RENDERS_VIA
-            },
+            }
+          ],
+          [
             {
               // Keeps the legacy key: on live sites navBorderRadius has
               // always meant the LINK, and only the React preview ever put
@@ -791,26 +751,49 @@ export function BuilderNavigationModuleSettings({
               rendersVia: RENDERS_VIA
             }
           ],
-          ...shadowFields(
+          // A7: the BOX shadow the bar casts, last on the axis (D9).
+          // `defaultOn` because the bar had this shadow before anything could
+          // switch it off — an absent setting has to keep meaning "on" or
+          // every live menu goes flat.
+          ...dropShadowFields(RENDERS_VIA, {
+            prefix: "navShadow",
+            label: "Drop Shadow",
+            defaultOn: true,
+            range: { offset: 60, blur: 120 },
+            defaults: {
+              x: String(NAV_STYLE_DEFAULTS.shadowX),
+              y: String(NAV_STYLE_DEFAULTS.shadowY),
+              blur: String(NAV_STYLE_DEFAULTS.shadowBlur),
+              color: NAV_STYLE_DEFAULTS.shadowColor
+            }
+          }).map((field) => [field]),
+          [
             {
-              toggle: "navShadow",
-              x: "navShadowX",
-              y: "navShadowY",
-              blur: "navShadowBlur",
-              spread: "navShadowSpread",
-              color: "navShadowColor",
-              opacity: "navShadowOpacity"
-            },
+              key: "navShadowSpread",
+              label: "Shadow Spread",
+              width: "num",
+              control: "number",
+              min: -40,
+              max: 40,
+              fallback: "0",
+              visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
             {
-              x: NAV_STYLE_DEFAULTS.shadowX,
-              y: NAV_STYLE_DEFAULTS.shadowY,
-              blur: NAV_STYLE_DEFAULTS.shadowBlur,
-              color: NAV_STYLE_DEFAULTS.shadowColor,
-              opacity: NAV_STYLE_DEFAULTS.shadowOpacity
-            },
-            "Drop Shadow",
-            true
-          )
+              key: "navShadowOpacity",
+              label: "Shadow Opacity",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 100,
+              step: 5,
+              fallback: String(NAV_STYLE_DEFAULTS.shadowOpacity),
+              visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
+              rendersVia: RENDERS_VIA
+            }
+          ]
         ]
       }
     ]

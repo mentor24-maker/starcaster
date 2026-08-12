@@ -132,6 +132,34 @@ layout would avoid.*
   modules and they drop to three. Tracked as its own piece of work; the
   axes are designed to collapse cleanly when it does.
 
+- **D9. ORDER WITHIN AN AXIS: BLAST RADIUS, DESCENDING.** Fields on an
+  axis are ordered by how much of the module they change — the setting
+  with the widest effect first, the finest adjustment last.
+  *(operator 8/13: "Do apply logic to the ordering of the fields, placing
+  the most important/global first and most trivial last.")* — **[eye]**
+
+  | | Rung | Examples |
+  |---|---|---|
+  | 1 | **Destination / source** — what the module points at or draws from | `targetPageUrl`, `crmFormId`, `filterParam`, `successRedirect` |
+  | 2 | **Mode / layout** — the arrangement choice | `layout`, `cardLayout`, `style`, `navDirection` |
+  | 3 | **What appears** — show/hide toggles and the copy each one gates | `showExcerpt`, `title`, `allLabel` |
+  | 4 | **Size and spacing** | `fontSize`, `gap`, `size`, counts |
+  | 5 | **Colour** | `color`, `activeColor`, `bgColor` |
+  | 6 | **Fine adjustment** — the last 2% | `borderRadius`, offsets, `zIndex`, `transition` |
+
+  Change the destination and the module does something else entirely;
+  change the radius and it looks 2% different. That is the whole ordering
+  principle, and it is why rung 1 leads even when the destination is a
+  dull-looking URL field.
+
+  **The toggle-pairing rule outranks this within a pair:** a toggle that
+  gates one specific sibling field stays adjacent to it, toggle first, at
+  whichever rung the pair belongs to. Splitting `showTitle` from `title`
+  to satisfy a sort order would be worse than the sort is good.
+
+  D9 is what replaced Advanced (A0): a rarely-touched control is now
+  de-emphasised by sitting last on its axis rather than by being hidden.
+
 ## W — Field and control widths
 
 *Umbrella: a control is as wide as its content needs — never as wide as the
@@ -206,17 +234,32 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   The one number left is `--builder-field-room` (40px) in
   `src/css/_variables.css`. **Never set a width on an individual field.**
 
-  *Rolled out: Table (8/12, refined 8/13). Every other module follows —
-  the CSS already covers any panel, so rolling out is deleting the
-  `LATTICE_MODULE_TYPES` gate in `builder-module-card.tsx`.*
+  *Rolled out: Table (8/12, refined 8/13), Heading (8/11, on the operator's
+  word: "It also hasn't received the new 'Alignment Protocol', so let's
+  apply that one here, too"). Every other module follows — the CSS already
+  covers any panel, so rolling out is adding the type to
+  `LATTICE_MODULE_TYPES` in `builder-module-card.tsx` and re-running
+  `npm run check:panels`.*
 
-  **Known gap, not yet solved:** a panel with an **Advanced** section
-  renders it as a second row of columns. Under fixed widths the two rows
-  lined up by construction; under per-column content sizing each row
-  measures itself, so an advanced control can sit out of line with the
-  axis it belongs to. Table has no Advanced section, so this is not
-  visible yet — it must be settled before the rollout reaches a module
-  that does (Navigation is the first).
+  **The chrome bar is not a lattice column.** The flowing row of
+  module-level settings above a panel (`.builder-heading-module-chrome`,
+  `.builder-floating-image-module-chrome`) is one line by design (D1/D2) —
+  it has no tracks to line up, so it is excluded from the label room and
+  the control stretch. Leaving it in was not cosmetic: on 8/11 the
+  Background select stretched to the full width of the bar and the word
+  "Alignment" printed on top of it (L5). The SHARED `.builder-module-chrome`
+  is **not** excluded — `check_panels` measures it as a lattice group.
+
+  ~~**Known gap:** a panel with an Advanced section renders it as a second
+  row of columns, which under per-column sizing measures itself
+  independently, so an advanced control sits out of line with its axis.~~
+  **Closed by A0 (8/13), which deleted the Advanced section rather than
+  aligning it.** Heading is where the gap became visible — its Advanced
+  "Text" column sat ~150px left of the basic "Text" column above it — and
+  it is the reason A0 gives for deleting rather than fixing: "That made
+  Advanced the single blocker to rolling the lattice out across 22 of the
+  32 schema-driven panels." One row of columns per panel, so there is
+  nothing left to line up.
 
 - **W1.** **Never stretch a field to the widest possible width.** *(7/1
   "I've begged and pleaded with every AI model I've used again and again …
@@ -247,35 +290,68 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
 
-## A — Advanced, and overriding the theme
+## A — Overriding the theme
 
 *Umbrella: the theme does the styling; a module only overrides it
 deliberately, and says so.*
 
-- **A1.** **A setting that overrides a theme value lives in Advanced.**
-  The everyday axes hold the module's own settings; anything that
-  second-guesses the theme is collapsed out of the way, because a themed
-  restyle should be the path of least resistance rather than something
-  every panel invites you to fight. *(operator 8/10: "anything that is a
-  theme override would be included in the Advanced settings")* —
-  **[eye]** (which settings are theme-backed) + **[type]** (the
-  `theme-color` control)
+- **A0. ADVANCED IS RETIRED FROM MODULE PANELS (operator 8/13).**
+  There is no collapsed Advanced section in a module settings panel.
+  Every setting sits on the axis it belongs to. **A1, A3 and A5 are
+  withdrawn** — they only described where the collapsed section went and
+  what it had to say for itself. **A2 stands and does the real work.**
+
+  *(operator 8/13: "I'm second guessing the Advanced section at the
+  moment. There aren't that many settings that go into it, and some of
+  them are judgement calls. It may be more trouble than it's worth.")*
+
+  **What the count showed.** 22 panels had an Advanced section holding 67
+  settings between them — a median of 2. Twelve panels hid one or two
+  controls; eight hid exactly one. That is a collapse, an override badge
+  and a second row of columns to conceal two fields.
+
+  **The boundary could not be applied consistently, even deliberately.**
+  A6 ruled on 8/11 that text colour is basic. On 8/13, Simple Text, Blog
+  TOC and Breadcrumb all still had their text colour inside Advanced —
+  contradicted in shipped code within a day of the rule being written.
+  A rule nobody can apply is not a rule.
+
+  **A2 is what actually protected the theme, not the hiding.** A control
+  that is empty and reads "theme" until you change it already says the
+  theme decides this, wherever it sits on screen. The collapse added
+  concealment on top and bought nothing — and A3 (the "N overriding the
+  theme" badge) existed only to compensate for the concealment.
+
+  **It also cost.** The Advanced row rendered as a second row of columns,
+  which under W0's per-column content sizing measured itself
+  independently — so an advanced control could sit out of line with the
+  axis it belonged to. That made Advanced the single blocker to rolling
+  the lattice out across 22 of the 32 schema-driven panels. Deleting it
+  was less work than fixing it.
+
+  **If a panel now feels crowded**, that is a signal about the module —
+  too many controls, or a missing axis — and a design question for the
+  operator. It is not a reason to reintroduce a hiding place (the old A4,
+  which survives as A0's own guard).
+
+- ~~**A1.** A setting that overrides a theme value lives in Advanced.~~
+  **WITHDRAWN 8/13 — see A0.** Theme-backed settings keep the
+  `theme-color` control (A2); they simply live on their axis now.
 - **A2.** A theme override is **empty by default and shows the theme's
   value**, with one click to give it back ("theme"). Never a hardcoded
   colour pre-filled into the field — that is an override nobody chose.
   Schema: `control: "theme-color"` with `themeDefault`. — **[type]**
-- **A3.** **Collapsed must not mean invisible.** The Advanced summary
-  states how many settings are currently overriding the theme, so a
-  module that ignores a themed restyle explains itself instead of
-  looking like a theme bug. — **[auto-ish]** (the generator renders the
-  count)
-- **A5.** **Offsets live under Placement → Advanced.** Vertical Offset
-  and Horizontal Offset are nudges, not everyday placement — they sit in
-  the Placement axis's Advanced section. *(operator 8/10)* — **[eye]**
-- **A4.** Advanced is for theme overrides and genuinely rare settings —
-  **not** a place to hide controls that did not fit a column. If a
-  control belongs to an axis, it goes on the axis. *(guard against A1
-  becoming a junk drawer)* — **[eye]**
+- ~~**A3.** Collapsed must not mean invisible — the Advanced summary
+  states how many settings are currently overriding the theme.~~
+  **WITHDRAWN 8/13 — see A0.** Nothing is collapsed, so nothing can be
+  invisible; the badge was machinery compensating for machinery.
+- ~~**A5.** Offsets live under Placement → Advanced.~~ **WITHDRAWN
+  8/13 — see A0.** Offsets are still nudges rather than everyday
+  placement, so they go **last on the Placement axis** (D9) instead of
+  behind a collapse. *(operator 8/10)*
+- **A4.** **If a control belongs to an axis, it goes on the axis.**
+  Written as a guard against A1 becoming a junk drawer; it outlived A1
+  and is now simply how panels are built. — **[eye]**
 - **A6.** **Text colour is basic. Effects are advanced.** A1 is amended:
   being theme-backed is not by itself enough to collapse a control out of
   sight. The colour of a piece of text is the most ordinary thing anyone
@@ -286,6 +362,10 @@ deliberately, and says so.*
   promoting it does not pre-fill an override nobody chose.
   *(operator 8/11: "Don't put text color under Advanced. That is basic.
   Hover effects, dropshadows, etc. are advance.")* — **[eye]**
+  **Superseded in part by A0 (8/13):** nothing is collapsed now, so the
+  "effects go to Advanced" half no longer has anywhere to send them.
+  Effects instead sort to the END of their axis under D9 — still
+  de-emphasised, still one glance away rather than one click.
 - **A7.** **A shadow belongs to the axis it actually shadows.** A
   `text-shadow` is a Text control; a `box-shadow` on a frame or card is a
   Frame control. Do not file a drop shadow under Frame because "shadows
