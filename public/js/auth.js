@@ -44,6 +44,26 @@ App.auth = {
   _registrationInviteOnly: null,
 };
 
+// An invitation link pasted into a tab that ALREADY has StarCaster open
+// changes only the fragment. That is a same-document navigation: no reload,
+// so the detection above never runs again and the invitation quietly does
+// nothing — the same silent failure this whole flow exists to prevent.
+// Opening the link from an email gives a fresh load and takes the path above.
+window.addEventListener('hashchange', (event) => {
+  try {
+    // Read the token out of the EVENT, not out of window.location. The SPA's
+    // hash router rewrites any hash it does not recognise back to
+    // "#page=<current>", and it wins the race — by the time this handler looks
+    // at the address bar the token is already gone.
+    const match = String(event?.newURL || window.location.href || '').match(/[#&]signup-invite=([^&]+)/);
+    if (!match) return;
+    App.auth._signupInviteToken = decodeURIComponent(match[1]);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (App.auth.user) App.auth._consumeSignupInvite();
+    else App.auth._applyRegistrationMode().catch(() => {});
+  } catch (_) {}
+});
+
 App.auth._els = {
   appShell: null,
   authLanding: null,
@@ -153,6 +173,27 @@ App.auth._applyRegistrationMode = async function _applyRegistrationMode() {
   try {
     const res = await App.api(`/api/invitations/verify?token=${encodeURIComponent(token)}`, { method: 'GET' });
     const invite = res.data || res;
+
+    // Someone who already has a login must be sent to the SIGN-IN form, not
+    // the sign-up one: registering would be refused as a duplicate address,
+    // which reads as "your invitation is broken". The token is redeemed after
+    // they sign in, by _consumeSignupInvite.
+    if (invite.hasAccount) {
+      const loginEmail = App.auth._els.authLoginForm
+        ? App.auth._els.authLoginForm.querySelector('input[name="email"]')
+        : null;
+      if (loginEmail && invite.email) loginEmail.value = invite.email;
+      if (authShowRegister) authShowRegister.classList.toggle('hidden', inviteOnly);
+      App.auth._setMode('login');
+      App.auth._setMessage(
+        invite.projectName
+          ? `You already have a StarCaster account. Sign in and ${invite.projectName} will be added to it.`
+          : 'You already have a StarCaster account. Sign in to accept this invitation.',
+        false
+      );
+      return;
+    }
+
     const form = App.auth._els.authRegisterForm;
     const emailInput = form ? form.querySelector('input[name="email"]') : null;
     if (emailInput && invite.email) {
@@ -287,6 +328,48 @@ App.auth.handleUnauthorized = function handleUnauthorized() {
   App.auth._setMessage('');
 };
 
+/**
+ * Redeem a sign-up invitation for someone who ALREADY has an account.
+ *
+ * Registration redeems the token itself, so this only has work to do when the
+ * invited address was already registered. Before it existed, such an
+ * invitation could never be accepted: signed in, the link did nothing at all
+ * (the sign-in screen never appears, so nothing looked at the token); signed
+ * out, it led to a sign-up form that refused the duplicate address.
+ */
+App.auth._consumeSignupInvite = async function _consumeSignupInvite() {
+  const token = String(App.auth._signupInviteToken || '').trim();
+  if (!token || !App.auth.user) return;
+  App.auth._signupInviteToken = null;
+
+  try {
+    const res = await App.api('/api/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+    const data = res?.data || res || {};
+    const projectId = String(data.projectId || '').trim();
+    const projectName = String(data.projectName || '').trim();
+
+    if (!projectId) {
+      App.notify('Invitation accepted.');
+      return;
+    }
+    App.notify(projectName ? `You've been added to ${projectName}.` : 'You have been added to the project.');
+    if (App.projectContext?.switchSessionProject) {
+      App.projectContext.switchSessionProject(projectId, { keepView: false, refresh: true }).catch(() => {
+        window.location.reload();
+      });
+    } else {
+      window.location.reload();
+    }
+  } catch (err) {
+    // Say why. A silently dropped invitation is what this whole change exists
+    // to stop happening.
+    App.notify(err.message || 'That invitation could not be accepted.', true);
+  }
+};
+
 App.auth._consumePendingProjectInvite = async function _consumePendingProjectInvite() {
   const token = App.auth._pendingProjectInviteToken;
   if (!token) return;
@@ -346,6 +429,10 @@ App.auth._register = async function _register(payload) {
     method: 'POST',
     body: JSON.stringify(body),
   });
+  // Registration redeems the token server-side. Clearing it here stops
+  // _consumeSignupInvite from trying to spend it a second time and reporting
+  // "already used" on a sign-up that just worked.
+  App.auth._signupInviteToken = null;
   App.auth._persistSessionToken(res);
   return res.user || res.data?.user || null;
 };
@@ -417,6 +504,7 @@ App.auth.init = function init(bootMainApp) {
         App.auth._startMainApp();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
+        App.auth._consumeSignupInvite();
         App.auth._setMessage('');
       } catch (err) {
         App.auth._setMessage(err.message || 'Login failed', true);
@@ -447,6 +535,7 @@ App.auth.init = function init(bootMainApp) {
         App.auth._startMainApp();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
+        App.auth._consumeSignupInvite();
         App.auth._setMessage('');
       } catch (err) {
         App.auth._setMessage(err.message || 'Registration failed', true);
@@ -542,6 +631,7 @@ App.auth.init = function init(bootMainApp) {
         App.auth._startMainApp();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
+        App.auth._consumeSignupInvite();
         App.auth._setMessage('');
       });
     })
