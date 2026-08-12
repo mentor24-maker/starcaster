@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import ActiveCampaignsList from './components/campaigns/ActiveCampaignsList';
 import AssociationsPanelHost from './components/associations/associations-panel';
+import AssetRenditionsPanel from './components/assets/asset-renditions-panel';
 
 // Host ids that should receive an Associations panel. The vanilla screen names
 // the open object by dispatching starcaster:associations-target at the panel.
@@ -17,6 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (campaignsRootHost) {
     const root = createRoot(campaignsRootHost);
     root.render(<ActiveCampaignsList />);
+  }
+
+  const assetRenditionsHost = document.getElementById('assetRenditionsRoot');
+
+  if (assetRenditionsHost) {
+    createRoot(assetRenditionsHost).render(<AssetRenditionsPanel />);
   }
 
   ASSOCIATION_PANEL_HOSTS.forEach((hostId) => {

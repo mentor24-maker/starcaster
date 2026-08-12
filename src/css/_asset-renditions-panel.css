@@ -1,0 +1,77 @@
+/* Scaled-copies sweep (React island) — components/assets/asset-renditions-panel.tsx
+   Sits directly under the Assets page intro line. It is maintenance, not
+   navigation, so it reads as a quiet notice rather than a call to action — and
+   it renders nothing at all once every image has its copies. */
+
+.asset-renditions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-light, #d7dde5);
+  border-radius: var(--radius-container, 10px);
+  background: var(--bg-surface, #fff);
+  font-size: var(--text-base);
+}
+
+.asset-renditions-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* The sentence explaining what the sweep does must not crowd the button off
+   the row on a narrow window, so it wraps within its own column. */
+.asset-renditions-headline > div:first-child {
+  flex: 1 1 22rem;
+  min-width: 0;
+}
+
+.asset-renditions-actions {
+  flex: 0 0 auto;
+}
+
+.asset-renditions-summary,
+.asset-renditions-detail {
+  margin: 0;
+  color: var(--ink-secondary, #536471);
+}
+
+.asset-renditions-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.asset-renditions-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-hover, #eef2f6);
+  overflow: hidden;
+}
+
+.asset-renditions-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent, #0f4f8f);
+  /* Batches land a few images at a time; easing the width stops the bar
+     jumping in visible steps. */
+  transition: width 240ms ease;
+}
+
+.asset-renditions-failures {
+  font-size: var(--text-sm);
+}
+
+.asset-renditions-failures summary {
+  cursor: pointer;
+  color: var(--ink-secondary, #536471);
+}
+
+.asset-renditions-failures ul {
+  margin: 0.4rem 0;
+  padding-left: 1.2rem;
+}
