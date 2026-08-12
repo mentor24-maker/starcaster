@@ -16,6 +16,7 @@ import {
 } from "@/lib/builder-table-data";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
+import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
@@ -30,7 +31,7 @@ import {
 } from "./builder-settings-schema";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
-import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
+import { type BuilderThemePalette } from "./builder-theme-color-field";
 import { PLAIN_TEXT_PLACEHOLDER, type ModulePaletteGroup, type ModulePaletteItem } from "./builder-types";
 import { getModuleAlignment, getModuleBackgroundSettings } from "./builder-utils";
 
@@ -42,6 +43,16 @@ const TABLE_CELL_EXCLUDED_PALETTE_GROUPS: ModulePaletteGroup[] = ["table", "cont
 
 const MAX_COLUMNS = 10;
 const MAX_ROWS = 100;
+
+/**
+ * Cell modules whose editor is the schema generator's multi-column axis
+ * layout (D8). 560px is a one-column form's width; four axes in it would
+ * crop (L4/D7 — a modal sizes to its content, and a form modal never
+ * scrolls sideways). 1200 is four 260px columns plus their gaps and the modal's own
+ * padding, measured — so the axes read across one row exactly as they
+ * do in a section panel.
+ */
+const AXIS_EDITOR_TYPES = new Set(["button", "heading", "image", "text"]);
 
 /**
  * Max Width presets (C1 — a dropdown of knowable values, not a free-form
@@ -135,11 +146,15 @@ function TableCellModules({
           </div>
           <div className="builder-table-cell-module-preview">{renderCellPreview(mod)}</div>
           {editingId === mod.id && (
-            <BuilderCenteredModal title={mod.name || mod.type} onClose={() => setEditingId(null)}>
+            <BuilderCenteredModal
+              title={mod.name || mod.type}
+              onClose={() => setEditingId(null)}
+              maxWidth={AXIS_EDITOR_TYPES.has(mod.type) ? 1200 : 560}
+            >
             <div className="builder-table-cell-module-editor">
               <label className="field">
                 <span>Module label</span>
-                <input type="text" value={mod.name} onChange={(e) => updateModuleField(mod.id, "name", e.target.value)} placeholder="Optional internal label" />
+                <input type="text" value={mod.name} onChange={(e) => updateModuleField(mod.id, "name", e.target.value)} placeholder="Internal label" />
               </label>
 
               {mod.type === "heading" ? (
@@ -200,44 +215,20 @@ function TableCellModules({
                 </label>
               )}
 
-              {mod.type === "button" && (
-                <div className="builder-table-cell-button-settings">
-                  <BuilderSettingRow label="Button label" fullWidth>
-                    <input
-                      type="text"
-                      value={mod.text}
-                      onChange={(e) => updateModuleField(mod.id, "text", e.target.value)}
-                      placeholder="Button text"
-                    />
-                  </BuilderSettingRow>
-                  <BuilderSettingRow label="Link" fullWidth>
-                    <input
-                      type="text"
-                      value={mod.settings.href ?? ""}
-                      onChange={(e) => updateModuleSettings(mod.id, { href: e.target.value })}
-                      placeholder="/path-or-url"
-                    />
-                  </BuilderSettingRow>
-                  <BuilderSettingRow label="Button color">
-                    <BuilderThemeColorField
-                      dialogLabel="Button color"
-                      fallback="#214c71"
-                      themeColors={themeColors}
-                      value={mod.settings.buttonColor ?? "#214c71"}
-                      onChange={(buttonColor) => updateModuleSettings(mod.id, { buttonColor })}
-                    />
-                  </BuilderSettingRow>
-                  <BuilderSettingRow label="Text color">
-                    <BuilderThemeColorField
-                      dialogLabel="Button text color"
-                      fallback="#ffffff"
-                      themeColors={themeColors}
-                      value={mod.settings.textColor ?? "#ffffff"}
-                      onChange={(textColor) => updateModuleSettings(mod.id, { textColor })}
-                    />
-                  </BuilderSettingRow>
-                </div>
-              )}
+              {/* The cell button gets the SAME panel as a button in a
+                  section — it used to get four hand-rolled fields (label,
+                  link, two colours) and nothing else, so a button dropped in
+                  a table cell had no padding, no border, no alignment, no
+                  margins and no size. Doctrine E1/C8: one editor per module
+                  type, wherever the module lives. */}
+              {mod.type === "button" ? (
+                <BuilderButtonModuleSettings
+                  compact
+                  module={mod}
+                  themeColors={themeColors}
+                  onUpdateModule={(updater) => updateCellModule(mod.id, updater)}
+                />
+              ) : null}
 
               {mod.type === "image" && (
                 <>

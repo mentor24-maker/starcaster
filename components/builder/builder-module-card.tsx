@@ -118,7 +118,7 @@ import {
   getVideoEmbedSource,
   isVideoMedia
 } from "./builder-utils";
-import { BuilderButtonDesignSettings } from "./builder-button-design-settings";
+import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
 import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
 import {
@@ -3553,7 +3553,7 @@ export function BuilderModuleCard({
           ) : null}
 
           {module.type === "button" ? (
-            <BuilderButtonDesignSettings
+            <BuilderButtonModuleSettings
               isEmailTemplate={isEmailTemplate}
               module={module}
               themeColors={themeColors}
