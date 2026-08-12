@@ -502,9 +502,14 @@ export type BuilderTemplateSection = {
    * — and kept in the type because old rows still carry it.
    */
   cellPadding: Record<string, string>;
-  cellVerticalPadding: Record<string, string>;
-  cellHorizontalPadding: Record<string, string>;
-  cellVerticalMargin: Record<string, string>;
+  cellPaddingTop: Record<string, string>;
+  cellPaddingBottom: Record<string, string>;
+  cellPaddingLeft: Record<string, string>;
+  cellPaddingRight: Record<string, string>;
+  cellMarginTop: Record<string, string>;
+  cellMarginBottom: Record<string, string>;
+  cellMarginLeft: Record<string, string>;
+  cellMarginRight: Record<string, string>;
   cellMobileHidden: Record<string, string>;
   cellDesktopHidden: Record<string, string>;
   cellIsPrivate: Record<string, string>;
@@ -1544,29 +1549,55 @@ function normalizeCellPadding(
 }
 
 /**
- * One axis of a cell's padding, seeded from the legacy all-sides
- * `cellPadding` when the axis has never been set.
+ * One SIDE of a cell's padding, seeded from whatever the cell used to carry.
  *
- * Splitting the control was the fix for a real dead end (operator,
- * 2026-08-11): a logo in a banner cell sat 18px lower than the menu beside
- * it, and the only way to close that gap was a single number that also threw
- * away the 18px holding the logo off the left edge. Seeding from the legacy
- * value is what keeps every row saved before the split pixel-identical.
+ * Two generations of fallback, newest first: the vertical/horizontal pair
+ * that shipped 2026-08-11, then the single all-sides `cellPadding` before
+ * it. A cell that has never been given a padding gets 0 — a default nobody
+ * asked for is what put an unreachable 18px band above a banner logo and
+ * cost the operator an evening.
  */
-function normalizeCellPaddingAxis(
+function normalizeCellPaddingSide(
   value: unknown,
+  pair: unknown,
   legacy: Record<string, string>,
   layout: BuilderTemplateLayout
 ): Record<string, string> {
   const columns = getLayoutColumns(layout);
-  const raw = value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  const read = (source: unknown, column: string) =>
+    source && typeof source === "object" && !Array.isArray(source)
+      ? (source as Record<string, unknown>)[column]
+      : undefined;
 
   return Object.fromEntries(
     columns.map((column) => [
       column,
-      normalizeSpacingValue(raw[column] ?? legacy[column] ?? "0", "0", 0, 50)
+      normalizeSpacingValue(
+        read(value, column) ?? read(pair, column) ?? legacy[column] ?? "0",
+        "0",
+        0,
+        50
+      )
+    ])
+  );
+}
+
+/** One side of a cell's margin, seeded from the vertical pair that preceded it. */
+function normalizeCellMarginSide(
+  value: unknown,
+  pair: unknown,
+  layout: BuilderTemplateLayout
+): Record<string, string> {
+  const columns = getLayoutColumns(layout);
+  const read = (source: unknown, column: string) =>
+    source && typeof source === "object" && !Array.isArray(source)
+      ? (source as Record<string, unknown>)[column]
+      : undefined;
+
+  return Object.fromEntries(
+    columns.map((column) => [
+      column,
+      normalizeSpacingValue(read(value, column) ?? read(pair, column) ?? "0", "0", 0, 160)
     ])
   );
 }
@@ -1755,12 +1786,59 @@ export function resolveBuilderModuleType(
   return type;
 }
 
+/**
+ * Migrate one spacing pair onto its four sides.
+ *
+ * Every object in the Builder — row, cell, module — spells its spacing the
+ * same way from 2026-08-11: Top, Bottom, Left, Right, for both margin and
+ * padding (operator: "standardize all objects on the Top/Bottom/Left/Right
+ * model"). Rows already did; everything else carried a vertical/horizontal
+ * PAIR, so each side inherits the pair's value and nothing moves.
+ *
+ * A side that has already been set wins, which is what makes this safe to
+ * run on every load: the operator's own number is never overwritten by the
+ * pair it came from.
+ */
+function migrateSpacingPairToSides(
+  settings: Record<string, string>,
+  prefix: string,
+  legacyVerticalKey: string,
+  legacyHorizontalKey: string,
+  {
+    min = 0,
+    max = 160,
+    verticalFallback = "0",
+    horizontalFallback = verticalFallback
+  }: { min?: number; max?: number; verticalFallback?: string; horizontalFallback?: string } = {}
+) {
+  const cap = (side: string) => `${prefix}${side}`;
+  const vertical = settings[legacyVerticalKey];
+  const horizontal = settings[legacyHorizontalKey];
+
+  // The two fallbacks are separate because a pair does not always default to
+  // the same number on both axes — a menu bar's links ship 0 top/bottom and
+  // 14 left/right. One shared fallback here would have flattened the link
+  // padding of every live menu that had never touched the control.
+  settings[cap("Top")] = normalizeSpacingValue(settings[cap("Top")] ?? vertical, verticalFallback, min, max);
+  settings[cap("Bottom")] = normalizeSpacingValue(settings[cap("Bottom")] ?? vertical, verticalFallback, min, max);
+  settings[cap("Left")] = normalizeSpacingValue(settings[cap("Left")] ?? horizontal, horizontalFallback, min, max);
+  settings[cap("Right")] = normalizeSpacingValue(settings[cap("Right")] ?? horizontal, horizontalFallback, min, max);
+
+  delete settings[legacyVerticalKey];
+  delete settings[legacyHorizontalKey];
+}
+
 export function normalizeBuilderModuleSettingsForType(
   type: BuilderTemplateModuleType,
   value: unknown,
   moduleContext?: Pick<BuilderTemplateModule, "id" | "name" | "text">
 ) {
   const settings = normalizeModuleSettings(value);
+
+  // Universal, before any per-type block: EVERY module's outer spacing is
+  // four sides. The per-type copies of this migration (heading's and the
+  // button's) are gone — one rule, run once, for all 38 types.
+  migrateSpacingPairToSides(settings, "margin", "verticalMargin", "horizontalMargin");
 
   if (type === "tractor-nav") {
     if (!settings.color)        settings.color        = "#0000ff";
@@ -1855,16 +1933,35 @@ export function normalizeBuilderModuleSettingsForType(
     delete settings.navBold;
 
     // The nav had its own margin pair alongside the module's, both live, both
-    // labelled "Vertical Margin". One survives, and it is the standard key
-    // every other module uses (doctrine W7/E4).
-    if (settings.navMarginV && !settings.verticalMargin) {
-      settings.verticalMargin = normalizeSpacingValue(settings.navMarginV, "0", 0, 160);
+    // labelled "Vertical Margin". One survives, and it is the standard the
+    // whole Builder now spells the same way (W7). The universal migration
+    // above has already run, so an unset side is still "0" here and taking
+    // the nav's own number does not overwrite anybody's choice.
+    if (settings.navMarginV && settings.marginTop === "0" && settings.marginBottom === "0") {
+      settings.marginTop = normalizeSpacingValue(settings.navMarginV, "0", 0, 160);
+      settings.marginBottom = settings.marginTop;
     }
-    if (settings.navMarginH && !settings.horizontalMargin) {
-      settings.horizontalMargin = normalizeSpacingValue(settings.navMarginH, "0", 0, 160);
+    if (settings.navMarginH && settings.marginLeft === "0" && settings.marginRight === "0") {
+      settings.marginLeft = normalizeSpacingValue(settings.navMarginH, "0", 0, 160);
+      settings.marginRight = settings.marginLeft;
     }
     delete settings.navMarginV;
     delete settings.navMarginH;
+
+    // The bar's own padding and the links' padding, each on four sides.
+    // Fallbacks are NAV_STYLE_DEFAULTS: the bar ships 8 on every side, the
+    // links 0 top/bottom and 14 left/right. Migrating to a flat 0 would have
+    // stripped the padding from every menu on every live site.
+    migrateSpacingPairToSides(settings, "navPadding", "navPaddingV", "navPaddingH", {
+      max: 60,
+      verticalFallback: "8",
+      horizontalFallback: "8"
+    });
+    migrateSpacingPairToSides(settings, "navLinkPadding", "navLinkPaddingV", "navLinkPaddingH", {
+      max: 60,
+      verticalFallback: "0",
+      horizontalFallback: "14"
+    });
 
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
@@ -1874,8 +1971,7 @@ export function normalizeBuilderModuleSettingsForType(
     stripOverlayOnlyImageSettings(settings);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
-    settings.verticalPadding = normalizeSpacingValue(settings.verticalPadding, "0", 0, 160);
-    settings.horizontalPadding = normalizeSpacingValue(settings.horizontalPadding, "0", 0, 160);
+    migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
   }
 
   if (type === "floating-image") {
@@ -1886,8 +1982,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.offsetY = normalizeSignedOffsetValue(settings.offsetY, "0");
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
-    settings.verticalPadding = normalizeSpacingValue(settings.verticalPadding, "0", 0, 160);
-    settings.horizontalPadding = normalizeSpacingValue(settings.horizontalPadding, "0", 0, 160);
+    migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
     settings.zIndex = normalizeSpacingValue(settings.zIndex, "20", -999, 999999);
 
     const trigger = normalizeModuleTrigger(settings[MODULE_TRIGGER_SETTING_KEY]);
@@ -1922,10 +2017,6 @@ export function normalizeBuilderModuleSettingsForType(
   }
 
   if (type === "heading") {
-    const legacy = settings.verticalMargin;
-    settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacy, "0");
-    settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacy, "0");
-    settings.horizontalMargin = normalizeSpacingValue(settings.horizontalMargin, "0", 0, 160);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     settings.fontFamily = HEADING_FONT_KEYS.has(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";
@@ -1941,14 +2032,14 @@ export function normalizeBuilderModuleSettingsForType(
   }
 
   if (type === "button") {
-    const legacyVertical = settings.verticalMargin;
-    const legacyHorizontal = settings.horizontalMargin;
-    settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacyVertical, "0", 0, 160);
-    settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacyVertical, "0", 0, 160);
-    settings.marginLeft = normalizeSpacingValue(settings.marginLeft ?? legacyHorizontal, "0", 0, 160);
-    settings.marginRight = normalizeSpacingValue(settings.marginRight ?? legacyHorizontal, "0", 0, 160);
-    settings.paddingX = normalizeSpacingValue(settings.paddingX, "24", 1, 50);
-    settings.paddingY = normalizeSpacingValue(settings.paddingY, "12", 1, 50);
+    // A button that has never carried a padding keeps the shape it shipped
+    // with — 12 top/bottom, 24 left/right — so no live button changes size.
+    settings.paddingTop = normalizeSpacingValue(settings.paddingTop ?? settings.paddingY, "12", 1, 50);
+    settings.paddingBottom = normalizeSpacingValue(settings.paddingBottom ?? settings.paddingY, "12", 1, 50);
+    settings.paddingLeft = normalizeSpacingValue(settings.paddingLeft ?? settings.paddingX, "24", 1, 50);
+    settings.paddingRight = normalizeSpacingValue(settings.paddingRight ?? settings.paddingX, "24", 1, 50);
+    delete settings.paddingX;
+    delete settings.paddingY;
   }
 
   if (type === "current-poll") {
@@ -2308,17 +2399,42 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
         cellPadding: cellPadding,
-        cellVerticalPadding: normalizeCellPaddingAxis(
+        cellPaddingTop: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingTop,
           normalizedSection.cellVerticalPadding,
           cellPadding,
           layout
         ),
-        cellHorizontalPadding: normalizeCellPaddingAxis(
+        cellPaddingBottom: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingBottom,
+          normalizedSection.cellVerticalPadding,
+          cellPadding,
+          layout
+        ),
+        cellPaddingLeft: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingLeft,
           normalizedSection.cellHorizontalPadding,
           cellPadding,
           layout
         ),
-        cellVerticalMargin: normalizeCellMetric(normalizedSection.cellVerticalMargin, layout, "0", 0, 160),
+        cellPaddingRight: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingRight,
+          normalizedSection.cellHorizontalPadding,
+          cellPadding,
+          layout
+        ),
+        cellMarginTop: normalizeCellMarginSide(
+          normalizedSection.cellMarginTop,
+          normalizedSection.cellVerticalMargin,
+          layout
+        ),
+        cellMarginBottom: normalizeCellMarginSide(
+          normalizedSection.cellMarginBottom,
+          normalizedSection.cellVerticalMargin,
+          layout
+        ),
+        cellMarginLeft: normalizeCellMarginSide(normalizedSection.cellMarginLeft, undefined, layout),
+        cellMarginRight: normalizeCellMarginSide(normalizedSection.cellMarginRight, undefined, layout),
         cellMobileHidden: normalizeCellColor(normalizedSection.cellMobileHidden, layout, "false"),
         cellDesktopHidden: normalizeCellColor(normalizedSection.cellDesktopHidden, layout, "false"),
         cellIsPrivate: normalizeCellColor(normalizedSection.cellIsPrivate, layout, "false"),
@@ -2397,9 +2513,14 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
       getLayoutColumns(layout).map((column) => [column, createDefaultBackgroundSettings()])
     ),
     cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
-    cellVerticalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
-    cellHorizontalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
-    cellVerticalMargin: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingTop: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingBottom: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingLeft: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingRight: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginTop: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginBottom: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginLeft: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginRight: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellMobileHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellDesktopHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellIsPrivate: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),

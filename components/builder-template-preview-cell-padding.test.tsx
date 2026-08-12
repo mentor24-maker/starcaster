@@ -31,7 +31,7 @@ describe("cell padding on the rendered page", () => {
   it("keeps a row saved before the split rendering exactly as it did", () => {
     const html = renderRows([bannerRow({ cellPadding: { left: "18", right: "18" } })]);
 
-    expect(html).toContain("padding:18px 18px");
+    expect(html).toContain("padding:18px 18px 18px 18px");
   });
 
   it("drops the top and bottom without losing the left and right", () => {
@@ -39,7 +39,7 @@ describe("cell padding on the rendered page", () => {
       bannerRow({ cellPadding: { left: "18", right: "18" }, cellVerticalPadding: { left: "0" } })
     ]);
 
-    expect(html).toContain("padding:0px 18px");
+    expect(html).toContain("padding:0px 18px 0px 18px");
   });
 
   it("drops the left and right without losing the top and bottom", () => {
@@ -47,7 +47,7 @@ describe("cell padding on the rendered page", () => {
       bannerRow({ cellPadding: { left: "18", right: "18" }, cellHorizontalPadding: { left: "0" } })
     ]);
 
-    expect(html).toContain("padding:18px 0px");
+    expect(html).toContain("padding:18px 0px 18px 0px");
   });
 });
 
@@ -65,10 +65,10 @@ describe("cell padding on the rendered page", () => {
  * without which it has nothing to honour.
  */
 describe("a cell publishes its padding, so no breakpoint can replace it", () => {
-  it("publishes both axes as one box value", () => {
+  it("publishes all four sides as one box value", () => {
     const html = renderRows([bannerRow({ cellPadding: { left: "4", right: "4" } })]);
 
-    expect(html).toContain("--builder-cell-padding-box:4px 4px");
+    expect(html).toContain("--builder-cell-padding-box:4px 4px 4px 4px");
   });
 
   it("publishes zero as zero rather than leaving the variable unset", () => {
@@ -76,22 +76,22 @@ describe("a cell publishes its padding, so no breakpoint can replace it", () => 
     // back to its own hardcoded 12px.
     const html = renderRows([bannerRow({ cellPadding: { left: "0", right: "0" } })]);
 
-    expect(html).toContain("--builder-cell-padding-box:0px 0px");
+    expect(html).toContain("--builder-cell-padding-box:0px 0px 0px 0px");
   });
 
-  it("keeps the two axes apart in the published value", () => {
+  it("keeps the sides apart in the published value", () => {
     const html = renderRows([
       bannerRow({ cellPadding: { left: "18", right: "18" }, cellVerticalPadding: { left: "0" } })
     ]);
 
-    expect(html).toContain("--builder-cell-padding-box:0px 18px");
+    expect(html).toContain("--builder-cell-padding-box:0px 18px 0px 18px");
   });
 
   it("agrees with the inline padding it sets — the two cannot drift", () => {
     const html = renderRows([bannerRow({ cellPadding: { left: "7", right: "7" } })]);
 
-    expect(html).toContain("--builder-cell-padding-box:7px 7px");
-    expect(html).toContain("padding:7px 7px");
+    expect(html).toContain("--builder-cell-padding-box:7px 7px 7px 7px");
+    expect(html).toContain("padding:7px 7px 7px 7px");
   });
 
   it("publishes the radius the same way", () => {
@@ -102,7 +102,7 @@ describe("a cell publishes its padding, so no breakpoint can replace it", () => 
     expect(html).toContain("--builder-cell-radius:24px");
   });
 
-  it("leaves PR 176's horizontal-axis variable alone", () => {
+  it("leaves the left-side variable PR 176 added alone", () => {
     // Its consumer is a margin-inline rule on an overlay slot; the box value
     // would be the wrong number there.
     const html = renderRows([bannerRow({ cellPadding: { left: "9", right: "9" } })]);

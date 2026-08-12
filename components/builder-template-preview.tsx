@@ -61,7 +61,6 @@ import {
 import {
   getAlignmentClass,
   getButtonModuleStyle,
-  getButtonModuleOuterSpacingStyle,
   getHeadingModuleStyle,
   getBuilderThemeStyleVars,
   getBuilderThemePageMarginStyle,
@@ -95,12 +94,10 @@ import {
   getSectionOffsetStyle,
   getSectionPaddingStyle,
   getSectionWidthStyle,
-  getModuleMarginStyle,
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
-  getVerticalMarginStyle,
   getVideoEmbedSource,
   isVideoMedia
 } from "@/components/builder/builder-utils";
@@ -1549,16 +1546,34 @@ function BuilderSectionPreview({
         const columnModules = section.modules.filter((module) => module.column === columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
+        /*
+         * Cell spacing, four sides, with both older generations read as
+         * fallbacks: the vertical/horizontal pair that shipped 2026-08-11 and
+         * the single all-sides `cellPadding` before it. Reading them here as
+         * well as in the normalizer is what lets a page that has not been
+         * re-saved render exactly as it did.
+         *
+         * The cast is because those older keys are off the type now — they
+         * exist only in stored data, which is precisely why this reads them.
+         */
+        const legacyCell = section as unknown as Record<string, Record<string, string> | undefined>;
         const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
-        const verticalPadding = section.cellVerticalPadding?.[columnKey] ?? legacyPadding;
-        const horizontalPadding = section.cellHorizontalPadding?.[columnKey] ?? legacyPadding;
+        const cellSide = (record: Record<string, string> | undefined, pairKey: string, fallback: string) =>
+          record?.[columnKey] ?? legacyCell[pairKey]?.[columnKey] ?? fallback;
+        const paddingTop = cellSide(section.cellPaddingTop, "cellVerticalPadding", legacyPadding);
+        const paddingBottom = cellSide(section.cellPaddingBottom, "cellVerticalPadding", legacyPadding);
+        const paddingLeft = cellSide(section.cellPaddingLeft, "cellHorizontalPadding", legacyPadding);
+        const paddingRight = cellSide(section.cellPaddingRight, "cellHorizontalPadding", legacyPadding);
         // `--builder-cell-padding` feeds one rule only, and that rule is
         // `margin-inline` — a full-bleed overlay slot reaching back out
-        // sideways (_builder-react.css). So it takes the HORIZONTAL axis;
-        // handing it the vertical one would pull the slot out by the wrong
-        // number the moment the two differ.
-        const padding = horizontalPadding;
-        const verticalMargin = section.cellVerticalMargin?.[columnKey] ?? "0";
+        // sideways (_builder-react.css). So it takes a HORIZONTAL side;
+        // handing it a vertical one would pull the slot out by the wrong
+        // number the moment the sides differ.
+        const padding = paddingLeft;
+        const marginTop = cellSide(section.cellMarginTop, "cellVerticalMargin", "0");
+        const marginBottom = cellSide(section.cellMarginBottom, "cellVerticalMargin", "0");
+        const marginLeft = section.cellMarginLeft?.[columnKey] ?? "0";
+        const marginRight = section.cellMarginRight?.[columnKey] ?? "0";
         const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
         const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
         const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
@@ -1577,15 +1592,14 @@ function BuilderSectionPreview({
          * argument. Publishing the values lets those rules honour them
          * instead of replacing them (see _builder-react-overrides.css).
          *
-         * Deliberately NOT reusing `--builder-cell-padding`: since the
-         * vertical/horizontal split (PR 176) that one carries the horizontal
-         * axis alone, for a `margin-inline` rule that reaches an overlay slot
-         * back out sideways. It would be the wrong number here.
+         * Deliberately NOT reusing `--builder-cell-padding`: that one carries
+         * the LEFT side alone, for a `margin-inline` rule that reaches an
+         * overlay slot back out sideways. It would be the wrong number here.
          */
         const effectiveCellPadding =
           isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
             ? "0px"
-            : `${verticalPadding}px ${horizontalPadding}px`;
+            : `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
         const effectiveCellRadius =
           isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
 
@@ -1601,7 +1615,14 @@ function BuilderSectionPreview({
           // background above. `columnBackground` is falsy until the operator
           // sets one, so an untouched menu cell is unchanged.
           ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
-          ...(isPageOverlayFlowColumn || isSectionOverlayColumn ? {} : getVerticalMarginStyle(verticalMargin)),
+          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? {}
+            : {
+                marginTop: `${marginTop}px`,
+                marginBottom: `${marginBottom}px`,
+                marginLeft: `${marginLeft}px`,
+                marginRight: `${marginRight}px`
+              }),
           ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
           ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
           ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
@@ -1609,10 +1630,10 @@ function BuilderSectionPreview({
             : {}),
           ...cellVariables,
           // Cell padding stays off for menu cells, and this one is deliberate:
-          // it defaults to 18px, so honouring it would push every live header
-          // down without anybody asking. The menu module carries its own
-          // Vertical/Horizontal Padding now (Placement axis), which is the
-          // control that should move a menu inside its cell.
+          // it used to default to 18px, so honouring it would have pushed
+          // every live header down without anybody asking. The menu module
+          // carries its own four padding sides now (Placement axis), which is
+          // the control that should move a menu inside its cell.
           padding: effectiveCellPadding,
           border:
             isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
@@ -1676,11 +1697,10 @@ function BuilderSectionPreview({
                     isCurrentPollModule ||
                     isPollCategoryListModule
                       ? {}
-                      : module.type === "heading"
-                        ? getModuleMarginStyle(module.settings)
-                        : module.type === "button"
-                          ? getButtonModuleOuterSpacingStyle(module.settings)
-                          : getModuleOuterSpacingStyle(module.settings)),
+                      // One reader for every type since 2026-08-11: heading
+                      // and button had their own because they were the only
+                      // two with split sides. Now everything has four.
+                      : getModuleOuterSpacingStyle(module.settings)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize

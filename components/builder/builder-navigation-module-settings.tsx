@@ -99,6 +99,36 @@ const isMegaMenu = (settings: Record<string, string>) =>
   settings.navDropdownStyle === "mega" && !isVerticalMenu(settings);
 const isListMenu = (settings: Record<string, string>) => !isMegaMenu(settings);
 
+/**
+ * Four side controls for a spacing box that is not the module's own — the
+ * menu bar's padding and the links' padding (W7 side order, qualified name).
+ * `top` is the default for top/bottom, `side` for left/right, because a
+ * link ships 0 above and 14 beside.
+ */
+function sideFields(
+  keyPrefix: string,
+  label: string,
+  { max, top, side }: { max: number; top: string; side: string }
+) {
+  return (
+    [
+      ["Top", "Top", top],
+      ["Bottom", "Bottom", top],
+      ["Left", "Left", side],
+      ["Right", "Right", side]
+    ] as const
+  ).map(([suffix, word, fallback]) => ({
+    key: `${keyPrefix}${suffix}`,
+    label: `${word} ${label}`,
+    width: "num" as const,
+    control: "number" as const,
+    min: 0,
+    max,
+    fallback,
+    rendersVia: RENDERS_VIA
+  }));
+}
+
 export function BuilderNavigationModuleSettings({
   module,
   onUpdateModule,
@@ -368,58 +398,22 @@ export function BuilderNavigationModuleSettings({
             }
           ],
           ...marginFields("getModuleOuterSpacingStyle", 160).map((field) => [field]),
-          [
-            {
-              key: "navPaddingV",
-              label: "Vertical Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 60,
-              fallback: String(NAV_STYLE_DEFAULTS.paddingV),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navPaddingH",
-              label: "Horizontal Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 60,
-              fallback: String(NAV_STYLE_DEFAULTS.paddingH),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              // W7 names the four spacing controls for a module's OWN box —
-              // taken above by the bar. This pair is the padding inside each
-              // link, a different quantity (same judgement call as Table's
-              // "Cell Padding"), so it carries a qualified name.
-              key: "navLinkPaddingV",
-              label: "Link V Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 40,
-              fallback: String(NAV_STYLE_DEFAULTS.linkPaddingV),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navLinkPaddingH",
-              label: "Link H Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 60,
-              fallback: String(NAV_STYLE_DEFAULTS.linkPaddingH),
-              rendersVia: RENDERS_VIA
-            }
-          ],
+          // The bar's own padding, four sides, each on its own strip like the
+          // margins above.
+          ...sideFields("navPadding", "Padding", {
+            max: 60,
+            top: String(NAV_STYLE_DEFAULTS.paddingV),
+            side: String(NAV_STYLE_DEFAULTS.paddingH)
+          }).map((field) => [field]),
+          // W7 names the four spacing controls for a module's OWN box, taken
+          // above by the bar. These four are the padding inside each LINK, a
+          // different quantity (same judgement call as Table's "Cell
+          // Padding"), so they carry a qualified name.
+          ...sideFields("navLinkPadding", "Link Padding", {
+            max: 60,
+            top: String(NAV_STYLE_DEFAULTS.linkPaddingV),
+            side: String(NAV_STYLE_DEFAULTS.linkPaddingH)
+          }).map((field) => [field]),
           // D9 puts the finest adjustment last on its axis. A0 retired the
           // Advanced section these two used to sit in (A3, withdrawn) —
           // sorting last is how a nudge is de-emphasised now.

@@ -290,33 +290,62 @@ function checkFieldStripAdoption(files) {
 }
 
 /**
- * E4 — horizontal and vertical margin are always offered together.
+ * E4 — a spacing box is offered as FOUR sides or not at all.
  *
- * The vertical side is satisfied by either `verticalMargin` or the split
- * `marginTop` + `marginBottom` pair (heading's model — the split is a
- * richer vertical offering, not a missing one; ruled 2026-08-09 when the
- * operator had horizontal margin capability added to heading).
+ * Widened from the H+V pair on 2026-08-11 (W7, operator: "standardize all
+ * objects on the Top/Bottom/Left/Right model"). A panel that names one side
+ * names all four, in one order — anything less sends an operator hunting for
+ * a control that is not there, which is the whole reason the pair failed:
+ * the one number that could close the gap above a banner logo also threw
+ * away the padding holding it off the left edge.
  *
- * Split-pair detection matches SETTINGS-KEY usage only (quoted key or
- * `settings.` access) — a bare `marginTop:` is an inline style, and
- * counting those flagged two innocent files the day this was written.
+ * Detection matches SETTINGS-KEY usage only (quoted key or `settings.`
+ * access) — a bare `marginTop:` is an inline style, and counting those
+ * flagged two innocent files the day the pair version was written.
+ *
+ * A panel that reaches the sides through the shared `MODULE_MARGIN_SIDES` /
+ * `MODULE_PADDING_SIDES` tables satisfies this by construction; naming the
+ * table counts as naming every side in it.
  */
 function usesSettingsKey(src, key) {
   return new RegExp(`["'\`]${key}["'\`]|settings\\.${key}`).test(src);
 }
 
+const SPACING_BOXES = [
+  { name: 'margin', table: 'MODULE_MARGIN_SIDES', legacy: ['verticalMargin', 'horizontalMargin'] },
+  { name: 'padding', table: 'MODULE_PADDING_SIDES', legacy: ['verticalPadding', 'horizontalPadding'] }
+];
+
 function checkMarginPairing(files) {
   for (const file of files.filter((f) => SETTINGS_GLOB.test(f))) {
     if (!fs.existsSync(file)) continue;
     const src = fs.readFileSync(file, 'utf8');
-    const h = src.includes('horizontalMargin');
-    const v = src.includes('verticalMargin') || (usesSettingsKey(src, 'marginTop') && usesSettingsKey(src, 'marginBottom'));
-    if (h === v) continue;
-    failures.push(
-      `[E4] ${file} offers ${h ? 'horizontalMargin without verticalMargin' : 'verticalMargin without horizontalMargin'}.\n` +
-        `      Always offer both, adjacent in the same strip — never a lone "Margin". An operator\n` +
-        `      who needs the missing one goes hunting through Advanced for a control that isn't there.`
-    );
+
+    for (const box of SPACING_BOXES) {
+      // The shared table, or the helper built from it, offers all four.
+      if (src.includes(box.table) || src.includes(`${box.name}Fields(`)) continue;
+
+      const sides = ['Top', 'Bottom', 'Left', 'Right'];
+      const present = sides.filter((side) => usesSettingsKey(src, `${box.name}${side}`));
+      if (present.length === 0 || present.length === 4) {
+        // Still catch the retired pair, which is what four sides replaced.
+        const stale = box.legacy.filter((key) => usesSettingsKey(src, key));
+        if (!stale.length || present.length === 4) continue;
+        failures.push(
+          `[E4/W7] ${file} still offers ${stale.join(' / ')}.\n` +
+            `      Spacing is four sides now — Top, Bottom, Left, Right — on every object.\n` +
+            `      Use MODULE_${box.name.toUpperCase()}_SIDES (or ${box.name}Fields()) from the settings schema.`
+        );
+        continue;
+      }
+
+      failures.push(
+        `[E4/W7] ${file} offers ${present.length} of the four ${box.name} sides ` +
+          `(${present.join(', ')}).\n` +
+          `      Name one side and you name all four, in Top/Bottom/Left/Right order. An operator who\n` +
+          `      needs the missing one goes hunting for a control that isn't there.`
+      );
+    }
   }
 }
 
@@ -346,10 +375,12 @@ function report() {
     : [];
   const adopted = settings.filter((f) => usesFieldStrips(fs.readFileSync(path.join(dir, f), 'utf8')));
   const offenders = breakpointOnlyLayout();
+  // Editors still spelling spacing as a vertical/horizontal pair rather than
+  // the four sides every object uses (W7).
   const unpaired = settings.filter((f) => {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
-    const v = src.includes('verticalMargin') || (usesSettingsKey(src, 'marginTop') && usesSettingsKey(src, 'marginBottom'));
-    return src.includes('horizontalMargin') !== v;
+    return ['verticalMargin', 'horizontalMargin', 'verticalPadding', 'horizontalPadding']
+      .some((key) => usesSettingsKey(src, key));
   });
 
   // R8 debt: distinct literal font sizes still in the hand-authored CSS.
@@ -364,7 +395,7 @@ function report() {
 
   console.log('\nUI doctrine — whole-repo debt (docs/MODULE_UI_DOCTRINE.md)\n');
   console.log(`  [E1] field-strip adoption ....... ${adopted.length}/${settings.length} editors`);
-  console.log(`  [E4] unpaired H/V margin ........ ${unpaired.length} editors`);
+  console.log(`  [E4] spacing still a V/H pair ... ${unpaired.length} editors`);
   for (const f of unpaired) console.log(`         ${f}`);
   console.log(`  [R1] breakpoint-only layout ..... ${offenders.length} selectors (excl. ${R1_ALLOW.size} allowlisted)`);
   for (const o of offenders) console.log(`         ${o.file}:${o.line}  ${o.sel}`);

@@ -133,47 +133,45 @@ export function getCellContentAlignmentStyle(hAlign: string, vAlign: string): CS
   };
 }
 
-export function getVerticalMarginStyle(value: unknown): CSSProperties {
-  const margin = normalizeSpacingValue(value, "0", 0, 160);
+/**
+ * The four sides of one spacing box, each falling back to the vertical /
+ * horizontal PAIR the Builder used before 2026-08-11.
+ *
+ * Every object spells its spacing the same way now — row, cell, module, for
+ * both margin and padding (operator: "standardize all objects on the
+ * Top/Bottom/Left/Right model"). Reading the legacy pair here as well as in
+ * the normalizer is deliberate: a page that has not been re-saved still
+ * renders from its old keys, so nothing moves while the data catches up.
+ */
+export function getFourSideValues(
+  settings: Record<string, string>,
+  prefix: "margin" | "padding",
+  legacyVerticalKey: string,
+  legacyHorizontalKey: string,
+  fallback = "0",
+  max = 160
+) {
+  const vertical = settings[legacyVerticalKey];
+  const horizontal = settings[legacyHorizontalKey];
+  const side = (key: string, legacy: string | undefined) =>
+    `${normalizeSpacingValue(settings[key] ?? legacy, fallback, 0, max)}px`;
 
   return {
-    marginTop: `${margin}px`,
-    marginBottom: `${margin}px`
-  };
+    [`${prefix}Top`]: side(`${prefix}Top`, vertical),
+    [`${prefix}Bottom`]: side(`${prefix}Bottom`, vertical),
+    [`${prefix}Left`]: side(`${prefix}Left`, horizontal),
+    [`${prefix}Right`]: side(`${prefix}Right`, horizontal)
+  } as CSSProperties;
 }
 
-export function getHorizontalMarginStyle(value: unknown): CSSProperties {
-  const margin = normalizeSpacingValue(value, "0", 0, 160);
-
-  return {
-    marginLeft: `${margin}px`,
-    marginRight: `${margin}px`
-  };
-}
-
-export function getVerticalPaddingStyle(value: unknown): CSSProperties {
-  const padding = normalizeSpacingValue(value, "0", 0, 160);
-
-  return {
-    paddingTop: `${padding}px`,
-    paddingBottom: `${padding}px`
-  };
-}
-
-export function getHorizontalPaddingStyle(value: unknown): CSSProperties {
-  const padding = normalizeSpacingValue(value, "0", 0, 160);
-
-  return {
-    paddingLeft: `${padding}px`,
-    paddingRight: `${padding}px`
-  };
-}
-
+/** A module's margin — the space OUTSIDE it, on all four sides. */
 export function getModuleOuterSpacingStyle(settings: Record<string, string>): CSSProperties {
-  return {
-    ...getVerticalMarginStyle(settings.verticalMargin),
-    ...getHorizontalMarginStyle(settings.horizontalMargin)
-  };
+  return getFourSideValues(settings, "margin", "verticalMargin", "horizontalMargin");
+}
+
+/** A module's padding — the space INSIDE it, on all four sides. */
+export function getModuleInnerSpacingStyle(settings: Record<string, string>): CSSProperties {
+  return getFourSideValues(settings, "padding", "verticalPadding", "horizontalPadding");
 }
 
 /** The Table module's Max Width, clamped, or undefined for "full width". */
@@ -206,51 +204,10 @@ export function getTableWrapStyle(settings: Record<string, string>): CSSProperti
   return style;
 }
 
-export function getButtonModuleOuterSpacingStyle(settings: Record<string, string>): CSSProperties {
-  const legacyVertical = settings.verticalMargin;
-  const legacyHorizontal = settings.horizontalMargin;
-
-  return {
-    marginTop: `${normalizeSpacingValue(settings.marginTop ?? legacyVertical, "0", 0, 160)}px`,
-    marginBottom: `${normalizeSpacingValue(settings.marginBottom ?? legacyVertical, "0", 0, 160)}px`,
-    marginLeft: `${normalizeSpacingValue(settings.marginLeft ?? legacyHorizontal, "0", 0, 160)}px`,
-    marginRight: `${normalizeSpacingValue(settings.marginRight ?? legacyHorizontal, "0", 0, 160)}px`
-  };
-}
-
 export function getSplitVerticalMarginStyle(top: unknown, bottom: unknown): CSSProperties {
   return {
     marginTop: `${normalizeSpacingValue(top, "0", 0, 160)}px`,
     marginBottom: `${normalizeSpacingValue(bottom, "0", 0, 160)}px`
-  };
-}
-
-export function getModuleMarginStyle(settings: Record<string, string>): CSSProperties {
-  const { top, bottom } = getModuleSplitMarginValues(settings);
-
-  return {
-    ...getSplitVerticalMarginStyle(top, bottom),
-    // Horizontal margin capability added 2026-08-09 by operator ruling
-    // (UI_RULES.md S2 audit item). Defaults to 0, so existing headings
-    // do not move.
-    ...getHorizontalMarginStyle(settings.horizontalMargin)
-  };
-}
-
-/**
- * The split top/bottom margins with the legacy verticalMargin fallback —
- * the SAME resolution getModuleMarginStyle renders with. Editors display
- * these instead of reading the raw keys: table-cell modules never pass
- * through normalizeBuilderModuleSettingsForType, so a cell heading can
- * still carry only the legacy key, and an editor that reads marginTop
- * directly shows 0 while the page renders the legacy value.
- */
-export function getModuleSplitMarginValues(settings: Record<string, string>): { top: string; bottom: string } {
-  const legacy = settings.verticalMargin;
-
-  return {
-    top: String(normalizeSpacingValue(settings.marginTop ?? legacy, "0", 0, 160)),
-    bottom: String(normalizeSpacingValue(settings.marginBottom ?? legacy, "0", 0, 160))
   };
 }
 
@@ -496,8 +453,7 @@ export function getImageModuleStyle(settings: Record<string, string>): CSSProper
     // had (operator, 2026-08-11). Margin, the space outside the frame, comes
     // from the shared chrome's H/V Margin pair. `box-sizing: border-box`
     // above keeps Width honest: a padded image narrows, the frame does not.
-    ...getVerticalPaddingStyle(settings.verticalPadding),
-    ...getHorizontalPaddingStyle(settings.horizontalPadding),
+    ...getModuleInnerSpacingStyle(settings),
     border: `${Math.max(Number.isFinite(borderThickness) ? borderThickness : 0, 0)}px solid ${
       settings.borderColor || "#0f4f8f"
     }`,
@@ -1042,7 +998,17 @@ export function getButtonModuleStyle(
     "--btn-border": resolvedBorderColor,
     color: textColor,
     textShadow,
-    padding: `${settings.paddingY || "12"}px ${settings.paddingX || "24"}px`,
+    // Four sides (W7). `paddingY`/`paddingX` are the pre-2026-08-11 pair and
+    // are still read here so a page that has not been re-saved keeps its
+    // button shape exactly.
+    padding: [
+      settings.paddingTop ?? settings.paddingY ?? "12",
+      settings.paddingRight ?? settings.paddingX ?? "24",
+      settings.paddingBottom ?? settings.paddingY ?? "12",
+      settings.paddingLeft ?? settings.paddingX ?? "24"
+    ]
+      .map((side) => `${normalizeSpacingValue(side, "0", 0, 50)}px`)
+      .join(" "),
     borderStyle,
     borderColor: resolvedBorderColor,
     borderWidth: `${resolvedBorderWidth}px`,
