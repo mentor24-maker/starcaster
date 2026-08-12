@@ -2281,6 +2281,24 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   grid-column: 1;
 }
 
+/*
+ * The chrome STACKS in these two, instead of flowing (operator, 2026-08-12:
+ * "Move Alignment, Top Margin, etc. under Background").
+ *
+ * `.builder-module-chrome` is a wrapping flex row by design (D1/D2) — one
+ * line of module-level settings above a full-width panel. That is still right
+ * everywhere else, and this rule does not touch it there. But in a two-column
+ * editor the chrome is confined to a half-width column, so the row wrapped
+ * into Background on the left with the Alignment/margins strip beside it: two
+ * ragged sub-columns where the operator was reading one list. Stacked, every
+ * chrome label starts at the same x as every other one in the column.
+ */
+.builder-react-root .builder-module-editor--feature-cards .builder-module-chrome,
+.builder-react-root .builder-module-editor--slideshow .builder-module-chrome {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 /* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
    implicit grid resolves to the explicit grid's only line, which collapses
    the column to a single row. */

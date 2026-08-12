@@ -2003,6 +2003,14 @@ export function normalizeBuilderModuleSettingsForType(
     }
   }
 
+  if (type === "slideshow") {
+    // The nudge, added 2026-08-12. Clamped here rather than trusted from the
+    // document, the same as every other module that offers it — an imported
+    // page can carry anything in these keys.
+    settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
+    settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+  }
+
   if (type === "feature-cards") {
     // Empty color settings mean "follow the site theme". Modules created
     // before 2026-08-08 were seeded with these literal factory colors, so a
