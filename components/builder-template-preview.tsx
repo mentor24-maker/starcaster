@@ -1565,6 +1565,36 @@ function BuilderSectionPreview({
           columnModules.length > 0 &&
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
         const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
+        /*
+         * The cell's own numbers, as one answer each, used BOTH by the inline
+         * properties below and by the variables the narrow-screen rules read.
+         *
+         * Operator, 2026-08-12: a cell set to 4 rendered 12 below 560px,
+         * because the generated stylesheet compacts every cell there with
+         * `padding: 12px !important` — and an `!important` in a stylesheet
+         * outranks an ordinary inline style, so the setting was never in the
+         * argument. Publishing the values lets those rules honour them
+         * instead of replacing them (see _builder-react-overrides.css).
+         *
+         * Deliberately NOT reusing `--builder-cell-padding`: since the
+         * vertical/horizontal split (PR 176) that one carries the horizontal
+         * axis alone, for a `margin-inline` rule that reaches an overlay slot
+         * back out sideways. It would be the wrong number here.
+         */
+        const effectiveCellPadding =
+          isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? "0px"
+            : `${verticalPadding}px ${horizontalPadding}px`;
+        const effectiveCellRadius =
+          isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
+
+        // Custom properties are not in the CSSProperties type, so they are
+        // built once and cast rather than sprinkling casts through the block.
+        const cellVariables = {
+          "--builder-cell-padding-box": effectiveCellPadding,
+          "--builder-cell-radius": effectiveCellRadius,
+        } as CSSProperties;
+
         const columnStyle: CSSProperties = {
           // The cell's own fill, honoured on menu cells too — see the row
           // background above. `columnBackground` is falsy until the operator
@@ -1576,20 +1606,18 @@ function BuilderSectionPreview({
           ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
             ? { "--builder-cell-padding": `${padding}px` }
             : {}),
+          ...cellVariables,
           // Cell padding stays off for menu cells, and this one is deliberate:
           // it defaults to 18px, so honouring it would push every live header
           // down without anybody asking. The menu module carries its own
           // Vertical/Horizontal Padding now (Placement axis), which is the
           // control that should move a menu inside its cell.
-          padding:
-            isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
-              ? 0
-              : `${verticalPadding}px ${horizontalPadding}px`,
+          padding: effectiveCellPadding,
           border:
             isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
               ? undefined
               : `${borderWidth}px solid ${borderColor}`,
-          borderRadius: isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${borderRadius}px`,
+          borderRadius: effectiveCellRadius,
           // {} at the left/top default, so only a cell he aligned moves.
           ...(isPageOverlayFlowColumn || isSectionOverlayColumn
             ? {}
