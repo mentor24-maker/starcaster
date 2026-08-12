@@ -6,7 +6,9 @@ const path = require('path');
 
 const {
   planRenditions,
+  classifyImage,
   isOversizedImage,
+  shouldBuildForSource,
   renditionKeyForAsset,
   renditionStoragePath,
   generateRenditionBuffers,
@@ -181,4 +183,37 @@ test('a transparent PNG keeps its alpha in webp and lands on white in the social
   const { data } = await sharp(social.buffer).raw().toBuffer({ resolveWithObject: true });
   // Black would mean the flatten background was left at its default.
   assert.ok(data[0] > 240 && data[1] > 240 && data[2] > 240, 'transparent areas should flatten to white, not black');
+});
+
+test('an image the library never measured is "unknown", not "small"', () => {
+  const image = (extra) => ({ assetType: 'Image', location: 'https://example.com/a.png', ...extra });
+
+  // The site importer stores images with no dimensions AND size 0. Reading that
+  // as "small" skipped a 2.7 MB, 1994px-wide PNG and left the Delray home page
+  // serving full-size originals after a completed sweep (2026-08-12).
+  assert.strictEqual(classifyImage(image({ size: 0 })), 'unknown');
+  assert.strictEqual(classifyImage(image({})), 'unknown');
+  assert.ok(isOversizedImage(image({ size: 0 })), 'unmeasured images must still be looked at');
+
+  // A recorded measurement is trusted, in both directions.
+  assert.strictEqual(classifyImage(image({ imageWidth: 800, imageHeight: 600, size: 0 })), 'no');
+  assert.strictEqual(classifyImage(image({ imageWidth: 1994, imageHeight: 789 })), 'yes');
+  assert.strictEqual(classifyImage(image({ size: 900000 })), 'yes');
+
+  // Things that are not images, or have nothing to fetch, are still excluded.
+  assert.strictEqual(classifyImage({ assetType: 'Video', location: 'https://e.com/v.mp4' }), 'no');
+  assert.strictEqual(classifyImage(image({ location: '' })), 'no');
+});
+
+test('the verdict after downloading uses the real pixels, not the stored ones', () => {
+  // The Delray case: stored as 0x0 and 0 bytes, actually 1994x789 and 2.7 MB.
+  assert.ok(shouldBuildForSource({ width: 1994, height: 789, bytes: 2739 * 1024 }));
+  // Tall images count on their long edge.
+  assert.ok(shouldBuildForSource({ width: 989, height: 1280, bytes: 883 * 1024 }));
+  // Small pixels but a heavy file is still worth re-encoding.
+  assert.ok(shouldBuildForSource({ width: 960, height: 379, bytes: 900 * 1024 }));
+  // Genuinely small: no copies, and the caller records the measurement so this
+  // image is never downloaded again.
+  assert.ok(!shouldBuildForSource({ width: 960, height: 379, bytes: 99 * 1024 }));
+  assert.ok(!shouldBuildForSource({ width: 0, height: 0, bytes: 0 }));
 });

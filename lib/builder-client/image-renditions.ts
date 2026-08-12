@@ -141,6 +141,27 @@ export function sizesForWidthPercent(percent: unknown, contentWidthPx = CONTENT_
 }
 
 /**
+ * The best URL for a CSS `background-image`.
+ *
+ * A background cannot take a `srcset` — CSS has no way to offer the browser a
+ * choice the way `<img>` does. So this hands back the widest web copy, which is
+ * the original's own dimensions re-encoded: same pixels, a fraction of the
+ * weight (a 2.7 MB hero PNG becomes a ~200 KB WebP). No layout or crop changes,
+ * because nothing about the size on screen is different.
+ *
+ * Falls back to the original URL whenever there are no copies.
+ */
+export function backgroundImageUrlFor(url: unknown): string {
+  const original = cleanUrl(url);
+  if (!original) return original;
+
+  const web = getImageRenditions(original).filter((item) => item.role !== "social");
+  if (!web.length) return original;
+
+  return web[web.length - 1].url;
+}
+
+/**
  * Spreadable `<img>` props. Returns just `{ src }` when the image has no
  * copies, so a call site can always spread the result and never branch.
  */

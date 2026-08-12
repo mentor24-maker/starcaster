@@ -19,6 +19,7 @@ import { escapeHtmlText, sanitizeInlineHtml, sanitizeRichTextHtml } from "@/lib/
 import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
+import { backgroundImageUrlFor } from "@/lib/image-renditions";
 
 /**
  * Section (row) column structures. Values are named for their `fr` ratio;
@@ -1433,7 +1434,9 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
 
   if (background.mode === "image" && background.imageUrl) {
     return {
-      backgroundImage: `url("${background.imageUrl}")`,
+      // A CSS background cannot carry a srcset, so it takes the widest copy
+      // instead: identical dimensions, a fraction of the bytes.
+      backgroundImage: `url("${backgroundImageUrlFor(background.imageUrl)}")`,
       backgroundSize: "cover",
       backgroundPosition: "center"
     };
