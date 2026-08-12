@@ -96,7 +96,19 @@ const TUNED = {
     name: 'Contact Strip',
     settings: {
       columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
-      tableData: '{"headers":["Phone","Hours","Status"],"cells":{},"rowCount":1}',
+      // A cell with a module in it: the cell editor is its own lattice
+      // surface (a modal), and it is where the `label.field` pairs live —
+      // the shape that hid from the check until 2026-08-12.
+      tableData: JSON.stringify({
+        headers: ['Phone', 'Hours', 'Status'],
+        rowCount: 1,
+        cells: {
+          '0-0': [{
+            id: 'cell-image', type: 'image', column: '0-0', name: 'Cell Image', text: '',
+            settings: { url: '', alt: '', size: '100', linkUrl: '', newTab: 'false' },
+          }],
+        },
+      }),
       borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
       cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
       backgroundColor: '#ffffff',

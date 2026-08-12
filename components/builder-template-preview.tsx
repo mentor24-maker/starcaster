@@ -5806,6 +5806,17 @@ const FEATURE_CARD_ASPECTS: Record<string, string> = {
 };
 
 /**
+ * Icon badge options. Each set is the single source of truth for its
+ * setting: the renderer validates against it, the CSS carries one rule
+ * per member, and the editor's dropdown is built from the same names —
+ * so an unknown stored value falls back to the default rather than
+ * emitting a class no stylesheet answers.
+ */
+const FEATURE_CARD_ICON_PLACEMENTS = new Set(["above", "on-image", "inline"]);
+const FEATURE_CARD_ICON_ALIGNS = new Set(["center", "left", "right"]);
+const FEATURE_CARD_ICON_SHAPES = new Set(["circle", "square", "plain"]);
+
+/**
  * Feature Cards — a responsive grid of linked cards.
  *
  * Built to docs/MODULE_STANDARDS.md from the spec on ClickUp 86bbaffu3.
@@ -5847,11 +5858,37 @@ function FeatureCardsModulePreview({
   const showArrow = module.settings.linkArrow !== "false";
   const fallbackLinkLabel = module.settings.linkLabel ?? "Learn More";
 
+  // Icon badge geometry. Every one of these was a hardcoded CSS value
+  // until 2026-08-12; the fallbacks below are those exact values, so a
+  // module saved before then renders identically — with one deliberate
+  // exception, `iconFront`. The badge sits earlier in the DOM than the
+  // image and neither declared a z-index, so the image always painted
+  // over it. Defaulting to "in front" fixes a bug rather than changing a
+  // design: an icon hidden behind the picture was never a choice anyone
+  // made.
+  // `|| 48` on the parse would turn a stored "0" into 48 rather than the
+  // 16px floor — the two cases are different and only one is a fallback.
+  const parsedIconSize = Number.parseInt(module.settings.iconSize || "48", 10);
+  const iconSize = Number.isFinite(parsedIconSize) ? Math.min(160, Math.max(16, parsedIconSize)) : 48;
+  const iconPlacement = FEATURE_CARD_ICON_PLACEMENTS.has(module.settings.iconPlacement || "")
+    ? (module.settings.iconPlacement as string)
+    : "above";
+  const iconAlign = FEATURE_CARD_ICON_ALIGNS.has(module.settings.iconAlign || "")
+    ? (module.settings.iconAlign as string)
+    : "center";
+  const iconShape = FEATURE_CARD_ICON_SHAPES.has(module.settings.iconShape || "")
+    ? (module.settings.iconShape as string)
+    : "circle";
+  const iconInFront = module.settings.iconFront !== "false";
+
   const className = [
     "builder-preview-feature-cards",
     `builder-preview-feature-cards-align-${align}`,
     module.settings.cardShadow === "false" ? "" : "builder-preview-feature-cards-shadow",
-    module.settings.cardHoverLift === "false" ? "" : "builder-preview-feature-cards-lift"
+    module.settings.cardHoverLift === "false" ? "" : "builder-preview-feature-cards-lift",
+    `builder-preview-feature-cards-icon-${iconPlacement}`,
+    `builder-preview-feature-cards-icon-align-${iconAlign}`,
+    `builder-preview-feature-cards-icon-shape-${iconShape}`
   ]
     .filter(Boolean)
     .join(" ");
@@ -5867,7 +5904,12 @@ function FeatureCardsModulePreview({
           "--feature-card-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
           "--feature-card-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #e1e8f0)",
           "--feature-card-accent": iconColor,
-          "--feature-card-aspect": aspect
+          "--feature-card-aspect": aspect,
+          "--feature-card-icon-size": `${iconSize}px`,
+          // 0 keeps the badge in the same paint layer as the image, where
+          // DOM order puts the image on top — i.e. the old behaviour, now
+          // reachable on purpose instead of by accident.
+          "--feature-card-icon-z": iconInFront ? "3" : "0"
         } as CSSProperties
       }
     >
@@ -5876,13 +5918,17 @@ function FeatureCardsModulePreview({
         const href = card.linkUrl ? (previewMode ? toPreviewHref(card.linkUrl) : toPublicHref(card.linkUrl)) : "";
         const linkLabel = card.linkLabel || fallbackLinkLabel;
         const badgeColor = alternateIcons && index % 2 === 1 ? iconAltColor : iconColor;
+        // "Plain" drops the filled disc, so the glyph itself has to carry
+        // the colour — white-on-nothing is invisible. With a disc, white
+        // stays the default and Icon Text overrides it.
+        const glyphColor = module.settings.iconTextColor || (iconShape === "plain" ? badgeColor : "#ffffff");
 
         return (
           <article className="builder-preview-feature-card" key={card.id}>
             {showIcons && card.icon ? (
               <span
                 className="builder-preview-feature-card-badge"
-                style={{ background: badgeColor }}
+                style={{ background: iconShape === "plain" ? "transparent" : badgeColor, color: glyphColor }}
                 aria-hidden="true"
               >
                 {card.icon}

@@ -26,6 +26,21 @@ const ASPECT_OPTIONS: { value: string; label: string }[] = [
   { value: "1-1", label: "Square" }
 ];
 
+/* Icon badge options. The values match the sets the renderer validates
+   against in `builder-template-preview.tsx` — labels say what the
+   operator sees, not what the CSS calls it. */
+const ICON_PLACEMENT_OPTIONS: { value: string; label: string }[] = [
+  { value: "above", label: "Over Top Edge" },
+  { value: "on-image", label: "On The Image" },
+  { value: "inline", label: "Above The Title" }
+];
+
+const ICON_SHAPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "circle", label: "Circle" },
+  { value: "square", label: "Rounded Square" },
+  { value: "plain", label: "No Background" }
+];
+
 /**
  * Settings editor for the Feature Cards module.
  *
@@ -34,19 +49,25 @@ const ASPECT_OPTIONS: { value: string; label: string }[] = [
  * declares a width token. Every control here is consumed by
  * `FeatureCardsModulePreview` (rule 13); nothing is decorative.
  *
- * A1 sort (2026-08-10): the theme-backed settings moved into the Advanced
- * block — Radius, Card Color, Border Color, Shadow, and the two icon
- * colours. The colours were already `BuilderThemeColorControlWithDefault`
- * with `hint="theme"`, so they arrive A2-compliant: empty means "follow the
- * theme", and normalizeBuilderModuleSettingsForType already converts the
- * old factory hexes to empty. Columns, Gap (W7 exempts its name), Align,
- * Image Shape, Hover Lift and the two icon toggles are the module's own
- * settings and stay basic (A4).
+ * Two columns (operator, 2026-08-12): "in the left column are all the
+ * global settings, and the right column is for all the elements." So the
+ * left holds every module-wide control, grouped Layout / Card / Icons /
+ * Link, and the right holds nothing but the card list. Before this the
+ * cards ran across the full width and the settings sat underneath them,
+ * which put the controls off the bottom of the panel on any module with
+ * more than two or three cards.
+ *
+ * Advanced is gone with it (A0, operator 8/13). Radius, Card Color,
+ * Border Color, Shadow, the icon colours and the link fields were behind
+ * a `<details>`; they are open on their group now. The colours are still
+ * `BuilderThemeColorControlWithDefault` with `hint="theme"`, so A2 holds:
+ * empty means "follow the theme", and normalizeBuilderModuleSettingsForType
+ * still converts the old factory hexes to empty.
  *
  * This editor is not schema-driven — the card manager is a bespoke titled
- * grid (L6) — so Advanced is the one existing `<details>` rather than the
- * generator's per-axis columns. The controls that moved keep the exact
- * visibility rules they had.
+ * grid (L6) — so the two columns are the module's own CSS rather than the
+ * generator's axis lattice. Every control here is consumed by
+ * `FeatureCardsModulePreview` (rule 13); nothing is decorative.
  */
 export function BuilderFeatureCardsModuleSettings({
   module,
@@ -88,12 +109,237 @@ export function BuilderFeatureCardsModuleSettings({
   const borderDefault = themeHex("Secondary") || "#e1e8f0";
   const iconDefault = themeHex("Accent") || "#0b2a4a";
   const iconAltDefault = themeHex("Primary") || "#4f9c3a";
+  // The glyph sits on the badge colour, so its default is white — except
+  // with no badge behind it ("No Background"), where white would be
+  // invisible and the renderer falls back to the badge colour instead.
+  const glyphDefault = module.settings.iconShape === "plain" ? iconDefault : "#ffffff";
 
   return (
-    <>
-      {/* Content — titled-column item grid (UI_RULES L6); the fields that
-          cannot fit a column (image picker, alt text, description) render as
-          a secondary row spanning the grid under each card's primary row. */}
+    <div className="builder-cards-panel">
+      {/* LEFT — everything that applies to the whole module.
+          `builder-schema-panel-column` is the schema generator's own column
+          class, borrowed rather than reinvented: inside it a field strip
+          becomes one control per row with a shared label track, which is
+          what keeps a narrow column from running its fields off the edge
+          (W0). Without it the strips stayed horizontal and Gap overhung the
+          card column. */}
+      <div className="builder-cards-panel-settings builder-schema-panel-column">
+      <div className="builder-schema-group-title">Layout</div>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Columns" width="select-sm">
+          <select value={module.settings.cardColumns ?? "3"} onChange={(event) => set("cardColumns", event.target.value)}>
+            {COLUMN_OPTIONS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </BuilderModuleField>
+        <BuilderModuleField label="Gap" width="num">
+          <BuilderNumberSelectControl
+            value={module.settings.cardGap ?? "12"}
+            min={0}
+            max={48}
+            fallback="12"
+            onChange={(cardGap) => set("cardGap", cardGap)}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Align" width="select-sm">
+          <select value={module.settings.cardAlign ?? "center"} onChange={(event) => set("cardAlign", event.target.value)}>
+            <option value="center">Center</option>
+            <option value="left">Left</option>
+          </select>
+        </BuilderModuleField>
+        <BuilderModuleField label="Image Shape" width="select-md">
+          <select value={module.settings.imageAspect ?? "4-3"} onChange={(event) => set("imageAspect", event.target.value)}>
+            {ASPECT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
+
+      <div className="builder-schema-group-title">Card</div>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Radius" width="num">
+          <BuilderNumberSelectControl
+            value={module.settings.cardRadius ?? "18"}
+            min={0}
+            max={48}
+            fallback="18"
+            onChange={(cardRadius) => set("cardRadius", cardRadius)}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Card Color" width="color">
+          <BuilderThemeColorControlWithDefault
+            defaultColor="#ffffff"
+            dialogLabel="Card background color"
+            hint="theme"
+            themeColors={themeColors}
+            value={module.settings.cardBackground ?? ""}
+            onChange={(cardBackground) => set("cardBackground", cardBackground)}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Border Color" width="color">
+          <BuilderThemeColorControlWithDefault
+            defaultColor={borderDefault}
+            dialogLabel="Card border color"
+            hint="theme"
+            themeColors={themeColors}
+            value={module.settings.cardBorderColor ?? ""}
+            onChange={(cardBorderColor) => set("cardBorderColor", cardBorderColor)}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Shadow" width="check">
+          <input
+            type="checkbox"
+            checked={module.settings.cardShadow !== "false"}
+            onChange={(event) => set("cardShadow", event.target.checked ? "true" : "false")}
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Hover Lift" width="check">
+          <input
+            type="checkbox"
+            checked={module.settings.cardHoverLift !== "false"}
+            onChange={(event) => set("cardHoverLift", event.target.checked ? "true" : "false")}
+          />
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
+
+      {/* Icons. Placement, size, shape and stacking were hardcoded in CSS
+          until 2026-08-12 — "In Front" is the one the operator asked for
+          by name: with it off the card image paints over the icon, which
+          is what every card did before this panel existed. */}
+      <div className="builder-schema-group-title">Icons</div>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Icons" width="check">
+          <input
+            type="checkbox"
+            checked={showIcons}
+            onChange={(event) => set("showIcons", event.target.checked ? "true" : "false")}
+          />
+        </BuilderModuleField>
+        {showIcons ? (
+          <>
+            <BuilderModuleField label="Place" width="select-md">
+              <select
+                value={module.settings.iconPlacement ?? "above"}
+                onChange={(event) => set("iconPlacement", event.target.value)}
+              >
+                {ICON_PLACEMENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </BuilderModuleField>
+            <BuilderModuleField label="Icon Align" width="select-sm">
+              <select value={module.settings.iconAlign ?? "center"} onChange={(event) => set("iconAlign", event.target.value)}>
+                <option value="center">Center</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+              </select>
+            </BuilderModuleField>
+            <BuilderModuleField label="In Front" width="check">
+              <input
+                type="checkbox"
+                checked={module.settings.iconFront !== "false"}
+                onChange={(event) => set("iconFront", event.target.checked ? "true" : "false")}
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Shape" width="select-md">
+              <select value={module.settings.iconShape ?? "circle"} onChange={(event) => set("iconShape", event.target.value)}>
+                {ICON_SHAPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </BuilderModuleField>
+            <BuilderModuleField label="Icon Size" width="num">
+              <BuilderNumberSelectControl
+                value={module.settings.iconSize ?? "48"}
+                min={16}
+                max={160}
+                fallback="48"
+                onChange={(iconSize) => set("iconSize", iconSize)}
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Alternate" width="check">
+              <input
+                type="checkbox"
+                checked={module.settings.iconAlternate !== "false"}
+                onChange={(event) => set("iconAlternate", event.target.checked ? "true" : "false")}
+              />
+            </BuilderModuleField>
+          </>
+        ) : null}
+      </BuilderModuleFieldStrip>
+
+      {showIcons ? (
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Icon Color" width="color">
+            <BuilderThemeColorControlWithDefault
+              defaultColor={iconDefault}
+              dialogLabel="Icon badge color"
+              hint="theme"
+              themeColors={themeColors}
+              value={module.settings.iconColor ?? ""}
+              onChange={(iconColor) => set("iconColor", iconColor)}
+            />
+          </BuilderModuleField>
+          {module.settings.iconAlternate !== "false" ? (
+            <BuilderModuleField label="2nd Color" width="color">
+              <BuilderThemeColorControlWithDefault
+                defaultColor={iconAltDefault}
+                dialogLabel="Alternating icon badge color"
+                hint="theme"
+                themeColors={themeColors}
+                value={module.settings.iconAltColor ?? ""}
+                onChange={(iconAltColor) => set("iconAltColor", iconAltColor)}
+              />
+            </BuilderModuleField>
+          ) : null}
+          <BuilderModuleField label="Icon Text" width="color">
+            <BuilderThemeColorControlWithDefault
+              defaultColor={glyphDefault}
+              dialogLabel="Icon glyph color"
+              themeColors={themeColors}
+              value={module.settings.iconTextColor ?? ""}
+              onChange={(iconTextColor) => set("iconTextColor", iconTextColor)}
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+      ) : null}
+
+      <div className="builder-schema-group-title">Link</div>
+      <BuilderModuleFieldStrip>
+        <BuilderModuleField label="Default Link Text" width="text-md">
+          <input
+            type="text"
+            value={module.settings.linkLabel ?? "Learn More"}
+            onChange={(event) => set("linkLabel", event.target.value)}
+            placeholder="Learn More"
+          />
+        </BuilderModuleField>
+        <BuilderModuleField label="Arrow" width="check">
+          <input
+            type="checkbox"
+            checked={module.settings.linkArrow !== "false"}
+            onChange={(event) => set("linkArrow", event.target.checked ? "true" : "false")}
+          />
+        </BuilderModuleField>
+      </BuilderModuleFieldStrip>
+      </div>
+
+      {/* RIGHT — the cards themselves. Titled-column item grid (UI_RULES
+          L6); the fields that cannot fit a column (image picker, alt text,
+          description) render as a secondary row spanning the grid under
+          each card's primary row. */}
+      <div className="builder-cards-panel-items">
+      <div className="builder-cards-panel-heading">Feature Cards</div>
       <div className={`builder-item-grid builder-item-grid--cards${showIcons ? " builder-item-grid--cards-icons" : ""}`}>
         {showIcons ? <span className="builder-item-grid-header">Icon</span> : null}
         <span className="builder-item-grid-header">Title</span>
@@ -195,161 +441,7 @@ export function BuilderFeatureCardsModuleSettings({
       <button type="button" className="secondary-button" onClick={addCard}>
         Add Card
       </button>
-
-      {/* Layout */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Columns" width="select-sm">
-          <select value={module.settings.cardColumns ?? "3"} onChange={(event) => set("cardColumns", event.target.value)}>
-            {COLUMN_OPTIONS.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </BuilderModuleField>
-        <BuilderModuleField label="Gap" width="num">
-          <BuilderNumberSelectControl
-            value={module.settings.cardGap ?? "12"}
-            min={0}
-            max={48}
-            fallback="12"
-            onChange={(cardGap) => set("cardGap", cardGap)}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Align" width="select-sm">
-          <select value={module.settings.cardAlign ?? "center"} onChange={(event) => set("cardAlign", event.target.value)}>
-            <option value="center">Center</option>
-            <option value="left">Left</option>
-          </select>
-        </BuilderModuleField>
-        <BuilderModuleField label="Image Shape" width="select-md">
-          <select value={module.settings.imageAspect ?? "4-3"} onChange={(event) => set("imageAspect", event.target.value)}>
-            {ASPECT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </BuilderModuleField>
-      </BuilderModuleFieldStrip>
-
-      {/* Style — what is left after the A1 sort: the card's own behaviour
-          toggles. The colours, radius and shadow moved to Advanced. */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Hover Lift" width="check">
-          <input
-            type="checkbox"
-            checked={module.settings.cardHoverLift !== "false"}
-            onChange={(event) => set("cardHoverLift", event.target.checked ? "true" : "false")}
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Icons" width="check">
-          <input
-            type="checkbox"
-            checked={showIcons}
-            onChange={(event) => set("showIcons", event.target.checked ? "true" : "false")}
-          />
-        </BuilderModuleField>
-        {showIcons ? (
-          <BuilderModuleField label="Alternate" width="check">
-            <input
-              type="checkbox"
-              checked={module.settings.iconAlternate !== "false"}
-              onChange={(event) => set("iconAlternate", event.target.checked ? "true" : "false")}
-            />
-          </BuilderModuleField>
-        ) : null}
-      </BuilderModuleFieldStrip>
-
-      {/* Advanced */}
-      <details className="hanging-details">
-        <summary>Advanced</summary>
-        {/* A1: every setting here second-guesses the theme — the card
-            surface, its corners, its border and its shadow. */}
-        <BuilderModuleFieldStrip>
-          <BuilderModuleField label="Radius" width="num">
-            <BuilderNumberSelectControl
-              value={module.settings.cardRadius ?? "18"}
-              min={0}
-              max={48}
-              fallback="18"
-              onChange={(cardRadius) => set("cardRadius", cardRadius)}
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="Card Color" width="color">
-            <BuilderThemeColorControlWithDefault
-              defaultColor="#ffffff"
-              dialogLabel="Card background color"
-              hint="theme"
-              themeColors={themeColors}
-              value={module.settings.cardBackground ?? ""}
-              onChange={(cardBackground) => set("cardBackground", cardBackground)}
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="Border Color" width="color">
-            <BuilderThemeColorControlWithDefault
-              defaultColor={borderDefault}
-              dialogLabel="Card border color"
-              hint="theme"
-              themeColors={themeColors}
-              value={module.settings.cardBorderColor ?? ""}
-              onChange={(cardBorderColor) => set("cardBorderColor", cardBorderColor)}
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="Shadow" width="check">
-            <input
-              type="checkbox"
-              checked={module.settings.cardShadow !== "false"}
-              onChange={(event) => set("cardShadow", event.target.checked ? "true" : "false")}
-            />
-          </BuilderModuleField>
-        </BuilderModuleFieldStrip>
-
-        {showIcons ? (
-          <BuilderModuleFieldStrip>
-            <BuilderModuleField label="Icon Color" width="color">
-              <BuilderThemeColorControlWithDefault
-                defaultColor={iconDefault}
-                dialogLabel="Icon badge color"
-                hint="theme"
-                themeColors={themeColors}
-                value={module.settings.iconColor ?? ""}
-                onChange={(iconColor) => set("iconColor", iconColor)}
-              />
-            </BuilderModuleField>
-            {module.settings.iconAlternate !== "false" ? (
-              <BuilderModuleField label="2nd Color" width="color">
-                <BuilderThemeColorControlWithDefault
-                  defaultColor={iconAltDefault}
-                  dialogLabel="Alternating icon badge color"
-                  hint="theme"
-                  themeColors={themeColors}
-                  value={module.settings.iconAltColor ?? ""}
-                  onChange={(iconAltColor) => set("iconAltColor", iconAltColor)}
-                />
-              </BuilderModuleField>
-            ) : null}
-          </BuilderModuleFieldStrip>
-        ) : null}
-
-        <BuilderModuleFieldStrip>
-          <BuilderModuleField label="Default Link Text" width="text-md">
-            <input
-              type="text"
-              value={module.settings.linkLabel ?? "Learn More"}
-              onChange={(event) => set("linkLabel", event.target.value)}
-              placeholder="Learn More"
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="Arrow" width="check">
-            <input
-              type="checkbox"
-              checked={module.settings.linkArrow !== "false"}
-              onChange={(event) => set("linkArrow", event.target.checked ? "true" : "false")}
-            />
-          </BuilderModuleField>
-        </BuilderModuleFieldStrip>
-      </details>
-    </>
+      </div>
+    </div>
   );
 }
