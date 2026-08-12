@@ -1265,21 +1265,82 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "site-search") {
     const s = module.settings;
+    const num = (raw: string | undefined, fallback: number) => {
+      const parsed = parseInt(String(raw ?? ""), 10);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
     const accent = s.accentColor || "#0f4f8f";
-    const radius = parseInt(s.borderRadius ?? "8", 10) || 8;
+    const radius = num(s.borderRadius, 8);
     const placeholder = s.placeholder || "Search this site…";
     const buttonLabel = s.buttonLabel || "Search";
     const showButton = (s.showButton ?? "true") !== "false";
+    const showLabel = s.showLabel === "true";
+    const labelText = s.labelText || "Search";
+    const labelInline = s.labelPosition === "inline";
+    // The card mirrors the real settings so the canvas is not quietly lying
+    // about what the page will show — the whole point of a preview.
+    const fieldWidth = num(s.fieldWidth, 0);
+    const height = Math.min(96, Math.max(24, num(s.fieldHeight, 40))) - 2;
+    const btnBorderWidth = num(s.buttonBorderWidth, 0);
+    const label = showLabel ? (
+      <span
+        style={{
+          fontSize: num(s.labelFontSize, 13),
+          fontWeight: s.labelBold === "true" ? 700 : 400,
+          color: s.labelColor || "#18324a",
+          whiteSpace: "nowrap"
+        }}
+      >
+        {labelText}
+      </span>
+    ) : null;
 
     return (
       <div className="builder-module-preview-copy">
+        {showLabel && !labelInline ? <div style={{ marginBottom: 6 }}>{label}</div> : null}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ flex: 1, height: 38, background: "#fff", border: "1px solid #c6d8e8", borderRadius: radius, padding: "0 12px", display: "flex", alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#aab" }}>{placeholder}</span>
+          {showLabel && labelInline ? label : null}
+          <div
+            style={{
+              flex: fieldWidth > 0 ? `0 0 ${fieldWidth}px` : 1,
+              maxWidth: "100%",
+              height,
+              background: "#fff",
+              border: "1px solid #c6d8e8",
+              borderRadius: radius,
+              padding: "0 12px",
+              display: "flex",
+              alignItems: "center",
+              overflow: "hidden"
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#aab", whiteSpace: "nowrap" }}>{placeholder}</span>
           </div>
           {showButton ? (
-            <div style={{ height: 38, padding: "0 16px", background: accent, borderRadius: radius, display: "flex", alignItems: "center", flexShrink: 0 }}>
-              <span style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>{buttonLabel}</span>
+            <div
+              style={{
+                height,
+                padding: "0 16px",
+                background: accent,
+                border: btnBorderWidth
+                  ? `${btnBorderWidth}px ${s.buttonBorderStyle || "solid"} ${s.buttonBorderColor || "#000000"}`
+                  : "none",
+                borderRadius: radius,
+                display: "flex",
+                alignItems: "center",
+                flexShrink: 0
+              }}
+            >
+              <span
+                style={{
+                  fontSize: num(s.buttonFontSize, 13),
+                  color: s.buttonTextColor || "#fff",
+                  fontWeight: s.buttonBold === "false" ? 400 : 600,
+                  whiteSpace: "nowrap"
+                }}
+              >
+                {buttonLabel}
+              </span>
             </div>
           ) : null}
         </div>

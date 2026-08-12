@@ -4835,24 +4835,86 @@ function useSiteSearchQueryParam(searchParam: string): string {
   return query;
 }
 
+/** A bounded whole number from a setting, or the fallback when it is unset. */
+function siteSearchNumber(raw: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
+/**
+ * Every style setting, as CSS custom properties on the form.
+ *
+ * Variables rather than inline styles on each element, for two reasons.
+ * Standard 3: the structural rules stay in the stylesheet's BASE ruleset where
+ * a media query can adjust them — inline styles cannot be overridden by a
+ * breakpoint at all, so a hard-coded field width would survive onto a phone
+ * and push the page sideways. And an unset setting emits NO variable, so the
+ * stylesheet's own `var(--x, fallback)` decides — which is what keeps "empty
+ * means follow the theme" (A2) true for every one of these at once.
+ */
+function siteSearchFieldVars(
+  settings: Record<string, string>,
+  themePalette?: CrmThemePalette
+): CSSProperties {
+  const radius = siteSearchRadius(settings);
+  const vars: Record<string, string> = {
+    "--site-search-radius": `${radius}px`,
+    "--site-search-btn-bg": siteSearchAccent(settings, themePalette)
+  };
+
+  const set = (name: string, value: string | undefined) => {
+    const clean = String(value ?? "").trim();
+    if (clean) vars[name] = clean;
+  };
+
+  // Field. Width 0 means "grow to fill the row", which is the default.
+  const fieldWidth = siteSearchNumber(settings.fieldWidth, 0, 0, 1200);
+  if (fieldWidth > 0) {
+    vars["--site-search-field-grow"] = "0";
+    vars["--site-search-field-basis"] = `${fieldWidth}px`;
+  }
+  vars["--site-search-field-height"] = `${siteSearchNumber(settings.fieldHeight, 40, 24, 96)}px`;
+
+  // Button text.
+  set("--site-search-btn-text", normalizeBuilderHexColor(settings.buttonTextColor, ""));
+  const btnSize = siteSearchNumber(settings.buttonFontSize, 0, 8, 48);
+  if (btnSize > 0) vars["--site-search-btn-size"] = `${btnSize}px`;
+  if (settings.buttonBold === "false") vars["--site-search-btn-weight"] = "400";
+
+  // Button border. A width with no colour would paint the browser default,
+  // so the colour carries its own visible fallback in the stylesheet.
+  const btnBorder = siteSearchNumber(settings.buttonBorderWidth, 0, 0, 12);
+  vars["--site-search-btn-border-width"] = `${btnBorder}px`;
+  set("--site-search-btn-border-color", normalizeBuilderHexColor(settings.buttonBorderColor, ""));
+  set("--site-search-btn-border-style", settings.buttonBorderStyle);
+
+  // Label.
+  set("--site-search-label-color", normalizeBuilderHexColor(settings.labelColor, ""));
+  const labelSize = siteSearchNumber(settings.labelFontSize, 0, 8, 48);
+  if (labelSize > 0) vars["--site-search-label-size"] = `${labelSize}px`;
+  if (settings.labelBold === "true") vars["--site-search-label-weight"] = "700";
+
+  return vars as CSSProperties;
+}
+
 function SiteSearchField({
   settings,
   themePalette,
-  initialQuery,
-  autoFocusHint
+  initialQuery
 }: {
   settings: Record<string, string>;
   themePalette?: CrmThemePalette;
   initialQuery: string;
-  autoFocusHint?: string;
 }) {
   const searchParam = (settings.searchParam || "q").trim() || "q";
   const targetPageUrl = (settings.targetPageUrl || "").trim();
   const placeholder = settings.placeholder || "Search this site…";
   const buttonLabel = settings.buttonLabel || "Search";
   const showButton = (settings.showButton ?? "true") !== "false";
-  const accent = siteSearchAccent(settings, themePalette);
-  const radius = siteSearchRadius(settings);
+  const showLabel = settings.showLabel === "true";
+  const labelText = settings.labelText || "Search";
+  // "above" puts the label on its own line; "inline" sits it before the field.
+  const labelPosition = settings.labelPosition === "inline" ? "inline" : "above";
   const inputId = useId();
 
   const [value, setValue] = useState(initialQuery);
@@ -4870,10 +4932,21 @@ function SiteSearchField({
     window.location.href = qs ? `${base}?${qs}` : base;
   }
 
+  // Standard 8: the input always has a real label. Showing it is a style
+  // choice; HAVING it is not, so "hidden" means visually hidden, never absent.
+  const labelClass = showLabel
+    ? `builder-site-search-label is-visible is-${labelPosition}`
+    : "builder-site-search-label";
+
   return (
-    <form className="builder-site-search-form" onSubmit={handleSubmit} role="search">
-      <label className="builder-site-search-label" htmlFor={inputId}>
-        {autoFocusHint || placeholder}
+    <form
+      className={`builder-site-search-form${showLabel && labelPosition === "above" ? " has-label-above" : ""}`}
+      onSubmit={handleSubmit}
+      role="search"
+      style={siteSearchFieldVars(settings, themePalette)}
+    >
+      <label className={labelClass} htmlFor={inputId}>
+        {showLabel ? labelText : placeholder}
       </label>
       <input
         id={inputId}
@@ -4882,14 +4955,9 @@ function SiteSearchField({
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={placeholder}
-        style={{ borderRadius: radius }}
       />
       {showButton ? (
-        <button
-          className="builder-site-search-submit"
-          type="submit"
-          style={{ background: accent, borderRadius: radius }}
-        >
+        <button className="builder-site-search-submit" type="submit">
           {buttonLabel}
         </button>
       ) : null}

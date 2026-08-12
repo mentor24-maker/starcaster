@@ -3047,8 +3047,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   margin: 0;
 }
 
-/* Visually hidden, but read aloud — the input needs a label, and the
-   placeholder is not one (Standard 8). */
+/* A visible label sitting ABOVE the field needs the row to break after it.
+   `flex-basis: 100%` on the label alone would do it, but only while the label
+   is the first child — this says it once, on the container. */
+.builder-react-root .builder-site-search-form.has-label-above {
+  row-gap: 6px;
+}
+
+/* Visually hidden by default, but always read aloud — the input needs a
+   label, and the placeholder is not one (Standard 8). Showing it is a style
+   choice; having it is not. */
 .builder-react-root .builder-site-search-label {
   position: absolute;
   width: 1px;
@@ -3062,16 +3070,41 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border: 0;
 }
 
+.builder-react-root .builder-site-search-label.is-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  font-size: var(--site-search-label-size, var(--text-md));
+  font-weight: var(--site-search-label-weight, 400);
+  line-height: 1.3;
+  color: var(--site-search-label-color, var(--ink-primary));
+}
+
+.builder-react-root .builder-site-search-label.is-visible.is-above {
+  flex: 1 1 100%;
+}
+
+.builder-react-root .builder-site-search-label.is-visible.is-inline {
+  flex: 0 0 auto;
+}
+
 .builder-react-root .builder-site-search-input {
-  flex: 1 1 12rem;
+  /* Field Width sets these two; unset means "grow to fill the row". */
+  flex: var(--site-search-field-grow, 1) 1 var(--site-search-field-basis, 12rem);
   min-width: 0;
-  height: 40px;
+  max-width: 100%;
+  height: var(--site-search-field-height, 40px);
   padding: 0 12px;
   font: inherit;
   font-size: var(--text-md);
   color: var(--ink-primary);
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
+  border-radius: var(--site-search-radius, 8px);
   outline: none;
 }
 
@@ -3082,13 +3115,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-site-search-submit {
   flex: 0 0 auto;
-  height: 40px;
+  height: var(--site-search-field-height, 40px);
   padding: 0 18px;
   font: inherit;
-  font-size: var(--text-md);
-  font-weight: 600;
-  color: var(--btn-text);
-  border: none;
+  font-size: var(--site-search-btn-size, var(--text-md));
+  font-weight: var(--site-search-btn-weight, 600);
+  color: var(--site-search-btn-text, var(--btn-text));
+  background: var(--site-search-btn-bg, #0f4f8f);
+  /* Width defaults to 0, so a border only appears once asked for — and when
+     it is asked for, the colour falls back to something visible rather than
+     the browser's default `currentColor`. */
+  border: var(--site-search-btn-border-width, 0)
+    var(--site-search-btn-border-style, solid)
+    var(--site-search-btn-border-color, var(--border-black));
+  border-radius: var(--site-search-radius, 8px);
   cursor: pointer;
 }
 
@@ -3174,6 +3214,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* Adjust only. The row, the growth, and the list are all set above. */
 @media (max-width: 560px) {
+  /* Overrides Field Width on purpose: a field pinned to 320px would otherwise
+     stay 320px on a 390px phone and push the page sideways (Standard 7). */
   .builder-react-root .builder-site-search-input {
     flex: 1 1 100%;
   }
