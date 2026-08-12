@@ -49,6 +49,45 @@ export function normalizeNumberSelectValue(
   return String(stepped);
 }
 
+/**
+ * The options to render, and which one is selected.
+ *
+ * A saved value does not have to sit on the step grid. It can predate the
+ * step (a width saved at 403 before the control counted in fives), or come
+ * from an import, or from a step that has since changed. Snapping the display
+ * to the nearest option would show 405 while 403 stayed in the document —
+ * the panel quietly disagreeing with the page, which is the worst kind of
+ * wrong because it looks fine.
+ *
+ * So an off-grid value is added to the list, in order, and selected. The
+ * operator sees what is actually set; the moment they pick anything else it
+ * rejoins the grid and the stray option disappears.
+ */
+export function resolveNumberSelectOptions(
+  value: string | undefined,
+  fallback: string,
+  min: number,
+  max: number,
+  step = 1
+): { options: string[]; selected: string } {
+  const options = buildNumberSelectOptions(min, max, step);
+  const parsed = Number.parseFloat(String(value ?? fallback));
+
+  if (!Number.isFinite(parsed)) {
+    return { options, selected: normalizeNumberSelectValue(value, fallback, min, max, step) };
+  }
+
+  const clamped = String(Math.min(max, Math.max(min, parsed)));
+  if (options.includes(clamped)) {
+    return { options, selected: clamped };
+  }
+
+  return {
+    options: [...options, clamped].sort((left, right) => Number(left) - Number(right)),
+    selected: clamped
+  };
+}
+
 type BuilderInlineNumberSelectProps = {
   label: string;
   value: string;
@@ -78,8 +117,7 @@ export function BuilderNumberSelectControl({
   disabled = false,
   onChange
 }: BuilderNumberSelectControlProps) {
-  const options = buildNumberSelectOptions(min, max, step);
-  const normalized = normalizeNumberSelectValue(value, fallback, min, max, step);
+  const { options, selected } = resolveNumberSelectOptions(value, fallback, min, max, step);
   const digitCount = getNumericSelectDigitCount(max, min);
 
   return (
@@ -87,7 +125,7 @@ export function BuilderNumberSelectControl({
       className="builder-number-select-control"
       disabled={disabled}
       style={buildNumericSelectWidthStyle(digitCount)}
-      value={normalized}
+      value={selected}
       onChange={(event) => onChange(event.target.value)}
     >
       {options.map((option) => (
@@ -108,13 +146,12 @@ export function BuilderInlineNumberSelect({
   fallback,
   onChange
 }: BuilderInlineNumberSelectProps) {
-  const options = buildNumberSelectOptions(min, max, step);
-  const normalized = normalizeNumberSelectValue(value, fallback, min, max, step);
+  const { options, selected } = resolveNumberSelectOptions(value, fallback, min, max, step);
 
   return (
     <label className="field builder-inline-number-field">
       <span>{label}</span>
-      <select value={normalized} onChange={(event) => onChange(event.target.value)}>
+      <select value={selected} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={`${label}-${option}`} value={option}>
             {option}

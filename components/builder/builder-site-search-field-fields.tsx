@@ -128,6 +128,10 @@ export function siteSearchFieldSizeFields(): BuilderSchemaField[] {
       control: "number",
       min: 0,
       max: 1200,
+      // Counts in fives (operator, 2026-08-12). At step 1 this dropdown held
+      // 1,201 options and scrolling it to 400 was the worst control in the
+      // panel; nobody sets a field width to the nearest pixel. 241 now.
+      step: 5,
       // 0 is the default and means "grow to fill the row" — the behaviour
       // every existing search box already has, so an untouched module does
       // not move.
