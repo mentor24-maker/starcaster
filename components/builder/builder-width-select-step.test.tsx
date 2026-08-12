@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BuilderSiteSearchModuleSettings } from "./builder-site-search-module-settings";
 import { BuilderBlogSearchResultsModuleSettings } from "./builder-blog-search-results-module-settings";
 import { createEmptyModule } from "@/lib/builder-template";
+import { modulePaletteItems } from "./builder-types";
 
 function optionsFor(html: string, labelText: string) {
   // Grab the <select> that follows the given field label.
@@ -61,5 +62,20 @@ describe("width dropdowns count in fives", () => {
     console.log("off-grid 403 ->", o.count, "options, selected:", o.selected);
     expect(o.selected).toBe("403");
     expect(o.count).toBe(242);
+  });
+});
+
+describe("a new Site Search Results module does not bring a second search box", () => {
+  it("ships with the form off, so pairing it with a Site Search box gives one form", () => {
+    // Operator, 2026-08-12: his /search page ended up with two identical forms —
+    // one in the header, one inside the results — because the results module
+    // defaulted to carrying its own.
+    const item = modulePaletteItems.find((i) => i.type === "site-search-results");
+    expect(item?.settings?.showSearchField).toBe("false");
+  });
+
+  it("leaves the standalone Site Search box alone — it IS the form", () => {
+    const item = modulePaletteItems.find((i) => i.type === "site-search");
+    expect(item?.settings?.showButton).toBe("true");
   });
 });

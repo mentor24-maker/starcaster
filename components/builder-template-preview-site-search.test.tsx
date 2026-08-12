@@ -81,9 +81,16 @@ describe("Site Search results", () => {
     expect(html).toContain("Type something above to search this site.");
   });
 
-  it("carries its own search box by default, and can drop it", () => {
-    expect(render("site-search-results")).toContain("builder-site-search-form");
+  it("can carry its own search box, or not", () => {
+    expect(render("site-search-results", { showSearchField: "true" })).toContain("builder-site-search-form");
     expect(render("site-search-results", { showSearchField: "false" })).not.toContain("builder-site-search-form");
+  });
+
+  it("keeps showing the box for a module saved before the default flipped", () => {
+    // The palette now inserts showSearchField:"false", but every module already
+    // on a page carries "true" explicitly and must not lose its form. Modules
+    // with the key absent entirely keep the old behaviour for the same reason.
+    expect(render("site-search-results")).toContain("builder-site-search-form");
   });
 
   it("never emits an empty results list", () => {
