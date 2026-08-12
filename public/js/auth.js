@@ -244,6 +244,32 @@ App.auth._showApp = function _showApp() {
   }
 };
 
+/**
+ * Does this account belong to any workspace at all?
+ *
+ * Distinct from "no ACTIVE workspace": that resolves itself, because the boot
+ * call picks one. This is the genuinely empty case — someone invited without
+ * a workspace — and every screen in the app would be blank and noisy for
+ * them, so the shell shows them one page and hides the menu.
+ */
+App.auth._hasNoWorkspace = function _hasNoWorkspace() {
+  const projects = Array.isArray(App.state?.projects) ? App.state.projects : [];
+  return Boolean(App.auth.user) && projects.length === 0;
+};
+
+App.auth._applyNoWorkspaceView = function _applyNoWorkspaceView() {
+  const stranded = App.auth._hasNoWorkspace();
+  document.body.classList.toggle('no-workspace-view', stranded);
+  if (!stranded) return false;
+  if (typeof App.setActivePage === 'function') {
+    // Not persisted: the moment they are added to a workspace this page stops
+    // being where they belong, and a remembered "last page" would strand them
+    // on it again.
+    App.setActivePage('noWorkspacePage', { persist: false, skipTracking: true });
+  }
+  return true;
+};
+
 App.auth._showPublicLegal = function _showPublicLegal(pageId) {
   const { appShell, authLanding, authLogoutButton } = App.auth._els;
   if (authLanding) authLanding.classList.add('hidden');
@@ -356,6 +382,13 @@ App.auth._consumeSignupInvite = async function _consumeSignupInvite() {
       return;
     }
     App.notify(projectName ? `You've been added to ${projectName}.` : 'You have been added to the project.');
+    // Coming from the "no workspace yet" page, the whole shell was set up for
+    // someone with nothing — menu hidden, one page showing. Switching the
+    // project in place would leave that scaffolding behind, so start clean.
+    if (document.body.classList.contains('no-workspace-view')) {
+      window.location.reload();
+      return;
+    }
     if (App.projectContext?.switchSessionProject) {
       App.projectContext.switchSessionProject(projectId, { keepView: false, refresh: true }).catch(() => {
         window.location.reload();
@@ -502,6 +535,7 @@ App.auth.init = function init(bootMainApp) {
         await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._applyNoWorkspaceView();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
         App.auth._consumeSignupInvite();
@@ -533,6 +567,7 @@ App.auth.init = function init(bootMainApp) {
         await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._applyNoWorkspaceView();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
         App.auth._consumeSignupInvite();
@@ -629,6 +664,7 @@ App.auth.init = function init(bootMainApp) {
       return App.auth._syncProjectContext().then(() => {
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._applyNoWorkspaceView();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
         App.auth._consumeSignupInvite();

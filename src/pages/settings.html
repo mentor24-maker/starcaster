@@ -610,3 +610,12 @@
         <!-- React island. Mounted by react-entry.js; see components/invitations/. -->
         <div id="invitationsReactRoot"></div>
       </section>
+
+      <!--
+        Shown to a signed-in user who belongs to no workspace at all — someone
+        invited without one. Every other screen would be empty and noisy for
+        them, so the shell routes here and hides the menu (body.no-workspace-view).
+      -->
+      <section id="noWorkspacePage" class="app-page hidden">
+        <div id="noWorkspaceReactRoot"></div>
+      </section>

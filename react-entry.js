@@ -4,6 +4,7 @@ import ActiveCampaignsList from './components/campaigns/ActiveCampaignsList';
 import AssociationsPanelHost from './components/associations/associations-panel';
 import AssetRenditionsPanel from './components/assets/asset-renditions-panel';
 import InvitationsPanel from './components/invitations/invitations-panel';
+import NoWorkspacePanel from './components/invitations/no-workspace-panel';
 
 // Host ids that should receive an Associations panel. The vanilla screen names
 // the open object by dispatching starcaster:associations-target at the panel.
@@ -31,6 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (invitationsHost) {
     createRoot(invitationsHost).render(<InvitationsPanel />);
+  }
+
+  const noWorkspaceHost = document.getElementById('noWorkspaceReactRoot');
+
+  if (noWorkspaceHost) {
+    createRoot(noWorkspaceHost).render(<NoWorkspacePanel />);
   }
 
   ASSOCIATION_PANEL_HOSTS.forEach((hostId) => {
