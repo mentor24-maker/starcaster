@@ -310,54 +310,59 @@ function splitIntoColumns(strips: BuilderSchemaStrip[], columns: number): Builde
 }
 
 /**
- * The H+V margin pair, always together and adjacent — doctrine E4 by
- * construction. Spread the result into a layout strip:
- *   [{ ... }, ...marginFields("getModuleMarginStyle")]
- * Only for modules whose renderer honours BOTH keys; wiring a control to a
- * setting nothing reads violates E7 (see the heading/current-poll debt note
- * in scripts/check_ui_doctrine.cjs).
+ * The four sides of a spacing box, in one fixed order: Top, Bottom, Left,
+ * Right. Every object in the Builder — row, cell, module — spells margin and
+ * padding this way from 2026-08-11 (operator: "standardize all objects on the
+ * Top/Bottom/Left/Right model"). `legacy` is the vertical/horizontal key that
+ * side used to come from, read as its fallback so a page that has not been
+ * re-saved shows the number it is actually rendering.
  */
-export function marginFields(rendersVia: string, max = 80): BuilderSchemaField[] {
-  return [
-    { key: "verticalMargin", label: "Vertical Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia },
-    { key: "horizontalMargin", label: "Horizontal Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia }
-  ];
-}
+export const MODULE_MARGIN_SIDES = [
+  { key: "marginTop", label: "Top Margin", legacy: "verticalMargin" },
+  { key: "marginBottom", label: "Bottom Margin", legacy: "verticalMargin" },
+  { key: "marginLeft", label: "Left Margin", legacy: "horizontalMargin" },
+  { key: "marginRight", label: "Right Margin", legacy: "horizontalMargin" }
+] as const;
+
+export const MODULE_PADDING_SIDES = [
+  { key: "paddingTop", label: "Top Padding", legacy: "verticalPadding" },
+  { key: "paddingBottom", label: "Bottom Padding", legacy: "verticalPadding" },
+  { key: "paddingLeft", label: "Left Padding", legacy: "horizontalPadding" },
+  { key: "paddingRight", label: "Right Padding", legacy: "horizontalPadding" }
+] as const;
 
 /**
- * The four spacing controls, with the only names they are allowed to have
- * (master rule W7, operator 8/10): Vertical Margin, Horizontal Margin,
- * Vertical Padding, Horizontal Padding. Pass only the keys a module
- * actually honours — a control wired to nothing is a C6 violation.
+ * A module's four margin controls, always together and in side order —
+ * doctrine E4 by construction. Spread the result into a layout strip:
+ *   [{ ... }, ...marginFields("getModuleOuterSpacingStyle")]
+ * Only for modules whose renderer honours the keys; wiring a control to a
+ * setting nothing reads violates E7.
  */
-export function spacingFields(
-  rendersVia: string,
-  keys: Partial<{
-    verticalMargin: string;
-    horizontalMargin: string;
-    verticalPadding: string;
-    horizontalPadding: string;
-  }>,
-  max = 160
-): BuilderSchemaField[] {
-  const labels: Record<string, string> = {
-    verticalMargin: "Vertical Margin",
-    horizontalMargin: "Horizontal Margin",
-    verticalPadding: "Vertical Padding",
-    horizontalPadding: "Horizontal Padding"
-  };
-  return (["verticalMargin", "horizontalMargin", "verticalPadding", "horizontalPadding"] as const)
-    .filter((name) => keys[name])
-    .map((name) => ({
-      key: keys[name] as string,
-      label: labels[name],
-      width: "num" as const,
-      control: "number" as const,
-      min: 0,
-      max,
-      fallback: "0",
-      rendersVia
-    }));
+export function marginFields(rendersVia: string, max = 80): BuilderSchemaField[] {
+  return MODULE_MARGIN_SIDES.map(({ key, label }) => ({
+    key,
+    label,
+    width: "num" as const,
+    control: "number" as const,
+    min: 0,
+    max,
+    fallback: "0",
+    rendersVia
+  }));
+}
+
+/** A module's four padding controls, same shape as `marginFields`. */
+export function paddingFields(rendersVia: string, max = 160): BuilderSchemaField[] {
+  return MODULE_PADDING_SIDES.map(({ key, label }) => ({
+    key,
+    label,
+    width: "num" as const,
+    control: "number" as const,
+    min: 0,
+    max,
+    fallback: "0",
+    rendersVia
+  }));
 }
 
 /**

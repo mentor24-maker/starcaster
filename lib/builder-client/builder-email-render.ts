@@ -13,7 +13,7 @@ import {
   getButtonModuleStyle,
   getHeadingModuleStyle,
   getModuleAlignment,
-  getModuleMarginStyle,
+  getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getSectionMarginStyle
 } from "@/components/builder/builder-utils";
@@ -80,7 +80,7 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     return "";
   }
 
-  const marginStyle = cssPropertiesToInline(getModuleMarginStyle(module.settings));
+  const marginStyle = cssPropertiesToInline(getModuleOuterSpacingStyle(module.settings));
   const alignment = getModuleAlignment(module.settings);
   const alignAttr = alignment === "center" ? "center" : alignment === "right" ? "right" : "left";
 

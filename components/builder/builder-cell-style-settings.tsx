@@ -31,6 +31,21 @@ function opacityFromPercent(percent: string) {
   return String(Number(percent) / 100);
 }
 
+/** The cell's spacing, in the one side order the whole Builder uses (W7). */
+const CELL_PADDING_SIDES = [
+  { key: "cellPaddingTop", label: "Top Padding", pair: "cellVerticalPadding" },
+  { key: "cellPaddingBottom", label: "Bottom Padding", pair: "cellVerticalPadding" },
+  { key: "cellPaddingLeft", label: "Left Padding", pair: "cellHorizontalPadding" },
+  { key: "cellPaddingRight", label: "Right Padding", pair: "cellHorizontalPadding" }
+] as const;
+
+const CELL_MARGIN_SIDES = [
+  { key: "cellMarginTop", label: "Top Margin", pair: "cellVerticalMargin" },
+  { key: "cellMarginBottom", label: "Bottom Margin", pair: "cellVerticalMargin" },
+  { key: "cellMarginLeft", label: "Left Margin", pair: "" },
+  { key: "cellMarginRight", label: "Right Margin", pair: "" }
+] as const;
+
 /**
  * The cell (column) editor.
  *
@@ -91,9 +106,11 @@ export function BuilderCellStyleSettings({
   const hAlign = getCellExtra(column, "cellHAlign", "left");
   const vAlign = getCellExtra(column, "cellVAlign", "top");
   const borderDisabled = borderStyle === "none";
-  // What both padding axes read when neither has been set: the one number the
-  // cell used to carry for all four sides.
+  // What a padding side reads when neither it nor its pair has been set: the
+  // one number the cell used to carry for all four sides.
   const legacyPadding = section.cellPadding?.[column] ?? "0";
+  const cellSide = (key: string, pair: string, fallback: string) =>
+    getCellExtra(column, key, "") || getCellExtra(column, pair, "") || fallback;
 
   return (
     <div className="builder-cell-style-settings is-lattice">
@@ -114,39 +131,33 @@ export function BuilderCellStyleSettings({
               <option value="bottom">Bottom</option>
             </select>
           </BuilderSettingRow>
-          {/* W7: these are the only names the four spacing controls may
-              carry, and the pair is adjacent (E4). They replaced a single
-              "Size" that moved all four sides at once — the dead end being
-              that a banner logo could not lose the 18px above it without also
-              losing the 18px holding it off the left edge. Both read the
-              legacy all-sides number when neither axis has been set. */}
-          <BuilderSettingRow label="Vertical Padding">
-            <BuilderNumberSelectControl
-              value={getCellExtra(column, "cellVerticalPadding", legacyPadding)}
-              min={0}
-              max={50}
-              fallback="0"
-              onChange={(value) => onSetCellExtra(column, "cellVerticalPadding", value)}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Horizontal Padding">
-            <BuilderNumberSelectControl
-              value={getCellExtra(column, "cellHorizontalPadding", legacyPadding)}
-              min={0}
-              max={50}
-              fallback="0"
-              onChange={(value) => onSetCellExtra(column, "cellHorizontalPadding", value)}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Vertical Margin">
-            <BuilderNumberSelectControl
-              value={getCellExtra(column, "cellVerticalMargin", "0")}
-              min={0}
-              max={160}
-              fallback="0"
-              onChange={(value) => onSetCellExtra(column, "cellVerticalMargin", value)}
-            />
-          </BuilderSettingRow>
+          {/* W7, the model every object shares: four padding sides and four
+              margin sides, in one order — top, bottom, left, right. Each side
+              reads the pair that preceded it and then the single all-sides
+              number before that, so a cell nobody has re-saved shows the
+              number it is actually rendering. */}
+          {CELL_PADDING_SIDES.map(({ key, label, pair }) => (
+            <BuilderSettingRow key={key} label={label}>
+              <BuilderNumberSelectControl
+                value={cellSide(key, pair, legacyPadding)}
+                min={0}
+                max={50}
+                fallback="0"
+                onChange={(value) => onSetCellExtra(column, key, value)}
+              />
+            </BuilderSettingRow>
+          ))}
+          {CELL_MARGIN_SIDES.map(({ key, label, pair }) => (
+            <BuilderSettingRow key={key} label={label}>
+              <BuilderNumberSelectControl
+                value={cellSide(key, pair, "0")}
+                min={0}
+                max={160}
+                fallback="0"
+                onChange={(value) => onSetCellExtra(column, key, value)}
+              />
+            </BuilderSettingRow>
+          ))}
         </div>
 
         <div className="builder-schema-panel-column">

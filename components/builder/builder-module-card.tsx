@@ -107,17 +107,15 @@ import {
   getModuleAlignment,
   getModuleBackgroundSettings,
   isPollCategoryListPanelTransparent,
-  getModuleMarginStyle,
   getModuleOuterSpacingStyle,
   getTableWrapStyle,
-  getButtonModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
-  getVerticalMarginStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
   isVideoMedia
 } from "./builder-utils";
+import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
 import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
@@ -3090,37 +3088,27 @@ export function BuilderModuleCard({
               }
             />
           </BuilderModuleField>
-          {/* W7: these are the only names these two controls may carry, and
-              the order matches marginFields() in the schema generator, so the
-              pair reads the same on hand-written and generated panels. */}
-          <BuilderModuleField label="Vertical Margin" width="num">
-            <BuilderNumberSelectControl
-              fallback="0"
-              max={160}
-              min={0}
-              value={module.settings.verticalMargin ?? "0"}
-              onChange={(verticalMargin) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, verticalMargin }
-                }))
-              }
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="Horizontal Margin" width="num">
-            <BuilderNumberSelectControl
-              fallback="0"
-              max={160}
-              min={0}
-              value={module.settings.horizontalMargin ?? "0"}
-              onChange={(horizontalMargin) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, horizontalMargin }
-                }))
-              }
-            />
-          </BuilderModuleField>
+          {/* W7: the four sides, in the same order `marginFields()` emits them,
+              so the set reads identically on hand-written and generated
+              panels. Each side reads the legacy vertical/horizontal pair when
+              its own key is unset, which is what keeps a page that has not
+              been re-saved showing the numbers it is actually rendering. */}
+          {MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => (
+            <BuilderModuleField key={key} label={label} width="num">
+              <BuilderNumberSelectControl
+                fallback="0"
+                max={160}
+                min={0}
+                value={module.settings[key] ?? module.settings[legacy] ?? "0"}
+                onChange={(next) =>
+                  onUpdateModule((current) => ({
+                    ...current,
+                    settings: { ...current.settings, [key]: next }
+                  }))
+                }
+              />
+            </BuilderModuleField>
+          ))}
           {module.type === "text" ? (
             <BuilderModuleField label="Width" width="select-sm">
               <select
@@ -3152,15 +3140,9 @@ export function BuilderModuleCard({
         ...(module.type !== "button" && !isPollCategoryListModule
           ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
           : {}),
-        ...(isHeadingModule
-          ? getModuleMarginStyle(module.settings)
-          : module.type === "button"
-            ? getButtonModuleOuterSpacingStyle(module.settings)
-            : isSocialModule || isCrmFormModule
-            ? getModuleOuterSpacingStyle(module.settings)
-            : isFloatingImage || isReminderModule
-              ? {}
-              : getVerticalMarginStyle(module.settings.verticalMargin))
+        // One reader for every type (W7). A floating image and a reminder are
+        // positioned overlays, so a wrapper margin has nothing to push.
+        ...(isFloatingImage || isReminderModule ? {} : getModuleOuterSpacingStyle(module.settings))
       }}
     >
       {onModuleDragStart ? (

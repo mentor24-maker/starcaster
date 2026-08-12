@@ -187,12 +187,16 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
 
   return {
     // --- the bar ------------------------------------------------------
-    "--site-nav-padding": `${num(settings.navPaddingV, NAV_STYLE_DEFAULTS.paddingV, 0, 60)}px ${num(
-      settings.navPaddingH,
-      NAV_STYLE_DEFAULTS.paddingH,
-      0,
-      60
-    )}px`,
+    // Four sides since 2026-08-11 (W7). The defaults still live here because
+    // this runs on raw settings in some paths, not only on normalized ones.
+    "--site-nav-padding": [
+      num(settings.navPaddingTop, NAV_STYLE_DEFAULTS.paddingV, 0, 60),
+      num(settings.navPaddingRight, NAV_STYLE_DEFAULTS.paddingH, 0, 60),
+      num(settings.navPaddingBottom, NAV_STYLE_DEFAULTS.paddingV, 0, 60),
+      num(settings.navPaddingLeft, NAV_STYLE_DEFAULTS.paddingH, 0, 60)
+    ]
+      .map((side) => `${side}px`)
+      .join(" "),
     "--site-nav-gap": `${num(settings.navGap, NAV_STYLE_DEFAULTS.gap, 0, 40)}px`,
     /*
      * The bar's fill when the Background control is set to None.
@@ -222,12 +226,14 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     // navPadding / navBorderRadius keep their live-site meaning (the LINK,
     // not the bar). The React preview used to apply both to the <nav>; that
     // is the disagreement this file ends.
-    "--site-nav-link-padding": `${num(settings.navLinkPaddingV, NAV_STYLE_DEFAULTS.linkPaddingV, 0, 40)}px ${num(
-      settings.navLinkPaddingH,
-      NAV_STYLE_DEFAULTS.linkPaddingH,
-      0,
-      60
-    )}px`,
+    "--site-nav-link-padding": [
+      num(settings.navLinkPaddingTop, NAV_STYLE_DEFAULTS.linkPaddingV, 0, 60),
+      num(settings.navLinkPaddingRight, NAV_STYLE_DEFAULTS.linkPaddingH, 0, 60),
+      num(settings.navLinkPaddingBottom, NAV_STYLE_DEFAULTS.linkPaddingV, 0, 60),
+      num(settings.navLinkPaddingLeft, NAV_STYLE_DEFAULTS.linkPaddingH, 0, 60)
+    ]
+      .map((side) => `${side}px`)
+      .join(" "),
     "--site-nav-link-radius": `${num(settings.navBorderRadius, NAV_STYLE_DEFAULTS.linkRadius, 0, 48)}px`,
     "--site-nav-link-height": `${num(settings.navLinkHeight, NAV_STYLE_DEFAULTS.linkHeight, 24, 96)}px`,
     "--site-nav-link-weight": String(num(settings.navWeight, NAV_STYLE_DEFAULTS.weight, 100, 900)),
