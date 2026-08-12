@@ -1554,7 +1554,6 @@ function SavedSectionsTable({
                             onUpdateCellBorderColor={(column, value) => onUpdateEditingSectionCellRecord("cellBorderColor", column, value)}
                             onUpdateCellBorderRadius={(column, value) => onUpdateEditingSectionCellRecord("cellBorderRadius", column, value)}
                             onUpdateCellBorderWidth={(column, value) => onUpdateEditingSectionCellRecord("cellBorderWidth", column, value)}
-                            onUpdateCellPadding={(column, value) => onUpdateEditingSectionCellRecord("cellPadding", column, value)}
                             onUpdateModule={onUpdateEditingSectionModule}
                             onUpdateModuleBackground={onUpdateEditingSectionModuleBackground}
                             onUpdateSection={onUpdateEditingSection}
@@ -1823,6 +1822,8 @@ export function BuilderModuleRepositoryList({
         Object.entries(section.cellBackgrounds ?? {}).map(([key, background]) => [key, { ...background }])
       ),
       cellPadding: { ...section.cellPadding },
+      cellVerticalPadding: { ...section.cellVerticalPadding },
+      cellHorizontalPadding: { ...section.cellHorizontalPadding },
       cellVerticalMargin: { ...section.cellVerticalMargin },
       cellMobileHidden: { ...section.cellMobileHidden },
       cellDesktopHidden: { ...section.cellDesktopHidden },

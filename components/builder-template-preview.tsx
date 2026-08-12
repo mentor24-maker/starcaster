@@ -1548,7 +1548,15 @@ function BuilderSectionPreview({
         const columnModules = section.modules.filter((module) => module.column === columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
-        const padding = section.cellPadding?.[columnKey] ?? "0";
+        const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
+        const verticalPadding = section.cellVerticalPadding?.[columnKey] ?? legacyPadding;
+        const horizontalPadding = section.cellHorizontalPadding?.[columnKey] ?? legacyPadding;
+        // `--builder-cell-padding` feeds one rule only, and that rule is
+        // `margin-inline` — a full-bleed overlay slot reaching back out
+        // sideways (_builder-react.css). So it takes the HORIZONTAL axis;
+        // handing it the vertical one would pull the slot out by the wrong
+        // number the moment the two differ.
+        const padding = horizontalPadding;
         const verticalMargin = section.cellVerticalMargin?.[columnKey] ?? "0";
         const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
         const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
@@ -1573,7 +1581,10 @@ function BuilderSectionPreview({
           // down without anybody asking. The menu module carries its own
           // Vertical/Horizontal Padding now (Placement axis), which is the
           // control that should move a menu inside its cell.
-          padding: isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${padding}px`,
+          padding:
+            isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+              ? 0
+              : `${verticalPadding}px ${horizontalPadding}px`,
           border:
             isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
               ? undefined
