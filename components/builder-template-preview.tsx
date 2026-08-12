@@ -43,7 +43,15 @@ import {
   redirectAfterAdminLogout,
   setAdminSessionToken,
 } from "@/lib/public-admin-session";
-import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import { resolveSessionProjectId, starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import type { CrmThemePalette } from "@/components/builder/builder-utils";
+import {
+  buildSiteSearchIndex,
+  searchSite,
+  type SiteSearchMatch,
+  type SiteSearchPageInput,
+  type SiteSearchResult
+} from "@/lib/site-search";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { TractorNavRuntime } from "@/components/builder-tractor-nav-module";
@@ -2060,6 +2068,12 @@ function BuilderModulePreview({
   }
   if (module.type === "blog-search-results") {
     return <BlogSearchResultsPreview settings={module.settings} />;
+  }
+  if (module.type === "site-search") {
+    return <SiteSearchPreview settings={module.settings} themePalette={themePalette} />;
+  }
+  if (module.type === "site-search-results") {
+    return <SiteSearchResultsPreview settings={module.settings} themePalette={themePalette} projectId={projectId} />;
   }
   if (
     module.type === "blog-post-card" ||
@@ -4769,6 +4783,272 @@ function BlogSearchResultsPreview({ settings }: { settings: Record<string, strin
           </a>
         );
       })}
+    </div>
+  );
+}
+
+// ── Site Search ───────────────────────────────────────────────────────────────
+
+/**
+ * Site Search reads the SAME payload the public site already downloads to
+ * render itself (`GET /api/public/pages`), so the search box needs no new
+ * endpoint and no new public data. The ranking lives in `@/lib/site-search`,
+ * away from React, where it can be tested.
+ */
+
+/**
+ * A2: an empty Button Color means "follow the theme", and only when the theme
+ * has nothing either does the shared default apply.
+ *
+ * The explicit `""` fallback on every call is the whole point.
+ * `normalizeBuilderHexColor` defaults to WHITE when handed an empty string, so
+ * the obvious `normalizeBuilderHexColor(a) || normalizeBuilderHexColor(b) || c`
+ * never falls through — the first call answers "#ffffff" and the search button
+ * ships white on white. Caught by the render test, not by review.
+ */
+function siteSearchAccent(settings: Record<string, string>, palette?: CrmThemePalette): string {
+  return (
+    normalizeBuilderHexColor(settings.accentColor, "")
+    || normalizeBuilderHexColor(palette?.accentColor, "")
+    || normalizeBuilderHexColor(palette?.primaryColor, "")
+    || "#0f4f8f"
+  );
+}
+
+function siteSearchRadius(settings: Record<string, string>): number {
+  const parsed = Number.parseInt(settings.borderRadius || "8", 10);
+  return Number.isFinite(parsed) ? Math.min(40, Math.max(0, parsed)) : 8;
+}
+
+/** The query currently in the URL, kept in sync when the visitor uses Back. */
+function useSiteSearchQueryParam(searchParam: string): string {
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const read = () => setQuery((new URLSearchParams(window.location.search).get(searchParam) ?? "").trim());
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, [searchParam]);
+
+  return query;
+}
+
+function SiteSearchField({
+  settings,
+  themePalette,
+  initialQuery,
+  autoFocusHint
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+  initialQuery: string;
+  autoFocusHint?: string;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const targetPageUrl = (settings.targetPageUrl || "").trim();
+  const placeholder = settings.placeholder || "Search this site…";
+  const buttonLabel = settings.buttonLabel || "Search";
+  const showButton = (settings.showButton ?? "true") !== "false";
+  const accent = siteSearchAccent(settings, themePalette);
+  const radius = siteSearchRadius(settings);
+  const inputId = useId();
+
+  const [value, setValue] = useState(initialQuery);
+  useEffect(() => setValue(initialQuery), [initialQuery]);
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (typeof window === "undefined") return;
+    const base = targetPageUrl || window.location.pathname;
+    const params = new URLSearchParams(targetPageUrl ? "" : window.location.search);
+    const trimmed = value.trim();
+    if (trimmed) params.set(searchParam, trimmed);
+    else params.delete(searchParam);
+    const qs = params.toString();
+    window.location.href = qs ? `${base}?${qs}` : base;
+  }
+
+  return (
+    <form className="builder-site-search-form" onSubmit={handleSubmit} role="search">
+      <label className="builder-site-search-label" htmlFor={inputId}>
+        {autoFocusHint || placeholder}
+      </label>
+      <input
+        id={inputId}
+        className="builder-site-search-input"
+        type="search"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={placeholder}
+        style={{ borderRadius: radius }}
+      />
+      {showButton ? (
+        <button
+          className="builder-site-search-submit"
+          type="submit"
+          style={{ background: accent, borderRadius: radius }}
+        >
+          {buttonLabel}
+        </button>
+      ) : null}
+    </form>
+  );
+}
+
+function SiteSearchPreview({
+  settings,
+  themePalette
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const query = useSiteSearchQueryParam(searchParam);
+  return <SiteSearchField settings={settings} themePalette={themePalette} initialQuery={query} />;
+}
+
+/** Snippet with the matched run marked. Text nodes only — never raw HTML. */
+function SiteSearchSnippet({ match }: { match: SiteSearchMatch }) {
+  const { snippet, highlights } = match;
+  if (!highlights.length) return <>{snippet}</>;
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  highlights.forEach((range, i) => {
+    const start = Math.max(cursor, Math.min(range.start, snippet.length));
+    const end = Math.max(start, Math.min(range.end, snippet.length));
+    if (start > cursor) parts.push(snippet.slice(cursor, start));
+    if (end > start) parts.push(<mark key={`h${i}`}>{snippet.slice(start, end)}</mark>);
+    cursor = end;
+  });
+  if (cursor < snippet.length) parts.push(snippet.slice(cursor));
+  return <>{parts}</>;
+}
+
+const SITE_SEARCH_KIND_LABELS: Record<SiteSearchMatch["kind"], string> = {
+  pageName: "page name",
+  title: "heading",
+  body: "page content",
+  meta: "image and link text"
+};
+
+function SiteSearchResultsPreview({
+  settings,
+  themePalette,
+  projectId: projectIdProp = ""
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+  projectId?: string;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const limit = Math.max(1, Number.parseInt(settings.limit || "50", 10) || 50);
+  const showSearchField = (settings.showSearchField ?? "true") !== "false";
+  const showResultCount = (settings.showResultCount ?? "true") !== "false";
+  const showOtherMatches = (settings.showOtherMatches ?? "true") !== "false";
+  const showMatchLocation = (settings.showMatchLocation ?? "false") === "true";
+  const emptyMessage = settings.emptyMessage || "Nothing on this site matched that search.";
+  const accent = siteSearchAccent(settings, themePalette);
+
+  const query = useSiteSearchQueryParam(searchParam);
+
+  const [pages, setPages] = useState<SiteSearchPageInput[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const projectId = projectIdProp || resolveSessionProjectId();
+    if (!projectId) {
+      setFailed(true);
+      return;
+    }
+    fetch(`/api/public/pages?projectId=${encodeURIComponent(projectId)}`, {
+      credentials: "include",
+      headers: starcasterScopedHeaders()
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (cancelled) return;
+        const list = Array.isArray(body?.pages) ? (body.pages as SiteSearchPageInput[]) : null;
+        if (list) setPages(list);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectIdProp]);
+
+  // Indexing walks every module on every page, so it is cached against the
+  // payload rather than redone on each keystroke or re-render.
+  const index = useMemo(() => (pages ? buildSiteSearchIndex(pages) : null), [pages]);
+
+  const results = useMemo<SiteSearchResult[]>(
+    () => (index && query ? searchSite(query, index, { limit }) : []),
+    [index, query, limit]
+  );
+
+  const field = showSearchField ? (
+    <SiteSearchField settings={settings} themePalette={themePalette} initialQuery={query} />
+  ) : null;
+
+  // Standard 5: every one of these is a designed state, not a blank box.
+  let body: React.ReactNode;
+  if (!query) {
+    body = <p className="builder-site-search-note">Type something above to search this site.</p>;
+  } else if (failed) {
+    body = <p className="builder-site-search-note">Search is unavailable right now. Please try again shortly.</p>;
+  } else if (!index) {
+    body = <p className="builder-site-search-note">Searching…</p>;
+  } else if (!results.length) {
+    body = <p className="builder-site-search-note">{emptyMessage}</p>;
+  } else {
+    body = (
+      <>
+        {showResultCount ? (
+          <p className="builder-site-search-count">
+            {results.length === 1 ? "1 page matches" : `${results.length} pages match`} “{query}”
+          </p>
+        ) : null}
+        <ol className="builder-site-search-results">
+          {results.map((result) => (
+            <li className="builder-site-search-result" key={result.pageId}>
+              <a className="builder-site-search-result-title" href={result.href} style={{ color: accent }}>
+                {result.pageName}
+              </a>
+              <p className="builder-site-search-result-snippet">
+                <SiteSearchSnippet match={result.topMatch} />
+              </p>
+              {showMatchLocation ? (
+                <p className="builder-site-search-result-where">
+                  Found in {SITE_SEARCH_KIND_LABELS[result.topMatch.kind]}
+                  {result.topMatch.moduleName ? ` — ${result.topMatch.moduleName}` : ""}
+                </p>
+              ) : null}
+              {showOtherMatches && result.otherMatches.length ? (
+                <ul className="builder-site-search-result-more">
+                  {result.otherMatches.map((match, i) => (
+                    <li key={`${result.pageId}-more-${i}`}>
+                      <SiteSearchSnippet match={match} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </>
+    );
+  }
+
+  return (
+    <div className="builder-site-search-panel">
+      {field}
+      {body}
     </div>
   );
 }

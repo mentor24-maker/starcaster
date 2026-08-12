@@ -85,6 +85,8 @@ import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-categor
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
 import { BuilderBlogSearchResultsModuleSettings } from "./builder-blog-search-results-module-settings";
+import { BuilderSiteSearchModuleSettings } from "./builder-site-search-module-settings";
+import { BuilderSiteSearchResultsModuleSettings } from "./builder-site-search-results-module-settings";
 import { BuilderMessagingTopicListModuleSettings } from "./builder-messaging-topic-list-module-settings";
 import { BuilderMessagingTagListModuleSettings } from "./builder-messaging-tag-list-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
@@ -1254,6 +1256,56 @@ function renderModulePreview(module: BuilderTemplateModule) {
                 <div style={{ fontSize: 12, color: "#587592", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{row.excerpt}</div>
               </div>
               <div style={{ flexShrink: 0, fontSize: 11, color: "#8aa", whiteSpace: "nowrap", paddingTop: 2 }}>Jun 29, 2026</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "site-search") {
+    const s = module.settings;
+    const accent = s.accentColor || "#0f4f8f";
+    const radius = parseInt(s.borderRadius ?? "8", 10) || 8;
+    const placeholder = s.placeholder || "Search this site…";
+    const buttonLabel = s.buttonLabel || "Search";
+    const showButton = (s.showButton ?? "true") !== "false";
+
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ flex: 1, height: 38, background: "#fff", border: "1px solid #c6d8e8", borderRadius: radius, padding: "0 12px", display: "flex", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "#aab" }}>{placeholder}</span>
+          </div>
+          {showButton ? (
+            <div style={{ height: 38, padding: "0 16px", background: accent, borderRadius: radius, display: "flex", alignItems: "center", flexShrink: 0 }}>
+              <span style={{ fontSize: 13, color: "#fff", fontWeight: 600 }}>{buttonLabel}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "site-search-results") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    // Static sample — the real list comes from the live pages at render time.
+    const rows = [
+      { title: "Pricing", before: "Plans start at $19 a month, and every plan includes ", hit: "support", after: " from a real person." },
+      { title: "Contact Us", before: "Our ", hit: "support", after: " team answers within one business day." },
+      { title: "FAQ", before: "How do I reach ", hit: "support", after: " outside office hours?" }
+    ];
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {rows.map((row, i) => (
+            <div key={i} style={{ borderBottom: i < rows.length - 1 ? "1px solid #e8eef4" : "none", paddingBottom: i < rows.length - 1 ? 12 : 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: accent, marginBottom: 3 }}>{row.title}</div>
+              <div style={{ fontSize: 12, color: "#587592", lineHeight: 1.4 }}>
+                {row.before}
+                <mark style={{ background: "#fff3b0", color: "#18324a" }}>{row.hit}</mark>
+                {row.after}
+              </div>
             </div>
           ))}
         </div>
@@ -2994,6 +3046,8 @@ export function BuilderModuleCard({
     const isBlogCardManagerModule = module.type === "blog-card-manager";
     const isBlogSearchModule = module.type === "blog-search";
     const isBlogSearchResultsModule = module.type === "blog-search-results";
+    const isSiteSearchModule = module.type === "site-search";
+    const isSiteSearchResultsModule = module.type === "site-search-results";
     const isMessagingTopicListModule = module.type === "messaging-topic-list";
     const isMessagingTagListModule = module.type === "messaging-tag-list";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
@@ -3362,6 +3416,10 @@ export function BuilderModuleCard({
               <BuilderBlogSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogSearchResultsModule ? (
               <BuilderBlogSearchResultsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isSiteSearchModule ? (
+              <BuilderSiteSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isSiteSearchResultsModule ? (
+              <BuilderSiteSearchResultsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTopicListModule ? (
               <BuilderMessagingTopicListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTagListModule ? (

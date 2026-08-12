@@ -79,7 +79,16 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     module.type === "code" ||
     module.type === "merch" ||
     module.type === "video" ||
-    module.type === "floating-image"
+    module.type === "floating-image" ||
+    // Standard 11, decided 2026-08-14: both Site Search modules are skipped.
+    // Search is a live query against the site's pages, run in the browser
+    // after the page loads. An email has no browser to run it and no live
+    // query string to read, so the box would render as an input nobody can
+    // submit and the results list as a permanently empty state. Neither has
+    // a sensible static form — a snapshot of "results" would be results for
+    // a search nobody performed.
+    module.type === "site-search" ||
+    module.type === "site-search-results"
   ) {
     return "";
   }
