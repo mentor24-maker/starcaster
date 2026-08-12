@@ -2645,7 +2645,19 @@ export function createEmptyModule(
           showIcons: "true",
           iconColor: "",
           iconAltColor: "",
+          iconTextColor: "",
           iconAlternate: "true",
+          // The icon badge used to be entirely hardcoded in CSS — 48px,
+          // circular, centred, overhanging the top edge, and painting
+          // BEHIND the card image because nothing declared a stacking
+          // order. These five settings expose all of it; the defaults
+          // reproduce the old look exactly, except iconFront, which is
+          // the fix (an icon nobody can see was never the intent).
+          iconSize: "48",
+          iconPlacement: "above",
+          iconAlign: "center",
+          iconShape: "circle",
+          iconFront: "true",
           linkLabel: "Learn More",
           linkArrow: "true"
         }
