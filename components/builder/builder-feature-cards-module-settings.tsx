@@ -263,6 +263,7 @@ export function BuilderFeatureCardsModuleSettings({
                 value={module.settings.iconSize ?? "48"}
                 min={16}
                 max={160}
+                step={5}
                 fallback="48"
                 onChange={(iconSize) => set("iconSize", iconSize)}
               />

@@ -366,8 +366,16 @@ function checkMarginPairing(files) {
 // the check exists: the next width control would have started at 1 again.
 // ---------------------------------------------------------------------------
 
-/** Keys that name a pixel measurement rather than a count, angle, or index. */
-const W8_SIZE_KEY = /(width|height|size)$/i;
+/**
+ * Keys that name a pixel measurement rather than a count, angle, or index.
+ *
+ * Spacing joined the list on 2026-08-12. The rule was written for `*Width`
+ * and shipped against Site Search, but the operator hit the same control the
+ * same night on the Slideshow module — a margin running 0–160 in ones, 161
+ * options, scrolled past 74 numbers to reach 75: "sizes incremented by 1 that
+ * should be 5". A margin is a pixel measurement like any other.
+ */
+const W8_SIZE_KEY = /(width|height|size|gap|margin|padding)(top|bottom|left|right)?$/i;
 
 /** Where the schema declares fields — editors, plus shared field modules. */
 const W8_GLOB = /components\/builder\/.*\.tsx$/;
@@ -420,9 +428,11 @@ function w8NumberFields(src) {
     if (end < 0) continue;
 
     const body = src.slice(start, end + 1);
+    const consts = w8FileConstants(src);
     const read = (name) => {
-      const hit = new RegExp(`\\b${name}:\\s*(-?\\d+)`).exec(body);
-      return hit ? Number(hit[1]) : null;
+      const hit = new RegExp(`\\b${name}:\\s*(-?\\d+|[A-Z][A-Z0-9_]*)`).exec(body);
+      if (!hit) return null;
+      return /^-?\d+$/.test(hit[1]) ? Number(hit[1]) : (consts.get(hit[1]) ?? null);
     };
     const key = /\bkey:\s*["']([\w-]+)["']/.exec(body)?.[1];
     const max = read('max');
@@ -432,6 +442,78 @@ function w8NumberFields(src) {
   }
 
   return fields;
+}
+
+/**
+ * `const NAME = 5` declarations, so a step written as a shared constant reads
+ * as its number.
+ *
+ * `marginFields()` and `paddingFields()` pass `step: MODULE_SPACING_STEP`
+ * rather than a literal — that is the point of the constant, one place to
+ * change the spacing grid. Without this the parser saw no digits, fell back
+ * to the default of 1, and failed the two helpers that had just been fixed.
+ */
+function w8FileConstants(src) {
+  const consts = new Map();
+  const re = /\bconst\s+([A-Z][A-Z0-9_]*)\s*=\s*(-?\d+)\s*;/g;
+  let m;
+  while ((m = re.exec(src))) consts.set(m[1], Number(m[2]));
+  return consts;
+}
+
+/**
+ * Every `<BuilderNumberSelectControl>` written directly as JSX.
+ *
+ * The schema parser above could not see these, and that is where all sixteen
+ * of the 2026-08-12 offenders lived: the shared module chrome's four margins,
+ * the row editor's margins, paddings and column gap, and the cell, CRM,
+ * social, button, heading and feature-card panels. The rule existed, the
+ * check ran green, and the operator was still scrolling a 161-option margin.
+ *
+ * A JSX prop has no `key:` to read, so these are judged by RANGE alone: past
+ * 100px, in this codebase, is always a pixel measurement. A control that
+ * genuinely needs every value says so in its own body with a `w8-allow:`
+ * comment and the reason.
+ */
+function w8JsxControls(src) {
+  const controls = [];
+  const consts = w8FileConstants(src);
+  const marker = /<BuilderNumberSelectControl\b/g;
+  let m;
+
+  while ((m = marker.exec(src))) {
+    // Forward to this element's own `/>`, ignoring any inside a prop
+    // expression — `onChange={(next) => ...}` nests braces, not elements.
+    let depth = 0;
+    let end = -1;
+    for (let i = m.index; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      else if (depth === 0 && ch === '/' && src[i + 1] === '>') { end = i; break; }
+    }
+    if (end < 0) continue;
+
+    const body = src.slice(m.index, end);
+    if (/w8-allow:/.test(body)) continue;
+
+    const read = (name) => {
+      const hit = new RegExp(`\\b${name}=\\{\\s*(-?\\d+|[A-Z][A-Z0-9_]*)\\s*\\}`).exec(body);
+      if (!hit) return null;
+      return /^-?\d+$/.test(hit[1]) ? Number(hit[1]) : (consts.get(hit[1]) ?? null);
+    };
+    const max = read('max');
+    if (max === null) continue;
+
+    controls.push({
+      line: src.slice(0, m.index).split('\n').length,
+      min: read('min') ?? 0,
+      max,
+      step: read('step') ?? 1
+    });
+  }
+
+  return controls;
 }
 
 function checkSizeSelectStep(files) {
@@ -452,6 +534,22 @@ function checkSizeSelectStep(files) {
           `(that would be ${Math.floor((field.max - field.min) / W8_MIN_STEP) + 1} options).\n` +
           `      Nobody sets a width to the nearest pixel. If this one genuinely needs every\n` +
           `      value, add it to W8_ALLOW in this file with the reason.`
+      );
+    }
+
+    for (const control of w8JsxControls(fs.readFileSync(file, 'utf8'))) {
+      if (control.max <= 100) continue;
+      if (control.step >= W8_MIN_STEP) continue;
+
+      const options = Math.floor((control.max - control.min) / control.step) + 1;
+      failures.push(
+        `[W8] ${file}:${control.line} — a <BuilderNumberSelectControl> spans ` +
+          `${control.min}–${control.max}px in steps of ${control.step}, so its dropdown ` +
+          `holds ${options} options.\n` +
+          `      Add \`step={${W8_MIN_STEP}}\` (that would be ` +
+          `${Math.floor((control.max - control.min) / W8_MIN_STEP) + 1} options).\n` +
+          `      Past 100px a single pixel is noise. If this one genuinely needs every value,\n` +
+          `      put a \`{/* w8-allow: <reason> */}\` comment inside the control.`
       );
     }
   }

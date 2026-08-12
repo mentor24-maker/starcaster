@@ -2181,6 +2181,33 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid--cards.builder-item-grid--cards-icons {
   grid-template-columns: 6ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
 }
+/* Slideshow: a slide is an image and its alt text, nothing else, so both fit
+   the primary row and there is no sub-row. The image column is wider because
+   it carries the URL and the Choose From Gallery button together. */
+.builder-react-root .builder-item-grid--slides {
+  /* The image column carries a URL AND the Choose From Gallery button, which
+     is ~200px of that track before the input gets any. At 1.6fr the input came
+     out around 140px — "https://astujhe2h" and nothing more. 2.4fr is what
+     leaves it a readable width while the alt text keeps a usable one. */
+  grid-template-columns: minmax(16ch, 2.4fr) minmax(12ch, 1fr) max-content;
+}
+
+/* The image picker renders its input and its Gallery button as siblings, so
+   the grid cell has to be their flex row — dropped straight into the grid
+   they would land in two different columns and push the actions out. */
+.builder-react-root .builder-item-grid-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-picker > input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-picker > button {
+  flex: 0 0 auto;
+}
 /* ---------------------------------------------------------------------------
  * Feature Cards editor — two columns (operator, 2026-08-12): global settings
  * left, the cards themselves right. The settings column is sized to its own
@@ -2268,6 +2295,51 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid > select {
   width: 100%;
   min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * W9 — no field spans its container (operator, 2026-08-12): "Never, ever have
+ * text fields that stretch the full width of their container. Every field
+ * must have some kind of size constraint."
+ *
+ * The lattice already bounds a panel column's controls, and an item grid
+ * bounds its columns — but three shapes had nothing above them: a `full`
+ * field (which exists precisely to span both tracks), a textarea, and the
+ * cells of an item grid on a wide screen. Those are what ran edge to edge in
+ * the Slideshow editor: an image URL about 2,000px wide.
+ *
+ * One ceiling, shared, from `--builder-field-long-max`. Narrower tokens are
+ * untouched — `label` (230px) and `text-md` (280px) set their own max-width
+ * and this never widens them, because a cap can only ever lower a used width.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .builder-item-grid > input,
+.builder-react-root .builder-item-grid > select,
+.builder-react-root .builder-item-grid > textarea,
+.builder-react-root .builder-item-grid-picker,
+.builder-react-root .builder-module-field--full .builder-module-field-control,
+.builder-react-root .builder-textarea,
+.builder-react-root .builder-module-field-control > textarea {
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+/*
+ * ...and the umbrella, because naming the shapes was not enough. The first
+ * pass at W9 listed the three that were known to stretch, and `check:panels`
+ * then found nine more the moment it could see them: a bare `label.field` in
+ * an editor that never joined a panel column (Video name, Instagram URL, Form
+ * type, Saved Product), each running the full 1,414px of the panel at 1600.
+ * Enumerating the shapes is how a rule ends up covering the ones somebody
+ * remembered — so this covers every text control on a settings surface, and
+ * the named rules above stay only for the wrappers that need a cap on the BOX
+ * rather than on the control inside it.
+ *
+ * Deliberately low specificity (0,2,1): every narrower width token — `label`
+ * at 230px, `text-md` at 280px — is a longer selector and keeps its own,
+ * smaller max-width. This can only ever lower a width, never raise one.
+ */
+.builder-react-root .is-lattice
+  :is(input[type="text"], input[type="url"], input[type="search"], input[type="number"], textarea, select) {
+  max-width: var(--builder-field-long-max, 560px);
 }
 .builder-react-root .builder-item-grid-header {
   font-size: var(--text-xs, 0.75rem);
@@ -2895,7 +2967,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   > :is(select, input[type="text"], input[type="number"], input[type="url"], .builder-number-select-control) {
   width: 100%;
   min-width: 0;
-  max-width: none;
+  /* W9. This was `none`, and `none` is how a control ends up as wide as the
+     panel it sits in. The track is still shared, so every control in the
+     column still ends at the same x — they just stop at a width a person can
+     read across instead of following the panel out to 2,000px. */
+  max-width: var(--builder-field-long-max, 560px);
   padding-right: calc(var(--builder-field-room, 40px) / 2);
 }
 
@@ -3509,7 +3585,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .is-lattice .builder-schema-panel-column label.field > *:not(span) {
   width: 100%;
   min-width: 0;
-  max-width: none;
+  /* W9 — same ceiling as every other control shape. */
+  max-width: var(--builder-field-long-max, 560px);
 }
 
 /* A checkbox keeps its size at the start of the slot (W0's exception). */

@@ -255,6 +255,7 @@ export function BuilderSocialModuleSettings({
                 value={module.settings[key] ?? module.settings[legacy] ?? "0"}
                 min={0}
                 max={160}
+                step={5}
                 fallback="0"
                 onChange={(next) => updateSetting(key, next)}
               />
