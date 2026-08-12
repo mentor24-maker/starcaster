@@ -2396,7 +2396,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    against these numbers.
    --------------------------------------------------------------------- */
 .builder-react-root .site-nav {
-  gap: var(--site-nav-gap, 0px);
+  /* Item Gap lives on `.site-nav-items` below — this element's only children
+     are the hamburger toggle and that wrapper, so a gap here is invisible on
+     any screen wide enough to show the menu. */
+  gap: 0px;
   /* Cleared means CLEARED. The generated stylesheet falls back to an opaque
      white pill here, which is what made the Background control one-way: you
      could set a colour, and clearing it just uncovered the white again
@@ -2981,3 +2984,25 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* Menu cells and overlay slots publish 0px, so they stay flush by their
    own value rather than by a second rule contradicting the first. */
+
+/* ---------------------------------------------------------------------
+   Item Gap — the space between top-level menu items.
+
+   Operator, 2026-08-12: "The Item Gap setting in the main menu in the
+   /home page doesn't seem to be working. I have worked the gap up from 5
+   to 10 to 20 and don't see any change."
+
+   Measured: the variable carried 5, 10, 20 and 40 correctly and landed on
+   `.site-nav` every time — but `.site-nav`'s children are the hamburger
+   toggle and the `.site-nav-items` wrapper, not the links. The links sit
+   inside that wrapper, whose gap was hardcoded at 4px, so the measured
+   space between items was 4px at every setting.
+
+   The control was wired to the right variable on the wrong box. It now
+   lands where the links actually are. `.site-nav-menu` is the same list in
+   the frozen Module Studio markup and gets the same treatment.
+   --------------------------------------------------------------------- */
+.builder-react-root .site-nav-items,
+.builder-react-root .site-nav-menu {
+  gap: var(--site-nav-gap, 4px);
+}

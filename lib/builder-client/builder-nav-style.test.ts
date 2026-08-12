@@ -183,6 +183,34 @@ describe("Text Color reaches every link, including the one you are standing on",
   });
 });
 
+describe("Item Gap", () => {
+  /*
+   * Operator, 2026-08-12: "The Item Gap setting ... doesn't seem to be
+   * working. I have worked the gap up from 5 to 10 to 20 and don't see any
+   * change." Measured: the variable carried every value correctly and landed
+   * on `.site-nav`, whose children are the hamburger toggle and the items
+   * wrapper — not the links. The measured space between items was 4px at
+   * every setting. The variable was right; the box was wrong.
+   */
+  it("carries the number the operator set", () => {
+    expect(style({ navGap: "20" })["--site-nav-gap"]).toBe("20px");
+    expect(style({ navGap: "0" })["--site-nav-gap"]).toBe("0px");
+  });
+
+  it("defaults to the 4px the item list has always rendered", () => {
+    // Not 0: the default has to match what the hardcoded rule produced, or
+    // moving the variable onto the item list would close up every live menu.
+    expect(style()["--site-nav-gap"]).toBe("4px");
+    expect(NAV_STYLE_DEFAULTS.gap).toBe(4);
+  });
+
+  it("clamps rather than emitting something the layout cannot use", () => {
+    expect(style({ navGap: "999" })["--site-nav-gap"]).toBe("40px");
+    expect(style({ navGap: "-5" })["--site-nav-gap"]).toBe("0px");
+    expect(style({ navGap: "abc" })["--site-nav-gap"]).toBe("4px");
+  });
+});
+
 describe("getNavUnderline", () => {
   it("defaults to no underline in either state", () => {
     expect(getNavUnderline({})).toEqual({ rest: "none", hover: "none" });

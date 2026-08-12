@@ -41,7 +41,14 @@ type NavSettings = Record<string, string>;
 export const NAV_STYLE_DEFAULTS = {
   paddingV: 8,
   paddingH: 8,
-  gap: 0,
+  /*
+   * The space BETWEEN top-level items. 4 because that is what
+   * `.site-nav-items` has always rendered — the control used to write this
+   * variable onto `.site-nav`, whose only children are the hamburger toggle
+   * and the items wrapper, so it had nowhere to show and the real spacing
+   * stayed pinned at the stylesheet's hardcoded 4px no matter what.
+   */
+  gap: 4,
   barRadius: 26,
   borderWidth: 1,
   borderStyle: "solid",

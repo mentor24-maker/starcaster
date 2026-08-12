@@ -12642,7 +12642,7 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   align-items: stretch;
   /* Same variables the React layer reads (_builder-react.css), so the base
      and the override can no longer disagree about what a setting does. */
-  gap: var(--site-nav-gap, 4px);
+  gap: 0;  /* Item Gap is on .site-nav-items — see _builder-react-overrides.css */
   padding: var(--site-nav-padding, 8px);
   border-radius: var(--site-nav-radius, 20px);
   background: var(--site-nav-bg, rgba(255, 255, 255, 0.82));
@@ -12688,7 +12688,9 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
 .site-nav-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  /* The operator's Item Gap. Hardcoded 4px here is what made that control
+     do nothing — it was writing its value onto the parent. */
+  gap: var(--site-nav-gap, 4px);
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -12712,7 +12714,9 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
   grid-auto-columns: minmax(0, 1fr);
   flex: 1 1 auto;
   width: 100%;
-  gap: 4px;
+  /* The operator's Item Gap, same as .site-nav-items. This is the list in
+     the frozen Module Studio markup. */
+  gap: var(--site-nav-gap, 4px);
   align-items: stretch;
   min-width: 0;
 }
