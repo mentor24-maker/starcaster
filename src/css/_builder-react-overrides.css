@@ -3466,3 +3466,68 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-width: min(640px, 100%);
   max-width: min(75vw, 100%);
 }
+
+/*
+ * `label.field` — the THIRD label/control shape, and the one that hid.
+ *
+ * The builder has three: `.builder-module-field` (schema panels),
+ * `.builder-setting-row` (row editor, legacy module rows) and this one —
+ * a `<label class="field">` wrapping a `<span>` and its control, which
+ * stacks the label ABOVE a full-width input. It is what the table CELL
+ * editor is built from, so drilling into an image inside a table cell
+ * reached a modal the lattice had never touched: Module label, Media URL
+ * and Link each a full-width box with its label floating above it, while
+ * the Content / Structure / Frame columns below them were correct
+ * (operator 8/12, "some areas where our reformatting hasn't reached").
+ *
+ * `display: contents` is all it takes: the `<span>` becomes the label cell
+ * and the control becomes the field cell, so the pair joins the column's
+ * lattice exactly like the other two shapes. Every one of these carries
+ * precisely two children, which is what makes that safe — a third would
+ * wrap into the next row's label cell and put the column out of phase.
+ */
+/* Item-manager fields keep their own grid (L6) — see the note in
+   check_panels.mjs. Only a panel's OWN pairs join the lattice. */
+.builder-react-root .is-lattice .builder-schema-panel-column
+  label.field:not(.builder-slider-item-grid label.field):not(.builder-item-grid label.field) {
+  display: contents;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column label.field > span {
+  padding-right: var(--builder-field-room, 40px);
+  white-space: nowrap;
+  font-size: var(--text-base, 0.9rem);
+  font-weight: 700;
+  color: var(--builder-editor-label, #12395f);
+}
+
+/*
+ * The control half fills the shared track like any other. `> *:not(span)`
+ * rather than a list of tags because these wrap pickers and link rows as
+ * often as they wrap a bare input.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column label.field > *:not(span) {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+/* A checkbox keeps its size at the start of the slot (W0's exception). */
+.builder-react-root .is-lattice .builder-schema-panel-column label.field.builder-checkbox-field > input[type="checkbox"] {
+  width: auto;
+  justify-self: start;
+}
+
+/* The image link row stacks its page picker over its URL box inside the
+   one field cell, rather than fighting it for the width. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-image-link-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  min-width: 0;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-image-link-row > * {
+  width: 100%;
+  min-width: 0;
+}
