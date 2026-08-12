@@ -24,6 +24,7 @@ import {
   getBuilderBackgroundStyle,
   isPlainTextVariant,
   normalizeBuilderAssetUrl,
+  formatHeadingContent,
   formatPlainTextContent,
   formatRichTextContent
 } from "@/lib/builder-template";
@@ -294,10 +295,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
       <div className="builder-module-preview-copy">
         <Tag
           className={`builder-module-preview-heading builder-module-preview-heading-${variant || "default"}`}
+          dangerouslySetInnerHTML={{ __html: formatHeadingContent(module.text) || "Heading" }}
           style={getHeadingModuleStyle(module.settings)}
-        >
-          {module.text || "Heading"}
-        </Tag>
+        />
       </div>
     );
   }
