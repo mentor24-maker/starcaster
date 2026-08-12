@@ -22,6 +22,15 @@ check.
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
 
+   **Assignment is the handoff signal.** Dane finds his work through ClickUp's
+   own *Assigned to me*, not a hand-built filter — a filtered view cannot span
+   the Starcaster and Dane of Earth spaces, but assignment does. In the same
+   `clickup_update_task` call that sets the status:
+
+   - `Ready to launch` or `Needs your input` → **assign Dane** (user id
+     `48012725`).
+   - `Queued` (sending it back to the build loop) → **clear all assignees**.
+
 2. **Check out the PR in a worktree.** Reuse the build worktree if present, or
    add one from the PR branch. Run `npm ci` if dependencies changed.
 
@@ -37,21 +46,23 @@ check.
      Non-goals violated? Any generated artifact left un-rebuilt?
 
 4. **Decide.**
-   - **Pass** → set the task to `Ready to launch`. Post to the operator (the
-     ClickUp bus channel and/or a push notification) a compact message: task
-     name, PR link, Vercel preview link, the "How to test" steps, and the line
-     **"Reply/tell me to merge when you're ready."** Do **NOT** merge — per
-     standing rule, CC merges only on the operator's explicit command, and only
-     with all checks green.
-   - **Fail, and a machine can fix it** → set the task back to `Queued` and add
-     a ClickUp comment listing precisely what to fix and why. The `loop-build`
-     skill will pick it up again. Do not fix it yourself inside the review step
-     — keep build and review separate so the check stays honest.
+   - **Pass** → set the task to `Ready to launch` **and assign Dane**. Post to
+     the operator (the ClickUp bus channel and/or a push notification) a
+     compact message: task name, PR link, Vercel preview link, the "How to
+     test" steps, and the line **"Reply/tell me to merge when you're ready."**
+     Do **NOT** merge — per standing rule, CC merges only on the operator's
+     explicit command, and only with all checks green.
+   - **Fail, and a machine can fix it** → set the task back to `Queued`,
+     **clear its assignees**, and add a ClickUp comment listing precisely what
+     to fix and why. The `loop-build` skill will pick it up again. Do not fix
+     it yourself inside the review step — keep build and review separate so the
+     check stays honest.
    - **Fail, and only a human can settle it** (the task is ambiguous, the
      acceptance criteria contradict what the code should do, or the fix is a
-     product decision) → set it to `Needs your input` and write the comment as
-     a plain-language question for the operator. Do not bounce a judgment call
-     around the loop; that is what this status exists for.
+     product decision) → set it to `Needs your input`, **assign Dane**, and
+     write the comment as a plain-language question for the operator. Do not
+     bounce a judgment call around the loop; that is what this status exists
+     for.
 
 5. **Report** the task and your verdict, then finish (the `/loop` wrapper
    re-invokes you for the next one).
