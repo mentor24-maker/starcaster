@@ -33,6 +33,7 @@ const require = createRequire(path.join(ROOT, 'package.json'));
 require('dotenv').config({ path: path.join(ROOT, '.env.local'), quiet: true });
 
 const { sbQuery, tableConfig } = require(path.join(ROOT, 'lib/supabase.js'));
+const { BUILDER_MODULE_TYPES, createEmptyModule } = require(path.join(ROOT, 'lib/builder/template.js'));
 const projectsStore = require(path.join(ROOT, 'lib/projectsStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
@@ -62,9 +63,60 @@ const must = (res, what) => {
  * heading at all. A browser-checked rule with an unreproducible fixture is
  * the honour system with extra steps.
  *
- * One module per lattice type, in one section, so a single run covers them
- * all. Adding a type to LATTICE_MODULE_TYPES means adding a module here.
+ * BUILT FROM THE TYPE LIST, not hand-listed (2026-08-13). The lattice is
+ * universal now, so the fixture must carry one module of EVERY type — and a
+ * hand-maintained roster is the same failure one step later: add a module
+ * type, forget the fixture, and the check passes on a panel it never saw.
+ * `BUILDER_MODULE_TYPES` is the single source; a type cannot exist without
+ * appearing here.
+ *
+ * TUNED[type] overrides the factory defaults where a module needs awkward
+ * content to be worth measuring — the longest labels, a shadow turned on,
+ * an offsets block. Everything else takes `createEmptyModule`.
  */
+const TUNED = {
+  // Navigation's "Dropdown" sub-section is where the axis-section lattice
+  // broke when the menu joined it (its six fields started at x=0 while the
+  // rest of Structure started at 125). Also the widest labels in the app:
+  // "Horizontal Padding" and "Shadow Opacity".
+  navigation: {
+    name: 'Top Menu',
+    settings: {
+      navItems: JSON.stringify([
+        { id: 'home', label: 'Home', href: '/' },
+        { id: 'play', label: 'Play', href: '/play' },
+        { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+        { id: 'about', label: 'About', href: '/about' },
+      ]),
+      navDirection: 'horizontal', navDropdownStyle: 'list', navLevels: '2',
+      navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
+    },
+  },
+  table: {
+    name: 'Contact Strip',
+    settings: {
+      columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
+      tableData: '{"headers":["Phone","Hours","Status"],"cells":{},"rowCount":1}',
+      borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
+      cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
+      backgroundColor: '#ffffff',
+    },
+  },
+  // An EYEBROW heading with its shadow on: the longest labels in the panel
+  // ("Horizontal Margin", "Shadow Blur") and the offsets block, which is
+  // where the lattice broke when Heading first joined it.
+  heading: {
+    name: 'Eyebrow Heading',
+    text: 'Delray Beach • Public Tennis • Two Locations',
+    settings: {
+      variant: 'eyebrow', level: 'h6', fontSize: '14', fontWeight: '800',
+      textAlign: 'left', textTransform: 'uppercase', lineHeight: '1.2', letterSpacing: '0',
+      dropShadow: 'true', dropShadowColor: '#0b2a4a',
+      dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
+    },
+  },
+};
+
 const PANEL_CHECK_SECTION = {
   id: 'section-panel-lattice-check',
   title: 'Panel Lattice Check',
@@ -72,62 +124,17 @@ const PANEL_CHECK_SECTION = {
   locked: false,
   alignment: 'left',
   widthMode: 'contained',
-  modules: [
-    {
-      id: 'module-panel-check-table',
-      name: 'Contact Strip',
-      text: '',
-      type: 'table',
-      column: 'main',
-      settings: {
-        columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
-        tableData: '{"headers":["Phone","Hours","Status"],"cells":{},"rowCount":1}',
-        borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
-        cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
-        backgroundColor: '#ffffff', mobileHidden: 'false', desktopHidden: 'false',
-      },
-    },
-    {
-      // An EYEBROW heading with its shadow on: the longest labels in the
-      // panel ("Horizontal Margin", "Shadow Blur") and the offsets block,
-      // which is where the lattice broke when Heading first joined it.
-      id: 'module-panel-check-heading',
-      name: 'Eyebrow Heading',
-      text: 'Delray Beach • Public Tennis • Two Locations',
-      type: 'heading',
-      column: 'main',
-      settings: {
-        variant: 'eyebrow', level: 'h6', fontSize: '14', fontWeight: '800',
-        textAlign: 'left', textTransform: 'uppercase', lineHeight: '1.2', letterSpacing: '0',
-        dropShadow: 'true', dropShadowColor: '#0b2a4a',
-        dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
-        mobileHidden: 'false', desktopHidden: 'false',
-      },
-    },
-    {
-      // A menu with a submenu, so the "Dropdown" sub-section is on screen —
-      // that titled wrapper is where the lattice broke when Navigation
-      // joined (its six fields started at x=0 while the rest of Structure
-      // started at 125). Also the widest labels in the app: "Horizontal
-      // Padding" and "Shadow Opacity".
-      id: 'module-panel-check-navigation',
-      name: 'Top Menu',
-      text: '',
-      type: 'navigation',
-      column: 'main',
-      settings: {
-        navItems: JSON.stringify([
-          { id: 'home', label: 'Home', href: '/' },
-          { id: 'play', label: 'Play', href: '/play' },
-          { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
-          { id: 'about', label: 'About', href: '/about' },
-        ]),
-        navDirection: 'horizontal', navDropdownStyle: 'list', navLevels: '2',
-        navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
-        mobileHidden: 'false', desktopHidden: 'false',
-      },
-    },
-  ],
+  modules: BUILDER_MODULE_TYPES.map((type) => {
+    const base = createEmptyModule(type, 'main');
+    const tuned = TUNED[type] || {};
+    return {
+      ...base,
+      id: `module-panel-check-${type}`,
+      name: tuned.name ?? type,
+      text: tuned.text ?? base.text ?? '',
+      settings: { ...base.settings, ...(tuned.settings || {}) },
+    };
+  }),
 };
 
 /** Content chosen to break layouts, not to look plausible. */

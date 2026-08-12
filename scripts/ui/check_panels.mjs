@@ -34,6 +34,11 @@ import { fileURLToPath } from 'node:url';
 import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const { createRequire } = await import('node:module');
+const { BUILDER_MODULE_TYPES } = createRequire(path.join(ROOT, 'package.json'))(
+  path.join(ROOT, 'lib/builder/template.js')
+);
+const EXPECTED_MODULES = BUILDER_MODULE_TYPES.length;
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
 /*
  * Seeded by `npm run seed:ui-fixture`, which is the point: this used to
@@ -265,6 +270,7 @@ function assertLattice(panels, width) {
 
 const allFailures = [];
 let panelsSeen = 0;
+let cardsSeen = 0;
 
 for (const width of WIDTHS) {
   const { browser, page } = await launch({ width, height: 1400, headless: true });
@@ -276,6 +282,9 @@ for (const width of WIDTHS) {
       allFailures.push(`${width}px: could not open a panel — ${problem}`);
       continue;
     }
+    cardsSeen = Math.max(cardsSeen, await page.evaluate(
+      () => document.querySelectorAll('.builder-module-card').length
+    ));
     const panels = measure(page, NON_STRETCH);
     const measured = await panels;
     panelsSeen += measured.length;
@@ -283,6 +292,21 @@ for (const width of WIDTHS) {
   } finally {
     await browser.close();
   }
+}
+
+// The fixture is shared local state: another session running
+// `npm run seed:ui-fixture` from its own worktree rewrites the SAME page in
+// the SAME database. On 2026-08-13 that silently cut this page from 53
+// modules to 3, and the check reported a confident pass over what was left.
+// Counting the cards is what makes that loud instead of invisible.
+if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
+  console.error(
+    `\n[check:panels] The fixture is INCOMPLETE — ${cardsSeen} module cards on the page, ` +
+    `${EXPECTED_MODULES} module types exist.\n` +
+    'Another session has probably re-seeded over it. Re-run `npm run seed:ui-fixture`\n' +
+    'and check again; a pass over a partial fixture is not a pass.\n'
+  );
+  process.exit(1);
 }
 
 if (panelsSeen === 0) {

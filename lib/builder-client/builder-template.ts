@@ -54,60 +54,75 @@ export type BuilderTemplateLayout =
 
 export type BackgroundStylePreset = "blue-yellow-circles";
 
-export type BuilderTemplateModuleType =
-  | "navigation"
-  | "heading"
-  | "headline-rotator"
-  | "text"
-  | "code"
-  | "merch"
-  | "image"
-  | "floating-image"
-  | "video"
-  | "quote"
-  | "speech-bubble"
-  | "reminder"
-  | "button"
-  | "contact-form"
-  | "player-portal"
-  | "table"
-  | "slider"
-  | "slideshow"
-  | "feature-cards"
-  | "social"
-  | "social-share"
-  | "previous-results"
-  | "current-poll"
-  | "poll-category-list"
-  | "confetti"
-  | "tractor-nav"
-  | "breadcrumb"
-  | "blog-post-list"
-  | "blog-post-card"
-  | "blog-author-bio"
-  | "crm-form"
-  | "crm-contacts-table"
-  | "blog-toc"
-  | "blog-newsletter-subscribe"
-  | "blog-related-posts"
-  | "blog-category-filter"
-  | "blog-post"
-  | "blog-tag-cloud"
-  | "blog-post-tags"
-  | "blog-post-create"
-  | "blog-post-manager"
-  | "blog-category-manager"
-  | "blog-card-manager"
-  | "blog-search"
-  | "blog-search-results"
-  | "messaging-topic-list"
-  | "messaging-tag-list"
-  | "admin-team-users"
-  | "admin-modules"
-  | "admin-login"
-  | "admin-nav-link"
-  | "admin-site-settings"
-  | "admin-support-form";
+/**
+ * Every builder module type, as a runtime VALUE — the union below is derived
+ * from it, so the two can never disagree.
+ *
+ * It is a list rather than a bare union because tooling outside TypeScript
+ * needs to enumerate the types. `scripts/ui/seed_fixture.mjs` builds the
+ * panel-lattice fixture from it: one module of every type on one page, so
+ * `npm run check:panels` measures them all. A hand-maintained copy of this
+ * list is exactly how that check once reported "OK across 6 panels" while
+ * silently measuring no heading at all (PR #169) — the fixture must not be
+ * able to fall behind the types it is supposed to cover.
+ */
+export const BUILDER_MODULE_TYPES = [
+  "navigation",
+  "heading",
+  "headline-rotator",
+  "text",
+  "code",
+  "merch",
+  "image",
+  "floating-image",
+  "video",
+  "quote",
+  "speech-bubble",
+  "reminder",
+  "button",
+  "contact-form",
+  "player-portal",
+  "table",
+  "slider",
+  "slideshow",
+  "feature-cards",
+  "social",
+  "social-share",
+  "previous-results",
+  "current-poll",
+  "poll-category-list",
+  "confetti",
+  "tractor-nav",
+  "breadcrumb",
+  "blog-post-list",
+  "blog-post-card",
+  "blog-author-bio",
+  "crm-form",
+  "crm-contacts-table",
+  "blog-toc",
+  "blog-newsletter-subscribe",
+  "blog-related-posts",
+  "blog-category-filter",
+  "blog-post",
+  "blog-tag-cloud",
+  "blog-post-tags",
+  "blog-post-create",
+  "blog-post-manager",
+  "blog-category-manager",
+  "blog-card-manager",
+  "blog-search",
+  "blog-search-results",
+  "messaging-topic-list",
+  "messaging-tag-list",
+  "admin-team-users",
+  "admin-modules",
+  "admin-login",
+  "admin-nav-link",
+  "admin-site-settings",
+  "admin-support-form"
+] as const;
+
+export type BuilderTemplateModuleType = (typeof BUILDER_MODULE_TYPES)[number];
 
 export type BuilderTemplateModule = {
   id: string;

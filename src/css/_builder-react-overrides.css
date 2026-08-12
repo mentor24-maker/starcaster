@@ -2500,7 +2500,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    instead of laying themselves out separately. Without these two the
    wrapper occupied one grid cell and every row below it lost its pairing —
    Frame's Background sat on a line of its own under its label. */
-.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare:has(.builder-module-field-strip, .builder-setting-row, .builder-setting-row-full, .builder-module-offset-fields),
 .builder-react-root .is-lattice .builder-schema-panel-column .builder-background-controls-horizontal,
 /* The offsets block is the same species, found when Heading joined the
    lattice (2026-08-11): two BuilderSettingRows inside their own wrapper,
@@ -2723,4 +2723,77 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  */
 .builder-react-root .builder-centered-modal .builder-schema-panel-columns[style*="--builder-axis-count"] {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/*
+ * A titled sub-section inside an axis joins the column's lattice instead of
+ * starting its own (W0, rollout 2026-08-13).
+ *
+ * `.builder-schema-axis-section` is a real box — it carries the hairline and
+ * the padding that say "still Structure, a different subject". So it cannot
+ * simply be `display: contents` like the strips are; it has to keep its box
+ * AND share the column's two tracks. That is what subgrid is for.
+ *
+ * Without this the section was one cell of the column grid and laid its own
+ * fields out inside it, so a panel had two lattices in one column. The check
+ * caught it on six panels at once: Navigation's "Dropdown" fields starting
+ * 12px off its Structure fields, and Blog Search's "Placeholder" sitting
+ * 431px away from "Results Page URL" in the same column.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-axis-section {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  /*
+   * MUST match the parent column's column-gap, which is 0 — the 40px of room
+   * lives on the label, not in a gutter. The base rule above sets `gap: 12px`
+   * as a shorthand, and a subgrid keeps its OWN gutters rather than the
+   * parent's: that 12px was eaten out of the shared tracks, so the section's
+   * labels came out 6px narrower and its fields started 6px later than the
+   * rows above them. Six pixels, invisible by eye, caught by the check.
+   */
+  column-gap: 0;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-axis-section > .builder-schema-group-subtitle {
+  grid-column: 1 / -1;
+}
+
+
+/*
+ * A bare block that is PROSE, not field pairs, spans the column instead of
+ * flattening into it (W0 rollout, 2026-08-13).
+ *
+ * `bare: true` covers two different things. The background picker is a set
+ * of label/control pairs and has to flatten so those pairs join the lattice.
+ * A note — "Search Param" explaining itself, blog-post-create's "Fields to
+ * show" subheading, the tag-list hints — is one lone node with no label, and
+ * flattening it dropped a SINGLE item into a two-track grid. Everything
+ * below it then shifted one cell: labels landed in the field track, controls
+ * wrapped to the next row's label track. That is why blog-search reported
+ * its Placeholder label as 713px wide and starting at x=0 while Results Page
+ * URL started at 713 — the whole column was running half a cell out of phase
+ * from the note down.
+ *
+ * `:has()` is what tells the two apart — and the test has to name EVERY
+ * shape a label/control pair comes in, not just field strips. The offsets
+ * block is a bare block built from BuilderSettingRows, so a test that only
+ * looked for `.builder-module-field-strip` called it prose and spanned it:
+ * that fixed five panels and quietly regressed Heading and Floating Image,
+ * which is why this was measured both ways before being kept.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare:not(:has(.builder-module-field-strip, .builder-setting-row, .builder-setting-row-full, .builder-module-offset-fields)) {
+  grid-column: 1 / -1;
+  /*
+   * Same guard the offset hint needs, and for the same reason: a spanning
+   * item still contributes to intrinsic track sizing, so a note left at its
+   * natural width would BE the width of both tracks. Held down to its
+   * longest word, then allowed to fill the row once the tracks are resolved.
+   * Without this, Heading's Placement column reported a 507px label track
+   * and 949px controls — the sentence had become the lattice.
+   */
+  width: min-content;
+  min-width: 100%;
 }
