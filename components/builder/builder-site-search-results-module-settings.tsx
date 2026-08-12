@@ -66,10 +66,16 @@ export function BuilderSiteSearchResultsModuleSettings({
                 <div className="builder-module-runtime-note">
                   <p>
                     The Search Param must match the one on the <strong>Site Search</strong> box that
-                    sends visitors here. Pages are ranked best match first: a page whose NAME matches
-                    outranks one whose heading matches, which outranks one that mentions the words in
-                    its body. Text that repeats on most pages — a footer, a contact strip — is pushed
-                    to the bottom automatically.
+                    sends visitors here. Leave <strong>Add a Search Box</strong> off when this page
+                    already has one — in a header, say — and tick it only when the results should
+                    carry their own.
+                  </p>
+                  <p>
+                    Pages are ranked best match first: a page whose NAME matches outranks one whose
+                    heading matches, which outranks one that mentions the words in its body. Text
+                    that repeats on most pages — a footer, a contact strip — is pushed to the bottom
+                    automatically. A page&rsquo;s own <strong>Search</strong> setting, in its page
+                    details, overrules all of it.
                   </p>
                 </div>
               )
@@ -78,7 +84,9 @@ export function BuilderSiteSearchResultsModuleSettings({
           [
             {
               key: "showSearchField",
-              label: "Search Box",
+              // "Search Box" read as a category in a panel that is entirely
+              // about search. "Add a Search Box" says what ticking it does.
+              label: "Add a Search Box",
               width: "check",
               control: "checkbox",
               rendersVia: "SiteSearchResultsPreview"

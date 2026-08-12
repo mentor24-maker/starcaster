@@ -986,7 +986,12 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {
       searchParam: "q",
       limit: "50",
-      showSearchField: "true",
+      // Off by default (operator, 2026-08-12). The results module is meant to
+      // be paired with a Site Search box elsewhere — the panel's own note says
+      // so — and a results block that brings its own form guarantees two forms
+      // on the page for anyone who follows that advice. Only NEW modules get
+      // this; every module already placed carries "true" explicitly.
+      showSearchField: "false",
       showResultCount: "true",
       showOtherMatches: "true",
       showMatchLocation: "false",
