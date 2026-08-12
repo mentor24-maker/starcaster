@@ -25,6 +25,7 @@ import {
 } from "@/lib/public-admin-session";
 import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
+import { registerImageRenditionMap } from "@/lib/image-renditions";
 
 type SiteThemeShell = ThemeShellBackgroundSource & BuilderThemeStyles;
 
@@ -95,7 +96,11 @@ function isHomeSlug(slug: string): boolean {
 async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
   const res = await fetch(`/api/public/pages?projectId=${encodeURIComponent(projectId)}`);
   if (!res.ok) return [];
-  const data = await res.json() as { pages?: unknown[] };
+  const data = await res.json() as { pages?: unknown[]; renditions?: unknown };
+  // Tells every <img> on this site which scaled-down copies it may choose from.
+  // Registered before the pages render so the first paint already picks the
+  // right file rather than swapping it afterwards.
+  registerImageRenditionMap(data.renditions);
   const pages = Array.isArray(data.pages) ? data.pages : [];
   return pages.map((p: unknown) => mapSitePageRecord(p as Record<string, unknown>));
 }

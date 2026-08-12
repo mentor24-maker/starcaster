@@ -100,7 +100,13 @@ async function handle(req, res, pathname, method) {
     const result = await listPublishedPagesForProject(scopedProjectId);
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to load pages'), true;
 
-    return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
+    // Which scaled-down copies exist for the images these pages use, so the
+    // browser can fetch a 600px file for a 600px slot instead of the original.
+    // Empty on any failure — never a reason to fail a page load.
+    const { buildRenditionMapForPages } = require('../lib/assetRenditionsForPages');
+    const renditions = await buildRenditionMapForPages(scopedProjectId, result.data);
+
+    return respondJson(res, req, 200, { ok: true, pages: result.data, renditions }), true;
   }
 
   // GET /api/public/admin-pages?projectId=... — restricted admin site pages (admin session required)
