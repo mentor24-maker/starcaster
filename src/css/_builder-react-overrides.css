@@ -3006,3 +3006,24 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .site-nav-menu {
   gap: var(--site-nav-gap, 4px);
 }
+
+/* ---------------------------------------------------------------------
+   Panel Text reaches the links inside a list dropdown.
+
+   Found by the control sweep (npm run check:nav-controls, 2026-08-12):
+   the only one of 54 controls that changed nothing on the rendered page.
+
+   A dropdown link carries BOTH classes — `site-nav-link site-nav-dropdown-item`
+   — and the colour was being set on the weaker of the two:
+
+     .site-nav-dropdown-item                  (0,1,0)  Panel Text
+     .builder-react-root .site-nav-link       (0,2,0)  Text Color   <- won
+
+   So Panel Text lost every cascade it entered. This restates it at equal
+   specificity, later in the file, which is the whole reason this file is
+   imported after the generated one. Mega-panel links are unaffected: they
+   carry neither class and already read the variable.
+   --------------------------------------------------------------------- */
+.builder-react-root .site-nav-dropdown-item {
+  color: var(--site-nav-dropdown-color, var(--site-nav-link-color, #163a5e));
+}
