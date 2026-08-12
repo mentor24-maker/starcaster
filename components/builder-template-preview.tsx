@@ -7,6 +7,7 @@ import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffec
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   createDefaultBackgroundSettings,
+  formatHeadingContent,
   formatPlainTextContent,
   formatRichTextContent,
   getBuilderBackgroundStyle,
@@ -42,7 +43,15 @@ import {
   redirectAfterAdminLogout,
   setAdminSessionToken,
 } from "@/lib/public-admin-session";
-import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import { resolveSessionProjectId, starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import type { CrmThemePalette } from "@/components/builder/builder-utils";
+import {
+  buildSiteSearchIndex,
+  searchSite,
+  type SiteSearchMatch,
+  type SiteSearchPageInput,
+  type SiteSearchResult
+} from "@/lib/site-search";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { TractorNavRuntime } from "@/components/builder-tractor-nav-module";
@@ -60,7 +69,6 @@ import {
 import {
   getAlignmentClass,
   getButtonModuleStyle,
-  getButtonModuleOuterSpacingStyle,
   getHeadingModuleStyle,
   getBuilderThemeStyleVars,
   getBuilderThemePageMarginStyle,
@@ -94,12 +102,10 @@ import {
   getSectionOffsetStyle,
   getSectionPaddingStyle,
   getSectionWidthStyle,
-  getModuleMarginStyle,
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
-  getVerticalMarginStyle,
   getVideoEmbedSource,
   isVideoMedia
 } from "@/components/builder/builder-utils";
@@ -1548,16 +1554,34 @@ function BuilderSectionPreview({
         const columnModules = section.modules.filter((module) => module.column === columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
+        /*
+         * Cell spacing, four sides, with both older generations read as
+         * fallbacks: the vertical/horizontal pair that shipped 2026-08-11 and
+         * the single all-sides `cellPadding` before it. Reading them here as
+         * well as in the normalizer is what lets a page that has not been
+         * re-saved render exactly as it did.
+         *
+         * The cast is because those older keys are off the type now — they
+         * exist only in stored data, which is precisely why this reads them.
+         */
+        const legacyCell = section as unknown as Record<string, Record<string, string> | undefined>;
         const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
-        const verticalPadding = section.cellVerticalPadding?.[columnKey] ?? legacyPadding;
-        const horizontalPadding = section.cellHorizontalPadding?.[columnKey] ?? legacyPadding;
+        const cellSide = (record: Record<string, string> | undefined, pairKey: string, fallback: string) =>
+          record?.[columnKey] ?? legacyCell[pairKey]?.[columnKey] ?? fallback;
+        const paddingTop = cellSide(section.cellPaddingTop, "cellVerticalPadding", legacyPadding);
+        const paddingBottom = cellSide(section.cellPaddingBottom, "cellVerticalPadding", legacyPadding);
+        const paddingLeft = cellSide(section.cellPaddingLeft, "cellHorizontalPadding", legacyPadding);
+        const paddingRight = cellSide(section.cellPaddingRight, "cellHorizontalPadding", legacyPadding);
         // `--builder-cell-padding` feeds one rule only, and that rule is
         // `margin-inline` — a full-bleed overlay slot reaching back out
-        // sideways (_builder-react.css). So it takes the HORIZONTAL axis;
-        // handing it the vertical one would pull the slot out by the wrong
-        // number the moment the two differ.
-        const padding = horizontalPadding;
-        const verticalMargin = section.cellVerticalMargin?.[columnKey] ?? "0";
+        // sideways (_builder-react.css). So it takes a HORIZONTAL side;
+        // handing it a vertical one would pull the slot out by the wrong
+        // number the moment the sides differ.
+        const padding = paddingLeft;
+        const marginTop = cellSide(section.cellMarginTop, "cellVerticalMargin", "0");
+        const marginBottom = cellSide(section.cellMarginBottom, "cellVerticalMargin", "0");
+        const marginLeft = section.cellMarginLeft?.[columnKey] ?? "0";
+        const marginRight = section.cellMarginRight?.[columnKey] ?? "0";
         const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
         const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
         const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
@@ -1576,15 +1600,14 @@ function BuilderSectionPreview({
          * argument. Publishing the values lets those rules honour them
          * instead of replacing them (see _builder-react-overrides.css).
          *
-         * Deliberately NOT reusing `--builder-cell-padding`: since the
-         * vertical/horizontal split (PR 176) that one carries the horizontal
-         * axis alone, for a `margin-inline` rule that reaches an overlay slot
-         * back out sideways. It would be the wrong number here.
+         * Deliberately NOT reusing `--builder-cell-padding`: that one carries
+         * the LEFT side alone, for a `margin-inline` rule that reaches an
+         * overlay slot back out sideways. It would be the wrong number here.
          */
         const effectiveCellPadding =
           isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
             ? "0px"
-            : `${verticalPadding}px ${horizontalPadding}px`;
+            : `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
         const effectiveCellRadius =
           isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
 
@@ -1600,7 +1623,14 @@ function BuilderSectionPreview({
           // background above. `columnBackground` is falsy until the operator
           // sets one, so an untouched menu cell is unchanged.
           ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
-          ...(isPageOverlayFlowColumn || isSectionOverlayColumn ? {} : getVerticalMarginStyle(verticalMargin)),
+          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? {}
+            : {
+                marginTop: `${marginTop}px`,
+                marginBottom: `${marginBottom}px`,
+                marginLeft: `${marginLeft}px`,
+                marginRight: `${marginRight}px`
+              }),
           ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
           ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
           ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
@@ -1608,10 +1638,10 @@ function BuilderSectionPreview({
             : {}),
           ...cellVariables,
           // Cell padding stays off for menu cells, and this one is deliberate:
-          // it defaults to 18px, so honouring it would push every live header
-          // down without anybody asking. The menu module carries its own
-          // Vertical/Horizontal Padding now (Placement axis), which is the
-          // control that should move a menu inside its cell.
+          // it used to default to 18px, so honouring it would have pushed
+          // every live header down without anybody asking. The menu module
+          // carries its own four padding sides now (Placement axis), which is
+          // the control that should move a menu inside its cell.
           padding: effectiveCellPadding,
           border:
             isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
@@ -1675,11 +1705,10 @@ function BuilderSectionPreview({
                     isCurrentPollModule ||
                     isPollCategoryListModule
                       ? {}
-                      : module.type === "heading"
-                        ? getModuleMarginStyle(module.settings)
-                        : module.type === "button"
-                          ? getButtonModuleOuterSpacingStyle(module.settings)
-                          : getModuleOuterSpacingStyle(module.settings)),
+                      // One reader for every type since 2026-08-11: heading
+                      // and button had their own because they were the only
+                      // two with split sides. Now everything has four.
+                      : getModuleOuterSpacingStyle(module.settings)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize
@@ -1735,13 +1764,15 @@ function BuilderModulePreview({
 
   if (module.type === "heading") {
     const Tag = (module.settings.level || "h2") as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+    // Inline markup, sanitized: a heading can carry a recoloured or resized
+    // word (see `formatHeadingContent`). A heading with no markup renders
+    // exactly the escaped text it always did.
     return (
       <Tag
         className={`builder-preview-heading builder-preview-heading-${variant || "default"}`}
+        dangerouslySetInnerHTML={{ __html: formatHeadingContent(module.text) }}
         style={getHeadingModuleStyle(module.settings)}
-      >
-        {module.text || ""}
-      </Tag>
+      />
     );
   }
 
@@ -2037,6 +2068,12 @@ function BuilderModulePreview({
   }
   if (module.type === "blog-search-results") {
     return <BlogSearchResultsPreview settings={module.settings} />;
+  }
+  if (module.type === "site-search") {
+    return <SiteSearchPreview settings={module.settings} themePalette={themePalette} />;
+  }
+  if (module.type === "site-search-results") {
+    return <SiteSearchResultsPreview settings={module.settings} themePalette={themePalette} projectId={projectId} />;
   }
   if (
     module.type === "blog-post-card" ||
@@ -4746,6 +4783,272 @@ function BlogSearchResultsPreview({ settings }: { settings: Record<string, strin
           </a>
         );
       })}
+    </div>
+  );
+}
+
+// ── Site Search ───────────────────────────────────────────────────────────────
+
+/**
+ * Site Search reads the SAME payload the public site already downloads to
+ * render itself (`GET /api/public/pages`), so the search box needs no new
+ * endpoint and no new public data. The ranking lives in `@/lib/site-search`,
+ * away from React, where it can be tested.
+ */
+
+/**
+ * A2: an empty Button Color means "follow the theme", and only when the theme
+ * has nothing either does the shared default apply.
+ *
+ * The explicit `""` fallback on every call is the whole point.
+ * `normalizeBuilderHexColor` defaults to WHITE when handed an empty string, so
+ * the obvious `normalizeBuilderHexColor(a) || normalizeBuilderHexColor(b) || c`
+ * never falls through — the first call answers "#ffffff" and the search button
+ * ships white on white. Caught by the render test, not by review.
+ */
+function siteSearchAccent(settings: Record<string, string>, palette?: CrmThemePalette): string {
+  return (
+    normalizeBuilderHexColor(settings.accentColor, "")
+    || normalizeBuilderHexColor(palette?.accentColor, "")
+    || normalizeBuilderHexColor(palette?.primaryColor, "")
+    || "#0f4f8f"
+  );
+}
+
+function siteSearchRadius(settings: Record<string, string>): number {
+  const parsed = Number.parseInt(settings.borderRadius || "8", 10);
+  return Number.isFinite(parsed) ? Math.min(40, Math.max(0, parsed)) : 8;
+}
+
+/** The query currently in the URL, kept in sync when the visitor uses Back. */
+function useSiteSearchQueryParam(searchParam: string): string {
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const read = () => setQuery((new URLSearchParams(window.location.search).get(searchParam) ?? "").trim());
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, [searchParam]);
+
+  return query;
+}
+
+function SiteSearchField({
+  settings,
+  themePalette,
+  initialQuery,
+  autoFocusHint
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+  initialQuery: string;
+  autoFocusHint?: string;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const targetPageUrl = (settings.targetPageUrl || "").trim();
+  const placeholder = settings.placeholder || "Search this site…";
+  const buttonLabel = settings.buttonLabel || "Search";
+  const showButton = (settings.showButton ?? "true") !== "false";
+  const accent = siteSearchAccent(settings, themePalette);
+  const radius = siteSearchRadius(settings);
+  const inputId = useId();
+
+  const [value, setValue] = useState(initialQuery);
+  useEffect(() => setValue(initialQuery), [initialQuery]);
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (typeof window === "undefined") return;
+    const base = targetPageUrl || window.location.pathname;
+    const params = new URLSearchParams(targetPageUrl ? "" : window.location.search);
+    const trimmed = value.trim();
+    if (trimmed) params.set(searchParam, trimmed);
+    else params.delete(searchParam);
+    const qs = params.toString();
+    window.location.href = qs ? `${base}?${qs}` : base;
+  }
+
+  return (
+    <form className="builder-site-search-form" onSubmit={handleSubmit} role="search">
+      <label className="builder-site-search-label" htmlFor={inputId}>
+        {autoFocusHint || placeholder}
+      </label>
+      <input
+        id={inputId}
+        className="builder-site-search-input"
+        type="search"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={placeholder}
+        style={{ borderRadius: radius }}
+      />
+      {showButton ? (
+        <button
+          className="builder-site-search-submit"
+          type="submit"
+          style={{ background: accent, borderRadius: radius }}
+        >
+          {buttonLabel}
+        </button>
+      ) : null}
+    </form>
+  );
+}
+
+function SiteSearchPreview({
+  settings,
+  themePalette
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const query = useSiteSearchQueryParam(searchParam);
+  return <SiteSearchField settings={settings} themePalette={themePalette} initialQuery={query} />;
+}
+
+/** Snippet with the matched run marked. Text nodes only — never raw HTML. */
+function SiteSearchSnippet({ match }: { match: SiteSearchMatch }) {
+  const { snippet, highlights } = match;
+  if (!highlights.length) return <>{snippet}</>;
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  highlights.forEach((range, i) => {
+    const start = Math.max(cursor, Math.min(range.start, snippet.length));
+    const end = Math.max(start, Math.min(range.end, snippet.length));
+    if (start > cursor) parts.push(snippet.slice(cursor, start));
+    if (end > start) parts.push(<mark key={`h${i}`}>{snippet.slice(start, end)}</mark>);
+    cursor = end;
+  });
+  if (cursor < snippet.length) parts.push(snippet.slice(cursor));
+  return <>{parts}</>;
+}
+
+const SITE_SEARCH_KIND_LABELS: Record<SiteSearchMatch["kind"], string> = {
+  pageName: "page name",
+  title: "heading",
+  body: "page content",
+  meta: "image and link text"
+};
+
+function SiteSearchResultsPreview({
+  settings,
+  themePalette,
+  projectId: projectIdProp = ""
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+  projectId?: string;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const limit = Math.max(1, Number.parseInt(settings.limit || "50", 10) || 50);
+  const showSearchField = (settings.showSearchField ?? "true") !== "false";
+  const showResultCount = (settings.showResultCount ?? "true") !== "false";
+  const showOtherMatches = (settings.showOtherMatches ?? "true") !== "false";
+  const showMatchLocation = (settings.showMatchLocation ?? "false") === "true";
+  const emptyMessage = settings.emptyMessage || "Nothing on this site matched that search.";
+  const accent = siteSearchAccent(settings, themePalette);
+
+  const query = useSiteSearchQueryParam(searchParam);
+
+  const [pages, setPages] = useState<SiteSearchPageInput[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const projectId = projectIdProp || resolveSessionProjectId();
+    if (!projectId) {
+      setFailed(true);
+      return;
+    }
+    fetch(`/api/public/pages?projectId=${encodeURIComponent(projectId)}`, {
+      credentials: "include",
+      headers: starcasterScopedHeaders()
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (cancelled) return;
+        const list = Array.isArray(body?.pages) ? (body.pages as SiteSearchPageInput[]) : null;
+        if (list) setPages(list);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectIdProp]);
+
+  // Indexing walks every module on every page, so it is cached against the
+  // payload rather than redone on each keystroke or re-render.
+  const index = useMemo(() => (pages ? buildSiteSearchIndex(pages) : null), [pages]);
+
+  const results = useMemo<SiteSearchResult[]>(
+    () => (index && query ? searchSite(query, index, { limit }) : []),
+    [index, query, limit]
+  );
+
+  const field = showSearchField ? (
+    <SiteSearchField settings={settings} themePalette={themePalette} initialQuery={query} />
+  ) : null;
+
+  // Standard 5: every one of these is a designed state, not a blank box.
+  let body: React.ReactNode;
+  if (!query) {
+    body = <p className="builder-site-search-note">Type something above to search this site.</p>;
+  } else if (failed) {
+    body = <p className="builder-site-search-note">Search is unavailable right now. Please try again shortly.</p>;
+  } else if (!index) {
+    body = <p className="builder-site-search-note">Searching…</p>;
+  } else if (!results.length) {
+    body = <p className="builder-site-search-note">{emptyMessage}</p>;
+  } else {
+    body = (
+      <>
+        {showResultCount ? (
+          <p className="builder-site-search-count">
+            {results.length === 1 ? "1 page matches" : `${results.length} pages match`} “{query}”
+          </p>
+        ) : null}
+        <ol className="builder-site-search-results">
+          {results.map((result) => (
+            <li className="builder-site-search-result" key={result.pageId}>
+              <a className="builder-site-search-result-title" href={result.href} style={{ color: accent }}>
+                {result.pageName}
+              </a>
+              <p className="builder-site-search-result-snippet">
+                <SiteSearchSnippet match={result.topMatch} />
+              </p>
+              {showMatchLocation ? (
+                <p className="builder-site-search-result-where">
+                  Found in {SITE_SEARCH_KIND_LABELS[result.topMatch.kind]}
+                  {result.topMatch.moduleName ? ` — ${result.topMatch.moduleName}` : ""}
+                </p>
+              ) : null}
+              {showOtherMatches && result.otherMatches.length ? (
+                <ul className="builder-site-search-result-more">
+                  {result.otherMatches.map((match, i) => (
+                    <li key={`${result.pageId}-more-${i}`}>
+                      <SiteSearchSnippet match={match} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </>
+    );
+  }
+
+  return (
+    <div className="builder-site-search-panel">
+      {field}
+      {body}
     </div>
   );
 }

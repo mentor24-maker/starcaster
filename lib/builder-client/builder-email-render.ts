@@ -8,12 +8,16 @@ import {
   type BuilderTemplateRecord,
   type BuilderTemplateSection
 } from "@/lib/builder-template";
-import { formatEmailPlainTextContent, formatEmailRichTextContent } from "@/lib/email-rich-text";
+import {
+  formatEmailHeadingContent,
+  formatEmailPlainTextContent,
+  formatEmailRichTextContent
+} from "@/lib/email-rich-text";
 import {
   getButtonModuleStyle,
   getHeadingModuleStyle,
   getModuleAlignment,
-  getModuleMarginStyle,
+  getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getSectionMarginStyle
 } from "@/components/builder/builder-utils";
@@ -75,12 +79,21 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     module.type === "code" ||
     module.type === "merch" ||
     module.type === "video" ||
-    module.type === "floating-image"
+    module.type === "floating-image" ||
+    // Standard 11, decided 2026-08-14: both Site Search modules are skipped.
+    // Search is a live query against the site's pages, run in the browser
+    // after the page loads. An email has no browser to run it and no live
+    // query string to read, so the box would render as an input nobody can
+    // submit and the results list as a permanently empty state. Neither has
+    // a sensible static form — a snapshot of "results" would be results for
+    // a search nobody performed.
+    module.type === "site-search" ||
+    module.type === "site-search-results"
   ) {
     return "";
   }
 
-  const marginStyle = cssPropertiesToInline(getModuleMarginStyle(module.settings));
+  const marginStyle = cssPropertiesToInline(getModuleOuterSpacingStyle(module.settings));
   const alignment = getModuleAlignment(module.settings);
   const alignAttr = alignment === "center" ? "center" : alignment === "right" ? "right" : "left";
 
@@ -88,7 +101,7 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     const level = module.settings.level || "h2";
     const style = cssPropertiesToInline(getHeadingModuleStyle(module.settings));
 
-    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><${level} style="margin:0;font-family:Arial,Helvetica,sans-serif;${style}">${escapeHtml(module.text || "")}</${level}></td></tr>`;
+    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><${level} style="margin:0;font-family:Arial,Helvetica,sans-serif;${style}">${formatEmailHeadingContent(module.text)}</${level}></td></tr>`;
   }
 
   if (module.type === "text") {

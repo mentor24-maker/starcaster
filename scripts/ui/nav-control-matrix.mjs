@@ -54,12 +54,24 @@ export const CONTROLS = [
 
   // --- Placement ---
   { key: "navAlignment", value: "right", label: "Alignment" },
-  { key: "verticalMargin", value: "56", label: "Vertical Margin" },
-  { key: "horizontalMargin", value: "56", label: "Horizontal Margin" },
-  { key: "navPaddingV", value: "44", label: "Vertical Padding" },
-  { key: "navPaddingH", value: "44", label: "Horizontal Padding" },
-  { key: "navLinkPaddingV", value: "28", label: "Link V Padding" },
-  { key: "navLinkPaddingH", value: "48", label: "Link H Padding" },
+  /*
+   * Four sides each, since PR 183 standardised every object on
+   * Top/Bottom/Left/Right. The V/H pairs this list used to name are gone —
+   * and the sweep would have reported them dead, correctly, which is the
+   * point: a renamed key looks exactly like a broken control from here.
+   */
+  { key: "marginTop", value: "56", label: "Margin Top" },
+  { key: "marginBottom", value: "56", label: "Margin Bottom" },
+  { key: "marginLeft", value: "56", label: "Margin Left" },
+  { key: "marginRight", value: "56", label: "Margin Right" },
+  { key: "navPaddingTop", value: "44", label: "Padding Top" },
+  { key: "navPaddingBottom", value: "44", label: "Padding Bottom" },
+  { key: "navPaddingLeft", value: "44", label: "Padding Left" },
+  { key: "navPaddingRight", value: "44", label: "Padding Right" },
+  { key: "navLinkPaddingTop", value: "28", label: "Link Padding Top" },
+  { key: "navLinkPaddingBottom", value: "28", label: "Link Padding Bottom" },
+  { key: "navLinkPaddingLeft", value: "48", label: "Link Padding Left" },
+  { key: "navLinkPaddingRight", value: "48", label: "Link Padding Right" },
   { key: "verticalOffset", value: "40", label: "Vertical Offset" },
   { key: "horizontalOffset", value: "40", label: "Horizontal Offset" },
 

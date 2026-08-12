@@ -4,7 +4,7 @@ import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
   marginFields,
-  spacingFields,
+  paddingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 
@@ -43,30 +43,28 @@ describe("BuilderSchemaModuleSettings", () => {
     expect(html).toContain("builder-module-field--select-sm");
   });
 
-  it("marginFields yields both margins adjacent in one strip, canonical names (E4/W7)", () => {
+  it("marginFields yields all four sides adjacent in one strip, canonical names (E4/W7)", () => {
     const html = render({ layout: [[...marginFields("getModuleOuterSpacingStyle")]] }, { horizontalMargin: "10", verticalMargin: "20" });
-    const v = html.indexOf("Vertical Margin");
-    const h = html.indexOf("Horizontal Margin");
-    expect(v).toBeGreaterThanOrEqual(0);
-    expect(h).toBeGreaterThan(v);
-    // Same strip: no strip boundary between the two labels.
-    expect(html.slice(v, h)).not.toContain("builder-module-field-strip");
-    // W7 forbids the old abbreviations.
+    const at = ["Top Margin", "Bottom Margin", "Left Margin", "Right Margin"].map((label) => html.indexOf(label));
+    expect(at.every((index) => index >= 0)).toBe(true);
+    // Side order is fixed: top, bottom, left, right.
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    // Same strip: no strip boundary anywhere between the first and last.
+    expect(html.slice(at[0], at[3])).not.toContain("builder-module-field-strip");
+    // W7 forbids the abbreviations and the pair that preceded the sides.
     expect(html).not.toContain(">V Margin<");
     expect(html).not.toContain(">H Margin<");
+    expect(html).not.toContain(">Vertical Margin<");
+    expect(html).not.toContain(">Horizontal Margin<");
   });
 
-  it("spacingFields emits only the keys a module honours, in canonical order (W7)", () => {
-    const html = render({
-      layout: [[...spacingFields("getModuleOuterSpacingStyle", { verticalPadding: "padY", horizontalPadding: "padX" })]]
-    });
-    const vp = html.indexOf("Vertical Padding");
-    const hp = html.indexOf("Horizontal Padding");
-    expect(vp).toBeGreaterThanOrEqual(0);
-    expect(hp).toBeGreaterThan(vp);
-    // Nothing invented for keys the module did not declare.
-    expect(html).not.toContain("Vertical Margin");
-    expect(html).not.toContain("Horizontal Margin");
+  it("paddingFields yields all four sides, same order and names (W7)", () => {
+    const html = render({ layout: [[...paddingFields("getModuleInnerSpacingStyle")]] });
+    const at = ["Top Padding", "Bottom Padding", "Left Padding", "Right Padding"].map((label) => html.indexOf(label));
+    expect(at.every((index) => index >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    // Padding controls never invent margin ones.
+    expect(html).not.toContain("Margin");
   });
 
   it("renders advanced strips inside a hanging details block", () => {

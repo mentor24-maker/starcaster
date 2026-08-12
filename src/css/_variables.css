@@ -15,6 +15,14 @@
   
   --btn-bg: #000000;
   --btn-text: #ffffff;
+
+  /*
+   * The run of text a search matched, marked inside a result snippet. A
+   * highlight has to stay legible against --ink-primary on --bg-surface AND
+   * survive a tenant theme repainting the page around it, so it is a warm
+   * near-white rather than a tint of any brand colour.
+   */
+  --mark-bg: #fff3b0;
   
   /* Sizing */
   --radius-btn: 10px;

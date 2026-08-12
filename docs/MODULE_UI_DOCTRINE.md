@@ -144,17 +144,25 @@ and belongs on the Text axis (master rule A6, operator 8/11). And a shadow
 is filed by what it shadows, not by habit — `text-shadow` is Text,
 `box-shadow` is Frame (A7).
 
-#### E4. H and V margin are always offered together, adjacent `[auto]`
+#### E4. A spacing box is four sides, or none `[auto]`
 
-`horizontalMargin` and `verticalMargin`, in the same strip, side by side. Never
-a lone "Margin", never one without the other.
+`marginTop`, `marginBottom`, `marginLeft`, `marginRight` — and the same four
+for padding — in that order, in the same strip. Never a lone "Margin", and
+never the vertical/horizontal pair that preceded them.
 
-*Why:* a module offering only horizontal margin looks broken to an operator who
-needs vertical space, and sends him hunting through Advanced for a control that
-doesn't exist.
+*Why:* a pair cannot express the ordinary case. A banner logo needed the
+padding above and below it gone and the padding holding it off the left edge
+kept; the single control that could reach the first took all four sides with
+it, and there was nothing else to try. The operator's ruling, 2026-08-11:
+"standardize all objects on the Top/Bottom/Left/Right model."
+
+*How:* build the controls from `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES`
+in `builder-settings-schema.tsx`, or from the `marginFields()` /
+`paddingFields()` helpers that read those tables. Then the names, the order
+and the count hold by construction.
 
 **Checked by:** `check_ui_doctrine.cjs` fails a changed settings file that
-references one without the other.
+names some sides but not all four, or that still names the retired pair.
 
 #### E5. Labels never wrap — shorten the text instead `[eye]`
 

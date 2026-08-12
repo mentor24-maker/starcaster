@@ -1,7 +1,7 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
-  spacingFields,
+  paddingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { type BuilderThemePalette } from "./builder-theme-color-field";
@@ -92,10 +92,7 @@ export function BuilderImageModuleSettings({
           // space between the frame and the picture was unreachable: the
           // operator asked to "control all margin and padding around image
           // objects" and only half of that existed.
-          spacingFields("getImageModuleStyle", {
-            verticalPadding: "verticalPadding",
-            horizontalPadding: "horizontalPadding"
-          })
+          paddingFields("getImageModuleStyle")
         ]
       },
       {
