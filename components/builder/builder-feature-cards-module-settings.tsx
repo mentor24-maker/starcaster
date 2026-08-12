@@ -41,6 +41,35 @@ const ICON_SHAPE_OPTIONS: { value: string; label: string }[] = [
   { value: "plain", label: "No Background" }
 ];
 
+/* The per-card icon glyph. Every one of these is a TEXT-presentation
+   character, not an emoji: the renderer paints the glyph with the Icon
+   Text colour, and an emoji ignores `color` and would always come out in
+   its own fixed colours. Any glyph a card already carries — typed in
+   before this was a dropdown — is appended to this list at render time
+   so switching the control cannot silently drop it. */
+const CARD_ICON_OPTIONS: { value: string; label: string }[] = [
+  { value: "★", label: "★  Star" },
+  { value: "☆", label: "☆  Star Open" },
+  { value: "✓", label: "✓  Check" },
+  { value: "✔", label: "✔  Check Bold" },
+  { value: "✕", label: "✕  Cross" },
+  { value: "✚", label: "✚  Plus" },
+  { value: "●", label: "●  Dot" },
+  { value: "◉", label: "◉  Target" },
+  { value: "■", label: "■  Square" },
+  { value: "◆", label: "◆  Diamond" },
+  { value: "▲", label: "▲  Triangle" },
+  { value: "♥", label: "♥  Heart" },
+  { value: "♦", label: "♦  Card Suit" },
+  { value: "❖", label: "❖  Diamond Frame" },
+  { value: "✦", label: "✦  Sparkle" },
+  { value: "✱", label: "✱  Asterisk" },
+  { value: "→", label: "→  Arrow" },
+  { value: "➜", label: "➜  Arrow Bold" },
+  { value: "☎", label: "☎  Phone" },
+  { value: "✉", label: "✉  Envelope" }
+];
+
 /**
  * Settings editor for the Feature Cards module.
  *
@@ -350,14 +379,25 @@ export function BuilderFeatureCardsModuleSettings({
         {cards.map((card, index) => (
           <Fragment key={card.id}>
             {showIcons ? (
-              <input
-                type="text"
+              <select
+                className="builder-item-grid-icon-select"
                 value={card.icon}
-                maxLength={3}
                 onChange={(event) => updateCard(card.id, { icon: event.target.value })}
-                placeholder="★"
                 aria-label={`Card ${index + 1} icon`}
-              />
+              >
+                <option value="">None</option>
+                {CARD_ICON_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+                {/* A glyph typed in before this became a dropdown is not in
+                    the list; keep it selectable so opening the panel does not
+                    rewrite the card. */}
+                {card.icon && !CARD_ICON_OPTIONS.some((option) => option.value === card.icon) ? (
+                  <option value={card.icon}>{`${card.icon}  (current)`}</option>
+                ) : null}
+              </select>
             ) : null}
             <input
               type="text"
