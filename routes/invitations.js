@@ -28,8 +28,9 @@ const {
 } = require('../lib/appInvitationsStore');
 const { sendInviteEmail, sendAccessRequestEmail, buildSignupUrl } = require('../lib/appInviteDelivery');
 const { getAppPublicOrigin } = require('../lib/appOrigin');
-const { listProjectsForUser } = require('../lib/projectsStore');
-const { getUserById } = require('../lib/authStore');
+const { listProjectsForUser, addMemberToProject, setActiveProjectForSession } = require('../lib/projectsStore');
+const { getUserById, findUserByEmail } = require('../lib/authStore');
+const { acceptInvitation } = require('../lib/appInvitationsStore');
 
 function safeText(value) {
   return String(value || '').trim();
@@ -103,13 +104,87 @@ async function handle(req, res, pathname, method) {
       }
     }
 
+    // Whether this address already has a login decides which form the visitor
+    // is shown: "create your account" is a dead end for someone who already
+    // has one. Disclosed only to a holder of a valid token, who was told the
+    // address in the invitation email itself.
+    const existing = await findUserByEmail(invitation.email);
+
     // Only what the recipient already knows from the email they received.
-    const payload = { email: invitation.email, projectName, expiresAt: invitation.expiresAt };
+    const payload = {
+      email: invitation.email,
+      projectName,
+      expiresAt: invitation.expiresAt,
+      hasAccount: Boolean(existing),
+    };
     return sendOk(res, 200, payload, payload), true;
   }
 
   const userId = safeText(req?.authUser?.id);
   if (!userId) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+
+  /**
+   * Redeem an invitation as somebody who ALREADY has a login.
+   *
+   * Registration redeems the token for a brand-new account; before this
+   * existed, inviting an address that was already registered produced an
+   * invitation that could never be accepted — the link only ever reached the
+   * sign-up form, which then refused the duplicate address, and for a signed-in
+   * user it did nothing at all.
+   */
+  if (normalizedPath === '/api/invitations/accept' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const token = safeText(body?.token);
+    if (!token) return sendErr(res, 400, 'Token is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const lookup = await getInvitationByToken(token);
+    if (!lookup.ok) return sendErr(res, lookup.status || 400, lookup.error, { code: 'INVITE_INVALID' }), true;
+    const invitation = lookup.data;
+
+    // Same rule as registration: the invitation names a mailbox, and only its
+    // owner may spend it. Otherwise a forwarded link would let any signed-in
+    // user join a project they were never invited to.
+    const signedInEmail = safeText(req?.authUser?.email).toLowerCase();
+    if (invitation.email !== signedInEmail) {
+      return sendErr(
+        res,
+        403,
+        `This invitation was sent to ${invitation.email}, but you are signed in as ${signedInEmail}. Sign out and sign in as ${invitation.email}.`,
+        { code: 'INVITE_EMAIL_MISMATCH' }
+      ), true;
+    }
+
+    const redeemed = await acceptInvitation(invitation.id, userId);
+    if (!redeemed.ok) return sendErr(res, redeemed.status || 409, redeemed.error, { code: 'INVITE_ALREADY_USED' }), true;
+
+    let projectName = '';
+    if (invitation.projectId) {
+      const granted = await addMemberToProject(invitation.projectId, userId, invitation.projectRole || 'member');
+      if (!granted?.ok) {
+        console.error(
+          `[invitations] ${invitation.id} accepted but membership of ${invitation.projectId} was not granted:`,
+          granted?.error || 'unknown error'
+        );
+        return sendErr(res, 500, 'Joined, but the workspace could not be added. Ask your administrator.', { code: 'MEMBERSHIP_FAILED' }), true;
+      }
+
+      // Drop them straight into the workspace they were invited to, rather
+      // than leaving them wherever they happened to be.
+      const sessionToken = safeText(req?.authSession?.token);
+      if (sessionToken) {
+        await setActiveProjectForSession(userId, invitation.projectId, sessionToken).catch(() => {});
+      }
+
+      const mine = await listProjectsForUser(userId);
+      if (mine.ok) {
+        const project = (mine.data || []).find((row) => safeText(row?.id) === invitation.projectId);
+        projectName = safeText(project?.name);
+      }
+    }
+
+    const payload = { projectId: invitation.projectId, projectName };
+    return sendOk(res, 200, payload, payload), true;
+  }
 
   // A user who landed with no workspace asks the person who invited them.
   if (normalizedPath === '/api/invitations/request-access' && requestMethod === 'POST') {
@@ -165,12 +240,16 @@ async function handle(req, res, pathname, method) {
     if (!created.ok) return sendErr(res, created.status || 500, created.error, { code: 'INVITE_FAILED' }), true;
 
     const { invitation, rawToken } = created.data;
+    // Someone who already has a login gets "join this workspace", not "create
+    // your account" — the latter points them at a form that would refuse them.
+    const alreadyRegistered = Boolean(await findUserByEmail(email));
     const sent = await sendInviteEmail({
       req,
       toEmail: email,
       rawToken,
       inviterName: safeText(req?.authUser?.name) || safeText(req?.authUser?.email),
       projectName: target.projectName,
+      hasAccount: alreadyRegistered,
     });
 
     // The invitation is real whether or not the mail server cooperated. Say so
@@ -186,6 +265,7 @@ async function handle(req, res, pathname, method) {
       signupUrl: buildSignupUrl(getAppPublicOrigin(req), rawToken),
       emailSent: sent.ok,
       emailError: sent.ok ? '' : safeText(sent.error),
+      hasAccount: alreadyRegistered,
     };
     return sendOk(res, 201, payload, payload), true;
   }
