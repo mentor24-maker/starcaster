@@ -122,6 +122,13 @@ describe("the menu carries its own style to the page", () => {
       .toContain("transform:translate(10px, -5px)");
   });
 
+  it("colours the labels themselves — the control the operator could not find", () => {
+    const html = renderMenu({ navLinkBackground: "#0b2a4a", navActiveBackground: "#ffcc00" });
+
+    expect(html).toContain("--site-nav-link-bg:#0b2a4a");
+    expect(html).toContain("--site-nav-link-active-bg:#ffcc00");
+  });
+
   it("lets the module Background paint over the bar's default fill", () => {
     const html = renderMenu({ backgroundMode: "color", backgroundColor: "#123456" });
     expect(html).toContain("#123456");

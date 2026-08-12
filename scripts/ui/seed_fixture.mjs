@@ -104,6 +104,29 @@ const PANEL_CHECK_SECTION = {
         mobileHidden: 'false', desktopHidden: 'false',
       },
     },
+    {
+      // A menu with a submenu, so the "Dropdown" sub-section is on screen —
+      // that titled wrapper is where the lattice broke when Navigation
+      // joined (its six fields started at x=0 while the rest of Structure
+      // started at 125). Also the widest labels in the app: "Horizontal
+      // Padding" and "Shadow Opacity".
+      id: 'module-panel-check-navigation',
+      name: 'Top Menu',
+      text: '',
+      type: 'navigation',
+      column: 'main',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'home', label: 'Home', href: '/' },
+          { id: 'play', label: 'Play', href: '/play' },
+          { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+          { id: 'about', label: 'About', href: '/about' },
+        ]),
+        navDirection: 'horizontal', navDropdownStyle: 'list', navLevels: '2',
+        navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
+        mobileHidden: 'false', desktopHidden: 'false',
+      },
+    },
   ],
 };
 

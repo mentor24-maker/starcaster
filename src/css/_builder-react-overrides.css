@@ -2318,6 +2318,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-height: var(--site-nav-link-height, 48px);
   border-radius: var(--site-nav-link-radius, 18px);
   padding: var(--site-nav-link-padding, 0px 14px);
+  /* The label's own fill at rest. There was no rule for this at all — a
+     link only had a background while you hovered it — which is why the
+     operator had no way to colour the labels (2026-08-11). */
+  background: var(--site-nav-link-bg, transparent);
   /* Bold was a dead control for as long as the generated rule said
      `font-weight: 700`: the setting wrote font-weight onto the <nav> and
      that rule overrode the inherited value on every link. */
@@ -2343,6 +2347,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    so there was no way to tell "you are here" from "your mouse is here". */
 .builder-react-root .site-nav-link-active {
   color: var(--site-nav-link-active-color, var(--site-nav-link-hover-color, #0a8fc4));
+  /* Falls back to the hover fill, which is what it silently WAS — but it is
+     reachable now, so the one label that always looked different can be
+     changed or switched off. */
+  background: var(--site-nav-link-active-bg, var(--site-nav-link-hover-bg, rgba(23, 183, 238, 0.12)));
   text-decoration: var(--site-nav-link-hover-decoration, none);
   transform: none;
 }
@@ -2499,7 +2507,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    each with its control in a `-value-stack` alongside a hint. Unflattened,
    the wrapper took one cell and both rows laid themselves out inside it —
    label above field, nothing lining up with the column. */
-.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields {
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields,
+/* And a titled sub-section (Navigation's "Dropdown"), the third of the
+   species: `npm run check:panels` caught its six fields starting at x=0
+   while the rest of the Structure column started at 125. The heading
+   inside it spans the tracks — see below. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-axis-section {
   display: contents;
 }
 
@@ -2549,9 +2562,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--muted, #445465);
 }
 
-/* The axis title is not a row of the lattice — it spans both tracks. */
-.builder-react-root .is-lattice .builder-schema-panel-column > .builder-schema-group-title {
+/* Neither title is a row of the lattice — both span the tracks. The
+   sub-heading keeps its rule above it, now drawn across the whole column
+   rather than around a nested box. */
+.builder-react-root .is-lattice .builder-schema-panel-column > .builder-schema-group-title,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-group-subtitle {
   grid-column: 1 / -1;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-group-subtitle {
+  margin-top: var(--space-3, 8px);
+  padding-top: var(--space-3, 8px);
+  border-top: 1px solid var(--builder-editor-hairline, rgba(11, 42, 74, 0.12));
 }
 
 /*

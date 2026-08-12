@@ -107,7 +107,9 @@ function oneOf<T extends string>(value: string | undefined, allowed: readonly T[
  */
 function flag(value: string | undefined, fallback: boolean): boolean {
   const trimmed = String(value ?? "").trim();
-  if (trimmed === "true") return true;
+  // "on" is the legacy truthy the shared dropShadowFields() control accepts;
+  // matching it here keeps the two halves of one checkbox in agreement.
+  if (trimmed === "true" || trimmed === "on") return true;
   if (trimmed === "false") return false;
   return fallback;
 }
@@ -226,9 +228,18 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     // Empty means "follow the theme" (master rule A1), so these stay
     // undefined rather than freezing a hex into every menu.
     "--site-nav-link-color": linkColor,
+    // The label's own fill, at rest. There was no such control and no CSS
+    // for it — a link only had a background while you hovered it, which is
+    // what the operator meant on 2026-08-11 by having no control over "the
+    // background colors of the labels".
+    "--site-nav-link-bg": color(settings.navLinkBackground),
     "--site-nav-link-hover-color": hoverColor,
     "--site-nav-link-hover-bg": color(settings.navHoverBackground),
     "--site-nav-link-active-color": color(settings.navActiveColor) ?? hoverColor,
+    // The current page's pill used to BE the hover fill, with no separate
+    // control — so one label in every menu looked different and nothing in
+    // the panel could change it.
+    "--site-nav-link-active-bg": color(settings.navActiveBackground) ?? color(settings.navHoverBackground),
 
     // --- the dropdown / mega panel ------------------------------------
     "--site-nav-dropdown-bg": color(settings.navDropdownBackground) ?? NAV_STYLE_DEFAULTS.dropdownBackground,
