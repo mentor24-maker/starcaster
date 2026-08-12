@@ -41,11 +41,8 @@ describe("getNavModuleStyle — an untouched menu keeps the look it had when the
     const vars = style();
 
     expect(vars["--site-nav-link-color"]).toBeUndefined();
-    expect(vars["--site-nav-link-bg"]).toBeUndefined();
     expect(vars["--site-nav-link-hover-color"]).toBeUndefined();
-    expect(vars["--site-nav-link-hover-bg"]).toBeUndefined();
     expect(vars["--site-nav-link-active-color"]).toBeUndefined();
-    expect(vars["--site-nav-link-active-bg"]).toBeUndefined();
     expect(vars.color).toBeUndefined();
   });
 
@@ -122,6 +119,67 @@ describe("the colours that had no control at all", () => {
 
     expect(vars["--site-nav-link-hover-bg"]).toBe("#00ff00");
     expect(vars["--site-nav-link-active-bg"]).toBe("#ff0000");
+  });
+});
+
+describe("clearing a colour actually clears it", () => {
+  /*
+   * The operator, 2026-08-12: "All I want to do is clear the color of the
+   * background for the menu as well as the links themselves ... I can set it
+   * to any color I want. I just can't clear it." He was right, and these are
+   * the four measurements that were wrong before the fix.
+   */
+  it("emits transparent for an unset bar background, not nothing", () => {
+    // Nothing emitted meant the stylesheet's hardcoded white pill showed
+    // through, so the Background control only ever worked one way.
+    expect(style()["--site-nav-bg"]).toBe("transparent");
+  });
+
+  it("emits transparent for an unset label fill", () => {
+    expect(style()["--site-nav-link-bg"]).toBe("transparent");
+  });
+
+  it("emits transparent for an unset hover fill", () => {
+    expect(style()["--site-nav-link-hover-bg"]).toBe("transparent");
+  });
+
+  it("emits transparent for an unset current-page fill", () => {
+    expect(style()["--site-nav-link-active-bg"]).toBe("transparent");
+  });
+
+  it("clears a fill that HAD been set, once the value is emptied again", () => {
+    expect(style({ navLinkBackground: "" })["--site-nav-link-bg"]).toBe("transparent");
+    expect(style({ navActiveBackground: "", navHoverBackground: "" })["--site-nav-link-active-bg"])
+      .toBe("transparent");
+  });
+
+  it("still lets a colour be set — the direction that always worked", () => {
+    expect(style({ navLinkBackground: "#123456" })["--site-nav-link-bg"]).toBe("#123456");
+  });
+});
+
+describe("Text Color reaches every link, including the one you are standing on", () => {
+  it("gives the current page the text colour when it has none of its own", () => {
+    // This is "it still won't render the text as white": the active link
+    // ended at a hardcoded blue and ignored the control completely.
+    expect(style({ navColor: "#ffffff" })["--site-nav-link-active-color"]).toBe("#ffffff");
+  });
+
+  it("gives hover the text colour too", () => {
+    expect(style({ navColor: "#ffffff" })["--site-nav-link-hover-color"]).toBe("#ffffff");
+  });
+
+  it("lets the current page override it when asked", () => {
+    const vars = style({ navColor: "#ffffff", navActiveColor: "#ff0000" });
+    expect(vars["--site-nav-link-color"]).toBe("#ffffff");
+    expect(vars["--site-nav-link-active-color"]).toBe("#ff0000");
+  });
+
+  it("leaves all three to the theme when nothing is set", () => {
+    const vars = style();
+    expect(vars["--site-nav-link-color"]).toBeUndefined();
+    expect(vars["--site-nav-link-hover-color"]).toBeUndefined();
+    expect(vars["--site-nav-link-active-color"]).toBeUndefined();
   });
 });
 
