@@ -2879,46 +2879,32 @@ function HeadlineRotatorModuleEditor({
 }
 
 /**
- * Module types whose settings panel is on THE LATTICE (master rule W0,
- * operator 8/12): one label width and one field width for the whole panel,
- * so labels start at the same x and fields start at the same x.
+ * THE LATTICE IS NOW UNIVERSAL (master rule W0; rollout 2026-08-13).
  *
- * ROLLING OUT IS DELETING THIS LIST — replace the lookup below with a
- * constant `true`. The CSS in _builder-react-overrides.css is already
- * written to cover any panel, and the two widths live in _variables.css.
- * The gate exists only because the operator asked to settle the rule on
- * Table before it reaches the other 52 panels; it is a sequencing device,
- * not a design decision.
- */
-/*
- * Which panels are on the lattice (W0). Table settled the rule; Heading
- * joined 2026-08-11 on the operator's word, looking at an Eyebrow heading:
- * "It also hasn't received the new 'Alignment Protocol', so let's apply
- * that one here, too."
+ * Every module settings panel gets it. The gate that used to live here — a
+ * set holding "table", then "table" and "heading" — existed only so the rule
+ * could be settled on one panel before it reached the other 52, which the
+ * operator asked for on 8/12 and signed off on 8/13 ("the Eyebrow module …
+ * can now be considered a model for how these forms should look").
  *
- * The gate still exists because the remaining 50 panels have not been
- * looked at one by one, and W0 is a browser-measured rule — `npm run
- * check:panels` is the only thing that knows whether a panel obeys it.
- * Add a type here, then run that check against a page carrying one.
+ * Nothing replaces it: a per-module opt-out would be the per-field width
+ * override in a bigger coat, and W0 exists to stop exactly that. If a panel
+ * fights the lattice, fix the panel — that is what the heading conversion
+ * did (PR #169) and what this rollout did for the rest.
  */
-const LATTICE_MODULE_TYPES = new Set<BuilderTemplateModuleType>(["table", "heading"]);
 
 function ModuleEditorWrapper({
   isPopped,
-  moduleType,
   title,
   onClose,
   children
 }: {
   isPopped: boolean;
-  moduleType: BuilderTemplateModuleType;
   title: string;
   onClose: () => void;
   children: ReactNode;
 }) {
-  const className = LATTICE_MODULE_TYPES.has(moduleType)
-    ? "builder-module-editor is-lattice"
-    : "builder-module-editor";
+  const className = "builder-module-editor is-lattice";
 
   if (isPopped) {
     return (
@@ -3262,7 +3248,7 @@ export function BuilderModuleCard({
       ) : null}
 
       {(isExpanded || isPopped) ? (
-        <ModuleEditorWrapper isPopped={isPopped} moduleType={module.type} title={module.name || module.type} onClose={() => setIsPopped(false)}>
+        <ModuleEditorWrapper isPopped={isPopped} title={module.name || module.type} onClose={() => setIsPopped(false)}>
           {module.type !== "social" && module.type !== "blog-post-list" ? (
             // Content-sized, not full-panel — this row tops every module,
             // so master rule W1 applies here with maximum leverage.

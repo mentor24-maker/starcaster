@@ -2389,6 +2389,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    --------------------------------------------------------------------- */
 .builder-react-root .site-nav {
   gap: var(--site-nav-gap, 0px);
+  /* Cleared means CLEARED. The generated stylesheet falls back to an opaque
+     white pill here, which is what made the Background control one-way: you
+     could set a colour, and clearing it just uncovered the white again
+     (operator, 2026-08-12). A set background still wins — it arrives as an
+     inline `background:` declaration, which outranks this rule. */
+  background: var(--site-nav-bg, transparent);
   padding: var(--site-nav-padding, 8px 8px);
   border-radius: var(--site-nav-radius, 26px);
   border: var(--site-nav-border-width, 1px) var(--site-nav-border-style, solid)
@@ -2400,6 +2406,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-height: var(--site-nav-link-height, 48px);
   border-radius: var(--site-nav-link-radius, 18px);
   padding: var(--site-nav-link-padding, 0px 14px);
+  /* The label's own fill at rest. There was no rule for this at all — a
+     link only had a background while you hovered it — which is why the
+     operator had no way to colour the labels (2026-08-11). */
+  background: var(--site-nav-link-bg, transparent);
   /* Bold was a dead control for as long as the generated rule said
      `font-weight: 700`: the setting wrote font-weight onto the <nav> and
      that rule overrode the inherited value on every link. */
@@ -2415,6 +2425,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .site-nav-link:hover,
 .builder-react-root .site-nav-link:focus-visible {
+  /* Same reason as the bar: the generated rule's hardcoded blue would show
+     through a hover fill the operator had cleared. */
+  background: var(--site-nav-link-hover-bg, transparent);
+  color: var(--site-nav-link-hover-color, var(--site-nav-link-color, #0a8fc4));
   text-decoration: var(--site-nav-link-hover-decoration, none);
   /* The lift moved to a hover-effect class; without this reset the
      generated rule would keep applying it under every other effect. */
@@ -2424,7 +2438,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* The current page reads as its own state now — it followed hover exactly,
    so there was no way to tell "you are here" from "your mouse is here". */
 .builder-react-root .site-nav-link-active {
-  color: var(--site-nav-link-active-color, var(--site-nav-link-hover-color, #0a8fc4));
+  /* Follows Text Color unless given its own. It used to end at a hardcoded
+     blue, so the page you were looking at was the one link that ignored the
+     Text Color control entirely. */
+  color: var(--site-nav-link-active-color, var(--site-nav-link-color, #0a8fc4));
+  /* Falls back to the hover fill, which is what it silently WAS — but it is
+     reachable now, so the one label that always looked different can be
+     changed or switched off. */
+  background: var(--site-nav-link-active-bg, transparent);
   text-decoration: var(--site-nav-link-hover-decoration, none);
   transform: none;
 }
@@ -2574,14 +2595,19 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    instead of laying themselves out separately. Without these two the
    wrapper occupied one grid cell and every row below it lost its pairing —
    Frame's Background sat on a line of its own under its label. */
-.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare:has(.builder-module-field-strip, .builder-setting-row, .builder-setting-row-full, .builder-module-offset-fields),
 .builder-react-root .is-lattice .builder-schema-panel-column .builder-background-controls-horizontal,
 /* The offsets block is the same species, found when Heading joined the
    lattice (2026-08-11): two BuilderSettingRows inside their own wrapper,
    each with its control in a `-value-stack` alongside a hint. Unflattened,
    the wrapper took one cell and both rows laid themselves out inside it —
    label above field, nothing lining up with the column. */
-.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields {
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-offset-fields,
+/* And a titled sub-section (Navigation's "Dropdown"), the third of the
+   species: `npm run check:panels` caught its six fields starting at x=0
+   while the rest of the Structure column started at 125. The heading
+   inside it spans the tracks — see below. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-axis-section {
   display: contents;
 }
 
@@ -2631,9 +2657,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--muted, #445465);
 }
 
-/* The axis title is not a row of the lattice — it spans both tracks. */
-.builder-react-root .is-lattice .builder-schema-panel-column > .builder-schema-group-title {
+/* Neither title is a row of the lattice — both span the tracks. The
+   sub-heading keeps its rule above it, now drawn across the whole column
+   rather than around a nested box. */
+.builder-react-root .is-lattice .builder-schema-panel-column > .builder-schema-group-title,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-group-subtitle {
   grid-column: 1 / -1;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-group-subtitle {
+  margin-top: var(--space-3, 8px);
+  padding-top: var(--space-3, 8px);
+  border-top: 1px solid var(--builder-editor-hairline, rgba(11, 42, 74, 0.12));
 }
 
 /*
@@ -2783,4 +2818,77 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  */
 .builder-react-root .builder-centered-modal .builder-schema-panel-columns[style*="--builder-axis-count"] {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/*
+ * A titled sub-section inside an axis joins the column's lattice instead of
+ * starting its own (W0, rollout 2026-08-13).
+ *
+ * `.builder-schema-axis-section` is a real box — it carries the hairline and
+ * the padding that say "still Structure, a different subject". So it cannot
+ * simply be `display: contents` like the strips are; it has to keep its box
+ * AND share the column's two tracks. That is what subgrid is for.
+ *
+ * Without this the section was one cell of the column grid and laid its own
+ * fields out inside it, so a panel had two lattices in one column. The check
+ * caught it on six panels at once: Navigation's "Dropdown" fields starting
+ * 12px off its Structure fields, and Blog Search's "Placeholder" sitting
+ * 431px away from "Results Page URL" in the same column.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-axis-section {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  /*
+   * MUST match the parent column's column-gap, which is 0 — the 40px of room
+   * lives on the label, not in a gutter. The base rule above sets `gap: 12px`
+   * as a shorthand, and a subgrid keeps its OWN gutters rather than the
+   * parent's: that 12px was eaten out of the shared tracks, so the section's
+   * labels came out 6px narrower and its fields started 6px later than the
+   * rows above them. Six pixels, invisible by eye, caught by the check.
+   */
+  column-gap: 0;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-axis-section > .builder-schema-group-subtitle {
+  grid-column: 1 / -1;
+}
+
+
+/*
+ * A bare block that is PROSE, not field pairs, spans the column instead of
+ * flattening into it (W0 rollout, 2026-08-13).
+ *
+ * `bare: true` covers two different things. The background picker is a set
+ * of label/control pairs and has to flatten so those pairs join the lattice.
+ * A note — "Search Param" explaining itself, blog-post-create's "Fields to
+ * show" subheading, the tag-list hints — is one lone node with no label, and
+ * flattening it dropped a SINGLE item into a two-track grid. Everything
+ * below it then shifted one cell: labels landed in the field track, controls
+ * wrapped to the next row's label track. That is why blog-search reported
+ * its Placeholder label as 713px wide and starting at x=0 while Results Page
+ * URL started at 713 — the whole column was running half a cell out of phase
+ * from the note down.
+ *
+ * `:has()` is what tells the two apart — and the test has to name EVERY
+ * shape a label/control pair comes in, not just field strips. The offsets
+ * block is a bare block built from BuilderSettingRows, so a test that only
+ * looked for `.builder-module-field-strip` called it prose and spanned it:
+ * that fixed five panels and quietly regressed Heading and Floating Image,
+ * which is why this was measured both ways before being kept.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-bare:not(:has(.builder-module-field-strip, .builder-setting-row, .builder-setting-row-full, .builder-module-offset-fields)) {
+  grid-column: 1 / -1;
+  /*
+   * Same guard the offset hint needs, and for the same reason: a spanning
+   * item still contributes to intrinsic track sizing, so a note left at its
+   * natural width would BE the width of both tracks. Held down to its
+   * longest word, then allowed to fill the row once the tracks are resolved.
+   * Without this, Heading's Placement column reported a 507px label track
+   * and 949px controls — the sentence had become the lattice.
+   */
+  width: min-content;
+  min-width: 100%;
 }
