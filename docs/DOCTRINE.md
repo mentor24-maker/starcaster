@@ -452,6 +452,41 @@ not a career programmer, and his stated bottleneck is attention, not
 willingness. Every chore surfaced for approval spends the scarcest resource he
 has on something he has already said yes to.
 
+### 6.5 Hand him the SQL itself — never a path to it
+
+**Standing instruction from the operator, 2026-08-12.** When he has to run SQL,
+paste the statements into the reply, in a fenced ```sql block, ready to copy
+straight into the Supabase SQL editor. Every time, without being asked.
+
+A file path is not a deliverable. Applying SQL by hand is the one schema step
+no agent can do here — the Supabase CLI on this machine has no access token and
+there is no Postgres connection string in the environment — so the reply asking
+for it is the whole handoff. Making him go find a file first adds a step to the
+one task that was already his.
+
+**The specific trap that produced this rule.** On 2026-08-12 the renditions
+migration was handed over as a repo-relative link. New files live on a branch,
+in `.claude/worktrees/<topic>/` — his editor is open on `main`, where the file
+does not exist. The link resolved to nothing and cost a round trip. Any link to
+a file this session created is broken for him by default until the branch
+merges.
+
+**So:**
+
+- Paste the SQL inline. It is usually under twenty lines; if it genuinely is
+  not, paste it anyway and say what it does above the block.
+- Add the GitHub URL on the branch (`.../blob/<branch>/docs/SQL/<file>.sql`)
+  only as a *secondary* reference, never as the primary instruction.
+- Say in one line what it changes and whether anything existing is touched.
+  "It only adds two new fields; it changes nothing that exists" is what tells
+  him it is safe to run.
+- Keep writing the file to `docs/SQL/` as well — that is the schema source of
+  truth (§7). The inline copy is for him; the file is for the repo.
+
+**The general rule behind it:** anything he must run, paste, or click goes in
+the message as content he can act on directly. Reserve file links for things he
+is only being *told about*.
+
 ---
 
 ## 7. Operator-facing gotchas
