@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { BackgroundSettings, BuilderTemplateLayout, BuilderTemplateSection } from "@/lib/builder-template";
 import { getLayoutColumns } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
@@ -41,7 +42,7 @@ export function BuilderSectionControls({
 }: BuilderSectionControlsProps) {
   if (editorDevice === "mobile") {
     return (
-      <div className="builder-section-settings">
+      <div className="builder-section-settings is-lattice">
         <BuilderSettingRow label="Mobile Layout" fullWidth>
           <select
             value={section.mobileLayout ?? "stack"}
@@ -65,241 +66,268 @@ export function BuilderSectionControls({
   }
 
   return (
-    <div className="builder-section-settings">
-      <div className="builder-section-settings-grid">
-        <BuilderSettingRow label="Layout">
-          <select
-            value={section.layout}
-            onChange={(event) => {
-              const nextLayout = event.target.value as BuilderTemplateLayout;
-              const allowedColumns = new Set(getLayoutColumns(nextLayout));
-              onUpdateSection((current) => ({
-                ...current,
-                layout: nextLayout,
-                modules: current.modules.map((module) => ({
-                  ...module,
-                  column: allowedColumns.has(module.column) ? module.column : getLayoutColumns(nextLayout)[0]
-                }))
-              }));
-            }}
-          >
-            {layoutOptions.map((layout) => (
-              <option key={layout.value} value={layout.value}>
-                {layout.label}
-              </option>
-            ))}
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Width">
-          <select
-            value={
-              section.widthMode === "full-width"
-                ? "full-width"
-                : (section.widthPercent ?? "100") === "100"
-                  ? "contained"
-                  : section.widthPercent ?? "100"
-            }
-            onChange={(event) => {
-              const value = event.target.value;
-              onUpdateSection((current) => {
-                if (value === "full-width") {
-                  return { ...current, widthMode: "full-width" };
-                }
-                if (value === "contained") {
-                  return { ...current, widthMode: "contained", widthPercent: "100" };
-                }
-                return { ...current, widthMode: "contained", widthPercent: value };
-              });
-            }}
-          >
-            <option value="full-width">Full width (edge to edge)</option>
-            <option value="contained">Contained (within page margins)</option>
-            <option value="90">90% (centered)</option>
-            <option value="75">75% (centered)</option>
-            <option value="66">66% (centered)</option>
-            <option value="50">50% (centered)</option>
-          </select>
-        </BuilderSettingRow>
-        {canJoinPrevious ? (
-          <BuilderSettingRow label="Share background">
-            <input
-              type="checkbox"
-              checked={section.joinWithPrevious === true}
-              onChange={(event) =>
-                onUpdateSection((current) => ({ ...current, joinWithPrevious: event.target.checked }))
-              }
-              title="Use the background of the row above, so one image or colour spans both rows. This row's own background is set aside while this is ticked."
-            />
-          </BuilderSettingRow>
-        ) : null}
-        <BuilderSettingRow label="Alignment">
-          <select
-            value={section.alignment}
-            onChange={(event) =>
-              onUpdateSection((current) => ({
-                ...current,
-                alignment: event.target.value as "left" | "center" | "right"
-              }))
-            }
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Row Background">
-          <select
-            value={section.background.mode}
-            onChange={(event) =>
-              updateSectionBackground(onUpdateSection, (current) => ({
-                ...current,
-                mode: event.target.value as BackgroundSettings["mode"]
-              }))
-            }
-          >
-            <option value="none">None</option>
-            <option value="color">Color</option>
-            <option value="gradient">Gradient</option>
-            <option value="image">Image</option>
-            <option value="style">Style</option>
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Top Margin">
-          <BuilderNumberSelectControl
-            value={section.marginTop ?? "0"}
-            min={0}
-            max={160}
-            fallback="0"
-            onChange={(marginTop) =>
-              onUpdateSection((current) => ({
-                ...current,
-                marginTop
-              }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Bottom Margin">
-          <BuilderNumberSelectControl
-            value={section.marginBottom ?? "0"}
-            min={0}
-            max={160}
-            fallback="0"
-            onChange={(marginBottom) =>
-              onUpdateSection((current) => ({
-                ...current,
-                marginBottom
-              }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Top Padding">
-          <BuilderNumberSelectControl
-            value={section.paddingTop ?? "18"}
-            min={0}
-            max={160}
-            fallback="18"
-            onChange={(paddingTop) =>
-              onUpdateSection((current) => ({
-                ...current,
-                paddingTop
-              }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Bottom Padding">
-          <BuilderNumberSelectControl
-            value={section.paddingBottom ?? "18"}
-            min={0}
-            max={160}
-            fallback="18"
-            onChange={(paddingBottom) =>
-              onUpdateSection((current) => ({
-                ...current,
-                paddingBottom
-              }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Border Width">
-          <BuilderNumberSelectControl
-            value={section.rowBorderWidth ?? "0"}
-            min={0}
-            max={20}
-            fallback="0"
-            onChange={(rowBorderWidth) =>
-              onUpdateSection((current) => ({ ...current, rowBorderWidth }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Border Style">
-          <select
-            disabled={Number(section.rowBorderWidth ?? "0") === 0}
-            value={section.rowBorderStyle ?? "solid"}
-            onChange={(event) =>
-              onUpdateSection((current) => ({ ...current, rowBorderStyle: event.target.value }))
-            }
-          >
-            <option value="solid">Solid</option>
-            <option value="dashed">Dashed</option>
-            <option value="dotted">Dotted</option>
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Border Color">
-          <BuilderThemeColorField
-            disabled={Number(section.rowBorderWidth ?? "0") === 0}
-            fallback="#000000"
-            themeColors={themeColors}
-            value={section.rowBorderColor ?? ""}
-            onChange={(rowBorderColor) =>
-              onUpdateSection((current) => ({ ...current, rowBorderColor }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Border Radius">
-          <BuilderNumberSelectControl
-            disabled={Number(section.rowBorderWidth ?? "0") === 0}
-            value={section.rowBorderRadius ?? "0"}
-            min={0}
-            max={60}
-            fallback="0"
-            onChange={(rowBorderRadius) =>
-              onUpdateSection((current) => ({ ...current, rowBorderRadius }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Locked">
-          <input
-            type="checkbox"
-            checked={section.locked === true}
-            onChange={(e) =>
-              onUpdateSection((current) => ({ ...current, locked: e.target.checked }))
-            }
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Visibility">
-          <div className="builder-radio-group">
-            <label>
-              <input
-                type="radio"
-                name={`section-visibility-${section.id}`}
-                value="public"
-                checked={!section.isPrivate}
-                onChange={() => onUpdateSection((current) => ({ ...current, isPrivate: false }))}
-              />
-              {" "}Public
-            </label>
-            <label>
-              <input
-                type="radio"
-                name={`section-visibility-${section.id}`}
-                value="private"
-                checked={section.isPrivate === true}
-                onChange={() => onUpdateSection((current) => ({ ...current, isPrivate: true }))}
-              />
-              {" "}Private
-            </label>
-          </div>
-        </BuilderSettingRow>
+    <div className="builder-section-settings is-lattice">
+      {/*
+       * D8 axes and the W0 lattice, same as a module panel (operator 8/13,
+       * "Section editors. Please proceed.").
+       *
+       * This was one flat grid of 15 label/field pairs in three equal columns.
+       * Equal columns meant every field got the same SHARE of the panel
+       * regardless of what it held, so a Layout select and a 2-digit padding
+       * box were the same width, and `.builder-setting-label` here was allowed
+       * to wrap (`white-space: normal`) against L2.
+       *
+       * Reusing `.builder-schema-panel-column` rather than restyling the old
+       * grid is the point: the lattice, the 40px of room, the D9 ordering and
+       * `check_panels` all come with it, and a row editor now reads like a
+       * module editor (S1 — learn one, know them all).
+       */}
+      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "4" } as CSSProperties}>
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Structure</div>
+          <BuilderSettingRow label="Layout">
+                    <select
+                      value={section.layout}
+                      onChange={(event) => {
+                        const nextLayout = event.target.value as BuilderTemplateLayout;
+                        const allowedColumns = new Set(getLayoutColumns(nextLayout));
+                        onUpdateSection((current) => ({
+                          ...current,
+                          layout: nextLayout,
+                          modules: current.modules.map((module) => ({
+                            ...module,
+                            column: allowedColumns.has(module.column) ? module.column : getLayoutColumns(nextLayout)[0]
+                          }))
+                        }));
+                      }}
+                    >
+                      {layoutOptions.map((layout) => (
+                        <option key={layout.value} value={layout.value}>
+                          {layout.label}
+                        </option>
+                      ))}
+                    </select>
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Width">
+                    <select
+                      value={
+                        section.widthMode === "full-width"
+                          ? "full-width"
+                          : (section.widthPercent ?? "100") === "100"
+                            ? "contained"
+                            : section.widthPercent ?? "100"
+                      }
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        onUpdateSection((current) => {
+                          if (value === "full-width") {
+                            return { ...current, widthMode: "full-width" };
+                          }
+                          if (value === "contained") {
+                            return { ...current, widthMode: "contained", widthPercent: "100" };
+                          }
+                          return { ...current, widthMode: "contained", widthPercent: value };
+                        });
+                      }}
+                    >
+                      <option value="full-width">Full width (edge to edge)</option>
+                      <option value="contained">Contained (within page margins)</option>
+                      <option value="90">90% (centered)</option>
+                      <option value="75">75% (centered)</option>
+                      <option value="66">66% (centered)</option>
+                      <option value="50">50% (centered)</option>
+                    </select>
+                  </BuilderSettingRow>
+          {canJoinPrevious ? (
+                    <BuilderSettingRow label="Share background">
+                      <input
+                        type="checkbox"
+                        checked={section.joinWithPrevious === true}
+                        onChange={(event) =>
+                          onUpdateSection((current) => ({ ...current, joinWithPrevious: event.target.checked }))
+                        }
+                        title="Use the background of the row above, so one image or colour spans both rows. This row's own background is set aside while this is ticked."
+                      />
+                    </BuilderSettingRow>
+                  ) : null}
+        </div>
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Placement</div>
+          <BuilderSettingRow label="Alignment">
+                    <select
+                      value={section.alignment}
+                      onChange={(event) =>
+                        onUpdateSection((current) => ({
+                          ...current,
+                          alignment: event.target.value as "left" | "center" | "right"
+                        }))
+                      }
+                    >
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Top Margin">
+                    <BuilderNumberSelectControl
+                      value={section.marginTop ?? "0"}
+                      min={0}
+                      max={160}
+                      fallback="0"
+                      onChange={(marginTop) =>
+                        onUpdateSection((current) => ({
+                          ...current,
+                          marginTop
+                        }))
+                      }
+                    />
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Bottom Margin">
+                    <BuilderNumberSelectControl
+                      value={section.marginBottom ?? "0"}
+                      min={0}
+                      max={160}
+                      fallback="0"
+                      onChange={(marginBottom) =>
+                        onUpdateSection((current) => ({
+                          ...current,
+                          marginBottom
+                        }))
+                      }
+                    />
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Top Padding">
+                    <BuilderNumberSelectControl
+                      value={section.paddingTop ?? "18"}
+                      min={0}
+                      max={160}
+                      fallback="18"
+                      onChange={(paddingTop) =>
+                        onUpdateSection((current) => ({
+                          ...current,
+                          paddingTop
+                        }))
+                      }
+                    />
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Bottom Padding">
+                    <BuilderNumberSelectControl
+                      value={section.paddingBottom ?? "18"}
+                      min={0}
+                      max={160}
+                      fallback="18"
+                      onChange={(paddingBottom) =>
+                        onUpdateSection((current) => ({
+                          ...current,
+                          paddingBottom
+                        }))
+                      }
+                    />
+                  </BuilderSettingRow>
+        </div>
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Frame</div>
+          <BuilderSettingRow label="Row Background">
+                    <select
+                      value={section.background.mode}
+                      onChange={(event) =>
+                        updateSectionBackground(onUpdateSection, (current) => ({
+                          ...current,
+                          mode: event.target.value as BackgroundSettings["mode"]
+                        }))
+                      }
+                    >
+                      <option value="none">None</option>
+                      <option value="color">Color</option>
+                      <option value="gradient">Gradient</option>
+                      <option value="image">Image</option>
+                      <option value="style">Style</option>
+                    </select>
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Border Width">
+                    <BuilderNumberSelectControl
+                      value={section.rowBorderWidth ?? "0"}
+                      min={0}
+                      max={20}
+                      fallback="0"
+                      onChange={(rowBorderWidth) =>
+                        onUpdateSection((current) => ({ ...current, rowBorderWidth }))
+                      }
+                    />
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Border Style">
+                    <select
+                      disabled={Number(section.rowBorderWidth ?? "0") === 0}
+                      value={section.rowBorderStyle ?? "solid"}
+                      onChange={(event) =>
+                        onUpdateSection((current) => ({ ...current, rowBorderStyle: event.target.value }))
+                      }
+                    >
+                      <option value="solid">Solid</option>
+                      <option value="dashed">Dashed</option>
+                      <option value="dotted">Dotted</option>
+                    </select>
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Border Color">
+                    <BuilderThemeColorField
+                      disabled={Number(section.rowBorderWidth ?? "0") === 0}
+                      fallback="#000000"
+                      themeColors={themeColors}
+                      value={section.rowBorderColor ?? ""}
+                      onChange={(rowBorderColor) =>
+                        onUpdateSection((current) => ({ ...current, rowBorderColor }))
+                      }
+                    />
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Border Radius">
+                    <BuilderNumberSelectControl
+                      disabled={Number(section.rowBorderWidth ?? "0") === 0}
+                      value={section.rowBorderRadius ?? "0"}
+                      min={0}
+                      max={60}
+                      fallback="0"
+                      onChange={(rowBorderRadius) =>
+                        onUpdateSection((current) => ({ ...current, rowBorderRadius }))
+                      }
+                    />
+                  </BuilderSettingRow>
+        </div>
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Visibility</div>
+          <BuilderSettingRow label="Visibility">
+                    <div className="builder-radio-group">
+                      <label>
+                        <input
+                          type="radio"
+                          name={`section-visibility-${section.id}`}
+                          value="public"
+                          checked={!section.isPrivate}
+                          onChange={() => onUpdateSection((current) => ({ ...current, isPrivate: false }))}
+                        />
+                        {" "}Public
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name={`section-visibility-${section.id}`}
+                          value="private"
+                          checked={section.isPrivate === true}
+                          onChange={() => onUpdateSection((current) => ({ ...current, isPrivate: true }))}
+                        />
+                        {" "}Private
+                      </label>
+                    </div>
+                  </BuilderSettingRow>
+          <BuilderSettingRow label="Locked">
+                    <input
+                      type="checkbox"
+                      checked={section.locked === true}
+                      onChange={(e) =>
+                        onUpdateSection((current) => ({ ...current, locked: e.target.checked }))
+                      }
+                    />
+                  </BuilderSettingRow>
+        </div>
       </div>
       <BuilderBackgroundControls
         hideModeRow

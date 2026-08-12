@@ -234,12 +234,28 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   The one number left is `--builder-field-room` (40px) in
   `src/css/_variables.css`. **Never set a width on an individual field.**
 
-  *Rolled out: Table (8/12, refined 8/13), Heading (8/11, on the operator's
-  word: "It also hasn't received the new 'Alignment Protocol', so let's
-  apply that one here, too"). Every other module follows — the CSS already
-  covers any panel, so rolling out is adding the type to
-  `LATTICE_MODULE_TYPES` in `builder-module-card.tsx` and re-running
-  `npm run check:panels`.*
+  *Rolled out to **every module panel** and to the **row (section)
+  editor**, 8/13 — the gate is deleted and nothing replaced it. A
+  per-module opt-out would be the per-field width override in a bigger
+  coat, which is what W0 exists to stop; a panel that fights the lattice
+  gets fixed instead.*
+
+  **W0 is not module-specific.** It belongs to any settings surface, so
+  `check_panels` selects on `.is-lattice` rather than on a container —
+  the next surface is measured the day it opts in, without anyone
+  remembering to widen the check.
+
+  **The row editor came last and was the same story.** It was one flat
+  grid of 15 pairs in three EQUAL columns, so a Layout select and a
+  2-digit padding box got the same share of the panel whatever they held,
+  and its labels were allowed to wrap (`white-space: normal`) against L2.
+  It now uses the same `.builder-schema-panel-column` markup as a module
+  panel — Structure / Placement / Frame / Visibility — which is what makes
+  a row read like a module (S1). Two controls needed W0's stated
+  exception wired up by CONTENT rather than by a width-token class, since
+  legacy `BuilderSettingRow` pairs carry none: a checkbox and a radio pair
+  were being stretched across the field track and ending up adrift at its
+  far end.
 
   **The chrome bar is not a lattice column.** The flowing row of
   module-level settings above a panel (`.builder-heading-module-chrome`,
