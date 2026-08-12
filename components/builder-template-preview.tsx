@@ -88,6 +88,7 @@ import {
   getModuleBackgroundSettings,
   getTableWrapStyle,
   getSectionMarginStyle,
+  getSectionOffsetStyle,
   getSectionPaddingStyle,
   getSectionWidthStyle,
   getModuleMarginStyle,
@@ -1495,6 +1496,10 @@ function BuilderSectionPreview({
     ...(section.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
     // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
     ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(section)),
+    // The operator's own nudge, after the layout styles it is nudging away
+    // from. {} until he sets one, and it deliberately sits BEFORE the overlay
+    // and navigation z-index rules below so those still win their stack.
+    ...(isOverlayLayoutCollapsed ? {} : getSectionOffsetStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }

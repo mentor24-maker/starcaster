@@ -434,6 +434,16 @@ export type BuilderTemplateSection = {
    */
   paddingTop: string;
   paddingBottom: string;
+  /**
+   * Nudges the whole row off where the layout put it, WITHOUT moving anything
+   * else — this is a transform, not a margin, so the rows above and below stay
+   * exactly where they are and the row simply rides over them. That is what
+   * makes a card band overlap the banner above it. Positive vertical moves the
+   * row UP and positive horizontal moves it RIGHT, matching the module-level
+   * Vertical/Horizontal Offset an operator already knows.
+   */
+  horizontalOffset: string;
+  verticalOffset: string;
   rowBorderWidth: string;
   rowBorderColor: string;
   rowBorderStyle: string;
@@ -2103,6 +2113,8 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         ),
         paddingTop: normalizeSpacingValue(normalizedSection.paddingTop, "18", 0, 160),
         paddingBottom: normalizeSpacingValue(normalizedSection.paddingBottom, "18", 0, 160),
+        horizontalOffset: normalizeSignedOffsetValue(normalizedSection.horizontalOffset, "0"),
+        verticalOffset: normalizeSignedOffsetValue(normalizedSection.verticalOffset, "0"),
         rowBorderWidth: normalizeSpacingValue(normalizedSection.rowBorderWidth, "0", 0, 20),
         rowBorderColor: normalizeBuilderHexColor(
           typeof normalizedSection.rowBorderColor === "string" ? normalizedSection.rowBorderColor : ""
@@ -2174,6 +2186,8 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     marginBottom: "0",
     paddingTop: "18",
     paddingBottom: "18",
+    horizontalOffset: "0",
+    verticalOffset: "0",
     rowBorderWidth: "0",
     rowBorderColor: "#000000",
     rowBorderStyle: "solid",

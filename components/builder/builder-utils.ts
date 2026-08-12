@@ -254,6 +254,31 @@ export function getSectionPaddingStyle(section: BuilderTemplateSection): CSSProp
 }
 
 /**
+ * Slides the whole row off where the layout put it. A transform rather than a
+ * margin on purpose: the rows above and below do not move, so a card band can
+ * ride up over the banner above it without leaving a hole underneath. Positive
+ * vertical moves the row UP — the same sign convention as the module-level
+ * offsets, so an operator learns it once.
+ *
+ * Returns `{}` at 0/0, which is the value every existing row carries, so an
+ * untouched page renders byte-identically and no `transform` is emitted (a
+ * transform would otherwise become the containing block for any fixed-position
+ * overlay inside the row).
+ */
+export function getSectionOffsetStyle(section: BuilderTemplateSection): CSSProperties {
+  const x = Number.parseInt(normalizeSignedOffsetValue(section.horizontalOffset, "0"), 10);
+  const y = Number.parseInt(normalizeSignedOffsetValue(section.verticalOffset, "0"), 10);
+
+  if (!x && !y) return {};
+
+  return {
+    transform: `translate(${x}px, ${-y}px)`,
+    position: "relative",
+    zIndex: 2
+  };
+}
+
+/**
  * Narrows a contained section to its widthPercent and centers it within the
  * page. Returns {} for full-width sections (which escape the page margins
  * entirely) and for the 100% default, so untouched sections keep full content

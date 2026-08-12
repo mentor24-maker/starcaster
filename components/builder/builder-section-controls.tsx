@@ -1,7 +1,7 @@
 "use client";
 
 import type { BackgroundSettings, BuilderTemplateLayout, BuilderTemplateSection } from "@/lib/builder-template";
-import { getLayoutColumns } from "@/lib/builder-template";
+import { getLayoutColumns, normalizeSignedOffsetValue } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { layoutOptions } from "./builder-types";
@@ -216,6 +216,38 @@ export function BuilderSectionControls({
               onUpdateSection((current) => ({
                 ...current,
                 paddingBottom
+              }))
+            }
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Vertical Offset">
+          <input
+            type="number"
+            min={-500}
+            max={500}
+            step={1}
+            value={section.verticalOffset ?? "0"}
+            title="Slides the row up or down over its neighbours without moving them — positive moves it up, negative moves it down. Use it to overlap the row above."
+            onChange={(event) =>
+              onUpdateSection((current) => ({
+                ...current,
+                verticalOffset: normalizeSignedOffsetValue(event.target.value, "0")
+              }))
+            }
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Horizontal Offset">
+          <input
+            type="number"
+            min={-500}
+            max={500}
+            step={1}
+            value={section.horizontalOffset ?? "0"}
+            title="Slides the row left or right without moving anything else — positive moves it right, negative moves it left."
+            onChange={(event) =>
+              onUpdateSection((current) => ({
+                ...current,
+                horizontalOffset: normalizeSignedOffsetValue(event.target.value, "0")
               }))
             }
           />
