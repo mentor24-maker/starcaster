@@ -36,8 +36,9 @@ write any code here. You produce well-formed tasks.
    - **Reviewable by a human in a couple of minutes.**
 
 3. **Write each task.** File a ClickUp task (`clickup_create_task`) in the
-   target list with `status: "Queued"` and a `markdown_description` in exactly
-   this shape:
+   target list with `status: "Queued"`, **no assignee** (assignment is how the
+   loops hand a ticket to Dane — see below), and a `markdown_description` in
+   exactly this shape:
 
    ```markdown
    ## Goal
@@ -99,3 +100,12 @@ status set, in this order:
 `Live` must be set as a **closed**-type status, not just another active one, or
 finished work never leaves the operator's open list. The build and review loops
 key off these names (matched case-insensitively).
+
+**Assignment carries the handoff, not a saved view.** Dane's "what needs me"
+is ClickUp's built-in *Assigned to me*. A hand-built filtered view was tried
+and abandoned: Loop Queue lives in the Starcaster space and the steward's
+Agent Response list lives in Dane of Earth, and a ClickUp view scoped to one
+space cannot see the other. Assignment crosses spaces for free and notifies
+him. So loops assign Dane when a ticket enters `Needs your input` or
+`Ready to launch`, and clear assignees when it goes back to a machine status.
+Tasks you file here start unassigned.

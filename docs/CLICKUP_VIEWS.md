@@ -1,9 +1,11 @@
-# ClickUp setup for the loop — statuses and the "My Turn" view
+# ClickUp setup for the loop — statuses, and finding what needs you
 
-Everything here is done once, by hand, in the ClickUp web app. None of it can
-be done from the API: ClickUp exposes no endpoint for editing a list's status
-set or creating a saved view, so this is the one part of the loop system that
-needs a human at a browser.
+Section 1 is done once, by hand, in the ClickUp web app; it cannot be done from
+the API, since ClickUp exposes no endpoint for editing a list's status set.
+Section 2 needs no setup at all — it explains why, and what was tried first.
+
+The Loop Queue was set up this way on 2026-08-12. These steps are here for the
+next list, or the next machine.
 
 ClickUp moves its menu labels around between releases. The paths below are
 what to look for, not a guarantee of exact wording — if a label has changed,
@@ -58,12 +60,18 @@ ClickUp sorts statuses into groups — **Not started**, **Active**, **Done**,
 **Closed**. A ticket only stops counting as open when its status sits in the
 Done or Closed group.
 
-Right now `merged` is an *Active* status. That means every task you have ever
-shipped still counts as open work, forever, and your list only grows.
+The original `merged` was an *Active* status. Left that way, every task ever
+shipped keeps counting as open work, forever, and the list only grows.
 
-**Drag `Live` into the Closed group.** That one change is what makes finished
-work disappear from your view. Leave the other five where they are: `Queued`
-in Not started, the rest in Active.
+**`Live` must sit in the Closed group.** That one setting is what makes
+finished work disappear from the open view. Leave the other five where they
+are: `Queued` in Not started, the rest in Active.
+
+Dragging into Closed can be fiddly — the drop tends to snap into *Done*, which
+looks the same but is not (Done-group tasks still show in the list by default).
+The reliable move is to rename the list's existing Closed status into `Live`:
+delete the `Live` you dragged into Done, choosing the old Closed status as the
+destination for its tasks, then rename that Closed status to `Live`.
 
 ### Colors worth setting
 
@@ -75,43 +83,45 @@ statuses muted greys and blues, and make yours loud:
 
 ---
 
-## 2. The **My Turn** view
+## 2. Finding what needs you
 
-Work waits on you in two different lists, in two different spaces:
+Work waits on Dane in two different lists, in two different spaces:
 
-| List | Space | The status that means "yours" |
+| List | Space | What "yours" looks like |
 |---|---|---|
-| Loop Queue | Starcaster | `Needs your input`, `Ready to launch` |
-| Agent Response | Dane of Earth | `pending response` |
+| Loop Queue | Starcaster | status `Needs your input` or `Ready to launch` |
+| Agent Response | Dane of Earth | status `pending response` |
 
-Because they are in different spaces, a Space-level view cannot span them. The
-view has to be built at the **Everything** level.
+**There is nothing to build here.** Use ClickUp's own **Assigned to me**
+(sidebar → **My Tasks** → *Assigned to me*). The loops assign Dane when they
+hand a ticket over and clear the assignee when they take it back, so that
+built-in view is already the complete picture.
 
-**Where:** click **Everything** at the top of the left sidebar → **`+`** next
-to the view tabs → **List** → name it **My Turn**.
+### Why not a saved "My Turn" view
 
-Then set a filter:
+This was tried on 2026-08-12 and abandoned. Recording it so nobody rebuilds it:
 
-```
-Status  is any of  [ Needs your input, Ready to launch, pending response ]
-```
+- A ClickUp **view is scoped to one space.** A view built on the Starcaster
+  space cannot see Agent Response in Dane of Earth, and vice versa. The two
+  lists that matter are deliberately in different spaces.
+- The workspace-wide level (**More → All Tasks**, formerly "Everything") can
+  span spaces, but its status filter offers *every status in the workspace* —
+  three groups deep, with near-duplicate names like `TO DO` / `TODO` /
+  `NEW REQUEST` from unrelated lists. It is a filter you have to maintain
+  forever, and it silently goes stale the moment a list adds a status.
+- **Assignment crosses spaces for free**, drives ClickUp's notifications and
+  Inbox, and needs no configuration that can drift.
 
-Group by **Status**, sort by **Date created**, oldest first — so the thing
-that has been waiting longest is at the top, which is usually the one that
-matters.
-
-Pin it (click the view tab → **Pin**) so it is the first thing you see.
-
-That is the only view you need to check. If nothing is in it, nothing is
-waiting on you, and the loops are working. Everything in the other four
-statuses is machines talking to each other.
+The one cost: a loop that forgets to clear an assignee leaves noise in the
+view. That is why "clear assignees when moving to a machine status" is written
+into `loop-build` and `loop-review` as a rule, not a nicety.
 
 ### A note on `responding`
 
-The Agent Response list also has a `responding` status, which the channel
-steward uses while a reply is being drafted. It is deliberately **not** in the
-filter — it means an agent is mid-answer, not that you are needed. Add it only
-if you find things getting stuck there.
+The Agent Response list has a `responding` status, which the channel steward
+uses while a reply is being drafted. The steward assigns Dane's seat on rows it
+routes, so those already reach him. `responding` means an agent is mid-answer,
+not that Dane is needed.
 
 ---
 
