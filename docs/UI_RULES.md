@@ -243,6 +243,33 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   coat, which is what W0 exists to stop; a panel that fights the lattice
   gets fixed instead.*
 
+  **There are THREE label/control shapes, and W0 covers all of them.**
+  `.builder-module-field` (schema panels), `.builder-setting-row` (row
+  editor and legacy module rows), and `label.field` — a `<label>` wrapping
+  a `<span>` and its control, which stacks the label ABOVE a full-width
+  box. The third is what the table CELL editor was built from, so drilling
+  into an image inside a table cell reached a modal the lattice had never
+  touched while the columns below it were correct *(operator 8/12: "some
+  areas where our reformatting hasn't reached")*. `check_panels` now reads
+  all three — a control the check cannot see is a control the rule does not
+  cover.
+
+  **`label.field` is being retired, not styled.** CSS can flatten it into
+  the lattice, but only while it holds exactly two children: an image
+  picker renders its input and its Gallery button as siblings, and a third
+  child lands in the NEXT row's label cell and puts the whole column out of
+  phase. Convert these to `BuilderModuleField`, which wraps the control
+  side in a box of its own, rather than adding CSS that works until a
+  control grows a second element.
+
+  **Item managers are out of scope, deliberately.** A repeating card
+  editor (social links, TOC entries, tag rows) is a titled-column grid
+  under L6, not a column of the lattice; its fields legitimately share a
+  row. Both the CSS and the check exclude them BY NAME rather than by
+  accident — they render empty in the fixture today, so a pass that relied
+  on their absence would be luck, and would turn into a false failure the
+  day someone seeded one.
+
   **W0 is not module-specific.** It belongs to any settings surface, so
   `check_panels` selects on `.is-lattice` rather than on a container —
   the next surface is measured the day it opts in, without anyone

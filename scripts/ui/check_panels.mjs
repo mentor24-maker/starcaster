@@ -156,13 +156,29 @@ function measure(page, nonStretch) {
       // `.builder-setting-label` carries a left padding `.builder-module-
       // field-label` does not. A control the check cannot see is a control
       // the rule does not cover.
+      // THREE pair shapes exist, and the check has to know all of them.
+      // `label.field` was the one it could not see: the table CELL editor is
+      // built from it, so an image opened inside a table cell rendered a
+      // whole modal of stacked full-width boxes while this reported a clean
+      // pass (operator 8/12). A control the check cannot see is a control the
+      // rule does not cover — the same lesson as the heading offsets.
       const pairs = [
         ...group.querySelectorAll('.builder-module-field'),
         ...group.querySelectorAll('.builder-setting-row, .builder-setting-row-full'),
-      ];
+        ...group.querySelectorAll('label.field'),
+      ].filter((el) => !el.closest('.builder-slider-item-grid, .builder-item-grid'));
+      // ITEM MANAGERS ARE OUT OF SCOPE, deliberately and not by accident.
+      // A repeating card editor (social links, TOC entries, tag rows) is a
+      // titled-column grid governed by L6, not a column of the panel
+      // lattice — its fields legitimately share a row. Excluded here so a
+      // future fixture WITH items in it reports honestly instead of failing
+      // a rule that was never meant to cover them. Today they render empty
+      // in the fixture, so without this line the pass would be luck.
       const fields = pairs.map((f) => {
-        const label = f.querySelector('.builder-module-field-label, .builder-setting-label');
-        let control = f.querySelector('.builder-module-field-control, .builder-setting-value');
+        const label = f.querySelector('.builder-module-field-label, .builder-setting-label')
+          || (f.matches('label.field') ? f.querySelector(':scope > span') : null);
+        let control = f.querySelector('.builder-module-field-control, .builder-setting-value')
+          || (f.matches('label.field') ? f.querySelector(':scope > *:not(span)') : null);
         if (!label || !control) return null;
 
         // A `full`-width field spans both tracks by design — it is long text

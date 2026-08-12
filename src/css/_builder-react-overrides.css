@@ -1191,28 +1191,102 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   object-fit: cover;
 }
 
+/* The icon badge. Size, shape, placement and stacking are all operator
+   settings now (2026-08-12) — every value that used to be a literal here
+   is a variable or a modifier class, and the fallbacks are the literals
+   it replaced, so a card saved before that date is untouched.
+
+   `z-index` is the one behaviour that changed on purpose. The badge is
+   written before the image in the DOM and neither had a z-index, so the
+   image painted over it and the icon was invisible on any card with a
+   picture. `--feature-card-icon-z` defaults to 3 (in front); 0 restores
+   the old paint order for anyone who wants it. */
 .builder-preview-feature-card-badge {
   position: absolute;
-  top: -22px;
+  z-index: var(--feature-card-icon-z, 3);
+  top: calc(var(--feature-card-icon-size, 48px) * -0.46);
   left: 50%;
   transform: translateX(-50%);
-  width: 48px;
-  height: 48px;
+  width: var(--feature-card-icon-size, 48px);
+  height: var(--feature-card-icon-size, 48px);
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: #ffffff;
-  border: 4px solid #ffffff;
+  /* The ring is there to separate the badge from what is behind it, so it
+     follows the card's own surface colour rather than a fixed white —
+     which is what it was, and what left a white halo on a dark card. */
+  border: calc(var(--feature-card-icon-size, 48px) * 0.083) solid var(--feature-card-bg, var(--bg-page, #ffffff));
   font-weight: 900;
-  font-size: 18px;
+  font-size: calc(var(--feature-card-icon-size, 48px) * 0.375);
   line-height: 1;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
 }
 
-/* A badge overhangs the card, so a grid with badges needs headroom or the
-   first row is clipped by whatever sits above it. */
-.builder-preview-feature-cards:has(.builder-preview-feature-card-badge) {
-  padding-top: 26px;
+/* Shape. "Plain" is the glyph alone — no disc, so no ring and no shadow
+   to outline, and the glyph grows to fill the space the disc held. */
+.builder-preview-feature-cards-icon-shape-square .builder-preview-feature-card-badge {
+  border-radius: calc(var(--feature-card-icon-size, 48px) * 0.22);
+}
+
+.builder-preview-feature-cards-icon-shape-plain .builder-preview-feature-card-badge {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: calc(var(--feature-card-icon-size, 48px) * 0.72);
+}
+
+/* Placement — where the badge sits relative to the card.
+   "above" overhangs the top edge (the original look). "on-image" tucks it
+   inside the card's top padding, over the picture. "inline" drops it back
+   into the normal flow above the title, overlapping nothing. */
+.builder-preview-feature-cards-icon-on-image .builder-preview-feature-card-badge {
+  top: calc(12px + var(--feature-card-icon-size, 48px) * 0.16);
+}
+
+.builder-preview-feature-cards-icon-inline .builder-preview-feature-card-badge {
+  position: static;
+  transform: none;
+  margin-bottom: var(--space-2, 6px);
+}
+
+/* Horizontal placement. 12px is the card's own padding; the extra 8px
+   keeps a left/right badge off the corner radius. */
+.builder-preview-feature-cards-icon-align-left .builder-preview-feature-card-badge {
+  left: 20px;
+  transform: none;
+}
+
+.builder-preview-feature-cards-icon-align-right .builder-preview-feature-card-badge {
+  left: auto;
+  right: 20px;
+  transform: none;
+}
+
+/* An out-of-flow badge takes its horizontal position from left/right; an
+   inline one is a flex item and takes it from align-self. */
+.builder-preview-feature-cards-icon-inline.builder-preview-feature-cards-icon-align-left
+  .builder-preview-feature-card-badge {
+  left: auto;
+  align-self: flex-start;
+}
+
+.builder-preview-feature-cards-icon-inline.builder-preview-feature-cards-icon-align-center
+  .builder-preview-feature-card-badge {
+  align-self: center;
+}
+
+.builder-preview-feature-cards-icon-inline.builder-preview-feature-cards-icon-align-right
+  .builder-preview-feature-card-badge {
+  right: auto;
+  align-self: flex-end;
+}
+
+/* Only the overhanging placement needs headroom — a grid whose badges sit
+   inside the card would just gain a gap of dead space. Scales with the
+   icon so a large one is not clipped by whatever sits above the grid. */
+.builder-preview-feature-cards-icon-above:has(.builder-preview-feature-card-badge) {
+  padding-top: calc(var(--feature-card-icon-size, 48px) * 0.55);
 }
 
 /* `flex: 1` on the copy block pushes every card's link to the bottom, so a
@@ -2107,6 +2181,89 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid--cards.builder-item-grid--cards-icons {
   grid-template-columns: 6ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
 }
+/* ---------------------------------------------------------------------------
+ * Feature Cards editor — two columns (operator, 2026-08-12): global settings
+ * left, the cards themselves right. The settings column is sized to its own
+ * controls and no wider; the card column takes everything left over, because
+ * that is the one that holds long URLs and descriptions.
+ *
+ * Below 1000px the panel is too narrow to hold both without cropping the card
+ * rows, so it stacks — settings first, cards under them.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .builder-cards-panel {
+  display: grid;
+  /* Equal halves (operator, 2026-08-12). The settings column was sized to
+     its own lattice — 360px, its longest label plus its widest control —
+     which read as lopsided next to the card list. Controls keep their own
+     widths inside the wider half; the leftover room stays empty rather
+     than stretching them (W-umbrella). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4, 12px) var(--space-6, 24px);
+  align-items: start;
+}
+
+.builder-react-root .builder-cards-panel-settings,
+.builder-react-root .builder-cards-panel-items {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 8px);
+}
+
+/* One control per row. The generator's column defaults to auto-filling at
+   300px, which fits two tracks in some panel widths and would stagger this
+   column's labels the moment it did. */
+.builder-react-root .builder-cards-panel-settings.builder-schema-panel-column .builder-module-field-strip {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The per-card Image / Alt text / Description row. A `full` field gives its
+   control 100% of the strip while its label still sits to the left, so the
+   control's right edge lands a label-width past the panel and crops the
+   "Choose From Gallery" button — visible in the operator's 2026-08-12
+   screenshot, and worse once the cards live in a column. Two tracks: the
+   label takes what it needs, the control takes what is left. */
+.builder-react-root .builder-cards-panel-items .builder-item-grid-sub .builder-module-field--full {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3, 8px);
+}
+
+.builder-react-root .builder-cards-panel-items .builder-item-grid-sub .builder-module-field-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
+  width: auto;
+  min-width: 0;
+}
+
+.builder-react-root .builder-cards-panel-items .builder-item-grid-sub .builder-module-field-control > input,
+.builder-react-root .builder-cards-panel-items .builder-item-grid-sub .builder-module-field-control > textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.builder-react-root .builder-cards-panel-items .builder-item-grid-sub .builder-module-field-control > button {
+  flex: 0 0 auto;
+}
+
+/* The first group title in a column has the column edge above it, not a
+   field, so it does not need the separating space the later ones do. */
+.builder-react-root .builder-cards-panel .builder-schema-group-title:first-child {
+  margin-top: 0;
+}
+
+.builder-react-root .builder-cards-panel-items .secondary-button {
+  align-self: flex-start;
+}
+
+@media (max-width: 1000px) {
+  .builder-react-root .builder-cards-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .builder-react-root .builder-item-grid > input,
 .builder-react-root .builder-item-grid > select {
   width: 100%;
@@ -3308,4 +3465,69 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   width: max-content;
   min-width: min(640px, 100%);
   max-width: min(75vw, 100%);
+}
+
+/*
+ * `label.field` — the THIRD label/control shape, and the one that hid.
+ *
+ * The builder has three: `.builder-module-field` (schema panels),
+ * `.builder-setting-row` (row editor, legacy module rows) and this one —
+ * a `<label class="field">` wrapping a `<span>` and its control, which
+ * stacks the label ABOVE a full-width input. It is what the table CELL
+ * editor is built from, so drilling into an image inside a table cell
+ * reached a modal the lattice had never touched: Module label, Media URL
+ * and Link each a full-width box with its label floating above it, while
+ * the Content / Structure / Frame columns below them were correct
+ * (operator 8/12, "some areas where our reformatting hasn't reached").
+ *
+ * `display: contents` is all it takes: the `<span>` becomes the label cell
+ * and the control becomes the field cell, so the pair joins the column's
+ * lattice exactly like the other two shapes. Every one of these carries
+ * precisely two children, which is what makes that safe — a third would
+ * wrap into the next row's label cell and put the column out of phase.
+ */
+/* Item-manager fields keep their own grid (L6) — see the note in
+   check_panels.mjs. Only a panel's OWN pairs join the lattice. */
+.builder-react-root .is-lattice .builder-schema-panel-column
+  label.field:not(.builder-slider-item-grid label.field):not(.builder-item-grid label.field) {
+  display: contents;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column label.field > span {
+  padding-right: var(--builder-field-room, 40px);
+  white-space: nowrap;
+  font-size: var(--text-base, 0.9rem);
+  font-weight: 700;
+  color: var(--builder-editor-label, #12395f);
+}
+
+/*
+ * The control half fills the shared track like any other. `> *:not(span)`
+ * rather than a list of tags because these wrap pickers and link rows as
+ * often as they wrap a bare input.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column label.field > *:not(span) {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+/* A checkbox keeps its size at the start of the slot (W0's exception). */
+.builder-react-root .is-lattice .builder-schema-panel-column label.field.builder-checkbox-field > input[type="checkbox"] {
+  width: auto;
+  justify-self: start;
+}
+
+/* The image link row stacks its page picker over its URL box inside the
+   one field cell, rather than fighting it for the width. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-image-link-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  min-width: 0;
+}
+
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-image-link-row > * {
+  width: 100%;
+  min-width: 0;
 }
