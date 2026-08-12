@@ -366,6 +366,103 @@ function checkNoDuplicatedChrome(files) {
 }
 
 // ---------------------------------------------------------------------------
+// D7 — dialogs and popup editors size to their content.
+//
+// A dialog declares a floor, grows to fit what is inside it, and stops at 75%
+// of the screen. A lone px width or max-width on a dialog shell is a guess
+// about content someone made once — the operator has now reported a cramped
+// editor four times, most recently a popped-out module panel capped at 680px
+// with two thirds of the screen empty (2026-08-11 sweep).
+//
+// Allowlist entries need a reason. "It was already like that" is not one.
+// ---------------------------------------------------------------------------
+const DIALOG_SELECTOR = /(-modal|-popup|-dialog)\s*$/;
+
+const D7_ALLOW = new Map([
+  ['.builder-react-root .builder-gallery-modal.builder-module-palette-modal',
+    'a picker grid of fixed-size cards, not an editor — 1200 is exactly four card columns'],
+  ['.c-modal__dialog.builder-theme-picker-modal',
+    'already opens at 98vw; the px value is only the ceiling on an ultrawide screen'],
+  ['.c-modal__dialog.builder-theme-picker-modal.builder-module-image-picker-modal',
+    'image picker grid, sized to its thumbnails, and it docks to one side rather than centring'],
+  ['.c-modal__dialog.builder-theme-image-preview-modal',
+    'a single preview image at 96vw — content sizing would shrink to the image, not grow'],
+  ['.c-modal__dialog.campaign-preview-modal',
+    'renders a post preview at its real posted width; growing it would misrepresent the post'],
+  ['.c-modal__dialog.campaign-hashtag-modal', 'hashtag list, already 94vw'],
+  ['.c-modal__dialog.peer-keyword-archive-dialog', 'confirmation, prose only'],
+  ['.c-modal__dialog.peer-keyword-harvest-dialog', 'confirmation, prose only'],
+  ['.promote-social-post-failure-dialog', 'an error message, prose only'],
+  ['.youtube-miner-replies-modal', 'reply list, already min(1120px, 96vw)'],
+  ['.builder-react-root .admin-image-preview-modal',
+    'a single preview image; content sizing would shrink it to the intrinsic image width'],
+]);
+
+/**
+ * Selectors the hand-authored overrides layer already content-sizes.
+ *
+ * A dialog defined in the REGENERATED layer cannot be fixed in place — the
+ * next `extract_builder_css.mjs` run erases the edit (R2) — so its floor and
+ * ceiling live in `_builder-react-overrides.css`, imported after and winning
+ * by cascade. What ships is the override, so that is what D7 judges.
+ */
+function overriddenDialogSelectors() {
+  const file = path.join(CSS_DIR, '_builder-react-overrides.css');
+  if (!fs.existsSync(file)) return new Set();
+  const src = fs.readFileSync(file, 'utf8');
+  const fixed = new Set();
+  for (const block of src.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (!/width\s*:\s*max-content/.test(block[2])) continue;
+    for (const sel of block[1].split(',')) fixed.add(sel.trim().split('\n').pop().trim());
+  }
+  return fixed;
+}
+
+function checkDialogWidths(files) {
+  const overridden = overriddenDialogSelectors();
+
+  // CSS: a dialog shell may declare min-width in px (a floor) but not a bare
+  // width/max-width in px (a cap).
+  for (const file of files.filter((f) => f.startsWith(CSS_DIR) && f.endsWith('.css'))) {
+    if (!fs.existsSync(file)) continue;
+    const src = fs.readFileSync(file, 'utf8');
+    const lines = src.split('\n');
+    for (const block of src.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = block[1].trim().split('\n').pop().trim();
+      if (!DIALOG_SELECTOR.test(selector) || D7_ALLOW.has(selector)) continue;
+      if (overridden.has(selector)) continue;
+      for (const decl of block[2].matchAll(/(?:^|;)\s*(max-width|width)\s*:\s*([^;]+)/g)) {
+        const value = decl[2].trim();
+        if (!/\d+(?:\.\d+)?px/.test(value)) continue;
+        if (/\b(?:75|80)vw\b/.test(value)) continue;
+        const line = lines.findIndex((l) => l.includes(selector.split(' ').pop())) + 1;
+        failures.push(
+          `[D7] ${file}:${line || '?'} ${selector} caps itself: ${decl[1]}: ${value}\n` +
+            `      A dialog sizes to its content. Use a floor, not a cap:\n` +
+            `        width: max-content;\n` +
+            `        min-width: min(${value.match(/(\d+)px/)?.[1] || '520'}px, 100%);\n` +
+            `        max-width: min(75vw, 100%);\n` +
+            `      If this one genuinely should not grow, add it to D7_ALLOW with the reason.`
+        );
+      }
+    }
+  }
+
+  // Components: no call site hands a modal a width number. The shell owns it.
+  for (const file of files.filter((f) => f.endsWith('.tsx'))) {
+    if (!fs.existsSync(file)) continue;
+    const src = fs.readFileSync(file, 'utf8');
+    for (const hit of src.matchAll(/<Builder(\w*Modal|EditorPopup)\b[^>]*?\b(maxWidth|minWidth)=\{(\d+)\}/gs)) {
+      failures.push(
+        `[D7] ${file} passes ${hit[2]}={${hit[3]}} to <Builder${hit[1]}>.\n` +
+          `      Call sites do not size dialogs — the shell sizes itself to its content\n` +
+          `      and stops at 75% of the screen. Drop the prop.`
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Debt report (never gates — these are too far gone to block on today)
 // ---------------------------------------------------------------------------
 function report() {
@@ -419,6 +516,12 @@ function run({ all = false } = {}) {
     checkBreakpointOnlyLayout({ all: true });
     const tracked = sh("git ls-files 'components/builder/*-module-settings.tsx'").split('\n').filter(Boolean);
     checkNoDuplicatedChrome(tracked);
+    // D7 is gated repo-wide from day one: the 2026-08-11 sweep left it clean,
+    // so anything this catches is new.
+    checkDialogWidths([
+      ...sh("git ls-files 'src/css/*.css'").split('\n').filter(Boolean),
+      ...sh("git ls-files 'components/**/*.tsx'").split('\n').filter(Boolean),
+    ]);
     // E4 gated repo-wide since 2026-08-09: the two original violators are
     // fixed — current-poll's renderer honours both margins and pairs the
     // controls; heading gained horizontal margin capability by operator
@@ -435,6 +538,7 @@ function run({ all = false } = {}) {
     checkFieldStripAdoption(files);
     checkMarginPairing(files);
     checkNoDuplicatedChrome(files);
+    checkDialogWidths(files);
 
     if (isMerging()) {
       notes.push(

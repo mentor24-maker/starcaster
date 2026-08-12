@@ -5,8 +5,12 @@ type BuilderCenteredModalProps = {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
-  /** Caps the dialog width; defaults to a comfortable form width. */
-  maxWidth?: number;
+  /**
+   * Floor for the dialog width — it never opens narrower than this. The
+   * dialog then grows with its content up to 75% of the screen. There is
+   * deliberately no cap prop: a capped editor crops (D7).
+   */
+  minWidth?: number;
 };
 
 /**
@@ -17,8 +21,20 @@ type BuilderCenteredModalProps = {
  * location so it is always centered and accessible, and reuses the existing
  * gallery-overlay styling so it matches the other builder modals.
  */
-export function BuilderCenteredModal({ title, onClose, children, maxWidth = 560 }: BuilderCenteredModalProps) {
-  const modalStyle: CSSProperties = { width: `min(${maxWidth}px, 100%)` };
+export function BuilderCenteredModal({ title, onClose, children, minWidth = 560 }: BuilderCenteredModalProps) {
+  /*
+   * D7 (UI_RULES.md): the dialog sizes to its content — as wide as the
+   * editor inside needs, up to 75% of the screen. Until 2026-08-11 this was
+   * a fixed `min(560px, 100%)` (680 for a popped-out module, 1200 for a
+   * table cell), so a multi-axis panel opened into a box narrower than the
+   * panel and cropped. The floor keeps a small editor from opening tiny;
+   * the ceiling is the screen, not a number picked at the call site.
+   */
+  const modalStyle: CSSProperties = {
+    width: "max-content",
+    minWidth: `min(${minWidth}px, calc(100vw - 48px))`,
+    maxWidth: "min(75vw, calc(100vw - 48px))"
+  };
 
   return (
     <BuilderBodyPortal>

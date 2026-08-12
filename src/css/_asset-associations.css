@@ -1,6 +1,13 @@
+/*
+ * D7 (UI_RULES.md): a window sizes to its CONTENT — wide when the content is
+ * wide. Each of these opens no narrower than it used to, grows to fit the
+ * editor inside, and stops at 75% of the screen. Swept 2026-08-11 after the
+ * fourth report of an editor cramped into a box someone sized by guess.
+ */
 .asset-associations-modal {
-  max-width: 1100px;
-  width: 94%;
+  width: max-content;
+  min-width: min(1100px, 94%);
+  max-width: min(75vw, 94%);
   max-height: 88vh;
   overflow: hidden;
   display: flex;
