@@ -6,7 +6,10 @@ in the morning describing what you want; the agents build it, review it, and
 open pull requests all day; you come back and merge the good ones.
 
 This doc is the operator's guide. The three skills that make it run live in
-`skills/loop-spec`, `skills/loop-build`, and `skills/loop-review`.
+`.claude/skills/loop-spec`, `.claude/skills/loop-build`, and
+`.claude/skills/loop-review`. That path is not decorative: Claude Code only
+discovers skills under `.claude/skills/`, so a skill parked anywhere else
+cannot be invoked by name and `/loop 30m loop-build` fails to find it.
 
 ## The three steps
 
