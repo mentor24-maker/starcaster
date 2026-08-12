@@ -1557,6 +1557,20 @@ function BuilderSectionPreview({
           columnModules.length > 0 &&
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
         const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
+        // One answer each, used by the inline property AND by the variable the
+        // narrow-screen rules read, so the two can never drift apart.
+        const effectiveCellPadding =
+          isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${padding}px`;
+        const effectiveCellRadius =
+          isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
+
+        // Custom properties are not in the CSSProperties type, so they are
+        // built once and cast, rather than sprinkling casts through the block.
+        const cellVariables = {
+          "--builder-cell-padding": effectiveCellPadding,
+          "--builder-cell-radius": effectiveCellRadius,
+        } as CSSProperties;
+
         const columnStyle: CSSProperties = {
           // The cell's own fill, honoured on menu cells too — see the row
           // background above. `columnBackground` is falsy until the operator
@@ -1565,20 +1579,28 @@ function BuilderSectionPreview({
           ...(isPageOverlayFlowColumn || isSectionOverlayColumn ? {} : getVerticalMarginStyle(verticalMargin)),
           ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
           ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
-          ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
-            ? { "--builder-cell-padding": `${padding}px` }
-            : {}),
+          /*
+           * The cell's own numbers, published as variables so the narrow-screen
+           * rules can honour them instead of replacing them.
+           *
+           * These used to be emitted only when padding was above zero, which
+           * left the breakpoint rules nothing to read — see
+           * _builder-react-overrides.css. Always emitting them is what lets a
+           * cell set to 4 stay 4 on a phone, and costs nothing: the value is
+           * identical to the inline padding this block already sets.
+           */
+          ...cellVariables,
           // Cell padding stays off for menu cells, and this one is deliberate:
           // it defaults to 18px, so honouring it would push every live header
           // down without anybody asking. The menu module carries its own
           // Vertical/Horizontal Padding now (Placement axis), which is the
           // control that should move a menu inside its cell.
-          padding: isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${padding}px`,
+          padding: effectiveCellPadding,
           border:
             isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
               ? undefined
               : `${borderWidth}px solid ${borderColor}`,
-          borderRadius: isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${borderRadius}px`,
+          borderRadius: effectiveCellRadius,
           // {} at the left/top default, so only a cell he aligned moves.
           ...(isPageOverlayFlowColumn || isSectionOverlayColumn
             ? {}

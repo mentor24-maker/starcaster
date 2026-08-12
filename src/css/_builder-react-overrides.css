@@ -2925,3 +2925,42 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
   margin: 0;
 }
+
+/* ---------------------------------------------------------------------
+   Cell padding and radius survive the narrow-screen rules.
+
+   Operator, 2026-08-12: "The buttons in the right column of the menu row
+   are set to have cellpadding of 4, but it is clearly much larger than
+   that." Measured: at 1440 and 900 the cell rendered the 4px it was set
+   to; at 560 and below it rendered 12px, and the radius went 24 → 16.
+
+   The generated stylesheet compacts every cell below 560px with
+   `padding: 12px !important` and `border-radius: 16px !important`. An
+   `!important` in a stylesheet outranks an ordinary inline style, so the
+   operator's number was not losing a cascade argument — it was never in
+   the argument. Below that width the control simply did nothing, on the
+   live site as well as in the builder.
+
+   Same shape as the menu colours (PR 173, no hash — the conventions
+   checker reads one as a hex literal): a hardcoded value that a control
+   cannot reach is not a default, it is an unremovable value.
+
+   These restate the same selectors reading the cell's own numbers, which
+   builder-template-preview.tsx now always publishes. The 12px/16px stay
+   as var() fallbacks, so anything that renders without the variables is
+   unchanged. Both rules must keep `!important`: they are answering one.
+   --------------------------------------------------------------------- */
+@media (max-width: 560px) {
+  .builder-react-root .builder-preview-column {
+    padding: var(--builder-cell-padding, 12px) !important;
+    border-radius: var(--builder-cell-radius, 16px) !important;
+  }
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-column {
+  padding: var(--builder-cell-padding, 12px) !important;
+  border-radius: var(--builder-cell-radius, 16px) !important;
+}
+
+/* Menu cells and overlay slots publish 0px, so they stay flush by their
+   own value rather than by a second rule contradicting the first. */
