@@ -151,6 +151,10 @@ import {
   BuilderInlineNumberSelectRow,
   BuilderNumberSelectControl
 } from "./builder-inline-number-select";
+import { imageProps } from "@/lib/image-renditions";
+
+/** Cards sit two or three across the content column. */
+const CARD_SIZES = "(max-width: 700px) 100vw, 400px";
 
 // Simple Text gets a bare typing box rather than the rich-text toolbar: the
 // editor can only produce paragraph blocks, which is the one thing this module
@@ -672,7 +676,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
     return (
       <div className="builder-module-preview-slideshow">
         {first ? (
-          <img src={first.url} alt={first.alt || ""} loading="lazy" />
+          <img {...imageProps(first.url)} alt={first.alt || ""} loading="lazy" />
         ) : (
           <span className="builder-module-preview-slideshow-empty">Add slides in the editor</span>
         )}
@@ -698,7 +702,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
       >
         {cards.slice(0, 6).map((card) => (
           <article key={card.id} className="builder-module-preview-feature-card">
-            {card.imageUrl ? <img src={card.imageUrl} alt={card.imageAlt || ""} loading="lazy" /> : null}
+            {card.imageUrl ? <img {...imageProps(card.imageUrl, { sizes: CARD_SIZES })} alt={card.imageAlt || ""} loading="lazy" /> : null}
             <strong>{card.title || "Untitled card"}</strong>
           </article>
         ))}

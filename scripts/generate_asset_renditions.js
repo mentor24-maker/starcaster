@@ -52,7 +52,7 @@ const { sbQuery, tableConfig } = require('../lib/supabase');
 const { fetchAssetImageBuffer } = require('../lib/assetImageBytes');
 const {
   isOversizedImage,
-  buildAssetRenditions,
+  buildRenditionPatchForAsset,
   OVERSIZED_MIN_EDGE,
   OVERSIZED_MIN_BYTES,
 } = require('../lib/assetRenditions');
@@ -211,6 +211,7 @@ async function run() {
   }
 
   let built = 0;
+  let measured = 0;
   let failed = 0;
   let newBytes = 0;
 
@@ -222,42 +223,43 @@ async function run() {
       continue;
     }
 
-    const result = await buildAssetRenditions(asset, media.data.buffer, {
-      sourceWidth: asset.imageWidth,
-      sourceHeight: asset.imageHeight,
-    });
+    const result = await buildRenditionPatchForAsset(asset, media.data.buffer, { minEdge, minBytes });
     if (!result.ok) {
       failed += 1;
       console.error(`[renditions] FAIL id=${asset.id} ${asset.assetName}: ${result.error}`);
       continue;
     }
 
-    const patch = {
-      renditions: result.data.renditions,
-      renditionsGeneratedAt: new Date().toISOString(),
-    };
-    // The scan leans on recorded dimensions; fill them in while we have the
-    // real numbers, so the 188 rows with no width stop being guesswork.
-    if (!asset.imageWidth && result.data.sourceWidth) patch.imageWidth = result.data.sourceWidth;
-    if (!asset.imageHeight && result.data.sourceHeight) patch.imageHeight = result.data.sourceHeight;
-
-    const saved = await updateAsset(asset.id, patch);
+    const saved = await updateAsset(asset.id, result.patch);
     if (!saved.ok) {
       failed += 1;
       console.error(`[renditions] FAIL id=${asset.id} ${asset.assetName}: save failed — ${saved.error}`);
       continue;
     }
 
+    // Downloaded, measured, and genuinely small. The recorded dimensions mean
+    // it will not be downloaded again.
+    if (!result.built) {
+      measured += 1;
+      console.log(
+        `[renditions] small id=${asset.id} ${asset.assetName} — ${result.width}x${result.height}, ` +
+          `${kb(result.bytes)}; no copies needed`
+      );
+      continue;
+    }
+
     built += 1;
-    newBytes += result.data.totalBytes;
-    const sizes = result.data.renditions.map((r) => `${r.w}${r.format === 'jpeg' ? 'j' : ''}`).join('/');
+    newBytes += result.totalBytes;
+    const sizes = result.renditions.map((r) => `${r.w}${r.format === 'jpeg' ? 'j' : ''}`).join('/');
     console.log(
       `[renditions] OK id=${asset.id} ${asset.assetName} -> ${sizes} ` +
-        `(${kb(asset.size)} original, ${kb(result.data.totalBytes)} of copies)`
+        `(${kb(result.bytes)} original, ${kb(result.totalBytes)} of copies)`
     );
   }
 
-  console.log(`[renditions] done built=${built} failed=${failed} new storage=${mb(newBytes)}`);
+  console.log(
+    `[renditions] done built=${built} already-small=${measured} failed=${failed} new storage=${mb(newBytes)}`
+  );
   if (failed) process.exitCode = 2;
 }
 

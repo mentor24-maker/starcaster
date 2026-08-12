@@ -16,6 +16,10 @@ import {
   isPlainTextVariant,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
+import { imageProps } from "@/lib/image-renditions";
+
+/** Feature cards sit up to three across the content column. */
+const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
 import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
@@ -5211,14 +5215,14 @@ function SlideshowPreview({
           style={{ transform: `translateX(-${index * 100}%)` }}
         >
           {slides.map((slide) => (
-            <img key={slide.id} src={slide.url} alt={slide.alt} loading="lazy" />
+            <img key={slide.id} {...imageProps(slide.url)} alt={slide.alt} loading="lazy" />
           ))}
         </div>
       ) : (
         slides.map((slide, slideIndex) => (
           <img
             key={slide.id}
-            src={slide.url}
+            {...imageProps(slide.url)}
             alt={slide.alt}
             loading="lazy"
             className="builder-preview-slideshow-fade-frame"
@@ -5560,7 +5564,7 @@ function NavMegaItem({
             <Link className="site-nav-mega-feature" href={href}>
               {featureImage ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={featureImage} alt="" loading="lazy" />
+                <img {...imageProps(featureImage, { sizes: FEATURE_CARD_SIZES })} alt="" loading="lazy" />
               ) : null}
               {item.featureHeading ? <strong>{item.featureHeading}</strong> : null}
             </Link>
