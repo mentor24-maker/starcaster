@@ -864,6 +864,13 @@
   App.messagingPostsEditor = {
     init: function () {
       bindPostsEditor();
+      // This loads at app start, not on page open, so for a user who belongs
+      // to no workspace it fires a red "Active project is required" toast
+      // across the page that exists to explain that calmly. Nothing to load
+      // anyway.
+      if (typeof App.auth?._hasNoWorkspace === 'function' && App.auth._hasNoWorkspace()) {
+        return Promise.resolve();
+      }
       return refreshPosts();
     },
     refreshPosts,

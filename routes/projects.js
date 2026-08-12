@@ -66,11 +66,18 @@ async function handle(req, res, pathname, method) {
   if (normalizedPath === '/api/projects/current' && requestMethod === 'GET') {
     const requestedProjectId = safeText(req.headers['x-project-id']);
     const sessionActiveProjectId = safeText(req?.authSession?.activeProjectId);
+    // Auto-create a starter project for the PLATFORM OWNER only. Handing one
+    // to everybody else defeats the point of inviting without a workspace:
+    // the invitee would silently become owner of an empty project of their
+    // own instead of landing on the page that asks whoever invited them for
+    // access. It also keeps a greenfield install working — the first account
+    // still gets somewhere to stand.
+    const platformOwner = safeText(req?.authUser?.role).toLowerCase() === 'owner';
     const result = await resolveCurrentProject({
       userId,
       requestedProjectId,
       sessionActiveProjectId,
-      autoCreateDefault: true,
+      autoCreateDefault: platformOwner,
       autoSelectFirst: true,
     });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;

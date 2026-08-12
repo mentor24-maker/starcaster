@@ -260,3 +260,14 @@ header .auth-header-meta .auth-logout-link {
     white-space: normal;
   }
 }
+
+/*
+ * Signed in, but belonging to no workspace at all — someone invited without
+ * one. Every menu entry would lead to an empty screen, so the chrome that
+ * navigates is hidden and only the one page they can act on remains. Logout
+ * stays: it is the one thing they must always be able to do.
+ */
+body.no-workspace-view #topNav,
+body.no-workspace-view #brandProfileButton {
+  display: none;
+}
