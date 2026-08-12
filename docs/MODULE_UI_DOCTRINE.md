@@ -191,11 +191,68 @@ and selects it, so raising a step can never quietly rewrite what an operator
 sees. This was already wrong for the six controls that stepped by more than
 one before this rule existed.
 
+**Widened to spacing, and to JSX, 2026-08-12 (same night).** The rule was
+written against Site Search and shipped, and the operator hit the identical
+control hours later on the Slideshow module: a margin running 0–160 in ones,
+161 options, scrolled past 74 numbers to reach 75. *"Slideshow module also has
+sizes incremented by 1 that should be 5."*
+
+Two things had let sixteen controls through:
+
+1. **The key regex covered `*Width` / `*Height` / `*Size` only.** A margin is a
+   pixel measurement like any other; `gap`, `margin*` and `padding*` are on the
+   list now. The `max > 100` gate still does the discriminating, which is why
+   Button's inner padding (1–50) keeps its 1px steps — a single pixel is
+   visible inside a pill, and invisible in a 75px outer margin.
+2. **The parser read schema field literals and nothing else.** Every one of the
+   sixteen was written directly as `<BuilderNumberSelectControl>` JSX — the
+   shared module chrome's four margins, the row editor's margins/paddings/gap,
+   and the cell, CRM, social, button, heading and feature-card panels. The rule
+   existed, the check ran green, and the operator was still scrolling. A JSX
+   prop has no `key:` to read, so those are judged by **range alone**: past
+   100px, in this codebase, is always pixels. One that genuinely needs every
+   value carries a `{/* w8-allow: <reason> */}` comment.
+
+The shared step is `MODULE_SPACING_STEP` in `builder-settings-schema.tsx`, so
+`marginFields()` / `paddingFields()` cannot drift from the hand-written strips
+— and the parser resolves `const NAME = <number>` for exactly that reason.
+
 **Checked by:** `check_ui_doctrine.cjs` (W8) fails a `control: "number"` field
-whose key ends in width/height/size, whose `max` is over 100, and whose step is
-under 5. A control that genuinely needs every value goes in `W8_ALLOW` with a
-reason. The field parser is covered by
-`scripts/builder/uiDoctrineSizeStep.test.js`.
+whose key names a pixel measurement, whose `max` is over 100, and whose step is
+under 5 — and any JSX `<BuilderNumberSelectControl>` over 100 stepping under 5.
+A control that genuinely needs every value goes in `W8_ALLOW` (schema) or
+carries a `w8-allow:` comment (JSX), with a reason. The field parser is covered
+by `scripts/builder/uiDoctrineSizeStep.test.js`.
+
+#### W9. No field spans its container `[browser-check]` *(added 2026-08-12)*
+
+Every field carries a size constraint. A control that can grow has a ceiling
+above it — never `max-width: none`.
+
+*Why:* W1 has forbidden "stretch a field to the widest possible width" since
+July, and it kept happening, because **W1 had nothing to check against**. The
+lattice bounds a panel column and an item grid bounds its tracks, but three
+shapes had nothing above them: a `full` field (which exists precisely to span
+both tracks), a bare `textarea`, and an item-grid cell on a wide screen. The
+Slideshow editor was all three at once. Operator, 2026-08-12: *"Never, ever
+have text fields that stretch the full width of their container. Every field
+must have some kind of size constraint."*
+
+*The ceiling is one number:* `--builder-field-long-max` (560px) in
+`src/css/_variables.css` — enough for the readable part of a URL and about a
+line of description. The two rules that had written `max-width: none` — the
+lattice control rule and the `label.field` control rule — now name the
+variable instead.
+
+*It cannot widen anything.* A cap only ever lowers a used width, so `label`
+(230px) and `text-md` (280px) are untouched, and W0 still holds: inside a
+column every control ends at the same x, they just all stop at the ceiling
+together.
+
+**Checked by:** `npm run check:panels` (`scripts/ui/check_panels.mjs`) measures
+every text control on a lattice surface — including the `full` fields and item
+managers W0 deliberately skips — and fails any that renders wider than the
+ceiling. Not in CI: CI has no browsers. Run it before shipping panel work.
 
 #### E5. Labels never wrap — shorten the text instead `[eye]`
 

@@ -153,6 +153,7 @@ export function BuilderCellStyleSettings({
                 value={cellSide(key, pair, "0")}
                 min={0}
                 max={160}
+                step={5}
                 fallback="0"
                 onChange={(value) => onSetCellExtra(column, key, value)}
               />

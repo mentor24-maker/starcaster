@@ -2181,9 +2181,43 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid--cards.builder-item-grid--cards-icons {
   grid-template-columns: 6ch minmax(12ch, 1fr) minmax(10ch, 1fr) minmax(10ch, 1fr) max-content;
 }
+/* Slideshow: a slide is an image and its alt text, nothing else, so both fit
+   the primary row and there is no sub-row. The image column is wider because
+   it carries the URL and the Choose From Gallery button together. */
+.builder-react-root .builder-item-grid--slides {
+  /* The image column carries a URL AND the Choose From Gallery button, which
+     is ~200px of that track before the input gets any. At 1.6fr the input came
+     out around 140px — "https://astujhe2h" and nothing more. 2.4fr is what
+     leaves it a readable width while the alt text keeps a usable one. */
+  grid-template-columns: minmax(16ch, 2.4fr) minmax(12ch, 1fr) max-content;
+}
+
+/* The image picker renders its input and its Gallery button as siblings, so
+   the grid cell has to be their flex row — dropped straight into the grid
+   they would land in two different columns and push the actions out. */
+.builder-react-root .builder-item-grid-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-picker > input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-picker > button {
+  flex: 0 0 auto;
+}
 /* ---------------------------------------------------------------------------
- * Feature Cards editor — two columns (operator, 2026-08-12): global settings
- * left, the cards themselves right. The settings column is sized to its own
+ * Two-column editors — Feature Cards and Slideshow (operator, 2026-08-12):
+ * global settings left, the items themselves right.
+ *
+ * Slideshow joined the same night, by the same instruction ("Set this one up
+ * the same as the Feature Cards with two EQUAL-width columns"). The selectors
+ * are a list rather than one shared class because the grid has to live on the
+ * EDITOR, whose class is stamped from the module type — see
+ * TWO_COLUMN_EDITOR_TYPES in builder-module-card.tsx, which must gain the
+ * same member. The settings column is sized to its own
  * controls and no wider; the card column takes everything left over, because
  * that is the one that holds long URLs and descriptions.
  *
@@ -2201,7 +2235,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    `.builder-cards-panel` flattens to `display: contents` so its two halves
    become items of THIS grid instead of a nested one — that is what lets a
    panel child sit in the same column track as the chrome above it. */
-.builder-react-root .builder-module-editor--feature-cards {
+.builder-react-root .builder-module-editor--feature-cards,
+.builder-react-root .builder-module-editor--slideshow {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2209,27 +2244,48 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
      widths inside the wider half; the leftover room stays empty rather
      than stretching them (W-umbrella). */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-4, 12px) var(--space-6, 24px);
+  /*
+   * ROW GAP IS ZERO, and the row spacing comes from margins below.
+   *
+   * The item column spans `1 / span 100` (see the note on it), which forces
+   * 100 implicit rows into existence. Empty rows have no height, but a row
+   * GAP between them does: 99 × 12px ≈ 1,190px of blank editor under a panel
+   * whose content ended long before. Measured 2026-08-12 — Feature Cards was
+   * 2,777px tall around 463px of content, Slideshow 1,868px around the same.
+   * Nothing about it is visible in the CSS, which is why it shipped.
+   */
+  gap: 0 var(--space-6, 24px);
   align-items: start;
 }
 
-.builder-react-root .builder-module-editor--feature-cards > * {
+.builder-react-root .builder-module-editor--feature-cards > *,
+.builder-react-root .builder-module-editor--slideshow > * {
   grid-column: 1;
   min-width: 0;
+  /* The row spacing the gap used to give, charged to the rows that exist. */
+  margin-bottom: var(--space-4, 12px);
 }
 
-.builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel {
+.builder-react-root .builder-module-editor--feature-cards > *:last-child,
+.builder-react-root .builder-module-editor--slideshow > *:last-child {
+  margin-bottom: 0;
+}
+
+.builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel,
+.builder-react-root .builder-module-editor--slideshow > .builder-cards-panel {
   display: contents;
 }
 
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings {
   grid-column: 1;
 }
 
 /* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
    implicit grid resolves to the explicit grid's only line, which collapses
    the column to a single row. */
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -2305,11 +2361,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    has to give up its row-1 placement too, or it would sit above the Label
    row it is supposed to follow. */
 @media (max-width: 1000px) {
-  .builder-react-root .builder-module-editor--feature-cards {
+  .builder-react-root .builder-module-editor--feature-cards,
+  .builder-react-root .builder-module-editor--slideshow {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
+  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+  .builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
     grid-column: 1;
     grid-row: auto;
   }
@@ -2319,6 +2377,51 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid > select {
   width: 100%;
   min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * W9 — no field spans its container (operator, 2026-08-12): "Never, ever have
+ * text fields that stretch the full width of their container. Every field
+ * must have some kind of size constraint."
+ *
+ * The lattice already bounds a panel column's controls, and an item grid
+ * bounds its columns — but three shapes had nothing above them: a `full`
+ * field (which exists precisely to span both tracks), a textarea, and the
+ * cells of an item grid on a wide screen. Those are what ran edge to edge in
+ * the Slideshow editor: an image URL about 2,000px wide.
+ *
+ * One ceiling, shared, from `--builder-field-long-max`. Narrower tokens are
+ * untouched — `label` (230px) and `text-md` (280px) set their own max-width
+ * and this never widens them, because a cap can only ever lower a used width.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .builder-item-grid > input,
+.builder-react-root .builder-item-grid > select,
+.builder-react-root .builder-item-grid > textarea,
+.builder-react-root .builder-item-grid-picker,
+.builder-react-root .builder-module-field--full .builder-module-field-control,
+.builder-react-root .builder-textarea,
+.builder-react-root .builder-module-field-control > textarea {
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+/*
+ * ...and the umbrella, because naming the shapes was not enough. The first
+ * pass at W9 listed the three that were known to stretch, and `check:panels`
+ * then found nine more the moment it could see them: a bare `label.field` in
+ * an editor that never joined a panel column (Video name, Instagram URL, Form
+ * type, Saved Product), each running the full 1,414px of the panel at 1600.
+ * Enumerating the shapes is how a rule ends up covering the ones somebody
+ * remembered — so this covers every text control on a settings surface, and
+ * the named rules above stay only for the wrappers that need a cap on the BOX
+ * rather than on the control inside it.
+ *
+ * Deliberately low specificity (0,2,1): every narrower width token — `label`
+ * at 230px, `text-md` at 280px — is a longer selector and keeps its own,
+ * smaller max-width. This can only ever lower a width, never raise one.
+ */
+.builder-react-root .is-lattice
+  :is(input[type="text"], input[type="url"], input[type="search"], input[type="number"], textarea, select) {
+  max-width: var(--builder-field-long-max, 560px);
 }
 .builder-react-root .builder-item-grid-header {
   font-size: var(--text-xs, 0.75rem);
@@ -2946,7 +3049,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   > :is(select, input[type="text"], input[type="number"], input[type="url"], .builder-number-select-control) {
   width: 100%;
   min-width: 0;
-  max-width: none;
+  /* W9. This was `none`, and `none` is how a control ends up as wide as the
+     panel it sits in. The track is still shared, so every control in the
+     column still ends at the same x — they just stop at a width a person can
+     read across instead of following the panel out to 2,000px. */
+  max-width: var(--builder-field-long-max, 560px);
   padding-right: calc(var(--builder-field-room, 40px) / 2);
 }
 
@@ -3300,6 +3407,33 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   flex: 0 0 auto;
 }
 
+/*
+ * The two ambient rules this module has to answer for.
+ *
+ * Standard 3's corollary: a module may not depend on ambient CSS it does not
+ * own. These are the other half of that — ambient CSS the module has to
+ * actively undo, because `legacy.css` styles bare `input` and
+ * `button[type="submit"]` element selectors and those reach every published
+ * tenant page, not just the admin screens they were written for.
+ *
+ * Operator, 2026-08-12: "notice the slight vertical offset between the field
+ * and button." It was 4.8px, and it was both rules at once:
+ *
+ *   input, textarea, select { margin: 0.3rem 0 }   -> pushes the FIELD down 4.8px
+ *   button[type="submit"]  { align-self: flex-start } -> pins the BUTTON to the top
+ *
+ * The form already says `align-items: center`; the button was opting out of
+ * it. Fixing only one of the two would have halved the gap and looked like a
+ * rounding error, which is the trap — so both are named here with what they do.
+ */
+.builder-react-root .builder-site-search-input {
+  margin: 0;
+}
+
+.builder-react-root .builder-site-search-submit {
+  align-self: center;
+}
+
 .builder-react-root .builder-site-search-input {
   /*
    * Field Width sets all three; unset means "grow to fill the row" (1 1 12rem).
@@ -3560,7 +3694,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .is-lattice .builder-schema-panel-column label.field > *:not(span) {
   width: 100%;
   min-width: 0;
-  max-width: none;
+  /* W9 — same ceiling as every other control shape. */
+  max-width: var(--builder-field-long-max, 560px);
 }
 
 /* A checkbox keeps its size at the start of the slot (W0's exception). */

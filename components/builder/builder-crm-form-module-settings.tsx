@@ -236,6 +236,7 @@ export function BuilderCrmFormModuleSettings({
             <BuilderNumberSelectControl
               fallback="0"
               max={160}
+              step={5}
               min={0}
               value={s[key] ?? s[legacy] ?? "0"}
               onChange={(next) => updateModuleSetting(key, next)}

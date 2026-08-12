@@ -324,6 +324,18 @@ export const MODULE_MARGIN_SIDES = [
   { key: "marginRight", label: "Right Margin", legacy: "horizontalMargin" }
 ] as const;
 
+/**
+ * Spacing counts in fives (W8, extended 2026-08-12 — operator: "sizes
+ * incremented by 1 that should be 5", on the Slideshow module's margins).
+ *
+ * A margin that runs 0–160 in ones is 161 options, and the operator was
+ * scrolling past 74 numbers to reach 75. Nobody nudges an outer margin by one
+ * pixel; the values people actually pick are multiples of five. Button
+ * padding (1–50) keeps its 1px steps — that one is the inside of a pill,
+ * where a single pixel is visible.
+ */
+export const MODULE_SPACING_STEP = 5;
+
 export const MODULE_PADDING_SIDES = [
   { key: "paddingTop", label: "Top Padding", legacy: "verticalPadding" },
   { key: "paddingBottom", label: "Bottom Padding", legacy: "verticalPadding" },
@@ -346,6 +358,7 @@ export function marginFields(rendersVia: string, max = 80): BuilderSchemaField[]
     control: "number" as const,
     min: 0,
     max,
+    step: MODULE_SPACING_STEP,
     fallback: "0",
     rendersVia
   }));
@@ -360,6 +373,7 @@ export function paddingFields(rendersVia: string, max = 160): BuilderSchemaField
     control: "number" as const,
     min: 0,
     max,
+    step: MODULE_SPACING_STEP,
     fallback: "0",
     rendersVia
   }));
