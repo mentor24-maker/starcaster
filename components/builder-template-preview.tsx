@@ -100,6 +100,7 @@ import {
   getTableWrapStyle,
   getSectionMarginStyle,
   getSectionColumnGapStyle,
+  getSectionColumnPercent,
   getSectionGridTemplate,
   getSectionHorizontalMarginStyle,
   getSectionMinHeightStyle,
@@ -1556,6 +1557,9 @@ function BuilderSectionPreview({
     >
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);
+        // What share of the row this column occupies, so an image inside it can
+        // ask the browser for a file sized to the real slot rather than the page.
+        const columnWidthPercent = getSectionColumnPercent(section, columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
         /*
@@ -1721,6 +1725,7 @@ function BuilderSectionPreview({
                   } as CSSProperties}
                 >
                   <BuilderModulePreview
+                    columnWidthPercent={columnWidthPercent}
                     emailPreview={emailPreview}
                     module={module}
                     overlayFlowDecor={isPageOverlayFlowModule || isSectionOverlayModule}
@@ -1742,6 +1747,7 @@ function BuilderSectionPreview({
 
 function BuilderModulePreview({
   module,
+  columnWidthPercent = 100,
   emailPreview = false,
   overlayFlowDecor = false,
   previewMode = false,
@@ -1751,6 +1757,8 @@ function BuilderModulePreview({
   themePalette
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** This module's column as a percentage of the row — see getSectionColumnPercent. */
+  columnWidthPercent?: number;
   emailPreview?: boolean;
   /** Floating image in a full-page overlay row — always visible on the live site. */
   overlayFlowDecor?: boolean;
@@ -1978,7 +1986,12 @@ function BuilderModulePreview({
 
   if (module.type === "image") {
     return (
-      <BuilderImagePreview module={module} variant={variant} placeholder="Choose an image" />
+      <BuilderImagePreview
+        module={module}
+        variant={variant}
+        placeholder="Choose an image"
+        columnWidthPercent={columnWidthPercent}
+      />
     );
   }
 

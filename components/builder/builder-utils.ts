@@ -32,6 +32,7 @@ import {
   getBuilderBackgroundLayerOpacity,
   getBuilderBackgroundStyle,
   getLayoutColumns,
+  getLayoutColumnPercents,
   getLayoutGridTemplate,
   normalizeBackgroundMode,
   normalizeBackgroundSettings,
@@ -293,6 +294,40 @@ export function getSectionMinHeightStyle(section: BuilderTemplateSection): CSSPr
  * set that does not add up to exactly 100 still fills the row instead of
  * leaving a slice of dead space on the right.
  */
+/**
+ * How wide one column is, as a percentage of the row's content width.
+ *
+ * An image inside a two-column row is 100% of *its column*, which is half the
+ * page — but the module only knows the "100". Without this it tells the browser
+ * to expect full page width and fetches a file twice as wide as the slot, which
+ * is exactly what happened when the Delray home page was paired into columns
+ * (2026-08-12): the layout halved, the download did not.
+ *
+ * Honours the operator's own Column Widths when he has set a complete set,
+ * and falls back to the layout preset's proportions otherwise — the same
+ * precedence `getSectionGridTemplate` uses, so the hint cannot disagree with
+ * the grid it describes.
+ */
+export function getSectionColumnPercent(
+  section: BuilderTemplateSection,
+  columnKey: string
+): number {
+  const columns = getLayoutColumns(section.layout);
+  const index = columns.indexOf(columnKey);
+  if (index < 0) return 100;
+
+  const custom = columns.map((column) =>
+    Number(normalizeSpacingValue(section.columnWidths?.[column], "0", 0, 100))
+  );
+  if (custom.length >= 2 && custom.every((width) => width > 0)) {
+    const total = custom.reduce((sum, width) => sum + width, 0);
+    if (total > 0) return Math.round((custom[index] / total) * 100);
+  }
+
+  const percents = getLayoutColumnPercents(section.layout);
+  return percents[index] ?? 100;
+}
+
 export function getSectionGridTemplate(section: BuilderTemplateSection): string {
   const columns = getLayoutColumns(section.layout);
   const widths = columns.map((column) =>
