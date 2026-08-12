@@ -605,13 +605,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }));
   }
 
-  function updateCellPadding(sectionId: string, column: string, value: string) {
-    updateSection(sectionId, (s) => ({
-      ...s,
-      cellPadding: { ...s.cellPadding, [column]: value }
-    }));
-  }
-
   function updateCellBorderWidth(sectionId: string, column: string, value: string) {
     updateSection(sectionId, (s) => ({
       ...s,
@@ -2437,7 +2430,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             onCloneSection={() => cloneSection(section.id)}
                             onSaveSection={() => void saveSection(section.id)}
                             onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
-                            onUpdateCellPadding={(col, value) => updateCellPadding(section.id, col, value)}
                             onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                             onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                             onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}
@@ -2514,7 +2506,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         onCloneSection={() => cloneSection(section.id)}
                         onSaveSection={() => void saveSection(section.id)}
                         onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
-                        onUpdateCellPadding={(col, value) => updateCellPadding(section.id, col, value)}
                         onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                         onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                         onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}

@@ -496,7 +496,14 @@ export type BuilderTemplateSection = {
   background: BackgroundSettings;
   overlayScreen?: RowOverlayScreenSettings;
   cellBackgrounds: Record<string, BackgroundSettings>;
+  /**
+   * Legacy: one number for all four sides of a cell. Kept as the seed for
+   * the two axes below, so a row saved before 2026-08-11 renders identically
+   * — and kept in the type because old rows still carry it.
+   */
   cellPadding: Record<string, string>;
+  cellVerticalPadding: Record<string, string>;
+  cellHorizontalPadding: Record<string, string>;
   cellVerticalMargin: Record<string, string>;
   cellMobileHidden: Record<string, string>;
   cellDesktopHidden: Record<string, string>;
@@ -1470,6 +1477,34 @@ function normalizeCellPadding(
   );
 }
 
+/**
+ * One axis of a cell's padding, seeded from the legacy all-sides
+ * `cellPadding` when the axis has never been set.
+ *
+ * Splitting the control was the fix for a real dead end (operator,
+ * 2026-08-11): a logo in a banner cell sat 18px lower than the menu beside
+ * it, and the only way to close that gap was a single number that also threw
+ * away the 18px holding the logo off the left edge. Seeding from the legacy
+ * value is what keeps every row saved before the split pixel-identical.
+ */
+function normalizeCellPaddingAxis(
+  value: unknown,
+  legacy: Record<string, string>,
+  layout: BuilderTemplateLayout
+): Record<string, string> {
+  const columns = getLayoutColumns(layout);
+  const raw = value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+  return Object.fromEntries(
+    columns.map((column) => [
+      column,
+      normalizeSpacingValue(raw[column] ?? legacy[column] ?? "18", "18", 0, 50)
+    ])
+  );
+}
+
 function normalizeCellMetric(
   value: unknown,
   layout: BuilderTemplateLayout,
@@ -2153,6 +2188,10 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
             .filter((module): module is BuilderTemplateModule => Boolean(module))
         : [];
 
+      // Read once: both padding axes fall back to it, so they must see the
+      // same normalized value the legacy key ends up with.
+      const cellPadding = normalizeCellPadding(normalizedSection.cellPadding, layout);
+
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
         title: safeText(normalizedSection.title, 255),
@@ -2202,7 +2241,17 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
-        cellPadding: normalizeCellPadding(normalizedSection.cellPadding, layout),
+        cellPadding: cellPadding,
+        cellVerticalPadding: normalizeCellPaddingAxis(
+          normalizedSection.cellVerticalPadding,
+          cellPadding,
+          layout
+        ),
+        cellHorizontalPadding: normalizeCellPaddingAxis(
+          normalizedSection.cellHorizontalPadding,
+          cellPadding,
+          layout
+        ),
         cellVerticalMargin: normalizeCellMetric(normalizedSection.cellVerticalMargin, layout, "0", 0, 160),
         cellMobileHidden: normalizeCellColor(normalizedSection.cellMobileHidden, layout, "false"),
         cellDesktopHidden: normalizeCellColor(normalizedSection.cellDesktopHidden, layout, "false"),
@@ -2282,6 +2331,8 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
       getLayoutColumns(layout).map((column) => [column, createDefaultBackgroundSettings()])
     ),
     cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "18"])),
+    cellVerticalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "18"])),
+    cellHorizontalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "18"])),
     cellVerticalMargin: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellMobileHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellDesktopHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),

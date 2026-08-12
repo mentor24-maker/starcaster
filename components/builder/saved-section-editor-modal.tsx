@@ -123,10 +123,6 @@ export function SavedSectionEditorModal({
     }));
   }
 
-  function updateCellPadding(column: string, value: string) {
-    updateSection((s) => ({ ...s, cellPadding: { ...s.cellPadding, [column]: value } }));
-  }
-
   function updateCellBorderWidth(column: string, value: string) {
     updateSection((s) => ({ ...s, cellBorderWidth: { ...s.cellBorderWidth, [column]: value } }));
   }
@@ -396,7 +392,6 @@ export function SavedSectionEditorModal({
                 onToggleCanonical={() => {}}
                 onUpdateSection={(updater) => updateSection(updater)}
                 onUpdateCellBackground={(col, updater) => updateCellBackground(col, updater)}
-                onUpdateCellPadding={(col, val) => updateCellPadding(col, val)}
                 onUpdateCellBorderWidth={(col, val) => updateCellBorderWidth(col, val)}
                 onUpdateCellBorderColor={(col, val) => updateCellBorderColor(col, val)}
                 onUpdateCellBorderRadius={(col, val) => updateCellBorderRadius(col, val)}
