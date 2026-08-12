@@ -19,7 +19,8 @@ describe("parseBuilderCardItems", () => {
       imageAlt: "",
       linkUrl: "",
       linkLabel: "",
-      icon: ""
+      icon: "",
+      iconImageUrl: ""
     });
   });
 
@@ -42,6 +43,19 @@ describe("parseBuilderCardItems", () => {
     );
 
     expect(parseBuilderCardItems(serializeBuilderCardItems(original))).toEqual(original);
+  });
+
+  it("keeps a symbol and an icon picture side by side, so switching type is reversible", () => {
+    // The module-level `iconType` decides which one renders. If choosing a
+    // picture overwrote the glyph, switching back would silently blank the
+    // card — so both live in their own field.
+    const [card] = parseBuilderCardItems(
+      JSON.stringify([{ id: "c1", icon: "★", iconImageUrl: "/icons/racquet.svg" }])
+    );
+
+    expect(card.icon).toBe("★");
+    expect(card.iconImageUrl).toBe("/icons/racquet.svg");
+    expect(parseBuilderCardItems(serializeBuilderCardItems([card]))[0]).toEqual(card);
   });
 
   it("keeps slider and feature-card content interchangeable", () => {
@@ -68,7 +82,7 @@ describe("parseBuilderCardItems", () => {
 
   it("creates blank cards with a full field set", () => {
     expect(Object.keys(createBuilderCardItem(1)).sort()).toEqual(
-      ["body", "icon", "id", "imageAlt", "imageUrl", "linkLabel", "linkUrl", "title"]
+      ["body", "icon", "iconImageUrl", "id", "imageAlt", "imageUrl", "linkLabel", "linkUrl", "title"]
     );
   });
 });

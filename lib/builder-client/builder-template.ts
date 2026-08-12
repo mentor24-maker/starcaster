@@ -2656,6 +2656,10 @@ export function createEmptyModule(
           cardHoverLift: "true",
           imageAspect: "4-3",
           showIcons: "true",
+          // Symbol or picture. "symbol" is the only value that existed
+          // before 2026-08-12, so it stays the default and an older module
+          // with no `iconType` reads the same as one that says "symbol".
+          iconType: "symbol",
           iconColor: "",
           iconAltColor: "",
           iconTextColor: "",

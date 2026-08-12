@@ -11,6 +11,11 @@ type BuilderImagePickerFieldProps = {
   buttonLabel?: string;
   /** When false, gallery modal is select-only (no upload). Defaults to true. */
   allowUpload?: boolean;
+  /**
+   * Opens the gallery already filtered to one category (e.g. "Icon"). The
+   * operator can still clear the filter — see BuilderGalleryModal.
+   */
+  galleryCategory?: string;
 };
 
 /**
@@ -31,7 +36,8 @@ export function BuilderImagePickerField({
   onChange,
   placeholder = "https://...",
   buttonLabel = "Choose From Gallery",
-  allowUpload = true
+  allowUpload = true,
+  galleryCategory = ""
 }: BuilderImagePickerFieldProps) {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -86,6 +92,7 @@ export function BuilderImagePickerField({
       </button>
       {isGalleryOpen ? (
         <BuilderGalleryModal
+          initialMediaCategory={galleryCategory}
           isUploading={isUploading}
           onSelectImage={(path) => {
             onChange(normalizeBuilderAssetUrl(path));

@@ -24,6 +24,14 @@ type BuilderGalleryModalProps = {
   onSelectImage: (imagePath: string) => void;
   onClose: () => void;
   onUploadImage?: (file: File | null) => void | Promise<void>;
+  /**
+   * Category the picker opens already filtered to — for a caller that wants
+   * one slice of the library ("Icon"), not the whole thing. It is a starting
+   * point, not a lock: the filter bar shows it and Clear removes it, because
+   * a picker that silently hides most of the gallery with no way back is
+   * indistinguishable from an empty gallery.
+   */
+  initialMediaCategory?: string;
 };
 
 type GalleryViewMode = "grid" | "list";
@@ -73,7 +81,8 @@ export function BuilderGalleryModal({
   isUploading,
   onSelectImage,
   onClose,
-  onUploadImage
+  onUploadImage,
+  initialMediaCategory = ""
 }: BuilderGalleryModalProps) {
   const [mounted, setMounted] = useState(false);
   const [mediaSource, setMediaSource] = useState<GalleryMediaSource>("project");
@@ -109,9 +118,24 @@ export function BuilderGalleryModal({
   // filtered subset — otherwise categories only present in not-yet-loaded
   // images are missing from the dropdown until you happen to load them.
   const categoryOptions = useMemo(
-    () => buildGalleryMediaCategoryOptions(allMedia.map((item) => item.mediaCategory ?? "")),
-    [allMedia]
+    () =>
+      buildGalleryMediaCategoryOptions([
+        // The requested category leads the list even when nothing in the
+        // library carries it yet — otherwise the filter is active but its
+        // dropdown shows blank, which reads as a broken picker rather than
+        // as "no icons uploaded yet".
+        ...(initialMediaCategory ? [initialMediaCategory] : []),
+        ...allMedia.map((item) => item.mediaCategory ?? "")
+      ]),
+    [allMedia, initialMediaCategory]
   );
+
+  // Apply the caller's starting category once, as the modal opens. The modal
+  // is unmounted while closed, so mounting IS opening.
+  useEffect(() => {
+    if (!initialMediaCategory) return;
+    setFilters((current) => ({ ...current, mediaCategory: initialMediaCategory }));
+  }, [initialMediaCategory, setFilters]);
 
   const topicOptions = useMemo(
     () => buildGalleryMediaTopicOptions(allMedia.map((item) => item.topic ?? "")),
