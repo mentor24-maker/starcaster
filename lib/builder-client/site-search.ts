@@ -54,6 +54,8 @@ export type SiteSearchPageInput = {
   name?: string;
   slug?: string;
   updatedAt?: string;
+  /** "pinned" | "boosted" | "normal" | "lowered" | "hidden"; see lib/pageSearchPriority.js. */
+  searchPriority?: string;
   layoutSections?: SiteSearchSectionInput[] | null;
 };
 
@@ -83,12 +85,15 @@ export type SiteSearchFragment = {
   boilerplate: boolean;
 };
 
+export type SiteSearchPriority = "pinned" | "boosted" | "normal" | "lowered" | "hidden";
+
 export type SiteSearchIndexedPage = {
   pageId: string;
   pageName: string;
   slug: string;
   href: string;
   updatedAt: string;
+  priority: SiteSearchPriority;
   fragments: SiteSearchFragment[];
   /** Total indexed words, for length normalisation. */
   wordCount: number;
@@ -117,6 +122,10 @@ export type SiteSearchResult = {
   href: string;
   updatedAt: string;
   score: number;
+  /** The operator's ranking for this page. */
+  priority: SiteSearchPriority;
+  /** True when this page is above the others because it was pinned, not because it matched best. */
+  pinned: boolean;
   /** The match that earned the ranking — drives the snippet shown. */
   topMatch: SiteSearchMatch;
   /** Further matches on the same page, best first, already de-duplicated. */
@@ -471,6 +480,7 @@ export function buildSiteSearchIndex(pagesInput: SiteSearchPageInput[]): SiteSea
     const pageId = String(page.id ?? `page-${pageOrdinal}`);
     const pageName = htmlToPlainText(page.name);
     const slug = String(page.slug ?? "").trim();
+    const priority = normalizeSiteSearchPriority(page.searchPriority);
     const fragments: SiteSearchFragment[] = [];
 
     if (isIndexableValue(pageName)) {
@@ -530,16 +540,32 @@ export function buildSiteSearchIndex(pagesInput: SiteSearchPageInput[]): SiteSea
       slug,
       href: pageHref(slug),
       updatedAt: String(page.updatedAt ?? ""),
+      priority,
       fragments,
       wordCount
     };
   });
 
+  /*
+   * Hidden pages are DROPPED, not filtered at query time, and that ordering
+   * matters for more than speed: their text no longer counts toward the
+   * boilerplate tally either. Delray has a "Welcome … Copy" duplicate of its
+   * home page — left in the tally, a hidden duplicate makes the real page's
+   * own content look like site chrome and suppresses it.
+   */
+  const visible = pages.filter((page) => page.priority !== "hidden");
+  for (const page of pages) {
+    if (page.priority !== "hidden") continue;
+    for (const fragment of page.fragments) {
+      pageCountByText.get(fragment.text.toLowerCase())?.delete(page.pageId);
+    }
+  }
+
   // Pass 2 — flag repeated text. A page's own NAME is never boilerplate, even
   // on a site where two pages share a name.
-  if (pages.length >= BOILERPLATE_MIN_PAGES) {
-    const threshold = pages.length * BOILERPLATE_PAGE_SHARE;
-    for (const page of pages) {
+  if (visible.length >= BOILERPLATE_MIN_PAGES) {
+    const threshold = visible.length * BOILERPLATE_PAGE_SHARE;
+    for (const page of visible) {
       for (const fragment of page.fragments) {
         if (fragment.kind === "pageName") continue;
         const seen = pageCountByText.get(fragment.text.toLowerCase());
@@ -548,7 +574,7 @@ export function buildSiteSearchIndex(pagesInput: SiteSearchPageInput[]): SiteSea
     }
   }
 
-  return { pages };
+  return { pages: visible };
 }
 
 /* ------------------------------------------------------------------ *
@@ -576,10 +602,40 @@ const SECTION_DECAY = 0.12;
 /** A page whose match count is high gets at most this much of a lift. */
 const BREADTH_SHARE = 0.25;
 
+/**
+ * What the operator's ranking does to a page.
+ *
+ * "Higher" and "Lower" are multipliers, so they move a page relative to
+ * equally good matches without ever overturning a much better one — a page
+ * marked Lower that is genuinely the best answer still wins, which is what
+ * keeps the control safe to use liberally.
+ *
+ * "Pin to top" is deliberately NOT a very large multiplier. A multiplier big
+ * enough to always win is indistinguishable from a separate tier until the
+ * day it is not, and then "pin to top" quietly means "usually near the top".
+ * Pinned pages sort as their own tier above everything else, and are ordered
+ * among themselves by score. It either pins or it does not.
+ */
+const PRIORITY_MULTIPLIER: Record<SiteSearchPriority, number> = {
+  pinned: 1,
+  boosted: 1.6,
+  normal: 1,
+  lowered: 0.45,
+  hidden: 0
+};
+
 /** Small nudges. Deliberately small — they break ties, they do not rank. */
 const HOME_PAGE_BOOST = 1.04;
 const RECENCY_BOOST_MAX = 1.05;
 const RECENCY_WINDOW_DAYS = 90;
+
+const PRIORITY_VALUES: SiteSearchPriority[] = ["pinned", "boosted", "normal", "lowered", "hidden"];
+
+/** Mirrors normalizePageSearchPriority in lib/pageSearchPriority.js — unset means normal. */
+export function normalizeSiteSearchPriority(value: unknown): SiteSearchPriority {
+  const clean = String(value ?? "").trim().toLowerCase() as SiteSearchPriority;
+  return PRIORITY_VALUES.includes(clean) ? clean : "normal";
+}
 
 export function normalizeSiteSearchQuery(query: string): string {
   return String(query ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -792,6 +848,8 @@ export function searchSite(
     // Breadth helps, but can never do more than add a quarter of the best hit.
     let score = best.score + Math.min(rest, best.score * BREADTH_SHARE);
 
+    score *= PRIORITY_MULTIPLIER[page.priority];
+
     if (page.href === "/") score *= HOME_PAGE_BOOST;
 
     const age = daysSince(page.updatedAt);
@@ -835,6 +893,8 @@ export function searchSite(
       href: page.href,
       updatedAt: page.updatedAt,
       score,
+      priority: page.priority,
+      pinned: page.priority === "pinned",
       topMatch,
       otherMatches,
       matchCount: scored.length
@@ -843,6 +903,9 @@ export function searchSite(
 
   return results
     .sort((left, right) => {
+      // Tier first: a pinned page outranks every unpinned one no matter how
+      // much better the unpinned one matched. That is what "pin to top" says.
+      if (left.pinned !== right.pinned) return left.pinned ? -1 : 1;
       if (right.score !== left.score) return right.score - left.score;
       return left.pageName.localeCompare(right.pageName, undefined, { sensitivity: "base" });
     })

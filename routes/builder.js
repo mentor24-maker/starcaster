@@ -50,6 +50,12 @@ function buildLandingPagePatch(body) {
   if (hasBodyField(body, 'themeId', 'theme_id')) {
     patch.themeId = body.themeId ?? body.theme_id;
   }
+  // This patch is a WHITELIST — a field the editor sends and this does not
+  // name is dropped here, the save reports success, and the setting silently
+  // does nothing.
+  if (hasBodyField(body, 'searchPriority', 'search_priority')) {
+    patch.searchPriority = body.searchPriority ?? body.search_priority;
+  }
   if (hasBodyField(body, 'layoutSections', 'layout_sections')) {
     patch.layoutSections = body.layoutSections ?? body.layout_sections;
   }
@@ -472,6 +478,7 @@ async function handle(req, res, pathname, method) {
       slug: body.slug,
       isPublished: body.isPublished ?? body.is_published,
       isPrivate: body.isPrivate ?? body.is_private,
+      searchPriority: body.searchPriority ?? body.search_priority,
       primaryColor: String(body.primaryColor || '').trim(),
       backgroundColor: String(body.backgroundColor || '').trim(),
       accentColor: String(body.accentColor || '').trim(),
@@ -2010,4 +2017,6 @@ const manifest = {
   prefixes: ['/api/builder', '/api/develop'],
 };
 
-module.exports = { handle, manifest };
+// buildLandingPagePatch is exported for the same reason it is dangerous: it
+// is a whitelist, and a field missing from it is dropped with a 200 OK.
+module.exports = { handle, manifest, buildLandingPagePatch };

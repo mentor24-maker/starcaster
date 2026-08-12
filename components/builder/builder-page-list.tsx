@@ -2,6 +2,7 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary,
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { PAGE_SEARCH_PRIORITIES } from "@/lib/page-search-priority";
 import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars, getThemeShellBackgroundSeedColor } from "./builder-utils";
 
 type SortField = "name" | "slug" | "template" | "visibility" | "updatedAt";
@@ -80,6 +81,8 @@ type BuilderPageListProps = {
   onSavePage: () => void;
   pageVisibility: PageVisibility;
   onSetPageVisibility: (visibility: PageVisibility) => void;
+  pageSearchPriority: string;
+  onSetPageSearchPriority: (value: string) => void;
   autoNewPage?: boolean;
   /** When mounted to edit a specific page (e.g. Manage Pages CRUD edit), open Page Details. */
   autoOpenPageDetails?: boolean;
@@ -122,6 +125,8 @@ export function BuilderPageList({
   onSavePage,
   pageVisibility,
   onSetPageVisibility,
+  pageSearchPriority,
+  onSetPageSearchPriority,
   autoNewPage,
   autoOpenPageDetails,
   snapshots,
@@ -918,6 +923,21 @@ export function BuilderPageList({
                 <option value="public">Public</option>
                 <option value="private">Private</option>
                 <option value="draft">Draft</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Search</span>
+              <select
+                className="builder-page-details-field"
+                value={pageSearchPriority || "normal"}
+                onChange={(event) => onSetPageSearchPriority(event.target.value)}
+                onBlur={handlePageDetailsFieldBlur}
+              >
+                {PAGE_SEARCH_PRIORITIES.map((option) => (
+                  <option key={option.value} value={option.value} title={option.hint}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
             <div className="builder-meta-grid-pages-background">

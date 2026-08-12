@@ -7,6 +7,7 @@ import {
   isIndexableValue,
   matchQuality,
   normalizeSiteSearchQuery,
+  normalizeSiteSearchPriority,
   searchSite,
   siteSearchQueryVariants,
   type SiteSearchPageInput
@@ -443,5 +444,111 @@ describe("searchSite — result shape", () => {
     expect(() =>
       searchSite("x", buildSiteSearchIndex([{ id: "1", name: "Bare", slug: "bare" }, { id: "2" }]))
     ).not.toThrow();
+  });
+});
+
+describe("normalizeSiteSearchPriority", () => {
+  it("accepts the five rungs, in any casing", () => {
+    expect(normalizeSiteSearchPriority("pinned")).toBe("pinned");
+    expect(normalizeSiteSearchPriority(" BOOSTED ")).toBe("boosted");
+    expect(normalizeSiteSearchPriority("hidden")).toBe("hidden");
+  });
+
+  it("treats unset, empty and nonsense as normal — this is what skips the backfill", () => {
+    for (const v of [undefined, null, "", "   ", "urgent", 7]) {
+      expect(normalizeSiteSearchPriority(v), String(v)).toBe("normal");
+    }
+  });
+});
+
+describe("searchSite — the operator's page ranking", () => {
+  const pages = () => [
+    page("Pricing", "pricing", [{ type: "heading", text: "Court rates" }]),
+    page("Old Blog Post", "old", [{ type: "heading", text: "Court rates" }]),
+    page("Contact", "contact", [{ text: "Ask us about court rates." }])
+  ];
+
+  function withPriority(list: SiteSearchPageInput[], slug: string, priority: string) {
+    return list.map((p) => (p.slug === slug ? { ...p, searchPriority: priority } : p));
+  }
+
+  it("changes nothing when no page has been given a ranking", () => {
+    const before = search("court rates", pages()).map((r) => r.pageName);
+    const after = search("court rates", withPriority(pages(), "pricing", "normal")).map((r) => r.pageName);
+    expect(after).toEqual(before);
+  });
+
+  it("pins a page above a BETTER match, which is the whole point of pinning", () => {
+    // Contact only mentions the words in body copy; the other two have it as a
+    // heading. Pinned still wins — a multiplier could not promise that.
+    const results = search("court rates", withPriority(pages(), "contact", "pinned"));
+    expect(results[0]?.pageName).toBe("Contact");
+    expect(results[0]?.pinned).toBe(true);
+    expect(results[1]?.pinned).toBe(false);
+  });
+
+  it("orders several pinned pages among themselves by how well they matched", () => {
+    let list = withPriority(pages(), "contact", "pinned");
+    list = withPriority(list, "pricing", "pinned");
+    const results = search("court rates", list);
+    expect(results.slice(0, 2).every((r) => r.pinned)).toBe(true);
+    // Pricing's heading beats Contact's body copy.
+    expect(results[0]?.pageName).toBe("Pricing");
+  });
+
+  it("lifts a boosted page over an equal match without overturning a better one", () => {
+    const lifted = search("court rates", withPriority(pages(), "old", "boosted"));
+    expect(lifted[0]?.pageName).toBe("Old Blog Post");
+
+    // Boosting the weakest match does NOT put it first — it is a nudge.
+    const nudged = search("court rates", withPriority(pages(), "contact", "boosted"));
+    expect(nudged[0]?.pageName).not.toBe("Contact");
+  });
+
+  it("sinks a lowered page below its equals", () => {
+    const results = search("court rates", withPriority(pages(), "pricing", "lowered"));
+    expect(results[0]?.pageName).toBe("Old Blog Post");
+    expect(results.map((r) => r.pageName)).toContain("Pricing");
+  });
+
+  it("removes a hidden page from results entirely", () => {
+    const results = search("court rates", withPriority(pages(), "pricing", "hidden"));
+    expect(results.map((r) => r.pageName)).not.toContain("Pricing");
+    expect(results).toHaveLength(2);
+  });
+
+  it("stops hidden duplicates from making the real page look like boilerplate", () => {
+    // Imported sites accumulate "-copy" pages; Delray really does carry a
+    // "Welcome … Copy" of its home page. Four of them sharing the home page's
+    // heading puts that text on 5 of 8 pages — past the 60% share at which
+    // repeated text is treated as site chrome and suppressed. Hiding the
+    // copies has to take their votes with them, or hiding a duplicate would
+    // still leave the original crippled.
+    const shared = { type: "heading" as const, text: "Summer camp registration" };
+    const filler = [
+      page("About", "about", [{ text: "filler copy" }]),
+      page("Contact", "contact", [{ text: "filler copy" }]),
+      page("Hours", "hours", [{ text: "filler copy" }])
+    ];
+    const copies = [1, 2, 3, 4].map((n) => page(`Home Copy ${n}`, `home-copy-${n}`, [shared]));
+    const list: SiteSearchPageInput[] = [page("Home", "", [shared]), ...copies, ...filler];
+
+    const withDuplicates = search("summer camp registration", list);
+    const duplicatesHidden = search(
+      "summer camp registration",
+      list.map((p) => (p.slug.startsWith("home-copy") ? { ...p, searchPriority: "hidden" } : p))
+    );
+
+    expect(duplicatesHidden.map((r) => r.pageName)).toEqual(["Home"]);
+    // Suppressed as chrome while the copies counted; real content once they don't.
+    expect(withDuplicates.find((r) => r.pageName === "Home")!.score).toBeLessThan(1);
+    expect(duplicatesHidden[0]!.score).toBeGreaterThan(5);
+  });
+
+  it("reports the ranking on every result so the module can label it", () => {
+    const results = search("court rates", withPriority(pages(), "pricing", "boosted"));
+    const byName = Object.fromEntries(results.map((r) => [r.pageName, r.priority]));
+    expect(byName["Pricing"]).toBe("boosted");
+    expect(byName["Contact"]).toBe("normal");
   });
 });
