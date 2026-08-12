@@ -2209,8 +2209,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   flex: 0 0 auto;
 }
 /* ---------------------------------------------------------------------------
- * Feature Cards editor — two columns (operator, 2026-08-12): global settings
- * left, the cards themselves right. The settings column is sized to its own
+ * Two-column editors — Feature Cards and Slideshow (operator, 2026-08-12):
+ * global settings left, the items themselves right.
+ *
+ * Slideshow joined the same night, by the same instruction ("Set this one up
+ * the same as the Feature Cards with two EQUAL-width columns"). The selectors
+ * are a list rather than one shared class because the grid has to live on the
+ * EDITOR, whose class is stamped from the module type — see
+ * TWO_COLUMN_EDITOR_TYPES in builder-module-card.tsx, which must gain the
+ * same member. The settings column is sized to its own
  * controls and no wider; the card column takes everything left over, because
  * that is the one that holds long URLs and descriptions.
  *
@@ -2228,7 +2235,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    `.builder-cards-panel` flattens to `display: contents` so its two halves
    become items of THIS grid instead of a nested one — that is what lets a
    panel child sit in the same column track as the chrome above it. */
-.builder-react-root .builder-module-editor--feature-cards {
+.builder-react-root .builder-module-editor--feature-cards,
+.builder-react-root .builder-module-editor--slideshow {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2236,27 +2244,48 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
      widths inside the wider half; the leftover room stays empty rather
      than stretching them (W-umbrella). */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-4, 12px) var(--space-6, 24px);
+  /*
+   * ROW GAP IS ZERO, and the row spacing comes from margins below.
+   *
+   * The item column spans `1 / span 100` (see the note on it), which forces
+   * 100 implicit rows into existence. Empty rows have no height, but a row
+   * GAP between them does: 99 × 12px ≈ 1,190px of blank editor under a panel
+   * whose content ended long before. Measured 2026-08-12 — Feature Cards was
+   * 2,777px tall around 463px of content, Slideshow 1,868px around the same.
+   * Nothing about it is visible in the CSS, which is why it shipped.
+   */
+  gap: 0 var(--space-6, 24px);
   align-items: start;
 }
 
-.builder-react-root .builder-module-editor--feature-cards > * {
+.builder-react-root .builder-module-editor--feature-cards > *,
+.builder-react-root .builder-module-editor--slideshow > * {
   grid-column: 1;
   min-width: 0;
+  /* The row spacing the gap used to give, charged to the rows that exist. */
+  margin-bottom: var(--space-4, 12px);
 }
 
-.builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel {
+.builder-react-root .builder-module-editor--feature-cards > *:last-child,
+.builder-react-root .builder-module-editor--slideshow > *:last-child {
+  margin-bottom: 0;
+}
+
+.builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel,
+.builder-react-root .builder-module-editor--slideshow > .builder-cards-panel {
   display: contents;
 }
 
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings {
   grid-column: 1;
 }
 
 /* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
    implicit grid resolves to the explicit grid's only line, which collapses
    the column to a single row. */
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -2332,11 +2361,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    has to give up its row-1 placement too, or it would sit above the Label
    row it is supposed to follow. */
 @media (max-width: 1000px) {
-  .builder-react-root .builder-module-editor--feature-cards {
+  .builder-react-root .builder-module-editor--feature-cards,
+  .builder-react-root .builder-module-editor--slideshow {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
+  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+  .builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
     grid-column: 1;
     grid-row: auto;
   }

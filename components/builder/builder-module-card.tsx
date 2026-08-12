@@ -155,6 +155,19 @@ import {
 // editor can only produce paragraph blocks, which is the one thing this module
 // exists to avoid. The placeholder shows what the box accepts.
 
+/**
+ * Editors laid out as two equal columns — settings left, the item list right.
+ *
+ * These need the module chrome (Label, Background, Alignment, the four
+ * margins) to fall into the LEFT column rather than span the panel, so the
+ * item list can start at row 1 level with the Label field. The chrome is
+ * rendered here, not by the settings component, so the grid lives on
+ * `.builder-module-editor--<type>` and this set is what names the members.
+ * Adding a module to the shape means adding it here and to the matching CSS
+ * selector list in `_builder-react-overrides.css`.
+ */
+const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow"]);
+
 type BuilderModuleCardProps = {
   module: BuilderTemplateModule;
   pages?: BuilderPageRecord[];
@@ -3255,11 +3268,14 @@ export function BuilderModuleCard({
           title={module.name || module.type}
           onClose={() => setIsPopped(false)}
         >
-          {/* Feature Cards runs its chrome down the left column beside the
-              card list, so that column needs a name at the top of it. Every
-              other module keeps the chrome full-width and has no columns to
-              label. */}
-          {module.type === "feature-cards" ? (
+          {/* A two-column editor runs its chrome down the left column beside
+              the item list, so that column needs a name at the top of it.
+              Every other module keeps the chrome full-width and has no
+              columns to label. Slideshow joined 2026-08-12, which is why this
+              is a set rather than the `=== "feature-cards"` it started as —
+              the second module to want it should not have to find this line
+              by reading the whole file. */}
+          {TWO_COLUMN_EDITOR_TYPES.has(module.type) ? (
             <div className="builder-cards-panel-heading">Settings</div>
           ) : null}
           {module.type !== "social" && module.type !== "blog-post-list" ? (

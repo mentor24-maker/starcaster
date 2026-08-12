@@ -88,7 +88,7 @@ export function BuilderSlideshowModuleSettings({
           becomes one control per row with a shared label track, which is what
           keeps a narrow column from running its fields off the edge. */}
       <div className="builder-cards-panel-settings builder-schema-panel-column">
-        <div className="builder-schema-group-title">Slideshow</div>
+        <div className="builder-schema-group-title">Playback</div>
         <BuilderModuleFieldStrip>
           <BuilderModuleField label="Transition" width="select-md">
             <select
@@ -127,7 +127,9 @@ export function BuilderSlideshowModuleSettings({
           the image picker and the alt text each get a column, so neither one
           can stretch the way it did as a stacked `label.field`. */}
       <div className="builder-cards-panel-items">
-        <div className="builder-schema-group-title">Slides</div>
+        {/* A column name, one step larger than a group title — it names the
+            whole right-hand column, the way "Settings" names the left. */}
+        <div className="builder-cards-panel-heading">Slides</div>
         <div className="builder-item-grid builder-item-grid--slides">
           <span className="builder-item-grid-header">Image</span>
           <span className="builder-item-grid-header">Alt text</span>
