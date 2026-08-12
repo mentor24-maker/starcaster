@@ -110,6 +110,33 @@ async function run() {
   });
   assert.equal(none.ok, true);
   assert.equal(none.data.project, null);
+
+  // Two brand-new users must BOTH get a default project. Slugs are globally
+  // unique, so when the auto-create asked for the name alone every default
+  // wanted the slug "default-project": the first user took it and every user
+  // after that got a 409, ended up with no project, and could not use a
+  // single screen.
+  seed([]);
+  const firstNewUser = await resolveCurrentProject({
+    userId: 'user_brand_new_one',
+    requestedProjectId: '',
+    sessionActiveProjectId: '',
+    autoCreateDefault: true,
+    autoSelectFirst: true,
+  });
+  const secondNewUser = await resolveCurrentProject({
+    userId: 'user_brand_new_two',
+    requestedProjectId: '',
+    sessionActiveProjectId: '',
+    autoCreateDefault: true,
+    autoSelectFirst: true,
+  });
+  assert.ok(firstNewUser.data.project?.id, 'first new user got no default project');
+  assert.ok(secondNewUser.data.project?.id, 'second new user got no default project');
+  assert.notEqual(secondNewUser.data.project.id, firstNewUser.data.project.id);
+  assert.notEqual(secondNewUser.data.project.slug, firstNewUser.data.project.slug);
+  // Each default still reads as a default, so a real project outranks it.
+  assert.ok(secondNewUser.data.project.slug.startsWith('default-'));
 }
 
 run()
