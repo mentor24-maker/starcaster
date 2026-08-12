@@ -3300,6 +3300,33 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   flex: 0 0 auto;
 }
 
+/*
+ * The two ambient rules this module has to answer for.
+ *
+ * Standard 3's corollary: a module may not depend on ambient CSS it does not
+ * own. These are the other half of that — ambient CSS the module has to
+ * actively undo, because `legacy.css` styles bare `input` and
+ * `button[type="submit"]` element selectors and those reach every published
+ * tenant page, not just the admin screens they were written for.
+ *
+ * Operator, 2026-08-12: "notice the slight vertical offset between the field
+ * and button." It was 4.8px, and it was both rules at once:
+ *
+ *   input, textarea, select { margin: 0.3rem 0 }   -> pushes the FIELD down 4.8px
+ *   button[type="submit"]  { align-self: flex-start } -> pins the BUTTON to the top
+ *
+ * The form already says `align-items: center`; the button was opting out of
+ * it. Fixing only one of the two would have halved the gap and looked like a
+ * rounding error, which is the trap — so both are named here with what they do.
+ */
+.builder-react-root .builder-site-search-input {
+  margin: 0;
+}
+
+.builder-react-root .builder-site-search-submit {
+  align-self: center;
+}
+
 .builder-react-root .builder-site-search-input {
   /*
    * Field Width sets all three; unset means "grow to fill the row" (1 1 12rem).
