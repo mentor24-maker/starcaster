@@ -40,6 +40,7 @@ const auth        = require('./auth');
 const projectAdmin = require('./projectAdmin');
 const projectSupport = require('./projectSupport');
 const projects    = require('./projects');
+const invitations = require('./invitations');
 const settings    = require('./settings');
 const acquire     = require('./acquire');
 const promoLeads  = require('./promoLeads');
@@ -76,6 +77,7 @@ const ROUTE_MODULES = [
   projectAdmin,
   projectSupport,
   projects,
+  invitations,
   settings,
   acquire,
   promoLeads,
@@ -246,6 +248,12 @@ async function handleRequest(req, res) {
   const isPublicCrmRoute = isPublicCrmRouteForAuth(pathname, method);
   const isPublicTenantReadRoute = isPublicTenantContentReadRoute(pathname, method, req);
   const isPublicSiteRoute = pathname.startsWith('/api/public/');
+  // SECURITY EXEMPTION: an invited person has no account yet, so checking
+  // their invitation link cannot require a session. Read-only, token-keyed,
+  // and answers only with the invited email and project name — the same
+  // facts the invitation email already told them. It never lists invitations
+  // and never redeems one; redemption is in POST /api/auth/register.
+  const isInviteVerifyRoute = pathname === '/api/invitations/verify' && method === 'GET';
   const isFacebookOAuthCallback =
     pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
   const isImportDriveFolderHealth =
@@ -310,6 +318,7 @@ async function handleRequest(req, res) {
     && !isPublicContactSubmit
     && !isPublicCrmRoute
     && !isPublicSiteRoute
+    && !isInviteVerifyRoute
     && !hasPublicTenantReadAccess
     && !authUser
   ) {
