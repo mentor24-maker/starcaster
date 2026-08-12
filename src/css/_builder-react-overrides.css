@@ -3201,3 +3201,51 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-inline-rich-text-code-view {
   min-height: 72px;
 }
+
+/* ============================================================== */
+/* D7 — DIALOGS AND POPUP EDITORS SIZE TO THEIR CONTENT            */
+/* ============================================================== */
+
+/*
+ * Each of these opens no narrower than it used to, grows to fit the editor
+ * inside it, and stops at 75% of the screen. Their base rules live in the
+ * regenerated layer (_builder-react.css) where a hand edit would be erased
+ * on the next extraction (R2) — so the floor-and-ceiling lives here, and
+ * wins by import order.
+ *
+ * Swept 2026-08-11, after the operator reported for the fourth time an
+ * editor cramped into a box someone had sized by guess. See
+ * docs/MODULE_UI_DOCTRINE.md §2 for the rule and the incident.
+ */
+
+/*
+ * The button's background picker: four mode tabs, a gallery row and the
+ * colour controls decide its width. At a flat 360px the tabs folded onto
+ * two lines. It hangs off the right edge of its trigger, so growing costs
+ * nothing but the room it needs.
+ */
+.builder-react-root .builder-button-background-popup {
+  width: max-content;
+  min-width: min(360px, 92vw);
+  max-width: min(75vw, 92vw);
+}
+
+/* The contact editor sizes to its own fields rather than a flat 520px,
+   which crowded each value against its label on the longer rows. */
+.builder-react-root .crm-contacts-modal {
+  width: max-content;
+  min-width: min(520px, 100%);
+  max-width: min(75vw, 100%);
+}
+
+.builder-react-root .admin-blog-paint-modal {
+  width: max-content;
+  min-width: min(520px, 100%);
+  max-width: min(75vw, 100%);
+}
+
+.builder-react-root .poll-related-picker-modal {
+  width: max-content;
+  min-width: min(640px, 100%);
+  max-width: min(75vw, 100%);
+}

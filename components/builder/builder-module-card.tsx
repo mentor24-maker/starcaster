@@ -2956,9 +2956,11 @@ function ModuleEditorWrapper({
 }) {
   const className = "builder-module-editor is-lattice";
 
+  // No width cap: popping a module out is how the operator escapes a narrow
+  // column, so the editor takes the room its panel needs (D7).
   if (isPopped) {
     return (
-      <BuilderCenteredModal title={title} onClose={onClose} maxWidth={680}>
+      <BuilderCenteredModal title={title} onClose={onClose}>
         <div className={className}>{children}</div>
       </BuilderCenteredModal>
     );

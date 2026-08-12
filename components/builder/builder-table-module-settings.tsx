@@ -45,16 +45,6 @@ const MAX_COLUMNS = 10;
 const MAX_ROWS = 100;
 
 /**
- * Cell modules whose editor is the schema generator's multi-column axis
- * layout (D8). 560px is a one-column form's width; four axes in it would
- * crop (L4/D7 — a modal sizes to its content, and a form modal never
- * scrolls sideways). 1200 is four 260px columns plus their gaps and the modal's own
- * padding, measured — so the axes read across one row exactly as they
- * do in a section panel.
- */
-const AXIS_EDITOR_TYPES = new Set(["button", "heading", "image", "text"]);
-
-/**
  * Max Width presets (C1 — a dropdown of knowable values, not a free-form
  * number), with "Full width" as the None option (empty string, which is what
  * the renderer reads as unconstrained).
@@ -149,7 +139,6 @@ function TableCellModules({
             <BuilderCenteredModal
               title={mod.name || mod.type}
               onClose={() => setEditingId(null)}
-              maxWidth={AXIS_EDITOR_TYPES.has(mod.type) ? 1200 : 560}
             >
             <div className="builder-table-cell-module-editor">
               <label className="field">
