@@ -37,6 +37,12 @@ type BuilderImagePreviewProps = {
   gameOverlayHost?: boolean;
   /** Button-trigger mascot row (stack above poll pods; Z-Index from module settings). */
   sectionScopedDecor?: boolean;
+  /**
+   * How wide this module's column is, as a percentage of the row. A module set
+   * to "100" inside a two-column row fills half the page, not all of it — and
+   * without that the browser is told to expect a full-width file.
+   */
+  columnWidthPercent?: number;
 };
 
 export function BuilderImagePreview({
@@ -45,7 +51,8 @@ export function BuilderImagePreview({
   imageClassName = "builder-preview-image",
   placeholder = "Choose an image",
   gameOverlayHost = false,
-  sectionScopedDecor = false
+  sectionScopedDecor = false,
+  columnWidthPercent = 100
 }: BuilderImagePreviewProps) {
   const mediaUrl = resolvePublicBuilderAssetUrl(module.settings.url);
   const linkUrl = isFloatingImageModule(module) ? "" : resolvePublicBuilderAssetUrl(module.settings.linkUrl);
@@ -64,8 +71,13 @@ export function BuilderImagePreview({
   // Offer the browser the scaled-down copies of this picture, and tell it how
   // wide the slot is so it does not fetch a full-width file for a half column.
   // Falls back to a plain `src` for any image that has no copies.
+  // The module's width is a share of its COLUMN, and the column is a share of
+  // the row — so the slot is the two multiplied. Half a two-column row is 50%,
+  // not 100%, and that is the difference between fetching the 600px copy and
+  // the 1200px one.
+  const slotWidthPercent = (getModuleWidthPercent(module.settings) * columnWidthPercent) / 100;
   const responsiveImage = imageProps(mediaUrl, {
-    sizes: sizesForWidthPercent(getModuleWidthPercent(module.settings))
+    sizes: sizesForWidthPercent(slotWidthPercent)
   });
 
   const figure = (
