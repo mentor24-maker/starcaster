@@ -89,6 +89,22 @@
    */
   --builder-field-room: 40px;
 
+  /*
+   * W9 (operator, 2026-08-12): "Never, ever have text fields that stretch the
+   * full width of their container. Every field must have some kind of size
+   * constraint." This is that constraint — the ceiling for the long-text
+   * fields that have no lattice column to bound them: a `full` field, a
+   * textarea, an image-picker URL, a cell in an item grid.
+   *
+   * 560px because it holds the readable part of a URL and roughly a line of
+   * description. Wider buys nothing: the Slideshow image field was rendering
+   * at about 2,000px, and no one reads a blob-storage URL end to end.
+   *
+   * Never write a bigger number on an individual field. `npm run
+   * check:panels` fails on any control that renders wider than this.
+   */
+  --builder-field-long-max: 560px;
+
   /* Aliases for legacy CSS */
   --text: var(--ink-primary);
   --subtext: var(--ink-secondary);

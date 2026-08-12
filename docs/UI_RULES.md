@@ -442,6 +442,50 @@ Advanced — is the follow-on pass the operator sequenced after this.
   padding kept, and the single control that could reach it took all four
   sides at once.*
 
+- **W8.** A **size dropdown past 100px counts in fives** — pixels, not
+  counts or angles. Spacing counts in fives at any range. *(operator
+  8/12 on Site Search: "update any dropdown that lets you set the field
+  width of something that would typically be more than 100px to
+  increment by 5px instead of 1px"; widened to margins and padding the
+  same night on Slideshow: "sizes incremented by 1 that should be 5")* —
+  **[auto]** `node scripts/check_ui_doctrine.cjs` (W8), which reads both
+  schema fields and JSX `<BuilderNumberSelectControl>` props.
+  Full write-up, including the off-grid-display trap that comes with
+  ever raising a step: `docs/MODULE_UI_DOCTRINE.md` §1a W8.
+
+- **W9. THE CEILING RULE — no field spans its container. Every field
+  carries a size constraint.** *(operator 8/12, on the Slideshow
+  module: "Never, ever have text fields that stretch the full width of
+  their container. Every field must have some kind of size
+  constraint.")* — **[browser-check]** `npm run check:panels`
+
+  W1 already forbade stretching a field to the widest available width,
+  and it was still happening, because W1 had **no ceiling to check
+  against** — only a habit. Three shapes had nothing bounding them at
+  all: a `full` field (which exists precisely to span both lattice
+  tracks), a bare `textarea`, and a cell of an item grid on a wide
+  screen. The Slideshow editor was all three at once — a slide's image
+  URL rendered about 2,000px wide, and the alt text under it did too.
+
+  **The ceiling is one number, shared: `--builder-field-long-max`
+  (560px) in `src/css/_variables.css`.** 560 because it holds the
+  readable part of a URL and roughly a line of description. Never write
+  a bigger number on an individual field — that is the per-field sizing
+  W0 exists to stop, and `check:panels` fails on any control that
+  renders wider.
+
+  **This is a ceiling, not a width.** A control narrower than the cap —
+  a `text-md` at 280px, a `label` at 230px — is untouched, because a cap
+  can only ever lower a used width. And it does not weaken W0: inside a
+  column every control still ends at the same x, since they all hit the
+  same ceiling together.
+
+  **Where the constraint comes from is the field's business.** A lattice
+  column, an item-grid track, a width token, or the shared cap — any of
+  them satisfies W9. What is forbidden is `max-width: none` on something
+  that can grow, which is exactly what the lattice control rule and the
+  `label.field` rule both declared before this.
+
 ## C — Controls: pick the right one
 
 *Umbrella: the control does the thinking, not the operator.*

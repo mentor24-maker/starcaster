@@ -22,6 +22,16 @@
  * group — are exempt from (3) by design: they keep their natural size at the
  * start of the slot. They are still bound by (1) and (2).
  *
+ * IT ALSO ASSERTS W9 — no field spans its container:
+ *   5. no text control anywhere on the surface renders wider than
+ *      `--builder-field-long-max` (560px)
+ *
+ * (5) is measured over EVERYTHING, including the `full` fields and the item
+ * managers that (1)–(4) deliberately skip. Those exclusions are what let the
+ * Slideshow editor ship a 2,000px-wide image URL field while this reported a
+ * clean pass — a control the check cannot see is a control the rule does not
+ * cover, for the third time.
+ *
  * Not in CI (CI has no browsers). Run it before shipping panel work, like
  * check_screens.mjs.
  *
@@ -238,6 +248,54 @@ function measure(page, nonStretch) {
   }, nonStretch);
 }
 
+/**
+ * W9 — every text control on the surface, with its rendered width.
+ *
+ * Measured OVER THE WHOLE PANEL rather than per column, and with none of the
+ * exclusions the lattice check needs: a `full` field and an item-manager cell
+ * are exempt from W0 because they legitimately span their tracks, and that is
+ * precisely where an unbounded field hides. Selects are in too — one with a
+ * long option list will happily grow past the ceiling.
+ *
+ * Reported by the deepest identifying label available, since an item-grid
+ * input has no label element of its own; its `aria-label` is what names the
+ * row ("Slide 2 alt text") when a failure has to be found by hand.
+ */
+function measureWidths(page) {
+  return page.evaluate(() => {
+    const panels = [...document.querySelectorAll('.is-lattice')]
+      .filter((el) => !el.parentElement?.closest('.is-lattice'));
+    const cap = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--builder-field-long-max')
+    ) || 560;
+
+    return panels.flatMap((panel, index) => {
+      const controls = [...panel.querySelectorAll(
+        'input[type="text"], input[type="url"], input[type="search"], input[type="number"], textarea, select'
+      )];
+      return controls.map((el) => {
+        const w = Math.round(el.getBoundingClientRect().width);
+        if (w <= cap) return null;
+        const named = el.getAttribute('aria-label')
+          || el.closest('.builder-module-field, .builder-setting-row, label.field')
+            ?.querySelector('.builder-module-field-label, .builder-setting-label, :scope > span')
+            ?.textContent?.trim()
+          || el.getAttribute('placeholder')
+          || el.tagName.toLowerCase();
+        return { index, name: named, width: w, cap };
+      }).filter(Boolean);
+    });
+  });
+}
+
+function assertCeiling(overflows, width) {
+  return overflows.map((o) =>
+    `${width}px panel #${o.index}: "${o.name}" renders ${o.width}px wide, over the ` +
+    `${o.cap}px ceiling (W9) — a field with no size constraint. The cap is ` +
+    '--builder-field-long-max; raise the field\'s own width token, never the cap.'
+  );
+}
+
 function assertLattice(panels, width) {
   const failures = [];
 
@@ -331,6 +389,9 @@ for (const width of WIDTHS) {
     const measured = await panels;
     panelsSeen += measured.length;
     allFailures.push(...assertLattice(measured, width));
+    // W9 runs at every width on purpose: a ceiling is only interesting on the
+    // wide end, and 1440 alone would let a 1600px-only overflow through.
+    allFailures.push(...assertCeiling(await measureWidths(page), width));
   } finally {
     await browser.close();
   }
@@ -362,14 +423,15 @@ if (panelsSeen === 0) {
 }
 
 if (allFailures.length) {
-  console.error(`\n[check:panels] W0 (the lattice) FAILED — ${allFailures.length} problem(s):\n`);
+  console.error(`\n[check:panels] FAILED — ${allFailures.length} problem(s):\n`);
   for (const f of allFailures) console.error(`  ✗ ${f}`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
     'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
-    'Fix them there — never by putting a width on one field.\n'
+    'W9: no field spans its container — the ceiling is --builder-field-long-max\n' +
+    'in the same file. Fix them there — never by putting a width on one field.\n'
   );
   process.exit(1);
 }
 
-console.log(`[check:panels] OK — W0 holds across ${panelsSeen} panel(s) at ${WIDTHS.join('/')}px.`);
+console.log(`[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) at ${WIDTHS.join('/')}px.`);

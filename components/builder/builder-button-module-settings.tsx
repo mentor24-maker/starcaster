@@ -395,6 +395,7 @@ export function BuilderButtonModuleSettings({
                   value={ctx.settings[key] ?? ctx.settings[legacy] ?? "0"}
                   min={0}
                   max={160}
+                  step={5}
                   fallback="0"
                   onChange={(next) => ctx.set(key, next)}
                 />
