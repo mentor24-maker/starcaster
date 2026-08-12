@@ -63,3 +63,32 @@ export function formatEmailPlainTextContent(value: unknown): string {
 
   return stripDangerousEmailHtml(html);
 }
+
+/**
+ * A heading module's content in email. The page-side twin is
+ * `formatHeadingContent` in `builder-template.ts`, which carries the
+ * reasoning; duplicated for the same reason as `formatEmailPlainTextContent`
+ * — this file must stay free of jsdom/DOMPurify for serverless email render,
+ * and `email-rich-text.test.ts` checks the two against each other.
+ *
+ * Block tags are dropped here rather than unwrapped (the sanitizer that
+ * unwraps is the one this file exists to avoid). Nothing writes them into a
+ * heading; the rule is only about pasted markup, and mail clients treat a
+ * stray `<div>` inside an `<h1>` worse than they treat missing words.
+ */
+export function formatEmailHeadingContent(value: unknown): string {
+  const text = String(value ?? "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const escaped = looksLikeHtml(text)
+    ? text
+    : text.replace(BARE_AMPERSAND, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  return stripDangerousEmailHtml(escaped.replace(/\n/g, "<br />")).replace(
+    /<\/?(?:p|div|h[1-6]|ul|ol|li|dl|blockquote|pre|table|thead|tbody|tr|td|th|section|article|aside|header|footer|figure|figcaption|hr|img)\b[^>]*>/gi,
+    ""
+  );
+}

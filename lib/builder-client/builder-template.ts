@@ -15,7 +15,7 @@ import {
   normalizeHeadlineRotatorHeadlinesJson
 } from "@/lib/headline-rotator";
 import { normalizeBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
-import { escapeHtmlText, sanitizeRichTextHtml } from "@/lib/sanitize-html";
+import { escapeHtmlText, sanitizeInlineHtml, sanitizeRichTextHtml } from "@/lib/sanitize-html";
 import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
@@ -715,6 +715,62 @@ export function formatPlainTextContent(value: unknown) {
   const html = BLOCK_LEVEL_TAG.test(text) ? escaped : escaped.replace(/\n/g, "<br />");
 
   return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(html), "display");
+}
+
+/**
+ * Heading content, which is inline markup inside the `<h1>`…`<h6>` the module
+ * renders — never a document of its own.
+ *
+ * The module used to store a bare string and render it as a text node, so a
+ * heading could only ever be one colour and one size: the operator could not
+ * make a single word green (reported 2026-08-11, hero heading on the model
+ * page). It now stores markup, and everything that reads it comes through
+ * here.
+ *
+ * A value with no tags is escaped exactly the way Simple Text escapes typed
+ * copy — entities the operator typed (`&nbsp;`) survive, bare `&` and every
+ * `<`/`>` do not — so every heading that existed before this change renders
+ * character-for-character as it did. Newlines become `<br />`; block tags are
+ * unwrapped to their text by the sanitizer, because nothing block-level can
+ * legally live inside a heading.
+ */
+export function formatHeadingContent(value: unknown) {
+  const text = String(value ?? "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const escaped = looksLikeHtml(text) ? text : escapePlainTextPreservingEntities(text);
+
+  return sanitizeInlineHtml(escaped.replace(/\n/g, "<br />"));
+}
+
+/**
+ * Storage → editor. The inline editor is a ProseMirror document, which must
+ * have a block node at the top, so the stored inline markup gets a `<p>`
+ * wrapper it never carries on disk.
+ */
+export function prepareHeadingHtmlForEditor(value: unknown) {
+  const html = formatHeadingContent(value);
+
+  return html ? `<p>${html}</p>` : "<p></p>";
+}
+
+/**
+ * Editor → storage. Unwraps the editor's paragraph and turns a paragraph
+ * break into the `<br />` a heading actually wants — pressing Enter in a
+ * heading means "second line", not "second paragraph".
+ */
+export function headingHtmlFromEditor(html: string) {
+  const inline = String(html ?? "")
+    .replace(/<\/p>\s*<p[^>]*>/gi, "<br />")
+    .replace(/^\s*<p[^>]*>/i, "")
+    .replace(/<\/p>\s*$/i, "");
+
+  return sanitizeInlineHtml(inline)
+    .replace(/(?:\s*<br\s*\/?>\s*)+$/i, "")
+    .trim();
 }
 
 // A trailing empty block (an otherwise-empty <p> or heading whose only

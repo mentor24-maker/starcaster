@@ -3006,3 +3006,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .site-nav-menu {
   gap: var(--site-nav-gap, 4px);
 }
+
+/* ---------------------------------------------------------------------
+   The heading module's content editor.
+
+   Same shell as the paragraph editor, sized for a heading: a couple of
+   lines of typing room rather than a page, and the text shown at the
+   weight a heading reads at so what is on screen matches what lands on
+   the page.
+   --------------------------------------------------------------------- */
+.builder-react-root .builder-inline-rich-text-content .ProseMirror {
+  min-height: 44px;
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.builder-react-root .builder-inline-rich-text-code-view {
+  min-height: 72px;
+}

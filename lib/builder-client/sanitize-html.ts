@@ -138,6 +138,58 @@ export function sanitizeRichTextHtml(html: string) {
   }
 }
 
+/**
+ * Inline markup only — what may legally live INSIDE an `<h1>`…`<h6>`.
+ *
+ * A heading is one element; block tags cannot nest in it, so this list is the
+ * rich-text list minus every block (`p`, `div`, `ul`, `li`, headings…) and
+ * minus `img`. Anything outside it is unwrapped rather than deleted: DOMPurify
+ * keeps a stripped tag's text, so pasting a paragraph into a heading gives you
+ * the words, not an empty heading.
+ *
+ * `style` stays allowed because that is how a coloured or resized word is
+ * expressed — `<span style="color:#4f9c3a">`.
+ */
+const INLINE_ALLOWED_TAGS = [
+  "br",
+  "strong",
+  "b",
+  "em",
+  "i",
+  "u",
+  "s",
+  "del",
+  "strike",
+  "span",
+  "a",
+  "sup",
+  "sub",
+  "mark",
+  "small",
+  "code",
+  "abbr"
+] as const;
+
+const INLINE_ALLOWED_ATTR = ["href", "target", "rel", "style", "class", "id", "title"] as const;
+
+/**
+ * Sanitize markup destined for the inside of a heading. Same guarantees as
+ * `sanitizeRichTextHtml`, narrower allowlist (see `INLINE_ALLOWED_TAGS`).
+ */
+export function sanitizeInlineHtml(html: string) {
+  try {
+    ensureConfigured();
+
+    return getDomPurify().sanitize(html, {
+      ALLOWED_TAGS: [...INLINE_ALLOWED_TAGS],
+      ALLOWED_ATTR: [...INLINE_ALLOWED_ATTR],
+      ALLOW_DATA_ATTR: false
+    });
+  } catch {
+    return stripDangerousRichTextHtml(html);
+  }
+}
+
 /** Fallback when DOMPurify/jsdom is unavailable (e.g. Vercel ESM/CJS mismatch). */
 export function stripDangerousRichTextHtml(html: string) {
   return html

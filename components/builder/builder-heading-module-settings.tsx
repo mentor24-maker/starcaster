@@ -1,6 +1,7 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { BuilderInlineRichTextEditor } from "./builder-inline-rich-text-editor";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import {
@@ -110,19 +111,16 @@ export function BuilderHeadingModuleSettings({
               label: "Heading",
               width: "full",
               control: "custom",
-              rendersVia: "BuilderHeadingPreview",
-              // Edits module.text, not a settings key.
+              rendersVia: "formatHeadingContent",
+              // Edits module.text, not a settings key. Inline formatting only —
+              // the heading is one element, so a word can be recoloured or
+              // resized but nothing block-level may go in. The Text axis below
+              // still sets the whole heading; this is for the exceptions.
               render: (ctx) => (
-                <input
-                  type="text"
+                <BuilderInlineRichTextEditor
                   value={ctx.module.text}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({
-                      ...current,
-                      text: event.target.value
-                    }))
-                  }
-                  placeholder="Enter heading"
+                  onChange={(text) => onUpdateModule((current) => ({ ...current, text }))}
+                  themeColors={themeColors}
                 />
               )
             }

@@ -7,6 +7,7 @@ import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffec
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   createDefaultBackgroundSettings,
+  formatHeadingContent,
   formatPlainTextContent,
   formatRichTextContent,
   getBuilderBackgroundStyle,
@@ -1735,13 +1736,15 @@ function BuilderModulePreview({
 
   if (module.type === "heading") {
     const Tag = (module.settings.level || "h2") as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+    // Inline markup, sanitized: a heading can carry a recoloured or resized
+    // word (see `formatHeadingContent`). A heading with no markup renders
+    // exactly the escaped text it always did.
     return (
       <Tag
         className={`builder-preview-heading builder-preview-heading-${variant || "default"}`}
+        dangerouslySetInnerHTML={{ __html: formatHeadingContent(module.text) }}
         style={getHeadingModuleStyle(module.settings)}
-      >
-        {module.text || ""}
-      </Tag>
+      />
     );
   }
 
