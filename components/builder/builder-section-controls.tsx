@@ -1,7 +1,11 @@
 "use client";
 
 import type { BackgroundSettings, BuilderTemplateLayout, BuilderTemplateSection } from "@/lib/builder-template";
-import { getLayoutColumns, normalizeSignedOffsetValue } from "@/lib/builder-template";
+import {
+  getLayoutColumnPercents,
+  getLayoutColumns,
+  normalizeSignedOffsetValue
+} from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { layoutOptions } from "./builder-types";
@@ -64,6 +68,17 @@ export function BuilderSectionControls({
     );
   }
 
+  const columnKeys = getLayoutColumns(section.layout);
+  // What the Column Widths boxes show. Until he sets a complete set, they show
+  // the Layout preset's own proportions — so the numbers he starts editing are
+  // the widths already on screen, and his first keystroke writes a full set
+  // rather than one custom column beside two zeroes.
+  const layoutPercents = getLayoutColumnPercents(section.layout);
+  const columnWidthValues = columnKeys.map((columnKey, index) => {
+    const stored = Number(section.columnWidths?.[columnKey] ?? "0");
+    return stored > 0 ? stored : layoutPercents[index] ?? 0;
+  });
+
   return (
     <div className="builder-section-settings">
       <div className="builder-section-settings-grid">
@@ -76,6 +91,12 @@ export function BuilderSectionControls({
               onUpdateSection((current) => ({
                 ...current,
                 layout: nextLayout,
+                // A new layout has its own columns, so any custom widths were
+                // measured against a row that no longer exists. Cleared, which
+                // puts the row back on the preset's proportions.
+                columnWidths: Object.fromEntries(
+                  getLayoutColumns(nextLayout).map((column) => [column, "0"])
+                ),
                 modules: current.modules.map((module) => ({
                   ...module,
                   column: allowedColumns.has(module.column) ? module.column : getLayoutColumns(nextLayout)[0]
@@ -164,6 +185,70 @@ export function BuilderSectionControls({
             <option value="style">Style</option>
           </select>
         </BuilderSettingRow>
+        {columnKeys.length > 1 ? (
+          <BuilderSettingRow label="Column Widths">
+            <div className="builder-column-width-fields">
+              {columnKeys.map((columnKey, index) => (
+                <input
+                  key={columnKey}
+                  type="number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  value={columnWidthValues[index]}
+                  title={`Share of the row taken by the ${columnKey} column. The numbers do not have to add up to exactly 100 — they are read as proportions.`}
+                  onChange={(event) => {
+                    const next = columnWidthValues.slice();
+                    next[index] = Math.min(100, Math.max(1, Number(event.target.value) || 1));
+                    onUpdateSection((current) => ({
+                      ...current,
+                      columnWidths: Object.fromEntries(
+                        columnKeys.map((key, position) => [key, String(next[position])])
+                      )
+                    }));
+                  }}
+                />
+              ))}
+              <span className="builder-column-width-unit">%</span>
+            </div>
+          </BuilderSettingRow>
+        ) : null}
+        {columnKeys.length > 1 ? (
+          <BuilderSettingRow label="Column Gap">
+            <BuilderNumberSelectControl
+              value={section.columnGap ?? "16"}
+              min={0}
+              max={120}
+              fallback="16"
+              onChange={(columnGap) => onUpdateSection((current) => ({ ...current, columnGap }))}
+            />
+          </BuilderSettingRow>
+        ) : null}
+        {columnKeys.length > 1 ? (
+          <BuilderSettingRow label="Match Column Heights">
+            <input
+              type="checkbox"
+              checked={section.equalColumnHeights === "true"}
+              title="Stretch every module in this row to the height of the tallest column, so a row of cards has one bottom edge instead of a ragged one."
+              onChange={(event) =>
+                onUpdateSection((current) => ({
+                  ...current,
+                  equalColumnHeights: event.target.checked ? "true" : "false"
+                }))
+              }
+            />
+          </BuilderSettingRow>
+        ) : null}
+        <BuilderSettingRow label="Min Height">
+          <BuilderNumberSelectControl
+            value={section.minHeight ?? "0"}
+            min={0}
+            max={1200}
+            step={10}
+            fallback="0"
+            onChange={(minHeight) => onUpdateSection((current) => ({ ...current, minHeight }))}
+          />
+        </BuilderSettingRow>
         <BuilderSettingRow label="Top Margin">
           <BuilderNumberSelectControl
             value={section.marginTop ?? "0"}
@@ -192,6 +277,24 @@ export function BuilderSectionControls({
             }
           />
         </BuilderSettingRow>
+        <BuilderSettingRow label="Left Margin">
+          <BuilderNumberSelectControl
+            value={section.marginLeft ?? "0"}
+            min={0}
+            max={160}
+            fallback="0"
+            onChange={(marginLeft) => onUpdateSection((current) => ({ ...current, marginLeft }))}
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Right Margin">
+          <BuilderNumberSelectControl
+            value={section.marginRight ?? "0"}
+            min={0}
+            max={160}
+            fallback="0"
+            onChange={(marginRight) => onUpdateSection((current) => ({ ...current, marginRight }))}
+          />
+        </BuilderSettingRow>
         <BuilderSettingRow label="Top Padding">
           <BuilderNumberSelectControl
             value={section.paddingTop ?? "18"}
@@ -218,6 +321,24 @@ export function BuilderSectionControls({
                 paddingBottom
               }))
             }
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Left Padding">
+          <BuilderNumberSelectControl
+            value={section.paddingLeft ?? "0"}
+            min={0}
+            max={160}
+            fallback="0"
+            onChange={(paddingLeft) => onUpdateSection((current) => ({ ...current, paddingLeft }))}
+          />
+        </BuilderSettingRow>
+        <BuilderSettingRow label="Right Padding">
+          <BuilderNumberSelectControl
+            value={section.paddingRight ?? "0"}
+            min={0}
+            max={160}
+            fallback="0"
+            onChange={(paddingRight) => onUpdateSection((current) => ({ ...current, paddingRight }))}
           />
         </BuilderSettingRow>
         <BuilderSettingRow label="Vertical Offset">

@@ -435,6 +435,33 @@ export type BuilderTemplateSection = {
   paddingTop: string;
   paddingBottom: string;
   /**
+   * Breathing room inside the row's left and right edges. ADDS to the inset
+   * that already centres every row on the theme's content width, so setting it
+   * pushes content further in rather than breaking the shared left edge that
+   * lines a contact strip up with the hero above it. Defaults to "0".
+   */
+  paddingLeft: string;
+  paddingRight: string;
+  /** Space OUTSIDE the row's left and right edges — moves the row itself in. */
+  marginLeft: string;
+  marginRight: string;
+  /** Space between this row's columns. "16" is the gap that used to be fixed. */
+  columnGap: string;
+  /** Floor for the row's height, so a band can be taller than its content. "0" = size to content. */
+  minHeight: string;
+  /**
+   * Per-column proportions, keyed by column. All zero (the default) means
+   * "follow the Layout preset"; any complete set overrides it, so 70/30 is
+   * reachable without adding a layout for every ratio anyone might want.
+   */
+  columnWidths: Record<string, string>;
+  /**
+   * When "true", every module in the row stretches to the height of the
+   * tallest column, so a row of cards has one bottom edge instead of a ragged
+   * one. Off by default because it makes short modules grow.
+   */
+  equalColumnHeights: string;
+  /**
    * Nudges the whole row off where the layout put it, WITHOUT moving anything
    * else — this is a transform, not a margin, so the rows above and below stay
    * exactly where they are and the row simply rides over them. That is what
@@ -803,6 +830,25 @@ export function resolveModuleColumnForLayout(column: unknown, layout: unknown): 
 
 export function getLayoutGridTemplate(layout: BuilderTemplateLayout) {
   return getLayoutSpec(layout).grid;
+}
+
+/**
+ * The layout preset's own proportions as whole percentages — "2fr 4fr" reads
+ * back as [33, 67]. This is what the Column Widths control shows before the
+ * operator has set anything, so the numbers he starts editing are the widths
+ * he is already looking at rather than an arbitrary even split.
+ */
+export function getLayoutColumnPercents(layout: BuilderTemplateLayout): number[] {
+  const parts = getLayoutSpec(layout)
+    .grid.split(/\s+/)
+    .map((part) => Number.parseFloat(part))
+    .filter((part) => Number.isFinite(part) && part > 0);
+
+  const total = parts.reduce((sum, part) => sum + part, 0);
+
+  if (!parts.length || total <= 0) return [100];
+
+  return parts.map((part) => Math.round((part / total) * 100));
 }
 
 export function normalizeLayout(value: unknown): BuilderTemplateLayout {
@@ -2113,6 +2159,14 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         ),
         paddingTop: normalizeSpacingValue(normalizedSection.paddingTop, "18", 0, 160),
         paddingBottom: normalizeSpacingValue(normalizedSection.paddingBottom, "18", 0, 160),
+        paddingLeft: normalizeSpacingValue(normalizedSection.paddingLeft, "0", 0, 160),
+        paddingRight: normalizeSpacingValue(normalizedSection.paddingRight, "0", 0, 160),
+        marginLeft: normalizeSpacingValue(normalizedSection.marginLeft, "0", 0, 160),
+        marginRight: normalizeSpacingValue(normalizedSection.marginRight, "0", 0, 160),
+        columnGap: normalizeSpacingValue(normalizedSection.columnGap, "16", 0, 120),
+        minHeight: normalizeSpacingValue(normalizedSection.minHeight, "0", 0, 1200),
+        columnWidths: normalizeCellMetric(normalizedSection.columnWidths, layout, "0", 0, 100),
+        equalColumnHeights: normalizeBooleanText(normalizedSection.equalColumnHeights),
         horizontalOffset: normalizeSignedOffsetValue(normalizedSection.horizontalOffset, "0"),
         verticalOffset: normalizeSignedOffsetValue(normalizedSection.verticalOffset, "0"),
         rowBorderWidth: normalizeSpacingValue(normalizedSection.rowBorderWidth, "0", 0, 20),
@@ -2186,6 +2240,14 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     marginBottom: "0",
     paddingTop: "18",
     paddingBottom: "18",
+    paddingLeft: "0",
+    paddingRight: "0",
+    marginLeft: "0",
+    marginRight: "0",
+    columnGap: "16",
+    minHeight: "0",
+    columnWidths: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    equalColumnHeights: "false",
     horizontalOffset: "0",
     verticalOffset: "0",
     rowBorderWidth: "0",

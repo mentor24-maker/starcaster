@@ -31,6 +31,8 @@ import {
   finalizeThemeStylesPageBackground,
   getBuilderBackgroundLayerOpacity,
   getBuilderBackgroundStyle,
+  getLayoutColumns,
+  getLayoutGridTemplate,
   normalizeBackgroundMode,
   normalizeBackgroundSettings,
   normalizeBuilderAssetUrl,
@@ -247,10 +249,86 @@ export function getSectionMarginStyle(section: BuilderTemplateSection): CSSPrope
 export function getSectionPaddingStyle(section: BuilderTemplateSection): CSSProperties {
   const top = normalizeSpacingValue(section.paddingTop, "18", 0, 160);
   const bottom = normalizeSpacingValue(section.paddingBottom, "18", 0, 160);
+  const left = normalizeSpacingValue(section.paddingLeft, "0", 0, 160);
+  const right = normalizeSpacingValue(section.paddingRight, "0", 0, 160);
   return {
     "--builder-section-padding-top": `${top}px`,
-    "--builder-section-padding-bottom": `${bottom}px`
+    "--builder-section-padding-bottom": `${bottom}px`,
+    // Side padding is ADDED to the content-width inset by the stylesheet, not
+    // substituted for it — see `--builder-section-padding-inline`. Emitted only
+    // when set, so an untouched row keeps the exact inset it has today.
+    ...(Number(left) > 0 ? { "--builder-section-padding-left": `${left}px` } : {}),
+    ...(Number(right) > 0 ? { "--builder-section-padding-right": `${right}px` } : {})
   } as CSSProperties;
+}
+
+/**
+ * Space outside the row's left and right edges.
+ *
+ * A full-width row already carries a negative side margin in CSS to escape the
+ * page's side padding and reach the viewport edge, so a plain `margin-left`
+ * here would cancel that escape and the row would silently stop being full
+ * width. The calc keeps the escape and adds the operator's inset on top of it.
+ */
+export function getSectionHorizontalMarginStyle(section: BuilderTemplateSection): CSSProperties {
+  const left = Number(normalizeSpacingValue(section.marginLeft, "0", 0, 160));
+  const right = Number(normalizeSpacingValue(section.marginRight, "0", 0, 160));
+
+  if (!left && !right) return {};
+
+  const isFullWidth = section.widthMode === "full-width";
+  const edge = (value: number) =>
+    isFullWidth ? `calc(${value}px - var(--bx-theme-padding-inline, 0px))` : `${value}px`;
+
+  return {
+    ...(left ? { marginLeft: edge(left) } : {}),
+    ...(right ? { marginRight: edge(right) } : {})
+  };
+}
+
+/**
+ * Space between the row's columns. Defaults to the 16px that used to be
+ * hard-coded in the renderer, so an untouched row is unchanged.
+ */
+export function getSectionColumnGapStyle(section: BuilderTemplateSection): CSSProperties {
+  return { gap: `${normalizeSpacingValue(section.columnGap, "16", 0, 120)}px` };
+}
+
+/**
+ * A floor for the row's height, so a band can be taller than the words in it.
+ *
+ * `{}` at 0 leaves the existing rule alone: the stylesheet's 56px floor keeps
+ * an EMPTY row big enough to drop a module onto, and the renderer releases it
+ * to 0 the moment the row holds something.
+ */
+export function getSectionMinHeightStyle(section: BuilderTemplateSection): CSSProperties {
+  const minHeight = Number(normalizeSpacingValue(section.minHeight, "0", 0, 1200));
+
+  if (!minHeight) return {};
+
+  return { "--builder-section-min-height": `${minHeight}px` } as CSSProperties;
+}
+
+/**
+ * The row's column proportions: the operator's own numbers when he has set a
+ * complete set, otherwise the Layout preset.
+ *
+ * His numbers are emitted as `fr` rather than `%` on purpose — `fr` divides
+ * what is left after the column gap, so 70/30 stays 70/30 at any gap, and a
+ * set that does not add up to exactly 100 still fills the row instead of
+ * leaving a slice of dead space on the right.
+ */
+export function getSectionGridTemplate(section: BuilderTemplateSection): string {
+  const columns = getLayoutColumns(section.layout);
+  const widths = columns.map((column) =>
+    Number(normalizeSpacingValue(section.columnWidths?.[column], "0", 0, 100))
+  );
+
+  if (widths.length < 2 || widths.some((width) => width <= 0)) {
+    return getLayoutGridTemplate(section.layout);
+  }
+
+  return widths.map((width) => `${width}fr`).join(" ");
 }
 
 /**
