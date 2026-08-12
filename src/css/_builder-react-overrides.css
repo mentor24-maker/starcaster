@@ -2192,9 +2192,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * ------------------------------------------------------------------------ */
 .builder-react-root .builder-cards-panel {
   display: grid;
-  /* 360px is the settings column's own lattice: its longest label plus its
-     widest control plus the 40px of room W0 asks for. */
-  grid-template-columns: 360px minmax(0, 1fr);
+  /* Equal halves (operator, 2026-08-12). The settings column was sized to
+     its own lattice — 360px, its longest label plus its widest control —
+     which read as lopsided next to the card list. Controls keep their own
+     widths inside the wider half; the leftover room stays empty rather
+     than stretching them (W-umbrella). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-4, 12px) var(--space-6, 24px);
   align-items: start;
 }
