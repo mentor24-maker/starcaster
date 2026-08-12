@@ -37,7 +37,6 @@
 .builder-react-root .builder-column-card,
 .builder-react-root .builder-module-card,
 .builder-react-root .builder-cell-panel,
-.builder-react-root .builder-cell-style-group,
 .builder-react-root .builder-cell-style-settings,
 .builder-react-root .builder-module-chrome,
 .builder-react-root .builder-module-editor,
@@ -803,6 +802,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-schema-panel-column .builder-setting-label {
   white-space: nowrap;
   text-align: left;
+}
+
+/*
+ * The cell panel's pre-lattice label styling — 1.125rem, extra padding and
+ * `white-space: normal`, i.e. labels allowed to WRAP, against L2. The cell
+ * editor joined the lattice on 2026-08-11 and takes the shared label metrics
+ * like every other axis column, so this cancels the leftover. It is cancelled
+ * rather than deleted because the rule lives in `_builder-react.css`, which
+ * is regenerated wholesale and never hand-edited (R2).
+ */
+.builder-react-root .builder-cell-style-settings.is-lattice .builder-setting-label {
+  font-size: var(--text-base, 0.9rem);
+  line-height: 1.2;
+  padding: 4px 12px;
+  white-space: nowrap;
 }
 
 .builder-react-root .builder-schema-panel-column .builder-setting-value {

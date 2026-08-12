@@ -108,6 +108,18 @@ async function openPanels(page) {
     });
   });
   await page.waitForTimeout(4000);
+
+  // The cell (column) editor is a third collapsed panel, one per column, and
+  // it was invisible to this check until it joined the lattice on 2026-08-11.
+  // Opening it here is the difference between "W0 holds" and "W0 holds on the
+  // surfaces we happened to open" — the same blind spot that let six TABLE
+  // panels report a clean pass without a heading among them.
+  await page.evaluate(() => {
+    document.querySelectorAll('button[aria-label]').forEach((button) => {
+      if (/^expand styles$/i.test(button.getAttribute('aria-label') || '')) button.click();
+    });
+  });
+  await page.waitForTimeout(3000);
   return null;
 }
 

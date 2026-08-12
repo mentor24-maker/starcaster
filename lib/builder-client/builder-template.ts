@@ -1456,6 +1456,16 @@ function normalizeCellBackgrounds(
   );
 }
 
+/**
+ * Legacy all-sides cell padding.
+ *
+ * The fallback is 0, not the 18 it was until 2026-08-11. A cell that nobody
+ * has given a padding to should not quietly carry one: the operator spent an
+ * evening hunting an 18px band above a banner logo that no image setting
+ * could reach, because the cell had been given that inset by a default
+ * rather than by him. Cells already carrying an explicit number keep it —
+ * this only changes what an unset cell inherits.
+ */
 function normalizeCellPadding(
   value: unknown,
   layout: BuilderTemplateLayout
@@ -1463,15 +1473,15 @@ function normalizeCellPadding(
   const columns = getLayoutColumns(layout);
 
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return Object.fromEntries(columns.map((column) => [column, "18"]));
+    return Object.fromEntries(columns.map((column) => [column, "0"]));
   }
 
   const raw = value as Record<string, unknown>;
 
   return Object.fromEntries(
     columns.map((column) => {
-      const parsed = Number.parseInt(String(raw[column] ?? "18"), 10);
-      const normalized = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 50) : 18;
+      const parsed = Number.parseInt(String(raw[column] ?? "0"), 10);
+      const normalized = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 50) : 0;
       return [column, String(normalized)];
     })
   );
@@ -1500,7 +1510,7 @@ function normalizeCellPaddingAxis(
   return Object.fromEntries(
     columns.map((column) => [
       column,
-      normalizeSpacingValue(raw[column] ?? legacy[column] ?? "18", "18", 0, 50)
+      normalizeSpacingValue(raw[column] ?? legacy[column] ?? "0", "0", 0, 50)
     ])
   );
 }
@@ -2258,7 +2268,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         cellIsPrivate: normalizeCellColor(normalizedSection.cellIsPrivate, layout, "false"),
         cellBorderWidth: normalizeCellMetric(normalizedSection.cellBorderWidth, layout, "0", 0, 20),
         cellBorderColor: normalizeCellColor(normalizedSection.cellBorderColor, layout, "transparent"),
-        cellBorderRadius: normalizeCellMetric(normalizedSection.cellBorderRadius, layout, "24", 0, 60),
+        cellBorderRadius: normalizeCellMetric(normalizedSection.cellBorderRadius, layout, "0", 0, 60),
         cellBorderStyle: normalizeCellColor(normalizedSection.cellBorderStyle, layout, "solid"),
         cellShadow: normalizeCellColor(normalizedSection.cellShadow, layout, "none"),
         cellOpacity: normalizeCellColor(normalizedSection.cellOpacity, layout, "1"),
@@ -2330,16 +2340,16 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     cellBackgrounds: Object.fromEntries(
       getLayoutColumns(layout).map((column) => [column, createDefaultBackgroundSettings()])
     ),
-    cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "18"])),
-    cellVerticalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "18"])),
-    cellHorizontalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "18"])),
+    cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellVerticalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellHorizontalPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellVerticalMargin: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellMobileHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellDesktopHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellIsPrivate: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellBorderWidth: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellBorderColor: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "transparent"])),
-    cellBorderRadius: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "24"])),
+    cellBorderRadius: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellBorderStyle: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "solid"])),
     cellShadow: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "none"])),
     cellOpacity: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "1"])),
