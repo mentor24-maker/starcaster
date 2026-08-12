@@ -206,6 +206,7 @@ export function BuilderSectionControls({
                 value={section.columnGap ?? "16"}
                 min={0}
                 max={120}
+                step={5}
                 fallback="16"
                 onChange={(columnGap) => onUpdateSection((current) => ({ ...current, columnGap }))}
               />
@@ -259,6 +260,7 @@ export function BuilderSectionControls({
                       value={section.marginTop ?? "0"}
                       min={0}
                       max={160}
+                      step={5}
                       fallback="0"
                       onChange={(marginTop) =>
                         onUpdateSection((current) => ({
@@ -273,6 +275,7 @@ export function BuilderSectionControls({
                       value={section.marginBottom ?? "0"}
                       min={0}
                       max={160}
+                      step={5}
                       fallback="0"
                       onChange={(marginBottom) =>
                         onUpdateSection((current) => ({
@@ -287,6 +290,7 @@ export function BuilderSectionControls({
               value={section.marginLeft ?? "0"}
               min={0}
               max={160}
+              step={5}
               fallback="0"
               onChange={(marginLeft) => onUpdateSection((current) => ({ ...current, marginLeft }))}
             />
@@ -296,6 +300,7 @@ export function BuilderSectionControls({
               value={section.marginRight ?? "0"}
               min={0}
               max={160}
+              step={5}
               fallback="0"
               onChange={(marginRight) => onUpdateSection((current) => ({ ...current, marginRight }))}
             />
@@ -305,6 +310,7 @@ export function BuilderSectionControls({
                       value={section.paddingTop ?? "18"}
                       min={0}
                       max={160}
+                      step={5}
                       fallback="18"
                       onChange={(paddingTop) =>
                         onUpdateSection((current) => ({
@@ -319,6 +325,7 @@ export function BuilderSectionControls({
                       value={section.paddingBottom ?? "18"}
                       min={0}
                       max={160}
+                      step={5}
                       fallback="18"
                       onChange={(paddingBottom) =>
                         onUpdateSection((current) => ({
@@ -333,6 +340,7 @@ export function BuilderSectionControls({
               value={section.paddingLeft ?? "0"}
               min={0}
               max={160}
+              step={5}
               fallback="0"
               onChange={(paddingLeft) => onUpdateSection((current) => ({ ...current, paddingLeft }))}
             />
@@ -342,6 +350,7 @@ export function BuilderSectionControls({
               value={section.paddingRight ?? "0"}
               min={0}
               max={160}
+              step={5}
               fallback="0"
               onChange={(paddingRight) =>
                 onUpdateSection((current) => ({ ...current, paddingRight }))
