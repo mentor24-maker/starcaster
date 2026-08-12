@@ -19,7 +19,7 @@ const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { sbQuery, tableConfig } = require('../lib/supabase');
 const { rowToAsset, updateAsset } = require('../lib/assetsStore');
 const { fetchAssetImageBuffer } = require('../lib/assetImageBytes');
-const { isOversizedImage, buildAssetRenditions } = require('../lib/assetRenditions');
+const { isOversizedImage, buildRenditionPatchForAsset } = require('../lib/assetRenditions');
 const { isConfigured: isBlobConfigured } = require('../lib/blobStorage');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
@@ -139,27 +139,31 @@ async function handleGenerate(req, res) {
       continue;
     }
 
-    const built = await buildAssetRenditions(asset, media.data.buffer, {
-      sourceWidth: asset.imageWidth,
-      sourceHeight: asset.imageHeight,
-    });
+    const built = await buildRenditionPatchForAsset(asset, media.data.buffer);
     if (!built.ok) {
       results.push({ id: asset.id, ok: false, error: built.error });
       continue;
     }
 
-    const patch = {
-      renditions: built.data.renditions,
-      renditionsGeneratedAt: new Date().toISOString(),
-    };
-    // Fill in dimensions we now know for certain, so the next scan stops
-    // guessing this image's size from its byte count.
-    if (!asset.imageWidth && built.data.sourceWidth) patch.imageWidth = built.data.sourceWidth;
-    if (!asset.imageHeight && built.data.sourceHeight) patch.imageHeight = built.data.sourceHeight;
-
-    const saved = await updateAsset(asset.id, patch, { projectId });
+    const saved = await updateAsset(asset.id, built.patch, { projectId });
     if (!saved.ok) {
       results.push({ id: asset.id, ok: false, error: saved.error || 'Could not save the copies' });
+      continue;
+    }
+
+    // An image the library recorded as unmeasured turns out to be small. Its
+    // real dimensions are now stored, so it drops out of the pending list
+    // instead of being downloaded again on every sweep.
+    if (!built.built) {
+      results.push({
+        id: asset.id,
+        ok: true,
+        measuredOnly: true,
+        name: asset.assetName,
+        originalBytes: built.bytes,
+        copyBytes: built.bytes,
+        widths: [],
+      });
       continue;
     }
 
@@ -167,9 +171,9 @@ async function handleGenerate(req, res) {
       id: asset.id,
       ok: true,
       name: asset.assetName,
-      originalBytes: Number(asset.size) || 0,
-      copyBytes: built.data.totalBytes,
-      widths: built.data.renditions.map((item) => item.w),
+      originalBytes: built.bytes,
+      copyBytes: built.totalBytes,
+      widths: built.renditions.map((item) => item.w),
     });
   }
 
