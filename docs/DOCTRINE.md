@@ -452,6 +452,53 @@ not a career programmer, and his stated bottleneck is attention, not
 willingness. Every chore surfaced for approval spends the scarcest resource he
 has on something he has already said yes to.
 
+### 6.5 SQL for the operator goes in the banner, as a GitHub URL
+
+**Standing instruction from the operator, 2026-08-12, given verbatim as a
+template.** When he has SQL to run, do not print the statements. Emit exactly
+this block and nothing else in its place:
+
+```
+#################### RUN SQL IN SUPABASE ####################
+
+[github url]
+
+##########################################################
+```
+
+The URL is the file on **its branch**, not on `main`:
+`https://github.com/mentor24-maker/starcaster/blob/<branch>/docs/SQL/<file>.sql`
+
+**Why a URL and not the SQL itself.** Applying SQL by hand is the one schema
+step no agent can do here — the Supabase CLI on this machine has no access
+token and the environment carries no Postgres connection string — so this block
+is the entire handoff, and it has to be unmissable. A wall of pasted SQL buries
+the ask inside the reply; the banner is scannable in a long message and says
+what to do with it in its own first line. He opens the URL and copies from
+GitHub.
+
+**The trap this replaced.** The first attempt handed over a repo-relative link
+(`docs/SQL/assets_renditions.sql`). New files live on a branch inside
+`.claude/worktrees/<topic>/`, and his editor is open on `main`, where the file
+does not exist — the link resolved to nothing and cost a round trip. **Any link
+to a file this session created is broken for him until the branch merges**,
+which is exactly why the URL in the banner must be branch-qualified. Check that
+the branch is pushed before emitting the block.
+
+**Also:**
+
+- Still write the file to `docs/SQL/` — that is the schema source of truth (§7)
+  — and to `supabase/migrations/` when it belongs there.
+- Say in one line, outside the banner, what it changes and whether anything
+  existing is touched. "It only adds two new fields; it changes nothing that
+  exists" is what tells him it is safe to run.
+- One banner per file. Two migrations means two banners, in run order.
+
+**The general rule behind it:** he has told us the shape he wants a handoff in.
+When he gives a template verbatim, reproduce it exactly rather than improving
+it — the point is that it looks the same every time, so he can find it without
+reading.
+
 ---
 
 ## 7. Operator-facing gotchas

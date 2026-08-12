@@ -7,9 +7,11 @@ import {
   getGameOverlayFloatingImageShellStyle,
   getImageModuleShellStyle,
   getImageModuleStyle,
+  getModuleWidthPercent,
   isFloatingImageModule,
   isVideoMedia
 } from "./builder-utils";
+import { imageProps, sizesForWidthPercent } from "@/lib/image-renditions";
 
 export function getImageEffectClassName(effect: string | undefined) {
   if (effect === "bounce") return " starcaster-effect-bounce";
@@ -59,6 +61,12 @@ export function BuilderImagePreview({
   const effectClass = getImageEffectClassName(effect);
   const motionClip = usesHorizontalMotionClip(effect);
   const resolvedVariant = variant ?? module.settings.variant ?? "default";
+  // Offer the browser the scaled-down copies of this picture, and tell it how
+  // wide the slot is so it does not fetch a full-width file for a half column.
+  // Falls back to a plain `src` for any image that has no copies.
+  const responsiveImage = imageProps(mediaUrl, {
+    sizes: sizesForWidthPercent(getModuleWidthPercent(module.settings))
+  });
 
   const figure = (
     <figure
@@ -72,7 +80,7 @@ export function BuilderImagePreview({
           <a href={linkUrl} rel={opensInNewTab ? "noopener noreferrer" : undefined} target={opensInNewTab ? "_blank" : undefined} style={{ display: "block" }}>
             <img
               alt={module.settings.alt || module.text || ""}
-              src={mediaUrl}
+              {...responsiveImage}
               suppressHydrationWarning
               style={{ width: "100%", height: "auto", display: "block" }}
             />
@@ -80,7 +88,7 @@ export function BuilderImagePreview({
         ) : (
           <img
             alt={module.settings.alt || module.text || ""}
-            src={mediaUrl}
+            {...responsiveImage}
             suppressHydrationWarning
             style={{ width: "100%", height: "auto", display: "block" } as CSSProperties}
           />

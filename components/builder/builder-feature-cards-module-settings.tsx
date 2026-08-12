@@ -340,7 +340,7 @@ export function BuilderFeatureCardsModuleSettings({
           description) render as a secondary row spanning the grid under
           each card's primary row. */}
       <div className="builder-cards-panel-items">
-      <div className="builder-schema-group-title">Cards</div>
+      <div className="builder-cards-panel-heading">Feature Cards</div>
       <div className={`builder-item-grid builder-item-grid--cards${showIcons ? " builder-item-grid--cards-icons" : ""}`}>
         {showIcons ? <span className="builder-item-grid-header">Icon</span> : null}
         <span className="builder-item-grid-header">Title</span>
