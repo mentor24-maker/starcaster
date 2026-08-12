@@ -3006,3 +3006,158 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .site-nav-menu {
   gap: var(--site-nav-gap, 4px);
 }
+
+/* ---------------------------------------------------------------------
+   Site Search — the search box, and the results list it feeds.
+
+   Standard 3: every structural rule (the flex row, the input's ability to
+   grow, the list reset, the snippet's wrapping) lives in the BASE ruleset.
+   The media query below only adjusts what the base already established —
+   it stacks the row and lets the button go full width. Nothing here exists
+   only inside a breakpoint, which is the failure that took the Card Slider
+   down on desktop.
+   --------------------------------------------------------------------- */
+.builder-react-root .builder-site-search-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+}
+
+/* Visually hidden, but read aloud — the input needs a label, and the
+   placeholder is not one (Standard 8). */
+.builder-react-root .builder-site-search-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.builder-react-root .builder-site-search-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  outline: none;
+}
+
+.builder-react-root .builder-site-search-input:focus-visible {
+  border-color: var(--border-black);
+  box-shadow: 0 0 0 3px rgba(15, 79, 143, 0.18);
+}
+
+.builder-react-root .builder-site-search-submit {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--btn-text);
+  border: none;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-site-search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.builder-react-root .builder-site-search-note,
+.builder-react-root .builder-site-search-count {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-site-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.builder-react-root .builder-site-search-result {
+  /* min-width:0 so a long unbroken URL in a snippet cannot widen the page
+     (Standard 7: the body never scrolls sideways). */
+  min-width: 0;
+}
+
+.builder-react-root .builder-site-search-result-title {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.builder-react-root .builder-site-search-result-title:hover,
+.builder-react-root .builder-site-search-result-title:focus-visible {
+  text-decoration: underline;
+}
+
+.builder-react-root .builder-site-search-result-snippet {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-site-search-result-where {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-site-search-result-more {
+  margin: 6px 0 0;
+  padding: 0 0 0 12px;
+  list-style: none;
+  border-left: 2px solid var(--border-light);
+}
+
+.builder-react-root .builder-site-search-result-more li {
+  margin-top: 4px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-site-search-panel mark,
+.builder-react-root .builder-site-search-result mark {
+  padding: 0 2px;
+  color: inherit;
+  background: var(--mark-bg);
+  border-radius: 2px;
+}
+
+/* Adjust only. The row, the growth, and the list are all set above. */
+@media (max-width: 560px) {
+  .builder-react-root .builder-site-search-input {
+    flex: 1 1 100%;
+  }
+
+  .builder-react-root .builder-site-search-submit {
+    width: 100%;
+  }
+}

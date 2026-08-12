@@ -146,6 +146,12 @@ export const modulePaletteGroups: Array<{
     description: "A responsive grid of linked cards with images, icons, and short copy."
   },
   { value: "breadcrumb", label: "Breadcrumb", icon: "›", description: "Horizontal trail showing the visitor's location in the site hierarchy." },
+  {
+    value: "site-search",
+    label: "Search",
+    icon: "⌕",
+    description: "Search the whole site — a search box, and the results list it feeds."
+  },
   { value: "blog", label: "Blog", icon: "✍", description: "Blog content modules — post feeds, filters, author bios, and more." },
   {
     value: "special-effects",
@@ -930,6 +936,52 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: { searchParam: "search", limit: "50" }
+  },
+  {
+    id: "site-search-standard",
+    type: "site-search",
+    group: "site-search",
+    label: "Site Search",
+    icon: "⌕",
+    description: "Search box that searches every module on every page. Sends the query to a Site Search Results module.",
+    name: "",
+    text: "",
+    settings: {
+      placeholder: "Search this site…",
+      buttonLabel: "Search",
+      searchParam: "q",
+      targetPageUrl: "/search",
+      showButton: "true",
+      accentColor: "",
+      borderRadius: "8",
+      horizontalMargin: "0",
+      verticalMargin: "0"
+    }
+  },
+  {
+    id: "site-search-results-standard",
+    type: "site-search-results",
+    group: "site-search",
+    label: "Site Search Results",
+    icon: "▤",
+    description: "Lists the pages matching the current search, best match first, with the matching text highlighted.",
+    name: "",
+    text: "",
+    settings: {
+      searchParam: "q",
+      limit: "50",
+      showSearchField: "true",
+      showResultCount: "true",
+      showOtherMatches: "true",
+      showMatchLocation: "false",
+      emptyMessage: "Nothing on this site matched that search.",
+      placeholder: "Search this site…",
+      buttonLabel: "Search",
+      accentColor: "",
+      borderRadius: "8",
+      horizontalMargin: "0",
+      verticalMargin: "0"
+    }
   },
   {
     id: "admin-team-users-table",
