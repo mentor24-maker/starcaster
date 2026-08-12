@@ -385,6 +385,7 @@ App.assets = (function () {
       ['assetsSortTopicBtn', 'topic', 'Topic'],
       ['assetsSortAspectBtn', 'aspect', 'Aspect'],
       ['assetsSortUsageBtn', 'usage', 'Used In'],
+      ['assetsSortCopiesBtn', 'copies', 'Copies'],
       ['assetsSortTagsBtn', 'tags', 'Tags'],
       ['assetsSortSizeBtn', 'size', 'Size'],
     ];
@@ -402,6 +403,12 @@ App.assets = (function () {
   function getAssetSortValue(asset, key) {
     if (key === 'size') return Number(asset?.size || 0) || 0;
     if (key === 'usage') return getAssetUsageCount(asset);
+    // Sort by the widest copy: the images worth looking at are the ones whose
+    // copies go highest, and a count would put a 4-rung thumbnail above them.
+    if (key === 'copies') {
+      const list = Array.isArray(asset?.renditions) ? asset.renditions : [];
+      return list.reduce((widest, item) => Math.max(widest, Number(item && item.w) || 0), 0);
+    }
     if (key === 'aspect') return resolvedAssetAspect(asset);
     if (key === 'tags') {
       return Array.isArray(asset?.tags) ? asset.tags.join(', ') : '';
@@ -569,6 +576,7 @@ App.assets = (function () {
     const widthFilter = String(filters.image_width || '').trim().toLowerCase();
     const heightFilter = String(filters.image_height || '').trim().toLowerCase();
     const usageFilter = String(filters.usage || '').trim().toLowerCase();
+    const copiesFilter = String(filters.copies || '').trim().toLowerCase();
 
     const filtered = (state.assets || []).filter((asset) => {
       const assetName = String(asset.assetName || '').toLowerCase();
@@ -603,6 +611,11 @@ App.assets = (function () {
         const used = getAssetUsageCount(asset) > 0;
         if (usageFilter === 'used' && !used) return false;
         if (usageFilter === 'unused' && used) return false;
+      }
+      if (copiesFilter) {
+        const hasCopies = (Array.isArray(asset.renditions) ? asset.renditions : []).length > 0;
+        if (copiesFilter === 'has' && !hasCopies) return false;
+        if (copiesFilter === 'needs' && !wantsCopies(asset)) return false;
       }
       return true;
     });
@@ -1008,6 +1021,7 @@ App.assets = (function () {
     if (els.assetsFilterHeight) els.assetsFilterHeight.disabled = bulkMode;
     if (els.assetsFilterTopic) els.assetsFilterTopic.disabled = bulkMode;
     if (els.assetsFilterUsage) els.assetsFilterUsage.disabled = bulkMode;
+    if (els.assetsFilterCopies) els.assetsFilterCopies.disabled = bulkMode;
 
     if (!els.assetsFilterName || !els.assetsFilterType) return;
 
@@ -1048,6 +1062,7 @@ App.assets = (function () {
     if (els.assetsFilterHeight) els.assetsFilterHeight.value = String(state.assetsFilters?.image_height || '');
     if (els.assetsFilterTags) els.assetsFilterTags.value = String(state.assetsFilters?.tags || '');
     if (els.assetsFilterUsage) els.assetsFilterUsage.value = String(state.assetsFilters?.usage || '');
+    if (els.assetsFilterCopies) els.assetsFilterCopies.value = String(state.assetsFilters?.copies || '');
     renderAssetFilterCategoryOptions(
       activeType,
       String(state.assetsFilters?.category || '').trim(),
@@ -1201,6 +1216,39 @@ App.assets = (function () {
     return td;
   }
 
+  /**
+   * The scaled-down copies this image already has, as the widths themselves —
+   * "300 / 600 / 1200" says more at a glance than a count does. The social JPEG
+   * is left out: it is a duplicate width kept for posting, not a size the page
+   * picks between.
+   */
+  function copiesLabel(asset) {
+    const list = Array.isArray(asset.renditions) ? asset.renditions : [];
+    const widths = list
+      .filter((item) => String(item && item.role) !== 'social')
+      .map((item) => Number(item && item.w) || 0)
+      .filter((width) => width > 0);
+    if (!widths.length) return '-';
+    return widths.join(' / ');
+  }
+
+  /**
+   * Mirrors the rule the sweep uses (lib/assetRenditions.js): oversized on the
+   * long edge, or heavy when the dimensions were never recorded. Kept in step
+   * by hand — if the thresholds move there, they move here.
+   */
+  function wantsCopies(asset) {
+    if (String(asset.assetType || '').trim() !== 'Image') return false;
+    if (!String(asset.location || '').trim()) return false;
+    if ((Array.isArray(asset.renditions) ? asset.renditions : []).length) return false;
+    const width = Number(asset.imageWidth || 0) || 0;
+    const height = Number(asset.imageHeight || 0) || 0;
+    const bytes = Number(asset.size || 0) || 0;
+    if (Math.max(width, height) >= 1200) return true;
+    if (width > 0 || height > 0) return false;
+    return bytes >= 400 * 1024 || bytes <= 0;
+  }
+
   function renderAssets() {
     if (!els.assetsTable) return;
     // The cards are anchored to rows that are about to be destroyed.
@@ -1296,6 +1344,7 @@ App.assets = (function () {
       appendCell(tr, asset.topic);
       appendCell(tr, displayAspect(resolvedAssetAspect(asset)));
       tr.appendChild(buildUsageCell(asset));
+      appendCell(tr, copiesLabel(asset));
 
       const createdAt = String(asset.createdAt || '').trim();
       appendCell(tr, createdAt ? new Date(createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '-');
@@ -1751,6 +1800,7 @@ App.assets = (function () {
     bindSortButton('assetsSortTopicBtn', 'topic', 'asc');
     bindSortButton('assetsSortAspectBtn', 'aspect', 'asc');
     bindSortButton('assetsSortUsageBtn', 'usage', 'desc');
+    bindSortButton('assetsSortCopiesBtn', 'copies', 'desc');
 
     // The hover card is positioned against the viewport, so any scroll would
     // leave it stranded away from the number it belongs to.
@@ -2079,6 +2129,16 @@ App.assets = (function () {
       els.assetsFilterUsage.addEventListener('change', () => {
         if (isBulkMode()) return;
         state.assetsFilters.usage = String(els.assetsFilterUsage.value || '');
+        renderAssets();
+      });
+    }
+
+    // Copies are derived the same way Used In is — there is nothing to bulk
+    // edit, so this only ever filters.
+    if (els.assetsFilterCopies) {
+      els.assetsFilterCopies.addEventListener('change', () => {
+        if (isBulkMode()) return;
+        state.assetsFilters.copies = String(els.assetsFilterCopies.value || '');
         renderAssets();
       });
     }
