@@ -713,10 +713,29 @@ describe("cell padding axes", () => {
     expect(section.cellHorizontalPadding.main).toBe("0");
   });
 
-  it("defaults a row that has never carried padding at all to 18 on both axes", () => {
+  it("gives a cell nobody has set no padding at all, rather than an inset it never asked for", () => {
     const section = firstSection({ id: "s1", layout: "single", modules: [] });
+
+    expect(section.cellPadding.main).toBe("0");
+    expect(section.cellVerticalPadding.main).toBe("0");
+    expect(section.cellHorizontalPadding.main).toBe("0");
+  });
+
+  it("leaves a cell that carries an explicit number exactly where it is", () => {
+    const section = firstSection({
+      id: "s1",
+      layout: "single",
+      cellPadding: { main: "18" },
+      modules: []
+    });
 
     expect(section.cellVerticalPadding.main).toBe("18");
     expect(section.cellHorizontalPadding.main).toBe("18");
+  });
+
+  it("stops rounding a corner nobody asked to round", () => {
+    const section = firstSection({ id: "s1", layout: "single", modules: [] });
+
+    expect(section.cellBorderRadius.main).toBe("0");
   });
 });
