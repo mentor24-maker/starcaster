@@ -79,15 +79,25 @@ Your day:
 3. **When you're ready:** tell CC "merge PR #NN" and it merges (only with all
    checks green). Merging stays manual on purpose — see Safety.
 
-### The one view to check
+### The one place to check: Assigned to me
 
-Work waits on you in two different places: this Loop Queue, and the **Agent
-Response** list that the channel steward feeds from the party line. Checking
-two lists is two chances to miss something.
+Work waits on you in two different places: this Loop Queue (Starcaster space),
+and the **Agent Response** list the channel steward feeds (Dane of Earth
+space). Checking two lists is two chances to miss something.
 
-Make one saved ClickUp view — call it **My Turn** — filtered to everything in
-a human status across both, and check only that. Setup is in
-`docs/CLICKUP_VIEWS.md`.
+The fix is **assignment**, not a saved view. When a loop hands you a ticket —
+`Needs your input` or `Ready to launch` — it assigns the ticket to you. When
+it takes the ticket back, it clears the assignee. So ClickUp's own
+**Assigned to me** becomes your whole inbox: it spans every space for free,
+needs no setup, and notifies you when something lands.
+
+A hand-built "My Turn" view was tried first and abandoned. A ClickUp view is
+scoped to one space, so it could see Loop Queue or Agent Response but never
+both — and the workspace-wide level made a status filter unwieldy, since it
+offers every status in the workspace at once. Assignment sidesteps all of it.
+
+If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
+`In review`, that is a bug in a loop, not a job for you — tell CC.
 
 ## The work log — a plain-English record
 
@@ -127,8 +137,9 @@ day one.
 2. In the ClickUp UI, set its statuses to the six in the table above, in that
    order, with `Live` as a **closed**-type status. Step-by-step clicks:
    `docs/CLICKUP_VIEWS.md`.
-3. Build the **My Turn** view (also in `docs/CLICKUP_VIEWS.md`) so there is one
-   place to look.
+3. Nothing to build for "what needs me" — that is ClickUp's own
+   **Assigned to me**, fed by the loops assigning and unassigning you. See
+   `docs/CLICKUP_VIEWS.md` for why a saved view was tried and dropped.
 4. Confirm the skills live in `.claude/skills/` — Claude Code discovers skills
    nowhere else, so a skill parked in another folder cannot be invoked by name.
 5. Do a **dry run:** spec 1–2 tiny test-coverage tasks, run one `loop-build`
