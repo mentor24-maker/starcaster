@@ -7,6 +7,13 @@ import {
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import type { BuilderThemePalette } from "./builder-theme-color-field";
+import {
+  siteSearchButtonFrameFields,
+  siteSearchButtonTypeFields,
+  siteSearchFieldSizeFields,
+  siteSearchLabelContentFields,
+  siteSearchTypeFields
+} from "./builder-site-search-field-fields";
 
 type Props = {
   module: BuilderTemplateModule;
@@ -70,6 +77,7 @@ export function BuilderSiteSearchModuleSettings({
               )
             }
           ],
+          [...siteSearchLabelContentFields()],
           [
             {
               key: "placeholder",
@@ -98,28 +106,17 @@ export function BuilderSiteSearchModuleSettings({
         ]
       },
       {
+        title: "Text",
+        strips: [
+          [...siteSearchTypeFields()],
+          [...siteSearchButtonTypeFields()]
+        ]
+      },
+      {
         title: "Frame",
         strips: [
-          [
-            {
-              key: "accentColor",
-              label: "Button Color",
-              width: "color",
-              control: "theme-color",
-              dialogLabel: "Button color",
-              themeDefault: "#0f4f8f",
-              rendersVia: "siteSearchAccent"
-            },
-            {
-              key: "borderRadius",
-              label: "Radius",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 40,
-              rendersVia: "siteSearchRadius"
-            }
-          ],
+          [...siteSearchFieldSizeFields()],
+          [...siteSearchButtonFrameFields()],
           [...marginFields("getModuleOuterSpacingStyle")]
         ]
       }

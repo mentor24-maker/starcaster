@@ -7,6 +7,13 @@ import {
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import type { BuilderThemePalette } from "./builder-theme-color-field";
+import {
+  siteSearchButtonFrameFields,
+  siteSearchButtonTypeFields,
+  siteSearchFieldSizeFields,
+  siteSearchLabelContentFields,
+  siteSearchTypeFields
+} from "./builder-site-search-field-fields";
 
 type Props = {
   module: BuilderTemplateModule;
@@ -125,32 +132,25 @@ export function BuilderSiteSearchResultsModuleSettings({
               placeholder: "Search",
               rendersVia: "SiteSearchField"
             }
-          ]
+          ],
+          [...siteSearchLabelContentFields()]
+        ]
+      },
+      {
+        title: "Text",
+        strips: [
+          [...siteSearchTypeFields()],
+          [...siteSearchButtonTypeFields()]
         ]
       },
       {
         title: "Frame",
         strips: [
-          [
-            {
-              key: "accentColor",
-              label: "Link Color",
-              width: "color",
-              control: "theme-color",
-              dialogLabel: "Result link color",
-              themeDefault: "#0f4f8f",
-              rendersVia: "siteSearchAccent"
-            },
-            {
-              key: "borderRadius",
-              label: "Radius",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 40,
-              rendersVia: "siteSearchRadius"
-            }
-          ],
+          [...siteSearchFieldSizeFields()],
+          // On this module `accentColor` paints the result links AND the
+          // button — one accent for the whole block, which is why the shared
+          // strip is used here rather than a second colour control.
+          [...siteSearchButtonFrameFields()],
           [...marginFields("getModuleOuterSpacingStyle")]
         ]
       }
