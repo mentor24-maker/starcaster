@@ -693,12 +693,12 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const programs = parsePrograms(module.settings.programs);
 
     if (programs.length === 0) {
-      return <span className="builder-module-preview-empty">Add programmes in the editor</span>;
+      return <span className="builder-module-preview-empty">Add programs in the editor</span>;
     }
 
-    // The canvas card is a glance, not the page. It names the programmes and
+    // The canvas card is a glance, not the page. It names the programs and
     // how often each runs, which is what an operator scanning a long page
-    // needs to tell one Programmes module from another.
+    // needs to tell one Programs module from another.
     return (
       <div className="builder-module-preview-programs">
         {programs.slice(0, 6).map((program) => (

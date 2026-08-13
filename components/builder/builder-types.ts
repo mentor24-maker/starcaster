@@ -147,7 +147,7 @@ export const modulePaletteGroups: Array<{
   },
   {
     value: "program-list",
-    label: "Programmes",
+    label: "Programs",
     icon: "🗓",
     description: "Classes, clinics and sessions with their days, times, coaches and prices."
   },
@@ -694,7 +694,7 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     id: "program-list-standard",
     type: "program-list",
     group: "program-list",
-    label: "Programmes",
+    label: "Programs",
     icon: "🗓",
     description: "A schedule of classes or clinics — days, times, coaches and prices, in a timetable a phone can read.",
     name: "",

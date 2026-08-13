@@ -1744,7 +1744,7 @@ export function normalizeModuleSettings(value: unknown) {
             : normalizedKey === "cards" ||
                 normalizedKey === "sliderItems" ||
                 // `programs` holds every class a club runs, each with its own
-                // sessions, price bands and bullets — fifteen programmes is
+                // sessions, price bands and bullets — fifteen programs is
                 // ordinary for one tennis centre, and the whole collection is
                 // one JSON value.
                 normalizedKey === "programs"
@@ -2693,9 +2693,9 @@ export function createEmptyModule(
           // flyers, because it is the one doing real work: it tells a reader
           // in a glance whether a session is for them.
           showLevelBadge: "true",
-          // The pro shop number is the club's, not each programme's, so it
+          // The pro shop number is the club's, not each program's, so it
           // lives once on the module. A club that wants a different number
-          // per programme is a real but unmet case — see the ClickUp task.
+          // per program is a real but unmet case — see the ClickUp task.
           showReserve: "true",
           reserveLabel: "Reserve",
           reservePhone: "",

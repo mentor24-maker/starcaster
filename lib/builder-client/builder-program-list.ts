@@ -1,7 +1,7 @@
 /**
  * Program List — the shared shape for a club's classes, clinics and mixers.
  *
- * Delray Beach Tennis Center published its programmes as designed flyer
+ * Delray Beach Tennis Center published its programs as designed flyer
  * images: staff could not change a start time without reopening a design
  * file, re-exporting and re-uploading. This module's whole reason for
  * existing is the operator's line on 2026-08-12 — *"they want the info
@@ -9,7 +9,7 @@
  * don't belong on a website."* (ClickUp `86bbdby3a`.)
  *
  * So this is deliberately **not** a flyer renderer. It carries the content
- * that varies between programmes and nothing else. Everything that was
+ * that varies between programs and nothing else. Everything that was
  * identical across all fifteen source flyers — club logo, address block,
  * social links, the decorative palm and halftone — is either site chrome
  * the page already provides or decoration that existed to fill a printed
@@ -22,11 +22,11 @@
  */
 
 /**
- * One occurrence of a programme.
+ * One occurrence of a program.
  *
- * `instructor` is per session, not per programme, because it genuinely
+ * `instructor` is per session, not per program, because it genuinely
  * varies within one: the "Back to Basics" flyer runs with Zach Schneider on
- * Tuesday and Vincent Williams on Thursday. A programme-level coach field
+ * Tuesday and Vincent Williams on Thursday. A program-level coach field
  * alone would have silently dropped one of those two names.
  */
 export type ProgramSession = {
@@ -182,7 +182,7 @@ export function parsePrograms(raw: unknown): Program[] {
       const row = entry as Record<string, unknown>;
 
       const title = text(row.title, MAX_SHORT);
-      // A programme with no name cannot be listed or chosen. Everything else
+      // A program with no name cannot be listed or chosen. Everything else
       // is optional — a title-only entry is a legitimate work in progress.
       if (!title) return null;
 
@@ -233,7 +233,7 @@ export function isProgramListEmpty(programs: Program[]): boolean {
  * Store a collection back into module settings.
  *
  * Deliberately does **not** re-run `parsePrograms`. The editor holds
- * half-typed rows — a session with a day and no time yet, a programme whose
+ * half-typed rows — a session with a day and no time yet, a program whose
  * title is still being typed — and parsing on the way out would delete them
  * mid-keystroke. Validation belongs on the read side, which is where the
  * renderer needs it.

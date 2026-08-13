@@ -5856,7 +5856,7 @@ const FEATURE_CARD_ICON_SHAPES = new Set(["circle", "square", "plain"]);
  * reduce the column count, they never introduce layout.
  */
 /**
- * Programmes — a club's classes, clinics and mixers as readable page content.
+ * Programs — a club's classes, clinics and mixers as readable page content.
  *
  * Replaces the flyer image. The operator's brief (ClickUp `86bbdby3a`) was
  * that staff must be able to change a start time without a design tool, and
@@ -5865,7 +5865,7 @@ const FEATURE_CARD_ICON_SHAPES = new Set(["circle", "square", "plain"]);
  * on all fifteen source flyers and are site chrome or print filler.
  *
  * The times are a real table with a monospaced, tabular-figures column,
- * because a schedule is a timetable and the columns should line up. Centred
+ * because a schedule is a timetable and the columns should line up. Centered
  * text baked into an image never could.
  */
 function ProgramListModulePreview({
@@ -5879,7 +5879,7 @@ function ProgramListModulePreview({
   if (programs.length === 0) {
     return (
       <div className="builder-preview-programs builder-preview-programs-empty">
-        Add programmes in the editor
+        Add programs in the editor
       </div>
     );
   }
@@ -5892,7 +5892,7 @@ function ProgramListModulePreview({
   const policyNote = (module.settings.policyNote || "").trim();
   const radius = Math.min(48, Math.max(0, Number.parseInt(module.settings.cardRadius || "10", 10) || 0));
 
-  // Empty colour settings follow the site theme. The --crm-theme-* vars are
+  // Empty color settings follow the site theme. The --crm-theme-* vars are
   // set on the preview root by getCrmThemePaletteVars on both the editor
   // canvas and the public site; the literals are the no-theme fallback.
   const accent = module.settings.accentColor || "var(--crm-theme-primary, #4f9c3a)";
@@ -5903,7 +5903,7 @@ function ProgramListModulePreview({
   const dialable = reservePhone.replace(/[^\d+]/g, "");
   const canReserve = showReserve && reservePhone.length > 0;
 
-  // A programme with no coach on any session leaves the column out entirely
+  // A program with no coach on any session leaves the column out entirely
   // rather than rendering a row of blanks.
   const anyInstructor = programs.some((program) =>
     program.sessions.some((session) => Boolean(session.instructor))

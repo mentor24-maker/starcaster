@@ -9,7 +9,7 @@ import {
 /**
  * The fixtures are the four real Delray flyers supplied on 2026-08-12, not
  * invented data. Between them they cover every variation found across the
- * fifteen flyers in that style: a programme with three sessions and no named
+ * fifteen flyers in that style: a program with three sessions and no named
  * coach, one with a different coach per session, single-price and two-tier
  * pricing, and bullet lists present on the mixers but not the clinics.
  */
@@ -77,12 +77,12 @@ const DELRAY_FIXTURE = [
 
 function byId(programs: Program[], wanted: string): Program {
   const found = programs.find((program) => program.id === wanted);
-  if (!found) throw new Error(`fixture programme ${wanted} did not survive parsing`);
+  if (!found) throw new Error(`fixture program ${wanted} did not survive parsing`);
   return found;
 }
 
 describe("parsePrograms — the real Delray flyers", () => {
-  it("keeps all four programmes", () => {
+  it("keeps all four programs", () => {
     expect(parsePrograms(DELRAY_FIXTURE)).toHaveLength(4);
   });
 
@@ -92,8 +92,8 @@ describe("parsePrograms — the real Delray flyers", () => {
   });
 
   it("keeps a different instructor on each session", () => {
-    // The reason `instructor` sits on the session and not the programme. A
-    // programme-level coach field would have dropped one of these two names.
+    // The reason `instructor` sits on the session and not the program. A
+    // program-level coach field would have dropped one of these two names.
     const sessions = byId(parsePrograms(DELRAY_FIXTURE), "back-to-basics").sessions;
     expect(sessions.map((session) => session.instructor)).toEqual([
       "Zach Schneider",
@@ -109,7 +109,7 @@ describe("parsePrograms — the real Delray flyers", () => {
     ]);
   });
 
-  it("leaves instructor absent rather than empty when a programme has no per-session coach", () => {
+  it("leaves instructor absent rather than empty when a program has no per-session coach", () => {
     const sessions = byId(parsePrograms(DELRAY_FIXTURE), "beginners").sessions;
     expect(sessions.every((session) => session.instructor === undefined)).toBe(true);
   });
@@ -141,12 +141,12 @@ describe("parsePrograms — malformed input never throws", () => {
     expect(parsePrograms(["a string", 7, null, ["nested"]])).toEqual([]);
   });
 
-  it("drops a programme with no title, since it cannot be listed or chosen", () => {
+  it("drops a program with no title, since it cannot be listed or chosen", () => {
     const parsed = parsePrograms([{ title: "   ", sessions: [] }, { title: "Real" }]);
     expect(parsed.map((program) => program.title)).toEqual(["Real"]);
   });
 
-  it("keeps a title-only programme, which is a legitimate work in progress", () => {
+  it("keeps a title-only program, which is a legitimate work in progress", () => {
     const parsed = parsePrograms([{ title: "Junior Camp" }]);
     expect(parsed[0]).toMatchObject({ title: "Junior Camp", sessions: [], pricing: [], bullets: [] });
   });
@@ -173,7 +173,7 @@ describe("parsePrograms — malformed input never throws", () => {
 
 describe("parsePrograms — ids and bounds", () => {
   it("falls back to a positional id so producers need not mint one", () => {
-    // The Phase 2 flyer reader will emit programmes with no ids.
+    // The Phase 2 flyer reader will emit programs with no ids.
     const parsed = parsePrograms([{ title: "First" }, { title: "Second" }]);
     expect(parsed.map((program) => program.id)).toEqual(["program-1", "program-2"]);
   });
@@ -188,7 +188,7 @@ describe("parsePrograms — ids and bounds", () => {
 
   it("caps the collection lengths so one bad save cannot render forever", () => {
     const many = Array.from({ length: 500 }, (_unused, index) => ({
-      title: `Programme ${index}`,
+      title: `Program ${index}`,
       sessions: Array.from({ length: 200 }, () => ({ day: "Monday", startTime: "9:00 AM" })),
       bullets: Array.from({ length: 200 }, () => "point")
     }));
@@ -226,11 +226,11 @@ describe("formatSessionHours", () => {
 });
 
 describe("isProgramListEmpty", () => {
-  it("is true for no programmes, so the designed empty state shows", () => {
+  it("is true for no programs, so the designed empty state shows", () => {
     expect(isProgramListEmpty(parsePrograms(undefined))).toBe(true);
   });
 
-  it("is false once a programme survives parsing", () => {
+  it("is false once a program survives parsing", () => {
     expect(isProgramListEmpty(parsePrograms(DELRAY_FIXTURE))).toBe(false);
   });
 });

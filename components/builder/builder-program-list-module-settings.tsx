@@ -110,8 +110,8 @@ export function BuilderProgramListModuleSettings({
     updateProgram(programId, { pricing: program.pricing.filter((price) => price.id !== priceId) });
   };
 
-  // Empty colour settings follow the site theme; the swatch previews the
-  // same theme colour the renderer resolves to, with the factory colour as
+  // Empty color settings follow the site theme; the swatch previews the
+  // same theme color the renderer resolves to, with the factory color as
   // the no-theme fallback.
   const themeHex = (label: string) => themeColors.find((color) => color.label === label)?.hex || "";
   const accentDefault = themeHex("Primary") || "#4f9c3a";
@@ -120,7 +120,7 @@ export function BuilderProgramListModuleSettings({
 
   return (
     <div className="builder-cards-panel">
-      {/* LEFT — settings that apply to every programme in the module.
+      {/* LEFT — settings that apply to every program in the module.
           `builder-schema-panel-column` is borrowed from the schema
           generator so a field strip stacks one control per row inside a
           narrow column (W0) instead of running off the edge. */}
@@ -176,7 +176,7 @@ export function BuilderProgramListModuleSettings({
               onChange={(event) => set("reserveLabel", event.target.value)}
             />
           </BuilderModuleField>
-          {/* One number for the club, not one per programme: on all fifteen
+          {/* One number for the club, not one per program: on all fifteen
               source flyers it was the same pro shop line. */}
           <BuilderModuleField label="Phone" width="select-md">
             <input
@@ -197,20 +197,20 @@ export function BuilderProgramListModuleSettings({
             <input
               type="text"
               value={module.settings.policyNote ?? ""}
-              placeholder="All programmes carry a 24-hour cancellation policy."
+              placeholder="All programs carry a 24-hour cancellation policy."
               onChange={(event) => set("policyNote", event.target.value)}
             />
           </BuilderModuleField>
         </BuilderModuleFieldStrip>
 
-        <div className="builder-schema-group-title">Colours</div>
+        <div className="builder-schema-group-title">Colors</div>
         <BuilderModuleFieldStrip>
           <BuilderModuleField label="Accent" width="color">
             <BuilderThemeColorControlWithDefault
               value={module.settings.accentColor ?? ""}
               defaultColor={accentDefault}
               themeColors={themeColors}
-              dialogLabel="Accent colour"
+              dialogLabel="Accent color"
               onChange={(accentColor) => set("accentColor", accentColor)}
             />
           </BuilderModuleField>
@@ -219,7 +219,7 @@ export function BuilderProgramListModuleSettings({
               value={module.settings.headingColor ?? ""}
               defaultColor={headingDefault}
               themeColors={themeColors}
-              dialogLabel="Heading colour"
+              dialogLabel="Heading color"
               onChange={(headingColor) => set("headingColor", headingColor)}
             />
           </BuilderModuleField>
@@ -228,7 +228,7 @@ export function BuilderProgramListModuleSettings({
               value={module.settings.cardBackground ?? ""}
               defaultColor="#ffffff"
               themeColors={themeColors}
-              dialogLabel="Card colour"
+              dialogLabel="Card color"
               onChange={(cardBackground) => set("cardBackground", cardBackground)}
             />
           </BuilderModuleField>
@@ -237,19 +237,19 @@ export function BuilderProgramListModuleSettings({
               value={module.settings.cardBorderColor ?? ""}
               defaultColor={borderDefault}
               themeColors={themeColors}
-              dialogLabel="Border colour"
+              dialogLabel="Border color"
               onChange={(cardBorderColor) => set("cardBorderColor", cardBorderColor)}
             />
           </BuilderModuleField>
         </BuilderModuleFieldStrip>
       </div>
 
-      {/* RIGHT — the programmes themselves. */}
+      {/* RIGHT — the programs themselves. */}
       <div className="builder-cards-panel-items">
-        <div className="builder-cards-panel-heading">Programmes</div>
+        <div className="builder-cards-panel-heading">Programs</div>
         <div className="builder-cards-panel-fields" data-lattice-pairs="2">
           {programs.map((program, index) => {
-            const programName = program.title || `Programme ${index + 1}`;
+            const programName = program.title || `Program ${index + 1}`;
 
             return (
               <Fragment key={program.id}>
@@ -279,7 +279,7 @@ export function BuilderProgramListModuleSettings({
                       className="builder-icon-button builder-icon-button-danger"
                       onClick={() => removeProgram(program.id)}
                       aria-label={`Delete ${programName}`}
-                      title="Delete programme"
+                      title="Delete program"
                     >
                       ✕
                     </button>
@@ -315,7 +315,7 @@ export function BuilderProgramListModuleSettings({
                   </BuilderModuleField>
                 </BuilderModuleFieldStrip>
 
-                {/* Sessions. A coach sits here rather than on the programme
+                {/* Sessions. A coach sits here rather than on the program
                     because it genuinely varies within one — Back to Basics
                     runs with a different coach on Tuesday and Thursday. */}
                 {program.sessions.map((session, sessionIndex) => (
@@ -459,7 +459,7 @@ export function BuilderProgramListModuleSettings({
           })}
         </div>
         <button type="button" className="secondary-button" onClick={addProgram}>
-          Add a programme
+          Add a program
         </button>
       </div>
     </div>

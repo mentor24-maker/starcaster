@@ -3899,7 +3899,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ==========================================================================
-   Programmes — a club's classes and clinics (module type `program-list`)
+   Programs — a club's classes and clinics (module type `program-list`)
 
    Replaces flyer images with readable content. Standard 3: every structural
    rule lives in this base layer. The single media query below only narrows
@@ -4037,7 +4037,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* A schedule is a timetable, so the times line up: a monospaced face with
    tabular figures puts every colon in the same column. This is the thing an
-   image of centred text could never do, and it is the clearest signal that
+   image of centered text could never do, and it is the clearest signal that
    the flyer became content. */
 .builder-react-root .builder-preview-program-time {
   padding-right: 16px;
