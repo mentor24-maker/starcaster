@@ -47,6 +47,31 @@ Tests: `npm run test:builder-ui`.
   panel's bespoke block.
 - Legacy `.builder-module-form-row` grids may remain on old modules;
   use field strips for all new work.
+
+### Before you write panel markup or CSS, read W0 in `docs/UI_RULES.md`
+
+Not the summary — the **mechanism** half of the rule: *"the COLUMN is the
+grid, not the field"*. Every field is `display: contents` so one grid's
+tracks measure the longest label and longest control across the whole
+column, plus `--builder-field-room` (40px). **Never put a width on a
+field.** A layout that lines up because you picked matching numbers is not
+the rule; it is a coincidence that drifts the moment content changes.
+
+This is written here because it was missed twice in one day (2026-08-12).
+Both times the rule was read, the intent was followed, and the
+implementation invented its own widths — `11ch` labels, `1fr` fields,
+`11rem` buttons — which the operator spotted immediately.
+
+**And do not trust a green `check:panels` on markup you just invented.**
+It measures three known pair shapes (`.builder-module-field`,
+`.builder-setting-row`, `label.field`) inside known containers, skips
+`--full` fields, and reports OK on anything it cannot see — the doctrine's
+own words: *a control the check cannot see is a control the rule does not
+cover*. New surface means: give it a shape the check knows, add its
+container to `scripts/ui/check_panels.mjs`, seed real content into
+`scripts/ui/seed_fixture.mjs` (an empty manager measures nothing and
+passes), and then **prove the check fails** by breaking the layout on
+purpose before you trust the pass.
 - Styles live in `src/css/_builder-react-overrides.css` and
   `src/css/_builder-react.css` — see `src/css/CLAUDE.md`.
 

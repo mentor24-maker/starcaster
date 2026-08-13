@@ -2351,56 +2351,128 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ---------------------------------------------------------------------------
- * THE CARD EDITOR — one labelled block per card (operator, 2026-08-12).
+ * THE CARD EDITOR — the card list as one labelled lattice (UI_RULES L6a).
  *
- * This replaced the titled-column item grid. *"I always want labels to be in
- * a column of the same length so the fields line up on the left. The same
- * applies to the field column and buttons. They should all line up neatly in
- * columns and rows."* That is W0, the lattice rule, which item managers were
- * exempt from — and the exemption is what made this column look sloppy beside
- * the settings lattice next to it.
+ * W0's mechanism, not an imitation of its output. The first cut of this
+ * (2026-08-12) hardcoded an 11ch label track, 1fr fields and an 11rem button
+ * — three fixed widths, which is the per-field width W0 exists to forbid. It
+ * looked aligned and was aligned by luck.
  *
- * Four tracks: label, field, label, field. BOTH label tracks are the same
- * fixed width and BOTH field tracks are 1fr, so the four text fields form the
- * 2x2 that was asked for and still line up in columns and rows. Anything
- * wider than half a row — the two pickers, the description — spans tracks 2-4
- * and therefore starts at the same x as every other field, which is what puts
- * the two "Choose Image" buttons in line with each other.
+ * So: THE LIST IS THE GRID. Every field is `display: contents`, so all the
+ * labels and all the controls are children of this one grid, and its tracks
+ * measure the longest label and the longest control ACROSS EVERY CARD — plus
+ * `--builder-field-room` (40px), which the shared `.is-lattice` label rule
+ * already puts on as trailing padding. Card 2's fields therefore start where
+ * card 1's do, by construction rather than by both happening to be 1fr.
+ *
+ * Four tracks instead of two: the operator asked for the four text fields two
+ * to a row. Each field declares its pair-column (--a, --b) or spans (--wide);
+ * rows fill themselves in document order. `data-lattice-pairs="2"` on the
+ * container is what tells check_panels to hold each pair-column to W0 on its
+ * own, so a stagger here fails a check instead of waiting to be noticed.
  * ------------------------------------------------------------------------ */
-.builder-react-root .builder-card-editor {
-  /* The label track holds "Description", the longest of them, without
-     wrapping (E5) — and it is a fixed width rather than max-content because
-     max-content would size the two label columns differently and stagger the
-     pair, which is the whole thing being fixed here. */
-  --card-editor-label: 11ch;
-  /* Wide enough for the longest button word pair ("Choose Image") with its
-     padding, so neither button's text wraps or truncates. */
-  --card-editor-button: 11rem;
+.builder-react-root .builder-cards-panel-fields {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-2, 6px);
-  /* 40px between cards, so two cards never read as one block. It replaces the
-     rule-plus-6px this had before. */
-  padding-bottom: 40px;
-  margin-bottom: 40px;
-  border-bottom: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
-}
-.builder-react-root .builder-card-editor:last-of-type {
-  padding-bottom: 0;
-  margin-bottom: 0;
-  border-bottom: 0;
+  /* label · field · label · field · BUTTON.
+   *
+   * The two LABEL tracks and the BUTTON track are max-content, so each is its
+   * own longest string plus the 40px of room the shared `.is-lattice` rules
+   * add — W0's mechanism, measured across every card at once. The fifth track
+   * is what makes "Choose Icon" and "Choose Image" a column instead of two
+   * buttons that merely end at the same x.
+   *
+   * The two FIELD tracks are an equal share of what is left, not max-content.
+   * This panel is one half of a fixed 50/50 editor (the operator's equal
+   * columns, 2026-08-12), and at 1600px the content-measured version came to
+   * 794px inside a 695px column — the buttons cropped off the right edge.
+   * Measured, not assumed. An equal share keeps the rule that matters here —
+   * one field width, shared by every card — inside a box that cannot grow. */
+  grid-template-columns:
+    max-content minmax(0, 1fr)
+    max-content minmax(0, 1fr)
+    max-content;
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  column-gap: 0;
+  min-width: 0;
 }
 
-.builder-react-root .builder-card-editor-head {
+/* Flatten the field wrappers so their labels and controls land in the grid
+   above — the same trick, and the same reason, as the panel columns. */
+.builder-react-root .builder-cards-panel-fields .builder-module-field {
+  display: contents;
+}
+
+/* Pair-column placement. Explicit columns with auto rows fill in document
+   order: Title, Link, then Link Text, Alt Text on the next row. */
+.builder-react-root .builder-cards-panel-fields .builder-card-field--a > .builder-module-field-label {
+  grid-column: 1;
+}
+.builder-react-root .builder-cards-panel-fields .builder-card-field--a > .builder-module-field-control {
+  grid-column: 2;
+}
+.builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-label {
+  grid-column: 3;
+}
+.builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-control {
+  grid-column: 4;
+}
+/* Too wide for half a row — a picker or a description. The label stays in the
+   label track so it lines up with every other label; the control takes the
+   field tracks and stops short of the button track, so every wide control
+   ends at the same x as the picker inputs. W9's ceiling still applies from
+   the shared `.is-lattice` control rule. */
+.builder-react-root .builder-cards-panel-fields .builder-card-field--wide > .builder-module-field-label {
+  grid-column: 1;
+}
+.builder-react-root .builder-cards-panel-fields .builder-card-field--wide > .builder-module-field-control {
+  grid-column: 2 / 5;
+}
+
+/* A picker is two controls, and its button belongs to the button track — so
+   the control slot flattens and hands both of them to the grid directly.
+   `.is-lattice` is in the selector to outrank the shared control rule, which
+   sets `display: flex` on every field control: without it the slot stayed a
+   flex row, the button's `width: 100%` filled that row instead of its track,
+   and the input collapsed to 32px. Measured, not guessed. */
+.builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control {
+  display: contents;
+}
+.builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > input {
+  grid-column: 2 / 5;
+  width: 100%;
+  min-width: 0;
+  max-width: var(--builder-field-long-max, 560px);
+  padding-right: calc(var(--builder-field-room, 40px) / 2);
+}
+.builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > button {
+  grid-column: 5;
+  width: 100%;
+  white-space: nowrap;
+}
+
+/* The head row spans everything and carries the separation between cards:
+   40px of space and a rule, so two cards never read as one block. */
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3, 8px);
   min-width: 0;
+  margin-top: 40px;
+  padding-top: 40px;
+  border-top: 1px solid var(--border-light, rgba(9, 16, 24, 0.16));
+}
+/* The first card has the panel heading above it, not another card. */
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
-/* The card's own title, so a block is identifiable once the column headers
-   that used to name these fields are gone. */
+/* The card's own title, so a block is identifiable now that the column
+   headers which used to name these fields are gone. */
 .builder-react-root .builder-card-editor-name {
   font-weight: 700;
   color: var(--builder-editor-heading, #0b2a4a);
@@ -2410,78 +2482,35 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-width: 0;
 }
 
-.builder-react-root .builder-card-editor-fields {
-  display: grid;
-  grid-template-columns:
-    var(--card-editor-label) minmax(0, 1fr)
-    var(--card-editor-label) minmax(0, 1fr);
-  align-items: center;
-  column-gap: var(--space-3, 8px);
-  row-gap: var(--space-2, 6px);
-  min-width: 0;
-}
-
-/* Layout only — the size, weight and colour come from the R9 block above,
-   which exists because a muted grey label on the builder's blue is the exact
-   pairing that rule was written to stop. */
-.builder-react-root .builder-card-editor-label {
-  /* E5: labels never wrap. */
+/* The picker is an input and a button sharing one control slot. The button
+   takes its natural width at the END of the slot, so every picker's button
+   lines up with every other picker's — the slot is one track, so its right
+   edge is the same on every card. */
+.builder-react-root .builder-cards-panel-fields .builder-image-picker-field-button {
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 
-/* Fields fill their track and stop at the shared ceiling (W9) — never the
-   full width of the panel. */
-.builder-react-root .builder-card-editor-fields > input,
-.builder-react-root .builder-card-editor-fields .builder-card-editor-wide > input,
-.builder-react-root .builder-card-editor-fields .builder-card-editor-wide > textarea {
-  width: 100%;
-  max-width: var(--builder-field-long-max, 560px);
-  min-width: 0;
-}
-
-.builder-react-root .builder-card-editor-wide {
-  grid-column: 2 / -1;
-  min-width: 0;
-}
-
-/* The picker is an input and a button side by side. The button gets a track of
-   its OWN FIXED WIDTH rather than its natural one: "Choose Icon" and "Choose
-   Image" are different lengths, so natural widths lined the two buttons up on
-   their right edges and staggered them on their left — which is the stagger
-   this whole layout exists to remove. One track, one width, both edges. */
-.builder-react-root .builder-card-editor-picker {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--card-editor-button);
-  align-items: center;
-  gap: var(--space-2, 6px);
-  max-width: var(--builder-field-long-max, 560px);
-}
-.builder-react-root .builder-card-editor-picker > input {
-  min-width: 0;
-}
-.builder-react-root .builder-card-editor-picker > button {
-  width: 100%;
-  white-space: nowrap;
-}
-
-/* The symbol dropdown keeps its natural width — W0's stated exception for a
-   control whose content decides its size. */
-.builder-react-root .builder-card-editor-icon-select {
-  width: auto;
-  max-width: var(--builder-field-long-max, 560px);
-}
-
-/* Narrow panel: the 2x2 cannot hold two pairs, so it becomes one pair per row
-   — still one label column and one field column, still a lattice. */
+/* Narrow panel: one pair per row. Still one label track and one field track,
+   which is plain W0. */
 @media (max-width: 1200px) {
-  .builder-react-root .builder-card-editor-fields {
-    grid-template-columns: var(--card-editor-label) minmax(0, 1fr);
+  .builder-react-root .builder-cards-panel-fields {
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
   }
-  .builder-react-root .builder-card-editor-wide {
-    grid-column: 2 / -1;
+  .builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-label {
+    grid-column: 1;
+  }
+  .builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-control {
+    grid-column: 2;
+  }
+  .builder-react-root .builder-cards-panel-fields .builder-card-field--wide > .builder-module-field-control,
+  .builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > input {
+    grid-column: 2 / 3;
+  }
+  .builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > button {
+    grid-column: 3;
   }
 }
-
 
 /* The first group title in a column has the column edge above it, not a
    field, so it does not need the separating space the later ones do. */

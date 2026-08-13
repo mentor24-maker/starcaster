@@ -96,8 +96,32 @@ as a rule first, then gets a checker where one is possible.
   with fields that cannot (pickers, long text, more than about four
   columns) takes the labelled block, because that is the one where the
   spanning secondary row was already breaking the column alignment.
-  — **[eye]**, and `check:panels` measures it for W9 (the width ceiling)
-  though not for W0.
+  **How it is built, and how it is checked (rewritten 8/13).** The first
+  cut got the shape right and the mechanism wrong — a fixed `11ch` label
+  track, `1fr` fields, an `11rem` button — which is the per-field width W0
+  forbids, and it lined up by coincidence. It is W0's own mechanism now:
+  the LIST is one grid, every field `display: contents`, tracks measuring
+  the longest label and longest control across **every card at once**, plus
+  `--builder-field-room`. That is also what makes card 2 line up with card
+  1 rather than each card being its own grid.
+
+  The two field tracks are an equal share of the leftover rather than
+  `max-content`: this manager is one half of a fixed 50/50 editor, and the
+  content-measured version came to 794px inside a 695px column and cropped
+  the buttons off the edge. Buttons get a track of their own (the fifth),
+  because sized to their own text they line up on the right and stagger on
+  the left.
+
+  **The manager declares `data-lattice-pairs="2"`, and that is what makes
+  it checkable.** `check_panels` measures any element carrying that
+  attribute as a lattice group, holds each pair-column to W0 separately,
+  and fails a group whose labels start at more x-positions than it
+  declared. It also measures the LABEL of a `--full` field inside such a
+  group — the control still spans, but "Description" and "Icon Image" are
+  the longest labels here, and skipping the whole pair is what let a
+  cramped 10px label track pass as green. `seed_fixture.mjs` seeds two real
+  cards, because an empty manager measures nothing and passes.
+  — **[browser-check]** `npm run check:panels`
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**
