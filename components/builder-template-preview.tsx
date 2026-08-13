@@ -5448,6 +5448,8 @@ type NavRenderItem = {
   id?: string;
   parentId?: string;
   width?: string;
+  /** The mega panel's extra column — a whole module, or the tile it replaced. */
+  featureModule?: import("@/lib/builder-template").BuilderTemplateModule;
   featureImage?: string;
   featureHeading?: string;
 };
@@ -5578,7 +5580,20 @@ function NavMegaItem({
             </div>
           ))}
 
-          {featureImage || item.featureHeading ? (
+          {/*
+            * The extra column, in two forms. A module chosen from the palette
+            * renders as itself — the slot supplies the grid cell and nothing
+            * else, so the module's own background, padding and alignment are
+            * not sitting inside a second card. Where no module has been
+            * chosen the original image-plus-heading tile still renders, which
+            * is what keeps live tenant menus (Delray's "Visit Delray Tennis")
+            * exactly as they are.
+            */}
+          {item.featureModule ? (
+            <div className="site-nav-mega-feature-module">
+              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} />
+            </div>
+          ) : featureImage || item.featureHeading ? (
             <Link className="site-nav-mega-feature" href={href}>
               {featureImage ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
