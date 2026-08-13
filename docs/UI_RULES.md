@@ -63,6 +63,41 @@ as a rule first, then gets a checker where one is possible.
   secondary row. Pattern: `.builder-item-grid` (successor to the nav
   grid). *(7/1 "Give each of those field columns titles: Parent Page,
   Page Name, Slug, Width, Action"; ruling 8/9)* — **[eye]**
+- **L6a. A titled-column grid is not the only shape an item manager may
+  take — and it is the wrong one once the columns stop lining up.**
+  *(8/12, on the Feature Cards manager: "I always want labels to be in a
+  column of the same length so the fields line up on the left. The same
+  applies to the field column and buttons. They should all line up neatly
+  in columns and rows. (This really isn't in doctrine anywhere?)")* It is
+  — it is W0 — but **W0 exempts item managers**, and that exemption is
+  what let this one look sloppy beside the lattice next to it.
+
+  So a card manager may instead be **one labelled block per item**, on its
+  own lattice: `.builder-card-editor` in Feature Cards is the pattern.
+  Every label sits in a track of one fixed width, every field in a track
+  of one width, and a control too wide for half a row spans to the end and
+  starts at the same x as the rest.
+
+  **Two label/field pairs may share a row here** — W0's "one control per
+  row" is relaxed for this shape, because the operator asked for it by
+  name: *"Add the Alt tag to the three other fields at the top of each
+  feature card to form a 2x2 field setup with labels for each field."*
+  Both label tracks take the same width and both field tracks the same
+  width, so the pairs line up as columns rather than staggering.
+
+  **Buttons get a track, not their natural width.** "Choose Icon" and
+  "Choose Image" are different lengths; sized to their content they line
+  up on their right edges and stagger on their left. A fixed button track
+  (`--card-editor-button`) lines up both edges — the operator named
+  buttons in the same breath as labels and fields.
+
+  **Which shape to reach for:** a manager whose fields all fit as columns
+  stays a titled-column grid (L6) — the breadcrumb manager still is. One
+  with fields that cannot (pickers, long text, more than about four
+  columns) takes the labelled block, because that is the one where the
+  spanning secondary row was already breaking the column alignment.
+  — **[eye]**, and `check:panels` measures it for W9 (the width ceiling)
+  though not for W0.
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**
@@ -269,6 +304,13 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   accident — they render empty in the fixture today, so a pass that relied
   on their absence would be luck, and would turn into a false failure the
   day someone seeded one.
+
+  **Out of scope is not the same as unruled (8/12).** The exemption says
+  the panel lattice does not govern an item manager; it does not say the
+  manager may stagger. Feature Cards was the case that proved the
+  difference — the operator read the exemption's output as sloppiness, and
+  he was right. A manager that cannot be a clean titled-column grid runs
+  its own lattice instead: L6a.
 
   **W0 is not module-specific.** It belongs to any settings surface, so
   `check_panels` selects on `.is-lattice` rather than on a container —
