@@ -60,7 +60,14 @@ const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
  * says it is.
  */
 const PAGE_NAME = process.env.UI_HARNESS_PANEL_PAGE || 'Panel Lattice Check';
-const WIDTHS = (process.env.UI_HARNESS_WIDTHS || '1440,1600').split(',').map(Number);
+/*
+ * 1920 joined on 2026-08-13, and it is the width that matters most: it is the
+ * operator's own screen. The Feature Cards block reached the same right edge
+ * at 1440 and 1600 and stopped short at 1920 — the wide rows hit the W9
+ * ceiling while the fields above them kept going — and two green runs at the
+ * narrower widths were reported as proof it was fixed.
+ */
+const WIDTHS = (process.env.UI_HARNESS_WIDTHS || '1440,1600,1920').split(',').map(Number);
 
 /** Field kinds whose control keeps its natural size (W0's stated exception). */
 const NON_STRETCH = ['check', 'align', 'color'];
