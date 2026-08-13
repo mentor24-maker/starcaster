@@ -75,11 +75,18 @@ destination for its tasks, then rename that Closed status to `Live`.
 
 ### Colors worth setting
 
-Only two statuses need to catch your eye across a room. Give the four machine
-statuses muted greys and blues, and make yours loud:
+Only two statuses need to catch your eye across a room. Leave the machine
+statuses muted, and make the operator's two loud. Click the **coloured circle**
+to the left of a status name — the colour is not in the row's `...` menu, which
+offers only Rename and Delete.
 
 - `Needs your input` — red
 - `Ready to launch` — green
+- Leave `Queued` (grey), `Building` (purple), `In review` (amber) alone
+
+`Live` cannot be recoloured: ClickUp locks every **Closed**-group status to
+green with a check mark. That is fine — a closed ticket is out of the open view
+anyway, so its colour never has to compete for attention.
 
 ---
 
