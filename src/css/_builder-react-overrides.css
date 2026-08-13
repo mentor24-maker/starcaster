@@ -2373,24 +2373,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * ------------------------------------------------------------------------ */
 .builder-react-root .builder-cards-panel-fields {
   display: grid;
-  /* label · field · label · field · BUTTON.
+  /* label · field · GAP · label · field.
    *
-   * The two LABEL tracks and the BUTTON track are max-content, so each is its
-   * own longest string plus the 40px of room the shared `.is-lattice` rules
-   * add — W0's mechanism, measured across every card at once. The fifth track
-   * is what makes "Choose Icon" and "Choose Image" a column instead of two
-   * buttons that merely end at the same x.
+   * Both LABEL tracks are max-content, so each is its own longest string plus
+   * the 40px of room the shared `.is-lattice` rules add — W0's mechanism,
+   * measured across every card at once rather than per card.
    *
-   * The two FIELD tracks are an equal share of what is left, not max-content.
-   * This panel is one half of a fixed 50/50 editor (the operator's equal
-   * columns, 2026-08-12), and at 1600px the content-measured version came to
-   * 794px inside a 695px column — the buttons cropped off the right edge.
-   * Measured, not assumed. An equal share keeps the rule that matters here —
-   * one field width, shared by every card — inside a box that cannot grow. */
+   * The GAP track is the same 40px, and it is a track rather than a margin
+   * because W0 says the columns stay compact and the space between them is
+   * the gap ("just the 40px padding between columns"). Without it the left
+   * column's fields ran straight into the right column's labels and the two
+   * halves read as one run-on row (operator, 2026-08-13).
+   *
+   * Both FIELD tracks are an equal share of what is left, which is what keeps
+   * the left and right halves the same width. max-content would be the
+   * default reading of W0, but this panel is one half of a fixed 50/50 editor
+   * and the content-measured version overflowed its column by ~100px and
+   * cropped the buttons — measured, not assumed. */
   grid-template-columns:
     max-content minmax(0, 1fr)
-    max-content minmax(0, 1fr)
-    max-content;
+    var(--builder-field-room, 40px)
+    max-content minmax(0, 1fr);
   align-items: center;
   row-gap: var(--space-2, 6px);
   column-gap: 0;
@@ -2412,42 +2415,41 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   grid-column: 2;
 }
 .builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-label {
-  grid-column: 3;
-}
-.builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-control {
   grid-column: 4;
 }
-/* Too wide for half a row — a picker or a description. The label stays in the
-   label track so it lines up with every other label; the control takes the
-   field tracks and stops short of the button track, so every wide control
-   ends at the same x as the picker inputs. W9's ceiling still applies from
-   the shared `.is-lattice` control rule. */
+.builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-control {
+  grid-column: 5;
+}
+
+/* Too wide for half a row — a picker or the description. The label stays in
+   the label track, and the control runs to the END of the grid: the block has
+   one right edge, and a wide control that stopped short of it would leave a
+   notch in the shape (L8). */
 .builder-react-root .builder-cards-panel-fields .builder-card-field--wide > .builder-module-field-label {
   grid-column: 1;
 }
 .builder-react-root .builder-cards-panel-fields .builder-card-field--wide > .builder-module-field-control {
-  grid-column: 2 / 5;
+  grid-column: 2 / -1;
 }
 
-/* A picker is two controls, and its button belongs to the button track — so
-   the control slot flattens and hands both of them to the grid directly.
-   `.is-lattice` is in the selector to outrank the shared control rule, which
-   sets `display: flex` on every field control: without it the slot stayed a
-   flex row, the button's `width: 100%` filled that row instead of its track,
-   and the input collapsed to 32px. Measured, not guessed. */
-.builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control {
-  display: contents;
+/* A picker is an input and a button sharing one wide slot. The button is
+   pushed to the far end, so it lands on the block's right edge with the
+   fields above it; `min-width` is what makes the two buttons one column
+   rather than two lengths of text — it can only grow a button, never crop
+   one, because the label never wraps. */
+.builder-react-root .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control {
+  /* The same 40px that separates the two columns, between the input and its
+     button — without it the two touch and read as one control. */
+  gap: var(--builder-field-room, 40px);
 }
-.builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > input {
-  grid-column: 2 / 5;
-  width: 100%;
+.builder-react-root .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > input {
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: var(--builder-field-long-max, 560px);
-  padding-right: calc(var(--builder-field-room, 40px) / 2);
 }
-.builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > button {
-  grid-column: 5;
-  width: 100%;
+.builder-react-root .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > .builder-image-picker-field-button {
+  flex: 0 0 auto;
+  margin-left: auto;
+  min-width: var(--builder-picker-button-w, 11rem);
   white-space: nowrap;
 }
 
@@ -2495,20 +2497,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    which is plain W0. */
 @media (max-width: 1200px) {
   .builder-react-root .builder-cards-panel-fields {
-    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    grid-template-columns: max-content minmax(0, 1fr);
   }
   .builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-label {
     grid-column: 1;
   }
   .builder-react-root .builder-cards-panel-fields .builder-card-field--b > .builder-module-field-control {
     grid-column: 2;
-  }
-  .builder-react-root .builder-cards-panel-fields .builder-card-field--wide > .builder-module-field-control,
-  .builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > input {
-    grid-column: 2 / 3;
-  }
-  .builder-react-root .is-lattice .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > button {
-    grid-column: 3;
   }
 }
 

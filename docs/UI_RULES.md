@@ -108,9 +108,10 @@ as a rule first, then gets a checker where one is possible.
   The two field tracks are an equal share of the leftover rather than
   `max-content`: this manager is one half of a fixed 50/50 editor, and the
   content-measured version came to 794px inside a 695px column and cropped
-  the buttons off the edge. Buttons get a track of their own (the fifth),
-  because sized to their own text they line up on the right and stagger on
-  the left.
+  the buttons off the edge. Between the two pair-columns is a real 40px gap
+  track, and the wide rows run to the block's right edge with their buttons
+  pushed onto it — **L8**, added 8/13 after the shape was still wrong with
+  every row individually correct.
 
   **The manager declares `data-lattice-pairs="2"`, and that is what makes
   it checkable.** `check_panels` measures any element carrying that
@@ -125,6 +126,44 @@ as a rule first, then gets a checker where one is possible.
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**
+- **L8. THE BLOCK EDGE — a form is one rectangle, not a stack of rows.**
+  *(8/13: "how the overall form lines up on the right and left, which gives
+  the appearance of a coherent whole. Not sure how to describe that kind of
+  aesthetic sense for doctrine, but please try.")*
+
+  Here is the try. W0 lines fields up **going down** — one label width, one
+  field width, per column. L8 is the other axis: the form has an outer
+  boundary, and every row is responsible for it.
+
+  1. **One left edge and one right edge.** The leftmost thing in every row
+     starts at the same x and the rightmost thing ends at the same x. A
+     control that stops short leaves a notch; one that runs past leaves a
+     bump. Either reads as a row that does not belong to the others.
+  2. **A wide control runs to the edge, not to wherever it ran out.** A
+     description, an image URL, a picker — they span the remaining columns
+     and finish flush with the fields above them.
+  3. **A trailing button belongs to the edge**, pushed to the end of its
+     row, and the same width as any button under it. Two buttons of
+     different text lengths, each sized to its own words, line up on the
+     right and stagger on the left; give them a floor width
+     (`--builder-picker-button-w`) so they read as a column.
+  4. **The space between columns is a real gap** — the same 40px
+     (`--builder-field-room`) W0 puts between a label and its field. Left
+     column's field running straight into the right column's label is what
+     makes two columns read as one run-on row.
+  5. **Chrome sits on the same edges.** The card's title starts at the left
+     edge; its up/down/delete buttons end at the right one.
+
+  *Why it is worth a rule:* every part of this can be individually
+  "correct" — each row aligned, every field sized by the lattice — while
+  the block still looks unresolved, because the eye reads the OUTLINE
+  before it reads the rows. The rule that produced the complaint was
+  followed. The shape was not.
+
+  *Why it kept needing a person to spot it:* `check:panels` measures rows
+  against each other, and a notch or a bump is a property of the whole
+  block. Until something measures the outline, this one is **[eye]** — the
+  operator's, usually, which is exactly the cost it is meant to remove.
 
 ## D — Density and layout of panels
 
