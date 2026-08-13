@@ -92,6 +92,32 @@ const TUNED = {
       navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
     },
   },
+  // The card manager runs its own lattice (L6a) and is measured as a group
+  // by check_panels. It ships EMPTY from createEmptyModule, so without cards
+  // here the check finds the group, measures nothing and passes — which is
+  // precisely what happened on 2026-08-12: a clean run was read as proof the
+  // new card layout obeyed W0, and it had never been measured at all. Two
+  // cards, with the longest labels the manager has, so the tracks are real.
+  'feature-cards': {
+    name: 'Feature Cards',
+    settings: {
+      iconType: 'image',
+      cards: JSON.stringify([
+        {
+          id: 'card-1', title: 'Court Fees & Lesson Prices', body: 'Rates, resident and guest.',
+          linkUrl: '/delray-beach-tennis-center-court-fees', linkLabel: 'See Prices',
+          imageUrl: '/images/courts.jpg', imageAlt: 'Clay courts at sunrise',
+          icon: '★', iconImageUrl: '/images/icon-racquet.svg',
+        },
+        {
+          id: 'card-2', title: 'Junior Tennis Programs', body: 'Camps and lessons.',
+          linkUrl: '/juniors', linkLabel: 'Learn More',
+          imageUrl: '/images/juniors.jpg', imageAlt: 'Junior players gathered at the net',
+          icon: '●', iconImageUrl: '/images/icon-ball.svg',
+        },
+      ]),
+    },
+  },
   table: {
     name: 'Contact Strip',
     settings: {

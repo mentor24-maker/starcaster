@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   createBuilderCardItem,
@@ -392,180 +393,161 @@ export function BuilderFeatureCardsModuleSettings({
       </BuilderModuleFieldStrip>
       </div>
 
-      {/* RIGHT — the cards themselves. One labelled block per card, rather
-          than the titled-column item grid (UI_RULES L6) this used to be.
+      {/* RIGHT — the cards themselves, as one labelled lattice (UI_RULES
+          L6a). The rewrite on 2026-08-12 got the SHAPE right and the
+          MECHANISM wrong: it hardcoded an 11ch label track and 1fr fields,
+          which lines things up by luck rather than by the rule. W0 says how
+          this is built, and the how is the point — "the COLUMN is the grid,
+          not the field": every field is `display: contents`, so all the
+          labels and all the controls are children of ONE grid whose tracks
+          measure the longest label and the longest control ACROSS EVERY
+          CARD, plus `--builder-field-room` (40px). Never a width on a field.
 
-          Operator, 2026-08-12: "I always want labels to be in a column of the
-          same length so the fields line up on the left. The same applies to
-          the field column and buttons." That is W0, the lattice rule — and
-          item managers were exempt from it, which is exactly why this column
-          looked sloppy next to the settings beside it.
+          The whole list is that one grid — not a grid per card — which is
+          what makes card 2's fields start where card 1's do. Cards are
+          separated by the head row's own rule and spacing instead.
 
-          The one departure from W0 is the one he asked for by name: the four
-          text fields pair up two to a row ("a 2x2 field setup with labels for
-          each field"). Both label tracks are the same width and both field
-          tracks are the same width, so the four still line up in columns and
-          rows. Everything wider than half a row — the two pickers and the
-          description — takes a full row and starts at the same x as the rest. */}
+          Four tracks rather than two, because the operator asked for the
+          four text fields two-to-a-row ("a 2x2 field setup"). Each field
+          says which pair-column it belongs to; `data-lattice-pairs` tells
+          check_panels to hold each pair-column to W0 separately, so this
+          cannot silently drift again. */}
       <div className="builder-cards-panel-items">
       <div className="builder-cards-panel-heading">Feature Cards</div>
-      {cards.map((card, index) => {
-        const cardName = card.title || `Card ${index + 1}`;
-        // Ids pair every label with its control. They have to be unique
-        // across the panel, so they hang off the card's own id.
-        const fieldId = (field: string) => `${card.id}-${field}`;
+      <div className="builder-cards-panel-fields" data-lattice-pairs="2">
+        {cards.map((card, index) => {
+          const cardName = card.title || `Card ${index + 1}`;
 
-        return (
-          <div className="builder-card-editor" key={card.id}>
-            <div className="builder-card-editor-head">
-              <span className="builder-card-editor-name">{cardName}</span>
-              <div className="builder-item-grid-actions">
-                <button
-                  type="button"
-                  className="builder-icon-button"
-                  onClick={() => moveCard(card.id, -1)}
-                  aria-label={`Move ${cardName} up`}
-                  title="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="builder-icon-button"
-                  onClick={() => moveCard(card.id, 1)}
-                  aria-label={`Move ${cardName} down`}
-                  title="Move down"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="builder-icon-button builder-icon-button-danger"
-                  onClick={() => removeCard(card.id)}
-                  aria-label={`Delete ${cardName}`}
-                  title="Delete card"
-                >
-                  ✕
-                </button>
+          return (
+            <Fragment key={card.id}>
+              <div className="builder-card-editor-head">
+                <span className="builder-card-editor-name">{cardName}</span>
+                <div className="builder-item-grid-actions">
+                  <button
+                    type="button"
+                    className="builder-icon-button"
+                    onClick={() => moveCard(card.id, -1)}
+                    aria-label={`Move ${cardName} up`}
+                    title="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="builder-icon-button"
+                    onClick={() => moveCard(card.id, 1)}
+                    aria-label={`Move ${cardName} down`}
+                    title="Move down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="builder-icon-button builder-icon-button-danger"
+                    onClick={() => removeCard(card.id)}
+                    aria-label={`Delete ${cardName}`}
+                    title="Delete card"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="builder-card-editor-fields">
               {/* The 2x2. Title and Link identify the card; Link Text and Alt
                   Text describe them, in the same order underneath. */}
-              <label className="builder-card-editor-label" htmlFor={fieldId("title")}>
-                Title
-              </label>
-              <input
-                id={fieldId("title")}
-                type="text"
-                value={card.title}
-                onChange={(event) => updateCard(card.id, { title: event.target.value })}
-                placeholder={`Card ${index + 1}`}
-              />
-              <label className="builder-card-editor-label" htmlFor={fieldId("link")}>
-                Link
-              </label>
-              <input
-                id={fieldId("link")}
-                type="text"
-                value={card.linkUrl}
-                onChange={(event) => updateCard(card.id, { linkUrl: event.target.value })}
-                placeholder="/path-or-url"
-              />
-              <label className="builder-card-editor-label" htmlFor={fieldId("link-text")}>
-                Link Text
-              </label>
-              <input
-                id={fieldId("link-text")}
-                type="text"
-                value={card.linkLabel}
-                onChange={(event) => updateCard(card.id, { linkLabel: event.target.value })}
-                placeholder={module.settings.linkLabel || "Learn More"}
-              />
-              <label className="builder-card-editor-label" htmlFor={fieldId("alt")}>
-                Alt Text
-              </label>
-              <input
-                id={fieldId("alt")}
-                type="text"
-                value={card.imageAlt}
-                onChange={(event) => updateCard(card.id, { imageAlt: event.target.value })}
-                placeholder="Describe the image"
-              />
+              <BuilderModuleField label="Title" width="text-md" className="builder-card-field--a">
+                <input
+                  type="text"
+                  value={card.title}
+                  onChange={(event) => updateCard(card.id, { title: event.target.value })}
+                  placeholder={`Card ${index + 1}`}
+                  aria-label={`${cardName} title`}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Link" width="text-md" className="builder-card-field--b">
+                <input
+                  type="text"
+                  value={card.linkUrl}
+                  onChange={(event) => updateCard(card.id, { linkUrl: event.target.value })}
+                  placeholder="/path-or-url"
+                  aria-label={`${cardName} link`}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Link Text" width="text-md" className="builder-card-field--a">
+                <input
+                  type="text"
+                  value={card.linkLabel}
+                  onChange={(event) => updateCard(card.id, { linkLabel: event.target.value })}
+                  placeholder={module.settings.linkLabel || "Learn More"}
+                  aria-label={`${cardName} link text`}
+                />
+              </BuilderModuleField>
+              <BuilderModuleField label="Alt Text" width="text-md" className="builder-card-field--b">
+                <input
+                  type="text"
+                  value={card.imageAlt}
+                  onChange={(event) => updateCard(card.id, { imageAlt: event.target.value })}
+                  placeholder="Describe the image"
+                  aria-label={`${cardName} alt text`}
+                />
+              </BuilderModuleField>
 
               {showSymbolColumn ? (
-                <>
-                  <label className="builder-card-editor-label" htmlFor={fieldId("icon")}>
-                    Icon
-                  </label>
-                  <div className="builder-card-editor-wide">
-                    <select
-                      id={fieldId("icon")}
-                      className="builder-card-editor-icon-select"
-                      value={card.icon}
-                      onChange={(event) => updateCard(card.id, { icon: event.target.value })}
-                    >
-                      <option value="">None</option>
-                      {CARD_ICON_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                      {/* A glyph typed in before this became a dropdown is not
-                          in the list; keep it selectable so opening the panel
-                          does not rewrite the card. */}
-                      {card.icon && !CARD_ICON_OPTIONS.some((option) => option.value === card.icon) ? (
-                        <option value={card.icon}>{`${card.icon}  (current)`}</option>
-                      ) : null}
-                    </select>
-                  </div>
-                </>
+                <BuilderModuleField label="Icon" width="select-md" className="builder-card-field--wide">
+                  <select
+                    value={card.icon}
+                    onChange={(event) => updateCard(card.id, { icon: event.target.value })}
+                    aria-label={`${cardName} icon`}
+                  >
+                    <option value="">None</option>
+                    {CARD_ICON_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                    {/* A glyph typed in before this became a dropdown is not
+                        in the list; keep it selectable so opening the panel
+                        does not rewrite the card. */}
+                    {card.icon && !CARD_ICON_OPTIONS.some((option) => option.value === card.icon) ? (
+                      <option value={card.icon}>{`${card.icon}  (current)`}</option>
+                    ) : null}
+                  </select>
+                </BuilderModuleField>
               ) : null}
 
               {showIcons && iconType === "image" ? (
-                <>
-                  <span className="builder-card-editor-label">Icon Image</span>
-                  <div className="builder-card-editor-wide builder-card-editor-picker">
-                    <BuilderImagePickerField
-                      value={card.iconImageUrl}
-                      onChange={(iconImageUrl) => updateCard(card.id, { iconImageUrl })}
-                      galleryCategory={ICON_GALLERY_CATEGORY}
-                      buttonLabel="Choose Icon"
-                      placeholder="Pick an icon from the gallery"
-                    />
-                  </div>
-                </>
+                <BuilderModuleField label="Icon Image" width="full" className="builder-card-field--wide builder-card-field--picker">
+                  <BuilderImagePickerField
+                    value={card.iconImageUrl}
+                    onChange={(iconImageUrl) => updateCard(card.id, { iconImageUrl })}
+                    galleryCategory={ICON_GALLERY_CATEGORY}
+                    buttonLabel="Choose Icon"
+                    placeholder="Pick an icon from the gallery"
+                  />
+                </BuilderModuleField>
               ) : null}
 
-              {/* The picker renders its input and its button as siblings, so
-                  the cell has to be their flex row — dropped straight into the
-                  grid they would land in two different columns. */}
-              <span className="builder-card-editor-label">Image</span>
-              <div className="builder-card-editor-wide builder-card-editor-picker">
+              <BuilderModuleField label="Image" width="full" className="builder-card-field--wide builder-card-field--picker">
                 <BuilderImagePickerField
                   value={card.imageUrl}
                   onChange={(imageUrl) => updateCard(card.id, { imageUrl })}
                 />
-              </div>
+              </BuilderModuleField>
 
-              <label className="builder-card-editor-label" htmlFor={fieldId("body")}>
-                Description
-              </label>
-              <div className="builder-card-editor-wide">
+              <BuilderModuleField label="Description" width="full" className="builder-card-field--wide">
                 <textarea
-                  id={fieldId("body")}
                   className="builder-textarea"
                   rows={3}
                   value={card.body}
                   onChange={(event) => updateCard(card.id, { body: event.target.value })}
                   placeholder={"Copy for this card.\nStart every line with “- ” to make a bullet list."}
+                  aria-label={`${cardName} description`}
                 />
-              </div>
-            </div>
-          </div>
-        );
-      })}
+              </BuilderModuleField>
+            </Fragment>
+          );
+        })}
+      </div>
       <button type="button" className="secondary-button" onClick={addCard}>
         Add Card
       </button>

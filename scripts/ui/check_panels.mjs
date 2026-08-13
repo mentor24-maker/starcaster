@@ -157,7 +157,14 @@ function measure(page, nonStretch) {
       // not ask for. Chrome outside any axis column is its own group.
       const groups = [...panel.querySelectorAll('.builder-schema-panel-column')];
       const loose = [...panel.querySelectorAll('.builder-module-chrome .builder-module-field-strip')];
-      return [...groups, ...loose].map((group, gi) => {
+      // An item manager running its own lattice (L6a) opts in by declaring
+      // how many label/field pairs it puts on a row. It is measured like any
+      // other group — this check reported a clean pass on the Feature Cards
+      // card list for a day because the list matched none of the selectors
+      // above, and the pass was read as verification. A surface the check
+      // cannot see is a surface the rule does not cover.
+      const managers = [...panel.querySelectorAll('[data-lattice-pairs]')];
+      return [...groups, ...loose, ...managers].map((group, gi) => {
       const groupName = ((group.querySelector('.builder-schema-group-title') || {}).textContent || '').trim()
         || `chrome strip ${gi}`;
       // Legacy BuilderSettingRow pairs are measured too. They were not,
@@ -192,8 +199,17 @@ function measure(page, nonStretch) {
         if (!label || !control) return null;
 
         // A `full`-width field spans both tracks by design — it is long text
-        // keeping the room, not a staggered row. Out of scope for W0.
-        if (f.classList.contains('builder-module-field--full')) return null;
+        // keeping the room, not a staggered row. Its CONTROL is out of scope
+        // for W0.
+        //
+        // Its LABEL is not, and that gap cost a day (2026-08-12). In the
+        // Feature Cards manager the longest labels — "Description", "Icon
+        // Image" — belong to full fields, so skipping the whole pair left the
+        // label track measured by the SHORT labels only. A fixed 11ch track
+        // that cramped "Description" to 10px of room sailed through, and the
+        // green run was reported as proof the layout obeyed the rule.
+        const full = f.classList.contains('builder-module-field--full');
+        if (full && !group.hasAttribute('data-lattice-pairs')) return null;
 
         // A wrapper flattened into the column grid (`display: contents`) has
         // NO BOX, so its rect is 0×0 at 0,0 — measuring it would report a
@@ -216,6 +232,7 @@ function measure(page, nonStretch) {
         return {
           name: (label.textContent || '').trim() || '(unlabelled)',
           kind,
+          full,
           labelW: Math.round(lr.width),
           // The TEXT width, not the box. scrollWidth counts padding, and the
           // 40px of room IS padding — using it here would compare the box to
@@ -228,6 +245,9 @@ function measure(page, nonStretch) {
           // this check passed.
           labelTextX: Math.round(label.getBoundingClientRect().left
             + parseFloat(getComputedStyle(label).paddingLeft || '0') - or.left),
+          // The label BOX's x, used to bucket a multi-pair group into its
+          // columns. Distinct from labelTextX, which is about padding.
+          labelBoxX: Math.round(lr.left - or.left),
           fieldX: Math.round(cr.left - or.left),
           fieldW: Math.round(cr.width),
           // Classify by the CONTROL, not only by a width-token class. Legacy
@@ -242,7 +262,8 @@ function measure(page, nonStretch) {
             && !control.querySelector(':scope > .builder-theme-color-field, :scope > .builder-color-swatch')
         };
       }).filter(Boolean);
-      return { index, group: groupName, fields };
+      const declaredPairs = Number(group.getAttribute('data-lattice-pairs') || '1') || 1;
+      return { index, group: groupName, pairs: declaredPairs, fields };
       });
     });
   }, nonStretch);
@@ -300,9 +321,32 @@ function assertLattice(panels, width) {
   const failures = [];
 
   for (const panel of panels) {
-    const { fields } = panel;
-    if (!fields.length) continue;
-    const where = `${width}px panel #${panel.index} / ${panel.group}`;
+    const { fields: allFields } = panel;
+    if (!allFields.length) continue;
+
+    // W0 is per COLUMN. A group that puts two label/field pairs on a row
+    // (L6a — the Feature Cards manager) therefore has two columns inside it,
+    // and each is held to the rule on its own. Bucketing is by the label's
+    // own x, and ONLY for a group that declared it: an undeclared group
+    // stays one bucket, so a genuine stagger still fails rather than being
+    // explained away as a second column.
+    const declared = panel.pairs || 1;
+    const buckets = declared > 1
+      ? [...new Map(allFields.map((f) => [f.labelBoxX, null])).keys()]
+        .sort((a, b) => a - b)
+        .map((x) => allFields.filter((f) => f.labelBoxX === x))
+      : [allFields];
+
+    if (declared > 1 && buckets.length > declared) {
+      failures.push(
+        `${width}px panel #${panel.index} / ${panel.group}: declares ${declared} pair-column(s) but its labels ` +
+        `start at ${buckets.length} different x-positions — the extra one is a stagger, not a column`
+      );
+    }
+
+    for (const [bi, fields] of buckets.entries()) {
+    const where = `${width}px panel #${panel.index} / ${panel.group}`
+      + (declared > 1 ? ` pair-column ${bi + 1}` : '');
 
     const labelWidths = [...new Set(fields.map((f) => f.labelW))];
     if (labelWidths.length > 1) {
@@ -323,15 +367,16 @@ function assertLattice(panels, width) {
       );
     }
 
-    const fieldXs = [...new Set(fields.map((f) => f.fieldX))];
+    const placed = fields.filter((f) => !f.full);
+    const fieldXs = [...new Set(placed.map((f) => f.fieldX))];
     if (fieldXs.length > 1) {
       failures.push(
         `${where}: fields start at ${fieldXs.length} different x-positions (${fieldXs.join('/')}px) — ` +
-        fields.map((f) => `${f.name}@${f.fieldX}`).join(', ')
+        placed.map((f) => `${f.name}@${f.fieldX}`).join(', ')
       );
     }
 
-    const stretch = fields.filter((f) => f.stretchable);
+    const stretch = placed.filter((f) => f.stretchable);
     const fieldWidths = [...new Set(stretch.map((f) => f.fieldW))];
     if (fieldWidths.length > 1) {
       failures.push(
@@ -362,6 +407,7 @@ function assertLattice(panels, width) {
           '(L4, cropped word) — the track should have grown to fit it, so a fixed width has crept back in'
         );
       }
+    }
     }
   }
 
