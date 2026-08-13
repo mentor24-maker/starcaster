@@ -105,6 +105,19 @@
    */
   --builder-field-long-max: 560px;
 
+  /*
+   * L8 (operator, 2026-08-13): the block has one right edge, and two buttons
+   * stacked on it read as a column only if they are the same width. "Choose
+   * Icon" and "Choose Image" are different lengths, so the shorter one gets
+   * padded up to this.
+   *
+   * A FLOOR, not a width — the labels never wrap, so a longer one grows its
+   * button past this rather than cropping. 11rem because the longest of them
+   * measures 165px in the running app; the number is here rather than in the
+   * rule so a second surface with picker buttons cannot pick a different one.
+   */
+  --builder-picker-button-w: 11rem;
+
   /* Aliases for legacy CSS */
   --text: var(--ink-primary);
   --subtext: var(--ink-secondary);
