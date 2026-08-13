@@ -228,3 +228,58 @@ export function formatSessionHours(session: ProgramSession): string {
 export function isProgramListEmpty(programs: Program[]): boolean {
   return programs.length === 0;
 }
+
+/**
+ * Store a collection back into module settings.
+ *
+ * Deliberately does **not** re-run `parsePrograms`. The editor holds
+ * half-typed rows — a session with a day and no time yet, a programme whose
+ * title is still being typed — and parsing on the way out would delete them
+ * mid-keystroke. Validation belongs on the read side, which is where the
+ * renderer needs it.
+ */
+export function serializePrograms(programs: Program[]): string {
+  return JSON.stringify(programs);
+}
+
+let sequence = 0;
+
+/**
+ * A locally-unique id for a newly added row.
+ *
+ * Ids only have to distinguish rows inside one module, and `Date.now()` alone
+ * collides when two rows are added in the same millisecond — which happens
+ * with a held-down key or a paste. The counter makes that impossible.
+ */
+function newId(prefix: string): string {
+  sequence += 1;
+  return `${prefix}-${Date.now().toString(36)}-${sequence}`;
+}
+
+export function createProgram(): Program {
+  return { id: newId("program"), title: "", sessions: [], pricing: [], bullets: [] };
+}
+
+export function createProgramSession(): ProgramSession {
+  return { id: newId("session"), day: "", startTime: "", endTime: "" };
+}
+
+export function createProgramPrice(): ProgramPrice {
+  return { id: newId("price"), amount: "", appliesTo: "" };
+}
+
+/**
+ * Bullets are edited as one per line in a textarea rather than as a list of
+ * add/remove rows: they are short, order matters, and reordering four points
+ * with arrow buttons is slower than editing four lines of text.
+ */
+export function bulletsToText(bullets: string[]): string {
+  return bullets.join("\n");
+}
+
+export function bulletsFromText(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}

@@ -87,6 +87,7 @@ export const BUILDER_MODULE_TYPES = [
   "slider",
   "slideshow",
   "feature-cards",
+  "program-list",
   "social",
   "social-share",
   "previous-results",
@@ -1674,6 +1675,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "slider" ||
     type === "slideshow" ||
     type === "feature-cards" ||
+    type === "program-list" ||
     type === "social" ||
     type === "social-share" ||
     type === "previous-results" ||
@@ -1739,7 +1741,13 @@ export function normalizeModuleSettings(value: unknown) {
             // empty on the next load, and the content is gone with no error.
             // `sliderItems` was missing here until 2026-08-07 — the Card
             // Slider had been capped at 10k since it shipped.
-            : normalizedKey === "cards" || normalizedKey === "sliderItems"
+            : normalizedKey === "cards" ||
+                normalizedKey === "sliderItems" ||
+                // `programs` holds every class a club runs, each with its own
+                // sessions, price bands and bullets — fifteen programmes is
+                // ordinary for one tennis centre, and the whole collection is
+                // one JSON value.
+                normalizedKey === "programs"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 200000))
             : normalizedKey === "navItems"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 500000))
@@ -2677,6 +2685,33 @@ export function createEmptyModule(
           iconFront: "true",
           linkLabel: "Learn More",
           linkArrow: "true"
+        }
+      : type === "program-list"
+      ? {
+          programs: "[]",
+          // The level chip is the one device carried over from the source
+          // flyers, because it is the one doing real work: it tells a reader
+          // in a glance whether a session is for them.
+          showLevelBadge: "true",
+          // The pro shop number is the club's, not each programme's, so it
+          // lives once on the module. A club that wants a different number
+          // per programme is a real but unmet case — see the ClickUp task.
+          showReserve: "true",
+          reserveLabel: "Reserve",
+          reservePhone: "",
+          // Stated once under the list rather than stamped on every entry.
+          // On the source flyers this was a shield graphic repeated fifteen
+          // times; it is a policy, and policies are text.
+          policyNote: "",
+          showInstructorColumn: "true",
+          // Empty color = follow the site theme, resolved at render. A hex
+          // here would be stamped into every new module and pin it forever
+          // (the mistake feature-cards had to be migrated out of).
+          accentColor: "",
+          headingColor: "",
+          cardBackground: "",
+          cardBorderColor: "",
+          cardRadius: "10"
         }
       : type === "video"
       ? {
