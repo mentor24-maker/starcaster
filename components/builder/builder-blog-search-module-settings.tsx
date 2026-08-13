@@ -142,6 +142,7 @@ export function BuilderBlogSearchModuleSettings({
               control: "number",
               min: 0,
               max: 40,
+              step: 5,
               fallback: "8",
               rendersVia: "BlogSearchPreview"
             }

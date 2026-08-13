@@ -452,6 +452,7 @@ export function BuilderSectionControls({
                       value={section.rowBorderRadius ?? "0"}
                       min={0}
                       max={60}
+                      step={5}
                       fallback="0"
                       onChange={(rowBorderRadius) =>
                         onUpdateSection((current) => ({ ...current, rowBorderRadius }))

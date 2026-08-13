@@ -2492,6 +2492,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-bottom: 0;
 }
 
+/* Feature Cards only (operator, 2026-08-12): the rule between two cards had
+   6px under it and the grid's 6px row gap over the next card, so six fields
+   belonging to two different cards ran together as one block. 40px on each
+   side of the line is what separates them into cards you can scan. Scoped to
+   the cards panel rather than added to the rule above, because the item grid
+   is a shared system — a manager that adopts it later should not inherit
+   Feature Cards' spacing without asking for it. */
+.builder-react-root .builder-cards-panel-items .builder-item-grid-sub {
+  padding-bottom: 40px;
+  margin-bottom: 40px;
+}
+.builder-react-root .builder-cards-panel-items .builder-item-grid-sub:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
 /* ============================================================== */
 /* ROW LAYOUT TILES — the icon must show the layout it adds        */
 /* ============================================================== */

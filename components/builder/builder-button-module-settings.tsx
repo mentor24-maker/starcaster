@@ -477,6 +477,7 @@ export function BuilderButtonModuleSettings({
               control: "number",
               min: 0,
               max: 80,
+              step: 5,
               fallback: "0",
               rendersVia: "getButtonModuleStyle"
             }

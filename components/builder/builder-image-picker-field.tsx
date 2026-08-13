@@ -35,7 +35,11 @@ export function BuilderImagePickerField({
   value,
   onChange,
   placeholder = "https://...",
-  buttonLabel = "Choose From Gallery",
+  // "Choose Image" (operator, 2026-08-12). The old "Choose From Gallery"
+  // named the place the picker goes rather than the thing it picks, and it
+  // was long enough to crowd the input beside it. Changed on the shared
+  // default rather than per call site so every panel says the same words.
+  buttonLabel = "Choose Image",
   allowUpload = true,
   galleryCategory = ""
 }: BuilderImagePickerFieldProps) {

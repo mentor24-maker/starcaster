@@ -302,6 +302,7 @@ export function BuilderFloatingImageModuleSettings({
               control: "number",
               min: 0,
               max: 80,
+              step: 5,
               fallback: "18",
               rendersVia: "getImageModuleStyle"
             }

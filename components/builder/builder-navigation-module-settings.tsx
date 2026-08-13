@@ -268,6 +268,7 @@ export function BuilderNavigationModuleSettings({
               control: "number",
               min: 0,
               max: 40,
+              step: 5,
               fallback: String(NAV_STYLE_DEFAULTS.gap),
               rendersVia: RENDERS_VIA
             }
@@ -335,6 +336,7 @@ export function BuilderNavigationModuleSettings({
                   control: "number",
                   min: 0,
                   max: 40,
+                  step: 5,
                   fallback: String(NAV_STYLE_DEFAULTS.dropdownRadius),
                   rendersVia: RENDERS_VIA
                 }
@@ -726,6 +728,7 @@ export function BuilderNavigationModuleSettings({
               control: "number",
               min: 0,
               max: 80,
+              step: 5,
               fallback: String(NAV_STYLE_DEFAULTS.barRadius),
               rendersVia: RENDERS_VIA
             }
@@ -741,6 +744,7 @@ export function BuilderNavigationModuleSettings({
               control: "number",
               min: 0,
               max: 48,
+              step: 5,
               fallback: String(NAV_STYLE_DEFAULTS.linkRadius),
               rendersVia: RENDERS_VIA
             }
