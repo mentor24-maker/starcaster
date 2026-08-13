@@ -202,6 +202,7 @@ export function siteSearchButtonFrameFields(): BuilderSchemaField[] {
       control: "number",
       min: 0,
       max: 40,
+      step: 5,
       // One radius for the field and the button on purpose: they sit edge to
       // edge, and two different corner sizes on one row reads as a mistake.
       rendersVia: "siteSearchRadius"

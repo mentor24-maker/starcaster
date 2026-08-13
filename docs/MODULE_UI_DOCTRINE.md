@@ -186,10 +186,22 @@ the case where the precision is noise, so the rule reads the key name
 width saved at 403 before the step changed would DISPLAY as 405 while 403 was
 still what the page used — the panel disagreeing with the live site and
 looking fine doing it. `resolveNumberSelectOptions` in
-`builder-inline-number-select.tsx` now inserts an off-grid value into the list
-and selects it, so raising a step can never quietly rewrite what an operator
-sees. This was already wrong for the six controls that stepped by more than
-one before this rule existed.
+`builder-inline-number-select.tsx` inserted the off-grid value into the list
+and selected it, so raising a step could never quietly rewrite what an
+operator sees. This was already wrong for the six controls that stepped by
+more than one before this rule existed.
+
+**Reversed the same evening, and the trap closed a different way.** The
+operator, on 403-style values: *"If they already have a value that is not
+divisible by 5, just change it to the next lowest number that is."* An
+off-grid value now snaps DOWN to the next option (403 → 400) and the control
+**writes that back through `onChange` as it mounts** — so the panel still
+cannot disagree with the page, but the resolution goes the other way: the
+document follows the panel instead of the panel bending to the document. The
+consequence is worth knowing before it surprises someone: opening a module
+panel can change a number nobody touched, and the page shows as edited.
+An empty setting is never written — blank means "use the default" on many of
+these, and filling it in would invent a choice.
 
 **Widened to spacing, and to JSX, 2026-08-12 (same night).** The rule was
 written against Site Search and shipped, and the operator hit the identical
@@ -216,6 +228,34 @@ Two things had let sixteen controls through:
 The shared step is `MODULE_SPACING_STEP` in `builder-settings-schema.tsx`, so
 `marginFields()` / `paddingFields()` cannot drift from the hand-written strips
 — and the parser resolves `const NAME = <number>` for exactly that reason.
+
+**Where the steps LAND, not just how big they are (2026-08-12).** Icon Size
+runs 16–160 in fives, and the list came out 16, 21, 26, 31 — every option off
+the round numbers, because it counted up from `min`. Options are aligned to
+multiples of the step now (20, 25, 30), which is the whole point of a coarse
+step: a person looking for 75 should find 75. A step of 1, or a fractional one
+(Tractor Nav speed counts in tenths), is left alone.
+
+**Box metrics below the 100px gate, moved by hand the same evening.** The
+operator: *"I want all those larger number dropdowns to increment on the 5s."*
+Radius, padding and gap controls whose range spans 40px or more went to
+`step: 5` — Feature Cards Gap and Radius, CRM Form Radius and Padding, the
+cell padding sides and cell/row border radius, and the Radius fields on
+Navigation, Button, Image, Floating Image, Site Search and Blog Search.
+
+These stayed at 1px on purpose, and the automated W8 check was deliberately
+NOT tightened to catch them, because it keys on `*Size`/`*Height` names and
+would drag the text controls in with them:
+
+- **Text sizes** — Font Size, Label Size, Button Text Size. 16px and 18px are
+  the two most common values in typography; a list that skips both is worse
+  than a long one.
+- **Counts, angles and percentages** — particles, max results, spread,
+  opacity, ring step. Every value means something and none of them are pixels.
+- **Fine nudges** — shadow X/Y/spread. The control exists to move something
+  by a pixel or two.
+- **Button's inner pill padding (1–50)** — recorded above, and it still
+  holds: a single pixel is visible inside a pill.
 
 **Checked by:** `check_ui_doctrine.cjs` (W8) fails a `control: "number"` field
 whose key names a pixel measurement, whose `max` is over 100, and whose step is

@@ -53,15 +53,21 @@ describe("width dropdowns count in fives", () => {
     expect(o.selected).toBe("120");
   });
 
-  it("an off-grid saved width is still shown", () => {
+  it("an off-grid saved width drops to the next five down", () => {
+    // Reversed on 2026-08-12: 403 used to be injected into the list and shown
+    // as-is, so the panel could not disagree with the page. The operator asked
+    // for clean lists instead — "change it to the next lowest number that is"
+    // divisible by five — and the control writes 400 back as it mounts, so
+    // the document follows the panel rather than drifting from it.
     const m = { ...createEmptyModule("site-search"), settings: { fieldWidth: "403" } };
     const html = renderToStaticMarkup(
       <BuilderSiteSearchModuleSettings module={m as never} onUpdateModule={() => {}} />
     );
     const o = optionsFor(html, "Field Width")!;
     console.log("off-grid 403 ->", o.count, "options, selected:", o.selected);
-    expect(o.selected).toBe("403");
-    expect(o.count).toBe(242);
+    expect(o.selected).toBe("400");
+    expect(o.has("403")).toBe(false);
+    expect(o.count).toBe(241);
   });
 });
 

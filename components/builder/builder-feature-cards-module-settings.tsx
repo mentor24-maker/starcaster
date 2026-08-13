@@ -184,6 +184,7 @@ export function BuilderFeatureCardsModuleSettings({
             value={module.settings.cardGap ?? "12"}
             min={0}
             max={48}
+            step={5}
             fallback="12"
             onChange={(cardGap) => set("cardGap", cardGap)}
           />
@@ -212,6 +213,7 @@ export function BuilderFeatureCardsModuleSettings({
             value={module.settings.cardRadius ?? "18"}
             min={0}
             max={48}
+            step={5}
             fallback="18"
             onChange={(cardRadius) => set("cardRadius", cardRadius)}
           />

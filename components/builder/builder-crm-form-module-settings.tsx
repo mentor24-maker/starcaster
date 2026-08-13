@@ -266,6 +266,7 @@ export function BuilderCrmFormModuleSettings({
                   <BuilderNumberSelectControl
                     fallback="10"
                     max={80}
+                    step={5}
                     min={0}
                     value={borderRadius}
                     onChange={(value) => updateFormStyle("borderRadius", toPx(value))}
@@ -275,6 +276,7 @@ export function BuilderCrmFormModuleSettings({
                   <BuilderNumberSelectControl
                     fallback="18"
                     max={80}
+                    step={5}
                     min={0}
                     value={padding}
                     onChange={(value) => updateFormStyle("padding", toPx(value))}

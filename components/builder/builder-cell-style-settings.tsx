@@ -142,6 +142,7 @@ export function BuilderCellStyleSettings({
                 value={cellSide(key, pair, legacyPadding)}
                 min={0}
                 max={50}
+                step={5}
                 fallback="0"
                 onChange={(value) => onSetCellExtra(column, key, value)}
               />
@@ -219,6 +220,7 @@ export function BuilderCellStyleSettings({
               value={section.cellBorderRadius[column] ?? "0"}
               min={0}
               max={60}
+              step={5}
               fallback="0"
               onChange={(value) => onUpdateCellBorderRadius(column, value)}
             />
