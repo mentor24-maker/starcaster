@@ -6,6 +6,8 @@ import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import { BuilderFeatureCardsModuleSettings } from "./builder-feature-cards-module-settings";
+import { BuilderProgramListModuleSettings } from "./builder-program-list-module-settings";
+import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
   BuilderSlideshowModuleSettings,
   parseBuilderSlideshowSlides
@@ -682,6 +684,39 @@ function renderModulePreview(module: BuilderTemplateModule) {
         )}
         {slides.length > 1 ? (
           <span className="builder-module-preview-slideshow-count">{slides.length} slides</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (module.type === "program-list") {
+    const programs = parsePrograms(module.settings.programs);
+
+    if (programs.length === 0) {
+      return <span className="builder-module-preview-empty">Add programs in the editor</span>;
+    }
+
+    // The canvas card is a glance, not the page. It names the programs and
+    // how often each runs, which is what an operator scanning a long page
+    // needs to tell one Programs module from another.
+    return (
+      <div className="builder-module-preview-programs">
+        {programs.slice(0, 6).map((program) => (
+          <div key={program.id} className="builder-module-preview-program">
+            <strong>{program.title}</strong>
+            {program.sessions.length > 0 ? (
+              <span>
+                {program.sessions.length === 1
+                  ? `${program.sessions[0].day} ${formatSessionHours(program.sessions[0])}`.trim()
+                  : `${program.sessions.length} sessions`}
+              </span>
+            ) : null}
+          </div>
+        ))}
+        {programs.length > 6 ? (
+          <div className="builder-module-preview-program">
+            <span>{`+${programs.length - 6} more`}</span>
+          </div>
         ) : null}
       </div>
     );
@@ -3763,6 +3798,9 @@ export function BuilderModuleCard({
           )}
           {module.type === "feature-cards" && (
             <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          )}
+          {module.type === "program-list" && (
+            <BuilderProgramListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
           )}
           {module.type === "navigation" && (
             <BuilderNavigationModuleSettings

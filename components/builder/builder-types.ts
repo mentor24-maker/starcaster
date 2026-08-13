@@ -145,6 +145,12 @@ export const modulePaletteGroups: Array<{
     icon: "▦",
     description: "A responsive grid of linked cards with images, icons, and short copy."
   },
+  {
+    value: "program-list",
+    label: "Programs",
+    icon: "🗓",
+    description: "Classes, clinics and sessions with their days, times, coaches and prices."
+  },
   { value: "breadcrumb", label: "Breadcrumb", icon: "›", description: "Horizontal trail showing the visitor's location in the site hierarchy." },
   {
     value: "site-search",
@@ -680,6 +686,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Feature Cards",
     icon: "▦",
     description: "A row of linked tiles — image, title, short copy, and a link. Wraps to fewer columns on small screens.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "program-list-standard",
+    type: "program-list",
+    group: "program-list",
+    label: "Programs",
+    icon: "🗓",
+    description: "A schedule of classes or clinics — days, times, coaches and prices, in a timetable a phone can read.",
     name: "",
     text: "",
     settings: {}

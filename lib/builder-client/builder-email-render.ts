@@ -73,6 +73,14 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // card styling. Doing it properly means a nested-table rewrite of the
     // renderer, which is its own task, not a footnote on this one.
     module.type === "feature-cards" ||
+    // Standard 11, decided 2026-08-13: skipped, for the same reason as
+    // Feature Cards. Each program is a CSS grid splitting intro from
+    // timetable, and Outlook's Word engine supports neither grid nor flex —
+    // it would stack every field into one ragged column and lose the
+    // alignment that is the whole point of the timetable. A club emailing
+    // its schedule is a real want, but it needs a nested-table renderer
+    // written for email, not this one bent into shape.
+    module.type === "program-list" ||
     module.type === "social" ||
     module.type === "social-share" ||
     module.type === "table" ||

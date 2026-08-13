@@ -24,6 +24,7 @@ import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
+import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
   getNavMegaColumnCount,
   getNavModuleClassNames,
@@ -1794,6 +1795,10 @@ function BuilderModulePreview({
 
   if (module.type === "slideshow") {
     return <SlideshowPreview module={module} />;
+  }
+
+  if (module.type === "program-list") {
+    return <ProgramListModulePreview module={module} />;
   }
 
   if (module.type === "feature-cards") {
@@ -5850,6 +5855,145 @@ const FEATURE_CARD_ICON_SHAPES = new Set(["circle", "square", "plain"]);
  * `_builder-react-overrides.css` (standard 3); the media queries there only
  * reduce the column count, they never introduce layout.
  */
+/**
+ * Programs — a club's classes, clinics and mixers as readable page content.
+ *
+ * Replaces the flyer image. The operator's brief (ClickUp `86bbdby3a`) was
+ * that staff must be able to change a start time without a design tool, and
+ * that "flyers don't belong on a website" — so nothing here reproduces the
+ * poster. No logo, no address block, no decorative palm: those were identical
+ * on all fifteen source flyers and are site chrome or print filler.
+ *
+ * The times are a real table with a monospaced, tabular-figures column,
+ * because a schedule is a timetable and the columns should line up. Centered
+ * text baked into an image never could.
+ */
+function ProgramListModulePreview({
+  module
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+}) {
+  const programs = parsePrograms(module.settings.programs);
+
+  // Standard 5: an empty module is a designed state, not a blank box.
+  if (programs.length === 0) {
+    return (
+      <div className="builder-preview-programs builder-preview-programs-empty">
+        Add programs in the editor
+      </div>
+    );
+  }
+
+  const showLevelBadge = module.settings.showLevelBadge !== "false";
+  const showReserve = module.settings.showReserve !== "false";
+  const showInstructorColumn = module.settings.showInstructorColumn !== "false";
+  const reserveLabel = module.settings.reserveLabel || "Reserve";
+  const reservePhone = (module.settings.reservePhone || "").trim();
+  const policyNote = (module.settings.policyNote || "").trim();
+  const radius = Math.min(48, Math.max(0, Number.parseInt(module.settings.cardRadius || "10", 10) || 0));
+
+  // Empty color settings follow the site theme. The --crm-theme-* vars are
+  // set on the preview root by getCrmThemePaletteVars on both the editor
+  // canvas and the public site; the literals are the no-theme fallback.
+  const accent = module.settings.accentColor || "var(--crm-theme-primary, #4f9c3a)";
+  const heading = module.settings.headingColor || "var(--crm-theme-accent, #14265c)";
+
+  // `tel:` needs the digits only; the label keeps whatever formatting the
+  // operator typed, because that is how the club writes its own number.
+  const dialable = reservePhone.replace(/[^\d+]/g, "");
+  const canReserve = showReserve && reservePhone.length > 0;
+
+  // A program with no coach on any session leaves the column out entirely
+  // rather than rendering a row of blanks.
+  const anyInstructor = programs.some((program) =>
+    program.sessions.some((session) => Boolean(session.instructor))
+  );
+  const withInstructors = showInstructorColumn && anyInstructor;
+
+  return (
+    <div
+      className="builder-preview-programs"
+      style={
+        {
+          "--program-radius": `${radius}px`,
+          "--program-accent": accent,
+          "--program-heading": heading,
+          "--program-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
+          "--program-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #dce3ef)"
+        } as React.CSSProperties
+      }
+    >
+      <div className="builder-preview-programs-list">
+        {programs.map((program) => (
+          <article className="builder-preview-program" key={program.id}>
+            <div className="builder-preview-program-intro">
+              <h3 className="builder-preview-program-title">{program.title}</h3>
+              {program.subtitle ? (
+                <p className="builder-preview-program-subtitle">{program.subtitle}</p>
+              ) : null}
+              {showLevelBadge && program.levelBadge ? (
+                <span className="builder-preview-program-level">{program.levelBadge}</span>
+              ) : null}
+              {program.bullets.length > 0 ? (
+                <ul className="builder-preview-program-points">
+                  {program.bullets.map((bullet, index) => (
+                    <li key={`${program.id}-point-${index}`}>{bullet}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
+            <div className="builder-preview-program-detail">
+              {program.sessions.length > 0 ? (
+                <div className="builder-preview-program-when">
+                  <p className="builder-preview-program-when-label">When</p>
+                  <table className="builder-preview-program-table">
+                    <tbody>
+                      {program.sessions.map((session) => (
+                        <tr key={session.id}>
+                          <td className="builder-preview-program-day">{session.day}</td>
+                          <td className="builder-preview-program-time">
+                            {formatSessionHours(session)}
+                          </td>
+                          {withInstructors ? (
+                            <td className="builder-preview-program-who">{session.instructor ?? ""}</td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {program.pricing.length > 0 ? (
+                <div className="builder-preview-program-cost">
+                  {program.pricing.map((price) => (
+                    <div className="builder-preview-program-cost-row" key={price.id}>
+                      <span className="builder-preview-program-cost-amount">{price.amount}</span>
+                      {price.appliesTo ? (
+                        <span className="builder-preview-program-cost-for">{price.appliesTo}</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {canReserve ? (
+                <p className="builder-preview-program-reserve">
+                  <span>{reserveLabel}:</span>{" "}
+                  <a href={`tel:${dialable}`}>{reservePhone}</a>
+                </p>
+              ) : null}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {policyNote ? <p className="builder-preview-programs-policy">{policyNote}</p> : null}
+    </div>
+  );
+}
+
 function FeatureCardsModulePreview({
   module,
   previewMode = false
