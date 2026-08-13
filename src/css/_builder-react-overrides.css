@@ -2398,6 +2398,25 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   row-gap: var(--space-2, 6px);
   column-gap: 0;
   min-width: 0;
+  /*
+   * THE BLOCK IS BOUNDED, and that is what lets every row reach the same
+   * right edge (L8).
+   *
+   * W9 caps every text control at --builder-field-long-max. The 2x2 fields
+   * are well under it, but a wide row — the description, a picker input —
+   * spans four tracks, so on a wide screen it hit the cap and stopped short
+   * while the fields above it ran on to the block's edge. A notch, exactly
+   * the shape L8 is about. It did not show at 1440 or 1600, where the block
+   * happens to be about the width of the cap; the operator's 1920 is where
+   * it appears, and 1920 is in the check's widths now.
+   *
+   * Bounding the block instead of widening the control keeps both rules: no
+   * control is ever wider than the ceiling, and no row stops short of the
+   * edge. 7rem is a little less than the label track ("Description" plus its
+   * 40px of room), so the wide span lands just inside the ceiling rather
+   * than just outside it.
+   */
+  max-width: calc(var(--builder-field-long-max, 560px) + 7rem);
 }
 
 /* Flatten the field wrappers so their labels and controls land in the grid
