@@ -4179,3 +4179,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     font-size: var(--text-xl);
   }
 }
+
+/* The paste box's result line. It reports what was read and what was
+   skipped — a tool that silently drops half its input is one nobody trusts
+   a second time, so the message has to be visible rather than a toast that
+   vanishes before it is read. */
+.builder-react-root .builder-program-paste-note {
+  margin: var(--space-2, 8px) 0 var(--space-3, 12px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-left: 3px solid var(--accent, #4f9c3a);
+  background: var(--bg-page, #ffffff);
+  font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+}
