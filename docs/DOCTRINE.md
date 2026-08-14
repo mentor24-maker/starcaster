@@ -454,6 +454,23 @@ has on something he has already said yes to.
 
 ### 6.5 SQL for the operator goes in the SQL handoff block, as a GitHub URL
 
+**Enforcement: `scripts/hooks/require_sql_handoff.cjs` (Stop hook, blocking).**
+If the branch adds a `docs/SQL/*.sql` and the reply does not carry the block
+with that file's branch-qualified URL, the turn is refused and the ready-made
+block is handed back. `npm run sql:handoff` prints it on demand. Tested in
+`scripts/hooks/require_sql_handoff.test.js`, gated in CI by `npm run test:hooks`.
+
+*Why this rule has a hook when most do not.* It was written down, binding, and
+sitting in the file CLAUDE.md tells every agent to read first — and on
+2026-08-14 an agent that had read it still handed over a repo-relative path,
+the exact trap documented below. The rule did not fail because it was unclear;
+it failed because nothing checked. This is the same lesson §2 records about the
+UI standards that sat under "enforced in review" for months with no review step,
+and the same one the 2026-07-22 template-swap fix taught the hard way: a rule
+written in a document changed nothing, and the code shipped the bug again three
+weeks later. **A doctrine entry that an agent must remember to apply is a hope,
+not a control.** When a rule is mechanical, give it a checker.
+
 **Standing instruction from the operator, 2026-08-12, given verbatim as a
 template.** When he has SQL to run, do not print the statements. Emit exactly
 this block and nothing else in its place — spaced exactly as shown here:
