@@ -452,7 +452,7 @@ not a career programmer, and his stated bottleneck is attention, not
 willingness. Every chore surfaced for approval spends the scarcest resource he
 has on something he has already said yes to.
 
-### 6.5 SQL for the operator goes in the banner, as a GitHub URL
+### 6.5 SQL for the operator goes in the SQL handoff block, as a GitHub URL
 
 **Standing instruction from the operator, 2026-08-12, given verbatim as a
 template.** When he has SQL to run, do not print the statements. Emit exactly
@@ -466,12 +466,12 @@ this block and nothing else in its place — spaced exactly as shown here:
 ##########################################################
 
 
-**Two blank lines above and below each banner** (operator, 2026-08-12: "add
+**Two blank lines above and below each SQL handoff block** (operator, 2026-08-12: "add
 two paragraph breaks above and below each SQL set so they stand out clearly").
-A single break lets the banner sit flush against the sentence introducing it,
+A single break lets the SQL handoff block sit flush against the sentence introducing it,
 and in a long reply the block stops reading as a block — which is the one
 thing it exists to do. Two breaks on each side, every time, including between
-two consecutive banners.
+two consecutive SQL handoff blocks.
 
 **Emit it as plain text, not inside a code fence** (operator, 2026-08-12:
 "can you make that link clickable?"). A fenced block renders the URL as dead
@@ -479,7 +479,7 @@ text and he cannot click it — which defeats a handoff whose entire job is to
 get him to that file. Outside a fence the terminal linkifies it, and a markdown
 link works too.
 
-The banner itself survives being unfenced: an ATX heading takes at most six
+The SQL handoff block itself survives being unfenced: an ATX heading takes at most six
 `#`, so a run of twenty renders as the literal text it looks like. Do not
 shorten the rules to six or fewer or they will turn into a heading.
 
@@ -490,7 +490,7 @@ The URL is the file on **its branch**, not on `main`:
 step no agent can do here — the Supabase CLI on this machine has no access
 token and the environment carries no Postgres connection string — so this block
 is the entire handoff, and it has to be unmissable. A wall of pasted SQL buries
-the ask inside the reply; the banner is scannable in a long message and says
+the ask inside the reply; the SQL handoff block is scannable in a long message and says
 what to do with it in its own first line. He opens the URL and copies from
 GitHub.
 
@@ -499,17 +499,17 @@ GitHub.
 `.claude/worktrees/<topic>/`, and his editor is open on `main`, where the file
 does not exist — the link resolved to nothing and cost a round trip. **Any link
 to a file this session created is broken for him until the branch merges**,
-which is exactly why the URL in the banner must be branch-qualified. Check that
+which is exactly why the URL in the SQL handoff block must be branch-qualified. Check that
 the branch is pushed before emitting the block.
 
 **Also:**
 
 - Still write the file to `docs/SQL/` — that is the schema source of truth (§7)
   — and to `supabase/migrations/` when it belongs there.
-- Say in one line, outside the banner, what it changes and whether anything
+- Say in one line, outside the SQL handoff block, what it changes and whether anything
   existing is touched. "It only adds two new fields; it changes nothing that
   exists" is what tells him it is safe to run.
-- One banner per file. Two migrations means two banners, in run order.
+- One SQL handoff block per file. Two migrations means two SQL handoff blocks, in run order.
 
 **The general rule behind it:** he has told us the shape he wants a handoff in.
 When he gives a template verbatim, reproduce it exactly rather than improving
