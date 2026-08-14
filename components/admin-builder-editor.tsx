@@ -131,6 +131,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
   const pageThemeDirtyRef = useRef(false);
+  // Template and theme are only written back when the operator actually picked
+  // one.  Both selects render blank whenever the stored value isn't among their
+  // options, and an unconditional write turns that cosmetic blank into a real
+  // NULL on save — silently unsetting a theme nobody touched.
+  const pageTemplateDirtyRef = useRef(false);
   const hydratedTemplateSelectionRef = useRef("");
   const [galleryMedia, setGalleryMedia] = useState<AdminMediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -460,6 +465,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
 
     hydratedPageSelectionRef.current = selectionKey;
     pageThemeDirtyRef.current = false;
+    pageTemplateDirtyRef.current = false;
     setDraft(createDraftFromPage(page));
     setPageSlug(page?.slug ?? "");
     setPageTemplateId(page?.templateId ?? "");
@@ -1481,6 +1487,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   function startNewPage() {
     hydratedPageSelectionRef.current = "";
     pageThemeDirtyRef.current = false;
+    pageTemplateDirtyRef.current = false;
     setSelectedPageId("");
     setPageSlug("");
     setPageTemplateId("");
@@ -1503,12 +1510,29 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }
 
   function applyTemplateToPage(templateId: string) {
+    pageTemplateDirtyRef.current = true;
     setPageTemplateId(templateId);
+    if (!templateId) return;
+
     const template = pageLayoutTemplates.find((t) => t.id === templateId) ?? null;
-    if (!template) { setDraft(createDraftFromPage(null)); return; }
+    if (!template) return;
     // Stub templates (empty layoutSections) only tag the page; they don't clear the layout.
     if (!template.layoutSections.length) return;
-    setDraft((c) => ({ id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
+
+    // Choosing a template NEVER overwrites a page that already has content.
+    // This dropdown reads blank whenever the page's stored value isn't one of
+    // its own options — which is every page carrying a legacy layout name —
+    // so a destructive apply here reaches the operator as "the field was
+    // empty, I filled it in, the page emptied out".  That is how the Delray
+    // home page lost 35 sections on 2026-08-14.  Seeding an empty page is the
+    // useful half of this and is kept; replacing real content is a deliberate
+    // act and needs its own command, not a change event on a select.
+    if (draft.layoutSections.length) {
+      setMessage(`Tagged this page with "${template.name}". Its existing layout was kept — a template never replaces content that is already on the page.`);
+      return;
+    }
+
+    setDraft((c) => ({ ...c, id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
   }
 
   async function makeTemplateFromPage() {
@@ -1786,7 +1810,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // slugs). Allow saving an existing root page without a slug; only require
     // one when creating a new page so we don't silently mint duplicate roots.
     if (!selectedPageId && !pageSlug.trim()) { setError("Page slug is required."); return; }
-    if (!pageTemplateId) { setError("Select a template before saving a page."); return; }
     setIsSaving(true); setError(null); setMessage(null);
     try {
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
@@ -1795,8 +1818,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         body: JSON.stringify({
           name: draft.name,
           slug: pageSlug,
-          templateId: pageTemplateId,
-          themeId: pageThemeId || null,
+          // Omitted, not nulled, when untouched: the store only writes fields
+          // the body actually carries, so leaving them out preserves whatever
+          // the row already holds instead of clobbering it with a blank select.
+          ...(!selectedPageId || pageTemplateDirtyRef.current ? { templateId: pageTemplateId } : {}),
+          ...(!selectedPageId || pageThemeDirtyRef.current ? { themeId: pageThemeId || null } : {}),
           ...pageVisibilityToFlags(pageVisibility),
           searchPriority: pageSearchPriority,
           pageBackground: draft.pageBackground,
@@ -1807,6 +1833,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       if (data.page) {
         pageThemeDirtyRef.current = false;
+        pageTemplateDirtyRef.current = false;
         setPageThemeId(data.page.themeId ?? "");
       }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
