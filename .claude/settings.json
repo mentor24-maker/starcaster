@@ -42,6 +42,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/require_sql_handoff.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking the SQL handoff block"
+          }
+        ]
+      }
     ]
   }
 }
