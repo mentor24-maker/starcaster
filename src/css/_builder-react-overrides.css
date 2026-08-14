@@ -4280,3 +4280,110 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-size: var(--text-sm);
   color: var(--ink-primary, #16203a);
 }
+
+/* ==============================================================
+   PAGE HISTORY (the per-page undo)
+   ==============================================================
+   Its own shell below Page Details rather than a field inside it: a history
+   list is rows of read-only facts plus one action, which fights the
+   label/control grid the meta grid is built on (UI_RULES W0 — the COLUMN is
+   the grid). Keeping it separate means neither layout has to bend.
+
+   These live here and not in _builder-react.css because that file is
+   regenerated wholesale by `npm run extract:builder-css` and never
+   hand-edited (R2) — a regeneration would silently drop them. */
+
+.builder-react-root .builder-page-history-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px);
+}
+
+.builder-react-root .builder-page-history-intro,
+.builder-react-root .builder-page-history-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-page-history-error,
+.builder-react-root .builder-page-history-message {
+  margin: 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-left: 3px solid var(--accent, #4f9c3a);
+  background: var(--bg-page, #ffffff);
+  font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+}
+
+.builder-react-root .builder-page-history-error {
+  border-left-color: var(--danger, #a03c28);
+}
+
+.builder-react-root .builder-page-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Time and size are read; Restore is pressed. Sizing the action column to
+   its content keeps the button off the right edge on a wide screen, where a
+   stretched button reads as the row's primary purpose rather than its
+   escape hatch. */
+.builder-react-root .builder-page-history-row {
+  display: grid;
+  grid-template-columns: minmax(16ch, 1.4fr) minmax(14ch, 1fr) max-content;
+  gap: var(--space-3, 12px);
+  align-items: center;
+  padding: var(--space-2, 8px) 0;
+  border-bottom: 1px solid var(--border-light, #e3e8e6);
+}
+
+.builder-react-root .builder-page-history-row:first-child {
+  border-top: 1px solid var(--border-light, #e3e8e6);
+}
+
+.builder-react-root .builder-page-history-when {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-react-root .builder-page-history-time {
+  font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+  font-variant-numeric: tabular-nums;
+}
+
+.builder-react-root .builder-page-history-reason {
+  font-size: var(--text-xs, 0.78rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-page-history-size {
+  font-size: var(--text-sm);
+  color: var(--ink-muted, #5c6a72);
+  font-variant-numeric: tabular-nums;
+}
+
+.builder-react-root .builder-page-history-restore {
+  white-space: nowrap;
+  width: fit-content;
+}
+
+/* Narrow: the action drops under the facts rather than squeezing them. */
+@media (max-width: 640px) {
+  .builder-react-root .builder-page-history-row {
+    grid-template-columns: 1fr max-content;
+  }
+  .builder-react-root .builder-page-history-size {
+    grid-column: 1 / -1;
+  }
+}

@@ -103,6 +103,10 @@ const {
   deletePageSnapshot,
 } = require('../lib/builderPageSnapshotsStore');
 const {
+  listPageRevisions,
+  getPageRevision,
+} = require('../lib/builderPageRevisionsStore');
+const {
   listPageTemplates,
   createPageTemplate,
   updatePageTemplate,
@@ -1596,6 +1600,66 @@ async function handle(req, res, pathname, method) {
   const landingPageIdMatch = String(pathname || '').match(/^\/api\/builder\/landing-pages\/([^/]+)\/?$/);
   const landingPageSubmitMatch = String(pathname || '').match(/^\/api\/builder\/landing-pages\/([^/]+)\/submit\/?$/);
   const pageTemplateIdMatch = String(pathname || '').match(/^\/api\/builder\/page-templates\/([^/]+)\/?$/);
+  const pageRevisionsMatch = String(pathname || '').match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/?$/);
+  const pageRevisionRestoreMatch = String(pathname || '')
+    .match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/([^/]+)\/restore\/?$/);
+
+  // GET /api/builder/landing-pages/:id/revisions — history for one page
+  if (pageRevisionsMatch && requestMethod === 'GET') {
+    const pageId = decodeURIComponent(pageRevisionsMatch[1] || '').trim();
+    if (!pageId) return sendErr(res, 400, 'page id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const result = await listPageRevisions(pageId, scope);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Could not load page history', {
+        code: result.code || null,
+      }), true;
+    }
+    const revisions = Array.isArray(result.data) ? result.data : [];
+    return sendOk(res, 200, revisions, { revisions }, { total: revisions.length }), true;
+  }
+
+  // POST /api/builder/landing-pages/:id/revisions/:revisionId/restore
+  //
+  // Restoring is itself a layout-changing save, so updatePage banks the
+  // pre-restore state as a new revision first. Undoing an undo is therefore
+  // just another restore -- there is no dead end.
+  if (pageRevisionRestoreMatch && requestMethod === 'POST') {
+    const pageId = decodeURIComponent(pageRevisionRestoreMatch[1] || '').trim();
+    const revisionId = decodeURIComponent(pageRevisionRestoreMatch[2] || '').trim();
+    if (!pageId || !revisionId) {
+      return sendErr(res, 400, 'page id and revision id are required', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const revisionResult = await getPageRevision(revisionId, scope);
+    if (!revisionResult.ok) {
+      return sendErr(res, revisionResult.status || 404, revisionResult.error || 'Revision not found', {
+        code: revisionResult.status === 404 ? 'NOT_FOUND' : null,
+      }), true;
+    }
+    const revision = revisionResult.data;
+    if (String(revision.pageId) !== String(Number(pageId) || 0)) {
+      return sendErr(res, 400, 'That revision belongs to a different page', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    // Layout only. Slug, title and visibility are deliberately left alone: the
+    // operator is undoing a layout mistake, not rewinding the page's identity
+    // and unpublishing it as a side effect.
+    const restored = await updatePage(
+      pageId,
+      {
+        layoutSections: revision.layoutSections,
+        ...(revision.pageBackground ? { pageBackground: revision.pageBackground } : {}),
+        ...(revision.theme ? { theme: revision.theme } : {}),
+      },
+      scope,
+      { reason: 'revert' }
+    );
+    if (!restored.ok) {
+      return sendErr(res, restored.status || 500, restored.error || 'Could not restore that version'), true;
+    }
+    return sendOk(res, 200, restored.data, { page: restored.data, restoredFrom: revision.createdAt }), true;
+  }
 
   if (landingPageSubmitMatch && requestMethod === 'POST') {
     const landingPageId = decodeURIComponent(landingPageSubmitMatch[1] || '').trim();

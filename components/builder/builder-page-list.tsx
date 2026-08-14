@@ -890,12 +890,20 @@ export function BuilderPageList({
                 onChange={(event) => onApplyTemplate(event.target.value)}
                 onBlur={handlePageDetailsFieldBlur}
               >
-                <option value="">Select a template</option>
+                <option value="">No template</option>
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name}
                   </option>
                 ))}
+                {/* A page saved before page-templates existed carries a layout
+                    name here rather than a template id, so it matches none of
+                    the options above.  Show it as itself instead of letting the
+                    select fall back to a blank that reads as "unset" and invites
+                    the operator to replace it. */}
+                {pageTemplateId && !templates.some((t) => t.id === pageTemplateId) ? (
+                  <option value={pageTemplateId}>Legacy layout (not a template)</option>
+                ) : null}
               </select>
             </label>
             <label className="field">
