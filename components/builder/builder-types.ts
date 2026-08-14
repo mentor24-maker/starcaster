@@ -145,7 +145,19 @@ export const modulePaletteGroups: Array<{
     icon: "▦",
     description: "A responsive grid of linked cards with images, icons, and short copy."
   },
+  {
+    value: "program-list",
+    label: "Programs",
+    icon: "🗓",
+    description: "Classes, clinics and sessions with their days, times, coaches and prices."
+  },
   { value: "breadcrumb", label: "Breadcrumb", icon: "›", description: "Horizontal trail showing the visitor's location in the site hierarchy." },
+  {
+    value: "site-search",
+    label: "Search",
+    icon: "⌕",
+    description: "Search the whole site — a search box, and the results list it feeds."
+  },
   { value: "blog", label: "Blog", icon: "✍", description: "Blog content modules — post feeds, filters, author bios, and more." },
   {
     value: "special-effects",
@@ -679,6 +691,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "program-list-standard",
+    type: "program-list",
+    group: "program-list",
+    label: "Programs",
+    icon: "🗓",
+    description: "A schedule of classes or clinics — days, times, coaches and prices, in a timetable a phone can read.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "breadcrumb-standard",
     type: "breadcrumb",
     group: "breadcrumb",
@@ -930,6 +953,89 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: { searchParam: "search", limit: "50" }
+  },
+  {
+    id: "site-search-standard",
+    type: "site-search",
+    group: "site-search",
+    label: "Site Search",
+    icon: "⌕",
+    description: "Search box that searches every module on every page. Sends the query to a Site Search Results module.",
+    name: "",
+    text: "",
+    settings: {
+      placeholder: "Search this site…",
+      buttonLabel: "Search",
+      searchParam: "q",
+      targetPageUrl: "/search",
+      showButton: "true",
+      showLabel: "false",
+      labelText: "Search",
+      labelPosition: "above",
+      labelBold: "false",
+      labelColor: "",
+      labelFontSize: "",
+      fieldWidth: "0",
+      fieldHeight: "40",
+      buttonTextColor: "",
+      buttonFontSize: "",
+      buttonBold: "true",
+      buttonBorderWidth: "0",
+      buttonBorderStyle: "solid",
+      buttonBorderColor: "",
+      accentColor: "",
+      borderRadius: "8",
+      marginTop: "0",
+      marginBottom: "0",
+      marginLeft: "0",
+      marginRight: "0"
+    }
+  },
+  {
+    id: "site-search-results-standard",
+    type: "site-search-results",
+    group: "site-search",
+    label: "Site Search Results",
+    icon: "▤",
+    description: "Lists the pages matching the current search, best match first, with the matching text highlighted.",
+    name: "",
+    text: "",
+    settings: {
+      searchParam: "q",
+      limit: "50",
+      // Off by default (operator, 2026-08-12). The results module is meant to
+      // be paired with a Site Search box elsewhere — the panel's own note says
+      // so — and a results block that brings its own form guarantees two forms
+      // on the page for anyone who follows that advice. Only NEW modules get
+      // this; every module already placed carries "true" explicitly.
+      showSearchField: "false",
+      showResultCount: "true",
+      showOtherMatches: "true",
+      showMatchLocation: "false",
+      emptyMessage: "Nothing on this site matched that search.",
+      placeholder: "Search this site…",
+      buttonLabel: "Search",
+      showLabel: "false",
+      labelText: "Search",
+      labelPosition: "above",
+      labelBold: "false",
+      labelColor: "",
+      labelFontSize: "",
+      fieldWidth: "0",
+      fieldHeight: "40",
+      buttonTextColor: "",
+      buttonFontSize: "",
+      buttonBold: "true",
+      buttonBorderWidth: "0",
+      buttonBorderStyle: "solid",
+      buttonBorderColor: "",
+      accentColor: "",
+      borderRadius: "8",
+      marginTop: "0",
+      marginBottom: "0",
+      marginLeft: "0",
+      marginRight: "0"
+    }
   },
   {
     id: "admin-team-users-table",

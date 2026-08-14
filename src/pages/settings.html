@@ -599,4 +599,23 @@
           </table>
         </div>
       </section>
-    
+
+      <section id="settingsInvitationsPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Settings: Invitations</h2>
+          <div class="page-heading-actions">
+            <button type="button" onclick="App.setActivePage('settingsPage')" class="btn">Back To Settings</button>
+          </div>
+        </div>
+        <!-- React island. Mounted by react-entry.js; see components/invitations/. -->
+        <div id="invitationsReactRoot"></div>
+      </section>
+
+      <!--
+        Shown to a signed-in user who belongs to no workspace at all — someone
+        invited without one. Every other screen would be empty and noisy for
+        them, so the shell routes here and hides the menu (body.no-workspace-view).
+      -->
+      <section id="noWorkspacePage" class="app-page hidden">
+        <div id="noWorkspaceReactRoot"></div>
+      </section>

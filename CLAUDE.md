@@ -185,8 +185,32 @@ Before reporting a task complete, run and state the results of:
    `SKIP_CONVENTIONS=1` bypasses — if you bypass, say so and why)
 5. `npm run check:syntax` if you touched `public/js/` or `public/shared/`
    (also runs at pre-commit and gates CI)
+6. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
+   and it is not optional because CI cannot run it — CI has no browser, so
+   this check only ever runs if a person runs it. A staggered panel reached
+   the operator on 2026-08-12 and again on 2026-08-13; both times the code
+   was reviewed, the rule was read, and nobody ran the check.
+
+   **A green run is only evidence if the fixture exercises your panel.**
+   `check_panels` measures what it can see: seed real content for your
+   module in `scripts/ui/seed_fixture.mjs`, then **break the layout on
+   purpose and watch it fail** before you believe the pass. An item manager
+   that declares `data-lattice-pairs` and renders no fields now fails
+   outright rather than passing silently, which is the specific hole that
+   let both of those panels through.
 
 "It should work" is not done. Passing commands are done.
+
+## Session-close capture (binding)
+
+Before the window closes, get the keepers onto the shared record, unprompted:
+decisions to the party line (the ClickUp bus), artifacts and findings to the
+docs of the repo that owns them, canon changes to the vault's
+`doctrine/_proposals/`. A standing instruction Dane gives verbatim is always a
+keeper. If the destination is somewhere CC-starcaster cannot write — vault
+doctrine, another repo's docs — hand it to the agent that can, on the wire, in
+this session. Noticing is not capturing. (Vault `doctrine/OPERATIONS.md`,
+Session-close capture; ratified 2026-08-14.)
 
 ## Naming: UI term vs code/DB term
 

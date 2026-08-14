@@ -1,16 +1,18 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { BuilderInlineRichTextEditor } from "./builder-inline-rich-text-editor";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import {
   BuilderSchemaModuleSettings,
   dropShadowFields,
+  MODULE_MARGIN_SIDES,
+  type BuilderSchemaFieldContext,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import {
   BUILDER_HEADING_FONTS,
-  getModuleSplitMarginValues,
   HEADING_VARIANT_PRESETS,
   type HeadingVariantPresetKey
 } from "./builder-utils";
@@ -110,19 +112,16 @@ export function BuilderHeadingModuleSettings({
               label: "Heading",
               width: "full",
               control: "custom",
-              rendersVia: "BuilderHeadingPreview",
-              // Edits module.text, not a settings key.
+              rendersVia: "formatHeadingContent",
+              // Edits module.text, not a settings key. Inline formatting only —
+              // the heading is one element, so a word can be recoloured or
+              // resized but nothing block-level may go in. The Text axis below
+              // still sets the whole heading; this is for the exceptions.
               render: (ctx) => (
-                <input
-                  type="text"
+                <BuilderInlineRichTextEditor
                   value={ctx.module.text}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({
-                      ...current,
-                      text: event.target.value
-                    }))
-                  }
-                  placeholder="Enter heading"
+                  onChange={(text) => onUpdateModule((current) => ({ ...current, text }))}
+                  themeColors={themeColors}
                 />
               )
             }
@@ -322,54 +321,27 @@ export function BuilderHeadingModuleSettings({
               fallback: "left",
               rendersVia: "getHeadingModuleStyle"
             },
-            // Read via the same helper getModuleMarginStyle renders with, legacy
-            // fallback included — table-cell headings are never normalized, so
-            // reading marginTop directly would show 0 while the page renders the
-            // legacy value.
-            {
-              key: "marginTop",
-              label: "Margin Top",
-              width: "num",
-              control: "custom",
-              rendersVia: "getModuleMarginStyle",
-              render: (ctx) => (
+            // The four sides, read through the same table and the same legacy
+            // fallback the renderer resolves with: a table-cell heading is
+            // never normalized, so reading `marginTop` alone would show 0
+            // while the page renders the pair it was saved with.
+            ...MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => ({
+              key,
+              label,
+              width: "num" as const,
+              control: "custom" as const,
+              rendersVia: "getModuleOuterSpacingStyle",
+              render: (ctx: BuilderSchemaFieldContext) => (
                 <BuilderNumberSelectControl
-                  value={getModuleSplitMarginValues(ctx.settings).top}
+                  value={ctx.settings[key] ?? ctx.settings[legacy] ?? "0"}
                   min={0}
                   max={160}
+                  step={5}
                   fallback="0"
-                  onChange={(marginTop) => ctx.set("marginTop", marginTop)}
+                  onChange={(next) => ctx.set(key, next)}
                 />
               )
-            },
-            {
-              key: "marginBottom",
-              label: "Margin Bottom",
-              width: "num",
-              control: "custom",
-              rendersVia: "getModuleMarginStyle",
-              render: (ctx) => (
-                <BuilderNumberSelectControl
-                  value={getModuleSplitMarginValues(ctx.settings).bottom}
-                  min={0}
-                  max={160}
-                  fallback="0"
-                  onChange={(marginBottom) => ctx.set("marginBottom", marginBottom)}
-                />
-              )
-            },
-            // Horizontal margin capability added by operator ruling 2026-08-09
-            // (UI_RULES.md S2 audit item). Pairs with the Top/Bottom split above.
-            {
-              key: "horizontalMargin",
-              label: "Horizontal Margin",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 160,
-              fallback: "0",
-              rendersVia: "getModuleMarginStyle"
-            }
+            }))
           ],
           // D9 rung 6, last on the axis. A5 used to put these in
           // Placement's own Advanced section for exactly this reason —

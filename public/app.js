@@ -58,6 +58,13 @@ App.refresh = async function refresh() {
   if (Array.isArray(App.PUBLIC_ADMIN_PAGE_IDS) && App.PUBLIC_ADMIN_PAGE_IDS.includes(activePageId)) {
     return;
   }
+  // Someone who belongs to no workspace has nothing to load, and every
+  // project-scoped request would come back "Active project is required" —
+  // a wall of red toasts across the one page that exists to explain the
+  // situation calmly.
+  if (typeof App.auth?._hasNoWorkspace === 'function' && App.auth._hasNoWorkspace()) {
+    return;
+  }
   const shouldNotifySharedDataErrors = (() => {
     if (!activePageId) return true;
     const relevantPrefixes = [
@@ -194,18 +201,32 @@ App.bootMainApp = function bootMainApp() {
     }
   }
 
-  for (const mod of App.manifests) {
-    if (!mod || typeof mod !== 'object') continue;
-    if (typeof mod.init === 'function') {
-      try {
-        mod.init();
-      } catch (err) {
-        console.error(`Module initialization failed:`, err);
+  // Someone who belongs to no workspace at all — invited without one. Every
+  // screen in this app is project-scoped, so booting the modules would fire a
+  // wave of "Active project is required" toasts across the one page that
+  // exists to explain the situation calmly. Guarding each module in turn was
+  // whack-a-mole; not starting them is the honest fix.
+  const noWorkspace = typeof App.auth?._hasNoWorkspace === 'function' && App.auth._hasNoWorkspace();
+
+  if (!noWorkspace) {
+    for (const mod of App.manifests) {
+      if (!mod || typeof mod !== 'object') continue;
+      if (typeof mod.init === 'function') {
+        try {
+          mod.init();
+        } catch (err) {
+          console.error(`Module initialization failed:`, err);
+        }
       }
     }
   }
 
   if (App.pageHeadingNav?.bindBackLinks) App.pageHeadingNav.bindBackLinks();
+
+  if (noWorkspace) {
+    App.setActivePage('noWorkspacePage', { persist: false, skipTracking: true });
+    return;
+  }
 
   const initialPage = App.getInitialPage();
   // Dispatches onPageActivated for the initial page (core.js). It used to be

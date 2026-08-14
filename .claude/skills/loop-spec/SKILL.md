@@ -36,8 +36,9 @@ write any code here. You produce well-formed tasks.
    - **Reviewable by a human in a couple of minutes.**
 
 3. **Write each task.** File a ClickUp task (`clickup_create_task`) in the
-   target list with `status: "todo"` and a `markdown_description` in exactly
-   this shape:
+   target list with `status: "Queued"`, **no assignee** (assignment is how the
+   loops hand a ticket to Dane — see below), and a `markdown_description` in
+   exactly this shape:
 
    ```markdown
    ## Goal
@@ -85,5 +86,26 @@ write any code here. You produce well-formed tasks.
 
 If the "Loop Queue" list does not exist yet, create it in the Starcaster space
 and tell the operator to confirm (once, in the ClickUp UI) that it uses this
-status set: `todo → building → review → approved → merged`, plus `blocked`.
-The build and review loops key off these statuses.
+status set, in this order:
+
+| Status | Type in ClickUp | Meaning |
+|---|---|---|
+| `Queued` | not started | waiting for a build loop to pick it up |
+| `Building` | active | a build loop is writing the code |
+| `In review` | active | a review loop is verifying the PR |
+| `Needs your input` | active | **operator's** — a human must answer something |
+| `Ready to launch` | active | **operator's** — built and verified, awaiting the merge |
+| `Live` | **closed** | merged and shipped; leaves the open view |
+
+`Live` must be set as a **closed**-type status, not just another active one, or
+finished work never leaves the operator's open list. The build and review loops
+key off these names (matched case-insensitively).
+
+**Assignment carries the handoff, not a saved view.** Dane's "what needs me"
+is ClickUp's built-in *Assigned to me*. A hand-built filtered view was tried
+and abandoned: Loop Queue lives in the Starcaster space and the steward's
+Agent Response list lives in Dane of Earth, and a ClickUp view scoped to one
+space cannot see the other. Assignment crosses spaces for free and notifies
+him. So loops assign Dane when a ticket enters `Needs your input` or
+`Ready to launch`, and clear assignees when it goes back to a machine status.
+Tasks you file here start unassigned.

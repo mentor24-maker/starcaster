@@ -23,8 +23,17 @@ const overlayStyle: CSSProperties = {
   zIndex: 10200
 };
 
+/*
+ * D7 (UI_RULES.md): a popup editor sizes to its CONTENT. It opens no
+ * narrower than a comfortable minimum, grows to whatever the controls
+ * inside actually need, and only stops at 75% of the screen — it never
+ * crops or side-scrolls the editor to hold a fixed narrow box. This was a
+ * flat 360px until 2026-08-11, which squeezed every picker inside it.
+ */
 const dialogStyle: CSSProperties = {
-  width: "min(360px, calc(100vw - 48px))",
+  width: "max-content",
+  minWidth: "min(360px, calc(100vw - 48px))",
+  maxWidth: "min(75vw, calc(100vw - 48px))",
   maxHeight: "min(85vh, calc(100dvh - 48px))",
   overflow: "hidden",
   border: "1px solid rgba(9, 16, 24, 0.16)",

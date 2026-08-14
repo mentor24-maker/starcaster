@@ -31,6 +31,9 @@ import {
   finalizeThemeStylesPageBackground,
   getBuilderBackgroundLayerOpacity,
   getBuilderBackgroundStyle,
+  getLayoutColumns,
+  getLayoutColumnPercents,
+  getLayoutGridTemplate,
   normalizeBackgroundMode,
   normalizeBackgroundSettings,
   normalizeBuilderAssetUrl,
@@ -131,29 +134,45 @@ export function getCellContentAlignmentStyle(hAlign: string, vAlign: string): CS
   };
 }
 
-export function getVerticalMarginStyle(value: unknown): CSSProperties {
-  const margin = normalizeSpacingValue(value, "0", 0, 160);
+/**
+ * The four sides of one spacing box, each falling back to the vertical /
+ * horizontal PAIR the Builder used before 2026-08-11.
+ *
+ * Every object spells its spacing the same way now — row, cell, module, for
+ * both margin and padding (operator: "standardize all objects on the
+ * Top/Bottom/Left/Right model"). Reading the legacy pair here as well as in
+ * the normalizer is deliberate: a page that has not been re-saved still
+ * renders from its old keys, so nothing moves while the data catches up.
+ */
+export function getFourSideValues(
+  settings: Record<string, string>,
+  prefix: "margin" | "padding",
+  legacyVerticalKey: string,
+  legacyHorizontalKey: string,
+  fallback = "0",
+  max = 160
+) {
+  const vertical = settings[legacyVerticalKey];
+  const horizontal = settings[legacyHorizontalKey];
+  const side = (key: string, legacy: string | undefined) =>
+    `${normalizeSpacingValue(settings[key] ?? legacy, fallback, 0, max)}px`;
 
   return {
-    marginTop: `${margin}px`,
-    marginBottom: `${margin}px`
-  };
+    [`${prefix}Top`]: side(`${prefix}Top`, vertical),
+    [`${prefix}Bottom`]: side(`${prefix}Bottom`, vertical),
+    [`${prefix}Left`]: side(`${prefix}Left`, horizontal),
+    [`${prefix}Right`]: side(`${prefix}Right`, horizontal)
+  } as CSSProperties;
 }
 
-export function getHorizontalMarginStyle(value: unknown): CSSProperties {
-  const margin = normalizeSpacingValue(value, "0", 0, 160);
-
-  return {
-    marginLeft: `${margin}px`,
-    marginRight: `${margin}px`
-  };
-}
-
+/** A module's margin — the space OUTSIDE it, on all four sides. */
 export function getModuleOuterSpacingStyle(settings: Record<string, string>): CSSProperties {
-  return {
-    ...getVerticalMarginStyle(settings.verticalMargin),
-    ...getHorizontalMarginStyle(settings.horizontalMargin)
-  };
+  return getFourSideValues(settings, "margin", "verticalMargin", "horizontalMargin");
+}
+
+/** A module's padding — the space INSIDE it, on all four sides. */
+export function getModuleInnerSpacingStyle(settings: Record<string, string>): CSSProperties {
+  return getFourSideValues(settings, "padding", "verticalPadding", "horizontalPadding");
 }
 
 /** The Table module's Max Width, clamped, or undefined for "full width". */
@@ -186,51 +205,10 @@ export function getTableWrapStyle(settings: Record<string, string>): CSSProperti
   return style;
 }
 
-export function getButtonModuleOuterSpacingStyle(settings: Record<string, string>): CSSProperties {
-  const legacyVertical = settings.verticalMargin;
-  const legacyHorizontal = settings.horizontalMargin;
-
-  return {
-    marginTop: `${normalizeSpacingValue(settings.marginTop ?? legacyVertical, "0", 0, 160)}px`,
-    marginBottom: `${normalizeSpacingValue(settings.marginBottom ?? legacyVertical, "0", 0, 160)}px`,
-    marginLeft: `${normalizeSpacingValue(settings.marginLeft ?? legacyHorizontal, "0", 0, 160)}px`,
-    marginRight: `${normalizeSpacingValue(settings.marginRight ?? legacyHorizontal, "0", 0, 160)}px`
-  };
-}
-
 export function getSplitVerticalMarginStyle(top: unknown, bottom: unknown): CSSProperties {
   return {
     marginTop: `${normalizeSpacingValue(top, "0", 0, 160)}px`,
     marginBottom: `${normalizeSpacingValue(bottom, "0", 0, 160)}px`
-  };
-}
-
-export function getModuleMarginStyle(settings: Record<string, string>): CSSProperties {
-  const { top, bottom } = getModuleSplitMarginValues(settings);
-
-  return {
-    ...getSplitVerticalMarginStyle(top, bottom),
-    // Horizontal margin capability added 2026-08-09 by operator ruling
-    // (UI_RULES.md S2 audit item). Defaults to 0, so existing headings
-    // do not move.
-    ...getHorizontalMarginStyle(settings.horizontalMargin)
-  };
-}
-
-/**
- * The split top/bottom margins with the legacy verticalMargin fallback —
- * the SAME resolution getModuleMarginStyle renders with. Editors display
- * these instead of reading the raw keys: table-cell modules never pass
- * through normalizeBuilderModuleSettingsForType, so a cell heading can
- * still carry only the legacy key, and an editor that reads marginTop
- * directly shows 0 while the page renders the legacy value.
- */
-export function getModuleSplitMarginValues(settings: Record<string, string>): { top: string; bottom: string } {
-  const legacy = settings.verticalMargin;
-
-  return {
-    top: String(normalizeSpacingValue(settings.marginTop ?? legacy, "0", 0, 160)),
-    bottom: String(normalizeSpacingValue(settings.marginBottom ?? legacy, "0", 0, 160))
   };
 }
 
@@ -247,10 +225,145 @@ export function getSectionMarginStyle(section: BuilderTemplateSection): CSSPrope
 export function getSectionPaddingStyle(section: BuilderTemplateSection): CSSProperties {
   const top = normalizeSpacingValue(section.paddingTop, "18", 0, 160);
   const bottom = normalizeSpacingValue(section.paddingBottom, "18", 0, 160);
+  const left = normalizeSpacingValue(section.paddingLeft, "0", 0, 160);
+  const right = normalizeSpacingValue(section.paddingRight, "0", 0, 160);
   return {
     "--builder-section-padding-top": `${top}px`,
-    "--builder-section-padding-bottom": `${bottom}px`
+    "--builder-section-padding-bottom": `${bottom}px`,
+    // Side padding is ADDED to the content-width inset by the stylesheet, not
+    // substituted for it — see `--builder-section-padding-inline`. Emitted only
+    // when set, so an untouched row keeps the exact inset it has today.
+    ...(Number(left) > 0 ? { "--builder-section-padding-left": `${left}px` } : {}),
+    ...(Number(right) > 0 ? { "--builder-section-padding-right": `${right}px` } : {})
   } as CSSProperties;
+}
+
+/**
+ * Space outside the row's left and right edges.
+ *
+ * A full-width row already carries a negative side margin in CSS to escape the
+ * page's side padding and reach the viewport edge, so a plain `margin-left`
+ * here would cancel that escape and the row would silently stop being full
+ * width. The calc keeps the escape and adds the operator's inset on top of it.
+ */
+export function getSectionHorizontalMarginStyle(section: BuilderTemplateSection): CSSProperties {
+  const left = Number(normalizeSpacingValue(section.marginLeft, "0", 0, 160));
+  const right = Number(normalizeSpacingValue(section.marginRight, "0", 0, 160));
+
+  if (!left && !right) return {};
+
+  const isFullWidth = section.widthMode === "full-width";
+  const edge = (value: number) =>
+    isFullWidth ? `calc(${value}px - var(--bx-theme-padding-inline, 0px))` : `${value}px`;
+
+  return {
+    ...(left ? { marginLeft: edge(left) } : {}),
+    ...(right ? { marginRight: edge(right) } : {})
+  };
+}
+
+/**
+ * Space between the row's columns. Defaults to the 16px that used to be
+ * hard-coded in the renderer, so an untouched row is unchanged.
+ */
+export function getSectionColumnGapStyle(section: BuilderTemplateSection): CSSProperties {
+  return { gap: `${normalizeSpacingValue(section.columnGap, "16", 0, 120)}px` };
+}
+
+/**
+ * A floor for the row's height, so a band can be taller than the words in it.
+ *
+ * `{}` at 0 leaves the existing rule alone: the stylesheet's 56px floor keeps
+ * an EMPTY row big enough to drop a module onto, and the renderer releases it
+ * to 0 the moment the row holds something.
+ */
+export function getSectionMinHeightStyle(section: BuilderTemplateSection): CSSProperties {
+  const minHeight = Number(normalizeSpacingValue(section.minHeight, "0", 0, 1200));
+
+  if (!minHeight) return {};
+
+  return { "--builder-section-min-height": `${minHeight}px` } as CSSProperties;
+}
+
+/**
+ * The row's column proportions: the operator's own numbers when he has set a
+ * complete set, otherwise the Layout preset.
+ *
+ * His numbers are emitted as `fr` rather than `%` on purpose — `fr` divides
+ * what is left after the column gap, so 70/30 stays 70/30 at any gap, and a
+ * set that does not add up to exactly 100 still fills the row instead of
+ * leaving a slice of dead space on the right.
+ */
+/**
+ * How wide one column is, as a percentage of the row's content width.
+ *
+ * An image inside a two-column row is 100% of *its column*, which is half the
+ * page — but the module only knows the "100". Without this it tells the browser
+ * to expect full page width and fetches a file twice as wide as the slot, which
+ * is exactly what happened when the Delray home page was paired into columns
+ * (2026-08-12): the layout halved, the download did not.
+ *
+ * Honours the operator's own Column Widths when he has set a complete set,
+ * and falls back to the layout preset's proportions otherwise — the same
+ * precedence `getSectionGridTemplate` uses, so the hint cannot disagree with
+ * the grid it describes.
+ */
+export function getSectionColumnPercent(
+  section: BuilderTemplateSection,
+  columnKey: string
+): number {
+  const columns = getLayoutColumns(section.layout);
+  const index = columns.indexOf(columnKey);
+  if (index < 0) return 100;
+
+  const custom = columns.map((column) =>
+    Number(normalizeSpacingValue(section.columnWidths?.[column], "0", 0, 100))
+  );
+  if (custom.length >= 2 && custom.every((width) => width > 0)) {
+    const total = custom.reduce((sum, width) => sum + width, 0);
+    if (total > 0) return Math.round((custom[index] / total) * 100);
+  }
+
+  const percents = getLayoutColumnPercents(section.layout);
+  return percents[index] ?? 100;
+}
+
+export function getSectionGridTemplate(section: BuilderTemplateSection): string {
+  const columns = getLayoutColumns(section.layout);
+  const widths = columns.map((column) =>
+    Number(normalizeSpacingValue(section.columnWidths?.[column], "0", 0, 100))
+  );
+
+  if (widths.length < 2 || widths.some((width) => width <= 0)) {
+    return getLayoutGridTemplate(section.layout);
+  }
+
+  return widths.map((width) => `${width}fr`).join(" ");
+}
+
+/**
+ * Slides the whole row off where the layout put it. A transform rather than a
+ * margin on purpose: the rows above and below do not move, so a card band can
+ * ride up over the banner above it without leaving a hole underneath. Positive
+ * vertical moves the row UP — the same sign convention as the module-level
+ * offsets, so an operator learns it once.
+ *
+ * Returns `{}` at 0/0, which is the value every existing row carries, so an
+ * untouched page renders byte-identically and no `transform` is emitted (a
+ * transform would otherwise become the containing block for any fixed-position
+ * overlay inside the row).
+ */
+export function getSectionOffsetStyle(section: BuilderTemplateSection): CSSProperties {
+  const x = Number.parseInt(normalizeSignedOffsetValue(section.horizontalOffset, "0"), 10);
+  const y = Number.parseInt(normalizeSignedOffsetValue(section.verticalOffset, "0"), 10);
+
+  if (!x && !y) return {};
+
+  return {
+    transform: `translate(${x}px, ${-y}px)`,
+    position: "relative",
+    zIndex: 2
+  };
 }
 
 /**
@@ -370,6 +483,12 @@ export function getImageModuleStyle(settings: Record<string, string>): CSSProper
 
   return {
     ...getModuleWidthStyle(settings),
+    // Padding sits INSIDE the frame — between the border and the picture —
+    // which is the half of "all margin and padding" the image module never
+    // had (operator, 2026-08-11). Margin, the space outside the frame, comes
+    // from the shared chrome's H/V Margin pair. `box-sizing: border-box`
+    // above keeps Width honest: a padded image narrows, the frame does not.
+    ...getModuleInnerSpacingStyle(settings),
     border: `${Math.max(Number.isFinite(borderThickness) ? borderThickness : 0, 0)}px solid ${
       settings.borderColor || "#0f4f8f"
     }`,
@@ -914,7 +1033,17 @@ export function getButtonModuleStyle(
     "--btn-border": resolvedBorderColor,
     color: textColor,
     textShadow,
-    padding: `${settings.paddingY || "12"}px ${settings.paddingX || "24"}px`,
+    // Four sides (W7). `paddingY`/`paddingX` are the pre-2026-08-11 pair and
+    // are still read here so a page that has not been re-saved keeps its
+    // button shape exactly.
+    padding: [
+      settings.paddingTop ?? settings.paddingY ?? "12",
+      settings.paddingRight ?? settings.paddingX ?? "24",
+      settings.paddingBottom ?? settings.paddingY ?? "12",
+      settings.paddingLeft ?? settings.paddingX ?? "24"
+    ]
+      .map((side) => `${normalizeSpacingValue(side, "0", 0, 50)}px`)
+      .join(" "),
     borderStyle,
     borderColor: resolvedBorderColor,
     borderWidth: `${resolvedBorderWidth}px`,

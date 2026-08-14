@@ -7,19 +7,24 @@ import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffec
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   createDefaultBackgroundSettings,
+  formatHeadingContent,
   formatPlainTextContent,
   formatRichTextContent,
   getBuilderBackgroundStyle,
   getLayoutColumns,
-  getLayoutGridTemplate,
   groupJoinedSections,
   isPlainTextVariant,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
+import { imageProps } from "@/lib/image-renditions";
+
+/** Feature cards sit up to three across the content column. */
+const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
 import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
+import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
   getNavMegaColumnCount,
   getNavModuleClassNames,
@@ -43,7 +48,15 @@ import {
   redirectAfterAdminLogout,
   setAdminSessionToken,
 } from "@/lib/public-admin-session";
-import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import { resolveSessionProjectId, starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import type { CrmThemePalette } from "@/components/builder/builder-utils";
+import {
+  buildSiteSearchIndex,
+  searchSite,
+  type SiteSearchMatch,
+  type SiteSearchPageInput,
+  type SiteSearchResult
+} from "@/lib/site-search";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { TractorNavRuntime } from "@/components/builder-tractor-nav-module";
@@ -61,7 +74,6 @@ import {
 import {
   getAlignmentClass,
   getButtonModuleStyle,
-  getButtonModuleOuterSpacingStyle,
   getHeadingModuleStyle,
   getBuilderThemeStyleVars,
   getBuilderThemePageMarginStyle,
@@ -88,14 +100,18 @@ import {
   getModuleBackgroundSettings,
   getTableWrapStyle,
   getSectionMarginStyle,
+  getSectionColumnGapStyle,
+  getSectionColumnPercent,
+  getSectionGridTemplate,
+  getSectionHorizontalMarginStyle,
+  getSectionMinHeightStyle,
+  getSectionOffsetStyle,
   getSectionPaddingStyle,
   getSectionWidthStyle,
-  getModuleMarginStyle,
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
-  getVerticalMarginStyle,
   getVideoEmbedSource,
   isVideoMedia
 } from "@/components/builder/builder-utils";
@@ -1228,7 +1244,7 @@ export function BuilderTemplatePreview({
 
   /**
    * Alternating bands are what make a page read as designed rather than as one
-   * wash of colour, so sections that set no background of their own take turns
+   * wash of color, so sections that set no background of their own take turns
    * between the theme's `surface` and `band` roles.
    *
    * Only those sections: one with a background the operator chose keeps it, and
@@ -1428,7 +1444,7 @@ function BuilderSectionPreview({
     : undefined;
 
   // Hero treatment: a tint over an image background so text can sit on the
-  // photo, with the inverse text colour on top. Layered as a gradient IN FRONT
+  // photo, with the inverse text color on top. Layered as a gradient IN FRONT
   // of the image, so the photo still reads through.
   const isImageSection = section.background?.mode === "image" && Boolean(section.background?.imageUrl);
   // A theme hero banner turns a plain section into an image section; it always
@@ -1471,13 +1487,17 @@ function BuilderSectionPreview({
     (module) => module.type === "current-poll" || module.type === "previous-results"
   );
   const rowBorderWidth = Number(section.rowBorderWidth ?? "0");
+  // His own column proportions when he has set a complete set, the Layout
+  // preset otherwise. Both the grid and the token the mobile stylesheet reads
+  // take the same answer, so they cannot disagree.
+  const sectionGridTemplate = getSectionGridTemplate(section);
   const gridStyle: CSSProperties = {
     // Band first: a section carrying its own background never gets one, so
     // this cannot overwrite an operator's choice.
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
     // A menu-only row used to throw its own background away, which is half of
     // the operator's "the style controls of the container have no effect"
-    // (2026-08-11) — he set a header strip's colour and nothing happened.
+    // (2026-08-11) — he set a header strip's color and nothing happened.
     // Honoured now: it is `undefined` until he picks one, so a row he never
     // touched still renders flush. The automatic treatments above and below
     // (band, hero tint, overlap) stay off — those are not his controls.
@@ -1486,6 +1506,7 @@ function BuilderSectionPreview({
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
     ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
+    ...(isOverlayLayoutCollapsed ? {} : getSectionHorizontalMarginStyle(section)),
     // Navigation-only rows already render flush by design; overlay slots are
     // not really rows at all. Everything else honours the operator's number.
     ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(section)),
@@ -1493,8 +1514,15 @@ function BuilderSectionPreview({
     // EMPTY row is still big enough to drop a module onto, and keeping it on
     // filled rows was padding every contact strip out to nearly triple height.
     ...(section.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
+    // ...unless the operator has asked for a taller band, which overrides both
+    // the floor and the release above it.
+    ...(isOverlayLayoutCollapsed ? {} : getSectionMinHeightStyle(section)),
     // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
     ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(section)),
+    // The operator's own nudge, after the layout styles it is nudging away
+    // from. {} until he sets one, and it deliberately sits BEFORE the overlay
+    // and navigation z-index rules below so those still win their stack.
+    ...(isOverlayLayoutCollapsed ? {} : getSectionOffsetStyle(section)),
     ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
     ...(isSectionOverlaySlot
       ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
@@ -1508,9 +1536,9 @@ function BuilderSectionPreview({
         }
       : {}),
     display: "grid",
-    gridTemplateColumns: getLayoutGridTemplate(section.layout),
-    gap: isOverlayLayoutCollapsed ? 0 : "16px",
-    "--builder-layout-grid": getLayoutGridTemplate(section.layout)
+    gridTemplateColumns: sectionGridTemplate,
+    ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(section)),
+    "--builder-layout-grid": sectionGridTemplate
   } as CSSProperties;
 
   return (
@@ -1520,16 +1548,49 @@ function BuilderSectionPreview({
       }${isPageOverlayFlowSection ? " builder-preview-section-overlay-flow" : ""}${
         isSectionOverlaySlot ? " builder-preview-section-overlay-slot" : ""
       }${hasPollModules ? " builder-preview-section-poll-row" : ""}${
+        section.equalColumnHeights === "true" && !isOverlayLayoutCollapsed
+          ? " builder-preview-section-equal-columns"
+          : ""
+      }${
         section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
       }`}
       style={gridStyle}
     >
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);
+        // What share of the row this column occupies, so an image inside it can
+        // ask the browser for a file sized to the real slot rather than the page.
+        const columnWidthPercent = getSectionColumnPercent(section, columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
-        const padding = section.cellPadding?.[columnKey] ?? "0";
-        const verticalMargin = section.cellVerticalMargin?.[columnKey] ?? "0";
+        /*
+         * Cell spacing, four sides, with both older generations read as
+         * fallbacks: the vertical/horizontal pair that shipped 2026-08-11 and
+         * the single all-sides `cellPadding` before it. Reading them here as
+         * well as in the normalizer is what lets a page that has not been
+         * re-saved render exactly as it did.
+         *
+         * The cast is because those older keys are off the type now — they
+         * exist only in stored data, which is precisely why this reads them.
+         */
+        const legacyCell = section as unknown as Record<string, Record<string, string> | undefined>;
+        const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
+        const cellSide = (record: Record<string, string> | undefined, pairKey: string, fallback: string) =>
+          record?.[columnKey] ?? legacyCell[pairKey]?.[columnKey] ?? fallback;
+        const paddingTop = cellSide(section.cellPaddingTop, "cellVerticalPadding", legacyPadding);
+        const paddingBottom = cellSide(section.cellPaddingBottom, "cellVerticalPadding", legacyPadding);
+        const paddingLeft = cellSide(section.cellPaddingLeft, "cellHorizontalPadding", legacyPadding);
+        const paddingRight = cellSide(section.cellPaddingRight, "cellHorizontalPadding", legacyPadding);
+        // `--builder-cell-padding` feeds one rule only, and that rule is
+        // `margin-inline` — a full-bleed overlay slot reaching back out
+        // sideways (_builder-react.css). So it takes a HORIZONTAL side;
+        // handing it a vertical one would pull the slot out by the wrong
+        // number the moment the sides differ.
+        const padding = paddingLeft;
+        const marginTop = cellSide(section.cellMarginTop, "cellVerticalMargin", "0");
+        const marginBottom = cellSide(section.cellMarginBottom, "cellVerticalMargin", "0");
+        const marginLeft = section.cellMarginLeft?.[columnKey] ?? "0";
+        const marginRight = section.cellMarginRight?.[columnKey] ?? "0";
         const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
         const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
         const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
@@ -1537,28 +1598,65 @@ function BuilderSectionPreview({
           columnModules.length > 0 &&
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
         const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
+        /*
+         * The cell's own numbers, as one answer each, used BOTH by the inline
+         * properties below and by the variables the narrow-screen rules read.
+         *
+         * Operator, 2026-08-12: a cell set to 4 rendered 12 below 560px,
+         * because the generated stylesheet compacts every cell there with
+         * `padding: 12px !important` — and an `!important` in a stylesheet
+         * outranks an ordinary inline style, so the setting was never in the
+         * argument. Publishing the values lets those rules honour them
+         * instead of replacing them (see _builder-react-overrides.css).
+         *
+         * Deliberately NOT reusing `--builder-cell-padding`: that one carries
+         * the LEFT side alone, for a `margin-inline` rule that reaches an
+         * overlay slot back out sideways. It would be the wrong number here.
+         */
+        const effectiveCellPadding =
+          isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? "0px"
+            : `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
+        const effectiveCellRadius =
+          isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
+
+        // Custom properties are not in the CSSProperties type, so they are
+        // built once and cast rather than sprinkling casts through the block.
+        const cellVariables = {
+          "--builder-cell-padding-box": effectiveCellPadding,
+          "--builder-cell-radius": effectiveCellRadius,
+        } as CSSProperties;
+
         const columnStyle: CSSProperties = {
           // The cell's own fill, honoured on menu cells too — see the row
           // background above. `columnBackground` is falsy until the operator
           // sets one, so an untouched menu cell is unchanged.
           ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
-          ...(isPageOverlayFlowColumn || isSectionOverlayColumn ? {} : getVerticalMarginStyle(verticalMargin)),
+          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? {}
+            : {
+                marginTop: `${marginTop}px`,
+                marginBottom: `${marginBottom}px`,
+                marginLeft: `${marginLeft}px`,
+                marginRight: `${marginRight}px`
+              }),
           ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
           ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
           ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
             ? { "--builder-cell-padding": `${padding}px` }
             : {}),
+          ...cellVariables,
           // Cell padding stays off for menu cells, and this one is deliberate:
-          // it defaults to 18px, so honouring it would push every live header
-          // down without anybody asking. The menu module carries its own
-          // Vertical/Horizontal Padding now (Placement axis), which is the
-          // control that should move a menu inside its cell.
-          padding: isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${padding}px`,
+          // it used to default to 18px, so honouring it would have pushed
+          // every live header down without anybody asking. The menu module
+          // carries its own four padding sides now (Placement axis), which is
+          // the control that should move a menu inside its cell.
+          padding: effectiveCellPadding,
           border:
             isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
               ? undefined
               : `${borderWidth}px solid ${borderColor}`,
-          borderRadius: isPageOverlayFlowColumn || isSectionOverlayColumn ? 0 : `${borderRadius}px`,
+          borderRadius: effectiveCellRadius,
           // {} at the left/top default, so only a cell he aligned moves.
           ...(isPageOverlayFlowColumn || isSectionOverlayColumn
             ? {}
@@ -1616,11 +1714,10 @@ function BuilderSectionPreview({
                     isCurrentPollModule ||
                     isPollCategoryListModule
                       ? {}
-                      : module.type === "heading"
-                        ? getModuleMarginStyle(module.settings)
-                        : module.type === "button"
-                          ? getButtonModuleOuterSpacingStyle(module.settings)
-                          : getModuleOuterSpacingStyle(module.settings)),
+                      // One reader for every type since 2026-08-11: heading
+                      // and button had their own because they were the only
+                      // two with split sides. Now everything has four.
+                      : getModuleOuterSpacingStyle(module.settings)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize
@@ -1629,6 +1726,7 @@ function BuilderSectionPreview({
                   } as CSSProperties}
                 >
                   <BuilderModulePreview
+                    columnWidthPercent={columnWidthPercent}
                     emailPreview={emailPreview}
                     module={module}
                     overlayFlowDecor={isPageOverlayFlowModule || isSectionOverlayModule}
@@ -1650,6 +1748,7 @@ function BuilderSectionPreview({
 
 function BuilderModulePreview({
   module,
+  columnWidthPercent = 100,
   emailPreview = false,
   overlayFlowDecor = false,
   previewMode = false,
@@ -1659,6 +1758,8 @@ function BuilderModulePreview({
   themePalette
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** This module's column as a percentage of the row — see getSectionColumnPercent. */
+  columnWidthPercent?: number;
   emailPreview?: boolean;
   /** Floating image in a full-page overlay row — always visible on the live site. */
   overlayFlowDecor?: boolean;
@@ -1676,13 +1777,15 @@ function BuilderModulePreview({
 
   if (module.type === "heading") {
     const Tag = (module.settings.level || "h2") as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+    // Inline markup, sanitized: a heading can carry a recolored or resized
+    // word (see `formatHeadingContent`). A heading with no markup renders
+    // exactly the escaped text it always did.
     return (
       <Tag
         className={`builder-preview-heading builder-preview-heading-${variant || "default"}`}
+        dangerouslySetInnerHTML={{ __html: formatHeadingContent(module.text) }}
         style={getHeadingModuleStyle(module.settings)}
-      >
-        {module.text || ""}
-      </Tag>
+      />
     );
   }
 
@@ -1692,6 +1795,10 @@ function BuilderModulePreview({
 
   if (module.type === "slideshow") {
     return <SlideshowPreview module={module} />;
+  }
+
+  if (module.type === "program-list") {
+    return <ProgramListModulePreview module={module} />;
   }
 
   if (module.type === "feature-cards") {
@@ -1884,7 +1991,12 @@ function BuilderModulePreview({
 
   if (module.type === "image") {
     return (
-      <BuilderImagePreview module={module} variant={variant} placeholder="Choose an image" />
+      <BuilderImagePreview
+        module={module}
+        variant={variant}
+        placeholder="Choose an image"
+        columnWidthPercent={columnWidthPercent}
+      />
     );
   }
 
@@ -1978,6 +2090,12 @@ function BuilderModulePreview({
   }
   if (module.type === "blog-search-results") {
     return <BlogSearchResultsPreview settings={module.settings} />;
+  }
+  if (module.type === "site-search") {
+    return <SiteSearchPreview settings={module.settings} themePalette={themePalette} />;
+  }
+  if (module.type === "site-search-results") {
+    return <SiteSearchResultsPreview settings={module.settings} themePalette={themePalette} projectId={projectId} />;
   }
   if (
     module.type === "blog-post-card" ||
@@ -4691,6 +4809,343 @@ function BlogSearchResultsPreview({ settings }: { settings: Record<string, strin
   );
 }
 
+// ── Site Search ───────────────────────────────────────────────────────────────
+
+/**
+ * Site Search reads the SAME payload the public site already downloads to
+ * render itself (`GET /api/public/pages`), so the search box needs no new
+ * endpoint and no new public data. The ranking lives in `@/lib/site-search`,
+ * away from React, where it can be tested.
+ */
+
+/**
+ * A2: an empty Button Color means "follow the theme", and only when the theme
+ * has nothing either does the shared default apply.
+ *
+ * The explicit `""` fallback on every call is the whole point.
+ * `normalizeBuilderHexColor` defaults to WHITE when handed an empty string, so
+ * the obvious `normalizeBuilderHexColor(a) || normalizeBuilderHexColor(b) || c`
+ * never falls through — the first call answers "#ffffff" and the search button
+ * ships white on white. Caught by the render test, not by review.
+ */
+function siteSearchAccent(settings: Record<string, string>, palette?: CrmThemePalette): string {
+  return (
+    normalizeBuilderHexColor(settings.accentColor, "")
+    || normalizeBuilderHexColor(palette?.accentColor, "")
+    || normalizeBuilderHexColor(palette?.primaryColor, "")
+    || "#0f4f8f"
+  );
+}
+
+function siteSearchRadius(settings: Record<string, string>): number {
+  const parsed = Number.parseInt(settings.borderRadius || "8", 10);
+  return Number.isFinite(parsed) ? Math.min(40, Math.max(0, parsed)) : 8;
+}
+
+/** The query currently in the URL, kept in sync when the visitor uses Back. */
+function useSiteSearchQueryParam(searchParam: string): string {
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const read = () => setQuery((new URLSearchParams(window.location.search).get(searchParam) ?? "").trim());
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, [searchParam]);
+
+  return query;
+}
+
+/** A bounded whole number from a setting, or the fallback when it is unset. */
+function siteSearchNumber(raw: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
+/**
+ * Every style setting, as CSS custom properties on the form.
+ *
+ * Variables rather than inline styles on each element, for two reasons.
+ * Standard 3: the structural rules stay in the stylesheet's BASE ruleset where
+ * a media query can adjust them — inline styles cannot be overridden by a
+ * breakpoint at all, so a hard-coded field width would survive onto a phone
+ * and push the page sideways. And an unset setting emits NO variable, so the
+ * stylesheet's own `var(--x, fallback)` decides — which is what keeps "empty
+ * means follow the theme" (A2) true for every one of these at once.
+ */
+function siteSearchFieldVars(
+  settings: Record<string, string>,
+  themePalette?: CrmThemePalette
+): CSSProperties {
+  const radius = siteSearchRadius(settings);
+  const vars: Record<string, string> = {
+    "--site-search-radius": `${radius}px`,
+    "--site-search-btn-bg": siteSearchAccent(settings, themePalette)
+  };
+
+  const set = (name: string, value: string | undefined) => {
+    const clean = String(value ?? "").trim();
+    if (clean) vars[name] = clean;
+  };
+
+  // Field. Width 0 means "grow to fill the row", which is the default.
+  const fieldWidth = siteSearchNumber(settings.fieldWidth, 0, 0, 1200);
+  if (fieldWidth > 0) {
+    vars["--site-search-field-grow"] = "0";
+    // Shrink off too, or the field collapses to whatever the shrink-wrapped
+    // module box happens to be and elbows the button onto the next line.
+    vars["--site-search-field-shrink"] = "0";
+    vars["--site-search-field-basis"] = `${fieldWidth}px`;
+  }
+  vars["--site-search-field-height"] = `${siteSearchNumber(settings.fieldHeight, 40, 24, 96)}px`;
+
+  // Button text.
+  set("--site-search-btn-text", normalizeBuilderHexColor(settings.buttonTextColor, ""));
+  const btnSize = siteSearchNumber(settings.buttonFontSize, 0, 8, 48);
+  if (btnSize > 0) vars["--site-search-btn-size"] = `${btnSize}px`;
+  if (settings.buttonBold === "false") vars["--site-search-btn-weight"] = "400";
+
+  // Button border. A width with no color would paint the browser default,
+  // so the color carries its own visible fallback in the stylesheet.
+  const btnBorder = siteSearchNumber(settings.buttonBorderWidth, 0, 0, 12);
+  vars["--site-search-btn-border-width"] = `${btnBorder}px`;
+  set("--site-search-btn-border-color", normalizeBuilderHexColor(settings.buttonBorderColor, ""));
+  set("--site-search-btn-border-style", settings.buttonBorderStyle);
+
+  // Label.
+  set("--site-search-label-color", normalizeBuilderHexColor(settings.labelColor, ""));
+  const labelSize = siteSearchNumber(settings.labelFontSize, 0, 8, 48);
+  if (labelSize > 0) vars["--site-search-label-size"] = `${labelSize}px`;
+  if (settings.labelBold === "true") vars["--site-search-label-weight"] = "700";
+
+  return vars as CSSProperties;
+}
+
+function SiteSearchField({
+  settings,
+  themePalette,
+  initialQuery
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+  initialQuery: string;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const targetPageUrl = (settings.targetPageUrl || "").trim();
+  const placeholder = settings.placeholder || "Search this site…";
+  const buttonLabel = settings.buttonLabel || "Search";
+  const showButton = (settings.showButton ?? "true") !== "false";
+  const showLabel = settings.showLabel === "true";
+  const labelText = settings.labelText || "Search";
+  // "above" puts the label on its own line; "inline" sits it before the field.
+  const labelPosition = settings.labelPosition === "inline" ? "inline" : "above";
+  const inputId = useId();
+
+  const [value, setValue] = useState(initialQuery);
+  useEffect(() => setValue(initialQuery), [initialQuery]);
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (typeof window === "undefined") return;
+    const base = targetPageUrl || window.location.pathname;
+    const params = new URLSearchParams(targetPageUrl ? "" : window.location.search);
+    const trimmed = value.trim();
+    if (trimmed) params.set(searchParam, trimmed);
+    else params.delete(searchParam);
+    const qs = params.toString();
+    window.location.href = qs ? `${base}?${qs}` : base;
+  }
+
+  // Standard 8: the input always has a real label. Showing it is a style
+  // choice; HAVING it is not, so "hidden" means visually hidden, never absent.
+  const labelClass = showLabel
+    ? `builder-site-search-label is-visible is-${labelPosition}`
+    : "builder-site-search-label";
+
+  return (
+    <form
+      className={`builder-site-search-form${showLabel && labelPosition === "above" ? " has-label-above" : ""}`}
+      onSubmit={handleSubmit}
+      role="search"
+      style={siteSearchFieldVars(settings, themePalette)}
+    >
+      <label className={labelClass} htmlFor={inputId}>
+        {showLabel ? labelText : placeholder}
+      </label>
+      <input
+        id={inputId}
+        className="builder-site-search-input"
+        type="search"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={placeholder}
+      />
+      {showButton ? (
+        <button className="builder-site-search-submit" type="submit">
+          {buttonLabel}
+        </button>
+      ) : null}
+    </form>
+  );
+}
+
+function SiteSearchPreview({
+  settings,
+  themePalette
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const query = useSiteSearchQueryParam(searchParam);
+  return <SiteSearchField settings={settings} themePalette={themePalette} initialQuery={query} />;
+}
+
+/** Snippet with the matched run marked. Text nodes only — never raw HTML. */
+function SiteSearchSnippet({ match }: { match: SiteSearchMatch }) {
+  const { snippet, highlights } = match;
+  if (!highlights.length) return <>{snippet}</>;
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  highlights.forEach((range, i) => {
+    const start = Math.max(cursor, Math.min(range.start, snippet.length));
+    const end = Math.max(start, Math.min(range.end, snippet.length));
+    if (start > cursor) parts.push(snippet.slice(cursor, start));
+    if (end > start) parts.push(<mark key={`h${i}`}>{snippet.slice(start, end)}</mark>);
+    cursor = end;
+  });
+  if (cursor < snippet.length) parts.push(snippet.slice(cursor));
+  return <>{parts}</>;
+}
+
+const SITE_SEARCH_KIND_LABELS: Record<SiteSearchMatch["kind"], string> = {
+  pageName: "page name",
+  title: "heading",
+  body: "page content",
+  meta: "image and link text"
+};
+
+function SiteSearchResultsPreview({
+  settings,
+  themePalette,
+  projectId: projectIdProp = ""
+}: {
+  settings: Record<string, string>;
+  themePalette?: CrmThemePalette;
+  projectId?: string;
+}) {
+  const searchParam = (settings.searchParam || "q").trim() || "q";
+  const limit = Math.max(1, Number.parseInt(settings.limit || "50", 10) || 50);
+  const showSearchField = (settings.showSearchField ?? "true") !== "false";
+  const showResultCount = (settings.showResultCount ?? "true") !== "false";
+  const showOtherMatches = (settings.showOtherMatches ?? "true") !== "false";
+  const showMatchLocation = (settings.showMatchLocation ?? "false") === "true";
+  const emptyMessage = settings.emptyMessage || "Nothing on this site matched that search.";
+  const accent = siteSearchAccent(settings, themePalette);
+
+  const query = useSiteSearchQueryParam(searchParam);
+
+  const [pages, setPages] = useState<SiteSearchPageInput[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const projectId = projectIdProp || resolveSessionProjectId();
+    if (!projectId) {
+      setFailed(true);
+      return;
+    }
+    fetch(`/api/public/pages?projectId=${encodeURIComponent(projectId)}`, {
+      credentials: "include",
+      headers: starcasterScopedHeaders()
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (cancelled) return;
+        const list = Array.isArray(body?.pages) ? (body.pages as SiteSearchPageInput[]) : null;
+        if (list) setPages(list);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectIdProp]);
+
+  // Indexing walks every module on every page, so it is cached against the
+  // payload rather than redone on each keystroke or re-render.
+  const index = useMemo(() => (pages ? buildSiteSearchIndex(pages) : null), [pages]);
+
+  const results = useMemo<SiteSearchResult[]>(
+    () => (index && query ? searchSite(query, index, { limit }) : []),
+    [index, query, limit]
+  );
+
+  const field = showSearchField ? (
+    <SiteSearchField settings={settings} themePalette={themePalette} initialQuery={query} />
+  ) : null;
+
+  // Standard 5: every one of these is a designed state, not a blank box.
+  let body: React.ReactNode;
+  if (!query) {
+    body = <p className="builder-site-search-note">Type something above to search this site.</p>;
+  } else if (failed) {
+    body = <p className="builder-site-search-note">Search is unavailable right now. Please try again shortly.</p>;
+  } else if (!index) {
+    body = <p className="builder-site-search-note">Searching…</p>;
+  } else if (!results.length) {
+    body = <p className="builder-site-search-note">{emptyMessage}</p>;
+  } else {
+    body = (
+      <>
+        {showResultCount ? (
+          <p className="builder-site-search-count">
+            {results.length === 1 ? "1 page matches" : `${results.length} pages match`} “{query}”
+          </p>
+        ) : null}
+        <ol className="builder-site-search-results">
+          {results.map((result) => (
+            <li className="builder-site-search-result" key={result.pageId}>
+              <a className="builder-site-search-result-title" href={result.href} style={{ color: accent }}>
+                {result.pageName}
+              </a>
+              <p className="builder-site-search-result-snippet">
+                <SiteSearchSnippet match={result.topMatch} />
+              </p>
+              {showMatchLocation ? (
+                <p className="builder-site-search-result-where">
+                  Found in {SITE_SEARCH_KIND_LABELS[result.topMatch.kind]}
+                  {result.topMatch.moduleName ? ` — ${result.topMatch.moduleName}` : ""}
+                </p>
+              ) : null}
+              {showOtherMatches && result.otherMatches.length ? (
+                <ul className="builder-site-search-result-more">
+                  {result.otherMatches.map((match, i) => (
+                    <li key={`${result.pageId}-more-${i}`}>
+                      <SiteSearchSnippet match={match} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </>
+    );
+  }
+
+  return (
+    <div className="builder-site-search-panel">
+      {field}
+      {body}
+    </div>
+  );
+}
+
 function BlogModulePlaceholder({ type }: { type: string }) {
   const labels: Record<string, string> = {
     "blog-post-card": "Post Card",
@@ -4755,7 +5210,16 @@ function SlideshowPreview({
     return <div className="builder-preview-slideshow builder-preview-slideshow-empty">Add slides in the editor</div>;
   }
 
-  const frameStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
+  // The nudge (operator, 2026-08-12), the same two settings and the same
+  // helper the image and heading modules use, so an operator learns it once.
+  // `position: relative` only when there is a transform to apply: an
+  // unconditional one would become the containing block for any
+  // fixed-position overlay inside the slideshow.
+  const nudgeTransform = getModuleNudgeTransform(module.settings);
+  const frameStyle: CSSProperties = {
+    ...(heightPx > 0 ? { height: `${heightPx}px` } : {}),
+    ...(nudgeTransform ? { transform: nudgeTransform, position: "relative" as const } : {})
+  };
   return (
     <div
       className={`builder-preview-slideshow builder-preview-slideshow-${transition}`}
@@ -4769,14 +5233,14 @@ function SlideshowPreview({
           style={{ transform: `translateX(-${index * 100}%)` }}
         >
           {slides.map((slide) => (
-            <img key={slide.id} src={slide.url} alt={slide.alt} loading="lazy" />
+            <img key={slide.id} {...imageProps(slide.url)} alt={slide.alt} loading="lazy" />
           ))}
         </div>
       ) : (
         slides.map((slide, slideIndex) => (
           <img
             key={slide.id}
-            src={slide.url}
+            {...imageProps(slide.url)}
             alt={slide.alt}
             loading="lazy"
             className="builder-preview-slideshow-fade-frame"
@@ -4984,6 +5448,8 @@ type NavRenderItem = {
   id?: string;
   parentId?: string;
   width?: string;
+  /** The mega panel's extra column — a whole module, or the tile it replaced. */
+  featureModule?: import("@/lib/builder-template").BuilderTemplateModule;
   featureImage?: string;
   featureHeading?: string;
 };
@@ -5114,11 +5580,24 @@ function NavMegaItem({
             </div>
           ))}
 
-          {featureImage || item.featureHeading ? (
+          {/*
+            * The extra column, in two forms. A module chosen from the palette
+            * renders as itself — the slot supplies the grid cell and nothing
+            * else, so the module's own background, padding and alignment are
+            * not sitting inside a second card. Where no module has been
+            * chosen the original image-plus-heading tile still renders, which
+            * is what keeps live tenant menus (Delray's "Visit Delray Tennis")
+            * exactly as they are.
+            */}
+          {item.featureModule ? (
+            <div className="site-nav-mega-feature-module">
+              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} />
+            </div>
+          ) : featureImage || item.featureHeading ? (
             <Link className="site-nav-mega-feature" href={href}>
               {featureImage ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={featureImage} alt="" loading="lazy" />
+                <img {...imageProps(featureImage, { sizes: FEATURE_CARD_SIZES })} alt="" loading="lazy" />
               ) : null}
               {item.featureHeading ? <strong>{item.featureHeading}</strong> : null}
             </Link>
@@ -5373,6 +5852,17 @@ const FEATURE_CARD_ASPECTS: Record<string, string> = {
 };
 
 /**
+ * Icon badge options. Each set is the single source of truth for its
+ * setting: the renderer validates against it, the CSS carries one rule
+ * per member, and the editor's dropdown is built from the same names —
+ * so an unknown stored value falls back to the default rather than
+ * emitting a class no stylesheet answers.
+ */
+const FEATURE_CARD_ICON_PLACEMENTS = new Set(["above", "on-image", "inline"]);
+const FEATURE_CARD_ICON_ALIGNS = new Set(["center", "left", "right"]);
+const FEATURE_CARD_ICON_SHAPES = new Set(["circle", "square", "plain"]);
+
+/**
  * Feature Cards — a responsive grid of linked cards.
  *
  * Built to docs/MODULE_STANDARDS.md from the spec on ClickUp 86bbaffu3.
@@ -5380,6 +5870,150 @@ const FEATURE_CARD_ASPECTS: Record<string, string> = {
  * `_builder-react-overrides.css` (standard 3); the media queries there only
  * reduce the column count, they never introduce layout.
  */
+/**
+ * Programs — a club's classes, clinics and mixers as readable page content.
+ *
+ * Replaces the flyer image. The operator's brief (ClickUp `86bbdby3a`) was
+ * that staff must be able to change a start time without a design tool, and
+ * that "flyers don't belong on a website" — so nothing here reproduces the
+ * poster. No logo, no address block, no decorative palm: those were identical
+ * on all fifteen source flyers and are site chrome or print filler.
+ *
+ * The times are a real table with a monospaced, tabular-figures column,
+ * because a schedule is a timetable and the columns should line up. Centered
+ * text baked into an image never could.
+ */
+function ProgramListModulePreview({
+  module
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+}) {
+  const programs = parsePrograms(module.settings.programs);
+
+  // Standard 5: an empty module is a designed state, not a blank box.
+  if (programs.length === 0) {
+    return (
+      <div className="builder-preview-programs builder-preview-programs-empty">
+        Add programs in the editor
+      </div>
+    );
+  }
+
+  const showLevelBadge = module.settings.showLevelBadge !== "false";
+  const showReserve = module.settings.showReserve !== "false";
+  const showInstructorColumn = module.settings.showInstructorColumn !== "false";
+  const reserveLabel = module.settings.reserveLabel || "Reserve";
+  const reservePhone = (module.settings.reservePhone || "").trim();
+  const policyNote = (module.settings.policyNote || "").trim();
+  const radius = Math.min(48, Math.max(0, Number.parseInt(module.settings.cardRadius || "10", 10) || 0));
+
+  // Empty color settings follow the site theme. The --crm-theme-* vars are
+  // set on the preview root by getCrmThemePaletteVars on both the editor
+  // canvas and the public site; the literals are the no-theme fallback.
+  const accent = module.settings.accentColor || "var(--crm-theme-primary, #4f9c3a)";
+  const heading = module.settings.headingColor || "var(--crm-theme-accent, #14265c)";
+
+  // `tel:` needs the digits only; the label keeps whatever formatting the
+  // operator typed, because that is how the club writes its own number.
+  const dialable = reservePhone.replace(/[^\d+]/g, "");
+  const canReserve = showReserve && reservePhone.length > 0;
+
+  // A program with no coach on any session leaves the column out entirely
+  // rather than rendering a row of blanks.
+  const anyInstructor = programs.some((program) =>
+    program.sessions.some((session) => Boolean(session.instructor))
+  );
+  const withInstructors = showInstructorColumn && anyInstructor;
+
+  return (
+    <div
+      className="builder-preview-programs"
+      style={
+        {
+          "--program-radius": `${radius}px`,
+          "--program-accent": accent,
+          "--program-heading": heading,
+          "--program-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
+          // A card border is a quiet line, not a brand color, so it does NOT
+          // default to a theme color. On a theme whose secondary is a strong
+          // green every card gained a green hairline — spotted in the settings
+          // swatch on 2026-08-13 before it ever reached a page. The operator
+          // can still pick any color; the default just stays out of the way.
+          "--program-border": module.settings.cardBorderColor || "#dce3ef"
+        } as React.CSSProperties
+      }
+    >
+      <div className="builder-preview-programs-list">
+        {programs.map((program) => (
+          <article className="builder-preview-program" key={program.id}>
+            <div className="builder-preview-program-intro">
+              <h3 className="builder-preview-program-title">{program.title}</h3>
+              {program.subtitle ? (
+                <p className="builder-preview-program-subtitle">{program.subtitle}</p>
+              ) : null}
+              {showLevelBadge && program.levelBadge ? (
+                <span className="builder-preview-program-level">{program.levelBadge}</span>
+              ) : null}
+              {program.bullets.length > 0 ? (
+                <ul className="builder-preview-program-points">
+                  {program.bullets.map((bullet, index) => (
+                    <li key={`${program.id}-point-${index}`}>{bullet}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
+            <div className="builder-preview-program-detail">
+              {program.sessions.length > 0 ? (
+                <div className="builder-preview-program-when">
+                  <p className="builder-preview-program-when-label">When</p>
+                  <table className="builder-preview-program-table">
+                    <tbody>
+                      {program.sessions.map((session) => (
+                        <tr key={session.id}>
+                          <td className="builder-preview-program-day">{session.day}</td>
+                          <td className="builder-preview-program-time">
+                            {formatSessionHours(session)}
+                          </td>
+                          {withInstructors ? (
+                            <td className="builder-preview-program-who">{session.instructor ?? ""}</td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {program.pricing.length > 0 ? (
+                <div className="builder-preview-program-cost">
+                  {program.pricing.map((price) => (
+                    <div className="builder-preview-program-cost-row" key={price.id}>
+                      <span className="builder-preview-program-cost-amount">{price.amount}</span>
+                      {price.appliesTo ? (
+                        <span className="builder-preview-program-cost-for">{price.appliesTo}</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {canReserve ? (
+                <p className="builder-preview-program-reserve">
+                  <span>{reserveLabel}:</span>{" "}
+                  <a href={`tel:${dialable}`}>{reservePhone}</a>
+                </p>
+              ) : null}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {policyNote ? <p className="builder-preview-programs-policy">{policyNote}</p> : null}
+    </div>
+  );
+}
+
 function FeatureCardsModulePreview({
   module,
   previewMode = false
@@ -5414,11 +6048,40 @@ function FeatureCardsModulePreview({
   const showArrow = module.settings.linkArrow !== "false";
   const fallbackLinkLabel = module.settings.linkLabel ?? "Learn More";
 
+  // Icon badge geometry. Every one of these was a hardcoded CSS value
+  // until 2026-08-12; the fallbacks below are those exact values, so a
+  // module saved before then renders identically — with one deliberate
+  // exception, `iconFront`. The badge sits earlier in the DOM than the
+  // image and neither declared a z-index, so the image always painted
+  // over it. Defaulting to "in front" fixes a bug rather than changing a
+  // design: an icon hidden behind the picture was never a choice anyone
+  // made.
+  // `|| 48` on the parse would turn a stored "0" into 48 rather than the
+  // 16px floor — the two cases are different and only one is a fallback.
+  const parsedIconSize = Number.parseInt(module.settings.iconSize || "48", 10);
+  const iconSize = Number.isFinite(parsedIconSize) ? Math.min(160, Math.max(16, parsedIconSize)) : 48;
+  const iconPlacement = FEATURE_CARD_ICON_PLACEMENTS.has(module.settings.iconPlacement || "")
+    ? (module.settings.iconPlacement as string)
+    : "above";
+  const iconAlign = FEATURE_CARD_ICON_ALIGNS.has(module.settings.iconAlign || "")
+    ? (module.settings.iconAlign as string)
+    : "center";
+  const iconShape = FEATURE_CARD_ICON_SHAPES.has(module.settings.iconShape || "")
+    ? (module.settings.iconShape as string)
+    : "circle";
+  const iconInFront = module.settings.iconFront !== "false";
+  // Anything but an explicit "image" is a symbol — every module saved before
+  // image icons existed carries no `iconType` at all.
+  const iconIsImage = module.settings.iconType === "image";
+
   const className = [
     "builder-preview-feature-cards",
     `builder-preview-feature-cards-align-${align}`,
     module.settings.cardShadow === "false" ? "" : "builder-preview-feature-cards-shadow",
-    module.settings.cardHoverLift === "false" ? "" : "builder-preview-feature-cards-lift"
+    module.settings.cardHoverLift === "false" ? "" : "builder-preview-feature-cards-lift",
+    `builder-preview-feature-cards-icon-${iconPlacement}`,
+    `builder-preview-feature-cards-icon-align-${iconAlign}`,
+    `builder-preview-feature-cards-icon-shape-${iconShape}`
   ]
     .filter(Boolean)
     .join(" ");
@@ -5434,7 +6097,12 @@ function FeatureCardsModulePreview({
           "--feature-card-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
           "--feature-card-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #e1e8f0)",
           "--feature-card-accent": iconColor,
-          "--feature-card-aspect": aspect
+          "--feature-card-aspect": aspect,
+          "--feature-card-icon-size": `${iconSize}px`,
+          // 0 keeps the badge in the same paint layer as the image, where
+          // DOM order puts the image on top — i.e. the old behaviour, now
+          // reachable on purpose instead of by accident.
+          "--feature-card-icon-z": iconInFront ? "3" : "0"
         } as CSSProperties
       }
     >
@@ -5443,16 +6111,28 @@ function FeatureCardsModulePreview({
         const href = card.linkUrl ? (previewMode ? toPreviewHref(card.linkUrl) : toPublicHref(card.linkUrl)) : "";
         const linkLabel = card.linkLabel || fallbackLinkLabel;
         const badgeColor = alternateIcons && index % 2 === 1 ? iconAltColor : iconColor;
+        // "Plain" drops the filled disc, so the glyph itself has to carry
+        // the color — white-on-nothing is invisible. With a disc, white
+        // stays the default and Icon Text overrides it.
+        const glyphColor = module.settings.iconTextColor || (iconShape === "plain" ? badgeColor : "#ffffff");
 
         return (
           <article className="builder-preview-feature-card" key={card.id}>
-            {showIcons && card.icon ? (
+            {showIcons && (iconIsImage ? card.iconImageUrl : card.icon) ? (
               <span
                 className="builder-preview-feature-card-badge"
-                style={{ background: badgeColor }}
+                style={{ background: iconShape === "plain" ? "transparent" : badgeColor, color: glyphColor }}
                 aria-hidden="true"
               >
-                {card.icon}
+                {iconIsImage ? (
+                  // Decorative, like the glyph it replaces — the badge is
+                  // aria-hidden, so the picture carries an empty alt rather
+                  // than repeating the card title to a screen reader.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="" className="builder-preview-feature-card-badge-img" src={card.iconImageUrl} />
+                ) : (
+                  card.icon
+                )}
               </span>
             ) : null}
 

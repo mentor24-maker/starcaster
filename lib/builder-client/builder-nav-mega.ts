@@ -14,6 +14,17 @@ export type NavMegaItem = {
   label: string;
   href: string;
   parentId?: string;
+  /**
+   * The mega panel's extra column.
+   *
+   * `featureModule` is the general form — any module from the palette, stored
+   * whole on the top-level item that owns the panel. `featureImage` /
+   * `featureHeading` are the fixed image-plus-heading tile that came first and
+   * still runs on live tenant sites (Delray's "Visit Delray Tennis"), so both
+   * paths stay alive: a module wins where one is set, the tile renders where
+   * it is not.
+   */
+  featureModule?: import("./builder-template").BuilderTemplateModule;
   featureImage?: string;
   featureHeading?: string;
 };

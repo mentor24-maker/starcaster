@@ -7,12 +7,18 @@ window.App = window.App || {};
 // variable and written back onto App.auth AFTER the object is initialised below.
 App.auth = App.auth || {};
 let _detectedProjectInviteToken = null;
+let _detectedSignupInviteToken = null;
 (function detectProjectInviteHash() {
   try {
     const hash = String(window.location.hash || '');
     const m = hash.match(/[#&]project-invite=([^&]+)/);
-    if (m) {
-      _detectedProjectInviteToken = decodeURIComponent(m[1]);
+    if (m) _detectedProjectInviteToken = decodeURIComponent(m[1]);
+    // A sign-up invitation: the only way to reach the "create account" form
+    // once invitations are switched on. Different token, different table, and
+    // consumed at registration rather than after it.
+    const s = hash.match(/[#&]signup-invite=([^&]+)/);
+    if (s) _detectedSignupInviteToken = decodeURIComponent(s[1]);
+    if (m || s) {
       // Clean the token from the address bar so it isn't bookmarked or shared
       const clean = window.location.pathname + window.location.search;
       window.history.replaceState(null, '', clean);
@@ -32,7 +38,31 @@ App.auth = {
   // Preserved from detectProjectInviteHash above (the App.auth = {} below would have
   // wiped it if we stored directly on App.auth before the reassignment).
   _pendingProjectInviteToken: _detectedProjectInviteToken,
+  _signupInviteToken: _detectedSignupInviteToken,
+  // Null until /api/auth/registration-mode answers. Treated as "open" until
+  // then so a failed check can never hide the form from a legitimate invitee.
+  _registrationInviteOnly: null,
 };
+
+// An invitation link pasted into a tab that ALREADY has StarCaster open
+// changes only the fragment. That is a same-document navigation: no reload,
+// so the detection above never runs again and the invitation quietly does
+// nothing — the same silent failure this whole flow exists to prevent.
+// Opening the link from an email gives a fresh load and takes the path above.
+window.addEventListener('hashchange', (event) => {
+  try {
+    // Read the token out of the EVENT, not out of window.location. The SPA's
+    // hash router rewrites any hash it does not recognise back to
+    // "#page=<current>", and it wins the race — by the time this handler looks
+    // at the address bar the token is already gone.
+    const match = String(event?.newURL || window.location.href || '').match(/[#&]signup-invite=([^&]+)/);
+    if (!match) return;
+    App.auth._signupInviteToken = decodeURIComponent(match[1]);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (App.auth.user) App.auth._consumeSignupInvite();
+    else App.auth._applyRegistrationMode().catch(() => {});
+  } catch (_) {}
+});
 
 App.auth._els = {
   appShell: null,
@@ -113,6 +143,80 @@ App.auth._setMode = function _setMode(modeInput) {
   App.auth._setMessage('');
 };
 
+/**
+ * Decide whether the "Register" tab is offered at all, and set up the form
+ * when the visitor arrived on an invitation link.
+ *
+ * Fails open on purpose: if the mode check or the token check errors, the
+ * form stays as it was rather than vanishing. A gate that hides itself when
+ * the network hiccups turns a bad connection into "I can't sign up".
+ */
+App.auth._applyRegistrationMode = async function _applyRegistrationMode() {
+  const { authShowRegister } = App.auth._els;
+  const token = String(App.auth._signupInviteToken || '').trim();
+
+  try {
+    const res = await App.api('/api/auth/registration-mode', { method: 'GET' });
+    const data = res.data || res;
+    App.auth._registrationInviteOnly = Boolean(data.inviteOnly);
+  } catch (_) {
+    App.auth._registrationInviteOnly = null;
+  }
+
+  const inviteOnly = App.auth._registrationInviteOnly === true;
+  if (authShowRegister) authShowRegister.classList.toggle('hidden', inviteOnly && !token);
+
+  if (!token) return;
+
+  // Confirm the link before showing the form, so a dead or expired link says
+  // so immediately instead of after they have typed everything in.
+  try {
+    const res = await App.api(`/api/invitations/verify?token=${encodeURIComponent(token)}`, { method: 'GET' });
+    const invite = res.data || res;
+
+    // Someone who already has a login must be sent to the SIGN-IN form, not
+    // the sign-up one: registering would be refused as a duplicate address,
+    // which reads as "your invitation is broken". The token is redeemed after
+    // they sign in, by _consumeSignupInvite.
+    if (invite.hasAccount) {
+      const loginEmail = App.auth._els.authLoginForm
+        ? App.auth._els.authLoginForm.querySelector('input[name="email"]')
+        : null;
+      if (loginEmail && invite.email) loginEmail.value = invite.email;
+      if (authShowRegister) authShowRegister.classList.toggle('hidden', inviteOnly);
+      App.auth._setMode('login');
+      App.auth._setMessage(
+        invite.projectName
+          ? `You already have a StarCaster account. Sign in and ${invite.projectName} will be added to it.`
+          : 'You already have a StarCaster account. Sign in to accept this invitation.',
+        false
+      );
+      return;
+    }
+
+    const form = App.auth._els.authRegisterForm;
+    const emailInput = form ? form.querySelector('input[name="email"]') : null;
+    if (emailInput && invite.email) {
+      // The invitation is bound to this address server-side; letting them
+      // change it here would only produce a confusing rejection.
+      emailInput.value = invite.email;
+      emailInput.readOnly = true;
+    }
+    App.auth._setMode('register');
+    App.auth._setMessage(
+      invite.projectName
+        ? `You've been invited to ${invite.projectName}. Choose a password to finish.`
+        : 'Choose a password to finish setting up your account.',
+      false
+    );
+  } catch (err) {
+    App.auth._signupInviteToken = null;
+    if (authShowRegister) authShowRegister.classList.toggle('hidden', inviteOnly);
+    App.auth._setMode('login');
+    App.auth._setMessage(err.message || 'This invitation link is not valid.', true);
+  }
+};
+
 App.auth._showLanding = function _showLanding(mode = 'login') {
   const { appShell, authLanding, authLogoutButton, authWelcomeName } = App.auth._els;
   if (appShell) appShell.classList.add('hidden');
@@ -120,6 +224,12 @@ App.auth._showLanding = function _showLanding(mode = 'login') {
   if (authLogoutButton) authLogoutButton.classList.add('hidden');
   if (authWelcomeName) authWelcomeName.textContent = '';
   App.auth._setMode(mode);
+  // Once per visit: the answer cannot change while the page is open, and
+  // re-running it would stamp over a message the visitor is reading.
+  if (!App.auth._registrationModeApplied) {
+    App.auth._registrationModeApplied = true;
+    App.auth._applyRegistrationMode().catch(() => {});
+  }
 };
 
 App.auth._showApp = function _showApp() {
@@ -132,6 +242,32 @@ App.auth._showApp = function _showApp() {
     const accountLabel = String(App.auth.user?.name || App.auth.user?.email || '').trim();
     authWelcomeName.textContent = accountLabel || 'Account';
   }
+};
+
+/**
+ * Does this account belong to any workspace at all?
+ *
+ * Distinct from "no ACTIVE workspace": that resolves itself, because the boot
+ * call picks one. This is the genuinely empty case — someone invited without
+ * a workspace — and every screen in the app would be blank and noisy for
+ * them, so the shell shows them one page and hides the menu.
+ */
+App.auth._hasNoWorkspace = function _hasNoWorkspace() {
+  const projects = Array.isArray(App.state?.projects) ? App.state.projects : [];
+  return Boolean(App.auth.user) && projects.length === 0;
+};
+
+App.auth._applyNoWorkspaceView = function _applyNoWorkspaceView() {
+  const stranded = App.auth._hasNoWorkspace();
+  document.body.classList.toggle('no-workspace-view', stranded);
+  if (!stranded) return false;
+  if (typeof App.setActivePage === 'function') {
+    // Not persisted: the moment they are added to a workspace this page stops
+    // being where they belong, and a remembered "last page" would strand them
+    // on it again.
+    App.setActivePage('noWorkspacePage', { persist: false, skipTracking: true });
+  }
+  return true;
 };
 
 App.auth._showPublicLegal = function _showPublicLegal(pageId) {
@@ -218,6 +354,55 @@ App.auth.handleUnauthorized = function handleUnauthorized() {
   App.auth._setMessage('');
 };
 
+/**
+ * Redeem a sign-up invitation for someone who ALREADY has an account.
+ *
+ * Registration redeems the token itself, so this only has work to do when the
+ * invited address was already registered. Before it existed, such an
+ * invitation could never be accepted: signed in, the link did nothing at all
+ * (the sign-in screen never appears, so nothing looked at the token); signed
+ * out, it led to a sign-up form that refused the duplicate address.
+ */
+App.auth._consumeSignupInvite = async function _consumeSignupInvite() {
+  const token = String(App.auth._signupInviteToken || '').trim();
+  if (!token || !App.auth.user) return;
+  App.auth._signupInviteToken = null;
+
+  try {
+    const res = await App.api('/api/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+    const data = res?.data || res || {};
+    const projectId = String(data.projectId || '').trim();
+    const projectName = String(data.projectName || '').trim();
+
+    if (!projectId) {
+      App.notify('Invitation accepted.');
+      return;
+    }
+    App.notify(projectName ? `You've been added to ${projectName}.` : 'You have been added to the project.');
+    // Coming from the "no workspace yet" page, the whole shell was set up for
+    // someone with nothing — menu hidden, one page showing. Switching the
+    // project in place would leave that scaffolding behind, so start clean.
+    if (document.body.classList.contains('no-workspace-view')) {
+      window.location.reload();
+      return;
+    }
+    if (App.projectContext?.switchSessionProject) {
+      App.projectContext.switchSessionProject(projectId, { keepView: false, refresh: true }).catch(() => {
+        window.location.reload();
+      });
+    } else {
+      window.location.reload();
+    }
+  } catch (err) {
+    // Say why. A silently dropped invitation is what this whole change exists
+    // to stop happening.
+    App.notify(err.message || 'That invitation could not be accepted.', true);
+  }
+};
+
 App.auth._consumePendingProjectInvite = async function _consumePendingProjectInvite() {
   const token = App.auth._pendingProjectInviteToken;
   if (!token) return;
@@ -271,10 +456,16 @@ App.auth._register = async function _register(payload) {
     email: String(payload?.email || '').trim(),
     password: String(payload?.password || ''),
   };
+  const inviteToken = String(App.auth._signupInviteToken || '').trim();
+  if (inviteToken) body.inviteToken = inviteToken;
   const res = await App.api('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(body),
   });
+  // Registration redeems the token server-side. Clearing it here stops
+  // _consumeSignupInvite from trying to spend it a second time and reporting
+  // "already used" on a sign-up that just worked.
+  App.auth._signupInviteToken = null;
   App.auth._persistSessionToken(res);
   return res.user || res.data?.user || null;
 };
@@ -344,8 +535,10 @@ App.auth.init = function init(bootMainApp) {
         await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._applyNoWorkspaceView();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
+        App.auth._consumeSignupInvite();
         App.auth._setMessage('');
       } catch (err) {
         App.auth._setMessage(err.message || 'Login failed', true);
@@ -374,8 +567,10 @@ App.auth.init = function init(bootMainApp) {
         await App.auth._syncProjectContext();
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._applyNoWorkspaceView();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
+        App.auth._consumeSignupInvite();
         App.auth._setMessage('');
       } catch (err) {
         App.auth._setMessage(err.message || 'Registration failed', true);
@@ -469,8 +664,10 @@ App.auth.init = function init(bootMainApp) {
       return App.auth._syncProjectContext().then(() => {
         App.auth._showApp();
         App.auth._startMainApp();
+        App.auth._applyNoWorkspaceView();
         App.auth._runAuthenticatedCallbacks();
         App.auth._consumePendingProjectInvite();
+        App.auth._consumeSignupInvite();
         App.auth._setMessage('');
       });
     })

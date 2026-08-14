@@ -35,9 +35,10 @@ lib/builder/email-render.js
 lib/build-stamp.json
 lib/site-import/dist/
 
-# Claude Code: settings.json is shared; everything else is personal
+# Claude Code: settings.json and skills are shared; everything else is personal
 .claude/*
 !.claude/settings.json
+!.claude/skills/
 docs/SQL/backups/
 
 # Supabase CLI local state — machine-specific, not project source

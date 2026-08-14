@@ -1,16 +1,25 @@
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
 import { NAV_STYLE_DEFAULTS } from "@/lib/builder-nav-style";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
+import { createEmptyModule, isPlainTextVariant, normalizeBuilderAssetUrl } from "@/lib/builder-template";
+import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderBackgroundControls } from "./builder-background-controls";
+import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
+import { BuilderCenteredModal } from "./builder-centered-modal";
+import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
+import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
+import { BuilderModulePaletteModal } from "./builder-module-palette-modal";
+import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
+import { PLAIN_TEXT_PLACEHOLDER, type ModulePaletteGroup, type ModulePaletteItem } from "./builder-types";
 import {
   BuilderSchemaModuleSettings,
+  dropShadowFields,
+  dropShadowIsOn,
   marginFields,
-  type BuilderSchemaField,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { getModuleBackgroundSettings } from "./builder-utils";
@@ -28,6 +37,18 @@ import type { BuilderThemePalette } from "./builder-theme-color-field";
  * **Structure / Placement / Text / Border**. "Border" rather than the
  * canonical "Frame" is his word for this module — the axis holds the bar's
  * border, its radius and its shadow, and he named it while looking at it.
+ *
+ * Each axis then splits into two named PARTS — **Main Menu** and **Panel**
+ * (2026-08-13: *"I think we can fit all four columns in one row: Structure,
+ * Placement, Text, Border … Then I want two parts within the Style section:
+ * Main Menu and Panel. Each one gets it's own set of style settings."*).
+ * The parts are inside the columns, so the four axes still hold ONE row.
+ *
+ * The Panel part is deliberately shorter than Main Menu. Nothing was added to
+ * fill it — the controls it lacks (its own padding, offsets, alignment,
+ * underline, italic, link height, label/hover/current colours, hover effect,
+ * text shadow, link radius and drop shadow) do not exist yet, and an empty
+ * row would say they did.
  *
  * What changed beyond the layout:
  *  - the control that said "Dropdown" is now **Menu Type**, first in
@@ -60,10 +81,36 @@ type NavItem = {
   href: string;
   parentId?: string;
   width?: string;
-  /** Mega-panel feature tile — top-level items only. See ClickUp 86bbafg38. */
+  /**
+   * The mega panel's extra column — top-level items only. See ClickUp 86bbafg38.
+   *
+   * `featureModule` is the general form: any module the palette offers, stored
+   * whole on the item that owns the panel, the way a table cell stores the
+   * modules dropped into it. `featureImage`/`featureHeading` are the fixed
+   * image-plus-heading tile it replaces; live tenant menus still carry them
+   * (Delray's "Visit Delray Tennis"), so the old pair keeps rendering
+   * wherever no module has been chosen.
+   */
+  featureModule?: BuilderTemplateModule;
   featureImage?: string;
   featureHeading?: string;
 };
+
+/** A module dropped into a mega panel is stored whole, so guard the shape. */
+function parseFeatureModule(raw: unknown): BuilderTemplateModule | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const candidate = raw as Partial<BuilderTemplateModule>;
+  if (typeof candidate.type !== "string" || !candidate.type) return undefined;
+  return {
+    ...candidate,
+    type: candidate.type,
+    id: String(candidate.id || `${candidate.type}-feature`),
+    column: typeof candidate.column === "string" ? candidate.column : "",
+    name: typeof candidate.name === "string" ? candidate.name : "",
+    text: typeof candidate.text === "string" ? candidate.text : "",
+    settings: candidate.settings && typeof candidate.settings === "object" ? candidate.settings : {}
+  };
+}
 
 function parseNavItems(settings: Record<string, string>): NavItem[] {
   try {
@@ -71,12 +118,14 @@ function parseNavItems(settings: Record<string, string>): NavItem[] {
     if (!Array.isArray(items)) return [];
     return items.map((item, index) => {
       const raw = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      const featureModule = parseFeatureModule(raw.featureModule);
       return {
         id: String(raw.id || `nav-${index + 1}`),
         label: String(raw.label || ""),
         href: String(raw.href || raw.url || ""),
         ...(raw.parentId ? { parentId: String(raw.parentId) } : {}),
         ...(raw.width ? { width: String(raw.width) } : {}),
+        ...(featureModule ? { featureModule } : {}),
         ...(raw.featureImage ? { featureImage: normalizeBuilderAssetUrl(raw.featureImage) } : {}),
         ...(raw.featureHeading ? { featureHeading: String(raw.featureHeading) } : {})
       };
@@ -99,114 +148,118 @@ const isMegaMenu = (settings: Record<string, string>) =>
 const isListMenu = (settings: Record<string, string>) => !isMegaMenu(settings);
 
 /**
- * The shadow parts, collapsed behind their own on/off. Six controls for a
- * shadow is right for a Border axis asked to hold "all the regular settings",
- * and wrong for one that is switched off — so they hide with it.
+ * Four side controls for a spacing box that is not the module's own — the
+ * menu bar's padding and the links' padding (W7 side order, qualified name).
+ * `top` is the default for top/bottom, `side` for left/right, because a
+ * link ships 0 above and 14 beside.
  */
-function shadowFields(
-  keys: { toggle: string; x: string; y: string; blur: string; spread?: string; color: string; opacity: string },
-  defaults: { x: number; y: number; blur: number; color: string; opacity: number },
+function sideFields(
+  keyPrefix: string,
   label: string,
-  /**
-   * Whether an untouched menu has this shadow. The bar's was on before it was
-   * controllable (turning it off by default would restyle every live menu);
-   * the text one is new, so it starts off. `whenOn` has to agree with that or
-   * the parts sit open under an unticked box — which is exactly how it looked
-   * the first time this was drawn.
-   */
-  defaultOn: boolean
-): BuilderSchemaField[][] {
-  const whenOn = (settings: Record<string, string>) =>
-    (settings[keys.toggle] ?? String(defaultOn)) === "true";
+  { max, top, side }: { max: number; top: string; side: string }
+) {
+  return (
+    [
+      ["Top", "Top", top],
+      ["Bottom", "Bottom", top],
+      ["Left", "Left", side],
+      ["Right", "Right", side]
+    ] as const
+  ).map(([suffix, word, fallback]) => ({
+    key: `${keyPrefix}${suffix}`,
+    label: `${word} ${label}`,
+    width: "num" as const,
+    control: "number" as const,
+    min: 0,
+    max,
+    fallback,
+    rendersVia: RENDERS_VIA
+  }));
+}
 
-  return [
-    [
-      {
-        key: keys.toggle,
-        label,
-        width: "check",
-        control: "checkbox",
-        fallback: String(defaultOn),
-        rendersVia: RENDERS_VIA
-      }
-    ],
-    [
-      {
-        key: keys.x,
-        label: "Shadow X",
-        width: "num",
-        control: "number",
-        min: -60,
-        max: 60,
-        fallback: String(defaults.x),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      },
-      {
-        key: keys.y,
-        label: "Shadow Y",
-        width: "num",
-        control: "number",
-        min: -60,
-        max: 60,
-        fallback: String(defaults.y),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      }
-    ],
-    [
-      {
-        key: keys.blur,
-        label: "Blur",
-        width: "num",
-        control: "number",
-        min: 0,
-        max: 120,
-        fallback: String(defaults.blur),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      },
-      ...(keys.spread
-        ? [
-            {
-              key: keys.spread,
-              label: "Spread",
-              width: "num" as const,
-              control: "number" as const,
-              min: -40,
-              max: 40,
-              fallback: "0",
-              visibleWhen: whenOn,
-              rendersVia: RENDERS_VIA
-            }
-          ]
-        : [])
-    ],
-    [
-      {
-        key: keys.color,
-        label: "Shadow Color",
-        width: "color",
-        control: "color",
-        dialogLabel: `${label} color`,
-        fallback: defaults.color,
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      },
-      {
-        key: keys.opacity,
-        label: "Opacity",
-        width: "num",
-        control: "number",
-        min: 0,
-        max: 100,
-        step: 5,
-        fallback: String(defaults.opacity),
-        visibleWhen: whenOn,
-        rendersVia: RENDERS_VIA
-      }
-    ]
-  ];
+/**
+ * Editor for the module sitting in a mega panel's extra column.
+ *
+ * Arranged like the table cell's nested editor: a module type that ships a
+ * standalone panel gets that panel, so a call-to-action button in a menu is
+ * edited by exactly the controls that edit a button in a section (doctrine C8
+ * — one editor per module type, wherever the module lives). The palette is
+ * unrestricted, so anything else keeps the settings the palette gave it and
+ * edits its label here; it still renders in the column either way.
+ */
+function NavFeatureModuleEditor({
+  featureModule,
+  themeColors,
+  onChange
+}: {
+  featureModule: BuilderTemplateModule;
+  themeColors: BuilderThemePalette;
+  onChange: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+}) {
+  const isPlainText = isPlainTextVariant(featureModule.settings);
+
+  return (
+    <div className="builder-nav-feature-module-editor is-lattice">
+      {/* W0: one lattice column, the same markup a module panel uses — a
+          nested editor is still a settings surface. */}
+      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "1" } as CSSProperties}>
+        <div className="builder-schema-panel-column">
+          {/* "Module", not "Content": the type's own panel below brings a
+              Content axis of its own. */}
+          <div className="builder-schema-group-title">Module</div>
+          <BuilderModuleField label="Module label" width="text-md">
+            <input
+              type="text"
+              value={featureModule.name}
+              onChange={(e) => onChange((current) => ({ ...current, name: e.target.value }))}
+              placeholder="Internal label"
+            />
+          </BuilderModuleField>
+
+          {featureModule.type === "text" && (
+            <BuilderModuleField label="Content" width="full">
+              {isPlainText ? (
+                <textarea
+                  className="builder-textarea"
+                  value={featureModule.text}
+                  onChange={(e) => onChange((current) => ({ ...current, text: e.target.value }))}
+                  placeholder={PLAIN_TEXT_PLACEHOLDER}
+                  rows={3}
+                />
+              ) : (
+                <BuilderRichTextEditor
+                  value={featureModule.text}
+                  onChange={(value) => onChange((current) => ({ ...current, text: value }))}
+                />
+              )}
+            </BuilderModuleField>
+          )}
+
+          {featureModule.type === "image" && (
+            <BuilderModuleField label="Media URL" width="full">
+              <BuilderImagePickerField
+                value={featureModule.settings.url ?? ""}
+                onChange={(url) => onChange((current) => ({ ...current, settings: { ...current.settings, url } }))}
+              />
+            </BuilderModuleField>
+          )}
+        </div>
+      </div>
+
+      {featureModule.type === "heading" && (
+        <BuilderHeadingModuleSettings compact module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+      {featureModule.type === "text" && isPlainText && (
+        <BuilderSimpleTextModuleSettings compact module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+      {featureModule.type === "button" && (
+        <BuilderButtonModuleSettings compact module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+      {featureModule.type === "image" && (
+        <BuilderImageModuleSettings module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+    </div>
+  );
 }
 
 export function BuilderNavigationModuleSettings({
@@ -226,6 +279,10 @@ export function BuilderNavigationModuleSettings({
 }) {
   const [styleCollapsed, setStyleCollapsed] = useState(false);
   const [linksCollapsed, setLinksCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteGroup, setPaletteGroup] = useState<ModulePaletteGroup | null>(null);
+  const [featureTargetId, setFeatureTargetId] = useState("");
+  const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
   const items = parseNavItems(module.settings);
   const topLevelWidthTotal = items
     .filter((i) => !i.parentId)
@@ -251,6 +308,63 @@ export function BuilderNavigationModuleSettings({
     persist([...items, { id: `nav-${Date.now()}-${items.length + 1}`, label: "", href: "" }]);
   }
 
+  /*
+   * The mega panel's extra column.
+   *
+   * It can only belong to a top-level item that actually opens a panel, so
+   * those are the items "+ Add Module" can target; the picker beside the
+   * button says which one, because a menu bar normally has several.
+   */
+  const hasChildren = (id: string) => items.some((child) => child.parentId === id);
+  const featureTargets = isMegaMenu(module.settings)
+    ? items.filter((item) => !item.parentId && hasChildren(item.id))
+    : [];
+  const featureTarget = featureTargets.find((item) => item.id === featureTargetId) ?? featureTargets[0];
+  const targetLabel = (item: NavItem) => item.label || `Link ${items.indexOf(item) + 1}`;
+
+  function closeFeaturePalette() {
+    setPaletteOpen(false);
+    setPaletteGroup(null);
+  }
+
+  function addFeatureModule(paletteItem: ModulePaletteItem) {
+    const target = featureTarget;
+    closeFeaturePalette();
+    if (!target) return;
+    // One slot per menu, so a second choice replaces the first — and says so
+    // rather than silently discarding whatever was configured in there.
+    if (
+      target.featureModule
+      && !window.confirm(
+        `"${targetLabel(target)}" already shows ${target.featureModule.name || target.featureModule.type} in its extra column. Replace it?`
+      )
+    ) {
+      return;
+    }
+    const created = createEmptyModule(paletteItem.type, "");
+    updateItem(target.id, {
+      featureModule: {
+        ...created,
+        name: paletteItem.name,
+        text: paletteItem.text,
+        settings: { ...created.settings, ...paletteItem.settings }
+      }
+    });
+    setEditingFeatureId(target.id);
+  }
+
+  function updateFeatureModule(id: string, updater: (current: BuilderTemplateModule) => BuilderTemplateModule) {
+    const current = items.find((item) => item.id === id)?.featureModule;
+    if (!current) return;
+    updateItem(id, { featureModule: updater(current) });
+  }
+
+  function removeFeatureModule(id: string) {
+    // JSON.stringify drops an undefined value, so the key leaves the saved item.
+    updateItem(id, { featureModule: undefined });
+    if (editingFeatureId === id) setEditingFeatureId(null);
+  }
+
   /**
    * The parent picker used to offer only top-level items and disable itself
    * on anything that already had children — so a three-level menu could not
@@ -263,116 +377,131 @@ export function BuilderNavigationModuleSettings({
   const depthOf = (item: NavItem) => navDepthOf(items, item);
   const eligibleParents = (item: NavItem) => eligibleNavParents(items, item) as NavItem[];
 
+  /*
+   * Every axis is split into two named PARTS — "Main Menu" first, "Panel"
+   * second (operator, 2026-08-13: *"I want two parts within the Style
+   * section: Main Menu and Panel. Each one gets it's own set of style
+   * settings."*). The parts sit INSIDE each axis, so the four columns still
+   * hold one row across the top; they are not two stacked blocks of four.
+   *
+   * The mechanism is the axis `sections` list — the same one that already
+   * carried the "Dropdown" sub-heading — so nothing loose is left on an axis
+   * and every axis's own `strips` is empty.
+   *
+   * The part heading carries the qualifier, so a label must not repeat it:
+   * "Panel Border Color" is "Border Color" under PANEL, "Bar Border" is
+   * "Border" under MAIN MENU. That is also how the four columns buy back the
+   * width they need to stay on one row — each column is sized by its longest
+   * label (W0), so shortening the labels narrows the column.
+   *
+   * Keys are untouched. A rename here is a rename of the LABEL only; renaming
+   * a key would silently drop every value already saved on a live menu.
+   */
   const schema: BuilderSettingsSchema = {
     axes: [
       {
         title: "Structure",
-        strips: [
-          [
-            {
-              // Was labelled "Dropdown". It is the first thing to decide and
-              // it renames everything below it, so it leads the column.
-              key: "navDropdownStyle",
-              label: "Menu Type",
-              width: "select-md",
-              control: "select",
-              fallback: "list",
-              options: [
-                { value: "list", label: "List" },
-                { value: "mega", label: "Mega Panel" }
-              ],
-              visibleWhen: (settings) => !isVerticalMenu(settings),
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          [
-            {
-              key: "navDirection",
-              label: "Direction",
-              width: "select-md",
-              control: "select",
-              fallback: "horizontal",
-              options: [
-                { value: "horizontal", label: "Horizontal" },
-                { value: "vertical", label: "Vertical" }
-              ],
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          [
-            {
-              key: "navLevels",
-              label: "Levels",
-              width: "num",
-              control: "number",
-              min: 1,
-              max: 3,
-              fallback: "2",
-              rendersVia: "NavigationModulePreview"
-            },
-            {
-              key: "navMegaWidth",
-              label: "Panel Width",
-              width: "num",
-              control: "number",
-              min: 320,
-              max: 1600,
-              step: 40,
-              fallback: String(NAV_STYLE_DEFAULTS.megaWidth),
-              visibleWhen: isMegaMenu,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navItemSizing",
-              label: "Sizing",
-              width: "select-md",
-              control: "select",
-              fallback: "auto",
-              options: [
-                { value: "auto", label: "Auto" },
-                { value: "equal", label: "Equal" },
-                { value: "custom", label: "Custom" }
-              ],
-              rendersVia: "NavigationModulePreview"
-            },
-            {
-              key: "navGap",
-              label: "Item Gap",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 40,
-              fallback: String(NAV_STYLE_DEFAULTS.gap),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "background",
-              label: "Background",
-              width: "full",
-              control: "custom",
-              bare: true,
-              rendersVia: "NavigationModulePreview",
-              render: () => (
-                <BuilderBackgroundControls
-                  label="Background"
-                  background={getModuleBackgroundSettings(module.settings)}
-                  horizontal
-                  onChange={onUpdateModuleBackground}
-                  themeBackgroundColor={themeBackgroundColor}
-                  themeColors={themeColors}
-                  themePrimaryColor={themePrimaryColor}
-                />
-              )
-            }
-          ]
-        ],
+        strips: [],
         sections: [
           {
-            title: "Dropdown",
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  // Was labelled "Dropdown". It is the first thing to decide and
+                  // it renames everything below it, so it leads the column.
+                  key: "navDropdownStyle",
+                  label: "Menu Type",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "list",
+                  options: [
+                    { value: "list", label: "List" },
+                    { value: "mega", label: "Mega Panel" }
+                  ],
+                  visibleWhen: (settings) => !isVerticalMenu(settings),
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navDirection",
+                  label: "Direction",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "horizontal",
+                  options: [
+                    { value: "horizontal", label: "Horizontal" },
+                    { value: "vertical", label: "Vertical" }
+                  ],
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navLevels",
+                  label: "Levels",
+                  width: "num",
+                  control: "number",
+                  min: 1,
+                  max: 3,
+                  fallback: "2",
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navItemSizing",
+                  label: "Sizing",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "auto",
+                  options: [
+                    { value: "auto", label: "Auto" },
+                    { value: "equal", label: "Equal" },
+                    { value: "custom", label: "Custom" }
+                  ],
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navGap",
+                  label: "Item Gap",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 40,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.gap),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "background",
+                  label: "Background",
+                  width: "full",
+                  control: "custom",
+                  bare: true,
+                  rendersVia: "NavigationModulePreview",
+                  render: () => (
+                    <BuilderBackgroundControls
+                      label="Background"
+                      background={getModuleBackgroundSettings(module.settings)}
+                      horizontal
+                      onChange={onUpdateModuleBackground}
+                      themeBackgroundColor={themeBackgroundColor}
+                      themeColors={themeColors}
+                      themePrimaryColor={themePrimaryColor}
+                    />
+                  )
+                }
+              ]
+            ]
+          },
+          {
+            title: "Panel",
             strips: [
               [
                 {
@@ -385,12 +514,33 @@ export function BuilderNavigationModuleSettings({
                   fallback: String(NAV_STYLE_DEFAULTS.megaColumns),
                   visibleWhen: isMegaMenu,
                   rendersVia: "buildMegaColumns (builder-nav-mega.ts)"
-                },
+                }
+              ],
+              /*
+               * Two controls, one label. A mega panel is sized by navMegaWidth
+               * and a list drop-down by navDropdownWidth, and only one of the
+               * two is ever on screen — so under PANEL they are both just
+               * "Width". "Panel Width" / "Menu Width" were the old names, both
+               * of which repeated the heading they now sit under.
+               */
+              [
                 {
-                  // A mega panel is sized by Panel Width; a list dropdown by
-                  // this. Only one of the two is ever on screen.
+                  key: "navMegaWidth",
+                  label: "Width",
+                  width: "num",
+                  control: "number",
+                  min: 320,
+                  max: 1600,
+                  step: 40,
+                  fallback: String(NAV_STYLE_DEFAULTS.megaWidth),
+                  visibleWhen: isMegaMenu,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
                   key: "navDropdownWidth",
-                  label: "Menu Width",
+                  label: "Width",
                   width: "num",
                   control: "number",
                   min: 100,
@@ -403,19 +553,9 @@ export function BuilderNavigationModuleSettings({
               ],
               [
                 {
-                  key: "navDropdownRadius",
-                  label: "Radius",
-                  width: "num",
-                  control: "number",
-                  min: 0,
-                  max: 40,
-                  fallback: String(NAV_STYLE_DEFAULTS.dropdownRadius),
-                  rendersVia: RENDERS_VIA
-                },
-                {
-                  // List only: a mega panel's ▾ is its open/close button, not
-                  // decoration — hiding it would strand every sub-link on a
-                  // phone, where the panel opens by tapping it.
+                  // List only: a mega panel's arrow is its open/close button,
+                  // not decoration — hiding it would strand every sub-link on
+                  // a phone, where the panel opens by tapping it.
                   key: "navShowArrow",
                   label: "Arrow",
                   width: "check",
@@ -427,386 +567,636 @@ export function BuilderNavigationModuleSettings({
               ],
               [
                 {
+                  // "Panel Fill" until the parts landed. It is the panel's
+                  // background, and it sits opposite the bar's Background in
+                  // the part above it, so it is named the same thing.
                   key: "navDropdownBackground",
-                  label: "Panel Fill",
+                  label: "Background",
                   width: "color",
                   control: "color",
                   dialogLabel: "Dropdown panel background",
                   fallback: NAV_STYLE_DEFAULTS.dropdownBackground,
                   rendersVia: RENDERS_VIA
                 }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [],
+        /*
+         * No "Panel" part here yet, and the gap is the honest report: a
+         * drop-down panel has no alignment, padding, margin or offset control
+         * built. Those are stage two. An empty titled part would say the
+         * opposite of the truth, so the axis carries one part until they exist.
+         */
+        sections: [
+          {
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  // Positions the items INSIDE the bar. The module box has no
+                  // separate alignment worth offering — the bar fills its column.
+                  key: "navAlignment",
+                  label: "Alignment",
+                  width: "align",
+                  control: "align",
+                  fallback: "center",
+                  ariaLabel: "Menu item alignment inside the nav",
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              ...marginFields("getModuleOuterSpacingStyle", 160).map((field) => [field]),
+              // The bar's own padding, four sides, each on its own strip like the
+              // margins above.
+              ...sideFields("navPadding", "Padding", {
+                max: 60,
+                top: String(NAV_STYLE_DEFAULTS.paddingV),
+                side: String(NAV_STYLE_DEFAULTS.paddingH)
+              }).map((field) => [field]),
+              // W7 names the four spacing controls for a module's OWN box, taken
+              // above by the bar. These four are the padding inside each LINK, a
+              // different quantity (same judgement call as Table's "Cell
+              // Padding"), so they carry a qualified name.
+              ...sideFields("navLinkPadding", "Link Padding", {
+                max: 60,
+                top: String(NAV_STYLE_DEFAULTS.linkPaddingV),
+                side: String(NAV_STYLE_DEFAULTS.linkPaddingH)
+              }).map((field) => [field]),
+              // D9 puts the finest adjustment last on its axis. A0 retired the
+              // Advanced section these two used to sit in (A3, withdrawn) —
+              // sorting last is how a nudge is de-emphasised now.
+              [
+                {
+                  key: "verticalOffset",
+                  label: "Vertical Offset",
+                  width: "num",
+                  control: "number",
+                  min: -100,
+                  max: 100,
+                  step: 5,
+                  fallback: "0",
+                  rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+                }
               ],
               [
                 {
+                  key: "horizontalOffset",
+                  label: "Horizontal Offset",
+                  width: "num",
+                  control: "number",
+                  min: -100,
+                  max: 100,
+                  step: 5,
+                  fallback: "0",
+                  rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        title: "Text",
+        /*
+         * A6, in the operator's words (8/11): "Don't put text color under
+         * Advanced. That is basic. Hover effects, dropshadows, etc. are
+         * advance." Colour and the label's own fill were both in Advanced
+         * and both read as missing — he reported having no control over
+         * "the background colors of the labels ... and the font color".
+         *
+         * The two levels used to be told apart by their LABELS — "Top-level
+         * Text" against "Sub-level Text", stacked in one list. They are told
+         * apart by the part headings now, so both are simply "Text Color".
+         */
+        strips: [],
+        sections: [
+          {
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  key: "navFontSize",
+                  label: "Font",
+                  width: "num",
+                  control: "number",
+                  min: 10,
+                  max: 48,
+                  fallback: String(NAV_STYLE_DEFAULTS.fontSize),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // Replaces the Bold checkbox, which never reached the links.
+                  key: "navWeight",
+                  label: "Weight",
+                  width: "select-sm",
+                  control: "select",
+                  fallback: String(NAV_STYLE_DEFAULTS.weight),
+                  options: [
+                    { value: "300", label: "Light" },
+                    { value: "400", label: "Regular" },
+                    { value: "500", label: "Medium" },
+                    { value: "600", label: "Semibold" },
+                    { value: "700", label: "Bold" },
+                    { value: "800", label: "Heavy" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navUnderline",
+                  label: "Underline",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "none",
+                  options: [
+                    { value: "none", label: "Never" },
+                    { value: "always", label: "Always" },
+                    { value: "hover", label: "On Hover" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navItalic",
+                  label: "Italic",
+                  width: "check",
+                  control: "checkbox",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navTextTransform",
+                  label: "Case",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "none",
+                  options: [
+                    { value: "none", label: "As typed" },
+                    { value: "uppercase", label: "UPPERCASE" },
+                    { value: "lowercase", label: "lowercase" },
+                    { value: "capitalize", label: "Capitalize" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navLetterSpacing",
+                  label: "Spacing",
+                  width: "num",
+                  control: "number",
+                  min: -4,
+                  max: 12,
+                  fallback: String(NAV_STYLE_DEFAULTS.letterSpacing),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navLinkHeight",
+                  label: "Link Height",
+                  width: "num",
+                  control: "number",
+                  min: 24,
+                  max: 96,
+                  step: 2,
+                  fallback: String(NAV_STYLE_DEFAULTS.linkHeight),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navColor",
+                  // "Text Color" → "Top-level Text" → "Text Color" again. The
+                  // qualifier was doing the work of a heading; now there is a
+                  // heading.
+                  label: "Text Color",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#163a5e",
+                  dialogLabel: "Menu text color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // New 8/13. A link had no resting background and no CSS for
+                  // one, so the labels could not be coloured at all.
+                  key: "navLinkBackground",
+                  label: "Label Fill",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "transparent",
+                  dialogLabel: "Menu label background",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navHoverColor",
+                  label: "Hover Text",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#0a8fc4",
+                  dialogLabel: "Menu hover text color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navHoverBackground",
+                  label: "Hover Fill",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#d0f0fb",
+                  dialogLabel: "Menu hover background color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navActiveColor",
+                  /*
+                   * A sub-link on the current page carries
+                   * `.site-nav-link-active` exactly like a top-level one, so
+                   * this control really does colour a label in both parts —
+                   * but only the current page's. It stays named for the page,
+                   * not for a level, which is what stopped it reading as the
+                   * one control governing both.
+                   */
+                  label: "Current Page Text",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#0a8fc4",
+                  dialogLabel: "Current page link color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // New 8/13. The current page's pill WAS the hover fill, with
+                  // no control of its own — one label in every menu looked
+                  // different and nothing could change it.
+                  key: "navActiveBackground",
+                  label: "Current Fill",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#d0f0fb",
+                  dialogLabel: "Current page background",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              /*
+               * The effect layer, sorted after the colours per D9 rather than
+               * hidden behind a collapse (A0 retired Advanced). A7 puts the TEXT
+               * shadow on this axis and the bar's BOX shadow on Border — two
+               * different shadows, which is why dropShadowFields() takes a
+               * key prefix.
+               */
+              [
+                {
+                  key: "navHoverEffect",
+                  label: "Hover",
+                  width: "select-md",
+                  control: "select",
+                  fallback: NAV_STYLE_DEFAULTS.hoverEffect,
+                  options: [
+                    { value: "none", label: "None" },
+                    { value: "lift", label: "Lift" },
+                    { value: "grow", label: "Grow" },
+                    { value: "fade", label: "Fade" },
+                    { value: "underline", label: "Underline Slide" }
+                  ],
+                  rendersVia: "getNavModuleClassNames (builder-nav-style.ts)"
+                }
+              ],
+              ...dropShadowFields(RENDERS_VIA, {
+                prefix: "navTextShadow",
+                label: "Text Shadow",
+                range: { offset: 20, blur: 40 },
+                defaults: {
+                  x: String(NAV_STYLE_DEFAULTS.textShadowX),
+                  y: String(NAV_STYLE_DEFAULTS.textShadowY),
+                  blur: String(NAV_STYLE_DEFAULTS.textShadowBlur),
+                  color: NAV_STYLE_DEFAULTS.textShadowColor
+                }
+              }).map((field) => [field]),
+              [
+                {
+                  key: "navTextShadowOpacity",
+                  label: "Shadow Opacity",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.textShadowOpacity),
+                  visibleWhen: (settings) => dropShadowIsOn(settings, "navTextShadow", false),
+                  rendersVia: RENDERS_VIA
+                }
+              ]
+            ]
+          },
+          {
+            title: "Panel",
+            /*
+             * The part reads short on purpose. Every one of these existed
+             * already, under a "Sub" prefix that the heading now says better;
+             * the ones Main Menu has and this does not — underline, italic,
+             * link height, the four label/hover/current colours, the hover
+             * effect and the text shadow — are not built yet. Padding the part
+             * with controls that do nothing would hide that.
+             */
+            strips: [
+              [
+                {
+                  /*
+                   * Empty means "follow the top level" for a list drop-down and
+                   * "keep the panel's own 0.86rem" for a mega panel — the two
+                   * behaviours each has always had. getNavModuleStyle() emits
+                   * nothing at all until one of these is set, so an untouched menu
+                   * cannot move.
+                   */
+                  key: "navDropdownFontSize",
+                  label: "Size",
+                  width: "num",
+                  control: "number",
+                  min: 8,
+                  max: 48,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownWeight",
+                  label: "Weight",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "",
+                  options: [
+                    { value: "", label: "Follow menu" },
+                    { value: "400", label: "Normal" },
+                    { value: "500", label: "Medium" },
+                    { value: "600", label: "Semibold" },
+                    { value: "700", label: "Bold" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownTextTransform",
+                  label: "Case",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "",
+                  options: [
+                    { value: "", label: "Follow menu" },
+                    { value: "none", label: "As typed" },
+                    { value: "uppercase", label: "UPPERCASE" },
+                    { value: "lowercase", label: "lowercase" },
+                    { value: "capitalize", label: "Capitalize" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownLetterSpacing",
+                  label: "Spacing",
+                  width: "num",
+                  control: "number",
+                  min: -4,
+                  max: 12,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  /*
+                   * "Panel Text", filed under Structure > Dropdown, until 8/13;
+                   * "Sub-level Text" on this axis after that. Same key and same
+                   * variable throughout — every menu already set keeps its
+                   * colour.
+                   */
                   key: "navDropdownTextColor",
-                  label: "Panel Text",
+                  label: "Text Color",
                   width: "color",
                   control: "theme-color",
                   themeDefault: "#334861",
-                  dialogLabel: "Dropdown link color",
+                  dialogLabel: "Drop-down link color",
                   rendersVia: RENDERS_VIA
                 }
               ]
             ]
           }
-        ],
-      },
-      {
-        title: "Placement",
-        strips: [
-          [
-            {
-              // Positions the items INSIDE the bar. The module box has no
-              // separate alignment worth offering — the bar fills its column.
-              key: "navAlignment",
-              label: "Alignment",
-              width: "align",
-              control: "align",
-              fallback: "center",
-              ariaLabel: "Menu item alignment inside the nav",
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          [...marginFields("getModuleOuterSpacingStyle", 160)],
-          [
-            {
-              key: "navPaddingV",
-              label: "Vertical Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 60,
-              fallback: String(NAV_STYLE_DEFAULTS.paddingV),
-              rendersVia: RENDERS_VIA
-            },
-            {
-              key: "navPaddingH",
-              label: "Horizontal Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 60,
-              fallback: String(NAV_STYLE_DEFAULTS.paddingH),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "verticalOffset",
-              label: "Vertical Offset",
-              width: "num",
-              control: "number",
-              min: -100,
-              max: 100,
-              step: 5,
-              fallback: "0",
-              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
-            },
-            {
-              key: "horizontalOffset",
-              label: "Horizontal Offset",
-              width: "num",
-              control: "number",
-              min: -100,
-              max: 100,
-              step: 5,
-              fallback: "0",
-              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
-            }
-          ],
-          [
-            {
-              // W7 names the four spacing controls for a module's OWN box —
-              // taken above by the bar. This pair is the padding inside each
-              // link, a different quantity (same judgement call as Table's
-              // "Cell Padding"), so it carries a qualified name.
-              key: "navLinkPaddingV",
-              label: "Link V Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 40,
-              fallback: String(NAV_STYLE_DEFAULTS.linkPaddingV),
-              rendersVia: RENDERS_VIA
-            },
-            {
-              key: "navLinkPaddingH",
-              label: "Link H Padding",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 60,
-              fallback: String(NAV_STYLE_DEFAULTS.linkPaddingH),
-              rendersVia: RENDERS_VIA
-            }
-          ]
         ]
       },
       {
-        title: "Text",
-        strips: [
-          [
-            {
-              key: "navFontSize",
-              label: "Font",
-              width: "num",
-              control: "number",
-              min: 10,
-              max: 48,
-              fallback: String(NAV_STYLE_DEFAULTS.fontSize),
-              rendersVia: RENDERS_VIA
-            },
-            {
-              // Replaces the Bold checkbox, which never reached the links.
-              key: "navWeight",
-              label: "Weight",
-              width: "select-sm",
-              control: "select",
-              fallback: String(NAV_STYLE_DEFAULTS.weight),
-              options: [
-                { value: "300", label: "Light" },
-                { value: "400", label: "Regular" },
-                { value: "500", label: "Medium" },
-                { value: "600", label: "Semibold" },
-                { value: "700", label: "Bold" },
-                { value: "800", label: "Heavy" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navUnderline",
-              label: "Underline",
-              width: "select-md",
-              control: "select",
-              fallback: "none",
-              options: [
-                { value: "none", label: "Never" },
-                { value: "always", label: "Always" },
-                { value: "hover", label: "On Hover" }
-              ],
-              rendersVia: RENDERS_VIA
-            },
-            {
-              key: "navItalic",
-              label: "Italic",
-              width: "check",
-              control: "checkbox",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navTextTransform",
-              label: "Case",
-              width: "select-md",
-              control: "select",
-              fallback: "none",
-              options: [
-                { value: "none", label: "As typed" },
-                { value: "uppercase", label: "UPPERCASE" },
-                { value: "lowercase", label: "lowercase" },
-                { value: "capitalize", label: "Capitalize" }
-              ],
-              rendersVia: RENDERS_VIA
-            },
-            {
-              key: "navLetterSpacing",
-              label: "Spacing",
-              width: "num",
-              control: "number",
-              min: -4,
-              max: 12,
-              fallback: String(NAV_STYLE_DEFAULTS.letterSpacing),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navHoverEffect",
-              label: "Hover",
-              width: "select-md",
-              control: "select",
-              fallback: NAV_STYLE_DEFAULTS.hoverEffect,
-              options: [
-                { value: "none", label: "None" },
-                { value: "lift", label: "Lift" },
-                { value: "grow", label: "Grow" },
-                { value: "fade", label: "Fade" },
-                { value: "underline", label: "Underline Slide" }
-              ],
-              rendersVia: "getNavModuleClassNames (builder-nav-style.ts)"
-            }
-          ],
-          ...shadowFields(
-            {
-              toggle: "navTextShadow",
-              x: "navTextShadowX",
-              y: "navTextShadowY",
-              blur: "navTextShadowBlur",
-              color: "navTextShadowColor",
-              opacity: "navTextShadowOpacity"
-            },
-            {
-              x: NAV_STYLE_DEFAULTS.textShadowX,
-              y: NAV_STYLE_DEFAULTS.textShadowY,
-              blur: NAV_STYLE_DEFAULTS.textShadowBlur,
-              color: NAV_STYLE_DEFAULTS.textShadowColor,
-              opacity: NAV_STYLE_DEFAULTS.textShadowOpacity
-            },
-            "Text Shadow",
-            false
-          ),
-          [
-            {
-              key: "navLinkHeight",
-              label: "Link Height",
-              width: "num",
-              control: "number",
-              min: 24,
-              max: 96,
-              step: 2,
-              fallback: String(NAV_STYLE_DEFAULTS.linkHeight),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navColor",
-              label: "Color",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#163a5e",
-              dialogLabel: "Menu text color",
-              rendersVia: RENDERS_VIA
-            },
-            {
-              key: "navHoverColor",
-              label: "Hover text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#0a8fc4",
-              dialogLabel: "Menu hover text color",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navHoverBackground",
-              label: "Hover bg",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#d0f0fb",
-              dialogLabel: "Menu hover background color",
-              rendersVia: RENDERS_VIA
-            },
-            {
-              // The current page's link. Followed the hover colour before,
-              // with no way to tell the two apart.
-              key: "navActiveColor",
-              label: "Current page",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#0a8fc4",
-              dialogLabel: "Current page link color",
-              rendersVia: RENDERS_VIA
-            }
-          ]
-        ],
-        /*
-         * A1: theme overrides live in Advanced. Empty means "follow the
-         * theme" — the renderer emits the variable only when a value is set,
-         * so an empty one lets the theme's CSS decide. They sit collapsed
-         * rather than in the Text column inviting an override.
-         */
-      },
-      {
         title: "Border",
-        strips: [
-          [
-            {
-              key: "navBorderWidth",
-              label: "Border",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 20,
-              fallback: String(NAV_STYLE_DEFAULTS.borderWidth),
-              rendersVia: RENDERS_VIA
-            },
-            {
-              key: "navBorderStyle",
-              label: "Style",
-              width: "select-md",
-              control: "select",
-              fallback: NAV_STYLE_DEFAULTS.borderStyle,
-              options: [
-                { value: "solid", label: "Solid" },
-                { value: "dashed", label: "Dashed" },
-                { value: "dotted", label: "Dotted" },
-                { value: "double", label: "Double" },
-                { value: "none", label: "None" }
+        strips: [],
+        sections: [
+          {
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  key: "navBorderWidth",
+                  // "Border" → "Bar Border" → "Border". The word "Bar" was
+                  // there to say which thing the axis styled; the part heading
+                  // says it now.
+                  label: "Border",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 20,
+                  fallback: String(NAV_STYLE_DEFAULTS.borderWidth),
+                  rendersVia: RENDERS_VIA
+                }
               ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navBorderColor",
-              label: "Border Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Menu border color",
-              fallback: NAV_STYLE_DEFAULTS.borderColor,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navBarRadius",
-              label: "Radius",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 80,
-              fallback: String(NAV_STYLE_DEFAULTS.barRadius),
-              rendersVia: RENDERS_VIA
-            },
-            {
-              // Keeps the legacy key: on live sites navBorderRadius has
-              // always meant the LINK, and only the React preview ever put
-              // it on the bar. Renaming it here would move real menus.
-              key: "navBorderRadius",
-              label: "Link Radius",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 48,
-              fallback: String(NAV_STYLE_DEFAULTS.linkRadius),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          ...shadowFields(
-            {
-              toggle: "navShadow",
-              x: "navShadowX",
-              y: "navShadowY",
-              blur: "navShadowBlur",
-              spread: "navShadowSpread",
-              color: "navShadowColor",
-              opacity: "navShadowOpacity"
-            },
-            {
-              x: NAV_STYLE_DEFAULTS.shadowX,
-              y: NAV_STYLE_DEFAULTS.shadowY,
-              blur: NAV_STYLE_DEFAULTS.shadowBlur,
-              color: NAV_STYLE_DEFAULTS.shadowColor,
-              opacity: NAV_STYLE_DEFAULTS.shadowOpacity
-            },
-            "Drop Shadow",
-            true
-          )
+              [
+                {
+                  key: "navBorderStyle",
+                  label: "Style",
+                  width: "select-md",
+                  control: "select",
+                  fallback: NAV_STYLE_DEFAULTS.borderStyle,
+                  options: [
+                    { value: "solid", label: "Solid" },
+                    { value: "dashed", label: "Dashed" },
+                    { value: "dotted", label: "Dotted" },
+                    { value: "double", label: "Double" },
+                    { value: "none", label: "None" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navBorderColor",
+                  label: "Border Color",
+                  width: "color",
+                  control: "color",
+                  dialogLabel: "Menu border color",
+                  fallback: NAV_STYLE_DEFAULTS.borderColor,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navBarRadius",
+                  label: "Radius",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 80,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.barRadius),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  /*
+                   * Keeps the legacy key: on live sites navBorderRadius has
+                   * always meant the LINK, and only the React preview ever put
+                   * it on the bar. Renaming it here would move real menus. It
+                   * keeps its "Link" qualifier too — this is the radius of a
+                   * link inside the bar, not of the bar, so the heading does
+                   * not cover it.
+                   */
+                  key: "navBorderRadius",
+                  label: "Link Radius",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 48,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.linkRadius),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              // A7: the BOX shadow the bar casts, last on the axis (D9).
+              // `defaultOn` because the bar had this shadow before anything could
+              // switch it off — an absent setting has to keep meaning "on" or
+              // every live menu goes flat.
+              ...dropShadowFields(RENDERS_VIA, {
+                prefix: "navShadow",
+                label: "Drop Shadow",
+                defaultOn: true,
+                range: { offset: 60, blur: 120 },
+                defaults: {
+                  x: String(NAV_STYLE_DEFAULTS.shadowX),
+                  y: String(NAV_STYLE_DEFAULTS.shadowY),
+                  blur: String(NAV_STYLE_DEFAULTS.shadowBlur),
+                  color: NAV_STYLE_DEFAULTS.shadowColor
+                }
+              }).map((field) => [field]),
+              [
+                {
+                  key: "navShadowSpread",
+                  label: "Shadow Spread",
+                  width: "num",
+                  control: "number",
+                  min: -40,
+                  max: 40,
+                  fallback: "0",
+                  visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navShadowOpacity",
+                  label: "Shadow Opacity",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.shadowOpacity),
+                  visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
+                  rendersVia: RENDERS_VIA
+                }
+              ]
+            ]
+          },
+          {
+            /*
+             * The drop-down panel's own frame (operator, 2026-08-13: *"the
+             * Border settings also only apply to the top menu"* — they did).
+             * The default differs by panel style because the two have never
+             * matched: a list drop-down draws a hairline, a mega panel draws
+             * none and leans on its shadow. See NAV_STYLE_DEFAULTS.
+             *
+             * "Radius" moved here from Structure > Dropdown so it sits opposite
+             * the bar's Radius. Same key, same variable.
+             */
+            title: "Panel",
+            strips: [
+              [
+                {
+                  key: "navDropdownBorderWidth",
+                  label: "Border",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 20,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownBorderStyle",
+                  label: "Style",
+                  width: "select-md",
+                  control: "select",
+                  fallback: NAV_STYLE_DEFAULTS.dropdownBorderStyle,
+                  options: [
+                    { value: "solid", label: "Solid" },
+                    { value: "dashed", label: "Dashed" },
+                    { value: "dotted", label: "Dotted" },
+                    { value: "double", label: "Double" },
+                    { value: "none", label: "None" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownBorderColor",
+                  label: "Border Color",
+                  width: "color",
+                  control: "color",
+                  dialogLabel: "Drop-down panel border color",
+                  fallback: NAV_STYLE_DEFAULTS.dropdownBorderColor,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownRadius",
+                  label: "Radius",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 40,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.dropdownRadius),
+                  rendersVia: RENDERS_VIA
+                }
+              ]
+            ]
+          }
         ]
       }
     ]
@@ -897,24 +1287,66 @@ export function BuilderNavigationModuleSettings({
                       && !item.parentId
                       && items.some((i) => i.parentId === item.id) && (
                       <details className="hanging-details builder-nav-item-feature">
-                        <summary>Feature tile</summary>
-                        <BuilderModuleFieldStrip>
-                          <BuilderModuleField label="Image" width="full">
-                            <BuilderImagePickerField
-                              value={item.featureImage ?? ""}
-                              onChange={(featureImage) => updateItem(item.id, { featureImage })}
-                            />
-                          </BuilderModuleField>
-                          <BuilderModuleField label="Heading" width="text-md">
-                            <input
-                              type="text"
-                              value={item.featureHeading ?? ""}
-                              onChange={(e) => updateItem(item.id, { featureHeading: e.target.value })}
-                              placeholder="Visit Delray Tennis"
-                            />
-                          </BuilderModuleField>
-                        </BuilderModuleFieldStrip>
+                        <summary>
+                          {item.featureModule
+                            ? `Feature column — ${item.featureModule.name || item.featureModule.type}`
+                            : "Feature column"}
+                        </summary>
+                        {item.featureModule ? (
+                          <div className="builder-nav-feature-module">
+                            <span className="builder-nav-feature-module-name">
+                              {item.featureModule.name || item.featureModule.type}
+                            </span>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => setEditingFeatureId(item.id)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button builder-icon-button-danger"
+                              aria-label="Remove module"
+                              onClick={() => removeFeatureModule(item.id)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          /* The fixed image-plus-heading tile the module slot
+                             generalizes. Live menus still run it, so it stays
+                             editable wherever no module has been chosen. */
+                          <BuilderModuleFieldStrip>
+                            <BuilderModuleField label="Image" width="full">
+                              <BuilderImagePickerField
+                                value={item.featureImage ?? ""}
+                                onChange={(featureImage) => updateItem(item.id, { featureImage })}
+                              />
+                            </BuilderModuleField>
+                            <BuilderModuleField label="Heading" width="text-md">
+                              <input
+                                type="text"
+                                value={item.featureHeading ?? ""}
+                                onChange={(e) => updateItem(item.id, { featureHeading: e.target.value })}
+                                placeholder="Visit Delray Tennis"
+                              />
+                            </BuilderModuleField>
+                          </BuilderModuleFieldStrip>
+                        )}
                       </details>
+                    )}
+                    {editingFeatureId === item.id && item.featureModule && (
+                      <BuilderCenteredModal
+                        title={`${targetLabel(item)} — feature column`}
+                        onClose={() => setEditingFeatureId(null)}
+                      >
+                        <NavFeatureModuleEditor
+                          featureModule={item.featureModule}
+                          themeColors={themeColors}
+                          onChange={(updater) => updateFeatureModule(item.id, updater)}
+                        />
+                      </BuilderCenteredModal>
                     )}
                   </div>
                 );
@@ -926,7 +1358,53 @@ export function BuilderNavigationModuleSettings({
                 {topLevelWidthTotal > 100 && " — over 100%"}
               </div>
             )}
-            <button type="button" className="secondary-button builder-nav-add-link-button" onClick={addItem}>+ Add Link</button>
+            <div className="builder-nav-items-footer">
+              <button type="button" className="secondary-button builder-nav-add-link-button" onClick={addItem}>+ Add Link</button>
+              {featureTargets.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="secondary-button builder-nav-add-module-button"
+                    onClick={() => {
+                      if (paletteOpen) {
+                        closeFeaturePalette();
+                      } else {
+                        setPaletteGroup(null);
+                        setPaletteOpen(true);
+                      }
+                    }}
+                    title="Put a module in this mega menu's extra column"
+                  >
+                    + Add Module
+                  </button>
+                  <label className="builder-nav-add-module-target">
+                    <span>to</span>
+                    <select
+                      value={featureTarget?.id ?? ""}
+                      onChange={(e) => setFeatureTargetId(e.target.value)}
+                    >
+                      {featureTargets.map((target) => (
+                        <option key={target.id} value={target.id}>
+                          {`${targetLabel(target)}${target.featureModule ? " (module set)" : ""}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+            </div>
+            {paletteOpen && (
+              /* Unrestricted on purpose: which modules belong in a menu
+                 column is the operator's call, not made yet. When it is, the
+                 mechanism is `excludeGroups` — see
+                 TABLE_CELL_EXCLUDED_PALETTE_GROUPS. */
+              <BuilderModulePaletteModal
+                activeGroup={paletteGroup}
+                onSelectGroup={setPaletteGroup}
+                onSelectItem={addFeatureModule}
+                onClose={closeFeaturePalette}
+              />
+            )}
           </>
         )}
       </div>

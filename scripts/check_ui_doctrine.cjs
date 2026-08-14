@@ -290,33 +290,268 @@ function checkFieldStripAdoption(files) {
 }
 
 /**
- * E4 — horizontal and vertical margin are always offered together.
+ * E4 — a spacing box is offered as FOUR sides or not at all.
  *
- * The vertical side is satisfied by either `verticalMargin` or the split
- * `marginTop` + `marginBottom` pair (heading's model — the split is a
- * richer vertical offering, not a missing one; ruled 2026-08-09 when the
- * operator had horizontal margin capability added to heading).
+ * Widened from the H+V pair on 2026-08-11 (W7, operator: "standardize all
+ * objects on the Top/Bottom/Left/Right model"). A panel that names one side
+ * names all four, in one order — anything less sends an operator hunting for
+ * a control that is not there, which is the whole reason the pair failed:
+ * the one number that could close the gap above a banner logo also threw
+ * away the padding holding it off the left edge.
  *
- * Split-pair detection matches SETTINGS-KEY usage only (quoted key or
- * `settings.` access) — a bare `marginTop:` is an inline style, and
- * counting those flagged two innocent files the day this was written.
+ * Detection matches SETTINGS-KEY usage only (quoted key or `settings.`
+ * access) — a bare `marginTop:` is an inline style, and counting those
+ * flagged two innocent files the day the pair version was written.
+ *
+ * A panel that reaches the sides through the shared `MODULE_MARGIN_SIDES` /
+ * `MODULE_PADDING_SIDES` tables satisfies this by construction; naming the
+ * table counts as naming every side in it.
  */
 function usesSettingsKey(src, key) {
   return new RegExp(`["'\`]${key}["'\`]|settings\\.${key}`).test(src);
 }
 
+const SPACING_BOXES = [
+  { name: 'margin', table: 'MODULE_MARGIN_SIDES', legacy: ['verticalMargin', 'horizontalMargin'] },
+  { name: 'padding', table: 'MODULE_PADDING_SIDES', legacy: ['verticalPadding', 'horizontalPadding'] }
+];
+
 function checkMarginPairing(files) {
   for (const file of files.filter((f) => SETTINGS_GLOB.test(f))) {
     if (!fs.existsSync(file)) continue;
     const src = fs.readFileSync(file, 'utf8');
-    const h = src.includes('horizontalMargin');
-    const v = src.includes('verticalMargin') || (usesSettingsKey(src, 'marginTop') && usesSettingsKey(src, 'marginBottom'));
-    if (h === v) continue;
-    failures.push(
-      `[E4] ${file} offers ${h ? 'horizontalMargin without verticalMargin' : 'verticalMargin without horizontalMargin'}.\n` +
-        `      Always offer both, adjacent in the same strip — never a lone "Margin". An operator\n` +
-        `      who needs the missing one goes hunting through Advanced for a control that isn't there.`
-    );
+
+    for (const box of SPACING_BOXES) {
+      // The shared table, or the helper built from it, offers all four.
+      if (src.includes(box.table) || src.includes(`${box.name}Fields(`)) continue;
+
+      const sides = ['Top', 'Bottom', 'Left', 'Right'];
+      const present = sides.filter((side) => usesSettingsKey(src, `${box.name}${side}`));
+      if (present.length === 0 || present.length === 4) {
+        // Still catch the retired pair, which is what four sides replaced.
+        const stale = box.legacy.filter((key) => usesSettingsKey(src, key));
+        if (!stale.length || present.length === 4) continue;
+        failures.push(
+          `[E4/W7] ${file} still offers ${stale.join(' / ')}.\n` +
+            `      Spacing is four sides now — Top, Bottom, Left, Right — on every object.\n` +
+            `      Use MODULE_${box.name.toUpperCase()}_SIDES (or ${box.name}Fields()) from the settings schema.`
+        );
+        continue;
+      }
+
+      failures.push(
+        `[E4/W7] ${file} offers ${present.length} of the four ${box.name} sides ` +
+          `(${present.join(', ')}).\n` +
+          `      Name one side and you name all four, in Top/Bottom/Left/Right order. An operator who\n` +
+          `      needs the missing one goes hunting for a control that isn't there.`
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// W8 — a size dropdown that spans past 100px counts in at least fives.
+//
+// Operator, 2026-08-12: "update any dropdown that lets you set the field width
+// of something that would typically be more than 100px to increment by 5px
+// instead of 1px." Site Search's Field Width ran 0–1200 in ones — 1,201
+// options, and scrolling it to 400 was the worst control in the panel.
+//
+// The rule is keyed on the KEY NAME rather than on the option count, because
+// a long list is not the problem by itself: `particleCount` (1–500) and
+// `spread` (0–180) are a count and an angle, where every value is meaningful.
+// Pixels above 100 are not — nobody sets a field width to the nearest pixel.
+//
+// Both steps that satisfy this today were set by hand, which is exactly why
+// the check exists: the next width control would have started at 1 again.
+// ---------------------------------------------------------------------------
+
+/**
+ * Keys that name a pixel measurement rather than a count, angle, or index.
+ *
+ * Spacing joined the list on 2026-08-12. The rule was written for `*Width`
+ * and shipped against Site Search, but the operator hit the same control the
+ * same night on the Slideshow module — a margin running 0–160 in ones, 161
+ * options, scrolled past 74 numbers to reach 75: "sizes incremented by 1 that
+ * should be 5". A margin is a pixel measurement like any other.
+ */
+const W8_SIZE_KEY = /(width|height|size|gap|margin|padding)(top|bottom|left|right)?$/i;
+
+/** Where the schema declares fields — editors, plus shared field modules. */
+const W8_GLOB = /components\/builder\/.*\.tsx$/;
+
+/** Smallest acceptable step once a size dropdown reaches past 100px. */
+const W8_MIN_STEP = 5;
+
+// Every entry needs a reason. "It was already like that" is not a reason.
+const W8_ALLOW = new Map([]);
+
+/**
+ * Every `control: "number"` field in a source file, parsed from its OWN
+ * object literal.
+ *
+ * Brace-matched rather than regex-scanned: a flat regex reading forward from
+ * a `key:` happily walks past the end of its object and pairs a key with the
+ * next field's min/max. That is not hypothetical — it is how a first pass at
+ * this reported a Search Param with a range of 1–200.
+ */
+function w8NumberFields(src) {
+  const fields = [];
+  const marker = /control:\s*["']number["']/g;
+  let m;
+
+  while ((m = marker.exec(src))) {
+    // Walk back to the `{` that opens this field's object.
+    let depth = 0;
+    let start = -1;
+    for (let i = m.index; i >= 0; i--) {
+      const ch = src[i];
+      if (ch === '}') depth++;
+      else if (ch === '{') {
+        if (depth === 0) { start = i; break; }
+        depth--;
+      }
+    }
+    if (start < 0) continue;
+
+    // ...and forward to its matching `}`.
+    depth = 0;
+    let end = -1;
+    for (let i = start; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end < 0) continue;
+
+    const body = src.slice(start, end + 1);
+    const consts = w8FileConstants(src);
+    const read = (name) => {
+      const hit = new RegExp(`\\b${name}:\\s*(-?\\d+|[A-Z][A-Z0-9_]*)`).exec(body);
+      if (!hit) return null;
+      return /^-?\d+$/.test(hit[1]) ? Number(hit[1]) : (consts.get(hit[1]) ?? null);
+    };
+    const key = /\bkey:\s*["']([\w-]+)["']/.exec(body)?.[1];
+    const max = read('max');
+    if (!key || max === null) continue;
+
+    fields.push({ key, min: read('min') ?? 0, max, step: read('step') ?? 1 });
+  }
+
+  return fields;
+}
+
+/**
+ * `const NAME = 5` declarations, so a step written as a shared constant reads
+ * as its number.
+ *
+ * `marginFields()` and `paddingFields()` pass `step: MODULE_SPACING_STEP`
+ * rather than a literal — that is the point of the constant, one place to
+ * change the spacing grid. Without this the parser saw no digits, fell back
+ * to the default of 1, and failed the two helpers that had just been fixed.
+ */
+function w8FileConstants(src) {
+  const consts = new Map();
+  const re = /\bconst\s+([A-Z][A-Z0-9_]*)\s*=\s*(-?\d+)\s*;/g;
+  let m;
+  while ((m = re.exec(src))) consts.set(m[1], Number(m[2]));
+  return consts;
+}
+
+/**
+ * Every `<BuilderNumberSelectControl>` written directly as JSX.
+ *
+ * The schema parser above could not see these, and that is where all sixteen
+ * of the 2026-08-12 offenders lived: the shared module chrome's four margins,
+ * the row editor's margins, paddings and column gap, and the cell, CRM,
+ * social, button, heading and feature-card panels. The rule existed, the
+ * check ran green, and the operator was still scrolling a 161-option margin.
+ *
+ * A JSX prop has no `key:` to read, so these are judged by RANGE alone: past
+ * 100px, in this codebase, is always a pixel measurement. A control that
+ * genuinely needs every value says so in its own body with a `w8-allow:`
+ * comment and the reason.
+ */
+function w8JsxControls(src) {
+  const controls = [];
+  const consts = w8FileConstants(src);
+  const marker = /<BuilderNumberSelectControl\b/g;
+  let m;
+
+  while ((m = marker.exec(src))) {
+    // Forward to this element's own `/>`, ignoring any inside a prop
+    // expression — `onChange={(next) => ...}` nests braces, not elements.
+    let depth = 0;
+    let end = -1;
+    for (let i = m.index; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      else if (depth === 0 && ch === '/' && src[i + 1] === '>') { end = i; break; }
+    }
+    if (end < 0) continue;
+
+    const body = src.slice(m.index, end);
+    if (/w8-allow:/.test(body)) continue;
+
+    const read = (name) => {
+      const hit = new RegExp(`\\b${name}=\\{\\s*(-?\\d+|[A-Z][A-Z0-9_]*)\\s*\\}`).exec(body);
+      if (!hit) return null;
+      return /^-?\d+$/.test(hit[1]) ? Number(hit[1]) : (consts.get(hit[1]) ?? null);
+    };
+    const max = read('max');
+    if (max === null) continue;
+
+    controls.push({
+      line: src.slice(0, m.index).split('\n').length,
+      min: read('min') ?? 0,
+      max,
+      step: read('step') ?? 1
+    });
+  }
+
+  return controls;
+}
+
+function checkSizeSelectStep(files) {
+  for (const file of files.filter((f) => W8_GLOB.test(f))) {
+    if (!fs.existsSync(file)) continue;
+
+    for (const field of w8NumberFields(fs.readFileSync(file, 'utf8'))) {
+      if (!W8_SIZE_KEY.test(field.key)) continue;
+      if (field.max <= 100) continue;
+      if (field.step >= W8_MIN_STEP) continue;
+      if (W8_ALLOW.has(field.key)) continue;
+
+      const options = Math.floor((field.max - field.min) / field.step) + 1;
+      failures.push(
+        `[W8] ${file} — \`${field.key}\` spans ${field.min}–${field.max}px in steps of ` +
+          `${field.step}, so its dropdown holds ${options} options.\n` +
+          `      A size past 100px counts in ${W8_MIN_STEP}s or coarser: add \`step: ${W8_MIN_STEP}\` ` +
+          `(that would be ${Math.floor((field.max - field.min) / W8_MIN_STEP) + 1} options).\n` +
+          `      Nobody sets a width to the nearest pixel. If this one genuinely needs every\n` +
+          `      value, add it to W8_ALLOW in this file with the reason.`
+      );
+    }
+
+    for (const control of w8JsxControls(fs.readFileSync(file, 'utf8'))) {
+      if (control.max <= 100) continue;
+      if (control.step >= W8_MIN_STEP) continue;
+
+      const options = Math.floor((control.max - control.min) / control.step) + 1;
+      failures.push(
+        `[W8] ${file}:${control.line} — a <BuilderNumberSelectControl> spans ` +
+          `${control.min}–${control.max}px in steps of ${control.step}, so its dropdown ` +
+          `holds ${options} options.\n` +
+          `      Add \`step={${W8_MIN_STEP}}\` (that would be ` +
+          `${Math.floor((control.max - control.min) / W8_MIN_STEP) + 1} options).\n` +
+          `      Past 100px a single pixel is noise. If this one genuinely needs every value,\n` +
+          `      put a \`{/* w8-allow: <reason> */}\` comment inside the control.`
+      );
+    }
   }
 }
 
@@ -337,6 +572,103 @@ function checkNoDuplicatedChrome(files) {
 }
 
 // ---------------------------------------------------------------------------
+// D7 — dialogs and popup editors size to their content.
+//
+// A dialog declares a floor, grows to fit what is inside it, and stops at 75%
+// of the screen. A lone px width or max-width on a dialog shell is a guess
+// about content someone made once — the operator has now reported a cramped
+// editor four times, most recently a popped-out module panel capped at 680px
+// with two thirds of the screen empty (2026-08-11 sweep).
+//
+// Allowlist entries need a reason. "It was already like that" is not one.
+// ---------------------------------------------------------------------------
+const DIALOG_SELECTOR = /(-modal|-popup|-dialog)\s*$/;
+
+const D7_ALLOW = new Map([
+  ['.builder-react-root .builder-gallery-modal.builder-module-palette-modal',
+    'a picker grid of fixed-size cards, not an editor — 1200 is exactly four card columns'],
+  ['.c-modal__dialog.builder-theme-picker-modal',
+    'already opens at 98vw; the px value is only the ceiling on an ultrawide screen'],
+  ['.c-modal__dialog.builder-theme-picker-modal.builder-module-image-picker-modal',
+    'image picker grid, sized to its thumbnails, and it docks to one side rather than centring'],
+  ['.c-modal__dialog.builder-theme-image-preview-modal',
+    'a single preview image at 96vw — content sizing would shrink to the image, not grow'],
+  ['.c-modal__dialog.campaign-preview-modal',
+    'renders a post preview at its real posted width; growing it would misrepresent the post'],
+  ['.c-modal__dialog.campaign-hashtag-modal', 'hashtag list, already 94vw'],
+  ['.c-modal__dialog.peer-keyword-archive-dialog', 'confirmation, prose only'],
+  ['.c-modal__dialog.peer-keyword-harvest-dialog', 'confirmation, prose only'],
+  ['.promote-social-post-failure-dialog', 'an error message, prose only'],
+  ['.youtube-miner-replies-modal', 'reply list, already min(1120px, 96vw)'],
+  ['.builder-react-root .admin-image-preview-modal',
+    'a single preview image; content sizing would shrink it to the intrinsic image width'],
+]);
+
+/**
+ * Selectors the hand-authored overrides layer already content-sizes.
+ *
+ * A dialog defined in the REGENERATED layer cannot be fixed in place — the
+ * next `extract_builder_css.mjs` run erases the edit (R2) — so its floor and
+ * ceiling live in `_builder-react-overrides.css`, imported after and winning
+ * by cascade. What ships is the override, so that is what D7 judges.
+ */
+function overriddenDialogSelectors() {
+  const file = path.join(CSS_DIR, '_builder-react-overrides.css');
+  if (!fs.existsSync(file)) return new Set();
+  const src = fs.readFileSync(file, 'utf8');
+  const fixed = new Set();
+  for (const block of src.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (!/width\s*:\s*max-content/.test(block[2])) continue;
+    for (const sel of block[1].split(',')) fixed.add(sel.trim().split('\n').pop().trim());
+  }
+  return fixed;
+}
+
+function checkDialogWidths(files) {
+  const overridden = overriddenDialogSelectors();
+
+  // CSS: a dialog shell may declare min-width in px (a floor) but not a bare
+  // width/max-width in px (a cap).
+  for (const file of files.filter((f) => f.startsWith(CSS_DIR) && f.endsWith('.css'))) {
+    if (!fs.existsSync(file)) continue;
+    const src = fs.readFileSync(file, 'utf8');
+    const lines = src.split('\n');
+    for (const block of src.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = block[1].trim().split('\n').pop().trim();
+      if (!DIALOG_SELECTOR.test(selector) || D7_ALLOW.has(selector)) continue;
+      if (overridden.has(selector)) continue;
+      for (const decl of block[2].matchAll(/(?:^|;)\s*(max-width|width)\s*:\s*([^;]+)/g)) {
+        const value = decl[2].trim();
+        if (!/\d+(?:\.\d+)?px/.test(value)) continue;
+        if (/\b(?:75|80)vw\b/.test(value)) continue;
+        const line = lines.findIndex((l) => l.includes(selector.split(' ').pop())) + 1;
+        failures.push(
+          `[D7] ${file}:${line || '?'} ${selector} caps itself: ${decl[1]}: ${value}\n` +
+            `      A dialog sizes to its content. Use a floor, not a cap:\n` +
+            `        width: max-content;\n` +
+            `        min-width: min(${value.match(/(\d+)px/)?.[1] || '520'}px, 100%);\n` +
+            `        max-width: min(75vw, 100%);\n` +
+            `      If this one genuinely should not grow, add it to D7_ALLOW with the reason.`
+        );
+      }
+    }
+  }
+
+  // Components: no call site hands a modal a width number. The shell owns it.
+  for (const file of files.filter((f) => f.endsWith('.tsx'))) {
+    if (!fs.existsSync(file)) continue;
+    const src = fs.readFileSync(file, 'utf8');
+    for (const hit of src.matchAll(/<Builder(\w*Modal|EditorPopup)\b[^>]*?\b(maxWidth|minWidth)=\{(\d+)\}/gs)) {
+      failures.push(
+        `[D7] ${file} passes ${hit[2]}={${hit[3]}} to <Builder${hit[1]}>.\n` +
+          `      Call sites do not size dialogs — the shell sizes itself to its content\n` +
+          `      and stops at 75% of the screen. Drop the prop.`
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Debt report (never gates — these are too far gone to block on today)
 // ---------------------------------------------------------------------------
 function report() {
@@ -346,10 +678,12 @@ function report() {
     : [];
   const adopted = settings.filter((f) => usesFieldStrips(fs.readFileSync(path.join(dir, f), 'utf8')));
   const offenders = breakpointOnlyLayout();
+  // Editors still spelling spacing as a vertical/horizontal pair rather than
+  // the four sides every object uses (W7).
   const unpaired = settings.filter((f) => {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
-    const v = src.includes('verticalMargin') || (usesSettingsKey(src, 'marginTop') && usesSettingsKey(src, 'marginBottom'));
-    return src.includes('horizontalMargin') !== v;
+    return ['verticalMargin', 'horizontalMargin', 'verticalPadding', 'horizontalPadding']
+      .some((key) => usesSettingsKey(src, key));
   });
 
   // R8 debt: distinct literal font sizes still in the hand-authored CSS.
@@ -364,7 +698,7 @@ function report() {
 
   console.log('\nUI doctrine — whole-repo debt (docs/MODULE_UI_DOCTRINE.md)\n');
   console.log(`  [E1] field-strip adoption ....... ${adopted.length}/${settings.length} editors`);
-  console.log(`  [E4] unpaired H/V margin ........ ${unpaired.length} editors`);
+  console.log(`  [E4] spacing still a V/H pair ... ${unpaired.length} editors`);
   for (const f of unpaired) console.log(`         ${f}`);
   console.log(`  [R1] breakpoint-only layout ..... ${offenders.length} selectors (excl. ${R1_ALLOW.size} allowlisted)`);
   for (const o of offenders) console.log(`         ${o.file}:${o.line}  ${o.sel}`);
@@ -388,11 +722,21 @@ function run({ all = false } = {}) {
     checkBreakpointOnlyLayout({ all: true });
     const tracked = sh("git ls-files 'components/builder/*-module-settings.tsx'").split('\n').filter(Boolean);
     checkNoDuplicatedChrome(tracked);
+    // D7 is gated repo-wide from day one: the 2026-08-11 sweep left it clean,
+    // so anything this catches is new.
+    checkDialogWidths([
+      ...sh("git ls-files 'src/css/*.css'").split('\n').filter(Boolean),
+      ...sh("git ls-files 'components/**/*.tsx'").split('\n').filter(Boolean),
+    ]);
     // E4 gated repo-wide since 2026-08-09: the two original violators are
     // fixed — current-poll's renderer honours both margins and pairs the
     // controls; heading gained horizontal margin capability by operator
     // ruling (its Top/Bottom split satisfies the vertical side).
     checkMarginPairing(tracked);
+    // W8 is gated repo-wide from day one: the two controls that violated it
+    // were fixed in the same change that added this, so anything it catches
+    // is new.
+    checkSizeSelectStep(sh("git ls-files 'components/builder/*.tsx'").split('\n').filter(Boolean));
   } else {
     const files = stagedFiles();
     if (!files.length) return { failures, notes };
@@ -404,6 +748,8 @@ function run({ all = false } = {}) {
     checkFieldStripAdoption(files);
     checkMarginPairing(files);
     checkNoDuplicatedChrome(files);
+    checkDialogWidths(files);
+    checkSizeSelectStep(files);
 
     if (isMerging()) {
       notes.push(
@@ -419,7 +765,10 @@ function run({ all = false } = {}) {
   return { failures, notes };
 }
 
-module.exports = { run };
+// w8NumberFields is exported for scripts/builder/uiDoctrineSizeStep.test.js —
+// the parser is the part with edge cases, and a checker nobody tests is a
+// checker that can silently stop catching things.
+module.exports = { run, w8NumberFields };
 
 if (require.main === module) {
   if (String(process.env.SKIP_CONVENTIONS || '') === '1') {

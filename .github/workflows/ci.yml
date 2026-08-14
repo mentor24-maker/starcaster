@@ -64,6 +64,12 @@ jobs:
       - name: Unit tests (builder server libs)
         run: npm run test:builder
 
+      - name: Unit tests (agent hooks)
+        # Blocking on purpose. These hooks enforce doctrine the agents kept
+        # missing (DOCTRINE.md §6.5); a hook whose test does not run is the
+        # same decoration the rule it replaced turned out to be.
+        run: npm run test:hooks
+
       - name: Unit tests (site import engine)
         # Runs after the full build so lib/builder/template.js exists for
         # the mapper's round-trip proof.

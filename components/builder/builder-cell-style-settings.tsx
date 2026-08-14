@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { BackgroundSettings, BuilderTemplateSection } from "@/lib/builder-template";
 import { createDefaultBackgroundSettings } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
@@ -12,7 +13,6 @@ type BuilderCellStyleSettingsProps = {
   section: BuilderTemplateSection;
   editorDevice: "browser" | "mobile";
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
-  onUpdateCellPadding: (column: string, value: string) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -31,12 +31,45 @@ function opacityFromPercent(percent: string) {
   return String(Number(percent) / 100);
 }
 
+/** The cell's spacing, in the one side order the whole Builder uses (W7). */
+const CELL_PADDING_SIDES = [
+  { key: "cellPaddingTop", label: "Top Padding", pair: "cellVerticalPadding" },
+  { key: "cellPaddingBottom", label: "Bottom Padding", pair: "cellVerticalPadding" },
+  { key: "cellPaddingLeft", label: "Left Padding", pair: "cellHorizontalPadding" },
+  { key: "cellPaddingRight", label: "Right Padding", pair: "cellHorizontalPadding" }
+] as const;
+
+const CELL_MARGIN_SIDES = [
+  { key: "cellMarginTop", label: "Top Margin", pair: "cellVerticalMargin" },
+  { key: "cellMarginBottom", label: "Bottom Margin", pair: "cellVerticalMargin" },
+  { key: "cellMarginLeft", label: "Left Margin", pair: "" },
+  { key: "cellMarginRight", label: "Right Margin", pair: "" }
+] as const;
+
+/**
+ * The cell (column) editor.
+ *
+ * D8 axes and the W0 lattice, the same shape a module panel and a row panel
+ * wear (operator 8/11, "these cell settings still have the horrendous old
+ * style form arrangement"). It was five stacked `builder-cell-style-group`
+ * blocks in one narrow column with its own label styling — 1.125rem labels
+ * that were allowed to WRAP, against L2 — so a cell editor looked like
+ * nothing else in the Builder and read top to bottom in a single file.
+ *
+ * Reusing `.builder-schema-panel-column` rather than restyling those blocks
+ * is the point, exactly as it was for the row editors: the lattice, the
+ * shared label/field tracks, the D9 ordering and `npm run check:panels` all
+ * arrive with it, and S1 holds — learn one panel, know them all.
+ *
+ * Axis assignment follows the row panel's vocabulary so the two read the
+ * same: spacing and alignment are Placement, everything that paints the box
+ * is Frame, and who can see the cell is Visibility.
+ */
 export function BuilderCellStyleSettings({
   column,
   section,
   editorDevice,
   onUpdateCellBackground,
-  onUpdateCellPadding,
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
@@ -48,16 +81,21 @@ export function BuilderCellStyleSettings({
 }: BuilderCellStyleSettingsProps) {
   if (editorDevice === "mobile") {
     return (
-      <div className="builder-cell-style-settings">
-        <BuilderSettingRow label="Hide on Mobile" fullWidth>
-          <input
-            type="checkbox"
-            checked={getCellExtra(column, "cellMobileHidden", "false") === "true"}
-            onChange={(event) =>
-              onSetCellExtra(column, "cellMobileHidden", event.target.checked ? "true" : "false")
-            }
-          />
-        </BuilderSettingRow>
+      <div className="builder-cell-style-settings is-lattice">
+        <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "1" } as CSSProperties}>
+          <div className="builder-schema-panel-column">
+            <div className="builder-schema-group-title">Visibility</div>
+            <BuilderSettingRow label="Hide on Mobile">
+              <input
+                type="checkbox"
+                checked={getCellExtra(column, "cellMobileHidden", "false") === "true"}
+                onChange={(event) =>
+                  onSetCellExtra(column, "cellMobileHidden", event.target.checked ? "true" : "false")
+                }
+              />
+            </BuilderSettingRow>
+          </div>
+        </div>
       </div>
     );
   }
@@ -68,148 +106,162 @@ export function BuilderCellStyleSettings({
   const hAlign = getCellExtra(column, "cellHAlign", "left");
   const vAlign = getCellExtra(column, "cellVAlign", "top");
   const borderDisabled = borderStyle === "none";
+  // What a padding side reads when neither it nor its pair has been set: the
+  // one number the cell used to carry for all four sides.
+  const legacyPadding = section.cellPadding?.[column] ?? "0";
+  const cellSide = (key: string, pair: string, fallback: string) =>
+    getCellExtra(column, key, "") || getCellExtra(column, pair, "") || fallback;
 
   return (
-    <div className="builder-cell-style-settings">
-      <div className="builder-cell-style-group">
-        <div className="builder-cell-style-group-label">Border</div>
-        <BuilderSettingRow label="Style" fullWidth>
-          <select
-            value={borderStyle}
-            onChange={(event) => onSetCellExtra(column, "cellBorderStyle", event.target.value)}
-          >
-            <option value="none">None</option>
-            <option value="solid">Solid</option>
-            <option value="dashed">Dashed</option>
-            <option value="dotted">Dotted</option>
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Width" fullWidth>
-          <BuilderNumberSelectControl
-            disabled={borderDisabled}
-            value={section.cellBorderWidth[column] ?? "0"}
-            min={0}
-            max={20}
-            fallback="0"
-            onChange={(value) => onUpdateCellBorderWidth(column, value)}
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Color" fullWidth>
-          <BuilderThemeColorField
-            disabled={borderDisabled}
-            fallback="#d9e4ef"
+    <div className="builder-cell-style-settings is-lattice">
+      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "3" } as CSSProperties}>
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Placement</div>
+          <BuilderSettingRow label="Horizontal">
+            <select value={hAlign} onChange={(event) => onSetCellExtra(column, "cellHAlign", event.target.value)}>
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Vertical">
+            <select value={vAlign} onChange={(event) => onSetCellExtra(column, "cellVAlign", event.target.value)}>
+              <option value="top">Top</option>
+              <option value="center">Middle</option>
+              <option value="bottom">Bottom</option>
+            </select>
+          </BuilderSettingRow>
+          {/* W7, the model every object shares: four padding sides and four
+              margin sides, in one order — top, bottom, left, right. Each side
+              reads the pair that preceded it and then the single all-sides
+              number before that, so a cell nobody has re-saved shows the
+              number it is actually rendering. */}
+          {CELL_PADDING_SIDES.map(({ key, label, pair }) => (
+            <BuilderSettingRow key={key} label={label}>
+              <BuilderNumberSelectControl
+                value={cellSide(key, pair, legacyPadding)}
+                min={0}
+                max={50}
+                step={5}
+                fallback="0"
+                onChange={(value) => onSetCellExtra(column, key, value)}
+              />
+            </BuilderSettingRow>
+          ))}
+          {CELL_MARGIN_SIDES.map(({ key, label, pair }) => (
+            <BuilderSettingRow key={key} label={label}>
+              <BuilderNumberSelectControl
+                value={cellSide(key, pair, "0")}
+                min={0}
+                max={160}
+                step={5}
+                fallback="0"
+                onChange={(value) => onSetCellExtra(column, key, value)}
+              />
+            </BuilderSettingRow>
+          ))}
+        </div>
+
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Frame</div>
+          {/* D9, blast radius descending: the fill moves the most, then how
+              much of it shows, then the border — style first because it gates
+              width and colour — and the shadow last. */}
+          <BuilderBackgroundControls
+            label="Background"
+            background={section.cellBackgrounds[column] ?? createDefaultBackgroundSettings()}
+            horizontal
+            onChange={(updater) => onUpdateCellBackground(column, updater)}
+            themeBackgroundColor={themeBackgroundColor}
             themeColors={themeColors}
-            value={section.cellBorderColor[column] ?? ""}
-            onChange={(hex) => onUpdateCellBorderColor(column, hex)}
+            themePrimaryColor={themePrimaryColor}
           />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Radius" fullWidth>
-          <BuilderNumberSelectControl
-            value={section.cellBorderRadius[column] ?? "24"}
-            min={0}
-            max={60}
-            fallback="24"
-            onChange={(value) => onUpdateCellBorderRadius(column, value)}
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Shadow" fullWidth>
-          <select value={shadow} onChange={(event) => onSetCellExtra(column, "cellShadow", event.target.value)}>
-            <option value="none">None</option>
-            <option value="light">Light</option>
-            <option value="medium">Medium</option>
-            <option value="heavy">Heavy</option>
-          </select>
-        </BuilderSettingRow>
-      </div>
+          <BuilderSettingRow label="Opacity">
+            <BuilderNumberSelectControl
+              value={opacityPercentValue(opacity)}
+              min={0}
+              max={100}
+              fallback="100"
+              onChange={(value) => onSetCellExtra(column, "cellOpacity", opacityFromPercent(value))}
+            />
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Border Style">
+            <select
+              value={borderStyle}
+              onChange={(event) => onSetCellExtra(column, "cellBorderStyle", event.target.value)}
+            >
+              <option value="none">None</option>
+              <option value="solid">Solid</option>
+              <option value="dashed">Dashed</option>
+              <option value="dotted">Dotted</option>
+            </select>
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Border Width">
+            <BuilderNumberSelectControl
+              disabled={borderDisabled}
+              value={section.cellBorderWidth[column] ?? "0"}
+              min={0}
+              max={20}
+              fallback="0"
+              onChange={(value) => onUpdateCellBorderWidth(column, value)}
+            />
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Border Color">
+            <BuilderThemeColorField
+              disabled={borderDisabled}
+              fallback="#d9e4ef"
+              themeColors={themeColors}
+              value={section.cellBorderColor[column] ?? ""}
+              onChange={(hex) => onUpdateCellBorderColor(column, hex)}
+            />
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Border Radius">
+            <BuilderNumberSelectControl
+              value={section.cellBorderRadius[column] ?? "0"}
+              min={0}
+              max={60}
+              step={5}
+              fallback="0"
+              onChange={(value) => onUpdateCellBorderRadius(column, value)}
+            />
+          </BuilderSettingRow>
+          <BuilderSettingRow label="Shadow">
+            <select value={shadow} onChange={(event) => onSetCellExtra(column, "cellShadow", event.target.value)}>
+              <option value="none">None</option>
+              <option value="light">Light</option>
+              <option value="medium">Medium</option>
+              <option value="heavy">Heavy</option>
+            </select>
+          </BuilderSettingRow>
+        </div>
 
-      <div className="builder-cell-style-group">
-        <div className="builder-cell-style-group-label">Background</div>
-        <BuilderBackgroundControls
-          label="Background"
-          background={section.cellBackgrounds[column] ?? createDefaultBackgroundSettings()}
-          horizontal
-          onChange={(updater) => onUpdateCellBackground(column, updater)}
-          themeBackgroundColor={themeBackgroundColor}
-          themeColors={themeColors}
-          themePrimaryColor={themePrimaryColor}
-        />
-        <BuilderSettingRow label="Opacity" fullWidth>
-          <BuilderNumberSelectControl
-            value={opacityPercentValue(opacity)}
-            min={0}
-            max={100}
-            fallback="100"
-            onChange={(value) => onSetCellExtra(column, "cellOpacity", opacityFromPercent(value))}
-          />
-        </BuilderSettingRow>
-      </div>
-
-      <div className="builder-cell-style-group">
-        <div className="builder-cell-style-group-label">Padding</div>
-        <BuilderSettingRow label="Size" fullWidth>
-          <BuilderNumberSelectControl
-            value={section.cellPadding[column] ?? "18"}
-            min={0}
-            max={50}
-            fallback="18"
-            onChange={(value) => onUpdateCellPadding(column, value)}
-          />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Vertical Margin" fullWidth>
-          <BuilderNumberSelectControl
-            value={getCellExtra(column, "cellVerticalMargin", "0")}
-            min={0}
-            max={160}
-            fallback="0"
-            onChange={(value) => onSetCellExtra(column, "cellVerticalMargin", value)}
-          />
-        </BuilderSettingRow>
-      </div>
-
-      <div className="builder-cell-style-group">
-        <div className="builder-cell-style-group-label">Alignment</div>
-        <BuilderSettingRow label="Horizontal" fullWidth>
-          <select value={hAlign} onChange={(event) => onSetCellExtra(column, "cellHAlign", event.target.value)}>
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </select>
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Vertical" fullWidth>
-          <select value={vAlign} onChange={(event) => onSetCellExtra(column, "cellVAlign", event.target.value)}>
-            <option value="top">Top</option>
-            <option value="center">Middle</option>
-            <option value="bottom">Bottom</option>
-          </select>
-        </BuilderSettingRow>
-      </div>
-
-      <div className="builder-cell-style-group">
-        <div className="builder-cell-style-group-label">Visibility</div>
-        <BuilderSettingRow label="Access" fullWidth>
-          <div className="builder-radio-group">
-            <label>
-              <input
-                type="radio"
-                name={`cell-visibility-${column}`}
-                value="public"
-                checked={getCellExtra(column, "cellIsPrivate", "false") !== "true"}
-                onChange={() => onSetCellExtra(column, "cellIsPrivate", "false")}
-              />
-              {" "}Public
-            </label>
-            <label>
-              <input
-                type="radio"
-                name={`cell-visibility-${column}`}
-                value="private"
-                checked={getCellExtra(column, "cellIsPrivate", "false") === "true"}
-                onChange={() => onSetCellExtra(column, "cellIsPrivate", "true")}
-              />
-              {" "}Private
-            </label>
-          </div>
-        </BuilderSettingRow>
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Visibility</div>
+          <BuilderSettingRow label="Access">
+            <div className="builder-radio-group">
+              <label>
+                <input
+                  type="radio"
+                  name={`cell-visibility-${column}`}
+                  value="public"
+                  checked={getCellExtra(column, "cellIsPrivate", "false") !== "true"}
+                  onChange={() => onSetCellExtra(column, "cellIsPrivate", "false")}
+                />
+                {" "}Public
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name={`cell-visibility-${column}`}
+                  value="private"
+                  checked={getCellExtra(column, "cellIsPrivate", "false") === "true"}
+                  onChange={() => onSetCellExtra(column, "cellIsPrivate", "true")}
+                />
+                {" "}Private
+              </label>
+            </div>
+          </BuilderSettingRow>
+        </div>
       </div>
     </div>
   );

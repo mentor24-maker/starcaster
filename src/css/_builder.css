@@ -423,7 +423,8 @@
 /* ─── Pattern Inspector modal ───────────────────────────────────────────────── */
 
 .pi-modal {
-  max-width: 760px;
+  min-width: min(760px, 100%);
+  max-width: min(75vw, 100%);
 }
 
 .pi-body {

@@ -33,6 +33,7 @@ const require = createRequire(path.join(ROOT, 'package.json'));
 require('dotenv').config({ path: path.join(ROOT, '.env.local'), quiet: true });
 
 const { sbQuery, tableConfig } = require(path.join(ROOT, 'lib/supabase.js'));
+const { BUILDER_MODULE_TYPES, createEmptyModule } = require(path.join(ROOT, 'lib/builder/template.js'));
 const projectsStore = require(path.join(ROOT, 'lib/projectsStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
@@ -62,9 +63,136 @@ const must = (res, what) => {
  * heading at all. A browser-checked rule with an unreproducible fixture is
  * the honour system with extra steps.
  *
- * One module per lattice type, in one section, so a single run covers them
- * all. Adding a type to LATTICE_MODULE_TYPES means adding a module here.
+ * BUILT FROM THE TYPE LIST, not hand-listed (2026-08-13). The lattice is
+ * universal now, so the fixture must carry one module of EVERY type — and a
+ * hand-maintained roster is the same failure one step later: add a module
+ * type, forget the fixture, and the check passes on a panel it never saw.
+ * `BUILDER_MODULE_TYPES` is the single source; a type cannot exist without
+ * appearing here.
+ *
+ * TUNED[type] overrides the factory defaults where a module needs awkward
+ * content to be worth measuring — the longest labels, a shadow turned on,
+ * an offsets block. Everything else takes `createEmptyModule`.
  */
+const TUNED = {
+  // Navigation's "Dropdown" sub-section is where the axis-section lattice
+  // broke when the menu joined it (its six fields started at x=0 while the
+  // rest of Structure started at 125). Also the widest labels in the app:
+  // "Horizontal Padding" and "Shadow Opacity".
+  navigation: {
+    name: 'Top Menu',
+    settings: {
+      navItems: JSON.stringify([
+        { id: 'home', label: 'Home', href: '/' },
+        { id: 'play', label: 'Play', href: '/play' },
+        { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+        { id: 'about', label: 'About', href: '/about' },
+      ]),
+      navDirection: 'horizontal', navDropdownStyle: 'list', navLevels: '2',
+      navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
+    },
+  },
+  // The card manager runs its own lattice (L6a) and is measured as a group
+  // by check_panels. It ships EMPTY from createEmptyModule, so without cards
+  // here the check finds the group, measures nothing and passes — which is
+  // precisely what happened on 2026-08-12: a clean run was read as proof the
+  // new card layout obeyed W0, and it had never been measured at all. Two
+  // cards, with the longest labels the manager has, so the tracks are real.
+  'feature-cards': {
+    name: 'Feature Cards',
+    settings: {
+      iconType: 'image',
+      cards: JSON.stringify([
+        {
+          id: 'card-1', title: 'Court Fees & Lesson Prices', body: 'Rates, resident and guest.',
+          linkUrl: '/delray-beach-tennis-center-court-fees', linkLabel: 'See Prices',
+          imageUrl: '/images/courts.jpg', imageAlt: 'Clay courts at sunrise',
+          icon: '★', iconImageUrl: '/images/icon-racquet.svg',
+        },
+        {
+          id: 'card-2', title: 'Junior Tennis Programs', body: 'Camps and lessons.',
+          linkUrl: '/juniors', linkLabel: 'Learn More',
+          imageUrl: '/images/juniors.jpg', imageAlt: 'Junior players gathered at the net',
+          icon: '●', iconImageUrl: '/images/icon-ball.svg',
+        },
+      ]),
+    },
+  },
+  // Same lesson as feature-cards, learned again on 2026-08-13: the Programs
+  // manager shipped with a staggered, overlapping panel while `check:panels`
+  // reported clean, because an empty module renders no fields and a group
+  // with no pairs measured nothing. Two programs, carrying the longest
+  // labels the manager has and both repeating grids populated, so the tracks
+  // are real. `check_panels` now FAILS on an empty manager rather than
+  // passing it, so this seed cannot quietly rot either.
+  'program-list': {
+    name: 'Programs',
+    settings: {
+      reservePhone: '(561) 243-7360',
+      policyNote: 'All programs carry a 24-hour cancellation policy.',
+      programs: JSON.stringify([
+        {
+          id: 'program-1', title: 'Back to Basics',
+          subtitle: 'Drills and intermediate king of the court',
+          levelBadge: '3.0 - 3.5 Players',
+          sessions: [
+            { id: 's1', day: 'Tuesday', startTime: '7:00 PM', endTime: '8:30 PM', instructor: 'Zach Schneider' },
+            { id: 's2', day: 'Thursday', startTime: '7:00 PM', endTime: '8:30 PM', instructor: 'Vincent Williams' },
+          ],
+          pricing: [{ id: 'p1', amount: '$30', appliesTo: 'members & non-members' }],
+          bullets: [],
+        },
+        {
+          id: 'program-2', title: 'Sunday Morning Mixer',
+          subtitle: 'with Jeff Kantor',
+          levelBadge: '3.0 - 5.0 Players',
+          sessions: [{ id: 's1', day: 'Sunday', startTime: '10:00 AM', endTime: '12:00 PM' }],
+          pricing: [
+            { id: 'p1', amount: '$20', appliesTo: 'members' },
+            { id: 'p2', amount: '$25', appliesTo: 'non-members' },
+          ],
+          bullets: ['Progressive mixed doubles', 'Winners move up, losers move down'],
+        },
+      ]),
+    },
+  },
+  table: {
+    name: 'Contact Strip',
+    settings: {
+      columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
+      // A cell with a module in it: the cell editor is its own lattice
+      // surface (a modal), and it is where the `label.field` pairs live —
+      // the shape that hid from the check until 2026-08-12.
+      tableData: JSON.stringify({
+        headers: ['Phone', 'Hours', 'Status'],
+        rowCount: 1,
+        cells: {
+          '0-0': [{
+            id: 'cell-image', type: 'image', column: '0-0', name: 'Cell Image', text: '',
+            settings: { url: '', alt: '', size: '100', linkUrl: '', newTab: 'false' },
+          }],
+        },
+      }),
+      borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
+      cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
+      backgroundColor: '#ffffff',
+    },
+  },
+  // An EYEBROW heading with its shadow on: the longest labels in the panel
+  // ("Horizontal Margin", "Shadow Blur") and the offsets block, which is
+  // where the lattice broke when Heading first joined it.
+  heading: {
+    name: 'Eyebrow Heading',
+    text: 'Delray Beach • Public Tennis • Two Locations',
+    settings: {
+      variant: 'eyebrow', level: 'h6', fontSize: '14', fontWeight: '800',
+      textAlign: 'left', textTransform: 'uppercase', lineHeight: '1.2', letterSpacing: '0',
+      dropShadow: 'true', dropShadowColor: '#0b2a4a',
+      dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
+    },
+  },
+};
+
 const PANEL_CHECK_SECTION = {
   id: 'section-panel-lattice-check',
   title: 'Panel Lattice Check',
@@ -72,39 +200,17 @@ const PANEL_CHECK_SECTION = {
   locked: false,
   alignment: 'left',
   widthMode: 'contained',
-  modules: [
-    {
-      id: 'module-panel-check-table',
-      name: 'Contact Strip',
-      text: '',
-      type: 'table',
-      column: 'main',
-      settings: {
-        columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
-        tableData: '{"headers":["Phone","Hours","Status"],"cells":{},"rowCount":1}',
-        borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
-        cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
-        backgroundColor: '#ffffff', mobileHidden: 'false', desktopHidden: 'false',
-      },
-    },
-    {
-      // An EYEBROW heading with its shadow on: the longest labels in the
-      // panel ("Horizontal Margin", "Shadow Blur") and the offsets block,
-      // which is where the lattice broke when Heading first joined it.
-      id: 'module-panel-check-heading',
-      name: 'Eyebrow Heading',
-      text: 'Delray Beach • Public Tennis • Two Locations',
-      type: 'heading',
-      column: 'main',
-      settings: {
-        variant: 'eyebrow', level: 'h6', fontSize: '14', fontWeight: '800',
-        textAlign: 'left', textTransform: 'uppercase', lineHeight: '1.2', letterSpacing: '0',
-        dropShadow: 'true', dropShadowColor: '#0b2a4a',
-        dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
-        mobileHidden: 'false', desktopHidden: 'false',
-      },
-    },
-  ],
+  modules: BUILDER_MODULE_TYPES.map((type) => {
+    const base = createEmptyModule(type, 'main');
+    const tuned = TUNED[type] || {};
+    return {
+      ...base,
+      id: `module-panel-check-${type}`,
+      name: tuned.name ?? type,
+      text: tuned.text ?? base.text ?? '',
+      settings: { ...base.settings, ...(tuned.settings || {}) },
+    };
+  }),
 };
 
 /** Content chosen to break layouts, not to look plausible. */

@@ -10,6 +10,9 @@
           </div>
         </div>
         <p>Manage the reusable media and PDFs that support campaigns, pages, and publishing.</p>
+        <!-- React island: the scaled-copies sweep. Renders nothing when every
+             image in the project already has its smaller copies. -->
+        <div id="assetRenditionsRoot"></div>
         <section id="assetUploadPanel" class="hidden">
           <div class="asset-upload-grid">
             <div class="stack-form" style="margin: 0;">
@@ -184,6 +187,13 @@
                     <option value="unused">Not used</option>
                   </select>
                 </th>
+                <th>
+                  <select id="assetsFilterCopies">
+                    <option value="">All Copies</option>
+                    <option value="has">Has smaller copies</option>
+                    <option value="needs">Could be smaller</option>
+                  </select>
+                </th>
                 <!-- Spans Create Date + Size + Actions so the toolbar has room
                      to sit on one line instead of stacking (T10). -->
                 <th class="crud-bulk-actions" colspan="3">
@@ -210,6 +220,7 @@
                 <th id="assetsSortTopicBtn">Topic</th>
                 <th id="assetsSortAspectBtn">Aspect</th>
                 <th id="assetsSortUsageBtn">Used In</th>
+                <th id="assetsSortCopiesBtn">Copies</th>
                 <th id="assetsSortUpdatedBtn">Create Date</th>
                 <th id="assetsSortSizeBtn">Size</th>
                 <th class="actions-col">Actions</th>

@@ -23,9 +23,37 @@ const {
   hasContactOrPersonForEmail,
   linkAuthUserByEmail,
 } = require('../lib/authPersonLink');
+const {
+  getInvitationByToken,
+  acceptInvitation,
+  isReady: invitationsReady,
+} = require('../lib/appInvitationsStore');
+const { addMemberToProject } = require('../lib/projectsStore');
 
 const SESSION_COOKIE_NAME = 'app_session';
 const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
+
+/**
+ * Is sign-up invitation-only?
+ *
+ * Default: yes IF the invitations table exists, no if it does not. Applying
+ * docs/SQL/app_invitations_setup.sql is therefore the switch — there is no
+ * window where the gate is on but nobody can be invited, and no second step
+ * to remember. Existing users are unaffected either way: they sign in, they
+ * do not register.
+ *
+ * REGISTRATION_INVITE_ONLY overrides it in both directions, and 'false' is
+ * the way back out if invitation email ever stops working. Vercel bakes env
+ * vars in at build time, so changing it needs a redeploy (landmine 10).
+ */
+async function isRegistrationInviteOnly() {
+  const override = String(process.env.REGISTRATION_INVITE_ONLY || '').trim().toLowerCase();
+  if (override === 'false' || override === '0' || override === 'off') return false;
+  if (override === 'true' || override === '1' || override === 'on') return true;
+
+  const ready = await invitationsReady();
+  return Boolean(ready.ok && ready.ready);
+}
 
 function isSecureRequest(req) {
   const host = String(req.headers.host || '');
@@ -91,27 +119,90 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { user }, { user }), true;
   }
 
+  // Lets the sign-in screen know whether to offer a "create account" form at
+  // all. Public by necessity — nobody is signed in when they read it — and it
+  // reveals only whether sign-up is open, which the form's presence shows
+  // anyway.
+  if (pathname === '/api/auth/registration-mode' && method === 'GET') {
+    const inviteOnly = await isRegistrationInviteOnly();
+    return sendOk(res, 200, { inviteOnly }, { inviteOnly }), true;
+  }
+
   if (pathname === '/api/auth/register' && method === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
     const email = normalizeEmail(body.email);
     const password = String(body.password || '');
+    const inviteToken = String(body.inviteToken || body.invite_token || '').trim();
+
+    const inviteOnly = await isRegistrationInviteOnly();
+    let invitation = null;
+
+    if (inviteOnly) {
+      if (!inviteToken) {
+        return sendErr(
+          res,
+          403,
+          'StarCaster accounts are by invitation only. Ask your administrator to send you an invitation.',
+          { code: 'INVITE_REQUIRED' }
+        ), true;
+      }
+
+      const lookup = await getInvitationByToken(inviteToken);
+      if (!lookup.ok) return sendErr(res, lookup.status || 403, lookup.error, { code: 'INVITE_INVALID' }), true;
+      invitation = lookup.data;
+
+      // The invitation names the mailbox it was sent to. Without this check a
+      // forwarded or leaked link would let anyone register under any address,
+      // which would make the whole gate decorative.
+      if (invitation.email !== email) {
+        return sendErr(
+          res,
+          403,
+          `This invitation was sent to ${invitation.email}. Sign up with that address, or ask for a new invitation.`,
+          { code: 'INVITE_EMAIL_MISMATCH' }
+        ), true;
+      }
+    }
 
     const created = await createUser({ name, email, password });
     if (!created.ok) return sendErr(res, created.status || 400, created.error || 'Unable to register', { code: 'REGISTER_FAILED' }), true;
 
     await linkAuthUserByEmail(created.data.id, email);
 
+    if (invitation) {
+      // Redeeming is conditional on the row still being pending, so a link
+      // cannot be spent twice. Two racing sign-ups are not really possible
+      // anyway — both would have to use the same email, and the second is
+      // already rejected as a duplicate account.
+      const redeemed = await acceptInvitation(invitation.id, created.data.id);
+      if (!redeemed.ok) {
+        return sendErr(res, redeemed.status || 409, redeemed.error, { code: 'INVITE_ALREADY_USED' }), true;
+      }
+      if (invitation.projectId) {
+        const granted = await addMemberToProject(invitation.projectId, created.data.id, invitation.projectRole || 'member');
+        if (!granted?.ok) {
+          // Non-fatal: the account is real and they can still sign in. But it
+          // must not be silent — this is the difference between landing in a
+          // workspace and landing on the "no workspace" page.
+          console.error(
+            `[auth] invitation ${invitation.id} accepted but membership of ${invitation.projectId} was not granted:`,
+            granted?.error || 'unknown error'
+          );
+        }
+      }
+    }
+
     const session = await createSession(created.data.id);
     if (!session.ok) return sendErr(res, session.status || 500, session.error || 'Unable to create session', { code: 'SESSION_FAILED' }), true;
 
     setSessionCookie(res, session.data.token, req);
-    return sendOk(
-      res,
-      201,
-      { user: created.data, sessionToken: session.data.token },
-      { user: created.data, sessionToken: session.data.token }
-    ), true;
+    const payload = {
+      user: created.data,
+      sessionToken: session.data.token,
+      projectId: invitation?.projectId || '',
+    };
+    return sendOk(res, 201, payload, payload), true;
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {

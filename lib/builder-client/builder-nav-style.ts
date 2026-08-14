@@ -41,7 +41,14 @@ type NavSettings = Record<string, string>;
 export const NAV_STYLE_DEFAULTS = {
   paddingV: 8,
   paddingH: 8,
-  gap: 0,
+  /*
+   * The space BETWEEN top-level items. 4 because that is what
+   * `.site-nav-items` has always rendered — the control used to write this
+   * variable onto `.site-nav`, whose only children are the hamburger toggle
+   * and the items wrapper, so it had nowhere to show and the real spacing
+   * stayed pinned at the stylesheet's hardcoded 4px no matter what.
+   */
+  gap: 4,
   barRadius: 26,
   borderWidth: 1,
   borderStyle: "solid",
@@ -71,6 +78,18 @@ export const NAV_STYLE_DEFAULTS = {
   dropdownWidth: 160,
   dropdownRadius: 14,
   dropdownBackground: "#ffffff",
+  /*
+   * The panel's own frame. The two panel styles have never looked the same
+   * here: a list dropdown has always drawn a hairline (`legacy.css`
+   * `.site-nav-dropdown-menu`), a mega panel has always drawn none and leant
+   * on its shadow instead. One default for both would move one of them on
+   * every live tenant menu, so the default is chosen per style in
+   * getNavModuleStyle().
+   */
+  dropdownBorderWidthList: 1,
+  dropdownBorderWidthMega: 0,
+  dropdownBorderStyle: "solid",
+  dropdownBorderColor: "rgba(9, 16, 24, 0.08)",
   megaColumns: 3,
   megaWidth: 1040
 } as const;
@@ -95,6 +114,39 @@ function color(value: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
+/**
+ * The sub-level's own type, emitted ONLY where the operator has set it.
+ *
+ * Operator, 2026-08-13: *"it uses the same font settings for the main menu as
+ * the sub menu."* Both halves of that were true and neither was intended —
+ * a list dropdown's links carry `.site-nav-link`, so they inherited every
+ * top-level type control; a mega panel's links carry none of it and were
+ * pinned to a hardcoded `0.86rem` no control could reach.
+ *
+ * Leaving a key out is meaningful: the CSS `var()` fallback then reproduces
+ * exactly what each panel rendered before this existed. Emitting a computed
+ * default instead would move both — the mega panel to the top-level size, the
+ * list dropdown to whatever number we picked — on every live tenant menu.
+ */
+function subPanelType(settings: NavSettings): Record<string, string> {
+  const out: Record<string, string> = {};
+  const size = String(settings.navDropdownFontSize ?? "").trim();
+  if (size) out["--site-nav-dropdown-size"] = `${num(size, 14, 8, 48)}px`;
+
+  const weight = String(settings.navDropdownWeight ?? "").trim();
+  if (weight) out["--site-nav-dropdown-weight"] = String(num(weight, 400, 100, 900));
+
+  const transform = String(settings.navDropdownTextTransform ?? "").trim();
+  if (transform) {
+    out["--site-nav-dropdown-transform"] = oneOf(transform, NAV_TEXT_TRANSFORMS, "none");
+  }
+
+  const spacing = String(settings.navDropdownLetterSpacing ?? "").trim();
+  if (spacing) out["--site-nav-dropdown-spacing"] = `${num(spacing, 0, -4, 12)}px`;
+
+  return out;
+}
+
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[], fallback: T): T {
   const trimmed = String(value ?? "").trim() as T;
   return allowed.includes(trimmed) ? trimmed : fallback;
@@ -107,7 +159,9 @@ function oneOf<T extends string>(value: string | undefined, allowed: readonly T[
  */
 function flag(value: string | undefined, fallback: boolean): boolean {
   const trimmed = String(value ?? "").trim();
-  if (trimmed === "true") return true;
+  // "on" is the legacy truthy the shared dropShadowFields() control accepts;
+  // matching it here keeps the two halves of one checkbox in agreement.
+  if (trimmed === "true" || trimmed === "on") return true;
   if (trimmed === "false") return false;
   return fallback;
 }
@@ -175,16 +229,34 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
   const underline = getNavUnderline(settings);
   const linkColor = color(settings.navColor);
   const hoverColor = color(settings.navHoverColor);
+  // Which panel is on screen decides only one thing here: the frame each has
+  // always drawn (see dropdownBorderWidth* in NAV_STYLE_DEFAULTS). The panel
+  // settings themselves are shared — one Sub-level axis, not two.
+  const isMegaPanel = isNavMegaMenu(settings);
 
   return {
     // --- the bar ------------------------------------------------------
-    "--site-nav-padding": `${num(settings.navPaddingV, NAV_STYLE_DEFAULTS.paddingV, 0, 60)}px ${num(
-      settings.navPaddingH,
-      NAV_STYLE_DEFAULTS.paddingH,
-      0,
-      60
-    )}px`,
+    // Four sides since 2026-08-11 (W7). The defaults still live here because
+    // this runs on raw settings in some paths, not only on normalized ones.
+    "--site-nav-padding": [
+      num(settings.navPaddingTop, NAV_STYLE_DEFAULTS.paddingV, 0, 60),
+      num(settings.navPaddingRight, NAV_STYLE_DEFAULTS.paddingH, 0, 60),
+      num(settings.navPaddingBottom, NAV_STYLE_DEFAULTS.paddingV, 0, 60),
+      num(settings.navPaddingLeft, NAV_STYLE_DEFAULTS.paddingH, 0, 60)
+    ]
+      .map((side) => `${side}px`)
+      .join(" "),
     "--site-nav-gap": `${num(settings.navGap, NAV_STYLE_DEFAULTS.gap, 0, 40)}px`,
+    /*
+     * The bar's fill when the Background control is set to None.
+     *
+     * A set background arrives as a real `background:` declaration from
+     * getBuilderBackgroundStyle and beats this, because an inline property
+     * outranks a stylesheet rule reading a variable. So this only ever
+     * decides what "cleared" looks like — and it has to be transparent, or
+     * clearing the control does nothing at all, which is what it did.
+     */
+    "--site-nav-bg": "transparent",
     "--site-nav-radius": `${num(settings.navBarRadius, NAV_STYLE_DEFAULTS.barRadius, 0, 80)}px`,
     // Three parts rather than one shorthand: the generated
     // `_builder-react.css` already uses `--site-nav-border` for a colour
@@ -203,12 +275,14 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     // navPadding / navBorderRadius keep their live-site meaning (the LINK,
     // not the bar). The React preview used to apply both to the <nav>; that
     // is the disagreement this file ends.
-    "--site-nav-link-padding": `${num(settings.navLinkPaddingV, NAV_STYLE_DEFAULTS.linkPaddingV, 0, 40)}px ${num(
-      settings.navLinkPaddingH,
-      NAV_STYLE_DEFAULTS.linkPaddingH,
-      0,
-      60
-    )}px`,
+    "--site-nav-link-padding": [
+      num(settings.navLinkPaddingTop, NAV_STYLE_DEFAULTS.linkPaddingV, 0, 60),
+      num(settings.navLinkPaddingRight, NAV_STYLE_DEFAULTS.linkPaddingH, 0, 60),
+      num(settings.navLinkPaddingBottom, NAV_STYLE_DEFAULTS.linkPaddingV, 0, 60),
+      num(settings.navLinkPaddingLeft, NAV_STYLE_DEFAULTS.linkPaddingH, 0, 60)
+    ]
+      .map((side) => `${side}px`)
+      .join(" "),
     "--site-nav-link-radius": `${num(settings.navBorderRadius, NAV_STYLE_DEFAULTS.linkRadius, 0, 48)}px`,
     "--site-nav-link-height": `${num(settings.navLinkHeight, NAV_STYLE_DEFAULTS.linkHeight, 24, 96)}px`,
     "--site-nav-link-weight": String(num(settings.navWeight, NAV_STYLE_DEFAULTS.weight, 100, 900)),
@@ -223,12 +297,45 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     "--site-nav-link-hover-decoration": underline.hover,
     "--site-nav-link-text-shadow": getNavTextShadow(settings),
 
-    // Empty means "follow the theme" (master rule A1), so these stay
-    // undefined rather than freezing a hex into every menu.
+    /*
+     * EVERY COLOUR BELOW IS EMITTED, ALWAYS — even when the operator has
+     * cleared it. That is the whole point of this block.
+     *
+     * Operator, 2026-08-12: "All I want to do is clear the color of the
+     * background for the menu as well as the links themselves. The menu has a
+     * background setting and I can set it to any color I want. I just can't
+     * clear it."
+     *
+     * He was exactly right, and the reason was here. These used to be left
+     * `undefined` when empty, so the CSS `var(--x, <hardcoded>)` fallback
+     * painted instead — clearing a setting did not clear anything, it just
+     * revealed the colour baked into the stylesheet. Measured before the fix:
+     * clearing Background left the bar at rgba(255,255,255,0.74), and the
+     * current page's link stayed rgb(10,143,196) no matter what.
+     *
+     * So an empty value now resolves to `transparent`, which is what "cleared"
+     * has to mean, and the CSS fallbacks are only there for a menu rendered
+     * without inline vars at all.
+     */
     "--site-nav-link-color": linkColor,
-    "--site-nav-link-hover-color": hoverColor,
-    "--site-nav-link-hover-bg": color(settings.navHoverBackground),
-    "--site-nav-link-active-color": color(settings.navActiveColor) ?? hoverColor,
+    // The label's own fill, at rest. There was no such control and no CSS
+    // for it — a link only had a background while you hovered it, which is
+    // what the operator meant on 2026-08-11 by having no control over "the
+    // background colors of the labels".
+    "--site-nav-link-bg": color(settings.navLinkBackground) ?? "transparent",
+    "--site-nav-link-hover-color": hoverColor ?? linkColor,
+    "--site-nav-link-hover-bg": color(settings.navHoverBackground) ?? "transparent",
+    /*
+     * The current page follows Text Color unless it is given its own.
+     *
+     * It used to fall back to a hardcoded blue, which is why setting Text
+     * Color to white left the page you were looking at stubbornly blue — the
+     * one link on screen that ignored the control (operator, 2026-08-12: "it
+     * still won't render the text as white").
+     */
+    "--site-nav-link-active-color": color(settings.navActiveColor) ?? hoverColor ?? linkColor,
+    "--site-nav-link-active-bg":
+      color(settings.navActiveBackground) ?? color(settings.navHoverBackground) ?? "transparent",
 
     // --- the dropdown / mega panel ------------------------------------
     "--site-nav-dropdown-bg": color(settings.navDropdownBackground) ?? NAV_STYLE_DEFAULTS.dropdownBackground,
@@ -241,6 +348,29 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     )}px`,
     "--site-nav-dropdown-width": `${num(settings.navDropdownWidth, NAV_STYLE_DEFAULTS.dropdownWidth, 100, 480)}px`,
     "--site-nav-mega-width": `${num(settings.navMegaWidth, NAV_STYLE_DEFAULTS.megaWidth, 320, 1600)}px`,
+    ...subPanelType(settings),
+    /*
+     * The panel's frame. Border Width / Style / Colour on the Border axis have
+     * only ever reached the BAR — the operator found this on 2026-08-13:
+     * *"the Border settings also only apply to the top menu."* These are the
+     * panel's own, defaulted per panel style so an untouched menu of either
+     * kind renders exactly as it did.
+     */
+    "--site-nav-dropdown-border-width": `${num(
+      settings.navDropdownBorderWidth,
+      isMegaPanel
+        ? NAV_STYLE_DEFAULTS.dropdownBorderWidthMega
+        : NAV_STYLE_DEFAULTS.dropdownBorderWidthList,
+      0,
+      20
+    )}px`,
+    "--site-nav-dropdown-border-style": oneOf(
+      settings.navDropdownBorderStyle,
+      NAV_BORDER_STYLES,
+      NAV_STYLE_DEFAULTS.dropdownBorderStyle
+    ),
+    "--site-nav-dropdown-border-color":
+      color(settings.navDropdownBorderColor) ?? NAV_STYLE_DEFAULTS.dropdownBorderColor,
 
     // --- direct properties --------------------------------------------
     fontSize: `${num(settings.navFontSize, NAV_STYLE_DEFAULTS.fontSize, 10, 48)}px`,

@@ -10,6 +10,7 @@ import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
   BuilderSchemaModuleSettings,
+  paddingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { type BuilderThemePalette } from "./builder-theme-color-field";
@@ -178,7 +179,11 @@ export function BuilderFloatingImageModuleSettings({
               fallback: "15",
               rendersVia: "getImageModuleStyle"
             }
-          ]
+          ],
+          // A floating image shares the standard image's frame styles, so it
+          // reads the same padding keys — exposed here too, or they would be
+          // settings the renderer honours and no panel shows (E7).
+          paddingFields("getImageModuleStyle")
         ]
       },
       {
@@ -297,6 +302,7 @@ export function BuilderFloatingImageModuleSettings({
               control: "number",
               min: 0,
               max: 80,
+              step: 5,
               fallback: "18",
               rendersVia: "getImageModuleStyle"
             }

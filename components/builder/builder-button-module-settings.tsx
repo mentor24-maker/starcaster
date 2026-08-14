@@ -13,6 +13,9 @@ import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import {
   BuilderSchemaModuleSettings,
   dropShadowFields,
+  MODULE_MARGIN_SIDES,
+  MODULE_PADDING_SIDES,
+  type BuilderSchemaFieldContext,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
@@ -350,124 +353,54 @@ export function BuilderButtonModuleSettings({
             }
           ],
           [
-            // W7 names, and the renderer's own clamps (1–50) — these are the
-            // pill's inner padding, not the module's outer spacing.
-            {
-              key: "paddingY",
-              label: "Vertical Padding",
-              width: "num",
-              control: "number",
-              min: 1,
-              max: 50,
-              fallback: "12",
-              rendersVia: "getButtonModuleStyle"
-            },
-            {
-              key: "paddingX",
-              label: "Horizontal Padding",
-              width: "num",
-              control: "number",
-              min: 1,
-              max: 50,
-              fallback: "24",
-              rendersVia: "getButtonModuleStyle"
-            }
+            // W7 side order, and the renderer's own clamps (1–50) — these are
+            // the pill's inner padding, not the module's outer spacing. The
+            // fallbacks are the shape a button ships with, so an untouched
+            // one shows what it actually renders.
+            ...MODULE_PADDING_SIDES.map(({ key, label }) => ({
+              key,
+              label,
+              width: "num" as const,
+              control: "custom" as const,
+              rendersVia: "getButtonModuleStyle",
+              render: (ctx: BuilderSchemaFieldContext) => (
+                <BuilderNumberSelectControl
+                  value={
+                    ctx.settings[key] ??
+                    (key === "paddingTop" || key === "paddingBottom"
+                      ? ctx.settings.paddingY ?? "12"
+                      : ctx.settings.paddingX ?? "24")
+                  }
+                  min={1}
+                  max={50}
+                  fallback={key === "paddingTop" || key === "paddingBottom" ? "12" : "24"}
+                  onChange={(next) => ctx.set(key, next)}
+                />
+              )
+            }))
           ],
           [
-            // The button honours all four sides separately
-            // (getButtonModuleOuterSpacingStyle), so it gets four controls
-            // rather than the collapsed V/H pair. Each reads through the same
-            // legacy fallback the renderer resolves with — verticalMargin /
-            // horizontalMargin — because a table-cell button never passes
-            // through normalizeBuilderModuleSettingsForType, so reading the
-            // raw key would show 0 while the page renders the legacy value.
-            {
-              key: "marginTop",
-              label: "Margin Top",
-              width: "num",
-              control: "custom",
-              rendersVia: "getButtonModuleOuterSpacingStyle",
-              render: (ctx) => (
+            // Read through the same legacy fallback the renderer resolves
+            // with: a table-cell button never passes through
+            // normalizeBuilderModuleSettingsForType, so reading the raw key
+            // would show 0 while the page renders the pair it was saved with.
+            ...MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => ({
+              key,
+              label,
+              width: "num" as const,
+              control: "custom" as const,
+              rendersVia: "getModuleOuterSpacingStyle",
+              render: (ctx: BuilderSchemaFieldContext) => (
                 <BuilderNumberSelectControl
-                  value={ctx.settings.marginTop ?? ctx.settings.verticalMargin ?? "0"}
+                  value={ctx.settings[key] ?? ctx.settings[legacy] ?? "0"}
                   min={0}
                   max={160}
+                  step={5}
                   fallback="0"
-                  onChange={(value) => ctx.set("marginTop", value)}
+                  onChange={(next) => ctx.set(key, next)}
                 />
               )
-            },
-            {
-              key: "marginBottom",
-              label: "Margin Bottom",
-              width: "num",
-              control: "custom",
-              rendersVia: "getButtonModuleOuterSpacingStyle",
-              render: (ctx) => (
-                <BuilderNumberSelectControl
-                  value={ctx.settings.marginBottom ?? ctx.settings.verticalMargin ?? "0"}
-                  min={0}
-                  max={160}
-                  fallback="0"
-                  onChange={(value) => ctx.set("marginBottom", value)}
-                />
-              )
-            },
-            {
-              key: "marginLeft",
-              label: "Margin Left",
-              width: "num",
-              control: "custom",
-              rendersVia: "getButtonModuleOuterSpacingStyle",
-              render: (ctx) => (
-                <BuilderNumberSelectControl
-                  value={ctx.settings.marginLeft ?? ctx.settings.horizontalMargin ?? "0"}
-                  min={0}
-                  max={160}
-                  fallback="0"
-                  onChange={(value) => ctx.set("marginLeft", value)}
-                />
-              )
-            },
-            {
-              key: "marginRight",
-              label: "Margin Right",
-              width: "num",
-              control: "custom",
-              rendersVia: "getButtonModuleOuterSpacingStyle",
-              render: (ctx) => (
-                <BuilderNumberSelectControl
-                  value={ctx.settings.marginRight ?? ctx.settings.horizontalMargin ?? "0"}
-                  min={0}
-                  max={160}
-                  fallback="0"
-                  onChange={(value) => ctx.set("marginRight", value)}
-                />
-              )
-            }
-          ]
-        ]
-      },
-      {
-        title: "Frame",
-        strips: [
-          [
-            {
-              key: "buttonBackgroundMode",
-              label: "Background",
-              width: "color",
-              control: "custom",
-              rendersVia: "getButtonBackgroundSettings",
-              render: (ctx) => (
-                <BuilderButtonBackgroundPicker
-                  background={getButtonBackgroundSettings(ctx.settings)}
-                  onChange={updateButtonBackground}
-                  onChooseImage={onOpenButtonBackgroundGallery}
-                  onUploadImage={onUploadButtonBackgroundMedia}
-                  themeColors={ctx.themeColors}
-                />
-              )
-            }
+            }))
           ],
           [
             {
@@ -544,6 +477,7 @@ export function BuilderButtonModuleSettings({
               control: "number",
               min: 0,
               max: 80,
+              step: 5,
               fallback: "0",
               rendersVia: "getButtonModuleStyle"
             }

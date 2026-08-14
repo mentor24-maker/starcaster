@@ -144,17 +144,155 @@ and belongs on the Text axis (master rule A6, operator 8/11). And a shadow
 is filed by what it shadows, not by habit — `text-shadow` is Text,
 `box-shadow` is Frame (A7).
 
-#### E4. H and V margin are always offered together, adjacent `[auto]`
+#### E4. A spacing box is four sides, or none `[auto]`
 
-`horizontalMargin` and `verticalMargin`, in the same strip, side by side. Never
-a lone "Margin", never one without the other.
+`marginTop`, `marginBottom`, `marginLeft`, `marginRight` — and the same four
+for padding — in that order, in the same strip. Never a lone "Margin", and
+never the vertical/horizontal pair that preceded them.
 
-*Why:* a module offering only horizontal margin looks broken to an operator who
-needs vertical space, and sends him hunting through Advanced for a control that
-doesn't exist.
+*Why:* a pair cannot express the ordinary case. A banner logo needed the
+padding above and below it gone and the padding holding it off the left edge
+kept; the single control that could reach the first took all four sides with
+it, and there was nothing else to try. The operator's ruling, 2026-08-11:
+"standardize all objects on the Top/Bottom/Left/Right model."
+
+*How:* build the controls from `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES`
+in `builder-settings-schema.tsx`, or from the `marginFields()` /
+`paddingFields()` helpers that read those tables. Then the names, the order
+and the count hold by construction.
 
 **Checked by:** `check_ui_doctrine.cjs` fails a changed settings file that
-references one without the other.
+names some sides but not all four, or that still names the retired pair.
+
+#### W8. A size dropdown past 100px counts in fives `[auto]` *(added 2026-08-12)*
+
+A number control measuring **pixels** whose range goes above 100 declares
+`step: 5` or coarser. Sizes that stay small — a border, a font — keep their
+1px steps.
+
+*Why:* Site Search's Field Width ran 0–1200 in ones. That is 1,201 options,
+and getting to 400 meant scrolling past 399 numbers nobody would ever pick.
+The operator, 2026-08-12: "update any dropdown that lets you set the field
+width of something that would typically be more than 100px to increment by 5px
+instead of 1px."
+
+*Why keyed on the name, not the option count:* a long list is not the fault by
+itself. `particleCount` runs to 500 and `spread` to 180, and every value in
+both is meaningful — one is a count, the other an angle. Pixels above 100 are
+the case where the precision is noise, so the rule reads the key name
+(`*Width`, `*Height`, `*Size`) rather than the length of the list.
+
+*The trap that comes with it:* a stored value need not sit on the new grid. A
+width saved at 403 before the step changed would DISPLAY as 405 while 403 was
+still what the page used — the panel disagreeing with the live site and
+looking fine doing it. `resolveNumberSelectOptions` in
+`builder-inline-number-select.tsx` inserted the off-grid value into the list
+and selected it, so raising a step could never quietly rewrite what an
+operator sees. This was already wrong for the six controls that stepped by
+more than one before this rule existed.
+
+**Reversed the same evening, and the trap closed a different way.** The
+operator, on 403-style values: *"If they already have a value that is not
+divisible by 5, just change it to the next lowest number that is."* An
+off-grid value now snaps DOWN to the next option (403 → 400) and the control
+**writes that back through `onChange` as it mounts** — so the panel still
+cannot disagree with the page, but the resolution goes the other way: the
+document follows the panel instead of the panel bending to the document. The
+consequence is worth knowing before it surprises someone: opening a module
+panel can change a number nobody touched, and the page shows as edited.
+An empty setting is never written — blank means "use the default" on many of
+these, and filling it in would invent a choice.
+
+**Widened to spacing, and to JSX, 2026-08-12 (same night).** The rule was
+written against Site Search and shipped, and the operator hit the identical
+control hours later on the Slideshow module: a margin running 0–160 in ones,
+161 options, scrolled past 74 numbers to reach 75. *"Slideshow module also has
+sizes incremented by 1 that should be 5."*
+
+Two things had let sixteen controls through:
+
+1. **The key regex covered `*Width` / `*Height` / `*Size` only.** A margin is a
+   pixel measurement like any other; `gap`, `margin*` and `padding*` are on the
+   list now. The `max > 100` gate still does the discriminating, which is why
+   Button's inner padding (1–50) keeps its 1px steps — a single pixel is
+   visible inside a pill, and invisible in a 75px outer margin.
+2. **The parser read schema field literals and nothing else.** Every one of the
+   sixteen was written directly as `<BuilderNumberSelectControl>` JSX — the
+   shared module chrome's four margins, the row editor's margins/paddings/gap,
+   and the cell, CRM, social, button, heading and feature-card panels. The rule
+   existed, the check ran green, and the operator was still scrolling. A JSX
+   prop has no `key:` to read, so those are judged by **range alone**: past
+   100px, in this codebase, is always pixels. One that genuinely needs every
+   value carries a `{/* w8-allow: <reason> */}` comment.
+
+The shared step is `MODULE_SPACING_STEP` in `builder-settings-schema.tsx`, so
+`marginFields()` / `paddingFields()` cannot drift from the hand-written strips
+— and the parser resolves `const NAME = <number>` for exactly that reason.
+
+**Where the steps LAND, not just how big they are (2026-08-12).** Icon Size
+runs 16–160 in fives, and the list came out 16, 21, 26, 31 — every option off
+the round numbers, because it counted up from `min`. Options are aligned to
+multiples of the step now (20, 25, 30), which is the whole point of a coarse
+step: a person looking for 75 should find 75. A step of 1, or a fractional one
+(Tractor Nav speed counts in tenths), is left alone.
+
+**Box metrics below the 100px gate, moved by hand the same evening.** The
+operator: *"I want all those larger number dropdowns to increment on the 5s."*
+Radius, padding and gap controls whose range spans 40px or more went to
+`step: 5` — Feature Cards Gap and Radius, CRM Form Radius and Padding, the
+cell padding sides and cell/row border radius, and the Radius fields on
+Navigation, Button, Image, Floating Image, Site Search and Blog Search.
+
+These stayed at 1px on purpose, and the automated W8 check was deliberately
+NOT tightened to catch them, because it keys on `*Size`/`*Height` names and
+would drag the text controls in with them:
+
+- **Text sizes** — Font Size, Label Size, Button Text Size. 16px and 18px are
+  the two most common values in typography; a list that skips both is worse
+  than a long one.
+- **Counts, angles and percentages** — particles, max results, spread,
+  opacity, ring step. Every value means something and none of them are pixels.
+- **Fine nudges** — shadow X/Y/spread. The control exists to move something
+  by a pixel or two.
+- **Button's inner pill padding (1–50)** — recorded above, and it still
+  holds: a single pixel is visible inside a pill.
+
+**Checked by:** `check_ui_doctrine.cjs` (W8) fails a `control: "number"` field
+whose key names a pixel measurement, whose `max` is over 100, and whose step is
+under 5 — and any JSX `<BuilderNumberSelectControl>` over 100 stepping under 5.
+A control that genuinely needs every value goes in `W8_ALLOW` (schema) or
+carries a `w8-allow:` comment (JSX), with a reason. The field parser is covered
+by `scripts/builder/uiDoctrineSizeStep.test.js`.
+
+#### W9. No field spans its container `[browser-check]` *(added 2026-08-12)*
+
+Every field carries a size constraint. A control that can grow has a ceiling
+above it — never `max-width: none`.
+
+*Why:* W1 has forbidden "stretch a field to the widest possible width" since
+July, and it kept happening, because **W1 had nothing to check against**. The
+lattice bounds a panel column and an item grid bounds its tracks, but three
+shapes had nothing above them: a `full` field (which exists precisely to span
+both tracks), a bare `textarea`, and an item-grid cell on a wide screen. The
+Slideshow editor was all three at once. Operator, 2026-08-12: *"Never, ever
+have text fields that stretch the full width of their container. Every field
+must have some kind of size constraint."*
+
+*The ceiling is one number:* `--builder-field-long-max` (560px) in
+`src/css/_variables.css` — enough for the readable part of a URL and about a
+line of description. The two rules that had written `max-width: none` — the
+lattice control rule and the `label.field` control rule — now name the
+variable instead.
+
+*It cannot widen anything.* A cap only ever lowers a used width, so `label`
+(230px) and `text-md` (280px) are untouched, and W0 still holds: inside a
+column every control ends at the same x, they just all stop at the ceiling
+together.
+
+**Checked by:** `npm run check:panels` (`scripts/ui/check_panels.mjs`) measures
+every text control on a lattice surface — including the `full` fields and item
+managers W0 deliberately skips — and fails any that renders wider than the
+ceiling. Not in CI: CI has no browsers. Run it before shipping panel work.
 
 #### E5. Labels never wrap — shorten the text instead `[eye]`
 
@@ -342,8 +480,28 @@ They are reproduced here with honest tags.
   `.standard-form-checkbox`; radios `.sc-radio-group` / `.sc-radio-option`
   (input left, label right, stacked). Inputs size to content or a declared width
   class — don't stretch to fill a wide container.
-- **Modals `[eye]`** — no scrollbars in form modals, especially horizontal.
-  Widen the modal instead.
+- **Modals and popup editors size to their content `[auto]`** — a dialog
+  declares a **floor** (never opens narrower than this), grows to fit whatever
+  is inside it, and stops at **75% of the screen**. In CSS that is
+  `width: max-content; min-width: min(<floor>px, 100%); max-width: min(75vw, 100%)`;
+  a React shell inlines the same three values. What a dialog must never carry
+  is a lone `width`/`max-width` in px — that is a guess about content someone
+  made once, and it is why an editor ends up cropped or scrolling sideways.
+  Prose declares its own reading measure (`.c-modal__body > p` is capped at
+  56ch) so a message dialog stays narrow while a form or table grows.
+
+  *Incident (2026-08-11):* the operator reported, for at least the fourth
+  time, an editor squeezed into too small a box — this round the popped-out
+  module editor, which capped at 680px and stacked its axis columns while
+  two thirds of the screen sat empty. The sweep found the same guess
+  everywhere: `BuilderEditorPopup` at a flat 360, `BuilderCenteredModal` at
+  560 with call sites re-capping at 680 and 1200, and `.c-modal__dialog` —
+  the shell **every** vanilla-admin modal inherits — at 520. Popping the
+  heading editor out now opens at 1189px on a 1900px screen (was 730), three
+  axis columns across, nothing cropped. `checkDialogWidths` in
+  `scripts/check_ui_doctrine.cjs` fails any new dialog selector that caps
+  itself in px, and any `minWidth`/`maxWidth` number handed to a modal
+  component at a call site.
 - **Feedback `[eye]`** — transient → `App.components.Toast` (`.c-toast`
   variants); sticky status → `App.notify(text, isError)`.
 - **Accordions `[eye]`** — toggle `aria-expanded` only; never rewrite a button's
@@ -388,6 +546,7 @@ They are reproduced here with honest tags.
 | R6 accessibility floor | `[eye]` | state it in the PR |
 | R7 sanitized HTML | `[eye]` | state it in the PR |
 | §2 tables / `<th>` | `[auto]` | `node scripts/check_conventions.cjs` |
+| §2 dialogs size to content | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
 | §2 remainder, §3 | `[eye]` | state it in the PR |
 
 Everything `[auto]` runs automatically at **pre-commit** (staged changes) and in

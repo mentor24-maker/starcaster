@@ -15,6 +15,14 @@
   
   --btn-bg: #000000;
   --btn-text: #ffffff;
+
+  /*
+   * The run of text a search matched, marked inside a result snippet. A
+   * highlight has to stay legible against --ink-primary on --bg-surface AND
+   * survive a tenant theme repainting the page around it, so it is a warm
+   * near-white rather than a tint of any brand colour.
+   */
+  --mark-bg: #fff3b0;
   
   /* Sizing */
   --radius-btn: 10px;
@@ -80,6 +88,35 @@
    * fails on it.
    */
   --builder-field-room: 40px;
+
+  /*
+   * W9 (operator, 2026-08-12): "Never, ever have text fields that stretch the
+   * full width of their container. Every field must have some kind of size
+   * constraint." This is that constraint — the ceiling for the long-text
+   * fields that have no lattice column to bound them: a `full` field, a
+   * textarea, an image-picker URL, a cell in an item grid.
+   *
+   * 560px because it holds the readable part of a URL and roughly a line of
+   * description. Wider buys nothing: the Slideshow image field was rendering
+   * at about 2,000px, and no one reads a blob-storage URL end to end.
+   *
+   * Never write a bigger number on an individual field. `npm run
+   * check:panels` fails on any control that renders wider than this.
+   */
+  --builder-field-long-max: 560px;
+
+  /*
+   * L8 (operator, 2026-08-13): the block has one right edge, and two buttons
+   * stacked on it read as a column only if they are the same width. "Choose
+   * Icon" and "Choose Image" are different lengths, so the shorter one gets
+   * padded up to this.
+   *
+   * A FLOOR, not a width — the labels never wrap, so a longer one grows its
+   * button past this rather than cropping. 11rem because the longest of them
+   * measures 165px in the running app; the number is here rather than in the
+   * rule so a second surface with picker buttons cannot pick a different one.
+   */
+  --builder-picker-button-w: 11rem;
 
   /* Aliases for legacy CSS */
   --text: var(--ink-primary);

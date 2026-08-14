@@ -452,6 +452,87 @@ not a career programmer, and his stated bottleneck is attention, not
 willingness. Every chore surfaced for approval spends the scarcest resource he
 has on something he has already said yes to.
 
+### 6.5 SQL for the operator goes in the SQL handoff block, as a GitHub URL
+
+**Enforcement: `scripts/hooks/require_sql_handoff.cjs` (Stop hook, blocking).**
+If the branch adds a `docs/SQL/*.sql` and the reply does not carry the block
+with that file's branch-qualified URL, the turn is refused and the ready-made
+block is handed back. `npm run sql:handoff` prints it on demand. Tested in
+`scripts/hooks/require_sql_handoff.test.js`, gated in CI by `npm run test:hooks`.
+
+*Why this rule has a hook when most do not.* It was written down, binding, and
+sitting in the file CLAUDE.md tells every agent to read first — and on
+2026-08-14 an agent that had read it still handed over a repo-relative path,
+the exact trap documented below. The rule did not fail because it was unclear;
+it failed because nothing checked. This is the same lesson §2 records about the
+UI standards that sat under "enforced in review" for months with no review step,
+and the same one the 2026-07-22 template-swap fix taught the hard way: a rule
+written in a document changed nothing, and the code shipped the bug again three
+weeks later. **A doctrine entry that an agent must remember to apply is a hope,
+not a control.** When a rule is mechanical, give it a checker.
+
+**Standing instruction from the operator, 2026-08-12, given verbatim as a
+template.** When he has SQL to run, do not print the statements. Emit exactly
+this block and nothing else in its place — spaced exactly as shown here:
+
+
+#################### RUN SQL IN SUPABASE ####################
+
+[github url]
+
+##########################################################
+
+
+**Two blank lines above and below each SQL handoff block** (operator, 2026-08-12: "add
+two paragraph breaks above and below each SQL set so they stand out clearly").
+A single break lets the SQL handoff block sit flush against the sentence introducing it,
+and in a long reply the block stops reading as a block — which is the one
+thing it exists to do. Two breaks on each side, every time, including between
+two consecutive SQL handoff blocks.
+
+**Emit it as plain text, not inside a code fence** (operator, 2026-08-12:
+"can you make that link clickable?"). A fenced block renders the URL as dead
+text and he cannot click it — which defeats a handoff whose entire job is to
+get him to that file. Outside a fence the terminal linkifies it, and a markdown
+link works too.
+
+The SQL handoff block itself survives being unfenced: an ATX heading takes at most six
+`#`, so a run of twenty renders as the literal text it looks like. Do not
+shorten the rules to six or fewer or they will turn into a heading.
+
+The URL is the file on **its branch**, not on `main`:
+`https://github.com/mentor24-maker/starcaster/blob/<branch>/docs/SQL/<file>.sql`
+
+**Why a URL and not the SQL itself.** Applying SQL by hand is the one schema
+step no agent can do here — the Supabase CLI on this machine has no access
+token and the environment carries no Postgres connection string — so this block
+is the entire handoff, and it has to be unmissable. A wall of pasted SQL buries
+the ask inside the reply; the SQL handoff block is scannable in a long message and says
+what to do with it in its own first line. He opens the URL and copies from
+GitHub.
+
+**The trap this replaced.** The first attempt handed over a repo-relative link
+(`docs/SQL/assets_renditions.sql`). New files live on a branch inside
+`.claude/worktrees/<topic>/`, and his editor is open on `main`, where the file
+does not exist — the link resolved to nothing and cost a round trip. **Any link
+to a file this session created is broken for him until the branch merges**,
+which is exactly why the URL in the SQL handoff block must be branch-qualified. Check that
+the branch is pushed before emitting the block.
+
+**Also:**
+
+- Still write the file to `docs/SQL/` — that is the schema source of truth (§7)
+  — and to `supabase/migrations/` when it belongs there.
+- Say in one line, outside the SQL handoff block, what it changes and whether anything
+  existing is touched. "It only adds two new fields; it changes nothing that
+  exists" is what tells him it is safe to run.
+- One SQL handoff block per file. Two migrations means two SQL handoff blocks, in run order.
+
+**The general rule behind it:** he has told us the shape he wants a handoff in.
+When he gives a template verbatim, reproduce it exactly rather than improving
+it — the point is that it looks the same every time, so he can find it without
+reading.
+
 ---
 
 ## 7. Operator-facing gotchas

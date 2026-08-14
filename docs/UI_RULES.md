@@ -63,9 +63,107 @@ as a rule first, then gets a checker where one is possible.
   secondary row. Pattern: `.builder-item-grid` (successor to the nav
   grid). *(7/1 "Give each of those field columns titles: Parent Page,
   Page Name, Slug, Width, Action"; ruling 8/9)* — **[eye]**
+- **L6a. A titled-column grid is not the only shape an item manager may
+  take — and it is the wrong one once the columns stop lining up.**
+  *(8/12, on the Feature Cards manager: "I always want labels to be in a
+  column of the same length so the fields line up on the left. The same
+  applies to the field column and buttons. They should all line up neatly
+  in columns and rows. (This really isn't in doctrine anywhere?)")* It is
+  — it is W0 — but **W0 exempts item managers**, and that exemption is
+  what let this one look sloppy beside the lattice next to it.
+
+  So a card manager may instead be **one labelled block per item**, on its
+  own lattice: `.builder-card-editor` in Feature Cards is the pattern.
+  Every label sits in a track of one fixed width, every field in a track
+  of one width, and a control too wide for half a row spans to the end and
+  starts at the same x as the rest.
+
+  **Two label/field pairs may share a row here** — W0's "one control per
+  row" is relaxed for this shape, because the operator asked for it by
+  name: *"Add the Alt tag to the three other fields at the top of each
+  feature card to form a 2x2 field setup with labels for each field."*
+  Both label tracks take the same width and both field tracks the same
+  width, so the pairs line up as columns rather than staggering.
+
+  **Buttons get a track, not their natural width.** "Choose Icon" and
+  "Choose Image" are different lengths; sized to their content they line
+  up on their right edges and stagger on their left. A fixed button track
+  (`--card-editor-button`) lines up both edges — the operator named
+  buttons in the same breath as labels and fields.
+
+  **Which shape to reach for:** a manager whose fields all fit as columns
+  stays a titled-column grid (L6) — the breadcrumb manager still is. One
+  with fields that cannot (pickers, long text, more than about four
+  columns) takes the labelled block, because that is the one where the
+  spanning secondary row was already breaking the column alignment.
+  **How it is built, and how it is checked (rewritten 8/13).** The first
+  cut got the shape right and the mechanism wrong — a fixed `11ch` label
+  track, `1fr` fields, an `11rem` button — which is the per-field width W0
+  forbids, and it lined up by coincidence. It is W0's own mechanism now:
+  the LIST is one grid, every field `display: contents`, tracks measuring
+  the longest label and longest control across **every card at once**, plus
+  `--builder-field-room`. That is also what makes card 2 line up with card
+  1 rather than each card being its own grid.
+
+  The two field tracks are an equal share of the leftover rather than
+  `max-content`: this manager is one half of a fixed 50/50 editor, and the
+  content-measured version came to 794px inside a 695px column and cropped
+  the buttons off the edge. Between the two pair-columns is a real 40px gap
+  track, and the wide rows run to the block's right edge with their buttons
+  pushed onto it — **L8**, added 8/13 after the shape was still wrong with
+  every row individually correct.
+
+  **The manager declares `data-lattice-pairs="2"`, and that is what makes
+  it checkable.** `check_panels` measures any element carrying that
+  attribute as a lattice group, holds each pair-column to W0 separately,
+  and fails a group whose labels start at more x-positions than it
+  declared. It also measures the LABEL of a `--full` field inside such a
+  group — the control still spans, but "Description" and "Icon Image" are
+  the longest labels here, and skipping the whole pair is what let a
+  cramped 10px label track pass as green. `seed_fixture.mjs` seeds two real
+  cards, because an empty manager measures nothing and passes.
+  — **[browser-check]** `npm run check:panels`
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**
+- **L8. THE BLOCK EDGE — a form is one rectangle, not a stack of rows.**
+  *(8/13: "how the overall form lines up on the right and left, which gives
+  the appearance of a coherent whole. Not sure how to describe that kind of
+  aesthetic sense for doctrine, but please try.")*
+
+  Here is the try. W0 lines fields up **going down** — one label width, one
+  field width, per column. L8 is the other axis: the form has an outer
+  boundary, and every row is responsible for it.
+
+  1. **One left edge and one right edge.** The leftmost thing in every row
+     starts at the same x and the rightmost thing ends at the same x. A
+     control that stops short leaves a notch; one that runs past leaves a
+     bump. Either reads as a row that does not belong to the others.
+  2. **A wide control runs to the edge, not to wherever it ran out.** A
+     description, an image URL, a picker — they span the remaining columns
+     and finish flush with the fields above them.
+  3. **A trailing button belongs to the edge**, pushed to the end of its
+     row, and the same width as any button under it. Two buttons of
+     different text lengths, each sized to its own words, line up on the
+     right and stagger on the left; give them a floor width
+     (`--builder-picker-button-w`) so they read as a column.
+  4. **The space between columns is a real gap** — the same 40px
+     (`--builder-field-room`) W0 puts between a label and its field. Left
+     column's field running straight into the right column's label is what
+     makes two columns read as one run-on row.
+  5. **Chrome sits on the same edges.** The card's title starts at the left
+     edge; its up/down/delete buttons end at the right one.
+
+  *Why it is worth a rule:* every part of this can be individually
+  "correct" — each row aligned, every field sized by the lattice — while
+  the block still looks unresolved, because the eye reads the OUTLINE
+  before it reads the rows. The rule that produced the complaint was
+  followed. The shape was not.
+
+  *Why it kept needing a person to spot it:* `check:panels` measures rows
+  against each other, and a notch or a bump is a property of the whole
+  block. Until something measures the outline, this one is **[eye]** — the
+  operator's, usually, which is exactly the cost it is meant to remove.
 
 ## D — Density and layout of panels
 
@@ -93,9 +191,12 @@ layout would avoid.*
 - **D6.** Rarely-touched settings collapse into **Advanced**; they never
   crowd the everyday controls. *(doctrine E3)* — **[eye]**
 - **D7.** Windows and modals size to their content — wide when the content
-  is wide *(7/2 "Let that window expand to 80% the width of the screen")* —
-  and form modals **never scroll internally**, especially sideways
-  *(doctrine §2)*. — **[eye]**
+  is wide *(7/2 "Let that window expand to 80% the width of the screen";
+  8/11 "these editors can take up 75% of the screen … ensure none are
+  unnecessarily constraining the content")* — and form modals **never scroll
+  internally**, especially sideways *(doctrine §2)*. Concretely: a floor it
+  never opens below, content sizing above that, and a 75% ceiling — never a
+  bare px width. Enforced by `checkDialogWidths`. — **[auto]**
 
 - **D8.** Panel controls are organized into **logical axes** — up to four
   titled columns, each holding the controls that belong to one aspect of
@@ -234,12 +335,62 @@ ONCE for the whole panel (W0), not re-decided field by field.*
   The one number left is `--builder-field-room` (40px) in
   `src/css/_variables.css`. **Never set a width on an individual field.**
 
-  *Rolled out: Table (8/12, refined 8/13), Heading (8/11, on the operator's
-  word: "It also hasn't received the new 'Alignment Protocol', so let's
-  apply that one here, too"). Every other module follows — the CSS already
-  covers any panel, so rolling out is adding the type to
-  `LATTICE_MODULE_TYPES` in `builder-module-card.tsx` and re-running
-  `npm run check:panels`.*
+  *Rolled out to **every module panel** and to the **row (section)
+  editor**, 8/13 — the gate is deleted and nothing replaced it. A
+  per-module opt-out would be the per-field width override in a bigger
+  coat, which is what W0 exists to stop; a panel that fights the lattice
+  gets fixed instead.*
+
+  **There are THREE label/control shapes, and W0 covers all of them.**
+  `.builder-module-field` (schema panels), `.builder-setting-row` (row
+  editor and legacy module rows), and `label.field` — a `<label>` wrapping
+  a `<span>` and its control, which stacks the label ABOVE a full-width
+  box. The third is what the table CELL editor was built from, so drilling
+  into an image inside a table cell reached a modal the lattice had never
+  touched while the columns below it were correct *(operator 8/12: "some
+  areas where our reformatting hasn't reached")*. `check_panels` now reads
+  all three — a control the check cannot see is a control the rule does not
+  cover.
+
+  **`label.field` is being retired, not styled.** CSS can flatten it into
+  the lattice, but only while it holds exactly two children: an image
+  picker renders its input and its Gallery button as siblings, and a third
+  child lands in the NEXT row's label cell and puts the whole column out of
+  phase. Convert these to `BuilderModuleField`, which wraps the control
+  side in a box of its own, rather than adding CSS that works until a
+  control grows a second element.
+
+  **Item managers are out of scope, deliberately.** A repeating card
+  editor (social links, TOC entries, tag rows) is a titled-column grid
+  under L6, not a column of the lattice; its fields legitimately share a
+  row. Both the CSS and the check exclude them BY NAME rather than by
+  accident — they render empty in the fixture today, so a pass that relied
+  on their absence would be luck, and would turn into a false failure the
+  day someone seeded one.
+
+  **Out of scope is not the same as unruled (8/12).** The exemption says
+  the panel lattice does not govern an item manager; it does not say the
+  manager may stagger. Feature Cards was the case that proved the
+  difference — the operator read the exemption's output as sloppiness, and
+  he was right. A manager that cannot be a clean titled-column grid runs
+  its own lattice instead: L6a.
+
+  **W0 is not module-specific.** It belongs to any settings surface, so
+  `check_panels` selects on `.is-lattice` rather than on a container —
+  the next surface is measured the day it opts in, without anyone
+  remembering to widen the check.
+
+  **The row editor came last and was the same story.** It was one flat
+  grid of 15 pairs in three EQUAL columns, so a Layout select and a
+  2-digit padding box got the same share of the panel whatever they held,
+  and its labels were allowed to wrap (`white-space: normal`) against L2.
+  It now uses the same `.builder-schema-panel-column` markup as a module
+  panel — Structure / Placement / Frame / Visibility — which is what makes
+  a row read like a module (S1). Two controls needed W0's stated
+  exception wired up by CONTENT rather than by a width-token class, since
+  legacy `BuilderSettingRow` pairs carry none: a checkbox and a radio pair
+  were being stretched across the field track and ending up adrift at its
+  far end.
 
   **The chrome bar is not a lattice column.** The flowing row of
   module-level settings above a panel (`.builder-heading-module-chrome`,
@@ -381,12 +532,64 @@ deliberately, and says so.*
 settings across the 38 modules are theme-backed — and therefore move to
 Advanced — is the follow-on pass the operator sequenced after this.
 
-- **W7.** The spacing controls are exactly these four, with these
-  names: **Vertical Margin**, **Horizontal Margin**, **Vertical
-  Padding**, **Horizontal Padding**. No "Pad V", no "V Margin", no
-  per-module invention. *(operator 8/10)* — **[eye]**
-  Helper: `spacingFields()` in the settings schema emits the pair(s) so
-  the labels cannot drift.
+- **W7.** Spacing is **four sides, never a pair**, on every object —
+  row, cell, module — for both quantities: **Top / Bottom / Left / Right
+  Margin** and **Top / Bottom / Left / Right Padding**, always in that
+  side order. No "Pad V", no "V Margin", no "Vertical Padding", no
+  per-module invention. *(operator 8/10, widened to four sides 8/11:
+  "standardize all objects on the Top/Bottom/Left/Right model")* —
+  **[auto]**
+  Helpers: `marginFields()` / `paddingFields()` in the settings schema,
+  both built from the `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES`
+  tables, so neither the names nor the order can drift.
+  *Rationale for four over two: a pair cannot express the common case.
+  A banner logo needed its top and bottom padding gone and its left
+  padding kept, and the single control that could reach it took all four
+  sides at once.*
+
+- **W8.** A **size dropdown past 100px counts in fives** — pixels, not
+  counts or angles. Spacing counts in fives at any range. *(operator
+  8/12 on Site Search: "update any dropdown that lets you set the field
+  width of something that would typically be more than 100px to
+  increment by 5px instead of 1px"; widened to margins and padding the
+  same night on Slideshow: "sizes incremented by 1 that should be 5")* —
+  **[auto]** `node scripts/check_ui_doctrine.cjs` (W8), which reads both
+  schema fields and JSX `<BuilderNumberSelectControl>` props.
+  Full write-up, including the off-grid-display trap that comes with
+  ever raising a step: `docs/MODULE_UI_DOCTRINE.md` §1a W8.
+
+- **W9. THE CEILING RULE — no field spans its container. Every field
+  carries a size constraint.** *(operator 8/12, on the Slideshow
+  module: "Never, ever have text fields that stretch the full width of
+  their container. Every field must have some kind of size
+  constraint.")* — **[browser-check]** `npm run check:panels`
+
+  W1 already forbade stretching a field to the widest available width,
+  and it was still happening, because W1 had **no ceiling to check
+  against** — only a habit. Three shapes had nothing bounding them at
+  all: a `full` field (which exists precisely to span both lattice
+  tracks), a bare `textarea`, and a cell of an item grid on a wide
+  screen. The Slideshow editor was all three at once — a slide's image
+  URL rendered about 2,000px wide, and the alt text under it did too.
+
+  **The ceiling is one number, shared: `--builder-field-long-max`
+  (560px) in `src/css/_variables.css`.** 560 because it holds the
+  readable part of a URL and roughly a line of description. Never write
+  a bigger number on an individual field — that is the per-field sizing
+  W0 exists to stop, and `check:panels` fails on any control that
+  renders wider.
+
+  **This is a ceiling, not a width.** A control narrower than the cap —
+  a `text-md` at 280px, a `label` at 230px — is untouched, because a cap
+  can only ever lower a used width. And it does not weaken W0: inside a
+  column every control still ends at the same x, since they all hit the
+  same ceiling together.
+
+  **Where the constraint comes from is the field's business.** A lattice
+  column, an item-grid track, a width token, or the shared cap — any of
+  them satisfies W9. What is forbidden is `max-width: none` on something
+  that can grow, which is exactly what the lattice control rule and the
+  `label.field` rule both declared before this.
 
 ## C — Controls: pick the right one
 

@@ -18,7 +18,7 @@ describe("getNavModuleStyle — an untouched menu keeps the look it had when the
   it("reproduces the old bar", () => {
     const vars = style();
 
-    expect(vars["--site-nav-padding"]).toBe("8px 8px");
+    expect(vars["--site-nav-padding"]).toBe("8px 8px 8px 8px");
     expect(vars["--site-nav-radius"]).toBe("26px");
     expect(vars["--site-nav-border-width"]).toBe("1px");
     expect(vars["--site-nav-border-style"]).toBe("solid");
@@ -29,7 +29,7 @@ describe("getNavModuleStyle — an untouched menu keeps the look it had when the
   it("reproduces the old links", () => {
     const vars = style();
 
-    expect(vars["--site-nav-link-padding"]).toBe("0px 14px");
+    expect(vars["--site-nav-link-padding"]).toBe("0px 14px 0px 14px");
     expect(vars["--site-nav-link-radius"]).toBe("18px");
     expect(vars["--site-nav-link-weight"]).toBe("700");
     expect(vars["--site-nav-link-decoration"]).toBe("none");
@@ -42,7 +42,6 @@ describe("getNavModuleStyle — an untouched menu keeps the look it had when the
 
     expect(vars["--site-nav-link-color"]).toBeUndefined();
     expect(vars["--site-nav-link-hover-color"]).toBeUndefined();
-    expect(vars["--site-nav-link-hover-bg"]).toBeUndefined();
     expect(vars["--site-nav-link-active-color"]).toBeUndefined();
     expect(vars.color).toBeUndefined();
   });
@@ -65,10 +64,19 @@ describe("getNavModuleStyle — the controls that used to do nothing", () => {
   });
 
   it("bar padding and link padding are separate quantities", () => {
-    const vars = style({ navPaddingV: "20", navPaddingH: "30", navLinkPaddingV: "6", navLinkPaddingH: "22" });
+    const vars = style({
+      navPaddingTop: "20",
+      navPaddingBottom: "20",
+      navPaddingLeft: "30",
+      navPaddingRight: "30",
+      navLinkPaddingTop: "6",
+      navLinkPaddingBottom: "6",
+      navLinkPaddingLeft: "22",
+      navLinkPaddingRight: "22"
+    });
 
-    expect(vars["--site-nav-padding"]).toBe("20px 30px");
-    expect(vars["--site-nav-link-padding"]).toBe("6px 22px");
+    expect(vars["--site-nav-padding"]).toBe("20px 30px 20px 30px");
+    expect(vars["--site-nav-link-padding"]).toBe("6px 22px 6px 22px");
   });
 
   it("bar radius and link radius are separate quantities", () => {
@@ -98,7 +106,117 @@ describe("getNavModuleStyle — the controls that used to do nothing", () => {
 
   it("falls back rather than emitting NaN for junk", () => {
     expect(style({ navFontSize: "abc" }).fontSize).toBe("16px");
-    expect(style({ navPaddingV: "", navPaddingH: "" })["--site-nav-padding"]).toBe("8px 8px");
+    expect(style({ navPaddingTop: "", navPaddingLeft: "" })["--site-nav-padding"]).toBe("8px 8px 8px 8px");
+  });
+});
+
+describe("the colours that had no control at all", () => {
+  it("gives the labels a resting fill — there was neither a setting nor a CSS rule", () => {
+    expect(style({ navLinkBackground: "#0b2a4a" })["--site-nav-link-bg"]).toBe("#0b2a4a");
+  });
+
+  it("gives the current page its own fill instead of silently borrowing hover's", () => {
+    expect(style({ navActiveBackground: "#ffcc00" })["--site-nav-link-active-bg"]).toBe("#ffcc00");
+  });
+
+  it("still falls back to the hover fill, which is what the current page always was", () => {
+    expect(style({ navHoverBackground: "#00ff00" })["--site-nav-link-active-bg"]).toBe("#00ff00");
+  });
+
+  it("lets the current page differ from hover once both are set", () => {
+    const vars = style({ navHoverBackground: "#00ff00", navActiveBackground: "#ff0000" });
+
+    expect(vars["--site-nav-link-hover-bg"]).toBe("#00ff00");
+    expect(vars["--site-nav-link-active-bg"]).toBe("#ff0000");
+  });
+});
+
+describe("clearing a colour actually clears it", () => {
+  /*
+   * The operator, 2026-08-12: "All I want to do is clear the color of the
+   * background for the menu as well as the links themselves ... I can set it
+   * to any color I want. I just can't clear it." He was right, and these are
+   * the four measurements that were wrong before the fix.
+   */
+  it("emits transparent for an unset bar background, not nothing", () => {
+    // Nothing emitted meant the stylesheet's hardcoded white pill showed
+    // through, so the Background control only ever worked one way.
+    expect(style()["--site-nav-bg"]).toBe("transparent");
+  });
+
+  it("emits transparent for an unset label fill", () => {
+    expect(style()["--site-nav-link-bg"]).toBe("transparent");
+  });
+
+  it("emits transparent for an unset hover fill", () => {
+    expect(style()["--site-nav-link-hover-bg"]).toBe("transparent");
+  });
+
+  it("emits transparent for an unset current-page fill", () => {
+    expect(style()["--site-nav-link-active-bg"]).toBe("transparent");
+  });
+
+  it("clears a fill that HAD been set, once the value is emptied again", () => {
+    expect(style({ navLinkBackground: "" })["--site-nav-link-bg"]).toBe("transparent");
+    expect(style({ navActiveBackground: "", navHoverBackground: "" })["--site-nav-link-active-bg"])
+      .toBe("transparent");
+  });
+
+  it("still lets a colour be set — the direction that always worked", () => {
+    expect(style({ navLinkBackground: "#123456" })["--site-nav-link-bg"]).toBe("#123456");
+  });
+});
+
+describe("Text Color reaches every link, including the one you are standing on", () => {
+  it("gives the current page the text colour when it has none of its own", () => {
+    // This is "it still won't render the text as white": the active link
+    // ended at a hardcoded blue and ignored the control completely.
+    expect(style({ navColor: "#ffffff" })["--site-nav-link-active-color"]).toBe("#ffffff");
+  });
+
+  it("gives hover the text colour too", () => {
+    expect(style({ navColor: "#ffffff" })["--site-nav-link-hover-color"]).toBe("#ffffff");
+  });
+
+  it("lets the current page override it when asked", () => {
+    const vars = style({ navColor: "#ffffff", navActiveColor: "#ff0000" });
+    expect(vars["--site-nav-link-color"]).toBe("#ffffff");
+    expect(vars["--site-nav-link-active-color"]).toBe("#ff0000");
+  });
+
+  it("leaves all three to the theme when nothing is set", () => {
+    const vars = style();
+    expect(vars["--site-nav-link-color"]).toBeUndefined();
+    expect(vars["--site-nav-link-hover-color"]).toBeUndefined();
+    expect(vars["--site-nav-link-active-color"]).toBeUndefined();
+  });
+});
+
+describe("Item Gap", () => {
+  /*
+   * Operator, 2026-08-12: "The Item Gap setting ... doesn't seem to be
+   * working. I have worked the gap up from 5 to 10 to 20 and don't see any
+   * change." Measured: the variable carried every value correctly and landed
+   * on `.site-nav`, whose children are the hamburger toggle and the items
+   * wrapper — not the links. The measured space between items was 4px at
+   * every setting. The variable was right; the box was wrong.
+   */
+  it("carries the number the operator set", () => {
+    expect(style({ navGap: "20" })["--site-nav-gap"]).toBe("20px");
+    expect(style({ navGap: "0" })["--site-nav-gap"]).toBe("0px");
+  });
+
+  it("defaults to the 4px the item list has always rendered", () => {
+    // Not 0: the default has to match what the hardcoded rule produced, or
+    // moving the variable onto the item list would close up every live menu.
+    expect(style()["--site-nav-gap"]).toBe("4px");
+    expect(NAV_STYLE_DEFAULTS.gap).toBe(4);
+  });
+
+  it("clamps rather than emitting something the layout cannot use", () => {
+    expect(style({ navGap: "999" })["--site-nav-gap"]).toBe("40px");
+    expect(style({ navGap: "-5" })["--site-nav-gap"]).toBe("0px");
+    expect(style({ navGap: "abc" })["--site-nav-gap"]).toBe("4px");
   });
 });
 
@@ -198,5 +316,94 @@ describe("hover effect, mega mode and arrows", () => {
   it("shows the dropdown arrow unless it is switched off", () => {
     expect(showsNavDropdownArrow({})).toBe(true);
     expect(showsNavDropdownArrow({ navShowArrow: "false" })).toBe(false);
+  });
+});
+
+/*
+ * Operator, 2026-08-13: the sub level had no type of its own ("it uses the same
+ * font settings for the main menu as the sub menu") and the Border axis reached
+ * the bar only. These cover both halves of the fix, and — the part that matters
+ * on live tenant menus — that neither one moves a menu nobody has touched.
+ */
+describe("the sub level's own type", () => {
+  it("emits nothing while every Sub control is unset, so each panel keeps its own look", () => {
+    const vars = style();
+
+    expect(vars["--site-nav-dropdown-size"]).toBeUndefined();
+    expect(vars["--site-nav-dropdown-weight"]).toBeUndefined();
+    expect(vars["--site-nav-dropdown-transform"]).toBeUndefined();
+    expect(vars["--site-nav-dropdown-spacing"]).toBeUndefined();
+  });
+
+  it("emits only the controls that were set", () => {
+    const vars = style({ navDropdownWeight: "600" });
+
+    expect(vars["--site-nav-dropdown-weight"]).toBe("600");
+    expect(vars["--site-nav-dropdown-size"]).toBeUndefined();
+  });
+
+  it("emits each control in the unit its CSS declaration expects", () => {
+    const vars = style({
+      navDropdownFontSize: "13",
+      navDropdownWeight: "500",
+      navDropdownTextTransform: "uppercase",
+      navDropdownLetterSpacing: "2"
+    });
+
+    expect(vars["--site-nav-dropdown-size"]).toBe("13px");
+    expect(vars["--site-nav-dropdown-weight"]).toBe("500");
+    expect(vars["--site-nav-dropdown-transform"]).toBe("uppercase");
+    expect(vars["--site-nav-dropdown-spacing"]).toBe("2px");
+  });
+
+  it("clamps a size or spacing typed outside the range the control offers", () => {
+    expect(style({ navDropdownFontSize: "900" })["--site-nav-dropdown-size"]).toBe("48px");
+    expect(style({ navDropdownLetterSpacing: "-40" })["--site-nav-dropdown-spacing"]).toBe("-4px");
+  });
+
+  it("falls back to no transform rather than emitting a value CSS would drop", () => {
+    expect(style({ navDropdownTextTransform: "sideways" })["--site-nav-dropdown-transform"]).toBe(
+      "none"
+    );
+  });
+});
+
+describe("the drop-down panel's own border", () => {
+  it("defaults to the hairline a list dropdown has always drawn", () => {
+    const vars = style();
+
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("1px");
+    expect(vars["--site-nav-dropdown-border-style"]).toBe("solid");
+    expect(vars["--site-nav-dropdown-border-color"]).toBe("rgba(9, 16, 24, 0.08)");
+  });
+
+  it("defaults to none for a mega panel, which has never had a border", () => {
+    expect(style({ navDropdownStyle: "mega" })["--site-nav-dropdown-border-width"]).toBe("0px");
+  });
+
+  it("treats a vertical mega menu as a list, the same way the panel itself does", () => {
+    const vars = style({ navDropdownStyle: "mega", navDirection: "vertical" });
+
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("1px");
+  });
+
+  it("takes the operator's values over either default", () => {
+    const vars = style({
+      navDropdownStyle: "mega",
+      navDropdownBorderWidth: "3",
+      navDropdownBorderStyle: "dashed",
+      navDropdownBorderColor: "#ff0000"
+    });
+
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("3px");
+    expect(vars["--site-nav-dropdown-border-style"]).toBe("dashed");
+    expect(vars["--site-nav-dropdown-border-color"]).toBe("#ff0000");
+  });
+
+  it("leaves the bar's own border untouched — the two axes are separate", () => {
+    const vars = style({ navDropdownBorderWidth: "6" });
+
+    expect(vars["--site-nav-border-width"]).toBe("1px");
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("6px");
   });
 });

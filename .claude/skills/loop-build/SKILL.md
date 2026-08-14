@@ -1,6 +1,6 @@
 ---
 name: loop-build
-description: Pick the next "todo" task from the Starcaster "Loop Queue" ClickUp list and build it end-to-end into a pull request — in its own git worktree, passing every build gate — then move the task to "review". Designed to be run on a timer with `/loop 30m loop-build`. Never edits main, never merges.
+description: Pick the next "Queued" task from the Starcaster "Loop Queue" ClickUp list and build it end-to-end into a pull request — in its own git worktree, passing every build gate — then move the task to "In review". Designed to be run on a timer with `/loop 30m loop-build`. Never edits main, never merges.
 ---
 
 # Loop: Build
@@ -13,10 +13,31 @@ Each run of this skill builds **one** task into **one** PR. When run under
 
 ## Workflow
 
-1. **Claim the next task.** Find the oldest `todo` task (highest priority first)
-   in the **Loop Queue** list (Starcaster space, id `90146476303`). If none,
-   report "queue empty" and stop — do not invent work. Set its status to
-   `building` so a parallel build loop won't grab the same one.
+1. **Claim the next task.** Find the oldest `Queued` task (highest priority
+   first) in the **Loop Queue** list (Starcaster space, id `90146476303`). If
+   none, report "queue empty" and stop — do not invent work. Set its status to
+   `Building` so a parallel build loop won't grab the same one.
+
+   The list's six statuses, in order, are `Queued → Building → In review →
+   Needs your input / Ready to launch → Live`. Match them case-insensitively.
+   Two of them belong to the operator and no loop may set or clear them except
+   as described below: **Needs your input** (a human must answer something) and
+   **Ready to launch** (a human must authorize the merge).
+
+   **Assignment is the handoff signal.** Dane's ClickUp view of "what needs me"
+   is ClickUp's own *Assigned to me*, not a hand-built filter — a filtered view
+   cannot span the Starcaster and Dane of Earth spaces, but assignment does.
+   So the rule is mechanical:
+
+   - Moving a ticket **into** `Needs your input` → **assign Dane**
+     (user id `48012725`) in the same `clickup_update_task` call.
+   - Moving a ticket into any machine status (`Queued`, `Building`,
+     `In review`) → **clear all assignees**, so it leaves his list the moment
+     it stops being his.
+
+   A ticket sitting in a machine status with Dane still assigned is a bug: it
+   puts noise in the one view he trusts. When you claim a task in step 1, clear
+   its assignees along with setting `Building`.
 
 2. **Get an isolated workspace — MANDATORY.** Create a dedicated worktree and
    branch off the latest main. Never build in a shared folder; never edit main.
@@ -51,9 +72,11 @@ Each run of this skill builds **one** task into **one** PR. When run under
      CI gate (CI has no browsers), so nothing else will catch a regression here.
 
    If a gate fails and you cannot fix it **within the task's scope**, set the
-   task to `blocked`, add a ClickUp comment explaining exactly what failed, and
-   stop. Do not force a broken build through, and do not expand scope to chase
-   an unrelated failure.
+   task to `Needs your input` **and assign Dane (`48012725`)**, add a ClickUp
+   comment explaining exactly what failed, and stop. Do not force a broken
+   build through, and do not expand scope to chase an unrelated failure. That
+   status is the operator's inbox: write the comment for a non-programmer, and
+   end it with the specific question or decision you need from him.
 
 5. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
@@ -73,10 +96,11 @@ Each run of this skill builds **one** task into **one** PR. When run under
      "How to test" steps, and a note that a Vercel preview will be attached.
      End with the Generated-with trailer.
 
-7. **Hand off to review.** Set the task status to `review` and add the PR URL
-   as a ClickUp comment. **Do NOT merge** — `main` is PR-protected (the
-   "verify" check must go green) and merges happen only on the operator's
-   explicit say-so. The `loop-review` skill takes it from here.
+7. **Hand off to review.** Set the task status to `In review`, leave it
+   unassigned (it is the machine's turn, not Dane's), and add the PR URL as a
+   ClickUp comment. **Do NOT merge** — `main` is PR-protected (the "verify"
+   check must go green) and merges happen only on the operator's explicit
+   say-so. The `loop-review` skill takes it from here.
 
 8. **Report** which task you built and the PR number, then finish (the `/loop`
    wrapper will re-invoke you for the next task).
@@ -84,8 +108,11 @@ Each run of this skill builds **one** task into **one** PR. When run under
 ## Guardrails
 
 - **One task, one worktree, one PR.** Never build two tasks in one branch.
-- **Never touch a task that isn't `todo`.** `building`/`review`/`blocked` are
-  owned by another step.
-- If the task description is too vague to build safely, set it `blocked` with a
-  comment asking for a `loop-spec` pass — don't guess.
+- **Never touch a task that isn't `Queued`.** Every other status is owned by
+  another step or by the operator.
+- **Never set `Ready to launch` and never clear `Needs your input`.** Those two
+  are the operator's; only he moves a task out of them.
+- If the task description is too vague to build safely, set it
+  `Needs your input` with a comment asking for a `loop-spec` pass — don't
+  guess.
 - Leave the worktree in place until the PR merges; `loop-review` may reuse it.

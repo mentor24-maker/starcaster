@@ -6,6 +6,12 @@ import { BuilderCenteredModal } from "./builder-centered-modal";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import { BuilderFeatureCardsModuleSettings } from "./builder-feature-cards-module-settings";
+import { BuilderProgramListModuleSettings } from "./builder-program-list-module-settings";
+import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
+import {
+  BuilderSlideshowModuleSettings,
+  parseBuilderSlideshowSlides
+} from "./builder-slideshow-module-settings";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -24,8 +30,10 @@ import {
   getBuilderBackgroundStyle,
   isPlainTextVariant,
   normalizeBuilderAssetUrl,
+  formatHeadingContent,
   formatPlainTextContent,
-  formatRichTextContent
+  formatRichTextContent,
+  normalizeSignedOffsetValue
 } from "@/lib/builder-template";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -84,6 +92,8 @@ import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-categor
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
 import { BuilderBlogSearchResultsModuleSettings } from "./builder-blog-search-results-module-settings";
+import { BuilderSiteSearchModuleSettings } from "./builder-site-search-module-settings";
+import { BuilderSiteSearchResultsModuleSettings } from "./builder-site-search-results-module-settings";
 import { BuilderMessagingTopicListModuleSettings } from "./builder-messaging-topic-list-module-settings";
 import { BuilderMessagingTagListModuleSettings } from "./builder-messaging-tag-list-module-settings";
 import { BuilderCrmContactsTableModuleSettings } from "./builder-crm-contacts-table-module-settings";
@@ -107,17 +117,15 @@ import {
   getModuleAlignment,
   getModuleBackgroundSettings,
   isPollCategoryListPanelTransparent,
-  getModuleMarginStyle,
   getModuleOuterSpacingStyle,
   getTableWrapStyle,
-  getButtonModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getTextModuleWidthStyle,
-  getVerticalMarginStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
   isVideoMedia
 } from "./builder-utils";
+import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
 import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
@@ -145,10 +153,41 @@ import {
   BuilderInlineNumberSelectRow,
   BuilderNumberSelectControl
 } from "./builder-inline-number-select";
+import { imageProps } from "@/lib/image-renditions";
+
+/** Cards sit two or three across the content column. */
+const CARD_SIZES = "(max-width: 700px) 100vw, 400px";
 
 // Simple Text gets a bare typing box rather than the rich-text toolbar: the
 // editor can only produce paragraph blocks, which is the one thing this module
 // exists to avoid. The placeholder shows what the box accepts.
+
+/**
+ * Editors laid out as two equal columns — settings left, the item list right.
+ *
+ * These need the module chrome (Label, Background, Alignment, the four
+ * margins) to fall into the LEFT column rather than span the panel, so the
+ * item list can start at row 1 level with the Label field. The chrome is
+ * rendered here, not by the settings component, so the grid lives on
+ * `.builder-module-editor--<type>` and this set is what names the members.
+ * Adding a module to the shape means adding it here and to the matching CSS
+ * selector list in `_builder-react-overrides.css`.
+ */
+const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list"]);
+
+/**
+ * The two nudge controls, named and ordered like `MODULE_MARGIN_SIDES` so a
+ * strip that carries both reads as one list.
+ *
+ * The hint is a `title` rather than a line of text under the box: the same
+ * words `BuilderModuleOffsetFields` prints, but a chrome strip is one label
+ * track and one control track, and a caption in the control cell widens that
+ * track for every row above it.
+ */
+const MODULE_NUDGE_SIDES = [
+  { key: "horizontalOffset", label: "Horizontal Offset", hint: "Positive moves right; negative moves left." },
+  { key: "verticalOffset", label: "Vertical Offset", hint: "Positive moves up; negative moves down." }
+] as const;
 
 type BuilderModuleCardProps = {
   module: BuilderTemplateModule;
@@ -296,10 +335,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
       <div className="builder-module-preview-copy">
         <Tag
           className={`builder-module-preview-heading builder-module-preview-heading-${variant || "default"}`}
+          dangerouslySetInnerHTML={{ __html: formatHeadingContent(module.text) || "Heading" }}
           style={getHeadingModuleStyle(module.settings)}
-        >
-          {module.text || "Heading"}
-        </Tag>
+        />
       </div>
     );
   }
@@ -635,17 +673,50 @@ function renderModulePreview(module: BuilderTemplateModule) {
   }
 
   if (module.type === "slideshow") {
-    const slides = parseSlideshowSlides(module.settings);
+    const slides = parseBuilderSlideshowSlides(module.settings);
     const first = slides[0];
     return (
       <div className="builder-module-preview-slideshow">
         {first ? (
-          <img src={first.url} alt={first.alt || ""} loading="lazy" />
+          <img {...imageProps(first.url)} alt={first.alt || ""} loading="lazy" />
         ) : (
           <span className="builder-module-preview-slideshow-empty">Add slides in the editor</span>
         )}
         {slides.length > 1 ? (
           <span className="builder-module-preview-slideshow-count">{slides.length} slides</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (module.type === "program-list") {
+    const programs = parsePrograms(module.settings.programs);
+
+    if (programs.length === 0) {
+      return <span className="builder-module-preview-empty">Add programs in the editor</span>;
+    }
+
+    // The canvas card is a glance, not the page. It names the programs and
+    // how often each runs, which is what an operator scanning a long page
+    // needs to tell one Programs module from another.
+    return (
+      <div className="builder-module-preview-programs">
+        {programs.slice(0, 6).map((program) => (
+          <div key={program.id} className="builder-module-preview-program">
+            <strong>{program.title}</strong>
+            {program.sessions.length > 0 ? (
+              <span>
+                {program.sessions.length === 1
+                  ? `${program.sessions[0].day} ${formatSessionHours(program.sessions[0])}`.trim()
+                  : `${program.sessions.length} sessions`}
+              </span>
+            ) : null}
+          </div>
+        ))}
+        {programs.length > 6 ? (
+          <div className="builder-module-preview-program">
+            <span>{`+${programs.length - 6} more`}</span>
+          </div>
         ) : null}
       </div>
     );
@@ -666,7 +737,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
       >
         {cards.slice(0, 6).map((card) => (
           <article key={card.id} className="builder-module-preview-feature-card">
-            {card.imageUrl ? <img src={card.imageUrl} alt={card.imageAlt || ""} loading="lazy" /> : null}
+            {card.imageUrl ? <img {...imageProps(card.imageUrl, { sizes: CARD_SIZES })} alt={card.imageAlt || ""} loading="lazy" /> : null}
             <strong>{card.title || "Untitled card"}</strong>
           </article>
         ))}
@@ -1256,6 +1327,117 @@ function renderModulePreview(module: BuilderTemplateModule) {
                 <div style={{ fontSize: 12, color: "#587592", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{row.excerpt}</div>
               </div>
               <div style={{ flexShrink: 0, fontSize: 11, color: "#8aa", whiteSpace: "nowrap", paddingTop: 2 }}>Jun 29, 2026</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "site-search") {
+    const s = module.settings;
+    const num = (raw: string | undefined, fallback: number) => {
+      const parsed = parseInt(String(raw ?? ""), 10);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const accent = s.accentColor || "#0f4f8f";
+    const radius = num(s.borderRadius, 8);
+    const placeholder = s.placeholder || "Search this site…";
+    const buttonLabel = s.buttonLabel || "Search";
+    const showButton = (s.showButton ?? "true") !== "false";
+    const showLabel = s.showLabel === "true";
+    const labelText = s.labelText || "Search";
+    const labelInline = s.labelPosition === "inline";
+    // The card mirrors the real settings so the canvas is not quietly lying
+    // about what the page will show — the whole point of a preview.
+    const fieldWidth = num(s.fieldWidth, 0);
+    const height = Math.min(96, Math.max(24, num(s.fieldHeight, 40))) - 2;
+    const btnBorderWidth = num(s.buttonBorderWidth, 0);
+    const label = showLabel ? (
+      <span
+        style={{
+          fontSize: num(s.labelFontSize, 13),
+          fontWeight: s.labelBold === "true" ? 700 : 400,
+          color: s.labelColor || "#18324a",
+          whiteSpace: "nowrap"
+        }}
+      >
+        {labelText}
+      </span>
+    ) : null;
+
+    return (
+      <div className="builder-module-preview-copy">
+        {showLabel && !labelInline ? <div style={{ marginBottom: 6 }}>{label}</div> : null}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {showLabel && labelInline ? label : null}
+          <div
+            style={{
+              flex: fieldWidth > 0 ? `0 0 ${fieldWidth}px` : 1,
+              maxWidth: "100%",
+              height,
+              background: "#fff",
+              border: "1px solid #c6d8e8",
+              borderRadius: radius,
+              padding: "0 12px",
+              display: "flex",
+              alignItems: "center",
+              overflow: "hidden"
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#aab", whiteSpace: "nowrap" }}>{placeholder}</span>
+          </div>
+          {showButton ? (
+            <div
+              style={{
+                height,
+                padding: "0 16px",
+                background: accent,
+                border: btnBorderWidth
+                  ? `${btnBorderWidth}px ${s.buttonBorderStyle || "solid"} ${s.buttonBorderColor || "#000000"}`
+                  : "none",
+                borderRadius: radius,
+                display: "flex",
+                alignItems: "center",
+                flexShrink: 0
+              }}
+            >
+              <span
+                style={{
+                  fontSize: num(s.buttonFontSize, 13),
+                  color: s.buttonTextColor || "#fff",
+                  fontWeight: s.buttonBold === "false" ? 400 : 600,
+                  whiteSpace: "nowrap"
+                }}
+              >
+                {buttonLabel}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "site-search-results") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    // Static sample — the real list comes from the live pages at render time.
+    const rows = [
+      { title: "Pricing", before: "Plans start at $19 a month, and every plan includes ", hit: "support", after: " from a real person." },
+      { title: "Contact Us", before: "Our ", hit: "support", after: " team answers within one business day." },
+      { title: "FAQ", before: "How do I reach ", hit: "support", after: " outside office hours?" }
+    ];
+    return (
+      <div className="builder-module-preview-copy">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {rows.map((row, i) => (
+            <div key={i} style={{ borderBottom: i < rows.length - 1 ? "1px solid #e8eef4" : "none", paddingBottom: i < rows.length - 1 ? 12 : 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: accent, marginBottom: 3 }}>{row.title}</div>
+              <div style={{ fontSize: 12, color: "#587592", lineHeight: 1.4 }}>
+                {row.before}
+                <mark style={{ background: "#fff3b0", color: "#18324a" }}>{row.hit}</mark>
+                {row.after}
+              </div>
             </div>
           ))}
         </div>
@@ -2147,25 +2329,6 @@ function serializeHeadlineItems(items: HeadlineItem[]) {
   return serializeHeadlineRotatorEntries(items);
 }
 
-type SlideshowSlide = { id: string; url: string; alt: string };
-
-function parseSlideshowSlides(settings: Record<string, string>): SlideshowSlide[] {
-  try {
-    const raw = JSON.parse(settings.slides || "[]");
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .map((entry, index) => ({
-        id: String((entry as SlideshowSlide)?.id || `slide-${index}`),
-        url: String((entry as SlideshowSlide)?.url || "").trim(),
-        alt: String((entry as SlideshowSlide)?.alt || "")
-      }));
-    // Empty-url slides stay: a just-added slide must survive until the
-    // operator picks its image. Renderers filter empties at display time.
-  } catch {
-    return [];
-  }
-}
-
 function parseSliderItems(settings: Record<string, string>): SliderItem[] {
   return parseBuilderCardItems(settings.sliderItems, "slide", "storage");
 }
@@ -2191,100 +2354,6 @@ function parseSocialItems(settings: Record<string, string>): SocialItem[] {
   } catch {
     return [];
   }
-}
-
-function SlideshowModuleEditor({
-  module,
-  onUpdateModule
-}: {
-  module: BuilderTemplateModule;
-  onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
-}) {
-  const slides = parseSlideshowSlides(module.settings);
-
-  function persist(next: SlideshowSlide[]) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, slides: JSON.stringify(next) } }));
-  }
-
-  function setSetting(key: string, value: string) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
-  }
-
-  function updateSlide(id: string, updates: Partial<SlideshowSlide>) {
-    persist(slides.map((slide) => (slide.id === id ? { ...slide, ...updates } : slide)));
-  }
-
-  function moveSlide(id: string, direction: -1 | 1) {
-    const index = slides.findIndex((slide) => slide.id === id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= slides.length) return;
-    const next = [...slides];
-    const [moved] = next.splice(index, 1);
-    next.splice(target, 0, moved);
-    persist(next);
-  }
-
-  return (
-    <>
-      <div className="builder-slider-design-grid">
-        <BuilderInlineNumberSelectRow>
-          <BuilderInlineNumberSelect
-            label="Interval (ms)"
-            value={module.settings.intervalMs ?? "5000"}
-            min={1000}
-            max={20000}
-            step={500}
-            fallback="5000"
-            onChange={(value) => setSetting("intervalMs", value)}
-          />
-          <BuilderInlineNumberSelect
-            label="Height (px, 0 = auto)"
-            value={module.settings.heightPx || "0"}
-            min={0}
-            max={900}
-            step={20}
-            fallback="0"
-            onChange={(value) => setSetting("heightPx", value === "0" ? "" : value)}
-          />
-        </BuilderInlineNumberSelectRow>
-        <label className="field">
-          <span>Transition</span>
-          <select
-            value={module.settings.transition === "fade" ? "fade" : "slide"}
-            onChange={(e) => setSetting("transition", e.target.value)}
-          >
-            <option value="slide">Slide</option>
-            <option value="fade">Fade</option>
-          </select>
-        </label>
-      </div>
-      <div className="builder-slider-items">
-        {slides.map((slide, index) => (
-          <div key={slide.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>Slide {index + 1}</strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveSlide(slide.id, -1)} title="Move up">↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveSlide(slide.id, 1)} title="Move down">↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => persist(slides.filter((s) => s.id !== slide.id))} title="Delete slide">✕</button>
-              </div>
-            </div>
-            <div className="builder-slider-item-grid">
-              <label className="field builder-slider-item-grid-full"><span>Image</span><BuilderImagePickerField value={slide.url} onChange={(url) => updateSlide(slide.id, { url })} /></label>
-              <label className="field builder-slider-item-grid-full"><span>Alt text</span><input type="text" value={slide.alt} onChange={(e) => updateSlide(slide.id, { alt: e.target.value })} placeholder="Describe the image" /></label>
-            </div>
-          </div>
-        ))}
-      </div>
-      <button
-        type="button"
-        className="secondary-button"
-        onClick={() => persist([...slides, { id: `slide-${Date.now()}-${slides.length + 1}`, url: "", alt: "" }])}
-      >
-        Add Slide
-      </button>
-    </>
-  );
 }
 
 function SliderModuleEditor({
@@ -2879,29 +2948,19 @@ function HeadlineRotatorModuleEditor({
 }
 
 /**
- * Module types whose settings panel is on THE LATTICE (master rule W0,
- * operator 8/12): one label width and one field width for the whole panel,
- * so labels start at the same x and fields start at the same x.
+ * THE LATTICE IS NOW UNIVERSAL (master rule W0; rollout 2026-08-13).
  *
- * ROLLING OUT IS DELETING THIS LIST — replace the lookup below with a
- * constant `true`. The CSS in _builder-react-overrides.css is already
- * written to cover any panel, and the two widths live in _variables.css.
- * The gate exists only because the operator asked to settle the rule on
- * Table before it reaches the other 52 panels; it is a sequencing device,
- * not a design decision.
- */
-/*
- * Which panels are on the lattice (W0). Table settled the rule; Heading
- * joined 2026-08-11 on the operator's word, looking at an Eyebrow heading:
- * "It also hasn't received the new 'Alignment Protocol', so let's apply
- * that one here, too."
+ * Every module settings panel gets it. The gate that used to live here — a
+ * set holding "table", then "table" and "heading" — existed only so the rule
+ * could be settled on one panel before it reached the other 52, which the
+ * operator asked for on 8/12 and signed off on 8/13 ("the Eyebrow module …
+ * can now be considered a model for how these forms should look").
  *
- * The gate still exists because the remaining 50 panels have not been
- * looked at one by one, and W0 is a browser-measured rule — `npm run
- * check:panels` is the only thing that knows whether a panel obeys it.
- * Add a type here, then run that check against a page carrying one.
+ * Nothing replaces it: a per-module opt-out would be the per-field width
+ * override in a bigger coat, and W0 exists to stop exactly that. If a panel
+ * fights the lattice, fix the panel — that is what the heading conversion
+ * did (PR #169) and what this rollout did for the rest.
  */
-const LATTICE_MODULE_TYPES = new Set<BuilderTemplateModuleType>(["table", "heading"]);
 
 function ModuleEditorWrapper({
   isPopped,
@@ -2911,18 +2970,26 @@ function ModuleEditorWrapper({
   children
 }: {
   isPopped: boolean;
-  moduleType: BuilderTemplateModuleType;
+  /**
+   * Stamped on the editor as a modifier class so a panel can lay out its own
+   * chrome. Only Feature Cards uses it today: its editor is two columns, and
+   * the Label / Background / Margins rows are the editor's children rather
+   * than the panel's, so the panel alone cannot place them. A type hook is
+   * the smallest thing that lets CSS reach them — the alternative was moving
+   * the chrome into every settings component.
+   */
+  moduleType: string;
   title: string;
   onClose: () => void;
   children: ReactNode;
 }) {
-  const className = LATTICE_MODULE_TYPES.has(moduleType)
-    ? "builder-module-editor is-lattice"
-    : "builder-module-editor";
+  const className = `builder-module-editor is-lattice builder-module-editor--${moduleType}`;
 
+  // No width cap: popping a module out is how the operator escapes a narrow
+  // column, so the editor takes the room its panel needs (D7).
   if (isPopped) {
     return (
-      <BuilderCenteredModal title={title} onClose={onClose} maxWidth={680}>
+      <BuilderCenteredModal title={title} onClose={onClose}>
         <div className={className}>{children}</div>
       </BuilderCenteredModal>
     );
@@ -2983,6 +3050,7 @@ export function BuilderModuleCard({
     const mobileAlignment = module.settings.mobileAlignment ?? "";
     const isVideoModule = module.type === "video" || (module.type === "image" && module.settings.variant === "video");
     const isStandardImage = module.type === "image" && !isVideoModule;
+    const isSlideshowModule = module.type === "slideshow";
     const isFloatingImage = module.type === "floating-image";
     const isReminderModule = module.type === "reminder";
     const isTableModule = module.type === "table";
@@ -3010,6 +3078,8 @@ export function BuilderModuleCard({
     const isBlogCardManagerModule = module.type === "blog-card-manager";
     const isBlogSearchModule = module.type === "blog-search";
     const isBlogSearchResultsModule = module.type === "blog-search-results";
+    const isSiteSearchModule = module.type === "site-search";
+    const isSiteSearchResultsModule = module.type === "site-search-results";
     const isMessagingTopicListModule = module.type === "messaging-topic-list";
     const isMessagingTagListModule = module.type === "messaging-tag-list";
     const isCrmContactsTableModule = module.type === "crm-contacts-table";
@@ -3104,37 +3174,63 @@ export function BuilderModuleCard({
               }
             />
           </BuilderModuleField>
-          {/* W7: these are the only names these two controls may carry, and
-              the order matches marginFields() in the schema generator, so the
-              pair reads the same on hand-written and generated panels. */}
-          <BuilderModuleField label="Vertical Margin" width="num">
-            <BuilderNumberSelectControl
-              fallback="0"
-              max={160}
-              min={0}
-              value={module.settings.verticalMargin ?? "0"}
-              onChange={(verticalMargin) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, verticalMargin }
-                }))
-              }
-            />
-          </BuilderModuleField>
-          <BuilderModuleField label="Horizontal Margin" width="num">
-            <BuilderNumberSelectControl
-              fallback="0"
-              max={160}
-              min={0}
-              value={module.settings.horizontalMargin ?? "0"}
-              onChange={(horizontalMargin) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, horizontalMargin }
-                }))
-              }
-            />
-          </BuilderModuleField>
+          {/* W7: the four sides, in the same order `marginFields()` emits them,
+              so the set reads identically on hand-written and generated
+              panels. Each side reads the legacy vertical/horizontal pair when
+              its own key is unset, which is what keeps a page that has not
+              been re-saved showing the numbers it is actually rendering. */}
+          {MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => (
+            <BuilderModuleField key={key} label={label} width="num">
+              <BuilderNumberSelectControl
+                fallback="0"
+                max={160}
+                step={5}
+                min={0}
+                value={module.settings[key] ?? module.settings[legacy] ?? "0"}
+                onChange={(next) =>
+                  onUpdateModule((current) => ({
+                    ...current,
+                    settings: { ...current.settings, [key]: next }
+                  }))
+                }
+              />
+            </BuilderModuleField>
+          ))}
+          {/* The nudge, in the strip rather than beside it (operator,
+              2026-08-12: "Add Vertical and Horizontal Offset to the left
+              column"). `BuilderModuleOffsetFields` — what the image module
+              uses — is its own grid, so dropped into a two-column editor its
+              labels and inputs started at their own x-positions, a stagger
+              W0 exists to stop and `check_panels` could not see because that
+              block sits outside every measured group. Inside the strip the
+              two fields are `display: contents` like every other chrome
+              field, so they share the one label track by construction.
+
+              Last on the strip by D9: a nudge is the finest adjustment here,
+              after the margins that move the whole module. */}
+          {isSlideshowModule
+            ? MODULE_NUDGE_SIDES.map(({ key, label, hint }) => (
+                <BuilderModuleField key={key} label={label} width="num">
+                  <input
+                    type="number"
+                    min={-500}
+                    max={500}
+                    step={1}
+                    title={hint}
+                    value={module.settings[key] ?? "0"}
+                    onChange={(event) =>
+                      onUpdateModule((current) => ({
+                        ...current,
+                        settings: {
+                          ...current.settings,
+                          [key]: normalizeSignedOffsetValue(event.target.value, "0")
+                        }
+                      }))
+                    }
+                  />
+                </BuilderModuleField>
+              ))
+            : null}
           {module.type === "text" ? (
             <BuilderModuleField label="Width" width="select-sm">
               <select
@@ -3166,15 +3262,9 @@ export function BuilderModuleCard({
         ...(module.type !== "button" && !isPollCategoryListModule
           ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
           : {}),
-        ...(isHeadingModule
-          ? getModuleMarginStyle(module.settings)
-          : module.type === "button"
-            ? getButtonModuleOuterSpacingStyle(module.settings)
-            : isSocialModule || isCrmFormModule
-            ? getModuleOuterSpacingStyle(module.settings)
-            : isFloatingImage || isReminderModule
-              ? {}
-              : getVerticalMarginStyle(module.settings.verticalMargin))
+        // One reader for every type (W7). A floating image and a reminder are
+        // positioned overlays, so a wrapper margin has nothing to push.
+        ...(isFloatingImage || isReminderModule ? {} : getModuleOuterSpacingStyle(module.settings))
       }}
     >
       {onModuleDragStart ? (
@@ -3262,7 +3352,22 @@ export function BuilderModuleCard({
       ) : null}
 
       {(isExpanded || isPopped) ? (
-        <ModuleEditorWrapper isPopped={isPopped} moduleType={module.type} title={module.name || module.type} onClose={() => setIsPopped(false)}>
+        <ModuleEditorWrapper
+          isPopped={isPopped}
+          moduleType={module.type}
+          title={module.name || module.type}
+          onClose={() => setIsPopped(false)}
+        >
+          {/* A two-column editor runs its chrome down the left column beside
+              the item list, so that column needs a name at the top of it.
+              Every other module keeps the chrome full-width and has no
+              columns to label. Slideshow joined 2026-08-12, which is why this
+              is a set rather than the `=== "feature-cards"` it started as —
+              the second module to want it should not have to find this line
+              by reading the whole file. */}
+          {TWO_COLUMN_EDITOR_TYPES.has(module.type) ? (
+            <div className="builder-cards-panel-heading">Settings</div>
+          ) : null}
           {module.type !== "social" && module.type !== "blog-post-list" ? (
             // Content-sized, not full-panel — this row tops every module,
             // so master rule W1 applies here with maximum leverage.
@@ -3394,6 +3499,10 @@ export function BuilderModuleCard({
               <BuilderBlogSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogSearchResultsModule ? (
               <BuilderBlogSearchResultsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isSiteSearchModule ? (
+              <BuilderSiteSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isSiteSearchResultsModule ? (
+              <BuilderSiteSearchResultsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTopicListModule ? (
               <BuilderMessagingTopicListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isMessagingTagListModule ? (
@@ -3476,6 +3585,10 @@ export function BuilderModuleCard({
               margins but whose own editor never offered them. */}
           {needsRestoredChrome ? sharedModuleChrome : null}
 
+          {/* Image keeps the standalone block — its editor is one full-width
+              column, where a captioned row costs nothing. Slideshow's two
+              nudge fields live in the chrome strip instead; see
+              MODULE_NUDGE_SIDES. */}
           {isStandardImage ? (
             <BuilderModuleOffsetFields
               horizontalOffset={module.settings.horizontalOffset ?? "0"}
@@ -3680,9 +3793,14 @@ export function BuilderModuleCard({
             />
           )}
           {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
-          {module.type === "slideshow" && <SlideshowModuleEditor module={module} onUpdateModule={onUpdateModule} />}
+          {module.type === "slideshow" && (
+            <BuilderSlideshowModuleSettings module={module} onUpdateModule={onUpdateModule} />
+          )}
           {module.type === "feature-cards" && (
             <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+          )}
+          {module.type === "program-list" && (
+            <BuilderProgramListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
           )}
           {module.type === "navigation" && (
             <BuilderNavigationModuleSettings
@@ -3822,6 +3940,12 @@ export function BuilderModuleCard({
           module.type !== "button" &&
           module.type !== "heading" &&
           module.type !== "blog-post-list" &&
+          /* Nothing reads `module.text` on a slideshow — `SlideshowPreview`
+             renders from `settings.slides` alone — so this was an empty box
+             sitting under the Settings column with no effect on anything
+             (doctrine E7). Excluding it does not touch stored text; it just
+             stops offering a control that never did anything. */
+          module.type !== "slideshow" &&
           module.type !== "admin-nav-link" ? (
             <label className="field">
               <span>Content</span>

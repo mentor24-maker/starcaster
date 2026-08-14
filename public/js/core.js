@@ -242,6 +242,7 @@ App.els = {
   assetsFilterTopic: document.getElementById('assetsFilterTopic'),
   assetsFilterAspect: document.getElementById('assetsFilterAspect'),
   assetsFilterUsage: document.getElementById('assetsFilterUsage'),
+  assetsFilterCopies: document.getElementById('assetsFilterCopies'),
   assetsSortUsageBtn: document.getElementById('assetsSortUsageBtn'),
   assetsFilterWidth: document.getElementById('assetsFilterWidth'),
   assetsFilterHeight: document.getElementById('assetsFilterHeight'),

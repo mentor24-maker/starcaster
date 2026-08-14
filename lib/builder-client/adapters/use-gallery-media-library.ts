@@ -14,6 +14,7 @@ import { sortGalleryMediaList, type GalleryMediaListSort } from '../gallery-medi
 import { normalizeGalleryMediaAspect } from '../gallery-media-aspect';
 import { starcasterApi, unwrapEnvelope } from './starcaster-app';
 import { registerGalleryMediaThumbnail } from './gallery-media-thumbnail';
+import { registerImageRenditions, type ImageRendition } from '../image-renditions';
 
 const PAGE_SIZE = 60;
 
@@ -30,6 +31,7 @@ type StarcasterAsset = {
   thumbnailUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
+  renditions?: ImageRendition[];
   createdAt?: string;
 };
 
@@ -53,6 +55,9 @@ export function assetToAdminMediaItem(asset: StarcasterAsset): AdminMediaItem | 
   const kind = assetKind(asset, extension);
   if (!kind) return null;
   if (asset.thumbnailUrl) registerGalleryMediaThumbnail(location, asset.thumbnailUrl);
+  // The builder preview renders the same modules as the live site, so it should
+  // pick from the same scaled-down copies rather than pulling every original.
+  if (asset.renditions) registerImageRenditions(location, asset.renditions);
   return {
     name: String(asset.assetName ?? '').trim() || location.split('/').pop() || location,
     path: location,

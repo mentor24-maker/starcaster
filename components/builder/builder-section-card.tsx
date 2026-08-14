@@ -21,7 +21,6 @@ import { modulePaletteGroups, modulePaletteItems } from "./builder-types";
 import {
   getAlignmentClass,
   getSectionMarginStyle,
-  getVerticalMarginStyle
 } from "./builder-utils";
 
 type BuilderSectionCardProps = {
@@ -43,7 +42,6 @@ type BuilderSectionCardProps = {
   onSaveSection: () => void;
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
-  onUpdateCellPadding: (column: string, value: string) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -114,7 +112,6 @@ export function BuilderSectionCard({
   onSaveSection,
   onUpdateSection,
   onUpdateCellBackground,
-  onUpdateCellPadding,
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
@@ -321,9 +318,14 @@ export function BuilderSectionCard({
   function getCellStyle(column: string): CSSProperties {
     const borderStyle = (section as unknown as Record<string, Record<string, string>>).cellBorderStyle?.[column] ?? "solid";
     const borderWidth = Number.parseInt(section.cellBorderWidth[column] ?? "0", 10);
-    const borderRadius = Number.parseInt(section.cellBorderRadius[column] ?? "24", 10);
+    const borderRadius = Number.parseInt(section.cellBorderRadius[column] ?? "0", 10);
     const shadow = (section as unknown as Record<string, Record<string, string>>).cellShadow?.[column] ?? "none";
     const opacity = (section as unknown as Record<string, Record<string, string>>).cellOpacity?.[column];
+
+    const records = section as unknown as Record<string, Record<string, string> | undefined>;
+    const legacyPadding = section.cellPadding?.[column] ?? "0";
+    const cellSide = (key: string, pairKey: string, fallback: string) =>
+      records[key]?.[column] ?? (pairKey ? records[pairKey]?.[column] : undefined) ?? fallback;
 
     const shadowMap: Record<string, string> = {
       none: "none",
@@ -334,12 +336,26 @@ export function BuilderSectionCard({
 
     return {
       ...resolveBuilderDrillDownSurfaceBackground(section.cellBackgrounds[column], "column"),
-      ...getVerticalMarginStyle(section.cellVerticalMargin?.[column] ?? "0"),
-      padding: `${section.cellPadding[column] ?? "18"}px`,
+      // Four sides, with the pre-2026-08-11 pair and the all-sides number
+      // before it read as fallbacks — same order the live page resolves in,
+      // so the canvas and the page cannot disagree. The cast reaches keys
+      // that live only in stored data now.
+      marginTop: `${cellSide("cellMarginTop", "cellVerticalMargin", "0")}px`,
+      marginBottom: `${cellSide("cellMarginBottom", "cellVerticalMargin", "0")}px`,
+      marginLeft: `${cellSide("cellMarginLeft", "", "0")}px`,
+      marginRight: `${cellSide("cellMarginRight", "", "0")}px`,
+      padding: [
+        cellSide("cellPaddingTop", "cellVerticalPadding", legacyPadding),
+        cellSide("cellPaddingRight", "cellHorizontalPadding", legacyPadding),
+        cellSide("cellPaddingBottom", "cellVerticalPadding", legacyPadding),
+        cellSide("cellPaddingLeft", "cellHorizontalPadding", legacyPadding)
+      ]
+        .map((side) => `${side}px`)
+        .join(" "),
       borderStyle: borderStyle === "none" ? "none" : borderStyle,
       borderWidth: borderStyle === "none" ? 0 : `${Math.max(Number.isFinite(borderWidth) ? borderWidth : 0, 0)}px`,
       borderColor: section.cellBorderColor[column] ?? "transparent",
-      borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 24, 0)}px`,
+      borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 0, 0)}px`,
       boxShadow: shadowMap[shadow] ?? "none",
       opacity: opacity ? Number.parseFloat(opacity) : undefined
     };
@@ -541,7 +557,6 @@ export function BuilderSectionCard({
                         section={section}
                         editorDevice={editorDevice}
                         onUpdateCellBackground={onUpdateCellBackground}
-                        onUpdateCellPadding={onUpdateCellPadding}
                         onUpdateCellBorderWidth={onUpdateCellBorderWidth}
                         onUpdateCellBorderColor={onUpdateCellBorderColor}
                         onUpdateCellBorderRadius={onUpdateCellBorderRadius}

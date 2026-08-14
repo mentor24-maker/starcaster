@@ -2,6 +2,7 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary,
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { PAGE_SEARCH_PRIORITIES } from "@/lib/page-search-priority";
 import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars, getThemeShellBackgroundSeedColor } from "./builder-utils";
 
 type SortField = "name" | "slug" | "template" | "visibility" | "updatedAt";
@@ -80,6 +81,8 @@ type BuilderPageListProps = {
   onSavePage: () => void;
   pageVisibility: PageVisibility;
   onSetPageVisibility: (visibility: PageVisibility) => void;
+  pageSearchPriority: string;
+  onSetPageSearchPriority: (value: string) => void;
   autoNewPage?: boolean;
   /** When mounted to edit a specific page (e.g. Manage Pages CRUD edit), open Page Details. */
   autoOpenPageDetails?: boolean;
@@ -122,6 +125,8 @@ export function BuilderPageList({
   onSavePage,
   pageVisibility,
   onSetPageVisibility,
+  pageSearchPriority,
+  onSetPageSearchPriority,
   autoNewPage,
   autoOpenPageDetails,
   snapshots,
@@ -885,12 +890,20 @@ export function BuilderPageList({
                 onChange={(event) => onApplyTemplate(event.target.value)}
                 onBlur={handlePageDetailsFieldBlur}
               >
-                <option value="">Select a template</option>
+                <option value="">No template</option>
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name}
                   </option>
                 ))}
+                {/* A page saved before page-templates existed carries a layout
+                    name here rather than a template id, so it matches none of
+                    the options above.  Show it as itself instead of letting the
+                    select fall back to a blank that reads as "unset" and invites
+                    the operator to replace it. */}
+                {pageTemplateId && !templates.some((t) => t.id === pageTemplateId) ? (
+                  <option value={pageTemplateId}>Legacy layout (not a template)</option>
+                ) : null}
               </select>
             </label>
             <label className="field">
@@ -918,6 +931,21 @@ export function BuilderPageList({
                 <option value="public">Public</option>
                 <option value="private">Private</option>
                 <option value="draft">Draft</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Search</span>
+              <select
+                className="builder-page-details-field"
+                value={pageSearchPriority || "normal"}
+                onChange={(event) => onSetPageSearchPriority(event.target.value)}
+                onBlur={handlePageDetailsFieldBlur}
+              >
+                {PAGE_SEARCH_PRIORITIES.map((option) => (
+                  <option key={option.value} value={option.value} title={option.hint}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
             <div className="builder-meta-grid-pages-background">

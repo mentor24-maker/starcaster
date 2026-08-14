@@ -42,9 +42,16 @@ Record **packs** or individual files after you run them. Oldest first.
 | 2026-08-05 | `site_import_setup.sql` | | | ✓ | Site Import Phase 1: `app_site_import_jobs`, `app_site_import_assets` (operator ran in Supabase SQL editor) |
 | 2026-08-06 | `site_import_setup.sql` (re-run) | | | ✓ | Adds `app_site_import_jobs.caps` (per-job cap overrides); file is idempotent |
 | 2026-08-07 | `theme_wizard_setup.sql` | | | ✓ | Theme Wizard Phase 1: `theme_wizard_sessions`, `_candidates`, `_jobs`, `_library_entries`. Operator ran in the Supabase SQL editor; existence verified against prod. **Not applied locally** — a local run is still outstanding. First attempt hit the Normie DB and was refused by the `app_projects` FK, which is the guard working as intended. |
+| 2026-08-12 | `auth_sessions_active_project_migration.sql` | ✓ | | ✓ | `app_auth_sessions.active_project_id`. **Written long before this date and never applied** — so every server-side "remember my workspace" write failed silently for months (`setActiveProjectForSession` returned an error nobody read), and the active project survived only in the browser's localStorage. Clearing storage, a new device, or a private window meant no project at all, and every scoped call answered "Active project is required". Applied to prod and local on 2026-08-12 after the gap was found. |
+| 2026-08-12 | `app_invitations_setup.sql` | ✓ | | ✓ | Invite-only sign-up: `app_invitations`. **Applying this file is the switch** — registration is invitation-only if and only if the table exists (`REGISTRATION_INVITE_ONLY=false` overrides). Ships with PR #204. |
 | | | | | | |
 
 *Add rows above as you apply scripts. Do not delete history—strike through superseded entries if needed.*
+
+**A missing row is not proof a file was never needed.** The `active_project_id`
+row above sat unapplied for months precisely because nothing recorded it and
+nothing failed loudly. Before assuming a column exists, check the database, not
+this table — and when you find a gap, add the row.
 
 ---
 

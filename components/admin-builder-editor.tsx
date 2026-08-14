@@ -50,6 +50,7 @@ import {
 } from "./builder/builder-utils";
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList, pageVisibilityFromRecord, pageVisibilityToFlags, type PageVisibility } from "./builder/builder-page-list";
+import { BuilderPageHistory } from "./builder/builder-page-history";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -119,6 +120,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [pageSlug, setPageSlug] = useState("");
   const [pageTemplateId, setPageTemplateId] = useState("");
   const [pageVisibility, setPageVisibility] = useState<PageVisibility>("public");
+  const [pageSearchPriority, setPageSearchPriority] = useState<string>("normal");
   const [draft, setDraft] = useState(createDraftFromTemplate(null));
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
   const [newSectionOpenFocusId, setNewSectionOpenFocusId] = useState<string | null>(null);
@@ -130,6 +132,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
   const pageThemeDirtyRef = useRef(false);
+  // Template and theme are only written back when the operator actually picked
+  // one.  Both selects render blank whenever the stored value isn't among their
+  // options, and an unconditional write turns that cosmetic blank into a real
+  // NULL on save — silently unsetting a theme nobody touched.
+  const pageTemplateDirtyRef = useRef(false);
   const hydratedTemplateSelectionRef = useRef("");
   const [galleryMedia, setGalleryMedia] = useState<AdminMediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -459,11 +466,15 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
 
     hydratedPageSelectionRef.current = selectionKey;
     pageThemeDirtyRef.current = false;
+    pageTemplateDirtyRef.current = false;
     setDraft(createDraftFromPage(page));
     setPageSlug(page?.slug ?? "");
     setPageTemplateId(page?.templateId ?? "");
     setPageThemeId(page?.themeId ?? "");
     setPageVisibility(pageVisibilityFromRecord(page));
+    // Pages saved before the column existed have nothing here; "normal" is
+    // what unset means everywhere else too.
+    setPageSearchPriority(page?.searchPriority || "normal");
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
 
@@ -602,13 +613,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     updateSection(sectionId, (s) => ({
       ...s,
       cellBackgrounds: { ...s.cellBackgrounds, [column]: updater(s.cellBackgrounds[column] ?? createDefaultBackgroundSettings()) }
-    }));
-  }
-
-  function updateCellPadding(sectionId: string, column: string, value: string) {
-    updateSection(sectionId, (s) => ({
-      ...s,
-      cellPadding: { ...s.cellPadding, [column]: value }
     }));
   }
 
@@ -1484,11 +1488,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   function startNewPage() {
     hydratedPageSelectionRef.current = "";
     pageThemeDirtyRef.current = false;
+    pageTemplateDirtyRef.current = false;
     setSelectedPageId("");
     setPageSlug("");
     setPageTemplateId("");
     setPageThemeId("");
     setPageVisibility("public");
+    setPageSearchPriority("normal");
     setDraft(createDraftFromPage(null));
     setMessage(null);
     setError(null);
@@ -1505,12 +1511,29 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }
 
   function applyTemplateToPage(templateId: string) {
+    pageTemplateDirtyRef.current = true;
     setPageTemplateId(templateId);
+    if (!templateId) return;
+
     const template = pageLayoutTemplates.find((t) => t.id === templateId) ?? null;
-    if (!template) { setDraft(createDraftFromPage(null)); return; }
+    if (!template) return;
     // Stub templates (empty layoutSections) only tag the page; they don't clear the layout.
     if (!template.layoutSections.length) return;
-    setDraft((c) => ({ id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
+
+    // Choosing a template NEVER overwrites a page that already has content.
+    // This dropdown reads blank whenever the page's stored value isn't one of
+    // its own options — which is every page carrying a legacy layout name —
+    // so a destructive apply here reaches the operator as "the field was
+    // empty, I filled it in, the page emptied out".  That is how the Delray
+    // home page lost 35 sections on 2026-08-14.  Seeding an empty page is the
+    // useful half of this and is kept; replacing real content is a deliberate
+    // act and needs its own command, not a change event on a select.
+    if (draft.layoutSections.length) {
+      setMessage(`Tagged this page with "${template.name}". Its existing layout was kept — a template never replaces content that is already on the page.`);
+      return;
+    }
+
+    setDraft((c) => ({ ...c, id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
   }
 
   async function makeTemplateFromPage() {
@@ -1788,7 +1811,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // slugs). Allow saving an existing root page without a slug; only require
     // one when creating a new page so we don't silently mint duplicate roots.
     if (!selectedPageId && !pageSlug.trim()) { setError("Page slug is required."); return; }
-    if (!pageTemplateId) { setError("Select a template before saving a page."); return; }
     setIsSaving(true); setError(null); setMessage(null);
     try {
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
@@ -1797,9 +1819,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         body: JSON.stringify({
           name: draft.name,
           slug: pageSlug,
-          templateId: pageTemplateId,
-          themeId: pageThemeId || null,
+          // Omitted, not nulled, when untouched: the store only writes fields
+          // the body actually carries, so leaving them out preserves whatever
+          // the row already holds instead of clobbering it with a blank select.
+          ...(!selectedPageId || pageTemplateDirtyRef.current ? { templateId: pageTemplateId } : {}),
+          ...(!selectedPageId || pageThemeDirtyRef.current ? { themeId: pageThemeId || null } : {}),
           ...pageVisibilityToFlags(pageVisibility),
+          searchPriority: pageSearchPriority,
           pageBackground: draft.pageBackground,
           theme: draft.theme,
           layoutSections: draft.layoutSections
@@ -1808,6 +1834,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       if (data.page) {
         pageThemeDirtyRef.current = false;
+        pageTemplateDirtyRef.current = false;
         setPageThemeId(data.page.themeId ?? "");
       }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
@@ -2322,6 +2349,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onSavePage={() => void savePage()}
           pageVisibility={pageVisibility}
           onSetPageVisibility={setPageVisibility}
+          pageSearchPriority={pageSearchPriority}
+          onSetPageSearchPriority={setPageSearchPriority}
           autoNewPage={autoNewPage}
           autoOpenPageDetails={Boolean(initialRecordId && initialMode === "pages")}
           snapshots={snapshots}
@@ -2334,6 +2363,20 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onDeleteSnapshot={(id) => void deleteSnapshot(id)}
         />
       )}
+
+      {builderMode === "pages" && selectedPageId ? (
+        <BuilderPageHistory
+          pageId={selectedPageId}
+          pageName={draft.name || "this page"}
+          onRestored={() => {
+            // Pull the restored layout back into the open editor, otherwise the
+            // canvas keeps showing the version we just replaced and the next
+            // save would write it straight back over the restore.
+            hydratedPageSelectionRef.current = "";
+            void loadPages();
+          }}
+        />
+      ) : null}
 
       {builderMode !== "modules" ? (
         <>
@@ -2437,7 +2480,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             onCloneSection={() => cloneSection(section.id)}
                             onSaveSection={() => void saveSection(section.id)}
                             onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
-                            onUpdateCellPadding={(col, value) => updateCellPadding(section.id, col, value)}
                             onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                             onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                             onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}
@@ -2514,7 +2556,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         onCloneSection={() => cloneSection(section.id)}
                         onSaveSection={() => void saveSection(section.id)}
                         onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
-                        onUpdateCellPadding={(col, value) => updateCellPadding(section.id, col, value)}
                         onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                         onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                         onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}

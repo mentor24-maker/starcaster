@@ -310,59 +310,92 @@ function splitIntoColumns(strips: BuilderSchemaStrip[], columns: number): Builde
 }
 
 /**
- * The H+V margin pair, always together and adjacent — doctrine E4 by
- * construction. Spread the result into a layout strip:
- *   [{ ... }, ...marginFields("getModuleMarginStyle")]
- * Only for modules whose renderer honours BOTH keys; wiring a control to a
- * setting nothing reads violates E7 (see the heading/current-poll debt note
- * in scripts/check_ui_doctrine.cjs).
+ * The four sides of a spacing box, in one fixed order: Top, Bottom, Left,
+ * Right. Every object in the Builder — row, cell, module — spells margin and
+ * padding this way from 2026-08-11 (operator: "standardize all objects on the
+ * Top/Bottom/Left/Right model"). `legacy` is the vertical/horizontal key that
+ * side used to come from, read as its fallback so a page that has not been
+ * re-saved shows the number it is actually rendering.
+ */
+export const MODULE_MARGIN_SIDES = [
+  { key: "marginTop", label: "Top Margin", legacy: "verticalMargin" },
+  { key: "marginBottom", label: "Bottom Margin", legacy: "verticalMargin" },
+  { key: "marginLeft", label: "Left Margin", legacy: "horizontalMargin" },
+  { key: "marginRight", label: "Right Margin", legacy: "horizontalMargin" }
+] as const;
+
+/**
+ * Spacing counts in fives (W8, extended 2026-08-12 — operator: "sizes
+ * incremented by 1 that should be 5", on the Slideshow module's margins).
+ *
+ * A margin that runs 0–160 in ones is 161 options, and the operator was
+ * scrolling past 74 numbers to reach 75. Nobody nudges an outer margin by one
+ * pixel; the values people actually pick are multiples of five. Button
+ * padding (1–50) keeps its 1px steps — that one is the inside of a pill,
+ * where a single pixel is visible.
+ */
+export const MODULE_SPACING_STEP = 5;
+
+export const MODULE_PADDING_SIDES = [
+  { key: "paddingTop", label: "Top Padding", legacy: "verticalPadding" },
+  { key: "paddingBottom", label: "Bottom Padding", legacy: "verticalPadding" },
+  { key: "paddingLeft", label: "Left Padding", legacy: "horizontalPadding" },
+  { key: "paddingRight", label: "Right Padding", legacy: "horizontalPadding" }
+] as const;
+
+/**
+ * A module's four margin controls, always together and in side order —
+ * doctrine E4 by construction. Spread the result into a layout strip:
+ *   [{ ... }, ...marginFields("getModuleOuterSpacingStyle")]
+ * Only for modules whose renderer honours the keys; wiring a control to a
+ * setting nothing reads violates E7.
  */
 export function marginFields(rendersVia: string, max = 80): BuilderSchemaField[] {
-  return [
-    { key: "verticalMargin", label: "Vertical Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia },
-    { key: "horizontalMargin", label: "Horizontal Margin", width: "num", control: "number", min: 0, max, fallback: "0", rendersVia }
-  ];
+  return MODULE_MARGIN_SIDES.map(({ key, label }) => ({
+    key,
+    label,
+    width: "num" as const,
+    control: "number" as const,
+    min: 0,
+    max,
+    step: MODULE_SPACING_STEP,
+    fallback: "0",
+    rendersVia
+  }));
+}
+
+/** A module's four padding controls, same shape as `marginFields`. */
+export function paddingFields(rendersVia: string, max = 160): BuilderSchemaField[] {
+  return MODULE_PADDING_SIDES.map(({ key, label }) => ({
+    key,
+    label,
+    width: "num" as const,
+    control: "number" as const,
+    min: 0,
+    max,
+    step: MODULE_SPACING_STEP,
+    fallback: "0",
+    rendersVia
+  }));
 }
 
 /**
- * The four spacing controls, with the only names they are allowed to have
- * (master rule W7, operator 8/10): Vertical Margin, Horizontal Margin,
- * Vertical Padding, Horizontal Padding. Pass only the keys a module
- * actually honours — a control wired to nothing is a C6 violation.
+ * A drop shadow is on for both the current value and the legacy `"on"`.
+ *
+ * `prefix` names which shadow — a module may have more than one (Navigation
+ * casts a `box-shadow` from the bar and a `text-shadow` from the links, and
+ * A7 files those on different axes). `defaultOn` is for a shadow that was
+ * painted before it was controllable: the menu bar's, which must stay on
+ * when the setting is absent or every live menu loses it.
  */
-export function spacingFields(
-  rendersVia: string,
-  keys: Partial<{
-    verticalMargin: string;
-    horizontalMargin: string;
-    verticalPadding: string;
-    horizontalPadding: string;
-  }>,
-  max = 160
-): BuilderSchemaField[] {
-  const labels: Record<string, string> = {
-    verticalMargin: "Vertical Margin",
-    horizontalMargin: "Horizontal Margin",
-    verticalPadding: "Vertical Padding",
-    horizontalPadding: "Horizontal Padding"
-  };
-  return (["verticalMargin", "horizontalMargin", "verticalPadding", "horizontalPadding"] as const)
-    .filter((name) => keys[name])
-    .map((name) => ({
-      key: keys[name] as string,
-      label: labels[name],
-      width: "num" as const,
-      control: "number" as const,
-      min: 0,
-      max,
-      fallback: "0",
-      rendersVia
-    }));
-}
-
-/** A drop shadow is on for both the current value and the legacy `"on"`. */
-export function dropShadowIsOn(settings: SettingsRecord): boolean {
-  return settings.dropShadow === "true" || settings.dropShadow === "on";
+export function dropShadowIsOn(
+  settings: SettingsRecord,
+  prefix = "dropShadow",
+  defaultOn = false
+): boolean {
+  const value = settings[prefix];
+  if (value === undefined || value === "") return defaultOn;
+  return value === "true" || value === "on";
 }
 
 /**
@@ -384,14 +417,36 @@ export function dropShadowIsOn(settings: SettingsRecord): boolean {
  */
 export function dropShadowFields(
   rendersVia: string,
-  options: { visibleWhen?: (settings: SettingsRecord) => boolean } = {}
+  options: {
+    visibleWhen?: (settings: SettingsRecord) => boolean;
+    /**
+     * Key prefix, for a module with more than one shadow. `dropShadow` (the
+     * default) keeps every existing caller on its existing keys; Navigation
+     * passes `navShadow` for the bar and `navTextShadow` for the links.
+     */
+    prefix?: string;
+    /** Overrides "Drop Shadow" when a panel carries two of these. */
+    label?: string;
+    /** On when the setting is absent — for a shadow that predates its control. */
+    defaultOn?: boolean;
+    /** Per-part overrides, so a bar shadow can reach further than a letter's. */
+    range?: { offset?: number; blur?: number };
+    defaults?: { x?: string; y?: string; blur?: string; color?: string };
+  } = {}
 ): BuilderSchemaField[] {
   const gate = options.visibleWhen ?? (() => true);
-  const detailVisible = (settings: SettingsRecord) => gate(settings) && dropShadowIsOn(settings);
+  const prefix = options.prefix ?? "dropShadow";
+  const defaultOn = options.defaultOn ?? false;
+  const offset = options.range?.offset ?? 20;
+  const blur = options.range?.blur ?? 30;
+  const defaults = options.defaults ?? {};
+  const detailVisible = (settings: SettingsRecord) =>
+    gate(settings) && dropShadowIsOn(settings, prefix, defaultOn);
+
   return [
     {
-      key: "dropShadow",
-      label: "Drop Shadow",
+      key: prefix,
+      label: options.label ?? "Drop Shadow",
       width: "check",
       control: "custom",
       rendersVia,
@@ -399,51 +454,51 @@ export function dropShadowFields(
       render: (ctx) => (
         <input
           type="checkbox"
-          checked={dropShadowIsOn(ctx.settings)}
-          onChange={(event) => ctx.set("dropShadow", event.target.checked ? "true" : "false")}
+          checked={dropShadowIsOn(ctx.settings, prefix, defaultOn)}
+          onChange={(event) => ctx.set(prefix, event.target.checked ? "true" : "false")}
         />
       )
     },
     {
-      key: "dropShadowColor",
+      key: `${prefix}Color`,
       label: "Shadow Color",
       width: "color",
       control: "color",
       dialogLabel: "Drop shadow color",
-      fallback: "#000000",
+      fallback: defaults.color ?? "#000000",
       rendersVia,
       visibleWhen: detailVisible
     },
     {
-      key: "dropShadowX",
+      key: `${prefix}X`,
       label: "Shadow X",
       width: "num",
       control: "number",
-      min: -20,
-      max: 20,
-      fallback: "3",
+      min: -offset,
+      max: offset,
+      fallback: defaults.x ?? "3",
       rendersVia,
       visibleWhen: detailVisible
     },
     {
-      key: "dropShadowY",
+      key: `${prefix}Y`,
       label: "Shadow Y",
       width: "num",
       control: "number",
-      min: -20,
-      max: 20,
-      fallback: "3",
+      min: -offset,
+      max: offset,
+      fallback: defaults.y ?? "3",
       rendersVia,
       visibleWhen: detailVisible
     },
     {
-      key: "dropShadowBlur",
+      key: `${prefix}Blur`,
       label: "Shadow Blur",
       width: "num",
       control: "number",
       min: 0,
-      max: 30,
-      fallback: "2",
+      max: blur,
+      fallback: defaults.blur ?? "2",
       rendersVia,
       visibleWhen: detailVisible
     }
@@ -509,6 +564,14 @@ function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext
           themeColors={ctx.themeColors}
           value={value}
           onChange={(hex) => ctx.set(field.key, hex)}
+          /*
+           * Every colour in a panel can be emptied again (master rule C9,
+           * 2026-08-12). The picker has always supported a Clear button; the
+           * generator simply never passed one, so a colour could be set and
+           * never unset — "I can set it to any color I want. I just can't
+           * clear it." An empty value renders as transparent.
+           */
+          onClear={() => ctx.set(field.key, "")}
         />
       );
     case "align":

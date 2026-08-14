@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import type {
   BackgroundSettings,
   BuilderPageRecord,
@@ -22,6 +22,7 @@ import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { BuilderModuleField } from "./builder-module-field";
 import { BuilderModulePaletteModal } from "./builder-module-palette-modal";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import {
@@ -43,16 +44,6 @@ const TABLE_CELL_EXCLUDED_PALETTE_GROUPS: ModulePaletteGroup[] = ["table", "cont
 
 const MAX_COLUMNS = 10;
 const MAX_ROWS = 100;
-
-/**
- * Cell modules whose editor is the schema generator's multi-column axis
- * layout (D8). 560px is a one-column form's width; four axes in it would
- * crop (L4/D7 — a modal sizes to its content, and a form modal never
- * scrolls sideways). 1200 is four 260px columns plus their gaps and the modal's own
- * padding, measured — so the axes read across one row exactly as they
- * do in a section panel.
- */
-const AXIS_EDITOR_TYPES = new Set(["button", "heading", "image", "text"]);
 
 /**
  * Max Width presets (C1 — a dropdown of knowable values, not a free-form
@@ -149,13 +140,107 @@ function TableCellModules({
             <BuilderCenteredModal
               title={mod.name || mod.type}
               onClose={() => setEditingId(null)}
-              maxWidth={AXIS_EDITOR_TYPES.has(mod.type) ? 1200 : 560}
             >
-            <div className="builder-table-cell-module-editor">
-              <label className="field">
-                <span>Module label</span>
-                <input type="text" value={mod.name} onChange={(e) => updateModuleField(mod.id, "name", e.target.value)} placeholder="Internal label" />
-              </label>
+            <div className="builder-table-cell-module-editor is-lattice">
+              {/*
+                * W0: the cell editor's own fields go in a lattice column like
+                * any other panel. They were bare `label.field` pairs — label
+                * stacked above a full-width box — which is how drilling into
+                * an image inside a table cell reached a modal the lattice had
+                * never touched (operator 8/12).
+                */}
+              <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "1" } as CSSProperties}>
+                <div className="builder-schema-panel-column">
+                  {/* "Module" rather than "Content": the nested panel below
+                      brings its own Content axis, and two Content headings a
+                      few hundred pixels apart read as a bug. */}
+                  <div className="builder-schema-group-title">Module</div>
+                  <BuilderModuleField label="Module label" width="text-md">
+                    <input type="text" value={mod.name} onChange={(e) => updateModuleField(mod.id, "name", e.target.value)} placeholder="Internal label" />
+                  </BuilderModuleField>
+
+                  {(mod.type === "text" || mod.type === "heading") && (
+                    <BuilderSettingRow label="Alignment" fullWidth>
+                      <BuilderAlignmentIconGroup
+                        value={getModuleAlignment(mod.settings)}
+                        onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
+                      />
+                    </BuilderSettingRow>
+                  )}
+
+                  {mod.type === "text" && (
+                    <BuilderModuleField label="Content" width="full">
+                      {/* Simple Text (PR #154) renders no <p>, so it edits as plain
+                          text — a rich-text editor here would inject the markup the
+                          variant exists to avoid. */}
+                      {isPlainTextVariant(mod.settings) ? (
+                        <textarea
+                          className="builder-textarea"
+                          value={mod.text}
+                          onChange={(event) => updateModuleField(mod.id, "text", event.target.value)}
+                          placeholder={PLAIN_TEXT_PLACEHOLDER}
+                          rows={3}
+                        />
+                      ) : (
+                        <BuilderRichTextEditor value={mod.text} onChange={(value) => updateModuleField(mod.id, "text", value)} />
+                      )}
+                    </BuilderModuleField>
+                  )}
+
+                  {mod.type === "quote" && (
+                    <BuilderModuleField label="Content" width="full">
+                      <textarea className="builder-textarea" value={mod.text} onChange={(e) => updateModuleField(mod.id, "text", e.target.value)} placeholder="Enter content" rows={2} />
+                    </BuilderModuleField>
+                  )}
+
+                  {mod.type === "image" && (
+                    <>
+                      <BuilderModuleField label="Media URL" width="full">
+                        <BuilderImagePickerField
+                          value={mod.settings.url ?? ""}
+                          onChange={(url) => updateModuleSettings(mod.id, { url })}
+                        />
+                      </BuilderModuleField>
+                      <BuilderSettingRow label="Alignment" fullWidth>
+                        <BuilderAlignmentIconGroup
+                          value={getModuleAlignment(mod.settings)}
+                          onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
+                        />
+                      </BuilderSettingRow>
+                      <BuilderModuleField label="Link" width="full">
+                        <div className="builder-image-link-row">
+                          {pages.length > 0 && (
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) updateModuleSettings(mod.id, { linkUrl: e.target.value });
+                              }}
+                            >
+                              <option value="">— Page —</option>
+                              {pages.map((p) => (
+                                <option key={p.id} value={`/${p.slug}`}>{p.name}</option>
+                              ))}
+                            </select>
+                          )}
+                          <input
+                            type="text"
+                            value={mod.settings.linkUrl ?? ""}
+                            onChange={(e) => updateModuleSettings(mod.id, { linkUrl: normalizeBuilderAssetUrl(e.target.value) })}
+                            placeholder="/path-or-url"
+                          />
+                        </div>
+                      </BuilderModuleField>
+                      <BuilderModuleField label="New Tab" width="check">
+                        <input
+                          type="checkbox"
+                          checked={mod.settings.newTab === "true"}
+                          onChange={(e) => updateModuleSettings(mod.id, { newTab: e.target.checked ? "true" : "false" })}
+                        />
+                      </BuilderModuleField>
+                    </>
+                  )}
+                </div>
+              </div>
 
               {mod.type === "heading" ? (
                 <BuilderHeadingModuleSettings
@@ -179,42 +264,6 @@ function TableCellModules({
                 />
               ) : null}
 
-              {(mod.type === "text" || mod.type === "heading") && (
-                <BuilderSettingRow label="Alignment" fullWidth>
-                  <BuilderAlignmentIconGroup
-                    value={getModuleAlignment(mod.settings)}
-                    onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
-                  />
-                </BuilderSettingRow>
-              )}
-
-              {mod.type === "text" && (
-                <label className="field">
-                  <span>Content</span>
-                  {/* Simple Text (PR #154) renders no <p>, so it edits as plain
-                      text — a rich-text editor here would inject the markup the
-                      variant exists to avoid. */}
-                  {isPlainTextVariant(mod.settings) ? (
-                    <textarea
-                      className="builder-textarea"
-                      value={mod.text}
-                      onChange={(event) => updateModuleField(mod.id, "text", event.target.value)}
-                      placeholder={PLAIN_TEXT_PLACEHOLDER}
-                      rows={3}
-                    />
-                  ) : (
-                    <BuilderRichTextEditor value={mod.text} onChange={(value) => updateModuleField(mod.id, "text", value)} />
-                  )}
-                </label>
-              )}
-
-              {mod.type === "quote" && (
-                <label className="field">
-                  <span>Content</span>
-                  <textarea className="builder-textarea" value={mod.text} onChange={(e) => updateModuleField(mod.id, "text", e.target.value)} placeholder="Enter content" rows={2} />
-                </label>
-              )}
-
               {/* The cell button gets the SAME panel as a button in a
                   section — it used to get four hand-rolled fields (label,
                   link, two colours) and nothing else, so a button dropped in
@@ -230,60 +279,13 @@ function TableCellModules({
                 />
               ) : null}
 
-              {mod.type === "image" && (
-                <>
-                  <label className="field">
-                    <span>Media URL</span>
-                    <BuilderImagePickerField
-                      value={mod.settings.url ?? ""}
-                      onChange={(url) => updateModuleSettings(mod.id, { url })}
-                    />
-                  </label>
-                  <BuilderSettingRow label="Alignment" fullWidth>
-                    <BuilderAlignmentIconGroup
-                      value={getModuleAlignment(mod.settings)}
-                      onChange={(alignment) => updateModuleSettings(mod.id, { alignment })}
-                    />
-                  </BuilderSettingRow>
-                  <label className="field">
-                    <span>Link</span>
-                    <div className="builder-image-link-row">
-                      {pages.length > 0 && (
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) updateModuleSettings(mod.id, { linkUrl: e.target.value });
-                          }}
-                        >
-                          <option value="">— Page —</option>
-                          {pages.map((p) => (
-                            <option key={p.id} value={`/${p.slug}`}>{p.name}</option>
-                          ))}
-                        </select>
-                      )}
-                      <input
-                        type="text"
-                        value={mod.settings.linkUrl ?? ""}
-                        onChange={(e) => updateModuleSettings(mod.id, { linkUrl: normalizeBuilderAssetUrl(e.target.value) })}
-                        placeholder="/path-or-url"
-                      />
-                    </div>
-                  </label>
-                  <label className="field builder-checkbox-field">
-                    <span>New Tab</span>
-                    <input
-                      type="checkbox"
-                      checked={mod.settings.newTab === "true"}
-                      onChange={(e) => updateModuleSettings(mod.id, { newTab: e.target.checked ? "true" : "false" })}
-                    />
-                  </label>
-                  <BuilderImageModuleSettings
-                    module={mod}
-                    themeColors={themeColors}
-                    onUpdateModule={(updater) => updateCellModule(mod.id, updater)}
-                  />
-                </>
-              )}
+              {mod.type === "image" ? (
+                <BuilderImageModuleSettings
+                  module={mod}
+                  themeColors={themeColors}
+                  onUpdateModule={(updater) => updateCellModule(mod.id, updater)}
+                />
+              ) : null}
             </div>
             </BuilderCenteredModal>
           )}

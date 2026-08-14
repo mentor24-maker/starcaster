@@ -32,15 +32,22 @@ type BuilderModuleFieldProps = {
    */
   width: BuilderModuleFieldWidth;
   children: ReactNode;
+  /**
+   * Extra class on the field wrapper. For grid PLACEMENT only — an item
+   * manager running its own lattice (Feature Cards, L6a) needs to say which
+   * pair-column a field belongs to. Never a width: widths are the `width`
+   * token's job, and W0 forbids a per-field one.
+   */
+  className?: string;
 };
 
 export function BuilderModuleFieldStrip({ children, className }: BuilderModuleFieldStripProps) {
   return <div className={["builder-module-field-strip", className].filter(Boolean).join(" ")}>{children}</div>;
 }
 
-export function BuilderModuleField({ label, width, children }: BuilderModuleFieldProps) {
+export function BuilderModuleField({ label, width, children, className }: BuilderModuleFieldProps) {
   return (
-    <div className={`builder-module-field builder-module-field--${width}`}>
+    <div className={[`builder-module-field builder-module-field--${width}`, className].filter(Boolean).join(" ")}>
       <span className="builder-module-field-label">{label}</span>
       <div className="builder-module-field-control">{children}</div>
     </div>

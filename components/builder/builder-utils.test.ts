@@ -10,6 +10,7 @@ import {
   getHeadingModuleStyle,
   getImageOverlayStyle,
   getImageModuleShellStyle,
+  getImageModuleStyle,
   getModuleWidthShellStyle,
   getModuleWidthStyle,
   getPlainTextModuleStyle,
@@ -1043,5 +1044,31 @@ describe("getTableWrapStyle", () => {
     // collapsing the table to nothing. Both old copies did this too.
     expect(getTableWrapStyle({ tableMaxWidth: "abc" })).toEqual({});
     expect(getTableWrapStyle({ tableMaxWidth: "0" })).toEqual({});
+  });
+});
+
+describe("image module padding", () => {
+  it("puts padding inside the frame, so the picture insets and the frame does not grow", () => {
+    const style = getImageModuleStyle({ verticalPadding: "12", horizontalPadding: "20" });
+
+    expect(style.paddingTop).toBe("12px");
+    expect(style.paddingBottom).toBe("12px");
+    expect(style.paddingLeft).toBe("20px");
+    expect(style.paddingRight).toBe("20px");
+    // Width stays the frame's width because the box measures border-to-border.
+    expect(style.boxSizing).toBe("border-box");
+  });
+
+  it("defaults to no padding, so an untouched image is unchanged", () => {
+    const style = getImageModuleStyle({});
+
+    expect(style.paddingTop).toBe("0px");
+    expect(style.paddingLeft).toBe("0px");
+  });
+
+  it("clamps a padding the operator could not have typed by hand", () => {
+    expect(getImageModuleStyle({ verticalPadding: "9999" }).paddingTop).toBe("160px");
+    expect(getImageModuleStyle({ verticalPadding: "-40" }).paddingTop).toBe("0px");
+    expect(getImageModuleStyle({ verticalPadding: "abc" }).paddingTop).toBe("0px");
   });
 });

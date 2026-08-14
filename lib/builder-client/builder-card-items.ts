@@ -9,9 +9,9 @@ import { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl } from "./builde
  *
  * They deliberately store the SAME field names so an operator can move
  * content between them without retyping it. `slider` simply ignores the
- * fields it has no use for (`icon`, `linkLabel`, `imageAlt`), and a card
- * that never had them parses with empty defaults — so the two directions
- * are both lossless-or-graceful, never corrupting.
+ * fields it has no use for (`icon`, `iconImageUrl`, `linkLabel`,
+ * `imageAlt`), and a card that never had them parses with empty defaults —
+ * so the two directions are both lossless-or-graceful, never corrupting.
  *
  * Ratified 2026-08-07 on ClickUp 86bbaffu3: Feature Cards is its own
  * module type rather than a layout mode on `slider`, but the item model
@@ -30,6 +30,13 @@ export type BuilderCardItem = {
   linkUrl: string;
   linkLabel: string;
   icon: string;
+  /**
+   * The card's icon as a picture instead of a typed symbol. Held alongside
+   * `icon` rather than replacing it: the module-level `iconType` setting
+   * decides which one renders, so switching the module back and forth
+   * never destroys the other choice.
+   */
+  iconImageUrl: string;
 };
 
 function str(value: unknown): string {
@@ -67,7 +74,8 @@ export function parseBuilderCardItems(
         imageAlt: str(source.imageAlt),
         linkUrl: str(source.linkUrl),
         linkLabel: str(source.linkLabel),
-        icon: str(source.icon)
+        icon: str(source.icon),
+        iconImageUrl: toImageUrl(source.iconImageUrl)
       };
     });
   } catch {
@@ -89,7 +97,8 @@ export function createBuilderCardItem(index: number, idPrefix = "card"): Builder
     imageAlt: "",
     linkUrl: "",
     linkLabel: "",
-    icon: ""
+    icon: "",
+    iconImageUrl: ""
   };
 }
 

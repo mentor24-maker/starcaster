@@ -8,12 +8,16 @@ import {
   type BuilderTemplateRecord,
   type BuilderTemplateSection
 } from "@/lib/builder-template";
-import { formatEmailPlainTextContent, formatEmailRichTextContent } from "@/lib/email-rich-text";
+import {
+  formatEmailHeadingContent,
+  formatEmailPlainTextContent,
+  formatEmailRichTextContent
+} from "@/lib/email-rich-text";
 import {
   getButtonModuleStyle,
   getHeadingModuleStyle,
   getModuleAlignment,
-  getModuleMarginStyle,
+  getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
   getSectionMarginStyle
 } from "@/components/builder/builder-utils";
@@ -69,18 +73,35 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // card styling. Doing it properly means a nested-table rewrite of the
     // renderer, which is its own task, not a footnote on this one.
     module.type === "feature-cards" ||
+    // Standard 11, decided 2026-08-13: skipped, for the same reason as
+    // Feature Cards. Each program is a CSS grid splitting intro from
+    // timetable, and Outlook's Word engine supports neither grid nor flex —
+    // it would stack every field into one ragged column and lose the
+    // alignment that is the whole point of the timetable. A club emailing
+    // its schedule is a real want, but it needs a nested-table renderer
+    // written for email, not this one bent into shape.
+    module.type === "program-list" ||
     module.type === "social" ||
     module.type === "social-share" ||
     module.type === "table" ||
     module.type === "code" ||
     module.type === "merch" ||
     module.type === "video" ||
-    module.type === "floating-image"
+    module.type === "floating-image" ||
+    // Standard 11, decided 2026-08-14: both Site Search modules are skipped.
+    // Search is a live query against the site's pages, run in the browser
+    // after the page loads. An email has no browser to run it and no live
+    // query string to read, so the box would render as an input nobody can
+    // submit and the results list as a permanently empty state. Neither has
+    // a sensible static form — a snapshot of "results" would be results for
+    // a search nobody performed.
+    module.type === "site-search" ||
+    module.type === "site-search-results"
   ) {
     return "";
   }
 
-  const marginStyle = cssPropertiesToInline(getModuleMarginStyle(module.settings));
+  const marginStyle = cssPropertiesToInline(getModuleOuterSpacingStyle(module.settings));
   const alignment = getModuleAlignment(module.settings);
   const alignAttr = alignment === "center" ? "center" : alignment === "right" ? "right" : "left";
 
@@ -88,7 +109,7 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     const level = module.settings.level || "h2";
     const style = cssPropertiesToInline(getHeadingModuleStyle(module.settings));
 
-    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><${level} style="margin:0;font-family:Arial,Helvetica,sans-serif;${style}">${escapeHtml(module.text || "")}</${level}></td></tr>`;
+    return `<tr><td align="${alignAttr}" style="padding:0 40px 12px;${marginStyle}"><${level} style="margin:0;font-family:Arial,Helvetica,sans-serif;${style}">${formatEmailHeadingContent(module.text)}</${level}></td></tr>`;
   }
 
   if (module.type === "text") {

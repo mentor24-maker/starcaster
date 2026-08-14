@@ -15,10 +15,11 @@ import {
   normalizeHeadlineRotatorHeadlinesJson
 } from "@/lib/headline-rotator";
 import { normalizeBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
-import { escapeHtmlText, sanitizeRichTextHtml } from "@/lib/sanitize-html";
+import { escapeHtmlText, sanitizeInlineHtml, sanitizeRichTextHtml } from "@/lib/sanitize-html";
 import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
+import { backgroundImageUrlFor } from "@/lib/image-renditions";
 
 /**
  * Section (row) column structures. Values are named for their `fr` ratio;
@@ -54,60 +55,78 @@ export type BuilderTemplateLayout =
 
 export type BackgroundStylePreset = "blue-yellow-circles";
 
-export type BuilderTemplateModuleType =
-  | "navigation"
-  | "heading"
-  | "headline-rotator"
-  | "text"
-  | "code"
-  | "merch"
-  | "image"
-  | "floating-image"
-  | "video"
-  | "quote"
-  | "speech-bubble"
-  | "reminder"
-  | "button"
-  | "contact-form"
-  | "player-portal"
-  | "table"
-  | "slider"
-  | "slideshow"
-  | "feature-cards"
-  | "social"
-  | "social-share"
-  | "previous-results"
-  | "current-poll"
-  | "poll-category-list"
-  | "confetti"
-  | "tractor-nav"
-  | "breadcrumb"
-  | "blog-post-list"
-  | "blog-post-card"
-  | "blog-author-bio"
-  | "crm-form"
-  | "crm-contacts-table"
-  | "blog-toc"
-  | "blog-newsletter-subscribe"
-  | "blog-related-posts"
-  | "blog-category-filter"
-  | "blog-post"
-  | "blog-tag-cloud"
-  | "blog-post-tags"
-  | "blog-post-create"
-  | "blog-post-manager"
-  | "blog-category-manager"
-  | "blog-card-manager"
-  | "blog-search"
-  | "blog-search-results"
-  | "messaging-topic-list"
-  | "messaging-tag-list"
-  | "admin-team-users"
-  | "admin-modules"
-  | "admin-login"
-  | "admin-nav-link"
-  | "admin-site-settings"
-  | "admin-support-form";
+/**
+ * Every builder module type, as a runtime VALUE — the union below is derived
+ * from it, so the two can never disagree.
+ *
+ * It is a list rather than a bare union because tooling outside TypeScript
+ * needs to enumerate the types. `scripts/ui/seed_fixture.mjs` builds the
+ * panel-lattice fixture from it: one module of every type on one page, so
+ * `npm run check:panels` measures them all. A hand-maintained copy of this
+ * list is exactly how that check once reported "OK across 6 panels" while
+ * silently measuring no heading at all (PR #169) — the fixture must not be
+ * able to fall behind the types it is supposed to cover.
+ */
+export const BUILDER_MODULE_TYPES = [
+  "navigation",
+  "heading",
+  "headline-rotator",
+  "text",
+  "code",
+  "merch",
+  "image",
+  "floating-image",
+  "video",
+  "quote",
+  "speech-bubble",
+  "reminder",
+  "button",
+  "contact-form",
+  "player-portal",
+  "table",
+  "slider",
+  "slideshow",
+  "feature-cards",
+  "program-list",
+  "social",
+  "social-share",
+  "previous-results",
+  "current-poll",
+  "poll-category-list",
+  "confetti",
+  "tractor-nav",
+  "breadcrumb",
+  "blog-post-list",
+  "blog-post-card",
+  "blog-author-bio",
+  "crm-form",
+  "crm-contacts-table",
+  "blog-toc",
+  "blog-newsletter-subscribe",
+  "blog-related-posts",
+  "blog-category-filter",
+  "blog-post",
+  "blog-tag-cloud",
+  "blog-post-tags",
+  "blog-post-create",
+  "blog-post-manager",
+  "blog-category-manager",
+  "blog-card-manager",
+  "blog-search",
+  "blog-search-results",
+  "site-search",
+  "site-search-results",
+  "messaging-topic-list",
+  "messaging-tag-list",
+  "admin-team-users",
+  "admin-modules",
+  "admin-login",
+  "admin-nav-link",
+  "admin-site-settings",
+  "admin-support-form"
+] as const;
+
+export type BuilderTemplateModuleType = (typeof BUILDER_MODULE_TYPES)[number];
 
 export type BuilderTemplateModule = {
   id: string;
@@ -434,6 +453,43 @@ export type BuilderTemplateSection = {
    */
   paddingTop: string;
   paddingBottom: string;
+  /**
+   * Breathing room inside the row's left and right edges. ADDS to the inset
+   * that already centres every row on the theme's content width, so setting it
+   * pushes content further in rather than breaking the shared left edge that
+   * lines a contact strip up with the hero above it. Defaults to "0".
+   */
+  paddingLeft: string;
+  paddingRight: string;
+  /** Space OUTSIDE the row's left and right edges — moves the row itself in. */
+  marginLeft: string;
+  marginRight: string;
+  /** Space between this row's columns. "16" is the gap that used to be fixed. */
+  columnGap: string;
+  /** Floor for the row's height, so a band can be taller than its content. "0" = size to content. */
+  minHeight: string;
+  /**
+   * Per-column proportions, keyed by column. All zero (the default) means
+   * "follow the Layout preset"; any complete set overrides it, so 70/30 is
+   * reachable without adding a layout for every ratio anyone might want.
+   */
+  columnWidths: Record<string, string>;
+  /**
+   * When "true", every module in the row stretches to the height of the
+   * tallest column, so a row of cards has one bottom edge instead of a ragged
+   * one. Off by default because it makes short modules grow.
+   */
+  equalColumnHeights: string;
+  /**
+   * Nudges the whole row off where the layout put it, WITHOUT moving anything
+   * else — this is a transform, not a margin, so the rows above and below stay
+   * exactly where they are and the row simply rides over them. That is what
+   * makes a card band overlap the banner above it. Positive vertical moves the
+   * row UP and positive horizontal moves it RIGHT, matching the module-level
+   * Vertical/Horizontal Offset an operator already knows.
+   */
+  horizontalOffset: string;
+  verticalOffset: string;
   rowBorderWidth: string;
   rowBorderColor: string;
   rowBorderStyle: string;
@@ -444,8 +500,20 @@ export type BuilderTemplateSection = {
   background: BackgroundSettings;
   overlayScreen?: RowOverlayScreenSettings;
   cellBackgrounds: Record<string, BackgroundSettings>;
+  /**
+   * Legacy: one number for all four sides of a cell. Kept as the seed for
+   * the two axes below, so a row saved before 2026-08-11 renders identically
+   * — and kept in the type because old rows still carry it.
+   */
   cellPadding: Record<string, string>;
-  cellVerticalMargin: Record<string, string>;
+  cellPaddingTop: Record<string, string>;
+  cellPaddingBottom: Record<string, string>;
+  cellPaddingLeft: Record<string, string>;
+  cellPaddingRight: Record<string, string>;
+  cellMarginTop: Record<string, string>;
+  cellMarginBottom: Record<string, string>;
+  cellMarginLeft: Record<string, string>;
+  cellMarginRight: Record<string, string>;
   cellMobileHidden: Record<string, string>;
   cellDesktopHidden: Record<string, string>;
   cellIsPrivate: Record<string, string>;
@@ -487,6 +555,8 @@ export type BuilderPageRecord = {
   updatedAt: string;
   isPublished: boolean;
   isPrivate: boolean;
+  /** Site Search ranking. Optional: pages saved before it exists read as "normal". */
+  searchPriority?: string;
 };
 
 export type BuilderCellModuleRecord = {
@@ -658,6 +728,62 @@ export function formatPlainTextContent(value: unknown) {
   return rewriteRichTextImageSrcInHtml(sanitizeRichTextHtml(html), "display");
 }
 
+/**
+ * Heading content, which is inline markup inside the `<h1>`…`<h6>` the module
+ * renders — never a document of its own.
+ *
+ * The module used to store a bare string and render it as a text node, so a
+ * heading could only ever be one colour and one size: the operator could not
+ * make a single word green (reported 2026-08-11, hero heading on the model
+ * page). It now stores markup, and everything that reads it comes through
+ * here.
+ *
+ * A value with no tags is escaped exactly the way Simple Text escapes typed
+ * copy — entities the operator typed (`&nbsp;`) survive, bare `&` and every
+ * `<`/`>` do not — so every heading that existed before this change renders
+ * character-for-character as it did. Newlines become `<br />`; block tags are
+ * unwrapped to their text by the sanitizer, because nothing block-level can
+ * legally live inside a heading.
+ */
+export function formatHeadingContent(value: unknown) {
+  const text = String(value ?? "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const escaped = looksLikeHtml(text) ? text : escapePlainTextPreservingEntities(text);
+
+  return sanitizeInlineHtml(escaped.replace(/\n/g, "<br />"));
+}
+
+/**
+ * Storage → editor. The inline editor is a ProseMirror document, which must
+ * have a block node at the top, so the stored inline markup gets a `<p>`
+ * wrapper it never carries on disk.
+ */
+export function prepareHeadingHtmlForEditor(value: unknown) {
+  const html = formatHeadingContent(value);
+
+  return html ? `<p>${html}</p>` : "<p></p>";
+}
+
+/**
+ * Editor → storage. Unwraps the editor's paragraph and turns a paragraph
+ * break into the `<br />` a heading actually wants — pressing Enter in a
+ * heading means "second line", not "second paragraph".
+ */
+export function headingHtmlFromEditor(html: string) {
+  const inline = String(html ?? "")
+    .replace(/<\/p>\s*<p[^>]*>/gi, "<br />")
+    .replace(/^\s*<p[^>]*>/i, "")
+    .replace(/<\/p>\s*$/i, "");
+
+  return sanitizeInlineHtml(inline)
+    .replace(/(?:\s*<br\s*\/?>\s*)+$/i, "")
+    .trim();
+}
+
 // A trailing empty block (an otherwise-empty <p> or heading whose only
 // contents are whitespace, non-breaking spaces, or <br>). The editor keeps
 // an empty line at the end for a comfortable typing cursor, but we do not
@@ -793,6 +919,25 @@ export function resolveModuleColumnForLayout(column: unknown, layout: unknown): 
 
 export function getLayoutGridTemplate(layout: BuilderTemplateLayout) {
   return getLayoutSpec(layout).grid;
+}
+
+/**
+ * The layout preset's own proportions as whole percentages — "2fr 4fr" reads
+ * back as [33, 67]. This is what the Column Widths control shows before the
+ * operator has set anything, so the numbers he starts editing are the widths
+ * he is already looking at rather than an arbitrary even split.
+ */
+export function getLayoutColumnPercents(layout: BuilderTemplateLayout): number[] {
+  const parts = getLayoutSpec(layout)
+    .grid.split(/\s+/)
+    .map((part) => Number.parseFloat(part))
+    .filter((part) => Number.isFinite(part) && part > 0);
+
+  const total = parts.reduce((sum, part) => sum + part, 0);
+
+  if (!parts.length || total <= 0) return [100];
+
+  return parts.map((part) => Math.round((part / total) * 100));
 }
 
 export function normalizeLayout(value: unknown): BuilderTemplateLayout {
@@ -1290,7 +1435,9 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
 
   if (background.mode === "image" && background.imageUrl) {
     return {
-      backgroundImage: `url("${background.imageUrl}")`,
+      // A CSS background cannot carry a srcset, so it takes the widest copy
+      // instead: identical dimensions, a fraction of the bytes.
+      backgroundImage: `url("${backgroundImageUrlFor(background.imageUrl)}")`,
       backgroundSize: "cover",
       backgroundPosition: "center"
     };
@@ -1378,6 +1525,16 @@ function normalizeCellBackgrounds(
   );
 }
 
+/**
+ * Legacy all-sides cell padding.
+ *
+ * The fallback is 0, not the 18 it was until 2026-08-11. A cell that nobody
+ * has given a padding to should not quietly carry one: the operator spent an
+ * evening hunting an 18px band above a banner logo that no image setting
+ * could reach, because the cell had been given that inset by a default
+ * rather than by him. Cells already carrying an explicit number keep it —
+ * this only changes what an unset cell inherits.
+ */
 function normalizeCellPadding(
   value: unknown,
   layout: BuilderTemplateLayout
@@ -1385,17 +1542,71 @@ function normalizeCellPadding(
   const columns = getLayoutColumns(layout);
 
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return Object.fromEntries(columns.map((column) => [column, "18"]));
+    return Object.fromEntries(columns.map((column) => [column, "0"]));
   }
 
   const raw = value as Record<string, unknown>;
 
   return Object.fromEntries(
     columns.map((column) => {
-      const parsed = Number.parseInt(String(raw[column] ?? "18"), 10);
-      const normalized = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 50) : 18;
+      const parsed = Number.parseInt(String(raw[column] ?? "0"), 10);
+      const normalized = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 50) : 0;
       return [column, String(normalized)];
     })
+  );
+}
+
+/**
+ * One SIDE of a cell's padding, seeded from whatever the cell used to carry.
+ *
+ * Two generations of fallback, newest first: the vertical/horizontal pair
+ * that shipped 2026-08-11, then the single all-sides `cellPadding` before
+ * it. A cell that has never been given a padding gets 0 — a default nobody
+ * asked for is what put an unreachable 18px band above a banner logo and
+ * cost the operator an evening.
+ */
+function normalizeCellPaddingSide(
+  value: unknown,
+  pair: unknown,
+  legacy: Record<string, string>,
+  layout: BuilderTemplateLayout
+): Record<string, string> {
+  const columns = getLayoutColumns(layout);
+  const read = (source: unknown, column: string) =>
+    source && typeof source === "object" && !Array.isArray(source)
+      ? (source as Record<string, unknown>)[column]
+      : undefined;
+
+  return Object.fromEntries(
+    columns.map((column) => [
+      column,
+      normalizeSpacingValue(
+        read(value, column) ?? read(pair, column) ?? legacy[column] ?? "0",
+        "0",
+        0,
+        50
+      )
+    ])
+  );
+}
+
+/** One side of a cell's margin, seeded from the vertical pair that preceded it. */
+function normalizeCellMarginSide(
+  value: unknown,
+  pair: unknown,
+  layout: BuilderTemplateLayout
+): Record<string, string> {
+  const columns = getLayoutColumns(layout);
+  const read = (source: unknown, column: string) =>
+    source && typeof source === "object" && !Array.isArray(source)
+      ? (source as Record<string, unknown>)[column]
+      : undefined;
+
+  return Object.fromEntries(
+    columns.map((column) => [
+      column,
+      normalizeSpacingValue(read(value, column) ?? read(pair, column) ?? "0", "0", 0, 160)
+    ])
   );
 }
 
@@ -1464,6 +1675,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "slider" ||
     type === "slideshow" ||
     type === "feature-cards" ||
+    type === "program-list" ||
     type === "social" ||
     type === "social-share" ||
     type === "previous-results" ||
@@ -1490,6 +1702,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-card-manager" ||
     type === "blog-search" ||
     type === "blog-search-results" ||
+    type === "site-search" ||
+    type === "site-search-results" ||
     type === "messaging-topic-list" ||
     type === "messaging-tag-list" ||
     type === "admin-team-users" ||
@@ -1527,7 +1741,13 @@ export function normalizeModuleSettings(value: unknown) {
             // empty on the next load, and the content is gone with no error.
             // `sliderItems` was missing here until 2026-08-07 — the Card
             // Slider had been capped at 10k since it shipped.
-            : normalizedKey === "cards" || normalizedKey === "sliderItems"
+            : normalizedKey === "cards" ||
+                normalizedKey === "sliderItems" ||
+                // `programs` holds every class a club runs, each with its own
+                // sessions, price bands and bullets — fifteen programs is
+                // ordinary for one tennis centre, and the whole collection is
+                // one JSON value.
+                normalizedKey === "programs"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 200000))
             : normalizedKey === "navItems"
               ? (Array.isArray(raw) ? JSON.stringify(raw) : safeText(raw, 500000))
@@ -1583,12 +1803,59 @@ export function resolveBuilderModuleType(
   return type;
 }
 
+/**
+ * Migrate one spacing pair onto its four sides.
+ *
+ * Every object in the Builder — row, cell, module — spells its spacing the
+ * same way from 2026-08-11: Top, Bottom, Left, Right, for both margin and
+ * padding (operator: "standardize all objects on the Top/Bottom/Left/Right
+ * model"). Rows already did; everything else carried a vertical/horizontal
+ * PAIR, so each side inherits the pair's value and nothing moves.
+ *
+ * A side that has already been set wins, which is what makes this safe to
+ * run on every load: the operator's own number is never overwritten by the
+ * pair it came from.
+ */
+function migrateSpacingPairToSides(
+  settings: Record<string, string>,
+  prefix: string,
+  legacyVerticalKey: string,
+  legacyHorizontalKey: string,
+  {
+    min = 0,
+    max = 160,
+    verticalFallback = "0",
+    horizontalFallback = verticalFallback
+  }: { min?: number; max?: number; verticalFallback?: string; horizontalFallback?: string } = {}
+) {
+  const cap = (side: string) => `${prefix}${side}`;
+  const vertical = settings[legacyVerticalKey];
+  const horizontal = settings[legacyHorizontalKey];
+
+  // The two fallbacks are separate because a pair does not always default to
+  // the same number on both axes — a menu bar's links ship 0 top/bottom and
+  // 14 left/right. One shared fallback here would have flattened the link
+  // padding of every live menu that had never touched the control.
+  settings[cap("Top")] = normalizeSpacingValue(settings[cap("Top")] ?? vertical, verticalFallback, min, max);
+  settings[cap("Bottom")] = normalizeSpacingValue(settings[cap("Bottom")] ?? vertical, verticalFallback, min, max);
+  settings[cap("Left")] = normalizeSpacingValue(settings[cap("Left")] ?? horizontal, horizontalFallback, min, max);
+  settings[cap("Right")] = normalizeSpacingValue(settings[cap("Right")] ?? horizontal, horizontalFallback, min, max);
+
+  delete settings[legacyVerticalKey];
+  delete settings[legacyHorizontalKey];
+}
+
 export function normalizeBuilderModuleSettingsForType(
   type: BuilderTemplateModuleType,
   value: unknown,
   moduleContext?: Pick<BuilderTemplateModule, "id" | "name" | "text">
 ) {
   const settings = normalizeModuleSettings(value);
+
+  // Universal, before any per-type block: EVERY module's outer spacing is
+  // four sides. The per-type copies of this migration (heading's and the
+  // button's) are gone — one rule, run once, for all 38 types.
+  migrateSpacingPairToSides(settings, "margin", "verticalMargin", "horizontalMargin");
 
   if (type === "tractor-nav") {
     if (!settings.color)        settings.color        = "#0000ff";
@@ -1683,16 +1950,35 @@ export function normalizeBuilderModuleSettingsForType(
     delete settings.navBold;
 
     // The nav had its own margin pair alongside the module's, both live, both
-    // labelled "Vertical Margin". One survives, and it is the standard key
-    // every other module uses (doctrine W7/E4).
-    if (settings.navMarginV && !settings.verticalMargin) {
-      settings.verticalMargin = normalizeSpacingValue(settings.navMarginV, "0", 0, 160);
+    // labelled "Vertical Margin". One survives, and it is the standard the
+    // whole Builder now spells the same way (W7). The universal migration
+    // above has already run, so an unset side is still "0" here and taking
+    // the nav's own number does not overwrite anybody's choice.
+    if (settings.navMarginV && settings.marginTop === "0" && settings.marginBottom === "0") {
+      settings.marginTop = normalizeSpacingValue(settings.navMarginV, "0", 0, 160);
+      settings.marginBottom = settings.marginTop;
     }
-    if (settings.navMarginH && !settings.horizontalMargin) {
-      settings.horizontalMargin = normalizeSpacingValue(settings.navMarginH, "0", 0, 160);
+    if (settings.navMarginH && settings.marginLeft === "0" && settings.marginRight === "0") {
+      settings.marginLeft = normalizeSpacingValue(settings.navMarginH, "0", 0, 160);
+      settings.marginRight = settings.marginLeft;
     }
     delete settings.navMarginV;
     delete settings.navMarginH;
+
+    // The bar's own padding and the links' padding, each on four sides.
+    // Fallbacks are NAV_STYLE_DEFAULTS: the bar ships 8 on every side, the
+    // links 0 top/bottom and 14 left/right. Migrating to a flat 0 would have
+    // stripped the padding from every menu on every live site.
+    migrateSpacingPairToSides(settings, "navPadding", "navPaddingV", "navPaddingH", {
+      max: 60,
+      verticalFallback: "8",
+      horizontalFallback: "8"
+    });
+    migrateSpacingPairToSides(settings, "navLinkPadding", "navLinkPaddingV", "navLinkPaddingH", {
+      max: 60,
+      verticalFallback: "0",
+      horizontalFallback: "14"
+    });
 
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
@@ -1702,6 +1988,7 @@ export function normalizeBuilderModuleSettingsForType(
     stripOverlayOnlyImageSettings(settings);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
   }
 
   if (type === "floating-image") {
@@ -1712,6 +1999,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.offsetY = normalizeSignedOffsetValue(settings.offsetY, "0");
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
     settings.zIndex = normalizeSpacingValue(settings.zIndex, "20", -999, 999999);
 
     const trigger = normalizeModuleTrigger(settings[MODULE_TRIGGER_SETTING_KEY]);
@@ -1724,6 +2012,14 @@ export function normalizeBuilderModuleSettingsForType(
         settings.offsetY = "0";
       }
     }
+  }
+
+  if (type === "slideshow") {
+    // The nudge, added 2026-08-12. Clamped here rather than trusted from the
+    // document, the same as every other module that offers it — an imported
+    // page can carry anything in these keys.
+    settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
+    settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
   }
 
   if (type === "feature-cards") {
@@ -1746,10 +2042,6 @@ export function normalizeBuilderModuleSettingsForType(
   }
 
   if (type === "heading") {
-    const legacy = settings.verticalMargin;
-    settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacy, "0");
-    settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacy, "0");
-    settings.horizontalMargin = normalizeSpacingValue(settings.horizontalMargin, "0", 0, 160);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     settings.fontFamily = HEADING_FONT_KEYS.has(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";
@@ -1765,14 +2057,14 @@ export function normalizeBuilderModuleSettingsForType(
   }
 
   if (type === "button") {
-    const legacyVertical = settings.verticalMargin;
-    const legacyHorizontal = settings.horizontalMargin;
-    settings.marginTop = normalizeSpacingValue(settings.marginTop ?? legacyVertical, "0", 0, 160);
-    settings.marginBottom = normalizeSpacingValue(settings.marginBottom ?? legacyVertical, "0", 0, 160);
-    settings.marginLeft = normalizeSpacingValue(settings.marginLeft ?? legacyHorizontal, "0", 0, 160);
-    settings.marginRight = normalizeSpacingValue(settings.marginRight ?? legacyHorizontal, "0", 0, 160);
-    settings.paddingX = normalizeSpacingValue(settings.paddingX, "24", 1, 50);
-    settings.paddingY = normalizeSpacingValue(settings.paddingY, "12", 1, 50);
+    // A button that has never carried a padding keeps the shape it shipped
+    // with — 12 top/bottom, 24 left/right — so no live button changes size.
+    settings.paddingTop = normalizeSpacingValue(settings.paddingTop ?? settings.paddingY, "12", 1, 50);
+    settings.paddingBottom = normalizeSpacingValue(settings.paddingBottom ?? settings.paddingY, "12", 1, 50);
+    settings.paddingLeft = normalizeSpacingValue(settings.paddingLeft ?? settings.paddingX, "24", 1, 50);
+    settings.paddingRight = normalizeSpacingValue(settings.paddingRight ?? settings.paddingX, "24", 1, 50);
+    delete settings.paddingX;
+    delete settings.paddingY;
   }
 
   if (type === "current-poll") {
@@ -2078,6 +2370,10 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
             .filter((module): module is BuilderTemplateModule => Boolean(module))
         : [];
 
+      // Read once: both padding axes fall back to it, so they must see the
+      // same normalized value the legacy key ends up with.
+      const cellPadding = normalizeCellPadding(normalizedSection.cellPadding, layout);
+
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
         title: safeText(normalizedSection.title, 255),
@@ -2103,6 +2399,16 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         ),
         paddingTop: normalizeSpacingValue(normalizedSection.paddingTop, "18", 0, 160),
         paddingBottom: normalizeSpacingValue(normalizedSection.paddingBottom, "18", 0, 160),
+        paddingLeft: normalizeSpacingValue(normalizedSection.paddingLeft, "0", 0, 160),
+        paddingRight: normalizeSpacingValue(normalizedSection.paddingRight, "0", 0, 160),
+        marginLeft: normalizeSpacingValue(normalizedSection.marginLeft, "0", 0, 160),
+        marginRight: normalizeSpacingValue(normalizedSection.marginRight, "0", 0, 160),
+        columnGap: normalizeSpacingValue(normalizedSection.columnGap, "16", 0, 120),
+        minHeight: normalizeSpacingValue(normalizedSection.minHeight, "0", 0, 1200),
+        columnWidths: normalizeCellMetric(normalizedSection.columnWidths, layout, "0", 0, 100),
+        equalColumnHeights: normalizeBooleanText(normalizedSection.equalColumnHeights),
+        horizontalOffset: normalizeSignedOffsetValue(normalizedSection.horizontalOffset, "0"),
+        verticalOffset: normalizeSignedOffsetValue(normalizedSection.verticalOffset, "0"),
         rowBorderWidth: normalizeSpacingValue(normalizedSection.rowBorderWidth, "0", 0, 20),
         rowBorderColor: normalizeBuilderHexColor(
           typeof normalizedSection.rowBorderColor === "string" ? normalizedSection.rowBorderColor : ""
@@ -2117,14 +2423,49 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
-        cellPadding: normalizeCellPadding(normalizedSection.cellPadding, layout),
-        cellVerticalMargin: normalizeCellMetric(normalizedSection.cellVerticalMargin, layout, "0", 0, 160),
+        cellPadding: cellPadding,
+        cellPaddingTop: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingTop,
+          normalizedSection.cellVerticalPadding,
+          cellPadding,
+          layout
+        ),
+        cellPaddingBottom: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingBottom,
+          normalizedSection.cellVerticalPadding,
+          cellPadding,
+          layout
+        ),
+        cellPaddingLeft: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingLeft,
+          normalizedSection.cellHorizontalPadding,
+          cellPadding,
+          layout
+        ),
+        cellPaddingRight: normalizeCellPaddingSide(
+          normalizedSection.cellPaddingRight,
+          normalizedSection.cellHorizontalPadding,
+          cellPadding,
+          layout
+        ),
+        cellMarginTop: normalizeCellMarginSide(
+          normalizedSection.cellMarginTop,
+          normalizedSection.cellVerticalMargin,
+          layout
+        ),
+        cellMarginBottom: normalizeCellMarginSide(
+          normalizedSection.cellMarginBottom,
+          normalizedSection.cellVerticalMargin,
+          layout
+        ),
+        cellMarginLeft: normalizeCellMarginSide(normalizedSection.cellMarginLeft, undefined, layout),
+        cellMarginRight: normalizeCellMarginSide(normalizedSection.cellMarginRight, undefined, layout),
         cellMobileHidden: normalizeCellColor(normalizedSection.cellMobileHidden, layout, "false"),
         cellDesktopHidden: normalizeCellColor(normalizedSection.cellDesktopHidden, layout, "false"),
         cellIsPrivate: normalizeCellColor(normalizedSection.cellIsPrivate, layout, "false"),
         cellBorderWidth: normalizeCellMetric(normalizedSection.cellBorderWidth, layout, "0", 0, 20),
         cellBorderColor: normalizeCellColor(normalizedSection.cellBorderColor, layout, "transparent"),
-        cellBorderRadius: normalizeCellMetric(normalizedSection.cellBorderRadius, layout, "24", 0, 60),
+        cellBorderRadius: normalizeCellMetric(normalizedSection.cellBorderRadius, layout, "0", 0, 60),
         cellBorderStyle: normalizeCellColor(normalizedSection.cellBorderStyle, layout, "solid"),
         cellShadow: normalizeCellColor(normalizedSection.cellShadow, layout, "none"),
         cellOpacity: normalizeCellColor(normalizedSection.cellOpacity, layout, "1"),
@@ -2174,6 +2515,16 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     marginBottom: "0",
     paddingTop: "18",
     paddingBottom: "18",
+    paddingLeft: "0",
+    paddingRight: "0",
+    marginLeft: "0",
+    marginRight: "0",
+    columnGap: "16",
+    minHeight: "0",
+    columnWidths: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    equalColumnHeights: "false",
+    horizontalOffset: "0",
+    verticalOffset: "0",
     rowBorderWidth: "0",
     rowBorderColor: "#000000",
     rowBorderStyle: "solid",
@@ -2186,14 +2537,21 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     cellBackgrounds: Object.fromEntries(
       getLayoutColumns(layout).map((column) => [column, createDefaultBackgroundSettings()])
     ),
-    cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "18"])),
-    cellVerticalMargin: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingTop: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingBottom: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingLeft: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellPaddingRight: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginTop: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginBottom: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginLeft: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
+    cellMarginRight: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellMobileHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellDesktopHidden: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellIsPrivate: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "false"])),
     cellBorderWidth: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellBorderColor: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "transparent"])),
-    cellBorderRadius: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "24"])),
+    cellBorderRadius: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellBorderStyle: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "solid"])),
     cellShadow: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "none"])),
     cellOpacity: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "1"])),
@@ -2306,11 +2664,54 @@ export function createEmptyModule(
           cardHoverLift: "true",
           imageAspect: "4-3",
           showIcons: "true",
+          // Symbol or picture. "symbol" is the only value that existed
+          // before 2026-08-12, so it stays the default and an older module
+          // with no `iconType` reads the same as one that says "symbol".
+          iconType: "symbol",
           iconColor: "",
           iconAltColor: "",
+          iconTextColor: "",
           iconAlternate: "true",
+          // The icon badge used to be entirely hardcoded in CSS — 48px,
+          // circular, centred, overhanging the top edge, and painting
+          // BEHIND the card image because nothing declared a stacking
+          // order. These five settings expose all of it; the defaults
+          // reproduce the old look exactly, except iconFront, which is
+          // the fix (an icon nobody can see was never the intent).
+          iconSize: "48",
+          iconPlacement: "above",
+          iconAlign: "center",
+          iconShape: "circle",
+          iconFront: "true",
           linkLabel: "Learn More",
           linkArrow: "true"
+        }
+      : type === "program-list"
+      ? {
+          programs: "[]",
+          // The level chip is the one device carried over from the source
+          // flyers, because it is the one doing real work: it tells a reader
+          // in a glance whether a session is for them.
+          showLevelBadge: "true",
+          // The pro shop number is the club's, not each program's, so it
+          // lives once on the module. A club that wants a different number
+          // per program is a real but unmet case — see the ClickUp task.
+          showReserve: "true",
+          reserveLabel: "Reserve",
+          reservePhone: "",
+          // Stated once under the list rather than stamped on every entry.
+          // On the source flyers this was a shield graphic repeated fifteen
+          // times; it is a policy, and policies are text.
+          policyNote: "",
+          showInstructorColumn: "true",
+          // Empty color = follow the site theme, resolved at render. A hex
+          // here would be stamped into every new module and pin it forever
+          // (the mistake feature-cards had to be migrated out of).
+          accentColor: "",
+          headingColor: "",
+          cardBackground: "",
+          cardBorderColor: "",
+          cardRadius: "10"
         }
       : type === "video"
       ? {
