@@ -34,21 +34,25 @@ export const CONTROLS = [
   { key: "navDropdownStyle", value: "mega", label: "Menu Type" },
   { key: "navDirection", value: "vertical", label: "Direction" },
   { key: "navLevels", value: "1", label: "Levels" },
-  { key: "navMegaWidth", value: "1600", label: "Panel Width", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navMegaWidth", value: "1600", label: "Panel: Width (mega)", base: { navDropdownStyle: "mega" }, open: true },
   { key: "navItemSizing", value: "equal", label: "Sizing" },
   { key: "navGap", value: "36", label: "Item Gap" },
   { key: "backgroundMode", value: "color", label: "Background", extra: { backgroundColor: "#123456" } },
 
   // --- Dropdown ---
   { key: "navMegaColumns", value: "5", label: "Columns", base: { navDropdownStyle: "mega" }, open: true },
-  { key: "navDropdownWidth", value: "420", label: "Menu Width" },
-  { key: "navDropdownRadius", value: "36", label: "Dropdown Radius" },
-  { key: "navDropdownBackground", value: "#8a2be2", label: "Panel Fill" },
-  { key: "navDropdownTextColor", value: "#ff4500", label: "Sub-level Text" },
+  { key: "navDropdownWidth", value: "420", label: "Panel: Width (list)" },
+  { key: "navDropdownRadius", value: "36", label: "Panel: Radius" },
+  { key: "navDropdownRadius", value: "36", label: "Panel: Radius (mega)",
+    id: "navDropdownRadiusMega", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navDropdownBackground", value: "#8a2be2", label: "Panel: Background" },
+  { key: "navDropdownBackground", value: "#8a2be2", label: "Panel: Background (mega)",
+    id: "navDropdownBackgroundMega", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navDropdownTextColor", value: "#ff4500", label: "Panel: Text Color" },
   // The same control in the other menu type — mega links carry neither
   // `site-nav-link` nor `site-nav-dropdown-item`, so they take a different
   // path through the cascade and need their own check.
-  { key: "navDropdownTextColor", value: "#ff4500", label: "Sub-level Text (mega)",
+  { key: "navDropdownTextColor", value: "#ff4500", label: "Panel: Text Color (mega)",
     id: "navDropdownTextColorMega", base: { navDropdownStyle: "mega" }, open: true },
   { key: "navShowArrow", value: "false", label: "Arrow" },
 
@@ -59,25 +63,38 @@ export const CONTROLS = [
    * not the other is exactly the bug being fixed. Sweeping only the default
    * (list) menu would have missed the whole mega half.
    */
-  { key: "navDropdownFontSize", value: "24", label: "Sub Size" },
-  { key: "navDropdownFontSize", value: "24", label: "Sub Size (mega)",
+  { key: "navDropdownFontSize", value: "24", label: "Panel: Size" },
+  { key: "navDropdownFontSize", value: "24", label: "Panel: Size (mega)",
     id: "navDropdownFontSizeMega", base: { navDropdownStyle: "mega" }, open: true },
-  { key: "navDropdownWeight", value: "400", label: "Sub Weight" },
-  { key: "navDropdownWeight", value: "700", label: "Sub Weight (mega)",
+  { key: "navDropdownWeight", value: "400", label: "Panel: Weight" },
+  { key: "navDropdownWeight", value: "700", label: "Panel: Weight (mega)",
     id: "navDropdownWeightMega", base: { navDropdownStyle: "mega" }, open: true },
-  { key: "navDropdownTextTransform", value: "uppercase", label: "Sub Case" },
-  { key: "navDropdownTextTransform", value: "uppercase", label: "Sub Case (mega)",
+  { key: "navDropdownTextTransform", value: "uppercase", label: "Panel: Case" },
+  { key: "navDropdownTextTransform", value: "uppercase", label: "Panel: Case (mega)",
     id: "navDropdownTextTransformMega", base: { navDropdownStyle: "mega" }, open: true },
-  { key: "navDropdownLetterSpacing", value: "6", label: "Sub Spacing" },
-  { key: "navDropdownLetterSpacing", value: "6", label: "Sub Spacing (mega)",
+  { key: "navDropdownLetterSpacing", value: "6", label: "Panel: Spacing" },
+  { key: "navDropdownLetterSpacing", value: "6", label: "Panel: Spacing (mega)",
     id: "navDropdownLetterSpacingMega", base: { navDropdownStyle: "mega" }, open: true },
-  { key: "navDropdownBorderWidth", value: "8", label: "Panel Border" },
-  { key: "navDropdownBorderWidth", value: "8", label: "Panel Border (mega)",
+  { key: "navDropdownBorderWidth", value: "8", label: "Panel: Border" },
+  { key: "navDropdownBorderWidth", value: "8", label: "Panel: Border (mega)",
     id: "navDropdownBorderWidthMega", base: { navDropdownStyle: "mega" }, open: true },
-  { key: "navDropdownBorderStyle", value: "dashed", label: "Panel Style",
+  { key: "navDropdownBorderStyle", value: "dashed", label: "Panel: Style",
     base: { navDropdownBorderWidth: "8" } },
-  { key: "navDropdownBorderColor", value: "#ff00ff", label: "Panel Border Color",
+  { key: "navDropdownBorderStyle", value: "dashed", label: "Panel: Style (mega)",
+    id: "navDropdownBorderStyleMega",
+    base: { navDropdownStyle: "mega", navDropdownBorderWidth: "8" }, open: true },
+  { key: "navDropdownBorderColor", value: "#ff00ff", label: "Panel: Border Color",
     base: { navDropdownBorderWidth: "8" } },
+  { key: "navDropdownBorderColor", value: "#ff00ff", label: "Panel: Border Color (mega)",
+    id: "navDropdownBorderColorMega",
+    base: { navDropdownStyle: "mega", navDropdownBorderWidth: "8" }, open: true },
+
+  /*
+   * The four remaining Panel controls are single-mode by construction, so a
+   * second sweep would render the same menu twice: Columns and Width (mega)
+   * only exist on a mega panel, Width (list) and Arrow only on a list
+   * drop-down. Everything else in the part is swept both ways above.
+   */
 
   // --- Placement ---
   { key: "navAlignment", value: "right", label: "Alignment" },
@@ -110,7 +127,7 @@ export const CONTROLS = [
   { key: "navTextTransform", value: "uppercase", label: "Case" },
   { key: "navLetterSpacing", value: "9", label: "Spacing" },
   { key: "navLinkHeight", value: "92", label: "Link Height" },
-  { key: "navColor", value: "#8a2be2", label: "Top-level Text" },
+  { key: "navColor", value: "#8a2be2", label: "Text Color" },
   { key: "navLinkBackground", value: "#8a2be2", label: "Label Fill" },
   { key: "navHoverColor", value: "#8a2be2", label: "Hover Text", hover: true },
   { key: "navHoverBackground", value: "#8a2be2", label: "Hover Fill", hover: true },
@@ -125,10 +142,10 @@ export const CONTROLS = [
   { key: "navTextShadowOpacity", value: "100", label: "Text Shadow Opacity", base: { navTextShadow: "true" } },
 
   // --- Border ---
-  { key: "navBorderWidth", value: "14", label: "Bar Border" },
-  { key: "navBorderStyle", value: "dashed", label: "Bar Style", base: { navBorderWidth: "6" } },
-  { key: "navBorderColor", value: "#8a2be2", label: "Bar Border Color", base: { navBorderWidth: "6" } },
-  { key: "navBarRadius", value: "72", label: "Bar Radius" },
+  { key: "navBorderWidth", value: "14", label: "Border" },
+  { key: "navBorderStyle", value: "dashed", label: "Style", base: { navBorderWidth: "6" } },
+  { key: "navBorderColor", value: "#8a2be2", label: "Border Color", base: { navBorderWidth: "6" } },
+  { key: "navBarRadius", value: "72", label: "Radius" },
   { key: "navBorderRadius", value: "44", label: "Link Radius" },
   { key: "navShadow", value: "false", label: "Drop Shadow" },
   { key: "navShadowColor", value: "#8a2be2", label: "Shadow Color" },

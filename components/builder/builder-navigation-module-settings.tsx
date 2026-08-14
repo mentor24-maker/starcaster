@@ -38,6 +38,18 @@ import type { BuilderThemePalette } from "./builder-theme-color-field";
  * canonical "Frame" is his word for this module — the axis holds the bar's
  * border, its radius and its shadow, and he named it while looking at it.
  *
+ * Each axis then splits into two named PARTS — **Main Menu** and **Panel**
+ * (2026-08-13: *"I think we can fit all four columns in one row: Structure,
+ * Placement, Text, Border … Then I want two parts within the Style section:
+ * Main Menu and Panel. Each one gets it's own set of style settings."*).
+ * The parts are inside the columns, so the four axes still hold ONE row.
+ *
+ * The Panel part is deliberately shorter than Main Menu. Nothing was added to
+ * fill it — the controls it lacks (its own padding, offsets, alignment,
+ * underline, italic, link height, label/hover/current colours, hover effect,
+ * text shadow, link radius and drop shadow) do not exist yet, and an empty
+ * row would say they did.
+ *
  * What changed beyond the layout:
  *  - the control that said "Dropdown" is now **Menu Type**, first in
  *    Structure, because it decides what every control under it means;
@@ -365,121 +377,131 @@ export function BuilderNavigationModuleSettings({
   const depthOf = (item: NavItem) => navDepthOf(items, item);
   const eligibleParents = (item: NavItem) => eligibleNavParents(items, item) as NavItem[];
 
+  /*
+   * Every axis is split into two named PARTS — "Main Menu" first, "Panel"
+   * second (operator, 2026-08-13: *"I want two parts within the Style
+   * section: Main Menu and Panel. Each one gets it's own set of style
+   * settings."*). The parts sit INSIDE each axis, so the four columns still
+   * hold one row across the top; they are not two stacked blocks of four.
+   *
+   * The mechanism is the axis `sections` list — the same one that already
+   * carried the "Dropdown" sub-heading — so nothing loose is left on an axis
+   * and every axis's own `strips` is empty.
+   *
+   * The part heading carries the qualifier, so a label must not repeat it:
+   * "Panel Border Color" is "Border Color" under PANEL, "Bar Border" is
+   * "Border" under MAIN MENU. That is also how the four columns buy back the
+   * width they need to stay on one row — each column is sized by its longest
+   * label (W0), so shortening the labels narrows the column.
+   *
+   * Keys are untouched. A rename here is a rename of the LABEL only; renaming
+   * a key would silently drop every value already saved on a live menu.
+   */
   const schema: BuilderSettingsSchema = {
     axes: [
       {
         title: "Structure",
-        strips: [
-          [
-            {
-              // Was labelled "Dropdown". It is the first thing to decide and
-              // it renames everything below it, so it leads the column.
-              key: "navDropdownStyle",
-              label: "Menu Type",
-              width: "select-md",
-              control: "select",
-              fallback: "list",
-              options: [
-                { value: "list", label: "List" },
-                { value: "mega", label: "Mega Panel" }
-              ],
-              visibleWhen: (settings) => !isVerticalMenu(settings),
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          [
-            {
-              key: "navDirection",
-              label: "Direction",
-              width: "select-md",
-              control: "select",
-              fallback: "horizontal",
-              options: [
-                { value: "horizontal", label: "Horizontal" },
-                { value: "vertical", label: "Vertical" }
-              ],
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          [
-            {
-              key: "navLevels",
-              label: "Levels",
-              width: "num",
-              control: "number",
-              min: 1,
-              max: 3,
-              fallback: "2",
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          [
-            {
-              key: "navMegaWidth",
-              label: "Panel Width",
-              width: "num",
-              control: "number",
-              min: 320,
-              max: 1600,
-              step: 40,
-              fallback: String(NAV_STYLE_DEFAULTS.megaWidth),
-              visibleWhen: isMegaMenu,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navItemSizing",
-              label: "Sizing",
-              width: "select-md",
-              control: "select",
-              fallback: "auto",
-              options: [
-                { value: "auto", label: "Auto" },
-                { value: "equal", label: "Equal" },
-                { value: "custom", label: "Custom" }
-              ],
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          [
-            {
-              key: "navGap",
-              label: "Item Gap",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 40,
-              step: 5,
-              fallback: String(NAV_STYLE_DEFAULTS.gap),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "background",
-              label: "Background",
-              width: "full",
-              control: "custom",
-              bare: true,
-              rendersVia: "NavigationModulePreview",
-              render: () => (
-                <BuilderBackgroundControls
-                  label="Background"
-                  background={getModuleBackgroundSettings(module.settings)}
-                  horizontal
-                  onChange={onUpdateModuleBackground}
-                  themeBackgroundColor={themeBackgroundColor}
-                  themeColors={themeColors}
-                  themePrimaryColor={themePrimaryColor}
-                />
-              )
-            }
-          ]
-        ],
+        strips: [],
         sections: [
           {
-            title: "Dropdown",
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  // Was labelled "Dropdown". It is the first thing to decide and
+                  // it renames everything below it, so it leads the column.
+                  key: "navDropdownStyle",
+                  label: "Menu Type",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "list",
+                  options: [
+                    { value: "list", label: "List" },
+                    { value: "mega", label: "Mega Panel" }
+                  ],
+                  visibleWhen: (settings) => !isVerticalMenu(settings),
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navDirection",
+                  label: "Direction",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "horizontal",
+                  options: [
+                    { value: "horizontal", label: "Horizontal" },
+                    { value: "vertical", label: "Vertical" }
+                  ],
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navLevels",
+                  label: "Levels",
+                  width: "num",
+                  control: "number",
+                  min: 1,
+                  max: 3,
+                  fallback: "2",
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navItemSizing",
+                  label: "Sizing",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "auto",
+                  options: [
+                    { value: "auto", label: "Auto" },
+                    { value: "equal", label: "Equal" },
+                    { value: "custom", label: "Custom" }
+                  ],
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  key: "navGap",
+                  label: "Item Gap",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 40,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.gap),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "background",
+                  label: "Background",
+                  width: "full",
+                  control: "custom",
+                  bare: true,
+                  rendersVia: "NavigationModulePreview",
+                  render: () => (
+                    <BuilderBackgroundControls
+                      label="Background"
+                      background={getModuleBackgroundSettings(module.settings)}
+                      horizontal
+                      onChange={onUpdateModuleBackground}
+                      themeBackgroundColor={themeBackgroundColor}
+                      themeColors={themeColors}
+                      themePrimaryColor={themePrimaryColor}
+                    />
+                  )
+                }
+              ]
+            ]
+          },
+          {
+            title: "Panel",
             strips: [
               [
                 {
@@ -494,12 +516,31 @@ export function BuilderNavigationModuleSettings({
                   rendersVia: "buildMegaColumns (builder-nav-mega.ts)"
                 }
               ],
+              /*
+               * Two controls, one label. A mega panel is sized by navMegaWidth
+               * and a list drop-down by navDropdownWidth, and only one of the
+               * two is ever on screen — so under PANEL they are both just
+               * "Width". "Panel Width" / "Menu Width" were the old names, both
+               * of which repeated the heading they now sit under.
+               */
               [
                 {
-                  // A mega panel is sized by Panel Width; a list dropdown by
-                  // this. Only one of the two is ever on screen.
+                  key: "navMegaWidth",
+                  label: "Width",
+                  width: "num",
+                  control: "number",
+                  min: 320,
+                  max: 1600,
+                  step: 40,
+                  fallback: String(NAV_STYLE_DEFAULTS.megaWidth),
+                  visibleWhen: isMegaMenu,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
                   key: "navDropdownWidth",
-                  label: "Menu Width",
+                  label: "Width",
                   width: "num",
                   control: "number",
                   min: 100,
@@ -507,6 +548,637 @@ export function BuilderNavigationModuleSettings({
                   step: 10,
                   fallback: String(NAV_STYLE_DEFAULTS.dropdownWidth),
                   visibleWhen: isListMenu,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // List only: a mega panel's arrow is its open/close button,
+                  // not decoration — hiding it would strand every sub-link on
+                  // a phone, where the panel opens by tapping it.
+                  key: "navShowArrow",
+                  label: "Arrow",
+                  width: "check",
+                  control: "checkbox",
+                  fallback: "true",
+                  visibleWhen: isListMenu,
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              [
+                {
+                  // "Panel Fill" until the parts landed. It is the panel's
+                  // background, and it sits opposite the bar's Background in
+                  // the part above it, so it is named the same thing.
+                  key: "navDropdownBackground",
+                  label: "Background",
+                  width: "color",
+                  control: "color",
+                  dialogLabel: "Dropdown panel background",
+                  fallback: NAV_STYLE_DEFAULTS.dropdownBackground,
+                  rendersVia: RENDERS_VIA
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        title: "Placement",
+        strips: [],
+        /*
+         * No "Panel" part here yet, and the gap is the honest report: a
+         * drop-down panel has no alignment, padding, margin or offset control
+         * built. Those are stage two. An empty titled part would say the
+         * opposite of the truth, so the axis carries one part until they exist.
+         */
+        sections: [
+          {
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  // Positions the items INSIDE the bar. The module box has no
+                  // separate alignment worth offering — the bar fills its column.
+                  key: "navAlignment",
+                  label: "Alignment",
+                  width: "align",
+                  control: "align",
+                  fallback: "center",
+                  ariaLabel: "Menu item alignment inside the nav",
+                  rendersVia: "NavigationModulePreview"
+                }
+              ],
+              ...marginFields("getModuleOuterSpacingStyle", 160).map((field) => [field]),
+              // The bar's own padding, four sides, each on its own strip like the
+              // margins above.
+              ...sideFields("navPadding", "Padding", {
+                max: 60,
+                top: String(NAV_STYLE_DEFAULTS.paddingV),
+                side: String(NAV_STYLE_DEFAULTS.paddingH)
+              }).map((field) => [field]),
+              // W7 names the four spacing controls for a module's OWN box, taken
+              // above by the bar. These four are the padding inside each LINK, a
+              // different quantity (same judgement call as Table's "Cell
+              // Padding"), so they carry a qualified name.
+              ...sideFields("navLinkPadding", "Link Padding", {
+                max: 60,
+                top: String(NAV_STYLE_DEFAULTS.linkPaddingV),
+                side: String(NAV_STYLE_DEFAULTS.linkPaddingH)
+              }).map((field) => [field]),
+              // D9 puts the finest adjustment last on its axis. A0 retired the
+              // Advanced section these two used to sit in (A3, withdrawn) —
+              // sorting last is how a nudge is de-emphasised now.
+              [
+                {
+                  key: "verticalOffset",
+                  label: "Vertical Offset",
+                  width: "num",
+                  control: "number",
+                  min: -100,
+                  max: 100,
+                  step: 5,
+                  fallback: "0",
+                  rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+                }
+              ],
+              [
+                {
+                  key: "horizontalOffset",
+                  label: "Horizontal Offset",
+                  width: "num",
+                  control: "number",
+                  min: -100,
+                  max: 100,
+                  step: 5,
+                  fallback: "0",
+                  rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        title: "Text",
+        /*
+         * A6, in the operator's words (8/11): "Don't put text color under
+         * Advanced. That is basic. Hover effects, dropshadows, etc. are
+         * advance." Colour and the label's own fill were both in Advanced
+         * and both read as missing — he reported having no control over
+         * "the background colors of the labels ... and the font color".
+         *
+         * The two levels used to be told apart by their LABELS — "Top-level
+         * Text" against "Sub-level Text", stacked in one list. They are told
+         * apart by the part headings now, so both are simply "Text Color".
+         */
+        strips: [],
+        sections: [
+          {
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  key: "navFontSize",
+                  label: "Font",
+                  width: "num",
+                  control: "number",
+                  min: 10,
+                  max: 48,
+                  fallback: String(NAV_STYLE_DEFAULTS.fontSize),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // Replaces the Bold checkbox, which never reached the links.
+                  key: "navWeight",
+                  label: "Weight",
+                  width: "select-sm",
+                  control: "select",
+                  fallback: String(NAV_STYLE_DEFAULTS.weight),
+                  options: [
+                    { value: "300", label: "Light" },
+                    { value: "400", label: "Regular" },
+                    { value: "500", label: "Medium" },
+                    { value: "600", label: "Semibold" },
+                    { value: "700", label: "Bold" },
+                    { value: "800", label: "Heavy" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navUnderline",
+                  label: "Underline",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "none",
+                  options: [
+                    { value: "none", label: "Never" },
+                    { value: "always", label: "Always" },
+                    { value: "hover", label: "On Hover" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navItalic",
+                  label: "Italic",
+                  width: "check",
+                  control: "checkbox",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navTextTransform",
+                  label: "Case",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "none",
+                  options: [
+                    { value: "none", label: "As typed" },
+                    { value: "uppercase", label: "UPPERCASE" },
+                    { value: "lowercase", label: "lowercase" },
+                    { value: "capitalize", label: "Capitalize" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navLetterSpacing",
+                  label: "Spacing",
+                  width: "num",
+                  control: "number",
+                  min: -4,
+                  max: 12,
+                  fallback: String(NAV_STYLE_DEFAULTS.letterSpacing),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navLinkHeight",
+                  label: "Link Height",
+                  width: "num",
+                  control: "number",
+                  min: 24,
+                  max: 96,
+                  step: 2,
+                  fallback: String(NAV_STYLE_DEFAULTS.linkHeight),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navColor",
+                  // "Text Color" → "Top-level Text" → "Text Color" again. The
+                  // qualifier was doing the work of a heading; now there is a
+                  // heading.
+                  label: "Text Color",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#163a5e",
+                  dialogLabel: "Menu text color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // New 8/13. A link had no resting background and no CSS for
+                  // one, so the labels could not be coloured at all.
+                  key: "navLinkBackground",
+                  label: "Label Fill",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "transparent",
+                  dialogLabel: "Menu label background",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navHoverColor",
+                  label: "Hover Text",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#0a8fc4",
+                  dialogLabel: "Menu hover text color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navHoverBackground",
+                  label: "Hover Fill",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#d0f0fb",
+                  dialogLabel: "Menu hover background color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navActiveColor",
+                  /*
+                   * A sub-link on the current page carries
+                   * `.site-nav-link-active` exactly like a top-level one, so
+                   * this control really does colour a label in both parts —
+                   * but only the current page's. It stays named for the page,
+                   * not for a level, which is what stopped it reading as the
+                   * one control governing both.
+                   */
+                  label: "Current Page Text",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#0a8fc4",
+                  dialogLabel: "Current page link color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // New 8/13. The current page's pill WAS the hover fill, with
+                  // no control of its own — one label in every menu looked
+                  // different and nothing could change it.
+                  key: "navActiveBackground",
+                  label: "Current Fill",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#d0f0fb",
+                  dialogLabel: "Current page background",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              /*
+               * The effect layer, sorted after the colours per D9 rather than
+               * hidden behind a collapse (A0 retired Advanced). A7 puts the TEXT
+               * shadow on this axis and the bar's BOX shadow on Border — two
+               * different shadows, which is why dropShadowFields() takes a
+               * key prefix.
+               */
+              [
+                {
+                  key: "navHoverEffect",
+                  label: "Hover",
+                  width: "select-md",
+                  control: "select",
+                  fallback: NAV_STYLE_DEFAULTS.hoverEffect,
+                  options: [
+                    { value: "none", label: "None" },
+                    { value: "lift", label: "Lift" },
+                    { value: "grow", label: "Grow" },
+                    { value: "fade", label: "Fade" },
+                    { value: "underline", label: "Underline Slide" }
+                  ],
+                  rendersVia: "getNavModuleClassNames (builder-nav-style.ts)"
+                }
+              ],
+              ...dropShadowFields(RENDERS_VIA, {
+                prefix: "navTextShadow",
+                label: "Text Shadow",
+                range: { offset: 20, blur: 40 },
+                defaults: {
+                  x: String(NAV_STYLE_DEFAULTS.textShadowX),
+                  y: String(NAV_STYLE_DEFAULTS.textShadowY),
+                  blur: String(NAV_STYLE_DEFAULTS.textShadowBlur),
+                  color: NAV_STYLE_DEFAULTS.textShadowColor
+                }
+              }).map((field) => [field]),
+              [
+                {
+                  key: "navTextShadowOpacity",
+                  label: "Shadow Opacity",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.textShadowOpacity),
+                  visibleWhen: (settings) => dropShadowIsOn(settings, "navTextShadow", false),
+                  rendersVia: RENDERS_VIA
+                }
+              ]
+            ]
+          },
+          {
+            title: "Panel",
+            /*
+             * The part reads short on purpose. Every one of these existed
+             * already, under a "Sub" prefix that the heading now says better;
+             * the ones Main Menu has and this does not — underline, italic,
+             * link height, the four label/hover/current colours, the hover
+             * effect and the text shadow — are not built yet. Padding the part
+             * with controls that do nothing would hide that.
+             */
+            strips: [
+              [
+                {
+                  /*
+                   * Empty means "follow the top level" for a list drop-down and
+                   * "keep the panel's own 0.86rem" for a mega panel — the two
+                   * behaviours each has always had. getNavModuleStyle() emits
+                   * nothing at all until one of these is set, so an untouched menu
+                   * cannot move.
+                   */
+                  key: "navDropdownFontSize",
+                  label: "Size",
+                  width: "num",
+                  control: "number",
+                  min: 8,
+                  max: 48,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownWeight",
+                  label: "Weight",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "",
+                  options: [
+                    { value: "", label: "Follow menu" },
+                    { value: "400", label: "Normal" },
+                    { value: "500", label: "Medium" },
+                    { value: "600", label: "Semibold" },
+                    { value: "700", label: "Bold" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownTextTransform",
+                  label: "Case",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "",
+                  options: [
+                    { value: "", label: "Follow menu" },
+                    { value: "none", label: "As typed" },
+                    { value: "uppercase", label: "UPPERCASE" },
+                    { value: "lowercase", label: "lowercase" },
+                    { value: "capitalize", label: "Capitalize" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownLetterSpacing",
+                  label: "Spacing",
+                  width: "num",
+                  control: "number",
+                  min: -4,
+                  max: 12,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  /*
+                   * "Panel Text", filed under Structure > Dropdown, until 8/13;
+                   * "Sub-level Text" on this axis after that. Same key and same
+                   * variable throughout — every menu already set keeps its
+                   * colour.
+                   */
+                  key: "navDropdownTextColor",
+                  label: "Text Color",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: "#334861",
+                  dialogLabel: "Drop-down link color",
+                  rendersVia: RENDERS_VIA
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        title: "Border",
+        strips: [],
+        sections: [
+          {
+            title: "Main Menu",
+            strips: [
+              [
+                {
+                  key: "navBorderWidth",
+                  // "Border" → "Bar Border" → "Border". The word "Bar" was
+                  // there to say which thing the axis styled; the part heading
+                  // says it now.
+                  label: "Border",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 20,
+                  fallback: String(NAV_STYLE_DEFAULTS.borderWidth),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navBorderStyle",
+                  label: "Style",
+                  width: "select-md",
+                  control: "select",
+                  fallback: NAV_STYLE_DEFAULTS.borderStyle,
+                  options: [
+                    { value: "solid", label: "Solid" },
+                    { value: "dashed", label: "Dashed" },
+                    { value: "dotted", label: "Dotted" },
+                    { value: "double", label: "Double" },
+                    { value: "none", label: "None" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navBorderColor",
+                  label: "Border Color",
+                  width: "color",
+                  control: "color",
+                  dialogLabel: "Menu border color",
+                  fallback: NAV_STYLE_DEFAULTS.borderColor,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navBarRadius",
+                  label: "Radius",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 80,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.barRadius),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  /*
+                   * Keeps the legacy key: on live sites navBorderRadius has
+                   * always meant the LINK, and only the React preview ever put
+                   * it on the bar. Renaming it here would move real menus. It
+                   * keeps its "Link" qualifier too — this is the radius of a
+                   * link inside the bar, not of the bar, so the heading does
+                   * not cover it.
+                   */
+                  key: "navBorderRadius",
+                  label: "Link Radius",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 48,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.linkRadius),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              // A7: the BOX shadow the bar casts, last on the axis (D9).
+              // `defaultOn` because the bar had this shadow before anything could
+              // switch it off — an absent setting has to keep meaning "on" or
+              // every live menu goes flat.
+              ...dropShadowFields(RENDERS_VIA, {
+                prefix: "navShadow",
+                label: "Drop Shadow",
+                defaultOn: true,
+                range: { offset: 60, blur: 120 },
+                defaults: {
+                  x: String(NAV_STYLE_DEFAULTS.shadowX),
+                  y: String(NAV_STYLE_DEFAULTS.shadowY),
+                  blur: String(NAV_STYLE_DEFAULTS.shadowBlur),
+                  color: NAV_STYLE_DEFAULTS.shadowColor
+                }
+              }).map((field) => [field]),
+              [
+                {
+                  key: "navShadowSpread",
+                  label: "Shadow Spread",
+                  width: "num",
+                  control: "number",
+                  min: -40,
+                  max: 40,
+                  fallback: "0",
+                  visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navShadowOpacity",
+                  label: "Shadow Opacity",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  fallback: String(NAV_STYLE_DEFAULTS.shadowOpacity),
+                  visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
+                  rendersVia: RENDERS_VIA
+                }
+              ]
+            ]
+          },
+          {
+            /*
+             * The drop-down panel's own frame (operator, 2026-08-13: *"the
+             * Border settings also only apply to the top menu"* — they did).
+             * The default differs by panel style because the two have never
+             * matched: a list drop-down draws a hairline, a mega panel draws
+             * none and leans on its shadow. See NAV_STYLE_DEFAULTS.
+             *
+             * "Radius" moved here from Structure > Dropdown so it sits opposite
+             * the bar's Radius. Same key, same variable.
+             */
+            title: "Panel",
+            strips: [
+              [
+                {
+                  key: "navDropdownBorderWidth",
+                  label: "Border",
+                  width: "num",
+                  control: "number",
+                  min: 0,
+                  max: 20,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownBorderStyle",
+                  label: "Style",
+                  width: "select-md",
+                  control: "select",
+                  fallback: NAV_STYLE_DEFAULTS.dropdownBorderStyle,
+                  options: [
+                    { value: "solid", label: "Solid" },
+                    { value: "dashed", label: "Dashed" },
+                    { value: "dotted", label: "Dotted" },
+                    { value: "double", label: "Double" },
+                    { value: "none", label: "None" }
+                  ],
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownBorderColor",
+                  label: "Border Color",
+                  width: "color",
+                  control: "color",
+                  dialogLabel: "Drop-down panel border color",
+                  fallback: NAV_STYLE_DEFAULTS.dropdownBorderColor,
                   rendersVia: RENDERS_VIA
                 }
               ],
@@ -522,603 +1194,9 @@ export function BuilderNavigationModuleSettings({
                   fallback: String(NAV_STYLE_DEFAULTS.dropdownRadius),
                   rendersVia: RENDERS_VIA
                 }
-              ],
-              [
-                {
-                  key: "navDropdownBackground",
-                  label: "Panel Fill",
-                  width: "color",
-                  control: "color",
-                  dialogLabel: "Dropdown panel background",
-                  fallback: NAV_STYLE_DEFAULTS.dropdownBackground,
-                  rendersVia: RENDERS_VIA
-                }
-              ],
-              /*
-               * "Panel Text" lived here until 2026-08-13. A6 had already
-               * rescued it from Advanced, but Structure > Dropdown was still
-               * the wrong home for a text colour: the operator found it here,
-               * a whole axis away from the colour it pairs with, and read it
-               * as doing nothing. It is now "Sub-level Text" on the Text axis,
-               * directly beneath "Top-level Text". Same key, same variable —
-               * every menu already set keeps its colour.
-               */
-              [
-                {
-                  // List only: a mega panel's arrow is its open/close button,
-                  // not decoration — hiding it would strand every sub-link on
-                  // a phone, where the panel opens by tapping it.
-                  key: "navShowArrow",
-                  label: "Arrow",
-                  width: "check",
-                  control: "checkbox",
-                  fallback: "true",
-                  visibleWhen: isListMenu,
-                  rendersVia: "NavigationModulePreview"
-                }
               ]
             ]
           }
-        ]
-      },
-      {
-        title: "Placement",
-        strips: [
-          [
-            {
-              // Positions the items INSIDE the bar. The module box has no
-              // separate alignment worth offering — the bar fills its column.
-              key: "navAlignment",
-              label: "Alignment",
-              width: "align",
-              control: "align",
-              fallback: "center",
-              ariaLabel: "Menu item alignment inside the nav",
-              rendersVia: "NavigationModulePreview"
-            }
-          ],
-          ...marginFields("getModuleOuterSpacingStyle", 160).map((field) => [field]),
-          // The bar's own padding, four sides, each on its own strip like the
-          // margins above.
-          ...sideFields("navPadding", "Padding", {
-            max: 60,
-            top: String(NAV_STYLE_DEFAULTS.paddingV),
-            side: String(NAV_STYLE_DEFAULTS.paddingH)
-          }).map((field) => [field]),
-          // W7 names the four spacing controls for a module's OWN box, taken
-          // above by the bar. These four are the padding inside each LINK, a
-          // different quantity (same judgement call as Table's "Cell
-          // Padding"), so they carry a qualified name.
-          ...sideFields("navLinkPadding", "Link Padding", {
-            max: 60,
-            top: String(NAV_STYLE_DEFAULTS.linkPaddingV),
-            side: String(NAV_STYLE_DEFAULTS.linkPaddingH)
-          }).map((field) => [field]),
-          // D9 puts the finest adjustment last on its axis. A0 retired the
-          // Advanced section these two used to sit in (A3, withdrawn) —
-          // sorting last is how a nudge is de-emphasised now.
-          [
-            {
-              key: "verticalOffset",
-              label: "Vertical Offset",
-              width: "num",
-              control: "number",
-              min: -100,
-              max: 100,
-              step: 5,
-              fallback: "0",
-              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
-            }
-          ],
-          [
-            {
-              key: "horizontalOffset",
-              label: "Horizontal Offset",
-              width: "num",
-              control: "number",
-              min: -100,
-              max: 100,
-              step: 5,
-              fallback: "0",
-              rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
-            }
-          ]
-        ]
-      },
-      {
-        title: "Text",
-        /*
-         * A6, in the operator's words (8/11): "Don't put text color under
-         * Advanced. That is basic. Hover effects, dropshadows, etc. are
-         * advance." Colour and the label's own fill were both in Advanced
-         * and both read as missing — he reported having no control over
-         * "the background colors of the labels ... and the font color".
-         */
-        strips: [
-          [
-            {
-              key: "navFontSize",
-              label: "Font",
-              width: "num",
-              control: "number",
-              min: 10,
-              max: 48,
-              fallback: String(NAV_STYLE_DEFAULTS.fontSize),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              // Replaces the Bold checkbox, which never reached the links.
-              key: "navWeight",
-              label: "Weight",
-              width: "select-sm",
-              control: "select",
-              fallback: String(NAV_STYLE_DEFAULTS.weight),
-              options: [
-                { value: "300", label: "Light" },
-                { value: "400", label: "Regular" },
-                { value: "500", label: "Medium" },
-                { value: "600", label: "Semibold" },
-                { value: "700", label: "Bold" },
-                { value: "800", label: "Heavy" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navUnderline",
-              label: "Underline",
-              width: "select-md",
-              control: "select",
-              fallback: "none",
-              options: [
-                { value: "none", label: "Never" },
-                { value: "always", label: "Always" },
-                { value: "hover", label: "On Hover" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navItalic",
-              label: "Italic",
-              width: "check",
-              control: "checkbox",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navTextTransform",
-              label: "Case",
-              width: "select-md",
-              control: "select",
-              fallback: "none",
-              options: [
-                { value: "none", label: "As typed" },
-                { value: "uppercase", label: "UPPERCASE" },
-                { value: "lowercase", label: "lowercase" },
-                { value: "capitalize", label: "Capitalize" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navLetterSpacing",
-              label: "Spacing",
-              width: "num",
-              control: "number",
-              min: -4,
-              max: 12,
-              fallback: String(NAV_STYLE_DEFAULTS.letterSpacing),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navLinkHeight",
-              label: "Link Height",
-              width: "num",
-              control: "number",
-              min: 24,
-              max: 96,
-              step: 2,
-              fallback: String(NAV_STYLE_DEFAULTS.linkHeight),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          /*
-           * The effect layer, sorted after the colours per D9 rather than
-           * hidden behind a collapse (A0 retired Advanced). A7 puts the TEXT
-           * shadow on this axis and the bar's BOX shadow on Border — two
-           * different shadows, which is why dropShadowFields() takes a
-           * key prefix.
-           */
-          [
-            {
-              key: "navColor",
-              // "Text Color" until 2026-08-13. It only ever coloured the top
-              // level, and the panel gave no clue that the sub level was a
-              // different control living on a different axis.
-              label: "Top-level Text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#163a5e",
-              dialogLabel: "Menu text color",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-
-          /*
-           * The sub level, kept adjacent to the top level rather than sorted
-           * with the other colours. D9 orders an axis by blast radius, and on
-           * this panel the thing with the widest blast radius is answering
-           * "which level am I changing?" — the operator's 2026-08-13 report was
-           * that one control appeared to move both. Two labelled levels, side
-           * by side, is the answer to that; splitting them across a colour
-           * group and a type group would rebuild the confusion.
-           *
-           * Sub-level Text was "Panel Text", filed under Structure > Dropdown,
-           * where he found it and reasonably read it as doing nothing.
-           */
-          [
-            {
-              key: "navDropdownTextColor",
-              label: "Sub-level Text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#334861",
-              dialogLabel: "Drop-down link color",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              /*
-               * Empty means "follow the top level" for a list drop-down and
-               * "keep the panel's own 0.86rem" for a mega panel — the two
-               * behaviours each has always had. getNavModuleStyle() emits
-               * nothing at all until one of these is set, so an untouched menu
-               * cannot move.
-               */
-              key: "navDropdownFontSize",
-              label: "Sub Size",
-              width: "num",
-              control: "number",
-              min: 8,
-              max: 48,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navDropdownWeight",
-              label: "Sub Weight",
-              width: "select-md",
-              control: "select",
-              fallback: "",
-              options: [
-                { value: "", label: "Follow menu" },
-                { value: "400", label: "Normal" },
-                { value: "500", label: "Medium" },
-                { value: "600", label: "Semibold" },
-                { value: "700", label: "Bold" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navDropdownTextTransform",
-              label: "Sub Case",
-              width: "select-md",
-              control: "select",
-              fallback: "",
-              options: [
-                { value: "", label: "Follow menu" },
-                { value: "none", label: "As typed" },
-                { value: "uppercase", label: "UPPERCASE" },
-                { value: "lowercase", label: "lowercase" },
-                { value: "capitalize", label: "Capitalize" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navDropdownLetterSpacing",
-              label: "Sub Spacing",
-              width: "num",
-              control: "number",
-              min: -4,
-              max: 12,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-
-          [
-            {
-              // New. A link had no resting background and no CSS for one,
-              // so the labels could not be coloured at all.
-              key: "navLinkBackground",
-              label: "Label Fill",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "transparent",
-              dialogLabel: "Menu label background",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-
-          [
-            {
-              key: "navHoverColor",
-              label: "Hover Text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#0a8fc4",
-              dialogLabel: "Menu hover text color",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navHoverBackground",
-              label: "Hover Fill",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#d0f0fb",
-              dialogLabel: "Menu hover background color",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navActiveColor",
-              /*
-               * "Current Text" until 2026-08-13. It is not a level, and being
-               * named as though it were is what made it look like the one
-               * control governing both: a sub-link on the current page carries
-               * `.site-nav-link-active` exactly like a top-level one, so this
-               * really does colour a label in both places — but only the
-               * current page's.
-               */
-              label: "Current Page Text",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#0a8fc4",
-              dialogLabel: "Current page link color",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              // New. The current page's pill WAS the hover fill, with no
-              // control of its own — one label in every menu looked
-              // different and nothing could change it.
-              key: "navActiveBackground",
-              label: "Current Fill",
-              width: "color",
-              control: "theme-color",
-              themeDefault: "#d0f0fb",
-              dialogLabel: "Current page background",
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navHoverEffect",
-              label: "Hover",
-              width: "select-md",
-              control: "select",
-              fallback: NAV_STYLE_DEFAULTS.hoverEffect,
-              options: [
-                { value: "none", label: "None" },
-                { value: "lift", label: "Lift" },
-                { value: "grow", label: "Grow" },
-                { value: "fade", label: "Fade" },
-                { value: "underline", label: "Underline Slide" }
-              ],
-              rendersVia: "getNavModuleClassNames (builder-nav-style.ts)"
-            }
-          ],
-          ...dropShadowFields(RENDERS_VIA, {
-            prefix: "navTextShadow",
-            label: "Text Shadow",
-            range: { offset: 20, blur: 40 },
-            defaults: {
-              x: String(NAV_STYLE_DEFAULTS.textShadowX),
-              y: String(NAV_STYLE_DEFAULTS.textShadowY),
-              blur: String(NAV_STYLE_DEFAULTS.textShadowBlur),
-              color: NAV_STYLE_DEFAULTS.textShadowColor
-            }
-          }).map((field) => [field]),
-          [
-            {
-              key: "navTextShadowOpacity",
-              label: "Shadow Opacity",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 100,
-              step: 5,
-              fallback: String(NAV_STYLE_DEFAULTS.textShadowOpacity),
-              visibleWhen: (settings) => dropShadowIsOn(settings, "navTextShadow", false),
-              rendersVia: RENDERS_VIA
-            }
-          ]
-        ]
-      },
-      {
-        title: "Border",
-        strips: [
-          [
-            {
-              key: "navBorderWidth",
-              // "Border" until 2026-08-13. Every control on this axis styles
-              // the BAR and always has; naming them so is the difference
-              // between "the border settings don't work on the drop-down" and
-              // "the drop-down has its own, below".
-              label: "Bar Border",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 20,
-              fallback: String(NAV_STYLE_DEFAULTS.borderWidth),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navBorderStyle",
-              label: "Bar Style",
-              width: "select-md",
-              control: "select",
-              fallback: NAV_STYLE_DEFAULTS.borderStyle,
-              options: [
-                { value: "solid", label: "Solid" },
-                { value: "dashed", label: "Dashed" },
-                { value: "dotted", label: "Dotted" },
-                { value: "double", label: "Double" },
-                { value: "none", label: "None" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navBorderColor",
-              label: "Bar Border Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Menu border color",
-              fallback: NAV_STYLE_DEFAULTS.borderColor,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navBarRadius",
-              label: "Bar Radius",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 80,
-              step: 5,
-              fallback: String(NAV_STYLE_DEFAULTS.barRadius),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-
-          /*
-           * The drop-down panel's own frame (operator, 2026-08-13: *"the
-           * Border settings also only apply to the top menu"* — they did).
-           * The default differs by panel style because the two have never
-           * matched: a list drop-down draws a hairline, a mega panel draws
-           * none and leans on its shadow. See NAV_STYLE_DEFAULTS.
-           */
-          [
-            {
-              key: "navDropdownBorderWidth",
-              label: "Panel Border",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 20,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navDropdownBorderStyle",
-              label: "Panel Style",
-              width: "select-md",
-              control: "select",
-              fallback: NAV_STYLE_DEFAULTS.dropdownBorderStyle,
-              options: [
-                { value: "solid", label: "Solid" },
-                { value: "dashed", label: "Dashed" },
-                { value: "dotted", label: "Dotted" },
-                { value: "double", label: "Double" },
-                { value: "none", label: "None" }
-              ],
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navDropdownBorderColor",
-              label: "Panel Border Color",
-              width: "color",
-              control: "color",
-              dialogLabel: "Drop-down panel border color",
-              fallback: NAV_STYLE_DEFAULTS.dropdownBorderColor,
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              // Keeps the legacy key: on live sites navBorderRadius has
-              // always meant the LINK, and only the React preview ever put
-              // it on the bar. Renaming it here would move real menus.
-              key: "navBorderRadius",
-              label: "Link Radius",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 48,
-              step: 5,
-              fallback: String(NAV_STYLE_DEFAULTS.linkRadius),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          // A7: the BOX shadow the bar casts, last on the axis (D9).
-          // `defaultOn` because the bar had this shadow before anything could
-          // switch it off — an absent setting has to keep meaning "on" or
-          // every live menu goes flat.
-          ...dropShadowFields(RENDERS_VIA, {
-            prefix: "navShadow",
-            label: "Drop Shadow",
-            defaultOn: true,
-            range: { offset: 60, blur: 120 },
-            defaults: {
-              x: String(NAV_STYLE_DEFAULTS.shadowX),
-              y: String(NAV_STYLE_DEFAULTS.shadowY),
-              blur: String(NAV_STYLE_DEFAULTS.shadowBlur),
-              color: NAV_STYLE_DEFAULTS.shadowColor
-            }
-          }).map((field) => [field]),
-          [
-            {
-              key: "navShadowSpread",
-              label: "Shadow Spread",
-              width: "num",
-              control: "number",
-              min: -40,
-              max: 40,
-              fallback: "0",
-              visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
-              rendersVia: RENDERS_VIA
-            }
-          ],
-          [
-            {
-              key: "navShadowOpacity",
-              label: "Shadow Opacity",
-              width: "num",
-              control: "number",
-              min: 0,
-              max: 100,
-              step: 5,
-              fallback: String(NAV_STYLE_DEFAULTS.shadowOpacity),
-              visibleWhen: (settings) => dropShadowIsOn(settings, "navShadow", true),
-              rendersVia: RENDERS_VIA
-            }
-          ]
         ]
       }
     ]
