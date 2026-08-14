@@ -42,7 +42,9 @@ export function BuilderProgramListModuleSettings({
   onUpdateModule,
   themeColors = []
 }: BuilderProgramListModuleSettingsProps) {
-  const programs = parsePrograms(module.settings.programs);
+  // keepUntitled: the editor shows the row "Add a program" just created,
+  // before it has a name. The renderer still drops nameless programs.
+  const programs = parsePrograms(module.settings.programs, { keepUntitled: true });
 
   const set = (key: string, value: string) =>
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
@@ -116,7 +118,9 @@ export function BuilderProgramListModuleSettings({
   const themeHex = (label: string) => themeColors.find((color) => color.label === label)?.hex || "";
   const accentDefault = themeHex("Primary") || "#4f9c3a";
   const headingDefault = themeHex("Accent") || "#14265c";
-  const borderDefault = themeHex("Secondary") || "#dce3ef";
+  // Not a theme color — see the renderer. A swatch that previews a color
+  // the renderer will not use is worse than no swatch at all.
+  const borderDefault = "#dce3ef";
 
   return (
     <div className="builder-cards-panel">

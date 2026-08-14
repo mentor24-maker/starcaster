@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   parsePrograms,
+  serializePrograms,
+  createProgram,
   formatSessionHours,
   isProgramListEmpty,
   type Program
@@ -168,6 +170,36 @@ describe("parsePrograms — malformed input never throws", () => {
   it("drops empty bullets rather than rendering blank list items", () => {
     const parsed = parsePrograms([{ title: "X", bullets: ["Real", "", "   ", "Also real"] }]);
     expect(parsed[0].bullets).toEqual(["Real", "Also real"]);
+  });
+});
+
+describe("parsePrograms — the editor keeps rows the renderer drops", () => {
+  // The "Add a program" button creates a row with no name yet. Without
+  // keepUntitled the row was discarded on the very next parse, so the button
+  // looked inert with no error anywhere. Found by the operator on 2026-08-13,
+  // the first time anyone clicked it.
+  it("keeps a nameless row for the editor", () => {
+    const parsed = parsePrograms([{ id: "new", title: "" }], { keepUntitled: true });
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].title).toBe("");
+  });
+
+  it("still drops a nameless row for the renderer", () => {
+    expect(parsePrograms([{ id: "new", title: "" }])).toEqual([]);
+  });
+
+  it("survives the add-then-serialize round trip the editor performs", () => {
+    const added = [...parsePrograms(undefined, { keepUntitled: true }), createProgram()];
+    const stored = serializePrograms(added);
+    expect(parsePrograms(stored, { keepUntitled: true })).toHaveLength(1);
+  });
+
+  it("keeps a row that has sessions but no name yet", () => {
+    const parsed = parsePrograms(
+      [{ title: "", sessions: [{ day: "Monday", startTime: "9:00 AM" }] }],
+      { keepUntitled: true }
+    );
+    expect(parsed[0].sessions).toHaveLength(1);
   });
 });
 
