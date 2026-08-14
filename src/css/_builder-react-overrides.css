@@ -570,8 +570,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * been failed his contrast rule (R9) — grey-on-blue is exactly the
  * low-contrast pairing he called out.
  */
+/*
+ * Axis headings, one step up the scale (operator, 2026-08-14: "Make the
+ * column headings larger as well"). They are the only thing telling you
+ * which of four columns you are reading, and at --text-lg they sat close
+ * enough to a field label to disappear into the panel.
+ */
 .builder-react-root .builder-schema-group-title {
-  font-size: var(--text-lg, 1.1rem);
+  font-size: var(--text-xl, 1.25rem);
   font-weight: 700;
   color: var(--builder-editor-heading, #0b2a4a);
   margin: var(--space-2, 6px) 0 var(--space-3, 8px);
@@ -597,9 +603,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-top: 1px solid var(--builder-editor-hairline, rgba(11, 42, 74, 0.12));
 }
 
+/*
+ * Sub-section headings — Navigation's "Main Menu" and "Panel".
+ *
+ * Operator, 2026-08-14: *"I didn't notice where Main Menu and Panel sections
+ * were until I searched the page for them."* At --text-base and the same
+ * colour as a field label, they read as another row of the form. Up a step,
+ * and set in small caps with letter spacing so the eye catches a DIVIDER
+ * rather than a heavier label — the two are one step apart on the scale, and
+ * on this panel a step of size alone was not enough to see.
+ */
 .builder-react-root .builder-schema-group-subtitle {
-  font-size: var(--text-base, 0.95rem);
+  font-size: var(--text-lg, 1.1rem);
   font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--builder-editor-heading, #0b2a4a);
   margin: 0;
 }
