@@ -118,6 +118,44 @@ const TUNED = {
       ]),
     },
   },
+  // Same lesson as feature-cards, learned again on 2026-08-13: the Programs
+  // manager shipped with a staggered, overlapping panel while `check:panels`
+  // reported clean, because an empty module renders no fields and a group
+  // with no pairs measured nothing. Two programs, carrying the longest
+  // labels the manager has and both repeating grids populated, so the tracks
+  // are real. `check_panels` now FAILS on an empty manager rather than
+  // passing it, so this seed cannot quietly rot either.
+  'program-list': {
+    name: 'Programs',
+    settings: {
+      reservePhone: '(561) 243-7360',
+      policyNote: 'All programs carry a 24-hour cancellation policy.',
+      programs: JSON.stringify([
+        {
+          id: 'program-1', title: 'Back to Basics',
+          subtitle: 'Drills and intermediate king of the court',
+          levelBadge: '3.0 - 3.5 Players',
+          sessions: [
+            { id: 's1', day: 'Tuesday', startTime: '7:00 PM', endTime: '8:30 PM', instructor: 'Zach Schneider' },
+            { id: 's2', day: 'Thursday', startTime: '7:00 PM', endTime: '8:30 PM', instructor: 'Vincent Williams' },
+          ],
+          pricing: [{ id: 'p1', amount: '$30', appliesTo: 'members & non-members' }],
+          bullets: [],
+        },
+        {
+          id: 'program-2', title: 'Sunday Morning Mixer',
+          subtitle: 'with Jeff Kantor',
+          levelBadge: '3.0 - 5.0 Players',
+          sessions: [{ id: 's1', day: 'Sunday', startTime: '10:00 AM', endTime: '12:00 PM' }],
+          pricing: [
+            { id: 'p1', amount: '$20', appliesTo: 'members' },
+            { id: 'p2', amount: '$25', appliesTo: 'non-members' },
+          ],
+          bullets: ['Progressive mixed doubles', 'Winners move up, losers move down'],
+        },
+      ]),
+    },
+  },
   table: {
     name: 'Contact Strip',
     settings: {

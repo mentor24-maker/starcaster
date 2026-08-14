@@ -270,7 +270,12 @@ function measure(page, nonStretch) {
         };
       }).filter(Boolean);
       const declaredPairs = Number(group.getAttribute('data-lattice-pairs') || '1') || 1;
-      return { index, group: groupName, pairs: declaredPairs, fields };
+      // Whether this group is an item manager that OPTED IN to being
+      // measured. Distinct from `pairs`, which defaults to 1 and so cannot
+      // tell "declared one column" from "declared nothing" — and that
+      // distinction is what makes an unmeasured manager detectable below.
+      const declaredManager = group.hasAttribute('data-lattice-pairs');
+      return { index, group: groupName, pairs: declaredPairs, declaredManager, fields };
       });
     });
   }, nonStretch);
@@ -329,6 +334,30 @@ function assertLattice(panels, width) {
 
   for (const panel of panels) {
     const { fields: allFields } = panel;
+
+    // AN UNMEASURED MANAGER IS A FAILURE, NOT A PASS.
+    //
+    // This `continue` used to be unconditional, and it is the reason this
+    // check reported clean on two broken panels: Feature Cards on
+    // 2026-08-12 and Programs on 2026-08-13. Both rendered EMPTY in the
+    // fixture, so the group was found, measured nothing, and skipped — and
+    // in both cases the green run was read as proof the layout obeyed W0
+    // when it had never been looked at.
+    //
+    // A group that declares `data-lattice-pairs` is an item manager saying
+    // "measure me". If it then yields no label/field pairs, the fixture does
+    // not exercise it and NOTHING here was verified. Saying so out loud is
+    // the only way a missing seed stops being invisible: the operator should
+    // never be the mechanism that discovers a staggered form.
+    if (panel.declaredManager && !allFields.length) {
+      failures.push(
+        `${width}px panel #${panel.index} / ${panel.group}: declares data-lattice-pairs but rendered no ` +
+        `label/field pairs — nothing was measured. Seed real content for this module in ` +
+        `scripts/ui/seed_fixture.mjs; an empty manager cannot verify anything.`
+      );
+      continue;
+    }
+
     if (!allFields.length) continue;
 
     // W0 is per COLUMN. A group that puts two label/field pairs on a row
