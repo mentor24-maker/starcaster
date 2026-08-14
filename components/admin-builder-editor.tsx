@@ -50,6 +50,7 @@ import {
 } from "./builder/builder-utils";
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList, pageVisibilityFromRecord, pageVisibilityToFlags, type PageVisibility } from "./builder/builder-page-list";
+import { BuilderPageHistory } from "./builder/builder-page-history";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -2335,6 +2336,20 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onDeleteSnapshot={(id) => void deleteSnapshot(id)}
         />
       )}
+
+      {builderMode === "pages" && selectedPageId ? (
+        <BuilderPageHistory
+          pageId={selectedPageId}
+          pageName={draft.name || "this page"}
+          onRestored={() => {
+            // Pull the restored layout back into the open editor, otherwise the
+            // canvas keeps showing the version we just replaced and the next
+            // save would write it straight back over the restore.
+            hydratedPageSelectionRef.current = "";
+            void loadPages();
+          }}
+        />
+      ) : null}
 
       {builderMode !== "modules" ? (
         <>
