@@ -63,6 +63,19 @@ export type Program = {
   bullets: string[];
 };
 
+/**
+ * `keepUntitled` separates the two readers of this data.
+ *
+ * The renderer and the canvas card want validated content: a program with no
+ * name cannot be listed or chosen, so it is not shown. The settings editor
+ * wants whatever the operator currently has on screen, including a row they
+ * have not named yet — otherwise the row vanishes between creating it and
+ * typing into it.
+ */
+export type ParseProgramsOptions = {
+  keepUntitled?: boolean;
+};
+
 const MAX_PROGRAMS = 60;
 const MAX_SESSIONS = 24;
 const MAX_PRICES = 8;
@@ -160,7 +173,8 @@ function parseBullets(raw: unknown): string[] {
  * throw: standard 5 requires a malformed collection to fall back to empty
  * rather than crash the page, and this renderer serves live tenant sites.
  */
-export function parsePrograms(raw: unknown): Program[] {
+export function parsePrograms(raw: unknown, options?: ParseProgramsOptions): Program[] {
+  const keepUntitled = options?.keepUntitled === true;
   let source: unknown = raw;
 
   if (typeof raw === "string") {
@@ -182,9 +196,13 @@ export function parsePrograms(raw: unknown): Program[] {
       const row = entry as Record<string, unknown>;
 
       const title = text(row.title, MAX_SHORT);
-      // A program with no name cannot be listed or chosen. Everything else
-      // is optional — a title-only entry is a legitimate work in progress.
-      if (!title) return null;
+      // A program with no name cannot be listed or chosen, so the renderer
+      // drops it. The EDITOR must not: "Add a program" creates an empty row
+      // for the operator to type into, and dropping it here made that button
+      // look inert — the row was created and discarded before it could be
+      // rendered, with no error anywhere. Found by the operator on
+      // 2026-08-13, first time anyone clicked it.
+      if (!title && !keepUntitled) return null;
 
       const program: Program = {
         id: id(row.id, "program", index),

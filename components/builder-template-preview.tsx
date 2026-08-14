@@ -1244,7 +1244,7 @@ export function BuilderTemplatePreview({
 
   /**
    * Alternating bands are what make a page read as designed rather than as one
-   * wash of colour, so sections that set no background of their own take turns
+   * wash of color, so sections that set no background of their own take turns
    * between the theme's `surface` and `band` roles.
    *
    * Only those sections: one with a background the operator chose keeps it, and
@@ -1444,7 +1444,7 @@ function BuilderSectionPreview({
     : undefined;
 
   // Hero treatment: a tint over an image background so text can sit on the
-  // photo, with the inverse text colour on top. Layered as a gradient IN FRONT
+  // photo, with the inverse text color on top. Layered as a gradient IN FRONT
   // of the image, so the photo still reads through.
   const isImageSection = section.background?.mode === "image" && Boolean(section.background?.imageUrl);
   // A theme hero banner turns a plain section into an image section; it always
@@ -1497,7 +1497,7 @@ function BuilderSectionPreview({
     ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
     // A menu-only row used to throw its own background away, which is half of
     // the operator's "the style controls of the container have no effect"
-    // (2026-08-11) — he set a header strip's colour and nothing happened.
+    // (2026-08-11) — he set a header strip's color and nothing happened.
     // Honoured now: it is `undefined` until he picks one, so a row he never
     // touched still renders flush. The automatic treatments above and below
     // (band, hero tint, overlap) stay off — those are not his controls.
@@ -1777,7 +1777,7 @@ function BuilderModulePreview({
 
   if (module.type === "heading") {
     const Tag = (module.settings.level || "h2") as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
-    // Inline markup, sanitized: a heading can carry a recoloured or resized
+    // Inline markup, sanitized: a heading can carry a recolored or resized
     // word (see `formatHeadingContent`). A heading with no markup renders
     // exactly the escaped text it always did.
     return (
@@ -4906,8 +4906,8 @@ function siteSearchFieldVars(
   if (btnSize > 0) vars["--site-search-btn-size"] = `${btnSize}px`;
   if (settings.buttonBold === "false") vars["--site-search-btn-weight"] = "400";
 
-  // Button border. A width with no colour would paint the browser default,
-  // so the colour carries its own visible fallback in the stylesheet.
+  // Button border. A width with no color would paint the browser default,
+  // so the color carries its own visible fallback in the stylesheet.
   const btnBorder = siteSearchNumber(settings.buttonBorderWidth, 0, 0, 12);
   vars["--site-search-btn-border-width"] = `${btnBorder}px`;
   set("--site-search-btn-border-color", normalizeBuilderHexColor(settings.buttonBorderColor, ""));
@@ -5919,7 +5919,12 @@ function ProgramListModulePreview({
           "--program-accent": accent,
           "--program-heading": heading,
           "--program-bg": module.settings.cardBackground || "var(--lp-surface, #ffffff)",
-          "--program-border": module.settings.cardBorderColor || "var(--crm-theme-secondary, #dce3ef)"
+          // A card border is a quiet line, not a brand color, so it does NOT
+          // default to a theme color. On a theme whose secondary is a strong
+          // green every card gained a green hairline — spotted in the settings
+          // swatch on 2026-08-13 before it ever reached a page. The operator
+          // can still pick any color; the default just stays out of the way.
+          "--program-border": module.settings.cardBorderColor || "#dce3ef"
         } as React.CSSProperties
       }
     >
@@ -6092,7 +6097,7 @@ function FeatureCardsModulePreview({
         const linkLabel = card.linkLabel || fallbackLinkLabel;
         const badgeColor = alternateIcons && index % 2 === 1 ? iconAltColor : iconColor;
         // "Plain" drops the filled disc, so the glyph itself has to carry
-        // the colour — white-on-nothing is invisible. With a disc, white
+        // the color — white-on-nothing is invisible. With a disc, white
         // stays the default and Icon Text overrides it.
         const glyphColor = module.settings.iconTextColor || (iconShape === "plain" ? badgeColor : "#ffffff");
 
