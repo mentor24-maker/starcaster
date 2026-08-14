@@ -534,19 +534,15 @@ export function BuilderNavigationModuleSettings({
                   rendersVia: RENDERS_VIA
                 }
               ],
-              [
-                {
-                  // A6: a text colour is basic wherever it lives. This one
-                  // was in Advanced, where nobody found it.
-                  key: "navDropdownTextColor",
-                  label: "Panel Text",
-                  width: "color",
-                  control: "theme-color",
-                  themeDefault: "#334861",
-                  dialogLabel: "Dropdown link color",
-                  rendersVia: RENDERS_VIA
-                }
-              ],
+              /*
+               * "Panel Text" lived here until 2026-08-13. A6 had already
+               * rescued it from Advanced, but Structure > Dropdown was still
+               * the wrong home for a text colour: the operator found it here,
+               * a whole axis away from the colour it pairs with, and read it
+               * as doing nothing. It is now "Sub-level Text" on the Text axis,
+               * directly beneath "Top-level Text". Same key, same variable —
+               * every menu already set keeps its colour.
+               */
               [
                 {
                   // List only: a mega panel's arrow is its open/close button,
@@ -745,11 +741,101 @@ export function BuilderNavigationModuleSettings({
           [
             {
               key: "navColor",
-              label: "Text Color",
+              // "Text Color" until 2026-08-13. It only ever coloured the top
+              // level, and the panel gave no clue that the sub level was a
+              // different control living on a different axis.
+              label: "Top-level Text",
               width: "color",
               control: "theme-color",
               themeDefault: "#163a5e",
               dialogLabel: "Menu text color",
+              rendersVia: RENDERS_VIA
+            }
+          ],
+
+          /*
+           * The sub level, kept adjacent to the top level rather than sorted
+           * with the other colours. D9 orders an axis by blast radius, and on
+           * this panel the thing with the widest blast radius is answering
+           * "which level am I changing?" — the operator's 2026-08-13 report was
+           * that one control appeared to move both. Two labelled levels, side
+           * by side, is the answer to that; splitting them across a colour
+           * group and a type group would rebuild the confusion.
+           *
+           * Sub-level Text was "Panel Text", filed under Structure > Dropdown,
+           * where he found it and reasonably read it as doing nothing.
+           */
+          [
+            {
+              key: "navDropdownTextColor",
+              label: "Sub-level Text",
+              width: "color",
+              control: "theme-color",
+              themeDefault: "#334861",
+              dialogLabel: "Drop-down link color",
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              /*
+               * Empty means "follow the top level" for a list drop-down and
+               * "keep the panel's own 0.86rem" for a mega panel — the two
+               * behaviours each has always had. getNavModuleStyle() emits
+               * nothing at all until one of these is set, so an untouched menu
+               * cannot move.
+               */
+              key: "navDropdownFontSize",
+              label: "Sub Size",
+              width: "num",
+              control: "number",
+              min: 8,
+              max: 48,
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navDropdownWeight",
+              label: "Sub Weight",
+              width: "select-md",
+              control: "select",
+              fallback: "",
+              options: [
+                { value: "", label: "Follow menu" },
+                { value: "400", label: "Normal" },
+                { value: "500", label: "Medium" },
+                { value: "600", label: "Semibold" },
+                { value: "700", label: "Bold" }
+              ],
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navDropdownTextTransform",
+              label: "Sub Case",
+              width: "select-md",
+              control: "select",
+              fallback: "",
+              options: [
+                { value: "", label: "Follow menu" },
+                { value: "none", label: "As typed" },
+                { value: "uppercase", label: "UPPERCASE" },
+                { value: "lowercase", label: "lowercase" },
+                { value: "capitalize", label: "Capitalize" }
+              ],
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navDropdownLetterSpacing",
+              label: "Sub Spacing",
+              width: "num",
+              control: "number",
+              min: -4,
+              max: 12,
               rendersVia: RENDERS_VIA
             }
           ],
@@ -793,7 +879,15 @@ export function BuilderNavigationModuleSettings({
           [
             {
               key: "navActiveColor",
-              label: "Current Text",
+              /*
+               * "Current Text" until 2026-08-13. It is not a level, and being
+               * named as though it were is what made it look like the one
+               * control governing both: a sub-link on the current page carries
+               * `.site-nav-link-active` exactly like a top-level one, so this
+               * really does colour a label in both places — but only the
+               * current page's.
+               */
+              label: "Current Page Text",
               width: "color",
               control: "theme-color",
               themeDefault: "#0a8fc4",
@@ -865,7 +959,11 @@ export function BuilderNavigationModuleSettings({
           [
             {
               key: "navBorderWidth",
-              label: "Border",
+              // "Border" until 2026-08-13. Every control on this axis styles
+              // the BAR and always has; naming them so is the difference
+              // between "the border settings don't work on the drop-down" and
+              // "the drop-down has its own, below".
+              label: "Bar Border",
               width: "num",
               control: "number",
               min: 0,
@@ -877,7 +975,7 @@ export function BuilderNavigationModuleSettings({
           [
             {
               key: "navBorderStyle",
-              label: "Style",
+              label: "Bar Style",
               width: "select-md",
               control: "select",
               fallback: NAV_STYLE_DEFAULTS.borderStyle,
@@ -894,7 +992,7 @@ export function BuilderNavigationModuleSettings({
           [
             {
               key: "navBorderColor",
-              label: "Border Color",
+              label: "Bar Border Color",
               width: "color",
               control: "color",
               dialogLabel: "Menu border color",
@@ -905,13 +1003,60 @@ export function BuilderNavigationModuleSettings({
           [
             {
               key: "navBarRadius",
-              label: "Radius",
+              label: "Bar Radius",
               width: "num",
               control: "number",
               min: 0,
               max: 80,
               step: 5,
               fallback: String(NAV_STYLE_DEFAULTS.barRadius),
+              rendersVia: RENDERS_VIA
+            }
+          ],
+
+          /*
+           * The drop-down panel's own frame (operator, 2026-08-13: *"the
+           * Border settings also only apply to the top menu"* — they did).
+           * The default differs by panel style because the two have never
+           * matched: a list drop-down draws a hairline, a mega panel draws
+           * none and leans on its shadow. See NAV_STYLE_DEFAULTS.
+           */
+          [
+            {
+              key: "navDropdownBorderWidth",
+              label: "Panel Border",
+              width: "num",
+              control: "number",
+              min: 0,
+              max: 20,
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navDropdownBorderStyle",
+              label: "Panel Style",
+              width: "select-md",
+              control: "select",
+              fallback: NAV_STYLE_DEFAULTS.dropdownBorderStyle,
+              options: [
+                { value: "solid", label: "Solid" },
+                { value: "dashed", label: "Dashed" },
+                { value: "dotted", label: "Dotted" },
+                { value: "double", label: "Double" },
+                { value: "none", label: "None" }
+              ],
+              rendersVia: RENDERS_VIA
+            }
+          ],
+          [
+            {
+              key: "navDropdownBorderColor",
+              label: "Panel Border Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Drop-down panel border color",
+              fallback: NAV_STYLE_DEFAULTS.dropdownBorderColor,
               rendersVia: RENDERS_VIA
             }
           ],

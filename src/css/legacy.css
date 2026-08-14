@@ -12929,7 +12929,12 @@ body.dev-linking-mode .dev-copy-btn[id^="linkChat_"] {
      module's Structure column. See lib/builder-client/builder-nav-style.ts. */
   min-width: var(--site-nav-dropdown-width, 160px);
   background: var(--site-nav-dropdown-bg, rgba(255, 255, 255, 0.94));
-  border: 1px solid rgba(9, 16, 24, 0.08);
+  /* The panel's own frame, from the Sub-level axis. The Border axis styles
+     the BAR and never reached here (operator, 2026-08-13). The fallbacks are
+     the hairline this rule hardcoded, so an untouched menu is unchanged. */
+  border: var(--site-nav-dropdown-border-width, 1px)
+    var(--site-nav-dropdown-border-style, solid)
+    var(--site-nav-dropdown-border-color, rgba(9, 16, 24, 0.08));
   border-radius: var(--site-nav-dropdown-radius, 14px);
   box-shadow: 0 6px 24px rgba(9, 16, 24, 0.12);
   backdrop-filter: blur(12px);

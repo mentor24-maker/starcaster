@@ -318,3 +318,92 @@ describe("hover effect, mega mode and arrows", () => {
     expect(showsNavDropdownArrow({ navShowArrow: "false" })).toBe(false);
   });
 });
+
+/*
+ * Operator, 2026-08-13: the sub level had no type of its own ("it uses the same
+ * font settings for the main menu as the sub menu") and the Border axis reached
+ * the bar only. These cover both halves of the fix, and — the part that matters
+ * on live tenant menus — that neither one moves a menu nobody has touched.
+ */
+describe("the sub level's own type", () => {
+  it("emits nothing while every Sub control is unset, so each panel keeps its own look", () => {
+    const vars = style();
+
+    expect(vars["--site-nav-dropdown-size"]).toBeUndefined();
+    expect(vars["--site-nav-dropdown-weight"]).toBeUndefined();
+    expect(vars["--site-nav-dropdown-transform"]).toBeUndefined();
+    expect(vars["--site-nav-dropdown-spacing"]).toBeUndefined();
+  });
+
+  it("emits only the controls that were set", () => {
+    const vars = style({ navDropdownWeight: "600" });
+
+    expect(vars["--site-nav-dropdown-weight"]).toBe("600");
+    expect(vars["--site-nav-dropdown-size"]).toBeUndefined();
+  });
+
+  it("emits each control in the unit its CSS declaration expects", () => {
+    const vars = style({
+      navDropdownFontSize: "13",
+      navDropdownWeight: "500",
+      navDropdownTextTransform: "uppercase",
+      navDropdownLetterSpacing: "2"
+    });
+
+    expect(vars["--site-nav-dropdown-size"]).toBe("13px");
+    expect(vars["--site-nav-dropdown-weight"]).toBe("500");
+    expect(vars["--site-nav-dropdown-transform"]).toBe("uppercase");
+    expect(vars["--site-nav-dropdown-spacing"]).toBe("2px");
+  });
+
+  it("clamps a size or spacing typed outside the range the control offers", () => {
+    expect(style({ navDropdownFontSize: "900" })["--site-nav-dropdown-size"]).toBe("48px");
+    expect(style({ navDropdownLetterSpacing: "-40" })["--site-nav-dropdown-spacing"]).toBe("-4px");
+  });
+
+  it("falls back to no transform rather than emitting a value CSS would drop", () => {
+    expect(style({ navDropdownTextTransform: "sideways" })["--site-nav-dropdown-transform"]).toBe(
+      "none"
+    );
+  });
+});
+
+describe("the drop-down panel's own border", () => {
+  it("defaults to the hairline a list dropdown has always drawn", () => {
+    const vars = style();
+
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("1px");
+    expect(vars["--site-nav-dropdown-border-style"]).toBe("solid");
+    expect(vars["--site-nav-dropdown-border-color"]).toBe("rgba(9, 16, 24, 0.08)");
+  });
+
+  it("defaults to none for a mega panel, which has never had a border", () => {
+    expect(style({ navDropdownStyle: "mega" })["--site-nav-dropdown-border-width"]).toBe("0px");
+  });
+
+  it("treats a vertical mega menu as a list, the same way the panel itself does", () => {
+    const vars = style({ navDropdownStyle: "mega", navDirection: "vertical" });
+
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("1px");
+  });
+
+  it("takes the operator's values over either default", () => {
+    const vars = style({
+      navDropdownStyle: "mega",
+      navDropdownBorderWidth: "3",
+      navDropdownBorderStyle: "dashed",
+      navDropdownBorderColor: "#ff0000"
+    });
+
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("3px");
+    expect(vars["--site-nav-dropdown-border-style"]).toBe("dashed");
+    expect(vars["--site-nav-dropdown-border-color"]).toBe("#ff0000");
+  });
+
+  it("leaves the bar's own border untouched — the two axes are separate", () => {
+    const vars = style({ navDropdownBorderWidth: "6" });
+
+    expect(vars["--site-nav-border-width"]).toBe("1px");
+    expect(vars["--site-nav-dropdown-border-width"]).toBe("6px");
+  });
+});
