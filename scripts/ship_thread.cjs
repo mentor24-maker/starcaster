@@ -27,14 +27,25 @@
  *   npm run ship -- --no-merge   everything except the merge
  *   npm run ship -- --dry-run    say what it would do, change nothing
  *
- * SAFETY, and where it lives
- * This script force-pushes (with `--force-with-lease`, which refuses if
- * someone else has pushed in the meantime) because rebasing rewrites the
- * branch and there is no other way to update it. The guard against that
- * touching anything important is IN HERE, not in a permission pattern:
- * PROTECTED below is refused outright, as a branch to ship and as a push
- * target. A glob over command text cannot tell `main` from `main-menu`;
- * this can.
+ * SAFETY: THIS SCRIPT NEVER FORCE-PUSHES
+ * It catches up by MERGING origin/main into the branch, not by rebasing, so
+ * the branch only ever gains commits and an ordinary push always works.
+ *
+ * That is a deliberate reversal of the first draft, which rebased and then
+ * force-pushed with `--force-with-lease`. The operator's settings carry
+ * `Bash(git push --force*)` on the deny list, and a force-push buried inside
+ * a node script is invisible to a rule that matches command text — so the one
+ * command he would run most often would have quietly done the exact thing he
+ * forbade. Routing around a standing rule is not something a convenience
+ * script gets to do (DOCTRINE.md 6.6).
+ *
+ * The cost of merging instead is zero here: every PR is squash-merged, so the
+ * merge commits are discarded on the way in and the history on main is
+ * identical either way.
+ *
+ * PROTECTED below is still refused outright, as a branch to ship and as a push
+ * target. A glob over command text cannot tell `main` from `main-menu`; this
+ * can.
  */
 
 const path = require('path');
@@ -114,23 +125,26 @@ const behind = git(['rev-list', '--count', `HEAD..origin/main`]);
 if (behind === '0') {
   say('    Already up to date with main.');
 } else if (DRY) {
-  say(`    Would rebase onto origin/main (${behind} commit(s) ahead of this branch).`);
+  say(`    Would merge origin/main in (${behind} commit(s) ahead of this branch).`);
 } else {
-  say(`    main has moved ${behind} commit(s). Rebasing onto it…`);
-  const rebase = quiet('git', ['rebase', 'origin/main']);
-  if (!rebase.ok) {
+  say(`    main has moved ${behind} commit(s). Merging it in…`);
+  // Merge, not rebase: the branch only gains commits, so an ordinary push
+  // always works and this script never needs to force anything. See the
+  // header — a force-push in here would sidestep the operator's deny rule.
+  const merge = quiet('git', ['merge', 'origin/main', '--no-edit']);
+  if (!merge.ok) {
     const conflicted = git(['diff', '--name-only', '--diff-filter=U'], { allowFail: true }) || '';
-    quiet('git', ['rebase', '--abort']);
+    quiet('git', ['merge', '--abort']);
     fail(
       'Two changes genuinely disagree and a person has to choose:\n\n' +
       conflicted.split('\n').filter(Boolean).map((f) => `  · ${f}`).join('\n') +
-      '\n\nThe rebase has been undone, so the branch is exactly as it was.\n' +
-      'Resolve it by hand (`git rebase origin/main`), then run `npm run ship` again.\n\n' +
+      '\n\nThe merge has been undone, so the branch is exactly as it was.\n' +
+      'Resolve it by hand (`git merge origin/main`), then run `npm run ship` again.\n\n' +
       'Note: the `?v=` asset pins are merged automatically (.gitattributes →\n' +
       'scripts/merge_asset_pins.cjs), so a conflict here is a real one.'
     );
   }
-  say('    Rebased cleanly.');
+  say('    Merged cleanly.');
 }
 
 /* ------------------------------------------------------------- 2. rebuild */
@@ -146,6 +160,7 @@ const CHECKS = [
   ['npm', ['run', 'typecheck'], 'types'],
   ['npm', ['run', 'test:builder-ui'], 'builder tests'],
   ['npm', ['run', 'test:builder'], 'server tests'],
+  ['npm', ['run', 'test:hooks'], 'agent hooks'],
   ['node', ['scripts/check_conventions.cjs'], 'repo conventions'],
   ['node', ['scripts/check_build_paths.cjs'], 'build paths'],
   ['node', ['scripts/check_syntax.cjs'], 'browser JS syntax'],
@@ -162,11 +177,15 @@ if (DRY) {
   }
 }
 
-// The rebuild can re-stamp the asset pins; that belongs in the commit.
+// The rebuild can re-stamp the asset pins, and those belong in the branch.
+// A NEW commit, never an amend: amending rewrites the last commit, and if the
+// branch is already on GitHub that turns the next push into a force-push —
+// reintroducing exactly what this script refuses to do. An extra commit costs
+// nothing, since the PR is squash-merged.
 if (!DRY && git(['status', '--porcelain'])) {
-  say('    Rebuild changed the asset stamps — folding them into the commit.');
+  say('    Rebuild re-stamped the asset pins — committing them.');
   git(['add', '-A']);
-  run('git', ['commit', '--amend', '--no-edit', '--no-verify']);
+  run('git', ['commit', '--no-verify', '-m', 'Re-pin asset hashes from a clean build']);
 }
 
 /* ---------------------------------------------------------------- 4. push */
@@ -175,30 +194,27 @@ heading('Sending it to GitHub');
 if (PROTECTED.has(branch)) fail('Refusing to push a protected branch.'); // belt and braces
 
 const upstream = git(['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], { allowFail: true });
-const diverged = upstream && git(['rev-list', '--count', `${upstream}..HEAD`]) !== git(['rev-list', '--count', 'HEAD']) &&
-  git(['rev-list', '--count', `HEAD..${upstream}`]) !== '0';
-
-const pushArgs = upstream
-  ? (diverged ? ['push', '--force-with-lease', 'origin', branch] : ['push', 'origin', branch])
-  : ['push', '-u', 'origin', branch];
+// Always an ordinary push. Catching up by merge means the branch only ever
+// gains commits, so there is never history to overwrite — and this script is
+// therefore never in the business of forcing anything.
+const pushArgs = upstream ? ['push', 'origin', branch] : ['push', '-u', 'origin', branch];
 
 if (DRY) {
   say(`    Would run: git ${pushArgs.join(' ')}`);
 } else {
   const push = quiet('git', pushArgs);
-  if (!push.ok && /rejected|non-fast-forward|stale info/i.test(push.out)) {
-    // Only ever after a rebase we just did ourselves, and --force-with-lease
-    // still refuses if someone else pushed since our last fetch.
-    say('    History was rewritten by the rebase — updating the branch in place.');
-    const forced = quiet('git', ['push', '--force-with-lease', 'origin', branch]);
-    if (!forced.ok) {
+  if (!push.ok) {
+    if (/rejected|non-fast-forward|stale info/i.test(push.out)) {
       fail(
-        'Could not update the branch on GitHub:\n\n' + forced.out + '\n\n' +
-        'If this says "stale info", someone (or another session) pushed to this branch.\n' +
-        'Run `git fetch origin` and look before forcing anything.'
+        'GitHub refused the push because this branch has history the remote does not:\n\n' +
+        push.out + '\n\n' +
+        'That means the branch was rebased or amended somewhere along the way. This\n' +
+        'script will not force-push over it — that is a decision for you, not a\n' +
+        'convenience script. Either:\n' +
+        '  · `git fetch origin && git merge origin/' + branch + '` to reconcile, then run this again, or\n' +
+        '  · look at what diverged before overwriting anything.'
       );
     }
-  } else if (!push.ok) {
     fail(`Could not push:\n\n${push.out}`);
   }
   say('    Pushed.');
