@@ -3420,6 +3420,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   column-gap: 0;
 }
 
+/*
+ * The hairline SEPARATES two subjects, so the first part in a column has
+ * nothing to be separated from — it sits directly under the axis title.
+ * Navigation put every control into a part on 2026-08-13, which is when a
+ * rule and a hairline ended up stacked two pixels apart on all four columns.
+ */
+.builder-react-root .builder-schema-group-title + .builder-schema-axis-section {
+  border-top: none;
+  padding-top: 0;
+}
+
 .builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-axis-section > .builder-schema-group-subtitle {
   grid-column: 1 / -1;
 }
