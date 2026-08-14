@@ -44,13 +44,40 @@ export const CONTROLS = [
   { key: "navDropdownWidth", value: "420", label: "Menu Width" },
   { key: "navDropdownRadius", value: "36", label: "Dropdown Radius" },
   { key: "navDropdownBackground", value: "#8a2be2", label: "Panel Fill" },
-  { key: "navDropdownTextColor", value: "#ff4500", label: "Panel Text" },
+  { key: "navDropdownTextColor", value: "#ff4500", label: "Sub-level Text" },
   // The same control in the other menu type — mega links carry neither
   // `site-nav-link` nor `site-nav-dropdown-item`, so they take a different
   // path through the cascade and need their own check.
-  { key: "navDropdownTextColor", value: "#ff4500", label: "Panel Text (mega)",
+  { key: "navDropdownTextColor", value: "#ff4500", label: "Sub-level Text (mega)",
     id: "navDropdownTextColorMega", base: { navDropdownStyle: "mega" }, open: true },
   { key: "navShowArrow", value: "false", label: "Arrow" },
+
+  /*
+   * The sub level's own type and frame (2026-08-13). Every one is swept
+   * TWICE, list and mega, for the reason above: the two panels reach these
+   * variables through different selectors, and a control that moves one and
+   * not the other is exactly the bug being fixed. Sweeping only the default
+   * (list) menu would have missed the whole mega half.
+   */
+  { key: "navDropdownFontSize", value: "24", label: "Sub Size" },
+  { key: "navDropdownFontSize", value: "24", label: "Sub Size (mega)",
+    id: "navDropdownFontSizeMega", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navDropdownWeight", value: "400", label: "Sub Weight" },
+  { key: "navDropdownWeight", value: "700", label: "Sub Weight (mega)",
+    id: "navDropdownWeightMega", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navDropdownTextTransform", value: "uppercase", label: "Sub Case" },
+  { key: "navDropdownTextTransform", value: "uppercase", label: "Sub Case (mega)",
+    id: "navDropdownTextTransformMega", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navDropdownLetterSpacing", value: "6", label: "Sub Spacing" },
+  { key: "navDropdownLetterSpacing", value: "6", label: "Sub Spacing (mega)",
+    id: "navDropdownLetterSpacingMega", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navDropdownBorderWidth", value: "8", label: "Panel Border" },
+  { key: "navDropdownBorderWidth", value: "8", label: "Panel Border (mega)",
+    id: "navDropdownBorderWidthMega", base: { navDropdownStyle: "mega" }, open: true },
+  { key: "navDropdownBorderStyle", value: "dashed", label: "Panel Style",
+    base: { navDropdownBorderWidth: "8" } },
+  { key: "navDropdownBorderColor", value: "#ff00ff", label: "Panel Border Color",
+    base: { navDropdownBorderWidth: "8" } },
 
   // --- Placement ---
   { key: "navAlignment", value: "right", label: "Alignment" },
@@ -83,11 +110,11 @@ export const CONTROLS = [
   { key: "navTextTransform", value: "uppercase", label: "Case" },
   { key: "navLetterSpacing", value: "9", label: "Spacing" },
   { key: "navLinkHeight", value: "92", label: "Link Height" },
-  { key: "navColor", value: "#8a2be2", label: "Text Color" },
+  { key: "navColor", value: "#8a2be2", label: "Top-level Text" },
   { key: "navLinkBackground", value: "#8a2be2", label: "Label Fill" },
   { key: "navHoverColor", value: "#8a2be2", label: "Hover Text", hover: true },
   { key: "navHoverBackground", value: "#8a2be2", label: "Hover Fill", hover: true },
-  { key: "navActiveColor", value: "#8a2be2", label: "Current Text" },
+  { key: "navActiveColor", value: "#8a2be2", label: "Current Page Text" },
   { key: "navActiveBackground", value: "#8a2be2", label: "Current Fill" },
   { key: "navHoverEffect", value: "grow", label: "Hover Effect", hover: true },
   { key: "navTextShadow", value: "true", label: "Text Shadow" },
@@ -98,10 +125,10 @@ export const CONTROLS = [
   { key: "navTextShadowOpacity", value: "100", label: "Text Shadow Opacity", base: { navTextShadow: "true" } },
 
   // --- Border ---
-  { key: "navBorderWidth", value: "14", label: "Border" },
-  { key: "navBorderStyle", value: "dashed", label: "Border Style", base: { navBorderWidth: "6" } },
-  { key: "navBorderColor", value: "#8a2be2", label: "Border Color", base: { navBorderWidth: "6" } },
-  { key: "navBarRadius", value: "72", label: "Radius" },
+  { key: "navBorderWidth", value: "14", label: "Bar Border" },
+  { key: "navBorderStyle", value: "dashed", label: "Bar Style", base: { navBorderWidth: "6" } },
+  { key: "navBorderColor", value: "#8a2be2", label: "Bar Border Color", base: { navBorderWidth: "6" } },
+  { key: "navBarRadius", value: "72", label: "Bar Radius" },
   { key: "navBorderRadius", value: "44", label: "Link Radius" },
   { key: "navShadow", value: "false", label: "Drop Shadow" },
   { key: "navShadowColor", value: "#8a2be2", label: "Shadow Color" },

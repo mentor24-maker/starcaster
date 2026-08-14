@@ -78,6 +78,18 @@ export const NAV_STYLE_DEFAULTS = {
   dropdownWidth: 160,
   dropdownRadius: 14,
   dropdownBackground: "#ffffff",
+  /*
+   * The panel's own frame. The two panel styles have never looked the same
+   * here: a list dropdown has always drawn a hairline (`legacy.css`
+   * `.site-nav-dropdown-menu`), a mega panel has always drawn none and leant
+   * on its shadow instead. One default for both would move one of them on
+   * every live tenant menu, so the default is chosen per style in
+   * getNavModuleStyle().
+   */
+  dropdownBorderWidthList: 1,
+  dropdownBorderWidthMega: 0,
+  dropdownBorderStyle: "solid",
+  dropdownBorderColor: "rgba(9, 16, 24, 0.08)",
   megaColumns: 3,
   megaWidth: 1040
 } as const;
@@ -100,6 +112,39 @@ function num(value: string | undefined, fallback: number, min: number, max: numb
 function color(value: string | undefined): string | undefined {
   const trimmed = String(value ?? "").trim();
   return trimmed || undefined;
+}
+
+/**
+ * The sub-level's own type, emitted ONLY where the operator has set it.
+ *
+ * Operator, 2026-08-13: *"it uses the same font settings for the main menu as
+ * the sub menu."* Both halves of that were true and neither was intended —
+ * a list dropdown's links carry `.site-nav-link`, so they inherited every
+ * top-level type control; a mega panel's links carry none of it and were
+ * pinned to a hardcoded `0.86rem` no control could reach.
+ *
+ * Leaving a key out is meaningful: the CSS `var()` fallback then reproduces
+ * exactly what each panel rendered before this existed. Emitting a computed
+ * default instead would move both — the mega panel to the top-level size, the
+ * list dropdown to whatever number we picked — on every live tenant menu.
+ */
+function subPanelType(settings: NavSettings): Record<string, string> {
+  const out: Record<string, string> = {};
+  const size = String(settings.navDropdownFontSize ?? "").trim();
+  if (size) out["--site-nav-dropdown-size"] = `${num(size, 14, 8, 48)}px`;
+
+  const weight = String(settings.navDropdownWeight ?? "").trim();
+  if (weight) out["--site-nav-dropdown-weight"] = String(num(weight, 400, 100, 900));
+
+  const transform = String(settings.navDropdownTextTransform ?? "").trim();
+  if (transform) {
+    out["--site-nav-dropdown-transform"] = oneOf(transform, NAV_TEXT_TRANSFORMS, "none");
+  }
+
+  const spacing = String(settings.navDropdownLetterSpacing ?? "").trim();
+  if (spacing) out["--site-nav-dropdown-spacing"] = `${num(spacing, 0, -4, 12)}px`;
+
+  return out;
 }
 
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[], fallback: T): T {
@@ -184,6 +229,10 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
   const underline = getNavUnderline(settings);
   const linkColor = color(settings.navColor);
   const hoverColor = color(settings.navHoverColor);
+  // Which panel is on screen decides only one thing here: the frame each has
+  // always drawn (see dropdownBorderWidth* in NAV_STYLE_DEFAULTS). The panel
+  // settings themselves are shared — one Sub-level axis, not two.
+  const isMegaPanel = isNavMegaMenu(settings);
 
   return {
     // --- the bar ------------------------------------------------------
@@ -299,6 +348,29 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     )}px`,
     "--site-nav-dropdown-width": `${num(settings.navDropdownWidth, NAV_STYLE_DEFAULTS.dropdownWidth, 100, 480)}px`,
     "--site-nav-mega-width": `${num(settings.navMegaWidth, NAV_STYLE_DEFAULTS.megaWidth, 320, 1600)}px`,
+    ...subPanelType(settings),
+    /*
+     * The panel's frame. Border Width / Style / Colour on the Border axis have
+     * only ever reached the BAR — the operator found this on 2026-08-13:
+     * *"the Border settings also only apply to the top menu."* These are the
+     * panel's own, defaulted per panel style so an untouched menu of either
+     * kind renders exactly as it did.
+     */
+    "--site-nav-dropdown-border-width": `${num(
+      settings.navDropdownBorderWidth,
+      isMegaPanel
+        ? NAV_STYLE_DEFAULTS.dropdownBorderWidthMega
+        : NAV_STYLE_DEFAULTS.dropdownBorderWidthList,
+      0,
+      20
+    )}px`,
+    "--site-nav-dropdown-border-style": oneOf(
+      settings.navDropdownBorderStyle,
+      NAV_BORDER_STYLES,
+      NAV_STYLE_DEFAULTS.dropdownBorderStyle
+    ),
+    "--site-nav-dropdown-border-color":
+      color(settings.navDropdownBorderColor) ?? NAV_STYLE_DEFAULTS.dropdownBorderColor,
 
     // --- direct properties --------------------------------------------
     fontSize: `${num(settings.navFontSize, NAV_STYLE_DEFAULTS.fontSize, 10, 48)}px`,
