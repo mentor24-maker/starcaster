@@ -173,7 +173,7 @@ const CARD_SIZES = "(max-width: 700px) 100vw, 400px";
  * Adding a module to the shape means adding it here and to the matching CSS
  * selector list in `_builder-react-overrides.css`.
  */
-const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow"]);
+const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list"]);
 
 /**
  * The two nudge controls, named and ordered like `MODULE_MARGIN_SIDES` so a

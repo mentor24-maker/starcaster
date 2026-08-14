@@ -2299,6 +2299,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    become items of THIS grid instead of a nested one — that is what lets a
    panel child sit in the same column track as the chrome above it. */
 .builder-react-root .builder-module-editor--feature-cards,
+.builder-react-root .builder-module-editor--program-list,
 .builder-react-root .builder-module-editor--slideshow {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
@@ -2322,6 +2323,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-module-editor--feature-cards > *,
+.builder-react-root .builder-module-editor--program-list > *,
 .builder-react-root .builder-module-editor--slideshow > * {
   grid-column: 1;
   min-width: 0;
@@ -2330,11 +2332,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-module-editor--feature-cards > *:last-child,
+.builder-react-root .builder-module-editor--program-list > *:last-child,
 .builder-react-root .builder-module-editor--slideshow > *:last-child {
   margin-bottom: 0;
 }
 
 .builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel,
+.builder-react-root .builder-module-editor--program-list > .builder-cards-panel,
 .builder-react-root .builder-module-editor--slideshow > .builder-cards-panel {
   display: contents;
 }
