@@ -1566,6 +1566,53 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-decoration: none;
 }
 
+/* --- Navigation panel: the mega menu's extra column -------------------- */
+
+/* "+ Add Link", "+ Add Module" and the menu the module goes into, on one
+   line — Add Module was asked for right beside Add Link, and a mega bar
+   normally has several panels, so which panel it lands in has to be visible
+   at the moment of choosing. */
+.builder-react-root .builder-nav-items-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.builder-react-root .builder-nav-add-module-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--color-muted, #888);
+}
+
+.builder-react-root .builder-nav-feature-module {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+.builder-react-root .builder-nav-feature-module-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* The generalized extra column. No card chrome on purpose: whatever module
+   went in there carries its own background, padding and radius, and wrapping
+   it in the tile's card would put a box inside a box. The slot's only job is
+   to be a grid cell that can shrink. */
+.builder-react-root .site-nav-mega-feature-module {
+  min-width: 0;
+}
+
 .builder-react-root .site-nav-mega-feature img {
   display: block;
   width: 100%;

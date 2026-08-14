@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
 import { NAV_STYLE_DEFAULTS } from "@/lib/builder-nav-style";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
+import { createEmptyModule, isPlainTextVariant, normalizeBuilderAssetUrl } from "@/lib/builder-template";
+import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderBackgroundControls } from "./builder-background-controls";
+import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
+import { BuilderCenteredModal } from "./builder-centered-modal";
+import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
+import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
+import { BuilderModulePaletteModal } from "./builder-module-palette-modal";
+import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
+import { PLAIN_TEXT_PLACEHOLDER, type ModulePaletteGroup, type ModulePaletteItem } from "./builder-types";
 import {
   BuilderSchemaModuleSettings,
   dropShadowFields,
@@ -61,10 +69,36 @@ type NavItem = {
   href: string;
   parentId?: string;
   width?: string;
-  /** Mega-panel feature tile — top-level items only. See ClickUp 86bbafg38. */
+  /**
+   * The mega panel's extra column — top-level items only. See ClickUp 86bbafg38.
+   *
+   * `featureModule` is the general form: any module the palette offers, stored
+   * whole on the item that owns the panel, the way a table cell stores the
+   * modules dropped into it. `featureImage`/`featureHeading` are the fixed
+   * image-plus-heading tile it replaces; live tenant menus still carry them
+   * (Delray's "Visit Delray Tennis"), so the old pair keeps rendering
+   * wherever no module has been chosen.
+   */
+  featureModule?: BuilderTemplateModule;
   featureImage?: string;
   featureHeading?: string;
 };
+
+/** A module dropped into a mega panel is stored whole, so guard the shape. */
+function parseFeatureModule(raw: unknown): BuilderTemplateModule | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const candidate = raw as Partial<BuilderTemplateModule>;
+  if (typeof candidate.type !== "string" || !candidate.type) return undefined;
+  return {
+    ...candidate,
+    type: candidate.type,
+    id: String(candidate.id || `${candidate.type}-feature`),
+    column: typeof candidate.column === "string" ? candidate.column : "",
+    name: typeof candidate.name === "string" ? candidate.name : "",
+    text: typeof candidate.text === "string" ? candidate.text : "",
+    settings: candidate.settings && typeof candidate.settings === "object" ? candidate.settings : {}
+  };
+}
 
 function parseNavItems(settings: Record<string, string>): NavItem[] {
   try {
@@ -72,12 +106,14 @@ function parseNavItems(settings: Record<string, string>): NavItem[] {
     if (!Array.isArray(items)) return [];
     return items.map((item, index) => {
       const raw = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      const featureModule = parseFeatureModule(raw.featureModule);
       return {
         id: String(raw.id || `nav-${index + 1}`),
         label: String(raw.label || ""),
         href: String(raw.href || raw.url || ""),
         ...(raw.parentId ? { parentId: String(raw.parentId) } : {}),
         ...(raw.width ? { width: String(raw.width) } : {}),
+        ...(featureModule ? { featureModule } : {}),
         ...(raw.featureImage ? { featureImage: normalizeBuilderAssetUrl(raw.featureImage) } : {}),
         ...(raw.featureHeading ? { featureHeading: String(raw.featureHeading) } : {})
       };
@@ -129,6 +165,91 @@ function sideFields(
   }));
 }
 
+/**
+ * Editor for the module sitting in a mega panel's extra column.
+ *
+ * Arranged like the table cell's nested editor: a module type that ships a
+ * standalone panel gets that panel, so a call-to-action button in a menu is
+ * edited by exactly the controls that edit a button in a section (doctrine C8
+ * — one editor per module type, wherever the module lives). The palette is
+ * unrestricted, so anything else keeps the settings the palette gave it and
+ * edits its label here; it still renders in the column either way.
+ */
+function NavFeatureModuleEditor({
+  featureModule,
+  themeColors,
+  onChange
+}: {
+  featureModule: BuilderTemplateModule;
+  themeColors: BuilderThemePalette;
+  onChange: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+}) {
+  const isPlainText = isPlainTextVariant(featureModule.settings);
+
+  return (
+    <div className="builder-nav-feature-module-editor is-lattice">
+      {/* W0: one lattice column, the same markup a module panel uses — a
+          nested editor is still a settings surface. */}
+      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "1" } as CSSProperties}>
+        <div className="builder-schema-panel-column">
+          {/* "Module", not "Content": the type's own panel below brings a
+              Content axis of its own. */}
+          <div className="builder-schema-group-title">Module</div>
+          <BuilderModuleField label="Module label" width="text-md">
+            <input
+              type="text"
+              value={featureModule.name}
+              onChange={(e) => onChange((current) => ({ ...current, name: e.target.value }))}
+              placeholder="Internal label"
+            />
+          </BuilderModuleField>
+
+          {featureModule.type === "text" && (
+            <BuilderModuleField label="Content" width="full">
+              {isPlainText ? (
+                <textarea
+                  className="builder-textarea"
+                  value={featureModule.text}
+                  onChange={(e) => onChange((current) => ({ ...current, text: e.target.value }))}
+                  placeholder={PLAIN_TEXT_PLACEHOLDER}
+                  rows={3}
+                />
+              ) : (
+                <BuilderRichTextEditor
+                  value={featureModule.text}
+                  onChange={(value) => onChange((current) => ({ ...current, text: value }))}
+                />
+              )}
+            </BuilderModuleField>
+          )}
+
+          {featureModule.type === "image" && (
+            <BuilderModuleField label="Media URL" width="full">
+              <BuilderImagePickerField
+                value={featureModule.settings.url ?? ""}
+                onChange={(url) => onChange((current) => ({ ...current, settings: { ...current.settings, url } }))}
+              />
+            </BuilderModuleField>
+          )}
+        </div>
+      </div>
+
+      {featureModule.type === "heading" && (
+        <BuilderHeadingModuleSettings compact module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+      {featureModule.type === "text" && isPlainText && (
+        <BuilderSimpleTextModuleSettings compact module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+      {featureModule.type === "button" && (
+        <BuilderButtonModuleSettings compact module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+      {featureModule.type === "image" && (
+        <BuilderImageModuleSettings module={featureModule} themeColors={themeColors} onUpdateModule={onChange} />
+      )}
+    </div>
+  );
+}
+
 export function BuilderNavigationModuleSettings({
   module,
   onUpdateModule,
@@ -146,6 +267,10 @@ export function BuilderNavigationModuleSettings({
 }) {
   const [styleCollapsed, setStyleCollapsed] = useState(false);
   const [linksCollapsed, setLinksCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteGroup, setPaletteGroup] = useState<ModulePaletteGroup | null>(null);
+  const [featureTargetId, setFeatureTargetId] = useState("");
+  const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
   const items = parseNavItems(module.settings);
   const topLevelWidthTotal = items
     .filter((i) => !i.parentId)
@@ -169,6 +294,63 @@ export function BuilderNavigationModuleSettings({
   function removeItem(id: string) { persist(items.filter((item) => item.id !== id)); }
   function addItem() {
     persist([...items, { id: `nav-${Date.now()}-${items.length + 1}`, label: "", href: "" }]);
+  }
+
+  /*
+   * The mega panel's extra column.
+   *
+   * It can only belong to a top-level item that actually opens a panel, so
+   * those are the items "+ Add Module" can target; the picker beside the
+   * button says which one, because a menu bar normally has several.
+   */
+  const hasChildren = (id: string) => items.some((child) => child.parentId === id);
+  const featureTargets = isMegaMenu(module.settings)
+    ? items.filter((item) => !item.parentId && hasChildren(item.id))
+    : [];
+  const featureTarget = featureTargets.find((item) => item.id === featureTargetId) ?? featureTargets[0];
+  const targetLabel = (item: NavItem) => item.label || `Link ${items.indexOf(item) + 1}`;
+
+  function closeFeaturePalette() {
+    setPaletteOpen(false);
+    setPaletteGroup(null);
+  }
+
+  function addFeatureModule(paletteItem: ModulePaletteItem) {
+    const target = featureTarget;
+    closeFeaturePalette();
+    if (!target) return;
+    // One slot per menu, so a second choice replaces the first — and says so
+    // rather than silently discarding whatever was configured in there.
+    if (
+      target.featureModule
+      && !window.confirm(
+        `"${targetLabel(target)}" already shows ${target.featureModule.name || target.featureModule.type} in its extra column. Replace it?`
+      )
+    ) {
+      return;
+    }
+    const created = createEmptyModule(paletteItem.type, "");
+    updateItem(target.id, {
+      featureModule: {
+        ...created,
+        name: paletteItem.name,
+        text: paletteItem.text,
+        settings: { ...created.settings, ...paletteItem.settings }
+      }
+    });
+    setEditingFeatureId(target.id);
+  }
+
+  function updateFeatureModule(id: string, updater: (current: BuilderTemplateModule) => BuilderTemplateModule) {
+    const current = items.find((item) => item.id === id)?.featureModule;
+    if (!current) return;
+    updateItem(id, { featureModule: updater(current) });
+  }
+
+  function removeFeatureModule(id: string) {
+    // JSON.stringify drops an undefined value, so the key leaves the saved item.
+    updateItem(id, { featureModule: undefined });
+    if (editingFeatureId === id) setEditingFeatureId(null);
   }
 
   /**
@@ -882,24 +1064,66 @@ export function BuilderNavigationModuleSettings({
                       && !item.parentId
                       && items.some((i) => i.parentId === item.id) && (
                       <details className="hanging-details builder-nav-item-feature">
-                        <summary>Feature tile</summary>
-                        <BuilderModuleFieldStrip>
-                          <BuilderModuleField label="Image" width="full">
-                            <BuilderImagePickerField
-                              value={item.featureImage ?? ""}
-                              onChange={(featureImage) => updateItem(item.id, { featureImage })}
-                            />
-                          </BuilderModuleField>
-                          <BuilderModuleField label="Heading" width="text-md">
-                            <input
-                              type="text"
-                              value={item.featureHeading ?? ""}
-                              onChange={(e) => updateItem(item.id, { featureHeading: e.target.value })}
-                              placeholder="Visit Delray Tennis"
-                            />
-                          </BuilderModuleField>
-                        </BuilderModuleFieldStrip>
+                        <summary>
+                          {item.featureModule
+                            ? `Feature column — ${item.featureModule.name || item.featureModule.type}`
+                            : "Feature column"}
+                        </summary>
+                        {item.featureModule ? (
+                          <div className="builder-nav-feature-module">
+                            <span className="builder-nav-feature-module-name">
+                              {item.featureModule.name || item.featureModule.type}
+                            </span>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => setEditingFeatureId(item.id)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button builder-icon-button-danger"
+                              aria-label="Remove module"
+                              onClick={() => removeFeatureModule(item.id)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          /* The fixed image-plus-heading tile the module slot
+                             generalizes. Live menus still run it, so it stays
+                             editable wherever no module has been chosen. */
+                          <BuilderModuleFieldStrip>
+                            <BuilderModuleField label="Image" width="full">
+                              <BuilderImagePickerField
+                                value={item.featureImage ?? ""}
+                                onChange={(featureImage) => updateItem(item.id, { featureImage })}
+                              />
+                            </BuilderModuleField>
+                            <BuilderModuleField label="Heading" width="text-md">
+                              <input
+                                type="text"
+                                value={item.featureHeading ?? ""}
+                                onChange={(e) => updateItem(item.id, { featureHeading: e.target.value })}
+                                placeholder="Visit Delray Tennis"
+                              />
+                            </BuilderModuleField>
+                          </BuilderModuleFieldStrip>
+                        )}
                       </details>
+                    )}
+                    {editingFeatureId === item.id && item.featureModule && (
+                      <BuilderCenteredModal
+                        title={`${targetLabel(item)} — feature column`}
+                        onClose={() => setEditingFeatureId(null)}
+                      >
+                        <NavFeatureModuleEditor
+                          featureModule={item.featureModule}
+                          themeColors={themeColors}
+                          onChange={(updater) => updateFeatureModule(item.id, updater)}
+                        />
+                      </BuilderCenteredModal>
                     )}
                   </div>
                 );
@@ -911,7 +1135,53 @@ export function BuilderNavigationModuleSettings({
                 {topLevelWidthTotal > 100 && " — over 100%"}
               </div>
             )}
-            <button type="button" className="secondary-button builder-nav-add-link-button" onClick={addItem}>+ Add Link</button>
+            <div className="builder-nav-items-footer">
+              <button type="button" className="secondary-button builder-nav-add-link-button" onClick={addItem}>+ Add Link</button>
+              {featureTargets.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="secondary-button builder-nav-add-module-button"
+                    onClick={() => {
+                      if (paletteOpen) {
+                        closeFeaturePalette();
+                      } else {
+                        setPaletteGroup(null);
+                        setPaletteOpen(true);
+                      }
+                    }}
+                    title="Put a module in this mega menu's extra column"
+                  >
+                    + Add Module
+                  </button>
+                  <label className="builder-nav-add-module-target">
+                    <span>to</span>
+                    <select
+                      value={featureTarget?.id ?? ""}
+                      onChange={(e) => setFeatureTargetId(e.target.value)}
+                    >
+                      {featureTargets.map((target) => (
+                        <option key={target.id} value={target.id}>
+                          {`${targetLabel(target)}${target.featureModule ? " (module set)" : ""}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+            </div>
+            {paletteOpen && (
+              /* Unrestricted on purpose: which modules belong in a menu
+                 column is the operator's call, not made yet. When it is, the
+                 mechanism is `excludeGroups` — see
+                 TABLE_CELL_EXCLUDED_PALETTE_GROUPS. */
+              <BuilderModulePaletteModal
+                activeGroup={paletteGroup}
+                onSelectGroup={setPaletteGroup}
+                onSelectItem={addFeatureModule}
+                onClose={closeFeaturePalette}
+              />
+            )}
           </>
         )}
       </div>
