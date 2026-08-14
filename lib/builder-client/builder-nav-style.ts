@@ -95,12 +95,20 @@ export const NAV_STYLE_DEFAULTS = {
 } as const;
 
 export const NAV_UNDERLINE_MODES = ["none", "always", "hover"] as const;
+/**
+ * Where the open mega panel hangs. "item" (the original behaviour) centres it
+ * on the hovered menu item; "menu" centres it under the whole bar so it opens
+ * in the same place whichever item is hovered; "right"/"left" grow it out of
+ * the item's left/right edge.
+ */
+export const NAV_MEGA_PLACEMENTS = ["item", "menu", "right", "left"] as const;
 export const NAV_HOVER_EFFECTS = ["none", "lift", "grow", "fade", "underline"] as const;
 export const NAV_TEXT_TRANSFORMS = ["none", "uppercase", "lowercase", "capitalize"] as const;
 export const NAV_BORDER_STYLES = ["solid", "dashed", "dotted", "double", "none"] as const;
 
 export type NavUnderlineMode = (typeof NAV_UNDERLINE_MODES)[number];
 export type NavHoverEffect = (typeof NAV_HOVER_EFFECTS)[number];
+export type NavMegaPlacement = (typeof NAV_MEGA_PLACEMENTS)[number];
 
 function num(value: string | undefined, fallback: number, min: number, max: number): number {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);
@@ -389,7 +397,16 @@ export function getNavModuleClassNames(settings: NavSettings): string {
     NAV_STYLE_DEFAULTS.hoverEffect as NavHoverEffect
   );
 
-  return `site-nav--hover-${effect}`;
+  const classes = [`site-nav--hover-${effect}`];
+  if (isNavMegaMenu(settings)) {
+    classes.push(`site-nav--mega-place-${getNavMegaPlacement(settings)}`);
+  }
+  return classes.join(" ");
+}
+
+/** Where the open mega panel hangs — see NAV_MEGA_PLACEMENTS. */
+export function getNavMegaPlacement(settings: NavSettings): NavMegaPlacement {
+  return oneOf<NavMegaPlacement>(settings.navMegaPlacement, NAV_MEGA_PLACEMENTS, "item");
 }
 
 /** How many mega-panel columns to deal the links into. */

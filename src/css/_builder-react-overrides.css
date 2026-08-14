@@ -1545,6 +1545,37 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: none;
 }
 
+/* Panel Placement (navMegaPlacement). The base rule above is "item" —
+   centred on the hovered menu item, the panel's original behaviour.
+
+   "menu": one fixed spot, centred under the whole bar, whichever item is
+   hovered. The trick is WHICH box `left`/`top` measure from: an absolutely
+   positioned element measures from its nearest positioned ancestor, so
+   un-positioning the item hands the panel to the bar. The media query at the
+   bottom un-positions the panel itself on phones, so these rules change
+   nothing in the mobile accordion. */
+.builder-react-root .site-nav--mega-place-menu {
+  position: relative;
+}
+
+.builder-react-root .site-nav--mega-place-menu .site-nav-mega {
+  position: static;
+}
+
+/* "right" / "left": the panel grows out of the item's own edge instead of
+   overhanging both sides. `transform: none` retires the centring shift. */
+.builder-react-root .site-nav--mega-place-right .site-nav-mega-panel {
+  left: 0;
+  right: auto;
+  transform: none;
+}
+
+.builder-react-root .site-nav--mega-place-left .site-nav-mega-panel {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
 .builder-react-root .site-nav-mega-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
