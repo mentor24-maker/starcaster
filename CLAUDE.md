@@ -201,6 +201,17 @@ Before reporting a task complete, run and state the results of:
 
 "It should work" is not done. Passing commands are done.
 
+## Session-close capture (binding)
+
+Before the window closes, get the keepers onto the shared record, unprompted:
+decisions to the party line (the ClickUp bus), artifacts and findings to the
+docs of the repo that owns them, canon changes to the vault's
+`doctrine/_proposals/`. A standing instruction Dane gives verbatim is always a
+keeper. If the destination is somewhere CC-starcaster cannot write — vault
+doctrine, another repo's docs — hand it to the agent that can, on the wire, in
+this session. Noticing is not capturing. (Vault `doctrine/OPERATIONS.md`,
+Session-close capture; ratified 2026-08-14.)
+
 ## Naming: UI term vs code/DB term
 
 | UI | Code / DB |
