@@ -533,6 +533,39 @@ When he gives a template verbatim, reproduce it exactly rather than improving
 it — the point is that it looks the same every time, so he can find it without
 reading.
 
+### 6.6 Never spend an operator decision on something already decided
+
+**Enforcement: `scripts/hooks/explain_denied_commands.cjs` (PreToolUse on Bash,
+blocking).** A command forbidden by a standing `deny` rule is blocked with the
+rule quoted and its settings file named, before the permission system produces
+its own ambiguous refusal. Tested in
+`scripts/hooks/explain_denied_commands.test.js`, gated by `npm run test:hooks`.
+
+**The incident.** 2026-08-14: a rebase needed `git push --force-with-lease` and
+the call was refused. The refusal reads *"Permission to use Bash with command X
+has been denied"* — which is word-for-word what you get whether he clicked "no"
+once or forbade it permanently. The agent guessed "one-off", asked him to
+choose, and he approved it. **The approval could not take effect**:
+`Bash(git push --force*)` sits on the deny list in `~/.claude/settings.json`.
+An operator decision was spent on a question already answered, and the answer
+was unactionable. The alternative — merge `main` in instead of rebasing — needed
+nothing from him and had been available the whole time.
+
+**The rule.** Before asking him to approve anything, establish whether it is
+already decided. A standing rule outranks an in-the-moment yes, so a question
+that a rule has pre-empted is pure cost: it spends the one resource he says is
+scarcest, and it cannot change the outcome.
+
+**And do not reword around a deny rule.** Reaching the same effect through a
+spelling the pattern misses is not cleverness, it is overriding a decision he
+made deliberately. If there is genuinely no other route, say the rule exists,
+name it, and let him change the *rule* — a config change he makes on purpose,
+not a per-occasion bypass.
+
+*Why this is doctrine and not judgement:* §6.4 already says his bottleneck is
+attention, not willingness. Asking about a settled question is the same waste as
+surfacing a chore for approval, minus even the possibility of a useful answer.
+
 ---
 
 ## 7. Operator-facing gotchas

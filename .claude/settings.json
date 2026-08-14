@@ -8,6 +8,17 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/explain_denied_commands.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking standing permission rules"
+          }
+        ]
+      },
+      {
         "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
           {
