@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   parsePrograms,
@@ -12,6 +12,7 @@ import {
   type ProgramSession,
   type ProgramPrice
 } from "@/lib/builder-program-list";
+import { parseProgramFlyerText } from "@/lib/builder-program-flyer-text";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderThemeColorControlWithDefault, type BuilderThemePalette } from "./builder-theme-color-field";
@@ -67,6 +68,34 @@ export function BuilderProgramListModuleSettings({
   };
 
   const addProgram = () => persist([...programs, createProgram()]);
+
+  // The paste box. The operator's objection to this panel on 2026-08-13 was
+  // that filling eleven fields per program is the wrong shape of work when
+  // the content already exists as text on a flyer.
+  const [flyerText, setFlyerText] = useState("");
+  const [flyerNote, setFlyerNote] = useState("");
+
+  const addFromFlyerText = () => {
+    const { program, ignored } = parseProgramFlyerText(flyerText);
+
+    if (!program) {
+      setFlyerNote("Nothing readable in that text. Check it has a name and at least one day or price.");
+      return;
+    }
+
+    persist([...programs, program]);
+    setFlyerText("");
+
+    // Say what was read AND what was thrown away. A tool that silently drops
+    // half its input is one nobody can trust the second time.
+    const found = [
+      `${program.sessions.length} session${program.sessions.length === 1 ? "" : "s"}`,
+      `${program.pricing.length} price${program.pricing.length === 1 ? "" : "s"}`
+    ];
+    if (program.bullets.length > 0) found.push(`${program.bullets.length} points`);
+    const skipped = ignored.length > 0 ? ` Skipped ${ignored.length} footer line${ignored.length === 1 ? "" : "s"}.` : "";
+    setFlyerNote(`Added ${program.title || "a program"} — ${found.join(", ")}.${skipped} Check it below.`);
+  };
 
   const updateSession = (programId: string, sessionId: string, updates: Partial<ProgramSession>) => {
     const program = programs.find((entry) => entry.id === programId);
@@ -251,6 +280,41 @@ export function BuilderProgramListModuleSettings({
       {/* RIGHT — the programs themselves. */}
       <div className="builder-cards-panel-items">
         <div className="builder-cards-panel-heading">Programs</div>
+
+        {/* Paste first, type second. The flyer's words already exist
+            somewhere; retyping them into eleven boxes is the work this
+            removes. Nothing is sent anywhere — the text is read here, by
+            rules, so it cannot turn $27.50 into $2750. */}
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Paste A Flyer" width="full">
+            <textarea
+              rows={4}
+              value={flyerText}
+              placeholder={"Paste the flyer's text here — name, coach, level, days and times, prices.\nThe address and phone footer is ignored."}
+              onChange={(event) => {
+                setFlyerText(event.target.value);
+                if (flyerNote) setFlyerNote("");
+              }}
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="" width="full">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={addFromFlyerText}
+              disabled={flyerText.trim().length === 0}
+            >
+              Read it and add a program
+            </button>
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+        {flyerNote ? (
+          <p className="builder-program-paste-note" role="status">
+            {flyerNote}
+          </p>
+        ) : null}
         <div className="builder-cards-panel-fields" data-lattice-pairs="2">
           {programs.map((program, index) => {
             const programName = program.title || `Program ${index + 1}`;
