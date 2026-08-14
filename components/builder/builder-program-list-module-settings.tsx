@@ -23,11 +23,6 @@ type BuilderProgramListModuleSettingsProps = {
   themeColors?: BuilderThemePalette;
 };
 
-/* Days are a dropdown rather than free text because they drive nothing but
-   are read by everyone: "Tues", "TUESDAY" and "Tue." across fifteen flyers
-   would make the timetable column look ragged for no gain. A club running
-   something on an irregular date can still type it — "Custom" opens the
-   field. */
 const DAY_OPTIONS = [
   "Monday",
   "Tuesday",
@@ -38,6 +33,31 @@ const DAY_OPTIONS = [
   "Sunday"
 ];
 
+/**
+ * The Programs panel.
+ *
+ * Two shapes, and picking the wrong one is what made the first version
+ * unusable (operator, 2026-08-13: *"the back-end form is a nightmare"*).
+ *
+ * - The **left column** is a lattice column (W0): `BuilderModuleFieldStrip`
+ *   pairs inside `.builder-schema-panel-column`, which the CSS flattens with
+ *   `display: contents` so one grid measures every label and every control in
+ *   the column at once.
+ * - The **program blocks** are an item manager on its own lattice (L6a), the
+ *   `.builder-card-editor` shape Feature Cards established. Fields are DIRECT
+ *   children of the `data-lattice-pairs="2"` grid, tagged `--a` / `--b` /
+ *   `--wide`. Wrapping them in strips — which the first version did — gives
+ *   every pair its own flex row, and the column stagger W0 exists to prevent
+ *   comes straight back.
+ * - **Repeating rows within a program** (sessions, price bands) are titled
+ *   column grids (L6): one header row, many short rows. Repeating the labels
+ *   "Day / From / To / Coach" on every session is exactly what L6 converts
+ *   into column titles.
+ *
+ * Every field carries a real label. The first version used empty labels and
+ * labels that appeared only on the first row of a repeat, which put the whole
+ * grid out of phase — a label cell with nothing in it still occupies a cell.
+ */
 export function BuilderProgramListModuleSettings({
   module,
   onUpdateModule,
@@ -69,9 +89,39 @@ export function BuilderProgramListModuleSettings({
 
   const addProgram = () => persist([...programs, createProgram()]);
 
-  // The paste box. The operator's objection to this panel on 2026-08-13 was
-  // that filling eleven fields per program is the wrong shape of work when
-  // the content already exists as text on a flyer.
+  const withProgram = (id: string, change: (program: Program) => Partial<Program>) => {
+    const program = programs.find((entry) => entry.id === id);
+    if (program) updateProgram(id, change(program));
+  };
+
+  const updateSession = (programId: string, sessionId: string, updates: Partial<ProgramSession>) =>
+    withProgram(programId, (program) => ({
+      sessions: program.sessions.map((session) =>
+        session.id === sessionId ? { ...session, ...updates } : session
+      )
+    }));
+
+  const addSession = (programId: string) =>
+    withProgram(programId, (program) => ({ sessions: [...program.sessions, createProgramSession()] }));
+
+  const removeSession = (programId: string, sessionId: string) =>
+    withProgram(programId, (program) => ({
+      sessions: program.sessions.filter((session) => session.id !== sessionId)
+    }));
+
+  const updatePrice = (programId: string, priceId: string, updates: Partial<ProgramPrice>) =>
+    withProgram(programId, (program) => ({
+      pricing: program.pricing.map((price) => (price.id === priceId ? { ...price, ...updates } : price))
+    }));
+
+  const addPrice = (programId: string) =>
+    withProgram(programId, (program) => ({ pricing: [...program.pricing, createProgramPrice()] }));
+
+  const removePrice = (programId: string, priceId: string) =>
+    withProgram(programId, (program) => ({
+      pricing: program.pricing.filter((price) => price.id !== priceId)
+    }));
+
   const [flyerText, setFlyerText] = useState("");
   const [flyerNote, setFlyerNote] = useState("");
 
@@ -93,74 +143,28 @@ export function BuilderProgramListModuleSettings({
       `${program.pricing.length} price${program.pricing.length === 1 ? "" : "s"}`
     ];
     if (program.bullets.length > 0) found.push(`${program.bullets.length} points`);
-    const skipped = ignored.length > 0 ? ` Skipped ${ignored.length} footer line${ignored.length === 1 ? "" : "s"}.` : "";
+    const skipped =
+      ignored.length > 0
+        ? ` Skipped ${ignored.length} footer line${ignored.length === 1 ? "" : "s"}.`
+        : "";
     setFlyerNote(`Added ${program.title || "a program"} — ${found.join(", ")}.${skipped} Check it below.`);
   };
 
-  const updateSession = (programId: string, sessionId: string, updates: Partial<ProgramSession>) => {
-    const program = programs.find((entry) => entry.id === programId);
-    if (!program) return;
-    updateProgram(programId, {
-      sessions: program.sessions.map((session) =>
-        session.id === sessionId ? { ...session, ...updates } : session
-      )
-    });
-  };
-
-  const addSession = (programId: string) => {
-    const program = programs.find((entry) => entry.id === programId);
-    if (!program) return;
-    updateProgram(programId, { sessions: [...program.sessions, createProgramSession()] });
-  };
-
-  const removeSession = (programId: string, sessionId: string) => {
-    const program = programs.find((entry) => entry.id === programId);
-    if (!program) return;
-    updateProgram(programId, {
-      sessions: program.sessions.filter((session) => session.id !== sessionId)
-    });
-  };
-
-  const updatePrice = (programId: string, priceId: string, updates: Partial<ProgramPrice>) => {
-    const program = programs.find((entry) => entry.id === programId);
-    if (!program) return;
-    updateProgram(programId, {
-      pricing: program.pricing.map((price) => (price.id === priceId ? { ...price, ...updates } : price))
-    });
-  };
-
-  const addPrice = (programId: string) => {
-    const program = programs.find((entry) => entry.id === programId);
-    if (!program) return;
-    updateProgram(programId, { pricing: [...program.pricing, createProgramPrice()] });
-  };
-
-  const removePrice = (programId: string, priceId: string) => {
-    const program = programs.find((entry) => entry.id === programId);
-    if (!program) return;
-    updateProgram(programId, { pricing: program.pricing.filter((price) => price.id !== priceId) });
-  };
-
-  // Empty color settings follow the site theme; the swatch previews the
-  // same theme color the renderer resolves to, with the factory color as
-  // the no-theme fallback.
+  // Empty color settings follow the site theme; the swatch previews the same
+  // theme color the renderer resolves to.
   const themeHex = (label: string) => themeColors.find((color) => color.label === label)?.hex || "";
   const accentDefault = themeHex("Primary") || "#4f9c3a";
   const headingDefault = themeHex("Accent") || "#14265c";
-  // Not a theme color — see the renderer. A swatch that previews a color
-  // the renderer will not use is worse than no swatch at all.
+  // Not a theme color — see the renderer. A swatch that previews a color the
+  // renderer will not use is worse than no swatch at all.
   const borderDefault = "#dce3ef";
 
   return (
     <div className="builder-cards-panel">
-      {/* LEFT — settings that apply to every program in the module.
-          `builder-schema-panel-column` is borrowed from the schema
-          generator so a field strip stacks one control per row inside a
-          narrow column (W0) instead of running off the edge. */}
       <div className="builder-cards-panel-settings builder-schema-panel-column">
         <div className="builder-schema-group-title">Layout</div>
         <BuilderModuleFieldStrip>
-          <BuilderModuleField label="Radius" width="num">
+          <BuilderModuleField label="Corner Radius" width="num">
             <BuilderNumberSelectControl
               value={module.settings.cardRadius ?? "10"}
               min={0}
@@ -174,6 +178,7 @@ export function BuilderProgramListModuleSettings({
             <select
               value={module.settings.showLevelBadge === "false" ? "false" : "true"}
               onChange={(event) => set("showLevelBadge", event.target.value)}
+              aria-label="Show the level chip"
             >
               <option value="true">Show</option>
               <option value="false">Hide</option>
@@ -183,6 +188,7 @@ export function BuilderProgramListModuleSettings({
             <select
               value={module.settings.showInstructorColumn === "false" ? "false" : "true"}
               onChange={(event) => set("showInstructorColumn", event.target.value)}
+              aria-label="Show the coach column"
             >
               <option value="true">Show</option>
               <option value="false">Hide</option>
@@ -196,42 +202,42 @@ export function BuilderProgramListModuleSettings({
             <select
               value={module.settings.showReserve === "false" ? "false" : "true"}
               onChange={(event) => set("showReserve", event.target.value)}
+              aria-label="Show the reserve line"
             >
               <option value="true">Show</option>
               <option value="false">Hide</option>
             </select>
           </BuilderModuleField>
-          <BuilderModuleField label="Label" width="select-md">
+          <BuilderModuleField label="Reserve Label" width="select-md">
             <input
               type="text"
               value={module.settings.reserveLabel ?? "Reserve"}
               placeholder="Reserve"
               onChange={(event) => set("reserveLabel", event.target.value)}
+              aria-label="Reserve label"
             />
           </BuilderModuleField>
           {/* One number for the club, not one per program: on all fifteen
               source flyers it was the same pro shop line. */}
-          <BuilderModuleField label="Phone" width="select-md">
+          <BuilderModuleField label="Phone Number" width="select-md">
             <input
               type="tel"
               value={module.settings.reservePhone ?? ""}
               placeholder="(561) 243-7360"
               onChange={(event) => set("reservePhone", event.target.value)}
+              aria-label="Reserve phone number"
             />
           </BuilderModuleField>
-        </BuilderModuleFieldStrip>
-
-        {/* Stated once under the whole list. On the flyers this was a shield
-            graphic repeated on every one; it is a policy, and policies are
-            text. */}
-        <div className="builder-schema-group-title">Footnote</div>
-        <BuilderModuleFieldStrip>
+          {/* Stated once under the whole list. On the flyers this was a shield
+              graphic repeated on every one; it is a policy, and policies are
+              text. */}
           <BuilderModuleField label="Policy Note" width="full">
             <input
               type="text"
               value={module.settings.policyNote ?? ""}
               placeholder="All programs carry a 24-hour cancellation policy."
               onChange={(event) => set("policyNote", event.target.value)}
+              aria-label="Policy note"
             />
           </BuilderModuleField>
         </BuilderModuleFieldStrip>
@@ -277,29 +283,31 @@ export function BuilderProgramListModuleSettings({
         </BuilderModuleFieldStrip>
       </div>
 
-      {/* RIGHT — the programs themselves. */}
       <div className="builder-cards-panel-items">
         <div className="builder-cards-panel-heading">Programs</div>
 
-        {/* Paste first, type second. The flyer's words already exist
-            somewhere; retyping them into eleven boxes is the work this
-            removes. Nothing is sent anywhere — the text is read here, by
-            rules, so it cannot turn $27.50 into $2750. */}
-        <BuilderModuleFieldStrip>
-          <BuilderModuleField label="Paste A Flyer" width="full">
+        {/* Fields are DIRECT children of this grid — no strips. A strip inside
+            an item manager becomes its own flex row, which is what staggered
+            the first version. --a is the left pair, --b the right, --wide
+            spans both. */}
+        <div className="builder-cards-panel-fields" data-lattice-pairs="2">
+          {/* Paste first, type second. The flyer's words already exist
+              somewhere; retyping them into eleven boxes is the work this
+              removes. Nothing is sent anywhere — rules read the text here, so
+              it cannot turn $27.50 into $2750. */}
+          <BuilderModuleField label="Paste A Flyer" width="full" className="builder-card-field--wide">
             <textarea
               rows={4}
               value={flyerText}
-              placeholder={"Paste the flyer's text here — name, coach, level, days and times, prices.\nThe address and phone footer is ignored."}
+              placeholder={"Paste the flyer's text — name, coach, level, days and times, prices.\nThe address and phone footer is ignored."}
               onChange={(event) => {
                 setFlyerText(event.target.value);
                 if (flyerNote) setFlyerNote("");
               }}
+              aria-label="Paste a flyer's text"
             />
           </BuilderModuleField>
-        </BuilderModuleFieldStrip>
-        <BuilderModuleFieldStrip>
-          <BuilderModuleField label="" width="full">
+          <BuilderModuleField label="Read The Flyer" width="full" className="builder-card-field--wide">
             <button
               type="button"
               className="secondary-button"
@@ -309,13 +317,12 @@ export function BuilderProgramListModuleSettings({
               Read it and add a program
             </button>
           </BuilderModuleField>
-        </BuilderModuleFieldStrip>
-        {flyerNote ? (
-          <p className="builder-program-paste-note" role="status">
-            {flyerNote}
-          </p>
-        ) : null}
-        <div className="builder-cards-panel-fields" data-lattice-pairs="2">
+          {flyerNote ? (
+            <div className="builder-program-block" role="status">
+              <p className="builder-program-paste-note">{flyerNote}</p>
+            </div>
+          ) : null}
+
           {programs.map((program, index) => {
             const programName = program.title || `Program ${index + 1}`;
 
@@ -354,174 +361,176 @@ export function BuilderProgramListModuleSettings({
                   </div>
                 </div>
 
-                <BuilderModuleFieldStrip>
-                  <BuilderModuleField label="Name" width="full">
-                    <input
-                      type="text"
-                      value={program.title}
-                      placeholder="Beginners"
-                      onChange={(event) => updateProgram(program.id, { title: event.target.value })}
-                    />
-                  </BuilderModuleField>
-                </BuilderModuleFieldStrip>
-                <BuilderModuleFieldStrip>
-                  <BuilderModuleField label="Subtitle" width="full">
-                    <input
-                      type="text"
-                      value={program.subtitle ?? ""}
-                      placeholder="with Glenn Muller"
-                      onChange={(event) => updateProgram(program.id, { subtitle: event.target.value })}
-                    />
-                  </BuilderModuleField>
-                  <BuilderModuleField label="Level" width="select-md">
-                    <input
-                      type="text"
-                      value={program.levelBadge ?? ""}
-                      placeholder="3.0 - 3.5 Players"
-                      onChange={(event) => updateProgram(program.id, { levelBadge: event.target.value })}
-                    />
-                  </BuilderModuleField>
-                </BuilderModuleFieldStrip>
+                <BuilderModuleField label="Name" width="text-md" className="builder-card-field--a">
+                  <input
+                    type="text"
+                    value={program.title}
+                    placeholder="Beginners"
+                    onChange={(event) => updateProgram(program.id, { title: event.target.value })}
+                    aria-label={`${programName} name`}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Level" width="text-md" className="builder-card-field--b">
+                  <input
+                    type="text"
+                    value={program.levelBadge ?? ""}
+                    placeholder="3.0 - 3.5 Players"
+                    onChange={(event) => updateProgram(program.id, { levelBadge: event.target.value })}
+                    aria-label={`${programName} level`}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Subtitle" width="full" className="builder-card-field--wide">
+                  <input
+                    type="text"
+                    value={program.subtitle ?? ""}
+                    placeholder="with Glenn Muller"
+                    onChange={(event) => updateProgram(program.id, { subtitle: event.target.value })}
+                    aria-label={`${programName} subtitle`}
+                  />
+                </BuilderModuleField>
 
-                {/* Sessions. A coach sits here rather than on the program
-                    because it genuinely varies within one — Back to Basics
-                    runs with a different coach on Tuesday and Thursday. */}
-                {program.sessions.map((session, sessionIndex) => (
-                  <BuilderModuleFieldStrip key={session.id}>
-                    <BuilderModuleField label={sessionIndex === 0 ? "Day" : ""} width="select-md">
-                      <select
-                        value={DAY_OPTIONS.includes(session.day) ? session.day : ""}
-                        onChange={(event) =>
-                          updateSession(program.id, session.id, { day: event.target.value })
-                        }
-                      >
-                        <option value="">Choose…</option>
-                        {DAY_OPTIONS.map((day) => (
-                          <option key={day} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </BuilderModuleField>
-                    <BuilderModuleField label={sessionIndex === 0 ? "From" : ""} width="select-sm">
-                      <input
-                        type="text"
-                        value={session.startTime}
-                        placeholder="6:00 PM"
-                        onChange={(event) =>
-                          updateSession(program.id, session.id, { startTime: event.target.value })
-                        }
-                      />
-                    </BuilderModuleField>
-                    <BuilderModuleField label={sessionIndex === 0 ? "To" : ""} width="select-sm">
-                      <input
-                        type="text"
-                        value={session.endTime}
-                        placeholder="7:00 PM"
-                        onChange={(event) =>
-                          updateSession(program.id, session.id, { endTime: event.target.value })
-                        }
-                      />
-                    </BuilderModuleField>
-                    <BuilderModuleField label={sessionIndex === 0 ? "Coach" : ""} width="select-md">
-                      <input
-                        type="text"
-                        value={session.instructor ?? ""}
-                        placeholder="Optional"
-                        onChange={(event) =>
-                          updateSession(program.id, session.id, { instructor: event.target.value })
-                        }
-                      />
-                    </BuilderModuleField>
-                    <BuilderModuleField label={sessionIndex === 0 ? " " : ""} width="num">
-                      <button
-                        type="button"
-                        className="builder-icon-button builder-icon-button-danger"
-                        onClick={() => removeSession(program.id, session.id)}
-                        aria-label={`Delete session ${sessionIndex + 1} of ${programName}`}
-                        title="Delete session"
-                      >
-                        ✕
-                      </button>
-                    </BuilderModuleField>
-                  </BuilderModuleFieldStrip>
-                ))}
-                <BuilderModuleFieldStrip>
-                  <BuilderModuleField label="" width="full">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => addSession(program.id)}
-                    >
-                      Add a session
-                    </button>
-                  </BuilderModuleField>
-                </BuilderModuleFieldStrip>
+                {/* L6: repeating rows become a titled-column grid. Printing
+                    "Day / From / To / Coach" beside every session is exactly
+                    what column titles replace. */}
+                <div className="builder-program-block">
+                  <div className="builder-program-block-title">Sessions</div>
+                  <div className="builder-item-grid builder-item-grid--sessions">
+                    <span className="builder-item-grid-header">Day</span>
+                    <span className="builder-item-grid-header">From</span>
+                    <span className="builder-item-grid-header">To</span>
+                    <span className="builder-item-grid-header">Coach</span>
+                    <span className="builder-item-grid-header">Action</span>
+                    {program.sessions.map((session, sessionIndex) => (
+                      <Fragment key={session.id}>
+                        <select
+                          value={DAY_OPTIONS.includes(session.day) ? session.day : ""}
+                          onChange={(event) =>
+                            updateSession(program.id, session.id, { day: event.target.value })
+                          }
+                          aria-label={`${programName} session ${sessionIndex + 1} day`}
+                        >
+                          <option value="">Choose…</option>
+                          {DAY_OPTIONS.map((day) => (
+                            <option key={day} value={day}>
+                              {day}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={session.startTime}
+                          placeholder="6:00 PM"
+                          onChange={(event) =>
+                            updateSession(program.id, session.id, { startTime: event.target.value })
+                          }
+                          aria-label={`${programName} session ${sessionIndex + 1} start time`}
+                        />
+                        <input
+                          type="text"
+                          value={session.endTime}
+                          placeholder="7:00 PM"
+                          onChange={(event) =>
+                            updateSession(program.id, session.id, { endTime: event.target.value })
+                          }
+                          aria-label={`${programName} session ${sessionIndex + 1} end time`}
+                        />
+                        <input
+                          type="text"
+                          value={session.instructor ?? ""}
+                          placeholder="Optional"
+                          onChange={(event) =>
+                            updateSession(program.id, session.id, { instructor: event.target.value })
+                          }
+                          aria-label={`${programName} session ${sessionIndex + 1} coach`}
+                        />
+                        <div className="builder-item-grid-actions">
+                          <button
+                            type="button"
+                            className="builder-icon-button builder-icon-button-danger"
+                            onClick={() => removeSession(program.id, session.id)}
+                            aria-label={`Delete ${programName} session ${sessionIndex + 1}`}
+                            title="Delete session"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </Fragment>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => addSession(program.id)}
+                  >
+                    Add a session
+                  </button>
+                </div>
 
                 {/* Pricing is a list because both mixers charge members $20
-                    and non-members $25, while the clinics charge one price
-                    to everyone. */}
-                {program.pricing.map((price, priceIndex) => (
-                  <BuilderModuleFieldStrip key={price.id}>
-                    <BuilderModuleField label={priceIndex === 0 ? "Price" : ""} width="select-sm">
-                      <input
-                        type="text"
-                        value={price.amount}
-                        placeholder="$27.50"
-                        onChange={(event) =>
-                          updatePrice(program.id, price.id, { amount: event.target.value })
-                        }
-                      />
-                    </BuilderModuleField>
-                    <BuilderModuleField label={priceIndex === 0 ? "Applies To" : ""} width="full">
-                      <input
-                        type="text"
-                        value={price.appliesTo}
-                        placeholder="members & non-members"
-                        onChange={(event) =>
-                          updatePrice(program.id, price.id, { appliesTo: event.target.value })
-                        }
-                      />
-                    </BuilderModuleField>
-                    <BuilderModuleField label={priceIndex === 0 ? " " : ""} width="num">
-                      <button
-                        type="button"
-                        className="builder-icon-button builder-icon-button-danger"
-                        onClick={() => removePrice(program.id, price.id)}
-                        aria-label={`Delete price ${priceIndex + 1} of ${programName}`}
-                        title="Delete price"
-                      >
-                        ✕
-                      </button>
-                    </BuilderModuleField>
-                  </BuilderModuleFieldStrip>
-                ))}
-                <BuilderModuleFieldStrip>
-                  <BuilderModuleField label="" width="full">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => addPrice(program.id)}
-                    >
-                      Add a price
-                    </button>
-                  </BuilderModuleField>
-                </BuilderModuleFieldStrip>
+                    and non-members $25, while the clinics charge one price to
+                    everyone. */}
+                <div className="builder-program-block">
+                  <div className="builder-program-block-title">Prices</div>
+                  <div className="builder-item-grid builder-item-grid--prices">
+                    <span className="builder-item-grid-header">Amount</span>
+                    <span className="builder-item-grid-header">Applies To</span>
+                    <span className="builder-item-grid-header">Action</span>
+                    {program.pricing.map((price, priceIndex) => (
+                      <Fragment key={price.id}>
+                        <input
+                          type="text"
+                          value={price.amount}
+                          placeholder="$27.50"
+                          onChange={(event) =>
+                            updatePrice(program.id, price.id, { amount: event.target.value })
+                          }
+                          aria-label={`${programName} price ${priceIndex + 1} amount`}
+                        />
+                        <input
+                          type="text"
+                          value={price.appliesTo}
+                          placeholder="members & non-members"
+                          onChange={(event) =>
+                            updatePrice(program.id, price.id, { appliesTo: event.target.value })
+                          }
+                          aria-label={`${programName} price ${priceIndex + 1} applies to`}
+                        />
+                        <div className="builder-item-grid-actions">
+                          <button
+                            type="button"
+                            className="builder-icon-button builder-icon-button-danger"
+                            onClick={() => removePrice(program.id, price.id)}
+                            aria-label={`Delete ${programName} price ${priceIndex + 1}`}
+                            title="Delete price"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </Fragment>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => addPrice(program.id)}
+                  >
+                    Add a price
+                  </button>
+                </div>
 
                 {/* One point per line. Four short bullets are quicker to edit
-                    as text than as four rows with their own arrow buttons. */}
-                <BuilderModuleFieldStrip>
-                  <BuilderModuleField label="Points" width="full">
-                    <textarea
-                      rows={4}
-                      value={bulletsToText(program.bullets)}
-                      placeholder={"Progressive mixed doubles\nWinners move up, losers move down"}
-                      onChange={(event) =>
-                        updateProgram(program.id, { bullets: bulletsFromText(event.target.value) })
-                      }
-                    />
-                  </BuilderModuleField>
-                </BuilderModuleFieldStrip>
+                    as text than as four rows with their own buttons. */}
+                <BuilderModuleField label="Points" width="full" className="builder-card-field--wide">
+                  <textarea
+                    rows={4}
+                    value={bulletsToText(program.bullets)}
+                    placeholder={"Progressive mixed doubles\nWinners move up, losers move down"}
+                    onChange={(event) =>
+                      updateProgram(program.id, { bullets: bulletsFromText(event.target.value) })
+                    }
+                    aria-label={`${programName} points`}
+                  />
+                </BuilderModuleField>
               </Fragment>
             );
           })}
