@@ -5666,7 +5666,14 @@ function NavigationModulePreview({
 
   return (
     <nav
-      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}${isMega ? " site-nav--mega" : ""} ${getNavModuleClassNames(module.settings)}`}
+      className={`site-nav site-nav--sizing-${itemSizing}${isVertical ? " site-nav--vertical" : ""}${mobileOpen ? " site-nav--open" : ""}${isMega ? " site-nav--mega" : ""}${
+        // The bar's backdrop-filter makes it a stacking context, so the
+        // panel's own z-index can order it only against the bar's other
+        // children — never against sibling modules. While a panel is open
+        // the whole bar has to outrank them, and only the renderer knows
+        // when that is.
+        isMega && openMegaId ? " site-nav--panel-open" : ""
+      } ${getNavModuleClassNames(module.settings)}`}
       aria-label="Main navigation"
       onKeyDown={
         isMega

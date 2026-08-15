@@ -437,3 +437,16 @@ describe("Panel Placement (navMegaPlacement)", () => {
     ).toBe("site-nav--hover-lift");
   });
 });
+
+describe("the toggle pull-back var (--site-nav-link-padding-right)", () => {
+  it("repeats the shorthand's right side so CSS can subtract it", () => {
+    expect(style()["--site-nav-link-padding-right"]).toBe("14px");
+    expect(style({ navLinkPaddingRight: "5" })["--site-nav-link-padding-right"]).toBe("5px");
+  });
+
+  it("stays in step with the shorthand itself", () => {
+    const vars = style({ navLinkPaddingRight: "22" });
+    expect(vars["--site-nav-link-padding"]).toBe("0px 22px 0px 14px");
+    expect(vars["--site-nav-link-padding-right"]).toBe("22px");
+  });
+});

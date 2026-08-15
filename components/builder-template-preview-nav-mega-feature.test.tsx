@@ -97,3 +97,11 @@ describe("the mega menu's extra column", () => {
     expect(html).not.toContain("site-nav-mega-feature");
   });
 });
+
+describe("the open-panel lift class", () => {
+  it("is absent while no panel is open — the bar must not outrank its neighbours at rest", () => {
+    const html = megaMenu({});
+    expect(html).toContain("site-nav--mega");
+    expect(html).not.toContain("site-nav--panel-open");
+  });
+});

@@ -1490,6 +1490,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: 2px;
 }
 
+/* An OPEN panel must outrank every sibling module (the operator's header
+   keeps buttons to the bar's right, and they were painting over the panel).
+   The panel's own z-index cannot do this: the bar's backdrop-filter makes
+   the bar a stacking context, so z-index 40 below only orders the panel
+   against the bar's other children — outside, the bar competes as a plain
+   in-flow box and later siblings win. Lifting the BAR while a panel is open
+   moves the whole context, panel included, over everything else in the
+   section. (Section-vs-section is already handled: a menu-carrying section
+   renders with z-index 10.) */
+.builder-react-root .site-nav--panel-open {
+  position: relative;
+  z-index: 60;
+}
+
 .builder-react-root .site-nav-mega-toggle {
   display: inline-flex;
   align-items: center;
@@ -1501,10 +1515,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-radius: 50%;
   background: none;
   color: inherit;
-  font-size: 12px;
+  /* Up from 12px — at 12px the ▾ read as a bullet, not an arrow. */
+  font-size: var(--text-md);
   line-height: 1;
   cursor: pointer;
   transition: transform 0.18s ease;
+  /* The arrow belongs to its label, so it sits tight against the text: pull
+     back over the link's right padding plus the button's own centring air.
+     The click target stays the full 22px circle — it just overlaps the
+     link's padded (not lettered) area, where a click on the arrow beats a
+     click on the link, which is what an arrow is for. */
+  margin-left: calc(-1 * var(--site-nav-link-padding-right, 14px) - 5px);
 }
 
 .builder-react-root .site-nav-mega-toggle:focus-visible {
@@ -1701,6 +1722,9 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     width: 34px;
     height: 34px;
     font-size: 15px;
+    /* The drawer row is label-left, arrow-right; the desktop pull-back
+       would drag the arrow out of its right-edge slot. */
+    margin-left: 0;
   }
 
   .builder-react-root .site-nav-mega-panel {
@@ -1736,6 +1760,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+/* Same reset as the 900px block above — the editor's device switcher swaps
+   a class, not the viewport. */
+.builder-react-root .builder-preview-device-mobile .site-nav-mega-toggle,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega-toggle {
+  margin-left: 0;
 }
 
 .builder-react-root .builder-preview-device-mobile .site-nav-mega-grid,
