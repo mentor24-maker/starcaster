@@ -4380,6 +4380,42 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--lp-muted, #8590a8);
 }
 
+/*
+ * The row's own "Settings and Styles" bar.
+ *
+ * It sits one level inside the row card, the same depth as a cell's Styles
+ * and Content bars, so it takes the same cell-level colour — one bar shape,
+ * learned once (S1). The generated sheet already paints a bar this way, but
+ * only for headers inside `.builder-column-card`, and this one is a direct
+ * child of the row.
+ *
+ * `--btn-text` rather than a white literal (R3): every other bar in this
+ * stack states its white the same way, and a hex here would be one more
+ * place to find if the chrome ever stops being teal.
+ */
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header {
+  background: var(--builder-header-cell);
+  color: var(--btn-text);
+  border-radius: 14px;
+  padding: 8px 12px;
+}
+
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header:hover {
+  background: var(--builder-header-cell-hover);
+  color: var(--btn-text);
+}
+
+/* The generated sheet turns a COLLAPSED cell bar's title dark (`var(--ink)`),
+   which is right on a pale bar and unreadable on this one. Both states white. */
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label,
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label strong {
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label:hover {
+  color: rgba(255, 255, 255, 0.86);
+}
+
 /* Standard 7: the only breakpoint. It narrows the split to one column and
    releases the coach name from its right edge; it introduces nothing. */
 @media (max-width: 736px) {

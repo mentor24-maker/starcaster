@@ -163,6 +163,11 @@ export function BuilderSectionCard({
     return moduleClass ? `${moduleClass} - ${cellModule.name}` : cellModule.name;
   };
   const [collapsedCellPanels, setCollapsedCellPanels] = useState<Record<string, { styles: boolean; content: boolean }>>({});
+  // The row's own settings start folded away, same as a cell's Styles panel.
+  // Fifteen-odd controls sat between the row header and the cells, so opening a
+  // row to reach its content meant scrolling past every one of them. Now the
+  // bar is all you see until you want them.
+  const [isSectionSettingsCollapsed, setIsSectionSettingsCollapsed] = useState(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
@@ -510,17 +515,28 @@ export function BuilderSectionCard({
 
       {!isCollapsed && !isCanonical ? (
         <>
-          <BuilderSectionControls
-            section={section}
-            canJoinPrevious={sectionIndex > 0}
-            editorDevice={editorDevice}
-            onUpdateSection={onUpdateSection}
-            onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
-            onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}
-            themeBackgroundColor={themeBackgroundColor}
-            themeColors={themeColors}
-            themePrimaryColor={themePrimaryColor}
-          />
+          <div className="builder-cell-panel builder-section-settings-panel">
+            <BuilderCellPanelHeader
+              isCollapsed={isSectionSettingsCollapsed}
+              onToggle={() => setIsSectionSettingsCollapsed((current) => !current)}
+              panelName="Settings and Styles"
+              title="Settings and Styles"
+            />
+
+            {!isSectionSettingsCollapsed ? (
+              <BuilderSectionControls
+                section={section}
+                canJoinPrevious={sectionIndex > 0}
+                editorDevice={editorDevice}
+                onUpdateSection={onUpdateSection}
+                onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
+                onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+            ) : null}
+          </div>
 
           <div
             className={`builder-columns builder-columns-${columns.length} ${getAlignmentClass(section.alignment)}`}
