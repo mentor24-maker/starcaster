@@ -178,6 +178,22 @@ const TUNED = {
       backgroundColor: '#ffffff',
     },
   },
+  // The rich-text module's Structure / Placement / Frame axes (2026-08-15).
+  // Every frame and spacing setting is non-default and no field is
+  // visibleWhen-gated, so all three columns render every control the panel
+  // has. Real body copy, because an empty module measures nothing and passes.
+  text: {
+    name: 'Pro Shop',
+    text: '<p><strong>Visit our <a href="/pro-shop">Pro Shop</a> for racket stringing and all your tennis and pickleball needs.</strong></p>',
+    settings: {
+      size: '66', alignment: 'center',
+      marginTop: '10', marginBottom: '10', marginLeft: '5', marginRight: '5',
+      paddingTop: '15', paddingBottom: '15', paddingLeft: '20', paddingRight: '20',
+      horizontalOffset: '4', verticalOffset: '-4',
+      borderStyle: 'dashed', borderWidth: '2', borderColor: '#0f4f8f', borderRadius: '10',
+      backgroundColor: '#eaf3e2',
+    },
+  },
   // An EYEBROW heading with its shadow on: the longest labels in the panel
   // ("Horizontal Margin", "Shadow Blur") and the offsets block, which is
   // where the lattice broke when Heading first joined it.

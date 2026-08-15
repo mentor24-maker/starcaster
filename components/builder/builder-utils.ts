@@ -487,6 +487,40 @@ export function getPlainTextModuleStyle(settings: Record<string, string>): CSSPr
   return Object.keys(style).length > 0 ? style : undefined;
 }
 
+const TEXT_BORDER_STYLES = new Set(["none", "solid", "dashed", "dotted"]);
+
+/**
+ * Frame + inner spacing for a text block: border, corner radius, the four
+ * padding sides, and the offset nudge. One reader shared by the editor
+ * canvas, the module thumbnail, and the live site, so the three surfaces
+ * cannot drift — same contract as `getImageModuleStyle`.
+ *
+ * Border and padding land on the same div `getTextModuleWidthStyle` sizes,
+ * so the frame wraps the text at its chosen Width rather than spanning the
+ * whole column. `box-sizing: border-box` keeps that Width honest once a
+ * border or padding exists — otherwise a 50%-wide padded block overflows
+ * its column by the padding.
+ */
+export function getTextModuleFrameStyle(settings: Record<string, string>): CSSProperties {
+  const borderWidth = Math.max(Number.parseInt(settings.borderWidth ?? "0", 10) || 0, 0);
+  const borderRadius = Math.max(Number.parseInt(settings.borderRadius ?? "0", 10) || 0, 0);
+  const borderStyle = TEXT_BORDER_STYLES.has(settings.borderStyle ?? "") ? settings.borderStyle : "solid";
+  const hasBorder = borderWidth > 0 && borderStyle !== "none";
+  const padding = getModuleInnerSpacingStyle(settings);
+  const hasPadding = Object.values(padding).some((value) => value !== "0px");
+  const nudgeTransform = getModuleNudgeTransform(settings);
+
+  return {
+    ...(hasPadding ? padding : {}),
+    ...(hasBorder
+      ? { border: `${borderWidth}px ${borderStyle} ${settings.borderColor || "#214c71"}` }
+      : {}),
+    ...(borderRadius > 0 ? { borderRadius: `${borderRadius}px` } : {}),
+    ...(hasBorder || hasPadding ? { boxSizing: "border-box" as const } : {}),
+    ...(nudgeTransform ? { transform: nudgeTransform } : {})
+  };
+}
+
 export function getImageModuleStyle(settings: Record<string, string>): CSSProperties {
   const borderThickness = Number.parseInt(settings.borderThickness ?? "0", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "18", 10);
