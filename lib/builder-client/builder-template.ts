@@ -51,7 +51,11 @@ export type BuilderTemplateLayout =
   | "two-one-one"
   | "one-one-two"
   | "three-one-one"
-  | "one-one-three";
+  | "one-one-three"
+  // Four to six equal columns.
+  | "four-column"
+  | "five-column"
+  | "six-column";
 
 export type BackgroundStylePreset = "blue-yellow-circles";
 
@@ -819,6 +823,12 @@ export function createLocalId(prefix: string) {
 const SINGLE_COLUMN = ["main"] as const;
 const TWO_COLUMNS = ["left", "right"] as const;
 const THREE_COLUMNS = ["left", "center", "right"] as const;
+// Past three columns the keys EXTEND the three-column set rather than
+// renaming to col1…colN — every stored left/center/right stays valid, and a
+// row narrowed from six columns to three keeps its first three cells intact.
+const FOUR_COLUMNS = ["left", "center", "right", "col4"] as const;
+const FIVE_COLUMNS = ["left", "center", "right", "col4", "col5"] as const;
+const SIX_COLUMNS = ["left", "center", "right", "col4", "col5", "col6"] as const;
 
 /**
  * The one table every layout is defined in: which column keys it exposes,
@@ -828,8 +838,9 @@ const THREE_COLUMNS = ["left", "center", "right"] as const;
  *
  * Column keys are persisted — on `module.column` and as the key of every
  * `cellBackgrounds` / `cellPadding` / … record — so the vocabulary is fixed
- * at main / left / center / right. Layouts sharing a key set (all the
- * three-column ones, say) keep their cell styling when swapped between.
+ * at main / left / center / right, plus col4 / col5 / col6 for the wide
+ * rows. Layouts sharing a key set (all the three-column ones, say) keep
+ * their cell styling when swapped between.
  *
  * Track sizes are ratios, not widths: `2fr 3fr` is Divi's 2/5 + 3/5.
  */
@@ -856,7 +867,11 @@ const LAYOUT_SPECS: Record<
   "two-one-one": { columns: THREE_COLUMNS, grid: "2fr 1fr 1fr" },
   "one-one-two": { columns: THREE_COLUMNS, grid: "1fr 1fr 2fr" },
   "three-one-one": { columns: THREE_COLUMNS, grid: "3fr 1fr 1fr" },
-  "one-one-three": { columns: THREE_COLUMNS, grid: "1fr 1fr 3fr" }
+  "one-one-three": { columns: THREE_COLUMNS, grid: "1fr 1fr 3fr" },
+
+  "four-column": { columns: FOUR_COLUMNS, grid: "1fr 1fr 1fr 1fr" },
+  "five-column": { columns: FIVE_COLUMNS, grid: "1fr 1fr 1fr 1fr 1fr" },
+  "six-column": { columns: SIX_COLUMNS, grid: "1fr 1fr 1fr 1fr 1fr 1fr" }
 };
 
 function getLayoutSpec(layout: BuilderTemplateLayout) {
@@ -891,6 +906,16 @@ export function resolveModuleColumnForLayout(column: unknown, layout: unknown): 
     center: "center",
     right: "right"
   };
+  // Four-plus columns: same first three, and main lands in the first column.
+  // col4…col6 need no entry — when the layout has them they pass the
+  // allowedColumns check above; when it doesn't, the first-column fallback
+  // below is the right answer.
+  const legacyMapWide: Record<string, string> = {
+    col1: "left",
+    col2: "center",
+    col3: "right",
+    main: "left"
+  };
   const legacyMapTwo: Record<string, string> = {
     col1: "left",
     col2: "right",
@@ -903,11 +928,13 @@ export function resolveModuleColumnForLayout(column: unknown, layout: unknown): 
     main: "main"
   };
   const map =
-    allowedColumns.length === 3
-      ? legacyMapThree
-      : allowedColumns.length === 2
-        ? legacyMapTwo
-        : legacyMapSingle;
+    allowedColumns.length >= 4
+      ? legacyMapWide
+      : allowedColumns.length === 3
+        ? legacyMapThree
+        : allowedColumns.length === 2
+          ? legacyMapTwo
+          : legacyMapSingle;
   const mapped = map[raw];
 
   if (mapped && allowedColumns.includes(mapped)) {

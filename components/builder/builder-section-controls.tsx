@@ -12,6 +12,7 @@ import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { layoutOptions } from "./builder-types";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
+import { formatColumnName } from "./builder-utils";
 
 type BuilderSectionControlsProps = {
   section: BuilderTemplateSection;
@@ -183,7 +184,7 @@ export function BuilderSectionControls({
                     max={100}
                     step={1}
                     value={columnWidthValues[index]}
-                    title={`Share of the row taken by the ${columnKey} column. The numbers do not have to add up to exactly 100 — they are read as proportions.`}
+                    title={`Share of the row taken by the ${formatColumnName(columnKey)} column. The numbers do not have to add up to exactly 100 — they are read as proportions.`}
                     onChange={(event) => {
                       const next = columnWidthValues.slice();
                       next[index] = Math.min(100, Math.max(1, Number(event.target.value) || 1));

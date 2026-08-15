@@ -91,6 +91,16 @@ export function createDraftFromPage(page?: BuilderPageRecord | null): BuilderDra
   };
 }
 
+/**
+ * Column keys are persisted identifiers ("left", "col4"), not display text.
+ * The named three read fine as-is; the wide-row keys get their human
+ * spelling — "col4" shows as "column 4".
+ */
+export function formatColumnName(column: string): string {
+  const wide = /^col(\d+)$/.exec(column);
+  return wide ? `column ${wide[1]}` : column;
+}
+
 export function getAlignmentClass(alignment: "left" | "center" | "right") {
   if (alignment === "center") {
     return "is-align-center";

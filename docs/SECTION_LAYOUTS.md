@@ -26,8 +26,8 @@ cannot: that the picker and the spec table describe the same set, and that
 each layout's tracks match the fractions its label promises.
 
 Two places outside those files list layouts by name and will silently
-mis-place a centre column if a new three-column layout misses them:
-`THREE_COLUMN_LAYOUTS` in `lib/builder/migrate-from-legacy.js`, and
+mis-place a centre column if a new three-or-more column layout misses
+them: `LAYOUT_COLUMN_COUNTS` in `lib/builder/migrate-from-legacy.js`, and
 `NORMIE_LAYOUT_TO_LEGACY` in `public/js/builder.js` (see *Vanilla interop*
 below).
 
@@ -62,7 +62,7 @@ Values are named for their `fr` ratio, following the existing
 `two-four` / `one-four-one` convention. Labels use fractions, which is what
 the ratio actually means and what Divi shows.
 
-### Shipped — 18
+### Shipped — 21
 
 | Value | Label | Grid template | Columns |
 |---|---|---|---|
@@ -84,10 +84,25 @@ the ratio actually means and what Divi shows.
 | `one-one-two` | 1/4 + 1/4 + 1/2 | `1fr 1fr 2fr` | left, center, right |
 | `three-one-one` | 3/5 + 1/5 + 1/5 | `3fr 1fr 1fr` | left, center, right |
 | `one-one-three` | 1/5 + 1/5 + 3/5 | `1fr 1fr 3fr` | left, center, right |
+| `four-column` | 1/4 × 4 | `1fr 1fr 1fr 1fr` | left, center, right, col4 |
+| `five-column` | 1/5 × 5 | `1fr 1fr 1fr 1fr 1fr` | left, center, right, col4, col5 |
+| `six-column` | 1/6 × 6 | `1fr 1fr 1fr 1fr 1fr 1fr` | left, center, right, col4, col5, col6 |
 
-That is every Divi structure of one, two or three columns, plus
-`one-five` / `five-one` / `one-four-one`, which are StarCaster-only —
-Divi has no sixths outside its six-column row.
+That is every Divi structure of one, two or three columns plus its equal
+four-to-six column rows, plus `one-five` / `five-one` / `one-four-one`,
+which are StarCaster-only — Divi has no sixths outside its six-column row.
+
+The wide rows extend the persisted column vocabulary with `col4`–`col6`
+rather than renaming to `col1`…`colN` — every stored `left` / `center` /
+`right` cell record stays valid, and a row narrowed from six columns to
+three keeps its first three cells key for key.
+`components/builder/builder-layout-options.test.ts` pins those keys, and
+`resolveModuleColumnForLayout` has a four-plus branch that maps legacy
+`col1`–`col3` onto `left` / `center` / `right` and folds columns a layout
+does not have into its first column. The count lookup in
+`lib/builder/migrate-from-legacy.js` (`LAYOUT_COLUMN_COUNTS`) carries the
+same vocabulary for legacy migration. In the editor a `col4`-style key is
+displayed through `formatColumnName` (builder-utils) as "column 4".
 
 Values are ratio names because they are persisted on saved sections;
 renaming one would orphan live documents. Labels are fractions of the row,
@@ -96,38 +111,24 @@ form Divi uses. `single` is labelled "1 Column", not "Full Width": the
 section already has a Width control whose options are Contained and
 Full-width, and two things called full width on one settings row is a trap.
 
-### To add — needs the column model widened
+### To add
 
 | Value | Fractions | Grid template | Columns |
 |---|---|---|---|
-| `four-column` | 1/4 × 4 | `1fr 1fr 1fr 1fr` | 4 |
-| `five-column` | 1/5 × 5 | `1fr 1fr 1fr 1fr 1fr` | 5 |
-| `six-column` | 1/6 × 6 | `1fr 1fr 1fr 1fr 1fr 1fr` | 6 |
-| `one-one-one-three` | 1/6 + 1/6 + 1/6 + 1/2 | `1fr 1fr 1fr 3fr` | 4 |
-| `three-one-one-one` | 1/2 + 1/6 + 1/6 + 1/6 | `3fr 1fr 1fr 1fr` | 4 |
+| `one-one-one-three` | 1/6 + 1/6 + 1/6 + 1/2 | `1fr 1fr 1fr 3fr` | left, center, right, col4 |
+| `three-one-one-one` | 1/2 + 1/6 + 1/6 + 1/6 | `3fr 1fr 1fr 1fr` | left, center, right, col4 |
 
-Five layouts, and a wider change. Column keys are persisted — on
-`module.column` and as the key of every `cellBackgrounds` /
-`cellPadding` / `cellBorderWidth` / … record — and the vocabulary today is
-exactly `main`, `left`, `center`, `right`. Going past three columns means:
+The column model was widened when `four-column`–`six-column` shipped, so
+these two are now ordinary additions: union member + `LAYOUT_SPECS` entry
+(reuse `FOUR_COLUMNS`) + picker entry + the contract test's `expected` map.
+Everything downstream — CSS, migration, vanilla interop, module column
+resolution — already handles four columns.
 
-1. **New keys.** Extend `getLayoutColumns` to `col4`…`col6` beyond the
-   existing three (keeps every stored `left`/`center`/`right` valid) rather
-   than renaming to `col1`…`colN`, which would rewrite live documents.
-2. **`resolveModuleColumnForLayout`** — its `legacyMapThree` / `Two` /
-   `Single` fallbacks branch on column count and need a 4–6 case.
-3. **`THREE_COLUMN_LAYOUTS`** in `lib/builder/migrate-from-legacy.js`
-   becomes a count lookup rather than a set of three-column names.
-4. **Editor + preview CSS** — `.builder-columns-2` / `-3` and
-   `.builder-preview-columns-2` / `-3` stop at three; mobile
-   `reverse-stack` reorders `nth-child(1..3)` only.
-5. **Narrow-cell chrome.** A 1/6 cell is ~226px in the editor at 1440px
-   and the cell's own Styles / Content / Save Cell controls already
-   overflow it (true today for `one-five`, unrelated to this work). At six
-   columns every cell is that narrow, so this stops being cosmetic.
-6. **Vanilla interop** — see below. There is no count-preserving legacy
-   row to fall back to past three columns, so this is the decision that
-   has to be made deliberately rather than defaulted.
+**Narrow-cell chrome** remains the standing caveat: a 1/6 cell is ~226px
+in the editor at 1440px and the cell's own Styles / Content / Save Cell
+controls already overflow it (true for `one-five` since before the wide
+rows). At six columns every cell is that narrow, so the wide rows make an
+old cosmetic problem easier to hit.
 
 ## Vanilla interop
 
@@ -150,6 +151,15 @@ are lost, not the content, and only for a section saved through the legacy
 page-template editor. Every layout that has no exact legacy code has
 always behaved this way; the ten new ones just widen the set it applies to.
 Nothing in the React page builder round-trips through it.
+
+The four-to-six column rows have no count-preserving legacy row at all, so
+the decision (made when they shipped) is: they resolve to `2-2-2`, the
+closest count. `mapNormieColumnToLegacy` folds `col4`–`col6` modules into
+the first column — it only passes a `colN` key through when the target
+legacy row actually has that column — so nothing is dropped, but a wide
+row saved through the legacy editor comes back as `three-column` with its
+overflow modules moved left. Displaying it there costs nothing; saving it
+there is the lossy step, same rule as above, just wider.
 
 [divi]: https://help.elegantthemes.com/en/articles/8612739-divi-rows-row-options
 
