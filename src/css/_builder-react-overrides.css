@@ -1616,12 +1616,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    connection (operator, 2026-08-14: "extend that piece by the size of the
    panel border so it covers it exactly"). Covering the border means
    painting OVER the panel, so the link outranks the panel's z-index 40 —
-   which is also why the depth must be exact now: any overshoot used to
-   hide under the panel and would show on top of it today. The 6px is
-   exact because the panel hangs off the same box the link bottoms out on
-   (the item, or the items row in Center on Menu). The link is its own
-   stacking context so the ::before's z-index: -1 slides under the label
-   text but stays above the bar. */
+   which is also why the depth is measured now: any overshoot used to
+   hide under the panel and shows on top of it today. The 6px is exact
+   because the panel hangs off the same box the link bottoms out on (the
+   item, or the items row in Center on Menu); the +1px is a cushion for
+   fractional-pixel rounding — on a retina/zoomed screen the two edges
+   can land on half pixels, and a mathematically exact depth left a 1px
+   sliver of the bar showing through (operator, 2026-08-14). The cushion
+   lands ON the panel's fill, hover-tint on panel-tint, where a spare
+   pixel is invisible; the sliver was bar-navy on panel-tint, where it
+   was not. The link is its own stacking context so the ::before's
+   z-index: -1 slides under the label text but stays above the bar. */
 .builder-react-root .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link {
   position: relative;
   z-index: 45;
@@ -1635,7 +1640,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   left: 0;
   right: 0;
   top: 50%;
-  bottom: calc(-1 * (6px + var(--site-nav-dropdown-border-width, 0px)));
+  bottom: calc(-1 * (7px + var(--site-nav-dropdown-border-width, 0px)));
   z-index: -1;
   background: var(--site-nav-link-hover-bg, transparent);
 }
