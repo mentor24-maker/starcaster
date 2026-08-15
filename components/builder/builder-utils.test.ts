@@ -15,6 +15,7 @@ import {
   getModuleWidthStyle,
   getPlainTextModuleStyle,
   getTextModuleFrameStyle,
+  getTextModuleRhythmStyle,
   getTextModuleWidthStyle,
   getTableWrapStyle,
   getSectionWidthStyle,
@@ -226,6 +227,36 @@ describe("getTextModuleFrameStyle", () => {
     });
     expect(style.borderRadius).toBe("10px");
     expect(style.transform).toBe("translate(4px, 4px)");
+  });
+});
+
+describe("getTextModuleRhythmStyle", () => {
+  it("is undefined until the operator sets something, so themed text is untouched", () => {
+    expect(getTextModuleRhythmStyle({})).toBeUndefined();
+    expect(getTextModuleRhythmStyle({ lineHeight: "", paragraphGap: "" })).toBeUndefined();
+  });
+
+  it("emits line height on its own", () => {
+    const style = getTextModuleRhythmStyle({ lineHeight: "1.2" }) ?? {};
+    expect(style.lineHeight).toBe("1.2");
+    expect(style).not.toHaveProperty("--bx-para-gap");
+  });
+
+  it("emits the paragraph gap as the custom property the stylesheet reads", () => {
+    const style = (getTextModuleRhythmStyle({ paragraphGap: "4" }) ?? {}) as Record<string, string>;
+    expect(style["--bx-para-gap"]).toBe("4px");
+    expect(style.lineHeight).toBeUndefined();
+  });
+
+  // Paragraphs sitting flush is a real look, so 0 must survive the
+  // truthiness check that drops an unset value.
+  it("keeps a zero gap", () => {
+    const style = (getTextModuleRhythmStyle({ paragraphGap: "0" }) ?? {}) as Record<string, string>;
+    expect(style["--bx-para-gap"]).toBe("0px");
+  });
+
+  it("ignores values that are not numbers", () => {
+    expect(getTextModuleRhythmStyle({ lineHeight: "cozy", paragraphGap: "wide" })).toBeUndefined();
   });
 });
 

@@ -357,6 +357,21 @@ export function BuilderRichTextEditor({
     chain.setMark("textStyle", { fontSize: `${nextSize}px` }).run();
   }
 
+  /**
+   * Line height belongs to the BLOCK, not to the run of text inside it.
+   *
+   * This wrote a `line-height` onto the textStyle mark — a `<span>` around the
+   * selection — until 2026-08-15, which made the control one-directional: a
+   * span can push a line box taller than its paragraph's line-height but never
+   * shorter, so every value below the inherited one (1.6, from
+   * `--bx-line-base`) rendered as no change at all. The operator set the
+   * footer to 1.2 and watched nothing happen.
+   *
+   * So the value lands on the paragraph/heading node, and any span-level
+   * line-height already inside the selection is cleared on the way — otherwise
+   * imported content (the Delray footer carried `line-height: 1.38` on every
+   * span) keeps winning over the block that now declares one.
+   */
   function applyLineHeight(nextValue: string) {
     const chain = chainWithSelection();
 
@@ -366,12 +381,14 @@ export function BuilderRichTextEditor({
 
     setActiveLineHeight(nextValue || "default");
 
-    if (!nextValue || nextValue === "default") {
-      chain.setMark("textStyle", { lineHeight: null }).removeEmptyTextStyle().run();
-      return;
-    }
+    const blockValue = !nextValue || nextValue === "default" ? null : nextValue;
 
-    chain.setMark("textStyle", { lineHeight: nextValue }).run();
+    chain
+      .setMark("textStyle", { lineHeight: null })
+      .removeEmptyTextStyle()
+      .updateAttributes("paragraph", { lineHeight: blockValue })
+      .updateAttributes("heading", { lineHeight: blockValue })
+      .run();
   }
 
   function formatHTML(html: string): string {
