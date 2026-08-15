@@ -211,21 +211,28 @@ function nextId(prefix) {
 
 // Propagate typography from a saved theme to all landing pages and templates so
 // the change takes effect site-wide without requiring each page to be re-saved.
-async function propagateTypographyToAllPages(typography, scope) {
-  if (!typography || typeof typography !== 'object') return;
-  const pagesResult = await listPages(undefined, scope);
-  if (!pagesResult.ok) return;
-  const pages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
-  await Promise.allSettled(pages.map(async (page) => {
-    const existingTheme = page.theme && typeof page.theme === 'object' ? page.theme : {};
-    const mergedTheme = { ...existingTheme, typography };
-    await updatePage(String(page.id), {
-      layoutSections: page.layoutSections,
-      pageBackground: page.pageBackground,
-      theme: mergedTheme,
-    }, scope);
-  }));
-}
+// SAVING A THEME WRITES TO NO PAGE. Removed 2026-08-15; here is what it did.
+//
+// `propagateTypographyToAllPages` used to rewrite EVERY page in the project on
+// every theme create and update, stamping the saved theme's typography into
+// each page's own document. Three things were wrong with it:
+//
+//   1. It ignored which theme a page uses. Saving theme A restyled the pages
+//      following theme B — the operator's "you can change a theme without
+//      affecting anything else on the site", failed exactly.
+//   2. It was a full page write (layoutSections + pageBackground + theme) per
+//      page, awaited inline in the request — 101 page writes on one theme save
+//      for the Delray project. The same shape as the canonical propagation
+//      that a serverless freeze truncated on 2026-07-22, leaving 30 of 50
+//      pages updated and the rest stale, with the failure swallowed by a bare
+//      `.catch(() => {})` exactly like this one had.
+//   3. It made the page the source of truth for something the theme owns, so a
+//      page that missed a push was silently wrong forever.
+//
+// `resolveRenderTheme` (lib/builder-client/builder-template.ts) replaces all of
+// it by reading the live theme record at render, the same way the page template
+// frame resolves against the current masters. A theme edit is now one row
+// written and nothing else touched.
 
 // Push a canonical saved module's content to every page/template instance that
 // was stamped with savedModuleId === canonicalId and has not been locked.
@@ -649,7 +656,6 @@ async function handle(req, res, pathname, method) {
       heroBanners: Array.isArray(body.heroBanners) ? body.heroBanners : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
-    if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
     return sendOk(res, 201, result.data, { theme: result.data }), true;
   }
 
@@ -750,7 +756,6 @@ async function handle(req, res, pathname, method) {
       heroBanners: Array.isArray(body.heroBanners) ? body.heroBanners : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
-    if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
     return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
 
