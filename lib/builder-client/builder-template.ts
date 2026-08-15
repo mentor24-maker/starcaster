@@ -3275,3 +3275,26 @@ export function serializeBuilderDocument(input: {
     sections: normalizeLayoutSections(input.layoutSections)
   };
 }
+
+/**
+ * Frame/body helpers, re-exported so the SERVER bundle carries them.
+ *
+ * scripts/build_template_bundle.mjs bundles this file into
+ * lib/builder/template.js, and esbuild follows the import — so re-exporting
+ * here is what lets routes/ and lib/ share the browser's resolver instead of
+ * keeping a second copy of the rule in CommonJS. Landmine 1 applies: run
+ * `npm run build:builder-template` after touching either file.
+ */
+export {
+  applyTemplateFrame,
+  bodySectionsOf,
+  frameSectionsOf,
+  isFrameReference,
+  isFrameSection,
+  resolveFrameSection,
+  resolveTemplateSections,
+  toTemplateFrameReference,
+  toTemplateReferences,
+  type FrameSection,
+  type SavedSectionLike
+} from './builder-template-frame';
