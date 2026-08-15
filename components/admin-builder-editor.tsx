@@ -1934,6 +1934,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     const effectiveTheme = selectedTheme?.typography
       ? { ...(template?.theme ?? createDefaultTheme()), typography: selectedTheme.typography }
       : (template?.theme ?? createDefaultTheme());
+    // Take the CURRENT header/menu/footer, not the copy frozen into the
+    // template — same resolution the single-page path already does.
+    const templateSections = resolveTemplateSections(
+      template?.layoutSections ?? [],
+      savedSections,
+      () => crypto.randomUUID()
+    );
     const results = await Promise.all(
       items.map(async (item): Promise<BulkCreateResult> => {
         try {
@@ -1948,7 +1955,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
               templateKind: "modular",
               pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
               theme: effectiveTheme,
-              layoutSections: template?.layoutSections ?? []
+              layoutSections: templateSections
             })
           });
           const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to create page.");

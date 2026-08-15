@@ -24,6 +24,9 @@ const serverAliases = [
 const bundles = [
   { entry: 'builder-template.ts', outfile: 'lib/builder/template.js' },
   { entry: 'builder-email-template.ts', outfile: 'lib/builder/email-template.js' },
+  // Bulk Create resolves a template's shared sections against their live
+  // masters, and must use the SAME rules as the interactive editor.
+  { entry: 'builder-template-frame.ts', outfile: 'lib/builder/template-frame.js' },
 ];
 
 for (const { entry, outfile } of bundles) {
