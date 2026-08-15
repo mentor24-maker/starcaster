@@ -9,6 +9,7 @@ import {
   BUILDER_PREVIEW_STORAGE_KEY,
   createDefaultBackgroundSettings,
   createDefaultTheme,
+  resolveRenderTheme,
   createEmptyModule,
   createEmptySection,
   getLayoutColumns,
@@ -202,6 +203,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // what it is about to rewrite.
   const savedSectionUsage = useMemo(() => buildSavedSectionUsageIndex(pages), [pages]);
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
+  // What the canvas paints type with. The shell colours above already read
+  // `linkedTheme` — the live record — while the type vars read the copy frozen
+  // into the draft, so editing a theme changed the canvas background and not
+  // its text. Same resolver the public site uses, so the two cannot disagree.
+  const canvasTheme = useMemo(
+    () => resolveRenderTheme(draft.theme, linkedTheme),
+    [draft.theme, linkedTheme]
+  );
   const workspaceShellLayers = useMemo(
     () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
     [draft.pageBackground, linkedTheme]
@@ -2590,7 +2599,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
                             themeColors={rteThemeColors}
-                            themeStyle={getThemeRootVars(draft.theme)}
+                            themeStyle={getThemeRootVars(canvasTheme)}
                             themeBackgroundColor={activeTheme?.backgroundColor}
                             themePrimaryColor={activeTheme?.primaryColor}
                             onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
@@ -2669,7 +2678,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
                         themeColors={rteThemeColors}
-                        themeStyle={getThemeRootVars(draft.theme)}
+                        themeStyle={getThemeRootVars(canvasTheme)}
                         themeBackgroundColor={activeTheme?.backgroundColor}
                         themePrimaryColor={activeTheme?.primaryColor}
                         onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
