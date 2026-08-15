@@ -350,11 +350,24 @@ export function SavedSectionEditorModal({
     setIsSaving(true);
     setError(null);
     try {
-      await appApi(`/api/builder/saved-sections/${savedSectionId}`, {
+      const result = await appApi(`/api/builder/saved-sections/${savedSectionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: localName || savedSectionName, section: draft }),
       });
+      // Saving a master rewrites this section on every page that follows it.
+      // A fan-out that only half landed used to close the dialog looking clean;
+      // hold the dialog open and say so instead.
+      const propagation = result?.meta?.propagation as { updated?: number; failed?: number } | undefined;
+      const failed = Number(propagation?.failed ?? 0) || 0;
+      if (failed > 0) {
+        const updated = Number(propagation?.updated ?? 0) || 0;
+        setError(
+          `Saved, and updated ${updated} ${updated === 1 ? "page" : "pages"}, but ${failed} ${failed === 1 ? "page" : "pages"} could not be updated. Close and save again to finish.`
+        );
+        onSaved();
+        return;
+      }
       onSaved();
       onClose();
     } catch (e) {
