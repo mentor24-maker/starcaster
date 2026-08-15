@@ -3,6 +3,7 @@ import {
   NAV_STYLE_DEFAULTS,
   getNavBarShadow,
   getNavMegaColumnCount,
+  getNavMegaPlacement,
   getNavModuleClassNames,
   getNavModuleStyle,
   getNavTextShadow,
@@ -405,5 +406,34 @@ describe("the drop-down panel's own border", () => {
 
     expect(vars["--site-nav-border-width"]).toBe("1px");
     expect(vars["--site-nav-dropdown-border-width"]).toBe("6px");
+  });
+});
+
+describe("Panel Placement (navMegaPlacement)", () => {
+  it("defaults to the original behaviour — centred on the hovered item", () => {
+    expect(getNavMegaPlacement({})).toBe("item");
+    expect(getNavModuleClassNames({ navDropdownStyle: "mega" })).toBe(
+      "site-nav--hover-lift site-nav--mega-place-item"
+    );
+  });
+
+  it("names each placement so the CSS variant can match it", () => {
+    for (const placement of ["menu", "right", "left"] as const) {
+      expect(getNavMegaPlacement({ navMegaPlacement: placement })).toBe(placement);
+      expect(
+        getNavModuleClassNames({ navDropdownStyle: "mega", navMegaPlacement: placement })
+      ).toBe(`site-nav--hover-lift site-nav--mega-place-${placement}`);
+    }
+  });
+
+  it("falls back for an unknown value rather than emitting a class no CSS matches", () => {
+    expect(getNavMegaPlacement({ navMegaPlacement: "sideways" })).toBe("item");
+  });
+
+  it("stays off a non-mega menu — a list drop-down has no panel to place", () => {
+    expect(getNavModuleClassNames({ navMegaPlacement: "menu" })).toBe("site-nav--hover-lift");
+    expect(
+      getNavModuleClassNames({ navDropdownStyle: "mega", navDirection: "vertical", navMegaPlacement: "menu" })
+    ).toBe("site-nav--hover-lift");
   });
 });
