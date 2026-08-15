@@ -473,7 +473,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     pageTemplateDirtyRef.current = false;
     setDraft(createDraftFromPage(page));
     setPageSlug(page?.slug ?? "");
-    setPageTemplateId(page?.templateId ?? "");
+    setPageTemplateId(page?.pageTemplateId ?? "");
     setPageThemeId(page?.themeId ?? "");
     setPageVisibility(pageVisibilityFromRecord(page));
     // Pages saved before the column existed have nothing here; "normal" is
@@ -1387,6 +1387,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             name: page.name,
             slug: page.slug,
             templateId: page.templateId,
+            pageTemplateId: page.pageTemplateId,
             isPublished: page.isPublished,
             pageBackground: page.pageBackground,
             layoutSections
@@ -1466,6 +1467,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             name: page.name,
             slug: page.slug,
             templateId: page.templateId,
+            pageTemplateId: page.pageTemplateId,
             isPublished: page.isPublished,
             pageBackground: page.pageBackground,
             layoutSections
@@ -1841,7 +1843,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           // Omitted, not nulled, when untouched: the store only writes fields
           // the body actually carries, so leaving them out preserves whatever
           // the row already holds instead of clobbering it with a blank select.
-          ...(!selectedPageId || pageTemplateDirtyRef.current ? { templateId: pageTemplateId } : {}),
+          ...(!selectedPageId || pageTemplateDirtyRef.current ? { pageTemplateId } : {}),
           ...(!selectedPageId || pageThemeDirtyRef.current ? { themeId: pageThemeId || null } : {}),
           ...pageVisibilityToFlags(pageVisibility),
           searchPriority: pageSearchPriority,
@@ -2298,7 +2300,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                 layoutSections: page.layoutSections
               }));
               setPageSlug(page.slug);
-              setPageTemplateId(page.templateId ?? "");
+              setPageTemplateId(page.pageTemplateId ?? "");
             }
 
             setMessage("Legacy reminders imported into the home page layout. Review the Reminders module, then Save Page.");
