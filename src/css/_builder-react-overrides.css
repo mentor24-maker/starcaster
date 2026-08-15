@@ -4449,3 +4449,52 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     grid-column: 1 / -1;
   }
 }
+
+/*
+ * Positional row insertion: while a layout tile is being dragged, slim drop
+ * zones render between the workspace's sections so the row can land exactly
+ * where it is dropped (dropping on the workspace background still appends).
+ */
+.builder-react-root .builder-section-gap-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 2px dashed rgba(11, 130, 212, 0.45);
+  border-radius: 10px;
+  background: rgba(11, 130, 212, 0.06);
+  color: var(--accent-dark);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-section-gap-drop > span {
+  pointer-events: none;
+}
+
+.builder-react-root .builder-section-gap-drop.is-over {
+  border-style: solid;
+  border-color: var(--accent-dark);
+  background: rgba(11, 130, 212, 0.16);
+}
+
+/* "Add under…" picker for inserting a saved section at a chosen position. */
+.builder-react-root .builder-add-under-list {
+  display: grid;
+  gap: 8px;
+}
+
+.builder-react-root .builder-add-under-option {
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid rgba(9, 16, 24, 0.16);
+  border-radius: 10px;
+  background: var(--surface-strong);
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-add-under-option:hover {
+  border-color: var(--accent-dark);
+  background: rgba(11, 130, 212, 0.08);
+}
