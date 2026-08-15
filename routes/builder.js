@@ -192,6 +192,10 @@ const {
   deleteLevelEvent,
 } = require('../lib/gameLevelEventsStore');
 const { normalizeBuilderDocument, serializeBuilderDocument } = require('../lib/builder');
+// Generated from lib/builder-client/builder-template-frame.ts by
+// `npm run build:builder-template`, so Bulk Create and the interactive editor
+// resolve shared sections by the same rules.
+const { resolveTemplateSections } = require('../lib/builder/template-frame');
 
 let playwrightChromium = null;
 function getChromium() {
@@ -1508,7 +1512,22 @@ async function handle(req, res, pathname, method) {
       .then((all) => (Array.isArray(all.data) ? all.data.find((t) => t.id === templateId) : null))
       .catch(() => null);
 
-    const templateLayoutSections = Array.isArray(tplResult?.layoutSections) ? tplResult.layoutSections : [];
+    // Resolve the template's shared sections (header, menu, footer) against
+    // their LIVE masters before cloning. A template keeps its own copy of those
+    // sections and never receives canonical propagation, so cloning it raw
+    // seeds every generated page with whatever the header looked like the day
+    // the template was saved — on 2026-08-15 that shipped 34 pages with a menu
+    // 41 minutes out of date. Newer templates store the shared sections as bare
+    // references with no modules at all, which cloned raw would have produced
+    // empty header and footer bands.
+    const savedSectionsResult = await listSavedSections(undefined, scope).catch(() => null);
+    const savedSectionRecords = Array.isArray(savedSectionsResult?.data) ? savedSectionsResult.data : [];
+    let frameCounter = 0;
+    const templateLayoutSections = resolveTemplateSections(
+      Array.isArray(tplResult?.layoutSections) ? tplResult.layoutSections : [],
+      savedSectionRecords,
+      () => `frame-${Date.now()}-${frameCounter++}`
+    );
     const templateBackground     = tplResult?.pageBackground || {};
     const templateTheme          = tplResult?.theme || {};
 
