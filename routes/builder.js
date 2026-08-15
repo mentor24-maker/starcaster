@@ -1,6 +1,6 @@
 'use strict';
 
-const { sendOk, sendErr, parseJsonBody } = require('./http');
+const { sendOk, sendErr, sendJson, parseJsonBody } = require('./http');
 
 /**
  * Builder records created from the React editor have no explicit templateId;
@@ -13,6 +13,21 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
   const source = String(body.slug || body.emailSlug || name || '').trim();
   const base = source.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'builder';
   return unique ? `${base}-${Date.now().toString(36)}` : base;
+}
+
+/**
+ * Who is making this request, for the page-revision audit trail.
+ *
+ * The dispatcher puts a platform session on req.authUser, and a tenant
+ * project-admin session in the same place (routes/index.js) -- the latter
+ * carries no display name, so the store falls back to the email. Returns null
+ * for anything unauthenticated, which records a revision with no author rather
+ * than inventing one.
+ */
+function actorFrom(req) {
+  const user = req && req.authUser;
+  if (!user || !user.id) return null;
+  return { id: String(user.id), name: String(user.name || ''), email: String(user.email || '') };
 }
 
 function hasBodyField(body, ...keys) {
@@ -1773,8 +1788,26 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updatePage(landingPageId, built.patch, scope);
+    // The editor sends the updated_at it last saw. Absent (scripts, older
+    // clients, the propagation path) means no opinion and the save proceeds.
+    const expectedUpdatedAt = String(body?.expectedUpdatedAt || body?.expected_updated_at || '').trim();
+
+    const result = await updatePage(landingPageId, built.patch, scope, {
+      expectedUpdatedAt,
+      actor: actorFrom(req),
+    });
     if (!result.ok) {
+      // A stale-editor refusal carries the live updated_at back, so the UI can
+      // say how long ago the other save landed and offer to overwrite THAT
+      // version rather than blindly re-sending. sendErr cannot carry a payload
+      // beyond the message, so this one writes the envelope itself.
+      if (result.status === 409 && result.code === 'STALE_EDITOR') {
+        return sendJson(res, 409, {
+          ok: false,
+          error: { message: result.error, code: 'STALE_EDITOR' },
+          conflict: result.conflict || {},
+        }), true;
+      }
       return sendErr(
         res,
         result.status || 500,
@@ -2042,7 +2075,12 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update saved section'), true;
     // Awaited, not fire-and-forget: serverless freezes the function once the
     // response is sent, which would cut propagation off partway down the pages.
-    const propagation = await propagateCanonicalSection(savedSectionMatch[1], result.data.section, scope);
+    const propagation = await propagateCanonicalSection(
+      savedSectionMatch[1],
+      result.data.section,
+      scope,
+      { actor: actorFrom(req) },
+    );
     return sendOk(res, 200, result.data, { savedSection: result.data }, { propagation }), true;
   }
   if (savedSectionMatch && requestMethod === 'DELETE') {
