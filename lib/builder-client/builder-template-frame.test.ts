@@ -205,3 +205,146 @@ describe('what the operator is told before anything is written', () => {
     expect(message).toContain('brings 1 shared section');
   });
 });
+
+/* ------------------------------------------------------------------ stage 4 */
+
+import {
+  isFrameReference,
+  resolveFrameSection,
+  resolveTemplateSections,
+  toTemplateFrameReference,
+  toTemplateReferences,
+  type SavedSectionLike
+} from './builder-template-frame';
+
+const ids = () => {
+  let n = 0;
+  return () => `gen-${++n}`;
+};
+
+const master = (id: string, title: string, text: string): SavedSectionLike => ({
+  id,
+  name: title,
+  section: { id: `m-${id}`, title, modules: [{ id: `mod-${id}`, type: 'text', text, settings: {} }] }
+});
+
+describe('templates store a reference, not a copy', () => {
+  it('strips a frame section to what identifies it', () => {
+    const ref = toTemplateFrameReference({
+      id: 's1', title: 'Contact Strip', canonical: true, savedSectionId: 'ss1',
+      modules: [{ id: 'm', type: 'text', text: 'SIX WEEKS OLD' }], background: { color: 'red' }
+    });
+    expect(ref).toEqual({ id: 's1', title: 'Contact Strip', canonical: true, savedSectionId: 'ss1' });
+    expect(ref.modules).toBeUndefined();
+  });
+
+  it('leaves body sections completely alone — their position marks the slot', () => {
+    const bodySection = { id: 'b', title: 'Hero', modules: [{ id: 'm', type: 'heading' }] };
+    expect(toTemplateFrameReference(bodySection)).toEqual(bodySection);
+  });
+
+  it('converts a whole template in one pass', () => {
+    const out = toTemplateReferences([
+      frame('ss1', 'Header'), body('b', 'Body'), frame('ss2', 'Footer')
+    ].map((s) => ({ ...s, modules: [{ id: 'x', type: 'text' }] })));
+    expect(out[0].modules).toBeUndefined();
+    expect(out[1].modules).toBeDefined();
+    expect(out[2].modules).toBeUndefined();
+  });
+
+  it('recognises a pure reference, including the shape the server hands back', () => {
+    expect(isFrameReference({ canonical: true, savedSectionId: 'ss1' })).toBe(true);
+    // Writing a reference drops `modules`, but the server normalises sections
+    // and returns `modules: []`. Verified against a real round trip; treating
+    // that as a copy would leave an empty band when a master is deleted.
+    expect(isFrameReference({ canonical: true, savedSectionId: 'ss1', modules: [] })).toBe(true);
+    expect(isFrameReference({ canonical: true, savedSectionId: 'ss1', modules: [{ id: 'm' }] })).toBe(false);
+  });
+
+  it('a stored reference with a dead master is dropped, not rendered empty', () => {
+    const stored = { id: 'i', canonical: true, savedSectionId: 'gone', title: 'Top Bar', modules: [] };
+    expect(resolveFrameSection(stored, [master('ss1', 'Other', 'x')], ids())).toBeNull();
+  });
+});
+
+describe('resolving a reference against the live master', () => {
+  const masters = [master('ss1', 'Contact Strip', 'CURRENT CONTENT')];
+
+  it('rebuilds from the master, so the applied frame is never stale', () => {
+    const resolved = resolveFrameSection(
+      { id: 'inst', canonical: true, savedSectionId: 'ss1' }, masters, ids()
+    );
+    expect(resolved?.title).toBe('Contact Strip');
+    expect((resolved?.modules?.[0] as { text: string }).text).toBe('CURRENT CONTENT');
+    expect(resolved?.canonical).toBe(true);
+    expect(resolved?.savedSectionId).toBe('ss1');
+  });
+
+  it('keeps the master\'s module ids, which is how local drift is detected', () => {
+    const resolved = resolveFrameSection(
+      { id: 'inst', canonical: true, savedSectionId: 'ss1' }, masters, ids()
+    );
+    expect((resolved?.modules?.[0] as { id: string }).id).toBe('mod-ss1');
+  });
+
+  it('falls back to the stored copy — no migration needed for old templates', () => {
+    const oldStyle = {
+      id: 'inst', canonical: true, savedSectionId: 'gone',
+      title: 'Old Copy', modules: [{ id: 'm', type: 'text', text: 'stored' }]
+    };
+    expect(resolveFrameSection(oldStyle, masters, ids())?.title).toBe('Old Copy');
+  });
+
+  it('drops a reference whose master was deleted, rather than leaving a blank band', () => {
+    expect(resolveFrameSection({ id: 'i', canonical: true, savedSectionId: 'gone' }, masters, ids())).toBeNull();
+  });
+
+  it('passes body sections through untouched', () => {
+    const b = body('b', 'Hero');
+    expect(resolveFrameSection(b, masters, ids())).toEqual(b);
+  });
+
+  it('resolveTemplateSections drops dead references and keeps the rest in order', () => {
+    const out = resolveTemplateSections(
+      [
+        { id: 'a', canonical: true, savedSectionId: 'ss1' },
+        body('b', 'Hero'),
+        { id: 'c', canonical: true, savedSectionId: 'gone' }
+      ],
+      masters,
+      ids()
+    );
+    expect(out.map((s) => s.title)).toEqual(['Contact Strip', 'Hero']);
+  });
+});
+
+describe('applying a reference-only template', () => {
+  const masters = [master('ss1', 'Slim Contact Bar', 'FRESH')];
+
+  it('stamps CURRENT master content, not whatever the template last saw', () => {
+    const template = [
+      { id: 't1', canonical: true, savedSectionId: 'ss1', title: 'STALE NAME' },
+      body('tb', 'placeholder')
+    ];
+    const page = [body('h', 'Hero'), body('c', 'Cards')];
+    const result = applyTemplateFrame(page, template, { savedSections: masters, makeId: ids() });
+
+    expect(result.sections.map((s) => s.title)).toEqual(['Slim Contact Bar', 'Hero', 'Cards']);
+    expect((result.sections[0].modules?.[0] as { text: string }).text).toBe('FRESH');
+    expect(result.keptBody).toBe(2);
+  });
+
+  it('still keeps the body when a frame reference is dead', () => {
+    const template = [{ id: 't1', canonical: true, savedSectionId: 'gone' }, body('tb', 'p')];
+    const page = [body('h', 'Hero')];
+    const result = applyTemplateFrame(page, template, { savedSections: masters, makeId: ids() });
+    expect(result.sections.map((s) => s.title)).toEqual(['Hero']);
+    expect(result.keptBody).toBe(1);
+  });
+
+  it('without savedSections it behaves exactly as before — stage 3 callers unaffected', () => {
+    const template = [frame('ss1', 'Header'), body('tb', 'p')];
+    const page = [body('h', 'Hero')];
+    expect(applyTemplateFrame(page, template).sections.map((s) => s.title)).toEqual(['Header', 'Hero']);
+  });
+});

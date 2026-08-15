@@ -40,7 +40,15 @@ export type FrameSection = {
   canonical?: boolean;
   savedSectionId?: string;
   title?: string;
+  modules?: unknown[];
   [key: string]: unknown;
+};
+
+/** A saved section master, as the editor holds it. */
+export type SavedSectionLike<S extends FrameSection = FrameSection> = {
+  id: string;
+  name?: string;
+  section: S;
 };
 
 export type TemplateFrameResult<S extends FrameSection> = {
@@ -78,6 +86,115 @@ function sectionLabel(section: FrameSection): string {
   return title || 'Untitled section';
 }
 
+/* ------------------------------------------------------------------ stage 4
+ * Templates hold a REFERENCE to each frame section, not a copy of it.
+ *
+ * A template used to store the whole Contact Strip inside itself. The page
+ * instances it created stayed current, because saving the master propagates to
+ * every page carrying that savedSectionId — but the copy sitting in the
+ * template did not, and nothing ever told anyone. Apply a six-week-old
+ * template and it stamped a six-week-old header onto the page, correct again
+ * only after the next unrelated edit to the master.
+ *
+ * Two sources of truth for one header, with no way to see they had diverged.
+ * Storing a reference removes the second one.
+ */
+
+/**
+ * Strip a frame section down to what identifies it. Body sections are returned
+ * untouched — they are the template's own design, and their position is what
+ * tells applyTemplateFrame where the page's body belongs.
+ */
+export function toTemplateFrameReference<S extends FrameSection>(section: S): S {
+  if (!isFrameSection(section)) return section;
+  return {
+    id: section.id,
+    title: section.title,
+    canonical: true,
+    savedSectionId: section.savedSectionId
+  } as unknown as S;
+}
+
+/** Every frame section in a template becomes a reference. */
+export function toTemplateReferences<S extends FrameSection>(sections: readonly S[] | null | undefined): S[] {
+  if (!Array.isArray(sections)) return [];
+  return sections.map((section) => toTemplateFrameReference(section));
+}
+
+/**
+ * True when a frame section carries no content of its own — a pure reference.
+ *
+ * An EMPTY modules array counts. Writing a reference drops `modules` entirely,
+ * but the server normalises every section on the way in and hands it back with
+ * `modules: []` — verified against a real round trip. Testing only for the
+ * absent key would classify every stored reference as a copy, and a reference
+ * whose master had been deleted would then render as an empty band instead of
+ * being dropped.
+ */
+export function isFrameReference(section: FrameSection): boolean {
+  if (!isFrameSection(section)) return false;
+  return !Array.isArray(section.modules) || section.modules.length === 0;
+}
+
+/**
+ * Turn a template's frame reference back into a live section, from the CURRENT
+ * master.
+ *
+ * Falls back to the section as stored when the master cannot be found, which
+ * is what makes this safe for the templates that already exist: they still
+ * carry full copies, and nothing has to be migrated. A reference whose master
+ * has been deleted resolves to null and is dropped rather than rendering an
+ * empty band.
+ */
+export function resolveFrameSection<S extends FrameSection>(
+  section: S,
+  savedSections: readonly SavedSectionLike<S>[] | null | undefined,
+  makeId: () => string
+): S | null {
+  if (!isFrameSection(section)) return section;
+
+  const masters = Array.isArray(savedSections) ? savedSections : [];
+  const master = masters.find((candidate) => candidate.id === section.savedSectionId);
+
+  if (!master?.section) {
+    // No master. An old-style template still has its copy; a pure reference
+    // has nothing to show, so it goes rather than leaving a blank band.
+    return isFrameReference(section) ? null : section;
+  }
+
+  // Master module ids are kept deliberately: that is how local drift is
+  // detected later (see insertSavedSection's canonical branch).
+  const modules = Array.isArray(master.section.modules)
+    ? (master.section.modules as unknown[]).map((module) => ({
+        ...(module as Record<string, unknown>),
+        settings: { ...((module as { settings?: Record<string, unknown> }).settings ?? {}) }
+      }))
+    : [];
+
+  return {
+    ...master.section,
+    id: section.id ?? makeId(),
+    savedSectionId: section.savedSectionId,
+    canonical: true,
+    modules
+  } as unknown as S;
+}
+
+/**
+ * Resolve every frame reference in a template against the live masters.
+ * Body sections pass through untouched.
+ */
+export function resolveTemplateSections<S extends FrameSection>(
+  templateSections: readonly S[] | null | undefined,
+  savedSections: readonly SavedSectionLike<S>[] | null | undefined,
+  makeId: () => string
+): S[] {
+  if (!Array.isArray(templateSections)) return [];
+  return templateSections
+    .map((section) => resolveFrameSection(section, savedSections, makeId))
+    .filter((section): section is S => section !== null);
+}
+
 /**
  * Put the page's body inside the template's frame.
  *
@@ -88,10 +205,23 @@ function sectionLabel(section: FrameSection): string {
  */
 export function applyTemplateFrame<S extends FrameSection>(
   pageSections: readonly S[] | null | undefined,
-  templateSections: readonly S[] | null | undefined
+  templateSections: readonly S[] | null | undefined,
+  options?: {
+    /** Live masters. Given these, frame references resolve to current content. */
+    savedSections?: readonly SavedSectionLike<S>[] | null;
+    makeId?: () => string;
+  }
 ): TemplateFrameResult<S> {
   const page = Array.isArray(pageSections) ? pageSections : [];
-  const template = Array.isArray(templateSections) ? templateSections : [];
+  const rawTemplate = Array.isArray(templateSections) ? templateSections : [];
+
+  // Resolve the frame from the CURRENT masters, so applying a template never
+  // stamps a stale header. Without savedSections this is a no-op and the
+  // template's stored sections are used as they are.
+  const makeId = options?.makeId ?? (() => `section-${Math.random().toString(36).slice(2, 10)}`);
+  const template = options?.savedSections
+    ? resolveTemplateSections(rawTemplate, options.savedSections, makeId)
+    : rawTemplate;
 
   const body = bodySectionsOf(page);
   const pageFrame = frameSectionsOf(page);

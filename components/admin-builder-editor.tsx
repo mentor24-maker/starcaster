@@ -53,7 +53,9 @@ import { BuilderPageList, pageVisibilityFromRecord, pageVisibilityToFlags, type 
 import { BuilderPageHistory } from "./builder/builder-page-history";
 import {
   applyTemplateFrame,
-  describeTemplateFrameChange
+  describeTemplateFrameChange,
+  resolveTemplateSections,
+  toTemplateReferences
 } from "@/lib/builder-template-frame";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
@@ -1553,8 +1555,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     //
     // PR #231 made this refuse to touch a page with content, which was the
     // right emergency stop and the wrong end state. This does the job instead.
+    // Frame references resolve against the CURRENT masters, so applying a
+    // template can never stamp a header that went stale after the template was
+    // made. Old templates still carrying full copies fall back to those, so
+    // nothing had to be migrated.
+    const frameResolution = { savedSections, makeId: () => crypto.randomUUID() };
+
     if (draft.layoutSections.length) {
-      const result = applyTemplateFrame(draft.layoutSections, template.layoutSections);
+      const result = applyTemplateFrame(draft.layoutSections, template.layoutSections, frameResolution);
       // Nothing is written until the operator has seen what changes. The count
       // of what is KEPT leads, because that is the question this control has
       // taught him to ask.
@@ -1574,7 +1582,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       return;
     }
 
-    setDraft((c) => ({ ...c, id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
+    // Seeding an empty page: resolve the references too, or a reference-only
+    // template would seed empty bands where the header and footer should be.
+    setDraft((c) => ({ ...c, id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: resolveTemplateSections(template.layoutSections, savedSections, frameResolution.makeId) as typeof c.layoutSections }));
   }
 
   async function makeTemplateFromPage() {
@@ -1594,7 +1604,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           name: templateName,
           pageBackground: draft.pageBackground,
           theme: draft.theme,
-          layoutSections: draft.layoutSections
+          // Frame sections are stored as REFERENCES, not copies. A template
+          // that embedded the Contact Strip kept serving whatever that strip
+          // looked like on the day the template was made — two sources of
+          // truth for one header, with nothing to show they had diverged.
+          layoutSections: toTemplateReferences(draft.layoutSections)
         })
       });
       const data = await readAdminJson<{ pageTemplate?: BuilderTemplateRecord; error?: string }>(response, "Failed to create template from page.");
