@@ -29,7 +29,17 @@ function buildLandingPagePatch(body) {
     const name = String(body.name || '').trim();
     if (!name) return { error: 'name is required' };
     patch.name = name;
-    if (!hasBodyField(body, 'templateId', 'template_id')) {
+    // Derive the legacy layout name from the title only when the caller has
+    // said nothing about template identity at all. A caller that sends
+    // pageTemplateId is managing it explicitly, and deriving here would
+    // silently rewrite template_id from the page's TITLE on every save —
+    // which is what happened the moment the editor switched to sending
+    // pageTemplateId instead (caught locally: an empty template_id became
+    // "button-panel-check" just because the page was saved).
+    const saysNothingAboutTemplate =
+      !hasBodyField(body, 'templateId', 'template_id') &&
+      !hasBodyField(body, 'pageTemplateId', 'page_template_id');
+    if (saysNothingAboutTemplate) {
       patch.templateId = deriveTemplateId(body, name);
     }
   }
@@ -39,6 +49,12 @@ function buildLandingPagePatch(body) {
   }
   if (hasBodyField(body, 'templateId', 'template_id')) {
     patch.templateId = body.templateId ?? body.template_id;
+  }
+  // Which page template this page came from — distinct from templateId, which
+  // is a legacy layout name. This patch is a WHITELIST (see below), so without
+  // this line the editor's choice is dropped and the save reports success.
+  if (hasBodyField(body, 'pageTemplateId', 'page_template_id')) {
+    patch.pageTemplateId = body.pageTemplateId ?? body.page_template_id;
   }
   if (hasBodyField(body, 'slug')) patch.slug = body.slug;
   if (hasBodyField(body, 'isPublished', 'is_published')) {

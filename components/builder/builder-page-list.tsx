@@ -273,8 +273,11 @@ export function BuilderPageList({
         av = a.slug.toLowerCase();
         bv = b.slug.toLowerCase();
       } else if (sortField === "template") {
-        av = (templates.find((t) => t.id === a.templateId)?.name ?? "").toLowerCase();
-        bv = (templates.find((t) => t.id === b.templateId)?.name ?? "").toLowerCase();
+        // pageTemplateId, not templateId — the latter is a legacy layout name
+        // and never matches a template row, so this column used to sort every
+        // page as blank.
+        av = (templates.find((t) => t.id === a.pageTemplateId)?.name ?? "").toLowerCase();
+        bv = (templates.find((t) => t.id === b.pageTemplateId)?.name ?? "").toLowerCase();
       } else if (sortField === "visibility") {
         av = pageVisibilitySortKey(a);
         bv = pageVisibilitySortKey(b);
@@ -896,13 +899,14 @@ export function BuilderPageList({
                     {template.name}
                   </option>
                 ))}
-                {/* A page saved before page-templates existed carries a layout
-                    name here rather than a template id, so it matches none of
-                    the options above.  Show it as itself instead of letting the
-                    select fall back to a blank that reads as "unset" and invites
-                    the operator to replace it. */}
+                {/* The "Legacy layout" stand-in this used to need is gone: the
+                    field now reads page_template_id, which only ever holds a
+                    template row id, so a blank here means the page genuinely
+                    has no page template rather than the field failing to match
+                    its own options. Kept as a guard for a template that was
+                    deleted out from under a page. */}
                 {pageTemplateId && !templates.some((t) => t.id === pageTemplateId) ? (
-                  <option value={pageTemplateId}>Legacy layout (not a template)</option>
+                  <option value={pageTemplateId}>Template no longer exists</option>
                 ) : null}
               </select>
             </label>
