@@ -1269,7 +1269,11 @@ export function BuilderNavigationModuleSettings({
                 const isCustomSizing = module.settings.navItemSizing === "custom";
                 const parentOptions = eligibleParents(item);
                 return (
-                  <div key={item.id} className="builder-nav-item-row">
+                  <div
+                    key={item.id}
+                    className="builder-nav-item-row"
+                    style={{ "--nav-item-depth": depthOf(item) } as CSSProperties}
+                  >
                     <div className="builder-nav-item-fields">
                       <select
                         className="builder-nav-item-parent-select"

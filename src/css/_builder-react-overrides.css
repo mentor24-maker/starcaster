@@ -1695,6 +1695,40 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-decoration: none;
 }
 
+/* --- Navigation panel: the Links list -------------------------------- */
+
+/* Children indent one step per level while KEEPING a top-level row's
+   field widths: the indent is paid back on the right, so the row slides
+   right instead of shrinking, and a child's action icons deliberately
+   sit beyond the top-level ones (operator, 2026-08-14). The header row
+   and top-level rows carry no depth, so the var falls back to 0. The
+   cell panel is overflow: visible, so the overhang draws rather than
+   clips. */
+.builder-react-root .builder-nav-item-row {
+  margin-left: calc(var(--nav-item-depth, 0) * 26px);
+  margin-right: calc(var(--nav-item-depth, 0) * -26px);
+}
+
+/* The canonical table-header band (_tables.css: black on white, bold) —
+   the Links list is a table in everything but markup, and its headers
+   used to be 11px muted mini-caps that read as hints, not headers
+   (operator, 2026-08-14: "make proper headers out of these"). Tokens
+   rather than the literal hexes _tables.css predates: --ink-primary is
+   the canonical black, --bg-surface the canonical white. The 8px side
+   padding lines the header text up with the text inside the selects
+   below, which carry about the same internal inset. */
+.builder-react-root .builder-nav-items-header {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--ink-primary, #18324a);
+  color: var(--bg-surface, #ffffff);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+}
+
 /* --- Navigation panel: the mega menu's extra column -------------------- */
 
 /* "+ Add Link", "+ Add Module" and the menu the module goes into, on one
