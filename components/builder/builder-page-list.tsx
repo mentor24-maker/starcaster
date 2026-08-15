@@ -143,6 +143,7 @@ export function BuilderPageList({
     details: true
   });
   const [filterText, setFilterText] = useState("");
+  const [filterSlug, setFilterSlug] = useState("");
   const [filterVisibility, setFilterVisibility] = useState<VisibilityFilter>("");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>("updatedAt");
@@ -260,6 +261,10 @@ export function BuilderPageList({
           (p) => p.name.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q)
         )
       : pages.slice();
+    const slugQ = filterSlug.trim().toLowerCase().replace(/^\//, "");
+    if (slugQ) {
+      result = result.filter((page) => page.slug.toLowerCase().includes(slugQ));
+    }
     if (filterVisibility) {
       result = result.filter((page) => pageVisibilityState(page) === filterVisibility);
     }
@@ -288,7 +293,7 @@ export function BuilderPageList({
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [pages, filterText, filterVisibility, sortField, sortDir, templates]);
+  }, [pages, filterText, filterSlug, filterVisibility, sortField, sortDir, templates]);
 
   const allVisibleChecked =
     filteredPages.length > 0 && filteredPages.every((p) => checkedIds.has(p.id));
@@ -649,7 +654,19 @@ export function BuilderPageList({
                 <tr className="builder-crud-filter-row">
                   <th scope="col" />
                   <th scope="col" />
-                  <th scope="col" />
+                  <th scope="col">
+                    <label className="builder-crud-filter-field">
+                      <span className="builder-crud-filter-label">Filter Slug</span>
+                      <input
+                        aria-label="Filter Slug"
+                        className="builder-crud-filter-input"
+                        onChange={(event) => setFilterSlug(event.target.value)}
+                        placeholder="Search"
+                        type="search"
+                        value={filterSlug}
+                      />
+                    </label>
+                  </th>
                   <th scope="col" />
                   <th scope="col">
                     <label className="builder-crud-filter-field">
