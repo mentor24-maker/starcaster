@@ -14,6 +14,7 @@ import {
   getModuleWidthShellStyle,
   getModuleWidthStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
   getTextModuleWidthStyle,
   getTableWrapStyle,
   getSectionWidthStyle,
@@ -179,6 +180,52 @@ describe("getTextModuleWidthStyle", () => {
     const right = getTextModuleWidthStyle({ size: "66", alignment: "right" });
     expect(right?.marginLeft).toBe("auto");
     expect(right?.marginRight).toBeUndefined();
+  });
+});
+
+describe("getTextModuleFrameStyle", () => {
+  it("returns an empty style for an untouched module, so existing pages do not move", () => {
+    expect(getTextModuleFrameStyle({})).toEqual({});
+  });
+
+  it("draws the border only once it has width, defaulting to solid", () => {
+    expect(getTextModuleFrameStyle({ borderColor: "#123456" }).border).toBeUndefined();
+    expect(getTextModuleFrameStyle({ borderWidth: "3", borderColor: "#123456" }).border).toBe(
+      "3px solid #123456"
+    );
+    expect(getTextModuleFrameStyle({ borderWidth: "2", borderStyle: "dashed" }).border).toBe(
+      "2px dashed #214c71"
+    );
+  });
+
+  it('draws nothing for style "none" even with a width set', () => {
+    expect(getTextModuleFrameStyle({ borderWidth: "3", borderStyle: "none" }).border).toBeUndefined();
+  });
+
+  it("keeps the Width setting honest once a border or padding exists", () => {
+    expect(getTextModuleFrameStyle({ borderWidth: "2" }).boxSizing).toBe("border-box");
+    expect(getTextModuleFrameStyle({ paddingLeft: "20" }).boxSizing).toBe("border-box");
+    expect(getTextModuleFrameStyle({}).boxSizing).toBeUndefined();
+  });
+
+  it("applies the four padding sides only when one is set", () => {
+    expect(getTextModuleFrameStyle({}).paddingTop).toBeUndefined();
+
+    const style = getTextModuleFrameStyle({ paddingTop: "15", paddingLeft: "20" });
+    expect(style.paddingTop).toBe("15px");
+    expect(style.paddingBottom).toBe("0px");
+    expect(style.paddingLeft).toBe("20px");
+    expect(style.paddingRight).toBe("0px");
+  });
+
+  it("rounds corners and carries the offset nudge", () => {
+    const style = getTextModuleFrameStyle({
+      borderRadius: "10",
+      horizontalOffset: "4",
+      verticalOffset: "-4"
+    });
+    expect(style.borderRadius).toBe("10px");
+    expect(style.transform).toBe("translate(4px, 4px)");
   });
 });
 

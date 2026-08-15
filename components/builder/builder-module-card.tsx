@@ -120,6 +120,7 @@ import {
   getModuleOuterSpacingStyle,
   getTableWrapStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
   getTextModuleWidthStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
@@ -129,6 +130,7 @@ import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
 import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
+import { BuilderTextModuleSettings } from "./builder-text-module-settings";
 import {
   BuilderThemeColorField,
   BuilderThemeColorFieldWithDefault,
@@ -2297,7 +2299,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
       style={{
         ...getTextModuleWidthStyle(module.settings),
-        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+        ...getTextModuleFrameStyle(module.settings)
       }}
       dangerouslySetInnerHTML={{
         __html: isPlainText
@@ -3091,6 +3094,11 @@ export function BuilderModuleCard({
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
+    // The rich-text editor left the shared chrome on 2026-08-15: its
+    // Background / Alignment / margins / Width now live on the D8 axes in
+    // BuilderTextModuleSettings (E6 — never a second copy). The Simple Text
+    // variant stays on the chrome, so this flag is variant-aware on purpose.
+    const isRichTextModule = module.type === "text" && !isPlainTextVariant(module.settings);
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
 
     /**
@@ -3563,6 +3571,15 @@ export function BuilderModuleCard({
                   />
                 </BuilderSettingRow>
               </div>
+            ) : isRichTextModule ? (
+              <BuilderTextModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
             ) : isNavigationModule ? null : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
               <div className="builder-floating-image-module-chrome">
                 <BuilderBackgroundControls

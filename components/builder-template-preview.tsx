@@ -111,6 +111,7 @@ import {
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
   getTextModuleWidthStyle,
   getVideoEmbedSource,
   isVideoMedia
@@ -1823,7 +1824,8 @@ function BuilderModulePreview({
         className={`builder-preview-text builder-preview-text-${variant || "default"}`}
         style={{
           ...getTextModuleWidthStyle(module.settings),
-          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+          ...getTextModuleFrameStyle(module.settings)
         }}
         dangerouslySetInnerHTML={{ __html: html || "" }}
       />
