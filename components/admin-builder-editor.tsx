@@ -51,6 +51,10 @@ import {
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList, pageVisibilityFromRecord, pageVisibilityToFlags, type PageVisibility } from "./builder/builder-page-list";
 import { BuilderPageHistory } from "./builder/builder-page-history";
+import {
+  applyTemplateFrame,
+  describeTemplateFrameChange
+} from "@/lib/builder-template-frame";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -1541,16 +1545,32 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // Stub templates (empty layoutSections) only tag the page; they don't clear the layout.
     if (!template.layoutSections.length) return;
 
-    // Choosing a template NEVER overwrites a page that already has content.
-    // This dropdown reads blank whenever the page's stored value isn't one of
-    // its own options — which is every page carrying a legacy layout name —
-    // so a destructive apply here reaches the operator as "the field was
-    // empty, I filled it in, the page emptied out".  That is how the Delray
-    // home page lost 35 sections on 2026-08-14.  Seeding an empty page is the
-    // useful half of this and is kept; replacing real content is a deliberate
-    // act and needs its own command, not a change event on a select.
+    // A template is a FRAME, not a photocopy of a page: it owns the shared
+    // furniture (the canonical sections) and the page owns its body. Switching
+    // swaps the frame and carries the body through untouched, so this cannot
+    // repeat 2026-08-14, when applying a template assigned its sections over
+    // the page's and the Delray home page went from 35 sections to 4.
+    //
+    // PR #231 made this refuse to touch a page with content, which was the
+    // right emergency stop and the wrong end state. This does the job instead.
     if (draft.layoutSections.length) {
-      setMessage(`Tagged this page with "${template.name}". Its existing layout was kept — a template never replaces content that is already on the page.`);
+      const result = applyTemplateFrame(draft.layoutSections, template.layoutSections);
+      // Nothing is written until the operator has seen what changes. The count
+      // of what is KEPT leads, because that is the question this control has
+      // taught him to ask.
+      if (!window.confirm(describeTemplateFrameChange(template.name, result))) {
+        // Put the dropdown back — a cancelled switch must leave no trace.
+        setPageTemplateId(pageTemplateId);
+        pageTemplateDirtyRef.current = false;
+        return;
+      }
+      setDraft((c) => ({ ...c, layoutSections: result.sections as typeof c.layoutSections }));
+      setCollapsedSectionIds(result.sections.map((section: BuilderTemplateSection) => String(section.id ?? "")));
+      setMessage(
+        `Switched to "${template.name}". ${result.keptBody} content section${result.keptBody === 1 ? "" : "s"} kept` +
+        (result.frameRemoved ? `, ${result.frameRemoved} shared section${result.frameRemoved === 1 ? "" : "s"} replaced` : "") +
+        "."
+      );
       return;
     }
 
