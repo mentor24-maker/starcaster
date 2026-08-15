@@ -1433,6 +1433,53 @@ export function normalizeTheme(value: unknown): BuilderTheme {
   };
 }
 
+/**
+ * THE THEME A PAGE ACTUALLY RENDERS WITH — the live theme record when the page
+ * names one, not the copy taken at the moment the theme was assigned.
+ *
+ * Assigning a theme to a page copies its typography into the page's own
+ * document (`applyThemeToPage`), and until 2026-08-15 every renderer read that
+ * copy. Colours, margins and backgrounds already resolved live — the server
+ * sends the theme record alongside each page — so a theme edit reached a
+ * published page's colour and not its type, which is indistinguishable from
+ * "the setting is broken". The operator changed a theme's global line height,
+ * saw nothing move, and reasonably concluded the control did not work.
+ *
+ * This is the same contract the page TEMPLATE frame already keeps: the page
+ * stores a REFERENCE and the reference resolves against the current master at
+ * render. Nothing is written to any page, which is the point — the canonical
+ * saved-section propagation had to rewrite every linked page to push a change
+ * out, and that is what lost 35 sections off the Delray home page on
+ * 2026-08-14. A theme edit here touches no page row at all.
+ *
+ * The stored copy stays as the fallback, and is what a page keeps if its theme
+ * is later deleted, or if the theme record carries no typography at all.
+ *
+ * Callers decide what counts as "linked" — the public site passes the theme
+ * shell only when the page carries a themeId, the editor passes the theme the
+ * Theme dropdown currently names. A page with no theme keeps its own stored
+ * values and must never inherit some other theme's type.
+ */
+export function resolveRenderTheme(
+  storedTheme: unknown,
+  liveTheme: { typography?: unknown } | null | undefined
+): BuilderTheme {
+  const liveTypography =
+    liveTheme && typeof liveTheme === "object" && !Array.isArray(liveTheme)
+      ? liveTheme.typography
+      : null;
+
+  const hasLiveTypography =
+    Boolean(liveTypography) &&
+    typeof liveTypography === "object" &&
+    !Array.isArray(liveTypography) &&
+    Object.keys(liveTypography as Record<string, unknown>).length > 0;
+
+  return hasLiveTypography
+    ? normalizeTheme({ typography: liveTypography })
+    : normalizeTheme(storedTheme);
+}
+
 export function getBuilderBackgroundStyle(background: BackgroundSettings | undefined): CSSProperties | undefined {
   if (!background || background.mode === "none") {
     return undefined;
