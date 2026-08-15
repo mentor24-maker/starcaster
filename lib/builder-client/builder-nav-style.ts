@@ -291,6 +291,9 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     ]
       .map((side) => `${side}px`)
       .join(" "),
+    // The right side again, alone: the mega toggle pulls itself back over the
+    // link's right padding (a shorthand var can't be picked apart in CSS).
+    "--site-nav-link-padding-right": `${num(settings.navLinkPaddingRight, NAV_STYLE_DEFAULTS.linkPaddingH, 0, 60)}px`,
     "--site-nav-link-radius": `${num(settings.navBorderRadius, NAV_STYLE_DEFAULTS.linkRadius, 0, 48)}px`,
     "--site-nav-link-height": `${num(settings.navLinkHeight, NAV_STYLE_DEFAULTS.linkHeight, 24, 96)}px`,
     "--site-nav-link-weight": String(num(settings.navWeight, NAV_STYLE_DEFAULTS.weight, 100, 900)),
