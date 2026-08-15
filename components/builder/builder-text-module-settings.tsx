@@ -44,10 +44,17 @@ type BuilderTextModuleSettingsProps = {
  *
  *   Structure   Width, Background — how much column the block takes and
  *               what it sits on.
+ *   Text        the block's vertical rhythm: line height, then the gap
+ *               between paragraphs (added 2026-08-15 — the module had
+ *               neither, so a footer link column could not be tightened
+ *               at all).
  *   Placement   Alignment → margins → padding → offsets (D9: the nudge is
  *               the finest adjustment, last).
  *   Frame       the operator's "Border" column, under its canonical D8
  *               title: style → width → colour → radius.
+ *
+ * Four axes is the D8 ceiling; a fifth is a design question for the
+ * operator, not a thing to squeeze in.
  *
  * Content is not an axis here: the rich-text editor itself is the Content
  * surface, rendered full-width below by the module card.
@@ -98,6 +105,46 @@ export function BuilderTextModuleSettings({
                   themePrimaryColor={themePrimaryColor}
                 />
               )
+            }
+          ]
+        ]
+      },
+      {
+        // The block's vertical rhythm. Both default to empty — "follow the
+        // theme" (A2) — so no existing text block changes until one is set.
+        // D9: line height touches every line in the module; the paragraph gap
+        // only touches the seams between them.
+        title: "Text",
+        strips: [
+          [
+            {
+              key: "lineHeight",
+              label: "Line Height",
+              width: "select-sm",
+              control: "select",
+              fallback: "",
+              options: [
+                { value: "", label: "Theme" },
+                ...["1", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.75", "2"].map((value) => ({
+                  value,
+                  label: value
+                }))
+              ],
+              rendersVia: "getTextModuleRhythmStyle"
+            },
+            {
+              key: "paragraphGap",
+              label: "Paragraph Gap",
+              width: "select-sm",
+              control: "select",
+              fallback: "",
+              options: [
+                { value: "", label: "Default" },
+                ...["0", "2", "4", "6", "8", "10", "12", "14", "18", "24", "32", "40"].map(
+                  (value) => ({ value, label: `${value}px` })
+                )
+              ],
+              rendersVia: "getTextModuleRhythmStyle"
             }
           ]
         ]

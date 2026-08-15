@@ -2071,6 +2071,20 @@ export function normalizeBuilderModuleSettingsForType(
     }
   }
 
+  if (type === "text") {
+    // The block's vertical rhythm, both of which mean "follow the theme" when
+    // empty (A2). Only a key that is actually present is touched: writing a
+    // normalized "" onto every text module would put the key on every text
+    // block on every page, and a fallback-on-blank would put a real line
+    // height on all of them.
+    if (settings.lineHeight) {
+      settings.lineHeight = normalizeDecimalValue(settings.lineHeight, "1.6", 0.8, 3);
+    }
+    if (settings.paragraphGap) {
+      settings.paragraphGap = normalizeSpacingValue(settings.paragraphGap, "14", 0, 120);
+    }
+  }
+
   if (type === "heading") {
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");

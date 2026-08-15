@@ -66,6 +66,33 @@ describe("normalizeBuilderModuleSettingsForType", () => {
     expect(settings.backgroundStyleKey).toBe("");
   });
 
+  it("leaves an untouched text block with no rhythm keys at all", () => {
+    const settings = normalizeBuilderModuleSettingsForType("text", {});
+
+    // Writing a normalized "" here would stamp the key onto every text block
+    // on every page; a fallback-on-blank would give them all a line height.
+    expect(settings).not.toHaveProperty("lineHeight");
+    expect(settings).not.toHaveProperty("paragraphGap");
+  });
+
+  it("bounds the text block's line height and paragraph gap", () => {
+    const settings = normalizeBuilderModuleSettingsForType("text", {
+      lineHeight: "1.25",
+      paragraphGap: "4"
+    });
+
+    expect(settings.lineHeight).toBe("1.25");
+    expect(settings.paragraphGap).toBe("4");
+
+    const clamped = normalizeBuilderModuleSettingsForType("text", {
+      lineHeight: "99",
+      paragraphGap: "9999"
+    });
+
+    expect(clamped.lineHeight).toBe("3");
+    expect(clamped.paragraphGap).toBe("120");
+  });
+
   it("converts the untouched feature-cards factory colors to theme-following", () => {
     const settings = normalizeBuilderModuleSettingsForType("feature-cards", {
       cardBackground: "#ffffff",

@@ -178,15 +178,18 @@ const TUNED = {
       backgroundColor: '#ffffff',
     },
   },
-  // The rich-text module's Structure / Placement / Frame axes (2026-08-15).
-  // Every frame and spacing setting is non-default and no field is
-  // visibleWhen-gated, so all three columns render every control the panel
-  // has. Real body copy, because an empty module measures nothing and passes.
+  // The rich-text module's Structure / Text / Placement / Frame axes
+  // (2026-08-15). Every frame and spacing setting is non-default and no field
+  // is visibleWhen-gated, so all four columns render every control the panel
+  // has — including "Paragraph Gap", which is the longest label on the Text
+  // axis and therefore the one that sets its track. Real body copy, because
+  // an empty module measures nothing and passes.
   text: {
     name: 'Pro Shop',
-    text: '<p><strong>Visit our <a href="/pro-shop">Pro Shop</a> for racket stringing and all your tennis and pickleball needs.</strong></p>',
+    text: '<p><strong>Visit our <a href="/pro-shop">Pro Shop</a> for racket stringing and all your tennis and pickleball needs.</strong></p><p>Stringing, grips, demo racquets and a full pickleball wall.</p>',
     settings: {
       size: '66', alignment: 'center',
+      lineHeight: '1.2', paragraphGap: '4',
       marginTop: '10', marginBottom: '10', marginLeft: '5', marginRight: '5',
       paddingTop: '15', paddingBottom: '15', paddingLeft: '20', paddingRight: '20',
       horizontalOffset: '4', verticalOffset: '-4',

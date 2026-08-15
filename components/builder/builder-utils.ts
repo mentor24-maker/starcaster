@@ -521,6 +521,40 @@ export function getTextModuleFrameStyle(settings: Record<string, string>): CSSPr
   };
 }
 
+/**
+ * A text block's vertical rhythm: how tall each line is, and how far apart the
+ * paragraphs sit. Two different quantities that look like one until the
+ * content is a stack of one-line paragraphs — a footer link column — where the
+ * line height has nothing to act on and the paragraph gap is the whole of the
+ * spacing. The operator hit exactly that on 2026-08-15 and had no control over
+ * either one.
+ *
+ * Both are omitted unless set, so an untouched block keeps inheriting the
+ * theme's `--bx-line-base` and the 0.9rem paragraph gap it shipped with.
+ * Line height is a plain inherited property, so a `line-height` still written
+ * on a `<span>` inside (imported content carries them) out-ranks this — which
+ * is why the editor's LH control clears those as it sets the paragraph.
+ */
+export function getTextModuleRhythmStyle(
+  settings: Record<string, string>
+): CSSProperties | undefined {
+  const style: Record<string, string> = {};
+
+  const lineHeight = Number.parseFloat(settings.lineHeight ?? "");
+  if (Number.isFinite(lineHeight) && lineHeight > 0) {
+    style.lineHeight = String(lineHeight);
+  }
+
+  // 0 is a real value here — paragraphs sitting flush is a legitimate look —
+  // so this checks only that the number parsed.
+  const paragraphGap = Number.parseFloat(settings.paragraphGap ?? "");
+  if (Number.isFinite(paragraphGap) && paragraphGap >= 0) {
+    style["--bx-para-gap"] = `${paragraphGap}px`;
+  }
+
+  return Object.keys(style).length > 0 ? (style as CSSProperties) : undefined;
+}
+
 export function getImageModuleStyle(settings: Record<string, string>): CSSProperties {
   const borderThickness = Number.parseInt(settings.borderThickness ?? "0", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "18", 10);

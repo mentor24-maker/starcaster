@@ -121,6 +121,7 @@ import {
   getTableWrapStyle,
   getPlainTextModuleStyle,
   getTextModuleFrameStyle,
+  getTextModuleRhythmStyle,
   getTextModuleWidthStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
@@ -2300,6 +2301,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
       style={{
         ...getTextModuleWidthStyle(module.settings),
         ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+        ...getTextModuleRhythmStyle(module.settings),
         ...getTextModuleFrameStyle(module.settings)
       }}
       dangerouslySetInnerHTML={{
