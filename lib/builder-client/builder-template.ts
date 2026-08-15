@@ -546,7 +546,10 @@ export type BuilderPageRecord = {
   id: string;
   name: string;
   slug: string;
+  /** Legacy layout NAME ("standard-right-form"). Not a page-template id. */
   templateId: string;
+  /** Which builder_page_templates row this page came from. "" = none, which is valid. */
+  pageTemplateId: string;
   themeId?: string;
   pageBackground: BackgroundSettings;
   theme: BuilderTheme;
@@ -3201,6 +3204,7 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
     name: safeText(row.name, 255),
     slug: safeText(row.slug, 255),
     templateId: safeText(row.template_id ?? row.templateId, 120),
+    pageTemplateId: safeText(row.page_template_id ?? row.pageTemplateId, 120),
     themeId: safeText(row.theme_id ?? row.themeId, 120) || undefined,
     pageBackground: document.pageBackground,
     theme: document.theme,
