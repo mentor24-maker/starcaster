@@ -7,7 +7,8 @@ import {
   BUILDER_PREVIEW_STORAGE_KEY,
   createDefaultBackgroundSettings,
   createDefaultTheme,
-  normalizeBuilderDocument
+  normalizeBuilderDocument,
+  resolveRenderTheme
 } from "@/lib/builder-template";
 
 import type { BuilderThemeStyles, CrmThemePalette, ThemeShellBackgroundSource } from "@/components/builder/builder-utils";
@@ -28,6 +29,7 @@ type PreviewDraft = {
   themeStyles?: BuilderThemeStyles;
   themeId?: string;
   themeShellBackground?: ThemeShellBackgroundSource;
+  themeRecord?: BuilderThemeRecord | null;
 };
 
 type BuilderThemeRecord = {
@@ -44,6 +46,7 @@ type BuilderThemeRecord = {
   topMargin?: number;
   bottomMargin?: number;
   sideMargins?: number;
+  typography?: unknown;
 };
 
 function hasCrmPaletteColors(palette: CrmThemePalette | undefined): boolean {
@@ -60,6 +63,8 @@ async function fetchBuilderTheme(themeId?: string): Promise<{
   palette?: CrmThemePalette;
   styles?: BuilderThemeStyles;
   shellBackground?: ThemeShellBackgroundSource;
+  /** The raw record, so typography resolves live like the colours already do. */
+  record?: BuilderThemeRecord | null;
 }> {
   try {
     const res = await fetch("/api/builder/themes", {
@@ -76,6 +81,7 @@ async function fetchBuilderTheme(themeId?: string): Promise<{
       palette: builderThemeToCrmPalette(theme),
       styles: buildBuilderThemeStyles(theme),
       shellBackground: theme as ThemeShellBackgroundSource,
+      record: theme ?? null,
     };
   } catch {
     return {};
@@ -123,6 +129,10 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
       themeStyles: themeRecord.styles,
       themeId,
       themeShellBackground: themeRecord.shellBackground,
+      // Only when the page names a theme: `fetchBuilderTheme` falls back to the
+      // first theme in the project, and that must not supply type to a page
+      // that was never themed.
+      themeRecord: themeId ? themeRecord.record ?? null : null,
     };
   } catch {
     return null;
@@ -306,7 +316,7 @@ export function BuilderPreviewPage() {
                 <BuilderTemplatePreview
                   layoutSections={draft.layoutSections}
                   pageBackground={draft.pageBackground}
-                  theme={draft.theme}
+                  theme={resolveRenderTheme(draft.theme, draft.themeRecord)}
                   themePalette={themePalette}
                   themeStyles={effectiveThemeStyles}
                   themeShellBackground={themeShellBackground ?? draft.themeShellBackground}

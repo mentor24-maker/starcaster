@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createDefaultTheme,
+  resolveRenderTheme,
   finalizeBackgroundSettings,
   promoteThemeStylesPageBackground,
   finalizeThemeStylesPageBackground,
@@ -628,6 +629,57 @@ describe("floating-image module migration", () => {
     expect(sections[0]?.modules[0]?.type).toBe("floating-image");
     expect(sections[0]?.modules[0]?.settings.offsetY).toBe("-479");
     expect(sections[0]?.modules[0]?.settings.positionMode).toBeUndefined();
+  });
+});
+
+describe("resolveRenderTheme", () => {
+  const STORED = {
+    typography: { scale: { baseSize: 16, ratio: 0, baseLineHeight: 1.8 } }
+  };
+  const LIVE = {
+    typography: { scale: { baseSize: 16, ratio: 0, baseLineHeight: 1.3 } }
+  };
+
+  it("prefers the live theme, so editing a theme reaches pages that already exist", () => {
+    // The whole point: no page row is written, the reference just resolves
+    // against the current record — same contract as the template frame.
+    expect(resolveRenderTheme(STORED, LIVE).typography.scale.baseLineHeight).toBe(1.3);
+  });
+
+  it("keeps the stored copy when the page is linked to no theme", () => {
+    // A page that names no theme must never inherit another theme's type: the
+    // server falls back to the project's FIRST theme for shell colours, and
+    // letting that supply typography would restyle pages nobody themed.
+    expect(resolveRenderTheme(STORED, null).typography.scale.baseLineHeight).toBe(1.8);
+    expect(resolveRenderTheme(STORED, undefined).typography.scale.baseLineHeight).toBe(1.8);
+  });
+
+  it("falls back to the stored copy when the theme record carries no typography", () => {
+    // A deleted theme, or one saved before typography existed. The page keeps
+    // the look it had rather than snapping back to the bare baseline.
+    expect(resolveRenderTheme(STORED, {}).typography.scale.baseLineHeight).toBe(1.8);
+    expect(resolveRenderTheme(STORED, { typography: {} }).typography.scale.baseLineHeight).toBe(1.8);
+    expect(resolveRenderTheme(STORED, { typography: null }).typography.scale.baseLineHeight).toBe(1.8);
+  });
+
+  it("lets the live theme CLEAR a value the stored copy still carries", () => {
+    // Blanking a field in the theme has to propagate too, or a theme could
+    // only ever add. The live record wins wholesale, it is not merged.
+    const cleared = resolveRenderTheme(STORED, { typography: { scale: {} } });
+    expect(cleared.typography.scale.baseLineHeight).toBe(0);
+  });
+
+  it("normalizes whatever the theme row happens to hold", () => {
+    const wild = resolveRenderTheme(STORED, {
+      typography: { scale: { baseLineHeight: 99 }, fonts: { body: "not-a-font" } }
+    });
+    expect(wild.typography.scale.baseLineHeight).toBe(3);
+    expect(wild.typography.fonts.body).toBe("");
+  });
+
+  it("survives junk on either side", () => {
+    expect(resolveRenderTheme(null, null)).toEqual(createDefaultTheme());
+    expect(resolveRenderTheme("nope", "nope" as unknown as null)).toEqual(createDefaultTheme());
   });
 });
 
