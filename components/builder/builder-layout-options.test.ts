@@ -55,6 +55,18 @@ describe("layoutOptions", () => {
     expect(normalizeLayout("1-4-1")).toBe("one-four-one");
   });
 
+  /**
+   * Past three columns the keys EXTEND left/center/right (col4…col6) rather
+   * than renaming to col1…colN — renaming would orphan every stored
+   * left/center/right cell record. A row narrowed from six columns to three
+   * must keep its first three cells intact, key for key.
+   */
+  it("extends the persisted column keys past three columns", () => {
+    expect(getLayoutColumns("four-column")).toEqual(["left", "center", "right", "col4"]);
+    expect(getLayoutColumns("five-column")).toEqual(["left", "center", "right", "col4", "col5"]);
+    expect(getLayoutColumns("six-column")).toEqual(["left", "center", "right", "col4", "col5", "col6"]);
+  });
+
   it("hands out a fresh column array each call", () => {
     const first = getLayoutColumns("three-column");
     first.push("bogus");
@@ -85,7 +97,10 @@ describe("layoutOptions", () => {
       "two-one-one": "2fr 1fr 1fr",
       "one-one-two": "1fr 1fr 2fr",
       "three-one-one": "3fr 1fr 1fr",
-      "one-one-three": "1fr 1fr 3fr"
+      "one-one-three": "1fr 1fr 3fr",
+      "four-column": "1fr 1fr 1fr 1fr",
+      "five-column": "1fr 1fr 1fr 1fr 1fr",
+      "six-column": "1fr 1fr 1fr 1fr 1fr 1fr"
     };
 
     // Both directions: every layout is checked, and nothing is offered that

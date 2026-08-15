@@ -21,8 +21,29 @@ import {
   normalizeLayoutSections,
   normalizeTheme,
   resolveBuilderModuleType,
+  resolveModuleColumnForLayout,
   serializeBuilderDocument
 } from "@/lib/builder-template";
+
+describe("resolveModuleColumnForLayout", () => {
+  it("keeps every column of a wide row addressable", () => {
+    for (const column of ["left", "center", "right", "col4", "col5", "col6"]) {
+      expect(resolveModuleColumnForLayout(column, "six-column")).toBe(column);
+    }
+  });
+
+  it("maps legacy col1..col3 into a wide row instead of dumping them in the first column", () => {
+    expect(resolveModuleColumnForLayout("col1", "four-column")).toBe("left");
+    expect(resolveModuleColumnForLayout("col2", "four-column")).toBe("center");
+    expect(resolveModuleColumnForLayout("col3", "four-column")).toBe("right");
+    expect(resolveModuleColumnForLayout("main", "four-column")).toBe("left");
+  });
+
+  it("folds columns a narrower layout does not have into its first column", () => {
+    expect(resolveModuleColumnForLayout("col5", "four-column")).toBe("left");
+    expect(resolveModuleColumnForLayout("col4", "three-column")).toBe("left");
+  });
+});
 
 describe("normalizeBuilderModuleSettingsForType", () => {
   it("preserves transparent poll category list background on save", () => {

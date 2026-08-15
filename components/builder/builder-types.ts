@@ -75,6 +75,9 @@ export const layoutOptions: Array<{ value: BuilderTemplateLayout; label: string 
   { value: "single", label: "1 Column" },
   { value: "two-column", label: "1/2 + 1/2" },
   { value: "three-column", label: "1/3 + 1/3 + 1/3" },
+  { value: "four-column", label: "1/4 × 4" },
+  { value: "five-column", label: "1/5 × 5" },
+  { value: "six-column", label: "1/6 × 6" },
 
   { value: "two-four", label: "1/3 + 2/3" },
   { value: "four-two", label: "2/3 + 1/3" },

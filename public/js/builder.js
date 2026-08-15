@@ -5165,6 +5165,13 @@ App.builder = (function () {
     'one-one-two': '2-2-2',
     'three-one-one': '2-2-2',
     'one-one-three': '2-2-2',
+    // Four to six columns: the six-span grid tops out at three columns, so
+    // the closest count wins. Columns four to six fold into the first
+    // column (mapNormieColumnToLegacy), and a save through THIS editor
+    // rewrites the row as three-column — lossy, but nothing is dropped.
+    'four-column': '2-2-2',
+    'five-column': '2-2-2',
+    'six-column': '2-2-2',
   };
 
   const LEGACY_TO_NORMIE_LAYOUT = {
@@ -5254,11 +5261,15 @@ App.builder = (function () {
 
   function mapNormieColumnToLegacy(column, layout) {
     const normieCol = safeText(column).toLowerCase() || 'main';
-    if (/^col\d+$/.test(normieCol)) return normieCol;
     const layoutKey = safeText(layout).toLowerCase();
     const legacyLayout = NORMIE_LAYOUT_TO_LEGACY[layoutKey] || layoutKey;
     const meta = getModularPageLayoutMeta(legacyLayout);
     const legacyCols = meta.columns.map((entry) => safeText(entry.id) || 'col1');
+    // colN is already a legacy column id — but only when this row HAS that
+    // column. The React builder's four-to-six column rows resolve to 2-2-2
+    // here, so their col4..col6 must fall through to the fallback below and
+    // land in the first column rather than vanish from a three-column grid.
+    if (/^col\d+$/.test(normieCol) && legacyCols.includes(normieCol)) return normieCol;
     const normieKeys = getNormieLayoutColumnKeys(layout);
     if (normieKeys.length === 1) return legacyCols[0] || 'col1';
     const idx = normieKeys.indexOf(normieCol);
