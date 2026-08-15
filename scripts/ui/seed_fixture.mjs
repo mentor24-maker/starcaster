@@ -200,17 +200,38 @@ const PANEL_CHECK_SECTION = {
   locked: false,
   alignment: 'left',
   widthMode: 'contained',
-  modules: BUILDER_MODULE_TYPES.map((type) => {
-    const base = createEmptyModule(type, 'main');
-    const tuned = TUNED[type] || {};
-    return {
-      ...base,
-      id: `module-panel-check-${type}`,
-      name: tuned.name ?? type,
-      text: tuned.text ?? base.text ?? '',
-      settings: { ...base.settings, ...(tuned.settings || {}) },
-    };
-  }),
+  modules: [
+    ...BUILDER_MODULE_TYPES.map((type) => {
+      const base = createEmptyModule(type, 'main');
+      const tuned = TUNED[type] || {};
+      return {
+        ...base,
+        id: `module-panel-check-${type}`,
+        name: tuned.name ?? type,
+        text: tuned.text ?? base.text ?? '',
+        settings: { ...base.settings, ...(tuned.settings || {}) },
+      };
+    }),
+    // A SECOND menu, in Mega Panel mode. Half the Panel controls (Columns,
+    // Width, Placement) are `visibleWhen: isMegaMenu`, so the list-mode menu
+    // above hides them and the check would report a pass over fields it never
+    // measured — the exact hole this file exists to close. One module per
+    // type is the floor, not the ceiling.
+    (() => {
+      const base = createEmptyModule('navigation', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-navigation-mega',
+        name: 'Top Menu (Mega Panel)',
+        settings: {
+          ...base.settings,
+          ...TUNED.navigation.settings,
+          navDropdownStyle: 'mega',
+          navMegaPlacement: 'menu',
+        },
+      };
+    })(),
+  ],
 };
 
 /** Content chosen to break layouts, not to look plausible. */

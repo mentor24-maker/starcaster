@@ -587,10 +587,10 @@ export function BuilderNavigationModuleSettings({
         title: "Placement",
         strips: [],
         /*
-         * No "Panel" part here yet, and the gap is the honest report: a
-         * drop-down panel has no alignment, padding, margin or offset control
-         * built. Those are stage two. An empty titled part would say the
-         * opposite of the truth, so the axis carries one part until they exist.
+         * The "Panel" part holds the one placement control built so far; a
+         * LIST drop-down still has none, and the renderer drops the empty
+         * heading for it, so the axis stays an honest report either way.
+         * Panel padding/margin/offset are still to come.
          */
         sections: [
           {
@@ -653,6 +653,31 @@ export function BuilderNavigationModuleSettings({
                   step: 5,
                   fallback: "0",
                   rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+                }
+              ]
+            ]
+          },
+          {
+            title: "Panel",
+            strips: [
+              [
+                {
+                  // What the open panel lines up WITH. "Center on Menu" is the
+                  // one-fixed-spot option — the panel opens in the same place
+                  // whichever item is hovered (operator, 2026-08-14).
+                  key: "navMegaPlacement",
+                  label: "Placement",
+                  width: "select-md",
+                  control: "select",
+                  fallback: "item",
+                  options: [
+                    { value: "item", label: "Center on Menu Item" },
+                    { value: "menu", label: "Center on Menu" },
+                    { value: "right", label: "Extend Right from Item" },
+                    { value: "left", label: "Extend Left from Item" }
+                  ],
+                  visibleWhen: isMegaMenu,
+                  rendersVia: "getNavModuleClassNames (builder-nav-style.ts)"
                 }
               ]
             ]
