@@ -19,6 +19,7 @@ import { BuilderModuleCard } from "./builder-module-card";
 import { BuilderSectionControls } from "./builder-section-controls";
 import { modulePaletteGroups, modulePaletteItems } from "./builder-types";
 import {
+  formatColumnName,
   getAlignmentClass,
   getSectionMarginStyle,
 } from "./builder-utils";
@@ -539,7 +540,7 @@ export function BuilderSectionCard({
                 >
                   {columnModules.length > 0 ? (
                     <div className="builder-column-header">
-                      <strong>{column}</strong>
+                      <strong>{formatColumnName(column)}</strong>
                     </div>
                   ) : null}
 

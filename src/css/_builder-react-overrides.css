@@ -4567,3 +4567,79 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-color: var(--accent-dark);
   background: rgba(11, 130, 212, 0.08);
 }
+
+/* ============================================================
+   WIDE ROWS — four to six equal columns (docs/SECTION_LAYOUTS.md)
+
+   _builder-react.css defines .builder-columns-1..-3, the matching
+   .builder-preview-columns, the .builder-layout-icon track lists and the
+   mobile reverse-stack orders, and that file is REGENERATED wholesale
+   (rule R2) — so the counts it does not know about live here instead.
+   Same declarations, same specificity, later file: the cascade treats
+   these as one set with the -1..-3 rules. */
+
+.builder-react-root .builder-layout-icon-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.builder-react-root .builder-layout-icon-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.builder-react-root .builder-layout-icon-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.builder-react-root .builder-columns-4,
+.builder-react-root .builder-preview-columns-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.builder-react-root .builder-columns-5,
+.builder-react-root .builder-preview-columns-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.builder-react-root .builder-columns-6,
+.builder-react-root .builder-preview-columns-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+/* Reverse-stack for columns four to six continues the descending order
+   sequence the -1..-3 rules establish (3, 2, 1 → 0, -1, -2). Negative
+   values are deliberate: the shipped rules cannot renumber, and order
+   only has to be mutually consistent within the section. */
+.builder-react-root .builder-preview-device-mobile .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(4) {
+  order: 0;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(5) {
+  order: -1;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(6) {
+  order: -2;
+}
+
+@media (max-width: 900px) {
+  .builder-react-root .builder-columns-4,
+  .builder-react-root .builder-columns-5,
+  .builder-react-root .builder-columns-6,
+  .builder-react-root .builder-preview-columns-4,
+  .builder-react-root .builder-preview-columns-5,
+  .builder-react-root .builder-preview-columns-6 {
+    grid-template-columns: 1fr;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(4) {
+    order: 0;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(5) {
+    order: -1;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(6) {
+    order: -2;
+  }
+}
