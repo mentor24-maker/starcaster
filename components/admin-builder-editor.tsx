@@ -2,7 +2,7 @@
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import type { ChangeEvent, DragEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AdminMediaItem } from "@/lib/admin-media";
 import {
   BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
@@ -64,6 +64,7 @@ import {
 } from "./builder/builder-floating-save-rail";
 import { BuilderSaveDebugPanel } from "./builder/builder-save-debug-panel";
 import { BuilderSectionCard } from "./builder/builder-section-card";
+import { BuilderCenteredModal } from "./builder/builder-centered-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
 import {
   BuilderModulePaletteModal,
@@ -142,6 +143,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [dragOverWorkspace, setDragOverWorkspace] = useState(false);
+  const [draggingLayout, setDraggingLayout] = useState(false);
+  const [dragOverSectionGap, setDragOverSectionGap] = useState<number | null>(null);
+  const [savedSectionToPlace, setSavedSectionToPlace] = useState<BuilderSavedSectionRecord | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isModulePaletteOpen, setIsModulePaletteOpen] = useState(false);
   const [galleryTarget, setGalleryTarget] = useState<GalleryTarget | null>(null);
@@ -663,9 +667,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     });
   }
 
-  function addSection(layout: BuilderTemplateLayout) {
+  function insertSectionAt(sections: BuilderTemplateSection[], section: BuilderTemplateSection, atIndex?: number) {
+    const arr = [...sections];
+    const index = atIndex === undefined ? arr.length : Math.max(0, Math.min(atIndex, arr.length));
+    arr.splice(index, 0, section);
+    return arr;
+  }
+
+  function addSection(layout: BuilderTemplateLayout, atIndex?: number) {
     const newSection = createEmptySection(layout);
-    setDraft((c) => ({ ...c, layoutSections: [...c.layoutSections, newSection] }));
+    setDraft((c) => ({ ...c, layoutSections: insertSectionAt(c.layoutSections, newSection, atIndex) }));
     setCollapsedSectionIds((c) => c.filter((id) => id !== newSection.id));
     setNewSectionOpenFocusId(newSection.id);
   }
@@ -702,7 +713,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     };
   }
 
-  function insertSavedSection(savedSectionId: string) {
+  function insertSavedSection(savedSectionId: string, atIndex?: number) {
     if (!savedSectionId) return;
 
     const savedSection = savedSections.find((candidate) => candidate.id === savedSectionId);
@@ -723,15 +734,23 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       section = { ...cloneSavedSection(savedSection.section), savedSectionId: savedSection.id, canonical: false };
     }
 
-    setDraft((current) => ({ ...current, layoutSections: [...current.layoutSections, section] }));
+    setDraft((current) => ({ ...current, layoutSections: insertSectionAt(current.layoutSections, section, atIndex) }));
     setCollapsedSectionIds((current) => [...current, section.id]);
     setMessage(`Inserted saved section "${savedSection.name}"${insertCanonical ? " (canonical)" : ""}.`);
     setError(null);
-    setSavedSectionSelectKey((current) => current + 1);
   }
 
   function handleSavedSectionSelect(event: ChangeEvent<HTMLSelectElement>) {
-    insertSavedSection(event.target.value);
+    const savedSection = savedSections.find((candidate) => candidate.id === event.target.value);
+    setSavedSectionSelectKey((current) => current + 1);
+    if (!savedSection) return;
+
+    if (draft.layoutSections.length === 0) {
+      insertSavedSection(savedSection.id, 0);
+      return;
+    }
+
+    setSavedSectionToPlace(savedSection);
   }
 
   async function saveSection(sectionId: string) {
@@ -2089,20 +2108,54 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   function handleLayoutDragStart(layout: BuilderTemplateLayout, event: DragEvent<HTMLButtonElement>) {
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("text/plain", layout);
+    // Deferred: mutating the DOM during dragstart makes Chrome cancel the drag,
+    // and this state change renders the gap drop zones into the workspace.
+    window.setTimeout(() => setDraggingLayout(true), 0);
+  }
+
+  function handleLayoutDragEnd() {
+    setDraggingLayout(false);
+    setDragOverSectionGap(null);
+    setDragOverWorkspace(false);
   }
 
   function handleWorkspaceDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     const layout = event.dataTransfer.getData("text/plain") as BuilderTemplateLayout;
     if (layout) addSection(layout);
-    setDragOverWorkspace(false);
+    handleLayoutDragEnd();
+  }
+
+  function handleSectionGapDrop(index: number, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const layout = event.dataTransfer.getData("text/plain") as BuilderTemplateLayout;
+    if (layout) addSection(layout, index);
+    handleLayoutDragEnd();
+  }
+
+  function renderSectionGapDropZone(index: number) {
+    if (!draggingLayout) return null;
+    return (
+      <div
+        className={`builder-section-gap-drop${dragOverSectionGap === index ? " is-over" : ""}`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragOverSectionGap(index);
+        }}
+        onDragLeave={() => setDragOverSectionGap((current) => (current === index ? null : current))}
+        onDrop={(event) => handleSectionGapDrop(index, event)}
+      >
+        <span>Drop row here</span>
+      </div>
+    );
   }
 
   function renderLayoutTile(layout: { value: BuilderTemplateLayout; label: string }) {
     const columns = getLayoutColumns(layout.value);
     const gridTemplateColumns = getLayoutGridTemplate(layout.value);
     return (
-      <button className="builder-layout-tile" draggable key={layout.value} onClick={() => addSection(layout.value)} onDragStart={(event) => handleLayoutDragStart(layout.value, event)} type="button">
+      <button className="builder-layout-tile" draggable key={layout.value} onClick={() => addSection(layout.value)} onDragStart={(event) => handleLayoutDragStart(layout.value, event)} onDragEnd={handleLayoutDragEnd} type="button">
         <span className={`builder-layout-icon builder-layout-icon-${columns.length}`} style={{ gridTemplateColumns }}>
           {columns.map((column) => (<span className="builder-layout-bar" key={column} />))}
         </span>
@@ -2454,9 +2507,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
                             : undefined;
                           return (
+                          <Fragment key={section.id}>
+                          {renderSectionGapDropZone(sectionIndex)}
                           <BuilderSectionCard
                             isEmailTemplate
-                            key={section.id}
                             section={section}
                             sectionIndex={sectionIndex}
                             editorDevice="browser"
@@ -2512,8 +2566,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             onUploadSectionBackgroundMedia={(file) => uploadMediaForSectionBackground(section.id, file)}
                             onOpenModulePalette={(col, anchor) => openModulePalette(section.id, col, anchor)}
                           />
+                          </Fragment>
                           );
                         })}
+                        {renderSectionGapDropZone(draft.layoutSections.length)}
                       </div>
                     )}
                   </div>
@@ -2530,9 +2586,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
                         : undefined;
                       return (
+                      <Fragment key={section.id}>
+                      {renderSectionGapDropZone(sectionIndex)}
                       <BuilderSectionCard
                         isEmailTemplate={isEmailTemplateDraft}
-                        key={section.id}
                         section={section}
                         sectionIndex={sectionIndex}
                         editorDevice={previewDevice === "mobile" ? "mobile" : "browser"}
@@ -2588,8 +2645,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         onUploadSectionBackgroundMedia={(file) => uploadMediaForSectionBackground(section.id, file)}
                         onOpenModulePalette={(col, anchor) => openModulePalette(section.id, col, anchor)}
                       />
+                      </Fragment>
                       );
                     })}
+                    {renderSectionGapDropZone(draft.layoutSections.length)}
                   </div>
                 )}
                     </div>
@@ -2614,6 +2673,39 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onSelectImage={selectGalleryImage}
           onClose={closeGallery}
         />
+      ) : null}
+
+      {savedSectionToPlace ? (
+        <BuilderCenteredModal
+          onClose={() => setSavedSectionToPlace(null)}
+          title={`Add "${savedSectionToPlace.name}" under…`}
+        >
+          <div className="builder-add-under-list">
+            <button
+              className="builder-add-under-option"
+              onClick={() => {
+                insertSavedSection(savedSectionToPlace.id, 0);
+                setSavedSectionToPlace(null);
+              }}
+              type="button"
+            >
+              Top of page
+            </button>
+            {draft.layoutSections.map((section, index) => (
+              <button
+                className="builder-add-under-option"
+                key={section.id}
+                onClick={() => {
+                  insertSavedSection(savedSectionToPlace.id, index + 1);
+                  setSavedSectionToPlace(null);
+                }}
+                type="button"
+              >
+                {index + 1}. {section.title?.trim() || `Section ${index + 1}`}
+              </button>
+            ))}
+          </div>
+        </BuilderCenteredModal>
       ) : null}
 
       {isModulePaletteOpen ? (
