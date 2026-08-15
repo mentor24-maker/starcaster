@@ -57,6 +57,12 @@ import {
   resolveTemplateSections,
   toTemplateReferences
 } from "@/lib/builder-template-frame";
+import {
+  buildSavedSectionUsageIndex,
+  describePropagationOutcome,
+  describePushImpact,
+  type BlockUsage
+} from "@/lib/shared-block-usage";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -191,6 +197,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // Palette swatches for the RTE toolbar: prefer the linked page theme, then fall back to the
   // first available theme so swatches still appear when no theme is selected on the page.
   const activeTheme = linkedTheme ?? builderThemes[0] ?? null;
+  // How many pages follow each saved section. One pass over the pages already
+  // in memory, so the manager can show "used on N pages" and a save can say
+  // what it is about to rewrite.
+  const savedSectionUsage = useMemo(() => buildSavedSectionUsageIndex(pages), [pages]);
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
   const workspaceShellLayers = useMemo(
     () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
@@ -1230,6 +1240,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       return;
     }
 
+    // Say what this will touch BEFORE writing. Saving a master rewrites the
+    // section on every page that follows it, and that fan-out used to be
+    // completely silent — see lib/builder-client/shared-block-usage.ts.
+    const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId));
+    if (impact && !window.confirm(impact)) return;
+
     setIsSaving(true);
     setError(null);
     setMessage(null);
@@ -1240,7 +1256,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmedName, section, isPrivate })
       });
-      const data = await readAdminJson<{ savedSection?: BuilderSavedSectionRecord; error?: string }>(response, "Failed to save saved section.");
+      const data = await readAdminJson<{
+        savedSection?: BuilderSavedSectionRecord;
+        error?: string;
+        meta?: { propagation?: { ok?: boolean; total?: number; updated?: number; failed?: number } };
+      }>(response, "Failed to save saved section.");
 
       if (!data.savedSection) {
         throw new Error(data.error ?? "Failed to save saved section.");
@@ -1249,7 +1269,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       setSavedSections((current) =>
         current.map((section) => (section.id === data.savedSection!.id ? data.savedSection! : section))
       );
-      setMessage(`Saved section "${data.savedSection.name}".`);
+      // The route has always returned this tally; it used to be dropped, so a
+      // fan-out that half failed reported the same "Saved." as a clean one.
+      setMessage(describePropagationOutcome(data.savedSection.name, data.meta?.propagation));
+      // Those pages now hold new content — refresh so the counts stay true.
+      await loadPages();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save saved section.");
     } finally {
@@ -2373,6 +2397,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       ) : builderMode === "modules" ? (
         <BuilderModuleRepositoryList
           cellModules={cellModules}
+          savedSectionUsage={savedSectionUsage}
           pages={pages}
           products={products}
           galleryMedia={galleryMedia}
