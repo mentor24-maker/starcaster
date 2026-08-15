@@ -131,9 +131,37 @@ sharing the same repo history. **Use the command, not the raw git:**
 
 ```
 npm run thread <topic>     # tidy first, branch off CURRENT origin/main, npm ci, build
+npm run ship               # catch up, verify, push, PR, wait for CI, merge, tidy
 npm run map                # what exists, what is shipped, what is still live work
 npm run tidy               # delete shipped branches, remove finished worktrees
 ```
+
+`npm run ship` is the other end of `thread`: the nine hand-run steps between
+"the work is done" and "it is live", in order, with the state checked between
+each one. Run it again if `main` moves while it runs — it picks up where it
+got to. `--dry-run` says what it would do; `--no-merge` stops before merging.
+
+**It never force-pushes.** It catches up by merging `origin/main` in rather
+than rebasing, so the branch only ever gains commits and an ordinary push
+always works. That is deliberate: a force-push inside a script is invisible to
+the operator's `Bash(git push --force*)` deny rule, and a convenience command
+does not get to route around a standing decision (`docs/DOCTRINE.md` §6.6).
+Squash-merge discards the merge commits anyway, so it costs nothing.
+`scripts/builder/shipThread.test.js` fails if a future edit reintroduces one.
+
+**The `?v=` asset pins no longer conflict.** Those four committed HTML files
+carry hashes rebuilt from whatever the build produced, so any two branches
+touching styling collide there even when neither edited a word of markup — it
+was most of the conflict traffic on 2026-08-11, and the resolution was
+mechanical every time. `.gitattributes` routes them through
+`scripts/merge_asset_pins.cjs`, which merges the markup normally and restores
+each pin by asset path. A genuine markup conflict still conflicts.
+
+The driver lives in `.git/config` (git will not run a driver defined by a
+cloned repo), so `scripts/install_git_hooks.cjs` registers it on every
+`npm install`. Without that step `.gitattributes` names a driver that does not
+exist and git falls back to the default merge **silently** — so if pins start
+conflicting again, run `npm install` before anything else.
 
 `npm run thread` exists because each hand-rolled step had already cost time:
 branching off a stale local `main` (forces a rebase later, which is where the

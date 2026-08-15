@@ -1,0 +1,18 @@
+# The committed HTML files that carry `?v=` cache-busting pins.
+#
+# Those hashes are rebuilt from whatever CSS and JS the build produced, so any
+# two branches that touch styling collide here even when neither one edited a
+# word of markup — it was most of the conflict traffic while shipping the Top
+# Menu work on 2026-08-11, and the fix was mechanical every single time.
+#
+# scripts/merge_asset_pins.cjs merges these by ignoring the pins and putting
+# them back per asset afterwards. A genuine markup conflict still conflicts.
+#
+# The driver itself is defined in .git/config, which is NOT committed —
+# scripts/install_git_hooks.cjs registers it, and npm `prepare` runs that on
+# every install. Without that step git silently falls back to the default
+# merge, which is the old behaviour rather than a broken one.
+src/layout.html             merge=asset-pins
+public/about.html           merge=asset-pins
+public/site.html            merge=asset-pins
+public/builder-preview.html merge=asset-pins

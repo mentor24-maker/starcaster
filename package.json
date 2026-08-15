@@ -9,6 +9,7 @@
     "map": "node scripts/repo_map.cjs",
     "tidy": "node scripts/repo_tidy.cjs",
     "thread": "node scripts/new_thread.cjs",
+    "ship": "node scripts/ship_thread.cjs",
     "check:passengers": "node scripts/check_branch_passengers.cjs",
     "build:html": "node scripts/build_html.js",
     "pin:assets": "node scripts/pin_asset_versions.cjs",
