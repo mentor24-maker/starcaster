@@ -6,6 +6,7 @@ import { createDefaultBackgroundSettings } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderCellStyleSettingsProps = {
@@ -111,6 +112,19 @@ export function BuilderCellStyleSettings({
   const legacyPadding = section.cellPadding?.[column] ?? "0";
   const cellSide = (key: string, pair: string, fallback: string) =>
     getCellExtra(column, key, "") || getCellExtra(column, pair, "") || fallback;
+  /*
+   * The spacing control reads a settings RECORD, and a cell's settings live
+   * behind getCellExtra/onSetCellExtra with a legacy pair underneath. These
+   * two adapters are the whole bridge — resolve the four sides into a record
+   * on the way in, write each changed side back on the way out.
+   */
+  const cellSideValues = (
+    sides: ReadonlyArray<{ key: string; pair: string }>,
+    fallback: string
+  ) => Object.fromEntries(sides.map(({ key, pair }) => [key, cellSide(key, pair, fallback)]));
+  const setCellSides = (values: Record<string, string>) => {
+    for (const [key, value] of Object.entries(values)) onSetCellExtra(column, key, value);
+  };
 
   return (
     <div className="builder-cell-style-settings is-lattice">
@@ -132,34 +146,24 @@ export function BuilderCellStyleSettings({
             </select>
           </BuilderSettingRow>
           {/* W7, the model every object shares: four padding sides and four
-              margin sides, in one order — top, bottom, left, right. Each side
+              margin sides, in one order — top, bottom, left, right — shown
+              matched per axis with the split one click away (E4b), the same
+              control the module panels and the row editor use. Each side
               reads the pair that preceded it and then the single all-sides
               number before that, so a cell nobody has re-saved shows the
               number it is actually rendering. */}
-          {CELL_PADDING_SIDES.map(({ key, label, pair }) => (
-            <BuilderSettingRow key={key} label={label}>
-              <BuilderNumberSelectControl
-                value={cellSide(key, pair, legacyPadding)}
-                min={0}
-                max={50}
-                step={5}
-                fallback="0"
-                onChange={(value) => onSetCellExtra(column, key, value)}
-              />
-            </BuilderSettingRow>
-          ))}
-          {CELL_MARGIN_SIDES.map(({ key, label, pair }) => (
-            <BuilderSettingRow key={key} label={label}>
-              <BuilderNumberSelectControl
-                value={cellSide(key, pair, "0")}
-                min={0}
-                max={160}
-                step={5}
-                fallback="0"
-                onChange={(value) => onSetCellExtra(column, key, value)}
-              />
-            </BuilderSettingRow>
-          ))}
+          <BuilderModuleSpacingFields
+            box={{ keyPrefix: "cellPadding", noun: "Padding" }}
+            max={50}
+            onChange={(values) => setCellSides(values)}
+            settings={cellSideValues(CELL_PADDING_SIDES, legacyPadding)}
+          />
+          <BuilderModuleSpacingFields
+            box={{ keyPrefix: "cellMargin", noun: "Margin" }}
+            max={160}
+            onChange={(values) => setCellSides(values)}
+            settings={cellSideValues(CELL_MARGIN_SIDES, "0")}
+          />
         </div>
 
         <div className="builder-schema-panel-column">
