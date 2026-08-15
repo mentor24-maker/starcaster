@@ -1569,14 +1569,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Panel Placement (navMegaPlacement). The base rule above is "item" —
    centred on the hovered menu item, the panel's original behaviour.
 
-   "menu": one fixed spot, centred under the whole bar, whichever item is
+   "menu": one fixed spot, centred under the menu, whichever item is
    hovered. The trick is WHICH box `left`/`top` measure from: an absolutely
    positioned element measures from its nearest positioned ancestor, so
-   un-positioning the item hands the panel to the bar. The media query at the
-   bottom un-positions the panel itself on phones, so these rules change
-   nothing in the mobile accordion. */
-.builder-react-root .site-nav--mega-place-menu {
+   un-positioning the item hands the panel to the items row. The row and not
+   the bar, because the two centres genuinely differ: the operator's header
+   carries uneven bar padding (0 left, 30 right) and a menu wider than its
+   column, so "centre of the bar's box" sat ~40px left of the centre of the
+   items a visitor actually sees. `min-width: max-content` makes the row's
+   box track its content even when that content overflows the bar, which is
+   exactly the case that exposed this. The media query at the bottom
+   un-positions the panel itself on phones, so these rules change nothing in
+   the mobile accordion. */
+.builder-react-root .site-nav--mega-place-menu .site-nav-items {
   position: relative;
+  min-width: max-content;
 }
 
 .builder-react-root .site-nav--mega-place-menu .site-nav-mega {
@@ -1595,6 +1602,36 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   left: auto;
   right: 0;
   transform: none;
+}
+
+/* While its panel is open, the item keeps the hover look and the fill
+   reaches DOWN to the panel — without this the pill stopped at the link's
+   bottom edge and 13px of bar padding + offset showed through as a gap
+   (operator, 2026-08-14: "the background color should extend all the way
+   down to connect/overlap with the 2nd tier menu").
+
+   The reach-down is a ::before (the underline hover effect owns ::after)
+   hanging from the pill's midline to just past the panel's top edge:
+   bar bottom padding + the 6px offset + 1px of overlap, and any overshoot
+   in the other placement modes hides under the panel (z-index 40). The
+   link becomes its own stacking context (z-index: 0) so the ::before's
+   z-index: -1 slides under the label text but stays above the bar. */
+.builder-react-root .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link {
+  position: relative;
+  z-index: 0;
+  background: var(--site-nav-link-hover-bg, transparent);
+  color: var(--site-nav-link-hover-color, var(--site-nav-link-color, #0a8fc4));
+}
+
+.builder-react-root .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  bottom: calc(-1 * (var(--site-nav-padding-bottom, 8px) + 7px));
+  z-index: -1;
+  background: var(--site-nav-link-hover-bg, transparent);
 }
 
 .builder-react-root .site-nav-mega-grid {
@@ -1737,6 +1774,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     box-shadow: none;
   }
 
+  /* The drawer keeps the open item's highlight but not the reach-down —
+     an accordion has no gap to bridge — and the items column must not be
+     widened by the desktop max-content rule. */
+  .builder-react-root .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link::before {
+    content: none;
+  }
+
+  .builder-react-root .site-nav--mega-place-menu .site-nav-items {
+    min-width: 0;
+  }
+
   .builder-react-root .site-nav-mega-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
@@ -1767,6 +1815,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-preview-device-mobile .site-nav-mega-toggle,
 .builder-react-root .builder-preview-device-tablet .site-nav-mega-toggle {
   margin-left: 0;
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link::before,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link::before {
+  content: none;
+}
+
+.builder-react-root .builder-preview-device-mobile .site-nav--mega-place-menu .site-nav-items,
+.builder-react-root .builder-preview-device-tablet .site-nav--mega-place-menu .site-nav-items {
+  min-width: 0;
 }
 
 .builder-react-root .builder-preview-device-mobile .site-nav-mega-grid,

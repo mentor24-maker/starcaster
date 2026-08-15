@@ -254,6 +254,10 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     ]
       .map((side) => `${side}px`)
       .join(" "),
+    // The bottom side again, alone: the open item's hover fill extends down
+    // past the bar's padding to meet the mega panel, and a shorthand var
+    // can't be picked apart in CSS.
+    "--site-nav-padding-bottom": `${num(settings.navPaddingBottom, NAV_STYLE_DEFAULTS.paddingV, 0, 60)}px`,
     "--site-nav-gap": `${num(settings.navGap, NAV_STYLE_DEFAULTS.gap, 0, 40)}px`,
     /*
      * The bar's fill when the Background control is set to None.

@@ -450,3 +450,11 @@ describe("the toggle pull-back var (--site-nav-link-padding-right)", () => {
     expect(vars["--site-nav-link-padding-right"]).toBe("22px");
   });
 });
+
+describe("the bridge var (--site-nav-padding-bottom)", () => {
+  it("repeats the bar padding shorthand's bottom side so CSS can span it", () => {
+    expect(style()["--site-nav-padding-bottom"]).toBe("8px");
+    expect(style({ navPaddingBottom: "7" })["--site-nav-padding-bottom"]).toBe("7px");
+    expect(style({ navPaddingBottom: "7" })["--site-nav-padding"]).toBe("8px 8px 7px 8px");
+  });
+});
