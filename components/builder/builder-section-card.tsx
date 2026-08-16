@@ -519,8 +519,8 @@ export function BuilderSectionCard({
             <BuilderCellPanelHeader
               isCollapsed={isSectionSettingsCollapsed}
               onToggle={() => setIsSectionSettingsCollapsed((current) => !current)}
-              panelName="Settings and Styles"
-              title="Settings and Styles"
+              panelName="Section Settings and Styles"
+              title="Section Settings and Styles"
             />
 
             {!isSectionSettingsCollapsed ? (
