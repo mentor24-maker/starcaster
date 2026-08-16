@@ -208,15 +208,19 @@ test('completeness fixture: every disposition, reconciled', () => {
   const allModules = home.sections.flatMap((s) => s.modules);
   const byType = allModules.reduce((m, x) => ((m[x.type] = (m[x.type] || 0) + 1), m), {});
   assert.equal(byType.image, 1);
-  assert.equal(byType.slideshow, 1);
-  const show = allModules.find((m) => m.type === 'slideshow');
-  const slides = JSON.parse(show.settings.slides);
+  // `carousel` in its slideshow format — `slideshow` was its own module type
+  // until the 2026-08-16 merge, and the importer writes the new shape
+  // directly rather than leaning on the normalizer's migration.
+  assert.equal(byType.carousel, 1);
+  const show = allModules.find((m) => m.type === 'carousel');
+  assert.equal(show.settings.format, 'slideshow');
+  const slides = JSON.parse(show.settings.items);
   assert.equal(slides.length, 4);
-  assert.equal(slides[0].url, 'https://blob.test/SiteImport/job/assets/aa.jpg'); // promoted asset URL
+  assert.equal(slides[0].imageUrl, 'https://blob.test/SiteImport/job/assets/aa.jpg'); // promoted asset URL
   assert.ok(show.settings.importSourceIds.split(',').length === 5); // whole run tracked
   // Interior page gets NO slideshow (ratified homepage-only amendment).
   const teamModules = out.pages[1].sections.flatMap((s) => s.modules);
-  assert.ok(!teamModules.some((m) => m.type === 'slideshow'));
+  assert.ok(!teamModules.some((m) => m.type === 'carousel'));
   assert.equal(byType.button, 1);
   assert.equal(byType.video, 1);
   assert.ok(byType.code >= 5);
@@ -320,7 +324,7 @@ test('slideshow veto: --no-slideshow keeps image runs as plain images', () => {
   // dedupe passes stand down too (they exist to serve the slideshow).
   const off = mapSite(ir, { existingSlugs: [], skipAllSlideshows: true });
   const offModules = off.pages.flatMap((p) => p.sections).flatMap((s) => s.modules);
-  assert.equal(offModules.filter((m) => m.type === 'slideshow').length, 0);
+  assert.equal(offModules.filter((m) => m.type === 'carousel').length, 0);
   assert.equal(off.slideshows.length, 0);
   assert.equal(off.report.elements.deduped, 0, 'nothing deduped when nothing consolidated');
   assert.ok(offModules.filter((m) => m.type === 'image').length >= 6, 'every image kept');
@@ -330,7 +334,7 @@ test('slideshow veto: --no-slideshow keeps image runs as plain images', () => {
   // home is the only page that would have produced one.
   const homeOff = mapSite(ir, { existingSlugs: [], skipSlideshowPaths: ['/'] });
   const homeModules = homeOff.pages[0].sections.flatMap((s) => s.modules);
-  assert.equal(homeModules.filter((m) => m.type === 'slideshow').length, 0);
+  assert.equal(homeModules.filter((m) => m.type === 'carousel').length, 0);
   assert.equal(homeOff.slideshows.length, 0);
   assert.ok(reportReconciles(homeOff.report));
 
@@ -371,17 +375,17 @@ test('delraytennis IR maps with full reconciliation', () => {
   // slideshow module; clones land in deduped. (This 2-page fixture keeps
   // the interior page's run as images: no clones there, and the cross-page
   // fingerprint needs >=3 pages.)
-  const shows = out.pages.flatMap((p) => p.sections).flatMap((s) => s.modules).filter((m) => m.type === 'slideshow');
+  const shows = out.pages.flatMap((p) => p.sections).flatMap((s) => s.modules).filter((m) => m.type === 'carousel');
   assert.equal(shows.length, 1);
   // 13 unique slides (the 14-image run holds one clone); the page's other
   // image run - 15 copies of one lazy-load placeholder - correctly does
   // NOT become a slideshow (min 3 unique slides).
-  assert.equal(JSON.parse(shows[0].settings.slides).length, 13);
+  assert.equal(JSON.parse(shows[0].settings.items).length, 13);
   // 1 clone inside the hero run + 14 for the interior page's own run +
   // the 15-copy lazy-load run of a photo the slideshow already shows
   // (operator-reported: slideshow followed by 15 identical pictures).
   assert.equal(out.report.elements.deduped, 30);
-  const slideUrls = new Set(JSON.parse(shows[0].settings.slides).map((s) => s.url));
+  const slideUrls = new Set(JSON.parse(shows[0].settings.items).map((s) => s.imageUrl));
   const redundant = out.pages[0].sections
     .flatMap((s) => s.modules)
     .filter((m) => m.type === 'image' && slideUrls.has(m.settings.url));
