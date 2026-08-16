@@ -2625,7 +2625,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: 3px 8px;
   border-radius: 5px;
   background: rgba(9, 16, 24, 0.72);
-  color: var(--btn-text, #ffffff);
+  color: var(--btn-text);
   font-size: 11px;
   opacity: 0;
   transition: opacity 140ms ease;
@@ -5440,4 +5440,130 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
      that paint outside their circle). In a grid row the spill lands on top
      of the Change Icon button beside it. */
   overflow: hidden;
+}
+
+/* ==============================================================
+   PUBLISH PANEL
+   ==============================================================
+   The count is the point. Publishing is a step now, and a step you can forget
+   is worse than no step — so the pending number sits in the panel header where
+   it is visible collapsed, and the body leads with the same fact in words.
+
+   Here rather than _builder-react.css because that file is regenerated
+   wholesale and a hand edit there disappears silently. */
+
+.builder-react-root .builder-publish-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px);
+}
+
+/* Reads as a fact, not a warning: unpublished work is the normal state of a
+   site being worked on, and colouring it like an error would cry wolf all day. */
+.builder-react-root .builder-publish-headline {
+  margin: 0;
+  font-size: var(--text-md, 1rem);
+  color: var(--ink-primary, #16203a);
+}
+
+.builder-react-root .builder-publish-headline.is-pending {
+  font-weight: 600;
+}
+
+.builder-react-root .builder-publish-note,
+.builder-react-root .builder-publish-progress {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-publish-error,
+.builder-react-root .builder-publish-message {
+  margin: 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-left: 3px solid var(--accent, #4f9c3a);
+  background: var(--bg-page, #ffffff);
+  font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+}
+
+.builder-react-root .builder-publish-error {
+  border-left-color: var(--danger, #a03c28);
+}
+
+/* The count badge in the header. Sized to two digits without reflowing the
+   label, since most sites will sit in single or low double figures. */
+.builder-react-root .builder-publish-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: var(--accent, #4f9c3a);
+  /* Text ON the accent, so it follows a tenant's theme rather than assuming
+     the accent stays dark enough for white. */
+  color: var(--btn-text);
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.builder-react-root .builder-publish-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* Name and address, nothing else. What changed on each page is Page History's
+   job, and duplicating it here would just be a worse version of it. */
+.builder-react-root .builder-publish-row {
+  display: grid;
+  grid-template-columns: minmax(12ch, 1.6fr) minmax(10ch, 1fr);
+  gap: var(--space-3, 12px);
+  align-items: baseline;
+  padding: var(--space-2, 8px) 0;
+  border-bottom: 1px solid var(--border-light, #e3e8e6);
+}
+
+.builder-react-root .builder-publish-row:first-child {
+  border-top: 1px solid var(--border-light, #e3e8e6);
+}
+
+.builder-react-root .builder-publish-page-name {
+  font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+}
+
+.builder-react-root .builder-publish-page-slug {
+  font-size: var(--text-sm);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-publish-more {
+  grid-template-columns: 1fr;
+  color: var(--ink-muted, #5c6a72);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .builder-react-root .builder-publish-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* Title and count travel together — see the comment in builder-publish-panel. */
+.builder-react-root .builder-publish-label-group {
+  display: inline-flex;
+  align-items: center;
 }
