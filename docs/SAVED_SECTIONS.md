@@ -45,10 +45,10 @@ so since 2026-08-16 it asks which (`BuilderSectionSaveModal`):
 **Overwrite the original.** `PATCH /api/builder/saved-sections/:id` — the same
 write the saved-section manager makes. The route rewrites the original and then
 **fans out**: every instance elsewhere with `canonical: true` and this
-`savedSectionId` is replaced. The dialog lists those pages before the click; the
-message afterwards gives the tally and an **Undo this update** button. The
-instance you saved from is relinked, because the original now holds exactly its
-content.
+`savedSectionId` is replaced. The dialog lists those pages before the click
+**and what changes on each** (§3a); the message afterwards gives the tally and
+an **Undo this update** button. The instance you saved from is relinked,
+because the original now holds exactly its content.
 
 **Save as a new section.** `POST /api/builder/saved-sections` — files a separate
 original under a name you type. The old, and until 2026-08-16 the only,
@@ -80,6 +80,44 @@ immediately; the page you are looking at still needs its own Save.
 **Local edits on a following page are replaced, without a merge.** There is no
 three-way anything here. The impact list exists so that is a decision rather
 than a discovery.
+
+---
+
+## 3a. The per-page diff, before the click
+
+`lib/builder-client/saved-section-diff.ts`, shown by
+`BuilderSectionSaveModal`. Naming a page is enough to make someone hesitate; it
+is not enough to make them decide, and that was the last open piece of the
+2026-07-21 request.
+
+It models **exactly** the rewrite in §3 — `before` is the instance as the page
+holds it, `after` is `{ ...proposed, id: <instance id>, savedSectionId,
+canonical: true }` — so it is not a naive object comparison. Three consequences
+that fall out of that and are easy to get wrong:
+
+- The **after state is identical on every page**. Diffs differ only because
+  before-states differ, which is why pages are grouped by an exact fingerprint
+  of their change list. Pages that still match the old original collapse into
+  one block; a page that had drifted stands on its own beside it.
+- **`canonicalLocked` does not save a module here.** That flag guards
+  module-level pushes; a section fan-out replaces the whole row. The diff says
+  the module changes, because it does.
+- **"No visible change" is a result, not a blank.** Forty pages of which
+  thirty-eight are identical is mostly noise, and that noise is what hides the
+  other two, so the unchanged pages get their own muted, collapsed group.
+
+It is pure and runs over the pages the editor already holds —
+`GET /api/admin/pages` is a `select=*`, so no endpoint was added. **That list is
+capped at 1000 rows** (`listPages` default) while the fan-out asks for 5000, so
+past 1000 pages the diff would under-report — the exact failure it exists to
+prevent. `PAGE_LIST_LIMIT` detects a list sitting at the cap and the dialog says
+so out loud rather than quietly showing less.
+
+Two things it deliberately approximates, both worth knowing before trusting a
+line of it: `after` is the editor's draft content, not a read-back of what the
+PATCH route stores after normalization; and the current page's own rows come
+from the last server load, not the unsaved draft, which only matters if the page
+you are editing holds a second following copy of the same section.
 
 ---
 
@@ -115,6 +153,7 @@ than a discovery.
 | Which save, and the wiring | `components/admin-builder-editor.tsx` — `saveSection`, `saveSectionAsNew`, `overwriteCanonicalFromSection`, `saveSavedSection` |
 | The dialog | `components/builder/builder-section-save-modal.tsx` |
 | Impact + outcome wording | `lib/builder-client/shared-block-usage.ts` |
+| Per-page diff before the click | `lib/builder-client/saved-section-diff.ts` |
 | Card states, badges, buttons | `components/builder/builder-section-card.tsx` |
 | Routes | `routes/builder.js` — `/api/builder/saved-sections*` |
 | Store | `lib/builderSavedSectionsStore.js` |
