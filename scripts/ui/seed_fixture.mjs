@@ -118,6 +118,29 @@ const TUNED = {
       ]),
     },
   },
+  // The platform list joined the manager family on 2026-08-15, and it is the
+  // third module to need real rows here for the same reason: an empty list
+  // renders no fields, so its lattice would be measured across nothing at all.
+  // Two platforms, one of them missing its icon and its link, so the "Choose
+  // From Gallery" button (the widest control in the grid) is on screen and the
+  // tracks are measured against it.
+  social: {
+    name: 'Social',
+    settings: {
+      socialIconSize: '44',
+      socialGap: '14',
+      socialShowLabels: 'true',
+      socialItems: JSON.stringify([
+        {
+          id: 'facebook', label: 'Facebook', href: 'https://facebook.com/delraytennis',
+          iconUrl: '/images/icon-facebook.svg', backgroundColor: '#1877f2',
+        },
+        {
+          id: 'instagram', label: 'Instagram', href: '', iconUrl: '', backgroundColor: '#c13584',
+        },
+      ]),
+    },
+  },
   // Same lesson as feature-cards, learned again on 2026-08-13: the Programs
   // manager shipped with a staggered, overlapping panel while `check:panels`
   // reported clean, because an empty module renders no fields and a group

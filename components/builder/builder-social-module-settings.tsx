@@ -1,25 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type DragEvent } from "react";
+import { Fragment, useState, type DragEvent } from "react";
 import type { BackgroundSettings, BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
-import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
-import {
-  BuilderInlineNumberSelect,
-  BuilderInlineNumberSelectRow,
-  BuilderNumberSelectControl
-} from "./builder-inline-number-select";
+import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
-import { BuilderSettingRow } from "./builder-setting-row";
-import {
-  BuilderThemeColorField,
-  BuilderThemeColorSettingRow,
-  type BuilderThemePalette
-} from "./builder-theme-color-field";
+import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
 import {
   DEFAULT_SOCIAL_ICON_BACKGROUND,
   normalizeSocialIconBackgroundColor
@@ -67,11 +57,47 @@ type BuilderSocialModuleSettingsProps = {
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
   onUpdateModuleBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onOpenGallery: (itemId: string) => void;
-  themeColors?: Array<{ label: string; hex: string }>;
+  themeColors?: BuilderThemePalette;
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
 };
 
+/**
+ * The Social module's settings panel.
+ *
+ * Rebuilt 2026-08-15 on the item-manager shape Feature Cards and Programs
+ * already wear (operator: *"update the Social Media module to reflect all the
+ * UI rules. It looks pretty rough now"* — and it was: the Label input printed
+ * over the word Background, Alignment and both margins shared a row with the
+ * "Icon Row" heading behind them, and the panel had two collapsible sub-panels
+ * plus a `<details>` for Border & Shadow).
+ *
+ * What it is now, and why each part:
+ *
+ *   TWO COLUMNS (D2/L6a) — module settings left, the platform list right,
+ *   the same 50/50 editor Feature Cards, Slideshow and Programs use. S1:
+ *   learn one manager, know them all.
+ *
+ *   THE LATTICE (W0) — the settings column is `builder-schema-panel-column`
+ *   and the list is `builder-cards-panel-fields`, so labels and controls
+ *   land in ONE grid per column and line up by construction rather than by
+ *   matching numbers. `data-lattice-pairs="2"` puts the list under
+ *   `check_panels`, which is what stops it drifting back.
+ *
+ *   NO COLLAPSES (A0) — Border & Shadow came out of its `<details>`, and the
+ *   Icon Row / Platforms sub-panels are gone. Everything sits on the axis it
+ *   belongs to, ordered by blast radius (D9).
+ *
+ * The settings column is hand-written rather than a `BuilderSettingsSchema`
+ * (E1's preference) for the same reason Feature Cards is: the generator lays
+ * axes out as a ROW of columns, and this half-width column needs them
+ * stacked. The field strips and width tokens are the generator's, so E1/E2
+ * still hold; only the arrangement is local.
+ *
+ * Background and margins stay in this panel rather than coming from the
+ * shared module chrome — the arrangement `needsRestoredChrome` documents in
+ * builder-module-card.tsx. Rendering both would be two of each control (E6).
+ */
 export function BuilderSocialModuleSettings({
   module,
   onUpdateModule,
@@ -83,9 +109,6 @@ export function BuilderSocialModuleSettings({
 }: BuilderSocialModuleSettingsProps) {
   const moduleAlignment = getModuleAlignment(module.settings);
   const items = parseSocialItems(module.settings);
-  const [iconRowCollapsed, setIconRowCollapsed] = useState(false);
-  const [platformsCollapsed, setPlatformsCollapsed] = useState(false);
-  const [collapsedItems, setCollapsedItems] = useState<Record<string, boolean>>({});
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
@@ -99,14 +122,6 @@ export function BuilderSocialModuleSettings({
       ...current,
       settings: { ...current.settings, ...values }
     }));
-  }
-
-  function isItemCollapsed(id: string) {
-    return collapsedItems[id] ?? true;
-  }
-
-  function toggleItem(id: string) {
-    setCollapsedItems((current) => ({ ...current, [id]: !isItemCollapsed(id) }));
   }
 
   function persist(nextItems: SocialItem[]) {
@@ -136,55 +151,42 @@ export function BuilderSocialModuleSettings({
     setDropTargetId(null);
   }
 
-  function handleItemDragStart(event: DragEvent<HTMLDivElement>, itemId: string) {
+  function handleItemDragStart(event: DragEvent<HTMLElement>, itemId: string) {
     event.dataTransfer.setData(SOCIAL_ITEM_DRAG_TYPE, itemId);
     event.dataTransfer.effectAllowed = "move";
     setDraggedItemId(itemId);
   }
 
-  function handleItemDragOver(event: DragEvent<HTMLDivElement>, itemId: string) {
+  function handleItemDragOver(event: DragEvent<HTMLElement>, itemId: string) {
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
-    if (draggedItemId && draggedItemId !== itemId) {
-      setDropTargetId(itemId);
-    }
+    if (draggedItemId && draggedItemId !== itemId) setDropTargetId(itemId);
   }
 
-  function handleItemDrop(event: DragEvent<HTMLDivElement>, targetIndex: number) {
+  function handleItemDrop(event: DragEvent<HTMLElement>, targetIndex: number) {
     event.preventDefault();
     event.stopPropagation();
     const sourceId = event.dataTransfer.getData(SOCIAL_ITEM_DRAG_TYPE);
-    if (!sourceId) {
-      clearDragState();
-      return;
-    }
-    moveItemToIndex(sourceId, targetIndex);
+    if (sourceId) moveItemToIndex(sourceId, targetIndex);
     clearDragState();
   }
 
   function removeItem(id: string) {
     persist(items.filter((item) => item.id !== id));
-    setCollapsedItems((current) => {
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
   }
 
   function addItem() {
-    const id = `social-${Date.now()}-${items.length + 1}`;
     persist([
       ...items,
       {
-        id,
+        id: `social-${Date.now()}-${items.length + 1}`,
         label: "",
         href: "",
         iconUrl: "",
         backgroundColor: DEFAULT_SOCIAL_ICON_BACKGROUND
       }
     ]);
-    setCollapsedItems((current) => ({ ...current, [id]: false }));
   }
 
   function handleBackgroundModeChange(newMode: BackgroundSettings["mode"]) {
@@ -201,12 +203,18 @@ export function BuilderSocialModuleSettings({
   }
 
   const moduleBackground = getModuleBackgroundSettings(module.settings);
+  const iconPreviewSize = Math.max(
+    28,
+    Math.min(Number.parseInt(module.settings.socialIconSize ?? "44", 10) || 44, 56)
+  );
 
   return (
-    <div className="builder-social-module-settings">
-      <div className="builder-social-module-layout">
+    <div className="builder-cards-panel">
+      <div className="builder-cards-panel-settings builder-schema-panel-column">
+        {/* The module's own name and surface, above the axes — the same two
+            rows the shared chrome puts at the top of every other panel. */}
         <BuilderModuleFieldStrip>
-          <BuilderModuleField label="Label" width="label">
+          <BuilderModuleField label="Label" width="text-md">
             <input
               type="text"
               value={module.name}
@@ -215,6 +223,8 @@ export function BuilderSocialModuleSettings({
               }
             />
           </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+        <BuilderModuleFieldStrip>
           <BuilderModuleField label="Background" width="select-md">
             <select
               value={moduleBackground.mode}
@@ -230,22 +240,67 @@ export function BuilderSocialModuleSettings({
             </select>
           </BuilderModuleField>
         </BuilderModuleFieldStrip>
-
         {moduleBackground.mode !== "none" ? (
-          <div className="builder-module-background-details">
-            <BuilderBackgroundControls
-              hideModeRow
-              horizontal
-              label="Background"
-              background={moduleBackground}
-              onChange={onUpdateModuleBackground}
-              themeBackgroundColor={themeBackgroundColor}
-              themeColors={themeColors}
-              themePrimaryColor={themePrimaryColor}
-            />
-          </div>
+          <BuilderBackgroundControls
+            hideModeRow
+            horizontal
+            label="Background"
+            background={moduleBackground}
+            onChange={onUpdateModuleBackground}
+            themeBackgroundColor={themeBackgroundColor}
+            themeColors={themeColors}
+            themePrimaryColor={themePrimaryColor}
+          />
         ) : null}
 
+        {/* D9, blast radius descending: the icon's size changes the row most,
+            then the space between icons, then the padding around the set,
+            then whether the names show at all. */}
+        <div className="builder-schema-group-title">Structure</div>
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Icon Size" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialIconSize ?? "44"}
+              min={24}
+              max={84}
+              step={2}
+              fallback="44"
+              onChange={(value) => updateSetting("socialIconSize", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Gap" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialGap ?? "14"}
+              min={6}
+              max={32}
+              step={2}
+              fallback="14"
+              onChange={(value) => updateSetting("socialGap", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Row Padding" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialPadding ?? "0"}
+              min={0}
+              max={80}
+              step={4}
+              fallback="0"
+              onChange={(value) => updateSetting("socialPadding", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Labels" width="check">
+            <input
+              className="standard-form-checkbox"
+              type="checkbox"
+              checked={module.settings.socialShowLabels !== "false"}
+              onChange={(event) =>
+                updateSetting("socialShowLabels", event.target.checked ? "true" : "false")
+              }
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+
+        <div className="builder-schema-group-title">Placement</div>
         <BuilderModuleFieldStrip>
           <BuilderModuleField label="Alignment" width="align">
             <BuilderAlignmentIconGroup
@@ -262,283 +317,223 @@ export function BuilderSocialModuleSettings({
             settings={module.settings}
           />
         </BuilderModuleFieldStrip>
-      </div>
 
-      <div className="builder-cell-panel builder-social-module-panel">
-        <BuilderCellPanelHeader
-          isCollapsed={iconRowCollapsed}
-          onToggle={() => setIconRowCollapsed((current) => !current)}
-          panelName="Icon Row"
-          title="Icon Row"
-        />
-        {!iconRowCollapsed ? (
-          <div className="builder-social-module-panel-body">
-            <BuilderInlineNumberSelectRow>
-              <BuilderInlineNumberSelect
-                label="Icon Size"
-                value={module.settings.socialIconSize ?? "44"}
-                min={24}
-                max={84}
-                step={2}
-                fallback="44"
-                onChange={(value) => updateSetting("socialIconSize", value)}
-              />
-              <BuilderInlineNumberSelect
-                label="Gap"
-                value={module.settings.socialGap ?? "14"}
-                min={6}
-                max={32}
-                step={2}
-                fallback="14"
-                onChange={(value) => updateSetting("socialGap", value)}
-              />
-              <BuilderInlineNumberSelect
-                label="Padding"
-                value={module.settings.socialPadding ?? "0"}
-                min={0}
-                max={80}
-                step={4}
-                fallback="0"
-                onChange={(value) => updateSetting("socialPadding", value)}
-              />
-            </BuilderInlineNumberSelectRow>
-            <div className="builder-module-form-row">
-              <BuilderSettingRow label="Labels">
-                <input
-                  className="standard-form-checkbox"
-                  type="checkbox"
-                  checked={module.settings.socialShowLabels !== "false"}
-                  onChange={(event) =>
-                    updateSetting("socialShowLabels", event.target.checked ? "true" : "false")
-                  }
-                />
-              </BuilderSettingRow>
-              <BuilderThemeColorSettingRow
-                dialogLabel="Icon background color"
-                fallback="#ffffff"
-                label="Icon BG"
-                themeColors={themeColors}
-                value={module.settings.socialIconBgColor || "#ffffff"}
-                onChange={(socialIconBgColor) => updateSetting("socialIconBgColor", socialIconBgColor)}
-              />
-            </div>
-          </div>
-        ) : null}
-      </div>
+        {/* Frame is the icon's own box: what fills it, what outlines it, how
+            round it is, and last (D9) the shadow it casts. A7 files this one
+            here rather than on Text because the renderer paints it as a
+            `box-shadow` on the icon, not a shadow on any letters.
 
-      <details className="hanging-details builder-social-advanced-details">
-        <summary>Border &amp; Shadow</summary>
-        <div className="builder-social-advanced-details-body">
-          <div className="builder-module-form-row">
-            <BuilderThemeColorSettingRow
+            Not `dropShadowFields()` (the schema's shared block): that helper
+            emits schema fields for a generated panel, and it gates its parts
+            behind an on/off flag this module has never had — the renderer
+            decides "is there a shadow" from the four numbers themselves, so
+            adding the flag would mean a migration for every live footer. */}
+        <div className="builder-schema-group-title">Frame</div>
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Icon Fill" width="color">
+            <BuilderThemeColorField
+              dialogLabel="Icon background color"
+              fallback="#ffffff"
+              themeColors={themeColors}
+              value={module.settings.socialIconBgColor || "#ffffff"}
+              onChange={(value) => updateSetting("socialIconBgColor", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Border Color" width="color">
+            <BuilderThemeColorField
               dialogLabel="Border color"
               fallback="#000000"
-              label="Border Color"
               themeColors={themeColors}
               value={module.settings.socialBorderColor || "#000000"}
-              onChange={(socialBorderColor) => updateSetting("socialBorderColor", socialBorderColor)}
+              onChange={(value) => updateSetting("socialBorderColor", value)}
             />
-            <BuilderSettingRow label="Border Width">
-              <BuilderNumberSelectControl
-                value={module.settings.socialBorderWidth ?? "0"}
-                min={0}
-                max={8}
-                fallback="0"
-                onChange={(value) => updateSetting("socialBorderWidth", value)}
-              />
-            </BuilderSettingRow>
-            <BuilderSettingRow label="Radius">
-              <BuilderNumberSelectControl
-                value={module.settings.socialBorderRadius ?? "0"}
-                min={0}
-                max={50}
-                step={5}
-                fallback="0"
-                onChange={(value) => updateSetting("socialBorderRadius", value)}
-              />
-            </BuilderSettingRow>
-            <BuilderThemeColorSettingRow
+          </BuilderModuleField>
+          <BuilderModuleField label="Border" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialBorderWidth ?? "0"}
+              min={0}
+              max={8}
+              fallback="0"
+              onChange={(value) => updateSetting("socialBorderWidth", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Radius" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialBorderRadius ?? "0"}
+              min={0}
+              max={50}
+              step={5}
+              fallback="0"
+              onChange={(value) => updateSetting("socialBorderRadius", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Shadow Color" width="color">
+            <BuilderThemeColorField
               dialogLabel="Shadow color"
               fallback="#000000"
-              label="Shadow Color"
               themeColors={themeColors}
               value={module.settings.socialShadowColor || "#000000"}
-              onChange={(socialShadowColor) => updateSetting("socialShadowColor", socialShadowColor)}
+              onChange={(value) => updateSetting("socialShadowColor", value)}
             />
-            <BuilderSettingRow label="Shadow X">
-              <BuilderNumberSelectControl
-                value={module.settings.socialShadowX ?? "0"}
-                min={-20}
-                max={20}
-                fallback="0"
-                onChange={(value) => updateSetting("socialShadowX", value)}
-              />
-            </BuilderSettingRow>
-            <BuilderSettingRow label="Shadow Y">
-              <BuilderNumberSelectControl
-                value={module.settings.socialShadowY ?? "0"}
-                min={-20}
-                max={20}
-                fallback="0"
-                onChange={(value) => updateSetting("socialShadowY", value)}
-              />
-            </BuilderSettingRow>
-            <BuilderSettingRow label="Shadow Blur">
-              <BuilderNumberSelectControl
-                value={module.settings.socialShadowBlur ?? "0"}
-                min={0}
-                max={40}
-                step={2}
-                fallback="0"
-                onChange={(value) => updateSetting("socialShadowBlur", value)}
-              />
-            </BuilderSettingRow>
-            <BuilderSettingRow label="Spread">
-              <BuilderNumberSelectControl
-                value={module.settings.socialShadowSpread ?? "0"}
-                min={-10}
-                max={20}
-                fallback="0"
-                onChange={(value) => updateSetting("socialShadowSpread", value)}
-              />
-            </BuilderSettingRow>
-          </div>
-        </div>
-      </details>
+          </BuilderModuleField>
+          <BuilderModuleField label="Shadow X" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialShadowX ?? "0"}
+              min={-20}
+              max={20}
+              fallback="0"
+              onChange={(value) => updateSetting("socialShadowX", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Shadow Y" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialShadowY ?? "0"}
+              min={-20}
+              max={20}
+              fallback="0"
+              onChange={(value) => updateSetting("socialShadowY", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Shadow Blur" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialShadowBlur ?? "0"}
+              min={0}
+              max={40}
+              step={2}
+              fallback="0"
+              onChange={(value) => updateSetting("socialShadowBlur", value)}
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Shadow Spread" width="num">
+            <BuilderNumberSelectControl
+              value={module.settings.socialShadowSpread ?? "0"}
+              min={-10}
+              max={20}
+              fallback="0"
+              onChange={(value) => updateSetting("socialShadowSpread", value)}
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+      </div>
 
-      <div className="builder-cell-panel builder-social-module-panel">
-        <BuilderCellPanelHeader
-          isCollapsed={platformsCollapsed}
-          onToggle={() => setPlatformsCollapsed((current) => !current)}
-          panelName={`Platforms (${items.length})`}
-          title="Platforms"
-        />
-        {!platformsCollapsed ? (
-          <div className="builder-social-module-panel-body">
-            <div
-              className="builder-social-module-items"
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(event) => handleItemDrop(event, items.length)}
-            >
-              {items.map((item, index) => {
-                const panelTitle = item.label || `Platform ${index + 1}`;
-                const isCollapsed = isItemCollapsed(item.id);
-                const isDragging = draggedItemId === item.id;
-                const isDropTarget = dropTargetId === item.id;
-                const iconPreviewSize = Math.max(
-                  32,
-                  Number.parseInt(module.settings.socialIconSize ?? "44", 10) || 44
-                );
+      {/* THE PLATFORM LIST — one grid for the whole list, not a grid per
+          platform, which is what makes row 2's fields start where row 1's do
+          (W0's mechanism; see the note over `.builder-cards-panel-fields`).
+          Each field declares its pair-column: Label and Link identify the
+          platform, Fill and Icon dress it. */}
+      <div className="builder-cards-panel-items">
+        <div className="builder-cards-panel-heading">Platforms</div>
+        <div
+          className="builder-cards-panel-fields"
+          data-lattice-pairs="2"
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => handleItemDrop(event, items.length)}
+        >
+          {items.map((item, index) => {
+            const itemName = item.label || `Platform ${index + 1}`;
+            const isDragging = draggedItemId === item.id;
+            const isDropTarget = dropTargetId === item.id;
 
-                return (
-                  <div
-                    key={item.id}
-                    className={`builder-social-module-item-card builder-cell-panel${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`}
-                    onDragEnd={clearDragState}
-                    onDragLeave={() => setDropTargetId(null)}
-                    onDragOver={(event) => handleItemDragOver(event, item.id)}
-                    onDrop={(event) => handleItemDrop(event, index)}
-                  >
-                    <BuilderCellPanelHeader
-                      leadingActions={
-                        <div
-                          aria-label="Drag"
-                          className="builder-module-drag-handle builder-social-item-drag-handle"
-                          draggable
-                          onDragStart={(event) => handleItemDragStart(event, item.id)}
-                          title="Drag Platform"
-                        >
-                          ⋮⋮
-                        </div>
-                      }
-                      headingActions={
-                        <button
-                          aria-label="Delete"
-                          className="builder-icon-button builder-icon-button-danger"
-                          onClick={() => removeItem(item.id)}
-                          title="Delete"
-                          type="button"
-                        >
-                          ✕
-                        </button>
-                      }
-                      isCollapsed={isCollapsed}
-                      onToggle={() => toggleItem(item.id)}
-                      panelName={panelTitle}
-                      title={panelTitle}
-                    />
-                    {!isCollapsed ? (
-                      <div className="builder-social-module-item-settings">
-                        <BuilderSettingRow label="Label">
-                          <input
-                            type="text"
-                            value={item.label}
-                            onChange={(event) => updateItem(item.id, { label: event.target.value })}
-                          />
-                        </BuilderSettingRow>
-                        <BuilderSettingRow label="Link">
-                          <input
-                            type="text"
-                            value={item.href}
-                            onChange={(event) => updateItem(item.id, { href: event.target.value })}
-                          />
-                        </BuilderSettingRow>
-                        <BuilderSettingRow label="Background">
-                          <BuilderThemeColorField
-                            dialogLabel="Platform icon background"
-                            fallback={DEFAULT_SOCIAL_ICON_BACKGROUND}
-                            themeColors={themeColors}
-                            value={item.backgroundColor || DEFAULT_SOCIAL_ICON_BACKGROUND}
-                            onChange={(backgroundColor) =>
-                              updateItem(item.id, {
-                                backgroundColor: normalizeSocialIconBackgroundColor(backgroundColor)
-                              })
-                            }
-                          />
-                        </BuilderSettingRow>
-                        <BuilderSettingRow
-                          label={
-                            item.iconUrl ? (
-                              <span
-                                className="builder-social-item-icon-preview"
-                                style={{ width: `${iconPreviewSize}px`, height: `${iconPreviewSize}px` }}
-                              >
-                                <Image
-                                  alt={item.label || "Selected icon"}
-                                  height={iconPreviewSize}
-                                  src={normalizeBuilderAssetUrl(item.iconUrl)}
-                                  unoptimized
-                                  width={iconPreviewSize}
-                                />
-                              </span>
-                            ) : (
-                              "Icon"
-                            )
-                          }
-                        >
-                          <button
-                            className="secondary-button builder-social-icon-picker-button"
-                            onClick={() => onOpenGallery(item.id)}
-                            type="button"
-                          >
-                            {item.iconUrl ? "Change Icon" : "Choose From Gallery"}
-                          </button>
-                        </BuilderSettingRow>
-                      </div>
-                    ) : null}
+            return (
+              <Fragment key={item.id}>
+                {/* The head row spans the grid, so it is also the drag target:
+                    a wrapper around each platform's fields would take one
+                    cell and break the shared tracks. */}
+                <div
+                  className={`builder-card-editor-head${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`}
+                  draggable
+                  onDragEnd={clearDragState}
+                  onDragLeave={() => setDropTargetId(null)}
+                  onDragOver={(event) => handleItemDragOver(event, item.id)}
+                  onDragStart={(event) => handleItemDragStart(event, item.id)}
+                  onDrop={(event) => handleItemDrop(event, index)}
+                  title="Drag to reorder"
+                >
+                  <span className="builder-card-editor-name">
+                    <span aria-hidden="true" className="builder-social-item-grip">⋮⋮</span>
+                    {itemName}
+                  </span>
+                  <div className="builder-item-grid-actions">
+                    <button
+                      aria-label={`Delete ${itemName}`}
+                      className="builder-icon-button builder-icon-button-danger"
+                      onClick={() => removeItem(item.id)}
+                      title="Delete platform"
+                      type="button"
+                    >
+                      ✕
+                    </button>
                   </div>
-                );
-              })}
-            </div>
+                </div>
 
-            <button className="secondary-button builder-social-add-button" onClick={addItem} type="button">
-              Add Social Icon
-            </button>
-          </div>
-        ) : null}
+                <BuilderModuleField label="Label" width="text-md" className="builder-card-field--a">
+                  <input
+                    type="text"
+                    value={item.label}
+                    onChange={(event) => updateItem(item.id, { label: event.target.value })}
+                    placeholder={`Platform ${index + 1}`}
+                    aria-label={`${itemName} label`}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Link" width="text-md" className="builder-card-field--b">
+                  <input
+                    type="text"
+                    value={item.href}
+                    onChange={(event) => updateItem(item.id, { href: event.target.value })}
+                    placeholder="https://"
+                    aria-label={`${itemName} link`}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Fill" width="color" className="builder-card-field--a">
+                  <BuilderThemeColorField
+                    dialogLabel="Platform icon background"
+                    fallback={DEFAULT_SOCIAL_ICON_BACKGROUND}
+                    themeColors={themeColors}
+                    value={item.backgroundColor || DEFAULT_SOCIAL_ICON_BACKGROUND}
+                    onChange={(backgroundColor) =>
+                      updateItem(item.id, {
+                        backgroundColor: normalizeSocialIconBackgroundColor(backgroundColor)
+                      })
+                    }
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField
+                  label="Icon"
+                  width="full"
+                  className="builder-card-field--wide builder-card-field--picker"
+                >
+                  {item.iconUrl ? (
+                    <span
+                      className="builder-social-item-icon-preview"
+                      style={{ width: `${iconPreviewSize}px`, height: `${iconPreviewSize}px` }}
+                    >
+                      <Image
+                        alt={item.label || "Selected icon"}
+                        height={iconPreviewSize}
+                        src={normalizeBuilderAssetUrl(item.iconUrl)}
+                        unoptimized
+                        width={iconPreviewSize}
+                      />
+                    </span>
+                  ) : null}
+                  <button
+                    className="secondary-button builder-social-icon-picker-button"
+                    onClick={() => onOpenGallery(item.id)}
+                    type="button"
+                  >
+                    {item.iconUrl ? "Change Icon" : "Choose From Gallery"}
+                  </button>
+                </BuilderModuleField>
+              </Fragment>
+            );
+          })}
+        </div>
+        <button className="secondary-button" onClick={addItem} type="button">
+          Add Social Icon
+        </button>
       </div>
     </div>
   );

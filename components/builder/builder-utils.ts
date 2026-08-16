@@ -511,6 +511,25 @@ export function getTextModuleFrameStyle(settings: Record<string, string>): CSSPr
   const nudgeTransform = getModuleNudgeTransform(settings);
 
   return {
+    /*
+     * THE FILL IS PART OF THE FRAME (operator, 2026-08-15: "I want the
+     * background color constrained by the boundary").
+     *
+     * It used to be painted by the module WRAPPER in
+     * builder-template-preview.tsx, one box out — which is a different box
+     * in three ways: the wrapper spans the whole column while this div is
+     * as wide as the Width setting says, the wrapper has square corners
+     * while this one has the Radius, and the padding that holds the words
+     * off the border is inside here. So a 66%-wide green text block with a
+     * 20px radius rendered as a full-width green rectangle with square
+     * corners and a rounded border floating inside it.
+     *
+     * Painting it here puts the fill in the same box as the border, the
+     * radius and the padding, which is what "constrained by the boundary"
+     * means. The wrapper skips `text` now (same exclusion navigation, table
+     * and button already had, and for the same reason).
+     */
+    ...(getBuilderBackgroundStyle(getModuleBackgroundSettings(settings)) ?? {}),
     ...(hasPadding ? padding : {}),
     ...(hasBorder
       ? { border: `${borderWidth}px ${borderStyle} ${settings.borderColor || "#214c71"}` }
