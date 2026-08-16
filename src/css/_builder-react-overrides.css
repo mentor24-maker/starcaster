@@ -4772,31 +4772,68 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-align: left;
 }
 
-/* Stale-editor warning. Shown in place of an ordinary error banner when a save
-   was refused because somebody else saved the page first — it carries two
-   actions, so it needs room the one-line .admin-notice does not give it. */
-.builder-react-root .builder-save-conflict {
+/* Stale-editor dialog. A save was refused because somebody else saved first,
+   and the operator has a decision to make — so it opens as a modal rather than
+   the inline notice this started as (operator, 2026-08-15). On a long Builder
+   page a banner near the top can sit off screen entirely while they keep
+   editing a page that will not save. It reuses the module editor's framing —
+   blue banner, 40px corners — so it reads as part of the app, not a browser
+   alert. */
+.builder-react-root .builder-save-conflict-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-3, 12px);
   text-align: left;
 }
 
-.builder-react-root .builder-save-conflict-lead,
-.builder-react-root .builder-save-conflict-help {
+.builder-react-root .builder-save-conflict-lead {
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
-.builder-react-root .builder-save-conflict-help {
-  opacity: 0.85;
+/* What each button does, as a definition list: the term IS the button's label,
+   so the reader matches word to word rather than re-reading a paragraph. */
+.builder-react-root .builder-save-conflict-choices {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  /* The row gap carries real weight here: at 4px the two choices ran together
+     as one block of text, and this list exists to be read as two distinct
+     options before clicking one of them. */
+  gap: var(--space-3, 12px) var(--space-3, 12px);
+  align-items: baseline;
+  margin: 0;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: 10px;
+  background: rgba(11, 42, 74, 0.05);
+}
+
+.builder-react-root .builder-save-conflict-choices dt {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-save-conflict-choices dd {
+  margin: 0;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
 }
 
 .builder-react-root .builder-save-conflict-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 2px;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-1, 4px);
+}
+
+/* Narrow: the two-column list would crush each description to a word a line. */
+@media (max-width: 560px) {
+  .builder-react-root .builder-save-conflict-choices {
+    grid-template-columns: 1fr;
+  }
+  .builder-react-root .builder-save-conflict-choices dd {
+    margin-bottom: var(--space-2, 8px);
+  }
 }
 
 /* ============================================================== */
