@@ -65,8 +65,11 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     module.type === "confetti" ||
     module.type === "headline-rotator" ||
     module.type === "poll-category-list" ||
-    module.type === "slider" ||
-    module.type === "slideshow" ||
+    // Both formats of the carousel, for the reason the two modules it merged
+    // from were each skipped: an email client has no JavaScript, so nothing
+    // advances and nothing scrolls — the reader would get one frozen item and
+    // no sign the rest exist.
+    module.type === "carousel" ||
     // Standard 11, decided 2026-08-07: skipped. Feature Cards is a CSS-grid
     // layout, and Outlook's Word rendering engine supports neither grid nor
     // flex — it would collapse to a single stacked column with none of the
