@@ -165,6 +165,13 @@ does not get to route around a standing decision (`docs/DOCTRINE.md` §6.6).
 Squash-merge discards the merge commits anyway, so it costs nothing.
 `scripts/builder/shipThread.test.js` fails if a future edit reintroduces one.
 
+**Three merges in `main` are named after housekeeping, not their work** —
+`ship` used to title the PR from `git log -1`, which by then was often its own
+asset-pin commit, and a squash-merge makes that title permanent. Fixed
+(`scripts/builder/pullRequestCommit.js`); the three that already landed are
+listed with their real subjects in `docs/MISLABELED_MERGES.md`. They are not
+being renamed, because that means force-pushing shared history.
+
 **The `?v=` asset pins no longer conflict.** Those four committed HTML files
 carry hashes rebuilt from whatever the build produced, so any two branches
 touching styling collide there even when neither edited a word of markup — it

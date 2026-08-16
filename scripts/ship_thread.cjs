@@ -53,6 +53,7 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
+const { pickPullRequestCommit, REPIN_SUBJECT } = require('./builder/pullRequestCommit');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -185,7 +186,7 @@ if (DRY) {
 if (!DRY && git(['status', '--porcelain'])) {
   say('    Rebuild re-stamped the asset pins — committing them.');
   git(['add', '-A']);
-  run('git', ['commit', '--no-verify', '-m', 'Re-pin asset hashes from a clean build']);
+  run('git', ['commit', '--no-verify', '-m', REPIN_SUBJECT]);
 }
 
 /* ---------------------------------------------------------------- 4. push */
@@ -232,8 +233,7 @@ if (prNumber) {
 } else if (DRY) {
   say('    Would open a pull request from the commit message.');
 } else {
-  const subject = git(['log', '-1', '--format=%s']);
-  const body = git(['log', '-1', '--format=%b']);
+  const { subject, body } = pickPullRequestCommit(git);
   const created = quiet('gh', ['pr', 'create', '--title', subject, '--body', body || subject]);
   if (!created.ok) fail(`Could not open a pull request:\n\n${created.out}`);
   prNumber = (created.out.match(/\/pull\/(\d+)/) || [])[1];
