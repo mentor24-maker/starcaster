@@ -182,7 +182,7 @@ the shorter-way-round step, both of which were wrong at least once).
   the operator during this work were pure CSS and every gate was green. Two
   narrow guards now read the stylesheet directly (that the card picture pins
   no height, and that the row hides its scrollbar); they are patches, not
-  coverage. See `docs/DOCTRINE.md` §5.13.
+  coverage. See `docs/DOCTRINE.md` §5.14.
 - **Scroll behaviour.** Cloning, the seam, swipe and autoplay stepping exist
   only in a browser — under SSR the container measures zero, so the module
   renders a single un-cloned copy and a markup test sees nothing of the loop.
