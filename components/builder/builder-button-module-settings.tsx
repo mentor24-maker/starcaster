@@ -9,13 +9,11 @@ import {
   getButtonBorderSettings,
   type ButtonBorderColorSettings
 } from "./builder-button-border-picker";
-import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import {
   BuilderSchemaModuleSettings,
   dropShadowFields,
-  MODULE_MARGIN_SIDES,
-  MODULE_PADDING_SIDES,
-  type BuilderSchemaFieldContext,
+  marginFields,
+  paddingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
@@ -354,53 +352,27 @@ export function BuilderButtonModuleSettings({
           ],
           [
             // W7 side order, and the renderer's own clamps (1–50) — these are
-            // the pill's inner padding, not the module's outer spacing. The
+            // the pill's inner padding, not the module's outer spacing, so
+            // they keep 1px steps (W8) and their own legacy pair. The
             // fallbacks are the shape a button ships with, so an untouched
             // one shows what it actually renders.
-            ...MODULE_PADDING_SIDES.map(({ key, label }) => ({
-              key,
-              label,
-              width: "num" as const,
-              control: "custom" as const,
-              rendersVia: "getButtonModuleStyle",
-              render: (ctx: BuilderSchemaFieldContext) => (
-                <BuilderNumberSelectControl
-                  value={
-                    ctx.settings[key] ??
-                    (key === "paddingTop" || key === "paddingBottom"
-                      ? ctx.settings.paddingY ?? "12"
-                      : ctx.settings.paddingX ?? "24")
-                  }
-                  min={1}
-                  max={50}
-                  fallback={key === "paddingTop" || key === "paddingBottom" ? "12" : "24"}
-                  onChange={(next) => ctx.set(key, next)}
-                />
-              )
-            }))
+            ...paddingFields("getButtonModuleStyle", 50, {
+              min: 1,
+              step: 1,
+              sides: {
+                paddingTop: { legacy: "paddingY", fallback: "12" },
+                paddingBottom: { legacy: "paddingY", fallback: "12" },
+                paddingLeft: { legacy: "paddingX", fallback: "24" },
+                paddingRight: { legacy: "paddingX", fallback: "24" }
+              }
+            })
           ],
           [
             // Read through the same legacy fallback the renderer resolves
             // with: a table-cell button never passes through
             // normalizeBuilderModuleSettingsForType, so reading the raw key
             // would show 0 while the page renders the pair it was saved with.
-            ...MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => ({
-              key,
-              label,
-              width: "num" as const,
-              control: "custom" as const,
-              rendersVia: "getModuleOuterSpacingStyle",
-              render: (ctx: BuilderSchemaFieldContext) => (
-                <BuilderNumberSelectControl
-                  value={ctx.settings[key] ?? ctx.settings[legacy] ?? "0"}
-                  min={0}
-                  max={160}
-                  step={5}
-                  fallback="0"
-                  onChange={(next) => ctx.set(key, next)}
-                />
-              )
-            }))
+            ...marginFields("getModuleOuterSpacingStyle", 160)
           ],
           [
             {

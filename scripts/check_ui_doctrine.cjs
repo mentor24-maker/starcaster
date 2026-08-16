@@ -316,14 +316,32 @@ const SPACING_BOXES = [
   { name: 'padding', table: 'MODULE_PADDING_SIDES', legacy: ['verticalPadding', 'horizontalPadding'] }
 ];
 
+/**
+ * Ways a panel can reach all four sides of ONE box by construction, beyond the
+ * side table and the `marginFields()`/`paddingFields()` helpers. Added with
+ * E4b (2026-08-15): the matched V/H rows are a display mode over these same
+ * four keys, so a panel that uses one of these still satisfies E4 and must not
+ * be asked for four labels it no longer renders.
+ *
+ * Deliberately PER BOX, like the two older forms. A blanket "this file
+ * mentions the spacing component anywhere" would let a panel that pairs its
+ * margins offer one lone padding side, which is the exact failure E4 exists
+ * to catch.
+ */
+function spacingConstructs(name) {
+  return [`spacingFields("${name}"`, `box="${name}"`];
+}
+
 function checkMarginPairing(files) {
   for (const file of files.filter((f) => SETTINGS_GLOB.test(f))) {
     if (!fs.existsSync(file)) continue;
     const src = fs.readFileSync(file, 'utf8');
 
     for (const box of SPACING_BOXES) {
-      // The shared table, or the helper built from it, offers all four.
+      // The shared table, the helper built from it, or the matched-rows
+      // control — each offers all four sides.
       if (src.includes(box.table) || src.includes(`${box.name}Fields(`)) continue;
+      if (spacingConstructs(box.name).some((construct) => src.includes(construct))) continue;
 
       const sides = ['Top', 'Bottom', 'Left', 'Right'];
       const present = sides.filter((side) => usesSettingsKey(src, `${box.name}${side}`));

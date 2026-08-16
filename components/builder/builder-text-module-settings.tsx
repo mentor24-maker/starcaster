@@ -4,11 +4,10 @@ import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { borderStyleOptions } from "./builder-button-border-picker";
-import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import {
   BuilderSchemaModuleSettings,
-  MODULE_MARGIN_SIDES,
+  marginFields,
   paddingFields,
   type BuilderSchemaFieldContext,
   type BuilderSettingsSchema
@@ -166,27 +165,12 @@ export function BuilderTextModuleSettings({
                 />
               )
             },
-            // The four sides, read through the same legacy vertical/horizontal
-            // fallback the renderer resolves with (same as the chrome strip
-            // this replaces): a page that has not been re-saved keeps showing
-            // the numbers it is actually rendering.
-            ...MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => ({
-              key,
-              label,
-              width: "num" as const,
-              control: "custom" as const,
-              rendersVia: "getModuleOuterSpacingStyle",
-              render: (ctx: BuilderSchemaFieldContext) => (
-                <BuilderNumberSelectControl
-                  value={ctx.settings[key] ?? ctx.settings[legacy] ?? "0"}
-                  min={0}
-                  max={160}
-                  step={5}
-                  fallback="0"
-                  onChange={(next) => ctx.set(key, next)}
-                />
-              )
-            }))
+            // One row per axis, splitting into its two sides on the row's own
+            // toggle (E4b). The helper reads the same legacy
+            // vertical/horizontal fallback the renderer resolves with, so a
+            // page that has not been re-saved keeps showing the numbers it is
+            // actually rendering.
+            ...marginFields("getModuleOuterSpacingStyle", 160)
           ],
           // Padding is the frame half of spacing — between the border and the
           // words — which the text module never had (the image module got its

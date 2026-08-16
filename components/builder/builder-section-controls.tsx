@@ -11,6 +11,7 @@ import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { layoutOptions } from "./builder-types";
 import { BuilderSettingRow } from "./builder-setting-row";
+import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
 import { formatColumnName } from "./builder-utils";
 
@@ -256,108 +257,42 @@ export function BuilderSectionControls({
                       <option value="right">Right</option>
                     </select>
                   </BuilderSettingRow>
-          <BuilderSettingRow label="Top Margin">
-                    <BuilderNumberSelectControl
-                      value={section.marginTop ?? "0"}
-                      min={0}
-                      max={160}
-                      step={5}
-                      fallback="0"
-                      onChange={(marginTop) =>
-                        onUpdateSection((current) => ({
-                          ...current,
-                          marginTop
-                        }))
-                      }
-                    />
-                  </BuilderSettingRow>
-          <BuilderSettingRow label="Bottom Margin">
-                    <BuilderNumberSelectControl
-                      value={section.marginBottom ?? "0"}
-                      min={0}
-                      max={160}
-                      step={5}
-                      fallback="0"
-                      onChange={(marginBottom) =>
-                        onUpdateSection((current) => ({
-                          ...current,
-                          marginBottom
-                        }))
-                      }
-                    />
-                  </BuilderSettingRow>
-          <BuilderSettingRow label="Left Margin">
-            <BuilderNumberSelectControl
-              value={section.marginLeft ?? "0"}
-              min={0}
-              max={160}
-              step={5}
-              fallback="0"
-              onChange={(marginLeft) => onUpdateSection((current) => ({ ...current, marginLeft }))}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Right Margin">
-            <BuilderNumberSelectControl
-              value={section.marginRight ?? "0"}
-              min={0}
-              max={160}
-              step={5}
-              fallback="0"
-              onChange={(marginRight) => onUpdateSection((current) => ({ ...current, marginRight }))}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Top Padding">
-                    <BuilderNumberSelectControl
-                      value={section.paddingTop ?? "18"}
-                      min={0}
-                      max={160}
-                      step={5}
-                      fallback="18"
-                      onChange={(paddingTop) =>
-                        onUpdateSection((current) => ({
-                          ...current,
-                          paddingTop
-                        }))
-                      }
-                    />
-                  </BuilderSettingRow>
-          <BuilderSettingRow label="Bottom Padding">
-                    <BuilderNumberSelectControl
-                      value={section.paddingBottom ?? "18"}
-                      min={0}
-                      max={160}
-                      step={5}
-                      fallback="18"
-                      onChange={(paddingBottom) =>
-                        onUpdateSection((current) => ({
-                          ...current,
-                          paddingBottom
-                        }))
-                      }
-                    />
-                  </BuilderSettingRow>
-          <BuilderSettingRow label="Left Padding">
-            <BuilderNumberSelectControl
-              value={section.paddingLeft ?? "0"}
-              min={0}
-              max={160}
-              step={5}
-              fallback="0"
-              onChange={(paddingLeft) => onUpdateSection((current) => ({ ...current, paddingLeft }))}
-            />
-          </BuilderSettingRow>
-          <BuilderSettingRow label="Right Padding">
-            <BuilderNumberSelectControl
-              value={section.paddingRight ?? "0"}
-              min={0}
-              max={160}
-              step={5}
-              fallback="0"
-              onChange={(paddingRight) =>
-                onUpdateSection((current) => ({ ...current, paddingRight }))
-              }
-            />
-          </BuilderSettingRow>
+          {/*
+            The row's spacing, matched per axis with the split one click away
+            (E4b) — the same control the module panels and the cell editor
+            use, so spacing is one thing to learn everywhere (S1/C8). The
+            values live on the section itself rather than in a settings
+            record, which is all the adapter below is doing.
+          */}
+          <BuilderModuleSpacingFields
+            box="margin"
+            max={160}
+            onChange={(values) => onUpdateSection((current) => ({ ...current, ...values }))}
+            settings={{
+              marginTop: section.marginTop ?? "0",
+              marginBottom: section.marginBottom ?? "0",
+              marginLeft: section.marginLeft ?? "0",
+              marginRight: section.marginRight ?? "0"
+            }}
+          />
+          {/* A row ships with 18px above and below and none at the sides, so
+              its two axes start unmatched-looking but each is matched
+              WITHIN itself: 18/18 and 0/0. */}
+          <BuilderModuleSpacingFields
+            box="padding"
+            max={160}
+            onChange={(values) => onUpdateSection((current) => ({ ...current, ...values }))}
+            settings={{
+              paddingTop: section.paddingTop ?? "18",
+              paddingBottom: section.paddingBottom ?? "18",
+              paddingLeft: section.paddingLeft ?? "0",
+              paddingRight: section.paddingRight ?? "0"
+            }}
+            sides={{
+              paddingTop: { fallback: "18" },
+              paddingBottom: { fallback: "18" }
+            }}
+          />
           {/* Last on the axis (D9): the fine nudge you reach for after the
               margins and padding are already where you want them. */}
           <BuilderSettingRow label="Vertical Offset">

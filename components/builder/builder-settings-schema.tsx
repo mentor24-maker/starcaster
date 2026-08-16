@@ -6,6 +6,15 @@ import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip, type BuilderModuleFieldWidth } from "./builder-module-field";
 import {
+  BuilderSpacingPairFields,
+  MODULE_MARGIN_SIDES,
+  MODULE_PADDING_SIDES,
+  spacingPairSpecs,
+  type BuilderSpacingBox,
+  type BuilderSpacingOptions,
+  type BuilderSpacingPairSpec
+} from "./builder-spacing-fields";
+import {
   BuilderThemeColorControlWithDefault,
   BuilderThemeColorField,
   type BuilderThemePalette
@@ -32,6 +41,12 @@ export type BuilderSchemaFieldContext = {
   module: BuilderTemplateModule;
   settings: SettingsRecord;
   set: (key: string, value: string) => void;
+  /**
+   * Several settings in ONE update. A matched spacing row writes both of its
+   * sides, and two chained `set` calls would be two entries in the undo
+   * history for one turn of a dropdown.
+   */
+  setMany: (values: SettingsRecord) => void;
   themeColors: BuilderThemePalette;
 };
 
@@ -63,6 +78,17 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
     | { control: "color"; dialogLabel: string }
     | { control: "align"; ariaLabel: string }
     | { control: "image" }
+    | {
+        /**
+         * One axis of a spacing box (E4b): a matched row that writes both
+         * sides, with a toggle that splits it into the two side rows. Built
+         * by `marginFields()` / `paddingFields()` — a panel never writes one
+         * of these by hand, which is how the labels and the side order stay
+         * identical everywhere.
+         */
+        control: "spacing-pair";
+        spec: BuilderSpacingPairSpec;
+      }
     | {
         /**
          * A THEME OVERRIDE (master rule A1): empty means "follow the
@@ -310,71 +336,71 @@ function splitIntoColumns(strips: BuilderSchemaStrip[], columns: number): Builde
 }
 
 /**
- * The four sides of a spacing box, in one fixed order: Top, Bottom, Left,
- * Right. Every object in the Builder — row, cell, module — spells margin and
- * padding this way from 2026-08-11 (operator: "standardize all objects on the
- * Top/Bottom/Left/Right model"). `legacy` is the vertical/horizontal key that
- * side used to come from, read as its fallback so a page that has not been
- * re-saved shows the number it is actually rendering.
+ * The side tables and the pair control live in `builder-spacing-fields.tsx`
+ * now — they are shared with the hand-written strips (the module chrome and
+ * the panels that copy it), and importing the generator from there would be
+ * a cycle. Re-exported so every existing `from "./builder-settings-schema"`
+ * import keeps working.
  */
-export const MODULE_MARGIN_SIDES = [
-  { key: "marginTop", label: "Top Margin", legacy: "verticalMargin" },
-  { key: "marginBottom", label: "Bottom Margin", legacy: "verticalMargin" },
-  { key: "marginLeft", label: "Left Margin", legacy: "horizontalMargin" },
-  { key: "marginRight", label: "Right Margin", legacy: "horizontalMargin" }
-] as const;
+export {
+  MODULE_MARGIN_SIDES,
+  MODULE_PADDING_SIDES,
+  MODULE_SPACING_STEP,
+  spacingPairSpecs,
+  BuilderModuleSpacingFields,
+  BuilderSpacingPairFields,
+  resolveSpacingSide
+} from "./builder-spacing-fields";
 
 /**
- * Spacing counts in fives (W8, extended 2026-08-12 — operator: "sizes
- * incremented by 1 that should be 5", on the Slideshow module's margins).
- *
- * A margin that runs 0–160 in ones is 161 options, and the operator was
- * scrolling past 74 numbers to reach 75. Nobody nudges an outer margin by one
- * pixel; the values people actually pick are multiples of five. Button
- * padding (1–50) keeps its 1px steps — that one is the inside of a pill,
- * where a single pixel is visible.
- */
-export const MODULE_SPACING_STEP = 5;
-
-export const MODULE_PADDING_SIDES = [
-  { key: "paddingTop", label: "Top Padding", legacy: "verticalPadding" },
-  { key: "paddingBottom", label: "Bottom Padding", legacy: "verticalPadding" },
-  { key: "paddingLeft", label: "Left Padding", legacy: "horizontalPadding" },
-  { key: "paddingRight", label: "Right Padding", legacy: "horizontalPadding" }
-] as const;
-
-/**
- * A module's four margin controls, always together and in side order —
- * doctrine E4 by construction. Spread the result into a layout strip:
+ * A module's margin controls, always together and in side order — doctrine
+ * E4/E4b by construction. Spread the result into a layout strip:
  *   [{ ... }, ...marginFields("getModuleOuterSpacingStyle")]
  * Only for modules whose renderer honours the keys; wiring a control to a
  * setting nothing reads violates E7.
+ *
+ * Two fields, not four: each is one AXIS of the box, which renders as a
+ * single matched row (V Margin) or splits into its two sides on the row's
+ * own toggle (E4b). The four side keys are unchanged — see
+ * builder-spacing-fields.tsx.
  */
-export function marginFields(rendersVia: string, max = 80): BuilderSchemaField[] {
-  return MODULE_MARGIN_SIDES.map(({ key, label }) => ({
-    key,
-    label,
-    width: "num" as const,
-    control: "number" as const,
-    min: 0,
-    max,
-    step: MODULE_SPACING_STEP,
-    fallback: "0",
-    rendersVia
-  }));
+export function marginFields(
+  rendersVia: string,
+  max = 80,
+  options: BuilderSpacingOptions = {}
+): BuilderSchemaField[] {
+  return spacingFields("margin", rendersVia, { max, ...options });
 }
 
-/** A module's four padding controls, same shape as `marginFields`. */
-export function paddingFields(rendersVia: string, max = 160): BuilderSchemaField[] {
-  return MODULE_PADDING_SIDES.map(({ key, label }) => ({
-    key,
-    label,
+/** A module's padding controls, same shape as `marginFields`. */
+export function paddingFields(
+  rendersVia: string,
+  max = 160,
+  options: BuilderSpacingOptions = {}
+): BuilderSchemaField[] {
+  return spacingFields("padding", rendersVia, { max, ...options });
+}
+
+/**
+ * The matched rows for ANY spacing box, including one that is not the
+ * module's own margin or padding — Navigation's bar padding and its per-link
+ * padding both come through here, so a nav panel's four boxes all behave the
+ * same way.
+ */
+export function spacingFields(
+  box: BuilderSpacingBox,
+  rendersVia: string,
+  options: BuilderSpacingOptions = {}
+): BuilderSchemaField[] {
+  return spacingPairSpecs(box, options).map((spec) => ({
+    // The first side's key names the field: it is the one a matched row
+    // writes first, and it keeps React keys and `visibleWhen` callers on a
+    // real settings key rather than an invented one.
+    key: spec.sides[0].key,
+    label: spec.pairLabel,
     width: "num" as const,
-    control: "number" as const,
-    min: 0,
-    max,
-    step: MODULE_SPACING_STEP,
-    fallback: "0",
+    control: "spacing-pair" as const,
+    spec,
     rendersVia
   }));
 }
@@ -614,6 +640,10 @@ function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext
       );
     case "custom":
       return field.render(ctx);
+    case "spacing-pair":
+      // Handled in renderStrips — a spacing pair emits its OWN fields (one
+      // row or two), so it cannot be wrapped in a single BuilderModuleField.
+      return null;
   }
 }
 
@@ -634,11 +664,22 @@ function renderStrips(strips: BuilderSchemaStrip[], ctx: BuilderSchemaFieldConte
     }
     return (
       <BuilderModuleFieldStrip key={stripIndex}>
-        {visible.map((field, fieldIndex) => (
-          <BuilderModuleField key={field.control === "custom" ? `custom-${fieldIndex}` : field.key} label={field.label} width={field.width}>
-            {renderControl(field, ctx)}
-          </BuilderModuleField>
-        ))}
+        {visible.map((field, fieldIndex) =>
+          // A spacing pair renders one row or two, so it supplies its own
+          // fields rather than sitting inside one (E4b).
+          field.control === "spacing-pair" ? (
+            <BuilderSpacingPairFields
+              key={field.key}
+              onChange={ctx.setMany}
+              settings={ctx.settings}
+              spec={field.spec}
+            />
+          ) : (
+            <BuilderModuleField key={field.control === "custom" ? `custom-${fieldIndex}` : field.key} label={field.label} width={field.width}>
+              {renderControl(field, ctx)}
+            </BuilderModuleField>
+          )
+        )}
       </BuilderModuleFieldStrip>
     );
   });
@@ -665,7 +706,9 @@ export function BuilderSchemaModuleSettings({
     settings: module.settings,
     themeColors,
     set: (key, value) =>
-      onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }))
+      onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } })),
+    setMany: (values) =>
+      onUpdateModule((current) => ({ ...current, settings: { ...current.settings, ...values } }))
   };
 
   function renderGroup(name: BuilderSchemaGroupName) {

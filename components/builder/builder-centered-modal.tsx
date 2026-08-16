@@ -46,12 +46,21 @@ export function BuilderCenteredModal({ title, onClose, children, minWidth = 560 
           aria-modal="true"
           style={modalStyle}
         >
-          <div className="builder-gallery-header">
+          {/*
+            A BANNER, not a row of text above the fields (operator's word,
+            2026-08-15): the title bar takes the modal's accent colour edge to
+            edge and reverses its type out of it, so the dialog reads as one
+            framed object rather than a floating panel of controls. The extra
+            class is what keeps that scoped to the module editor — the gallery
+            and palette modals share this stylesheet and keep their plain
+            header.
+          */}
+          <div className="builder-gallery-header builder-centered-modal-banner">
             <div>
               <h3>{title}</h3>
             </div>
             <div className="builder-gallery-header-actions">
-              <button className="secondary-button" onClick={onClose} type="button">
+              <button className="secondary-button builder-centered-modal-done" onClick={onClose} type="button">
                 Done
               </button>
             </div>
