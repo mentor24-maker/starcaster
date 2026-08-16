@@ -22,6 +22,7 @@ import { imageProps } from "@/lib/image-renditions";
 const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
 import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
+import { carouselSeamShift, carouselShortestDelta } from "@/lib/builder-carousel-loop";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
@@ -5229,50 +5230,180 @@ function CarouselPreview({
 
   const count = items.length;
   const step = cardWidth + gap;
+  const setWidth = count * step;
 
-  // Which item the cards format is currently parked on. Derived from scroll
-  // position rather than stored, because the visitor can also drag/swipe the
-  // strip directly — a stored index would immediately disagree with the eye.
+  /**
+   * Does the shelf hold more than it can show?
+   *
+   * Looping is built by rendering the cards three times over, so only the
+   * middle copy is ever on screen and the strip can be walked past either end
+   * without running out. That trick is worse than useless when the whole set
+   * already fits: two cards on a wide page would render as "A B A B A B",
+   * visibly repeating with nothing gained. Measured rather than guessed,
+   * because it depends on the container the module happens to land in.
+   */
+  const [overflows, setOverflows] = useState(false);
   useEffect(() => {
     if (!isCards) return;
     const el = scrollRef.current;
     if (!el) return;
-    function update() {
+    const measure = () => setOverflows(setWidth > el.clientWidth + 1);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [isCards, setWidth]);
+
+  const loopCards = isCards && loop && overflows && count > 1;
+  const copies = loopCards ? 3 : 1;
+
+  /**
+   * Park on the middle copy so there is a whole set of cards waiting on each
+   * side. Runs when looping turns on, and again if the card geometry changes
+   * under it.
+   */
+  useEffect(() => {
+    if (!loopCards) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = setWidth;
+    targetRef.current = setWidth;
+  }, [loopCards, setWidth]);
+
+  /**
+   * The seam. Once scrolling settles, if the strip has walked off the middle
+   * copy, put it back by exactly one set-width. The three copies are
+   * identical, so the jump lands on the same picture in the same place and is
+   * invisible — which is what makes the first card come round again instead
+   * of the shelf dead-ending (operator, 2026-08-16).
+   *
+   * AFTER it settles, not during: a smooth scroll is still animating toward a
+   * target, and moving the ground under it mid-flight lands somewhere nobody
+   * asked for. `scrollend` would say this exactly, but Safari does not have
+   * it, so the 120ms quiet period stands in.
+   */
+  useEffect(() => {
+    if (!isCards) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    let settle = 0;
+
+    function onScroll() {
       if (!el) return;
-      setIndex(Math.round(el.scrollLeft / Math.max(step, 1)));
+      // The dots follow the eye immediately, even mid-drag.
+      const at = Math.round(el.scrollLeft / Math.max(step, 1));
+      setIndex(count > 0 ? ((at % count) + count) % count : 0);
+
+      if (!loopCards) return;
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        if (!el) return;
+        const shift = carouselSeamShift(el.scrollLeft, setWidth);
+        if (shift) {
+          el.scrollLeft += shift;
+          if (targetRef.current != null) {
+            // The pending target moves with the ground...
+            targetRef.current += shift;
+            // ...and the journey is restarted, because assigning `scrollLeft`
+            // cancels any smooth scroll still running. Without this, a press
+            // that lands while the strip is crossing the seam is thrown away
+            // — eight quick presses moved seven cards.
+            if (Math.abs(el.scrollLeft - targetRef.current) > 1) {
+              el.scrollTo({ left: targetRef.current, behavior: "smooth" });
+            }
+          }
+        }
+        // Adopt reality only once the strip has actually arrived. A target
+        // still some distance off means something is mid-flight toward it,
+        // and overwriting it here would drop that step. Far-off with nothing
+        // in flight is a swipe, which is exactly when adopting is right.
+        if (targetRef.current == null || Math.abs(el.scrollLeft - targetRef.current) < step * 0.5) {
+          targetRef.current = el.scrollLeft;
+        }
+      }, 120);
     }
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
+
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
     return () => {
-      el.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
+      window.clearTimeout(settle);
+      el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
     };
-  }, [isCards, step, count]);
+  }, [isCards, step, count, loopCards, setWidth]);
+
+  /**
+   * Where the strip is HEADED, which is not where it currently is.
+   *
+   * A smooth scroll takes a moment, and every arrow press during that moment
+   * used to read the half-finished position and work out its next step from
+   * there — so a visitor clicking quickly got most of their presses ignored
+   * (six deliberate clicks moved one card). Steps are counted from the
+   * target instead, and the target is resynced to reality whenever scrolling
+   * settles, which is also what absorbs a swipe.
+   */
+  const targetRef = useRef<number | null>(null);
+
+  /** One card left or right, relative — position repeats while looping. */
+  const nudgeCards = (direction: -1 | 1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const next = (targetRef.current ?? el.scrollLeft) + direction * step;
+    targetRef.current = next;
+    el.scrollTo({ left: next, behavior: "smooth" });
+  };
 
   const goTo = (next: number) => {
     if (count === 0) return;
-    const wrapped = loop ? ((next % count) + count) % count : Math.min(Math.max(next, 0), count - 1);
     if (isCards) {
-      scrollRef.current?.scrollTo({ left: wrapped * step, behavior: "smooth" });
+      const el = scrollRef.current;
+      if (!el) return;
+      if (loopCards) {
+        // Walk to the wanted card from wherever the strip is headed, rather
+        // than to an absolute offset that names one of three identical
+        // copies. The shorter way round wins, so the dots never take the
+        // long trip past everything to reach a neighbour.
+        const base = targetRef.current ?? el.scrollLeft;
+        const at = Math.round(base / Math.max(step, 1));
+        const to = base + carouselShortestDelta(at, next, count) * step;
+        targetRef.current = to;
+        el.scrollTo({ left: to, behavior: "smooth" });
+        return;
+      }
+      const clamped = Math.min(Math.max(next, 0), count - 1);
+      targetRef.current = clamped * step;
+      el.scrollTo({ left: clamped * step, behavior: "smooth" });
+      setIndex(clamped);
+      return;
     }
+    const wrapped = loop ? ((next % count) + count) % count : Math.min(Math.max(next, 0), count - 1);
     setIndex(wrapped);
   };
 
   useEffect(() => {
     if (!autoplay || count <= 1 || paused) return;
     const timer = window.setInterval(() => {
+      if (isCards) {
+        if (loopCards) {
+          nudgeCards(1);
+          return;
+        }
+        setIndex((current) => {
+          const next = Math.min(current + 1, count - 1);
+          scrollRef.current?.scrollTo({ left: next * step, behavior: "smooth" });
+          return next;
+        });
+        return;
+      }
       setIndex((current) => {
         const next = current + 1;
         // Autoplay respects Loop: without it the run stops on the last item
         // rather than snapping back to the first.
-        const wrapped = loop ? next % count : Math.min(next, count - 1);
-        if (isCards) scrollRef.current?.scrollTo({ left: wrapped * step, behavior: "smooth" });
-        return wrapped;
+        return loop ? next % count : Math.min(next, count - 1);
       });
     }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [autoplay, count, paused, intervalMs, isCards, step, loop]);
+  }, [autoplay, count, paused, intervalMs, isCards, step, loop, loopCards]);
 
   useEffect(() => {
     if (index >= count) setIndex(0);
@@ -5368,10 +5499,19 @@ function CarouselPreview({
           ref={scrollRef}
           style={{ ...frameStyle, gap: `${gap}px` }}
         >
-          {items.map((item) => (
+          {/* The set, rendered `copies` times — once normally, or three times
+              when looping. Only the middle copy is ever on screen; the outer
+              two are what the strip walks into instead of hitting an end.
+              Clones are hidden from screen readers and taken out of the tab
+              order, so a keyboard or screen-reader visitor meets each card
+              once rather than three times. */}
+          {Array.from({ length: copies }).flatMap((_, copy) =>
+            items.map((item) => (
             <article
-              key={item.id}
+              key={`${item.id}-copy-${copy}`}
               className="builder-preview-carousel-card"
+              aria-hidden={copies > 1 && copy !== 1 ? true : undefined}
+              inert={copies > 1 && copy !== 1 ? true : undefined}
               // Both, not `minWidth` alone: a flex item with `flex: 0 0 auto`
               // and no width takes its size from its content, so a card
               // holding a 1920px photo came out 1920px wide.
@@ -5402,7 +5542,8 @@ function CarouselPreview({
                 </>
               )}
             </article>
-          ))}
+            ))
+          )}
         </div>
       ) : (
         <div
