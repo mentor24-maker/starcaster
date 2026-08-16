@@ -233,6 +233,41 @@ and "contains a space" for one problem. A quoted key also fails the prefix check
 problem — so errors suppress warnings for the same value, and the space rule
 matches spaces and tabs only.
 
+### 3.9 The second run is a different program — run it before you believe the first
+
+Reconciling the delraytennis import shipped three defects in one afternoon,
+all invisible on the first run and all obvious on the second:
+
+- The decisions file was rebuilt from the "still outstanding" list. A
+  decision that WORKED moved its page off that list, so the file silently
+  erased every call that succeeded — three operator decisions became zero
+  between two identical commands.
+- `createAsset` always inserts, and the blob copy it follows overwrites in
+  place. Applying twice registered all 73 images a second time; nothing
+  looked wrong anywhere except a library that had quietly doubled.
+- The image step asked "is this photo already on the page?" while counting
+  its own output, so a re-run would place nothing at all — freezing the page
+  on whatever shape the first run happened to write.
+
+**Do this:** anything that looks idempotent gets run twice and diffed
+before it is believed. A record rebuilt from what is *outstanding* loses
+what *succeeded* — rebuild from what is known and only ever add. An
+"already present" test must exclude the thing you are about to write.
+
+### 3.10 A write that normalizes to nothing looks exactly like a success
+
+The reconcile runner passed the section list in the shape the database
+COLUMN uses rather than the shape the serializer takes. The serializer does
+not reject it: it reads no sections and writes an empty page. Fourteen
+pages were emptied in one run, each one reporting "wrote 1 section", and
+the only reason it was caught is that the database was checked instead of
+the script's own output.
+
+**Do this:** read the record back immediately after writing it and compare
+it against what you sent — count and identity, not just "no error". Stop on
+the first mismatch, before the next record is touched, and print the
+restore command. A tool's own log is not evidence about the database.
+
 ---
 
 ## 4. Secrets
@@ -400,6 +435,53 @@ site's menu. The smoke test asserts both halves: sr-only text goes, a
 **Do this:** when filtering out what a visitor "cannot see", enumerate why
 each thing is hidden. Hidden-forever and hidden-until-interaction are
 opposite cases wearing the same costume.
+
+### 5.10 The stores take arguments in an order that silently crosses tenants
+
+Three separate ways to read the wrong thing, all of which return data
+rather than erroring:
+
+- `listPages(limit, scope)` takes the LIMIT first. `listPages(scope)` reads
+  the scope as a limit and returns **every project's pages** — a survey of
+  one tenant reported 185 pages for a project that has none.
+- The stores return `{ ok, status, data }` envelopes, never the row. Reading
+  `job.status` off the envelope yields `200`, so a complete job reads as
+  status "200". Use a `must(res, what)` helper, as the other runners do.
+- The page-document input is NOT the column's shape. `layoutSections` must
+  be the ARRAY of sections; `{ sections: [...] }` is accepted and produces
+  an empty page (§3.10). Spread the whole page — passing `layoutSections`
+  alone silently resets `pageBackground` and `theme` to defaults.
+
+**Do this:** check the signature before calling a store, unwrap through
+`must()`, and for any multi-tenant read assert that what came back belongs
+to the project you asked for.
+
+### 5.11 A retired module name still works, which is why writing one is a bug
+
+`slideshow` and `slider` merged into `carousel`; the old names stay in
+`RETIRED_MODULE_TYPES` permanently so old documents keep loading. So a tool
+that emits `slideshow` is accepted, renders correctly, and leaves the
+document in a shape no current code writes — migrated on every single load
+until someone happens to save the page. Nothing reports anything.
+
+Worse, the folder's generated `lib/builder/template.js` predated the rename,
+so the test passed locally and failed only in CI, which builds fresh.
+
+**Do this:** assert that the type you emit survives the real serializer
+UNCHANGED, rather than asserting a hardcoded name — that way the next rename
+fails loudly instead of falling through the compatibility shim. And when a
+test disagrees between here and CI, rebuild the generated artifacts first
+(CLAUDE.md landmine 1); CI is the one with the honest copy.
+
+### 5.12 A list endpoint with a hard cap and no offset cannot report the truth
+
+`listAssets` capped at 2,000 rows with no way to page. The delraytennis job
+recorded 2,067, so a caller reading the first page could not distinguish a
+complete list from a truncated one — and would have quietly planned against
+67 missing assets.
+
+**Do this:** a capped list takes `{ limit, offset }` and callers page to
+exhaustion. If a cap must stay, return enough for the caller to detect it.
 
 ---
 
