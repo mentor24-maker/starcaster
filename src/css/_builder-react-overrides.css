@@ -4572,8 +4572,28 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-muted, #5c6a72);
 }
 
-.builder-react-root .builder-page-history-size {
+/* What the next save did, with the counts under it as the secondary fact.
+   Before this column existed the counts were the ONLY fact, and five
+   consecutive rows reading "41 sections · 84 modules" was the result. */
+.builder-react-root .builder-page-history-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-react-root .builder-page-history-change {
   font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+  /* One line, always: the summary already caps its own name list, and a row
+     that wraps turns the list into a wall. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.builder-react-root .builder-page-history-size {
+  font-size: var(--text-xs, 0.78rem);
   color: var(--ink-muted, #5c6a72);
   font-variant-numeric: tabular-nums;
 }
@@ -4588,7 +4608,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-page-history-row {
     grid-template-columns: 1fr max-content;
   }
-  .builder-react-root .builder-page-history-size {
+  .builder-react-root .builder-page-history-what {
     grid-column: 1 / -1;
   }
 }

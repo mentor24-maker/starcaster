@@ -5,8 +5,8 @@ const assert = require('node:assert/strict');
 
 const {
   describeActor,
-  rejectsAuthorColumns,
-  stripAuthorColumns,
+  rejectedOptionalColumns,
+  stripColumns,
 } = require('../../lib/builderPageRevisionsStore');
 
 /**
@@ -50,22 +50,22 @@ test('an unauthenticated write records no author rather than inventing one', () 
 });
 
 test('a database without the saved_by columns is detected from the error', () => {
-  assert.equal(
-    rejectsAuthorColumns({ error: "column builder_page_revisions.saved_by does not exist" }),
-    true
+  assert.deepEqual(
+    rejectedOptionalColumns({ error: "column builder_page_revisions.saved_by does not exist" }),
+    ['saved_by']
   );
-  assert.equal(
-    rejectsAuthorColumns({ error: "column builder_page_revisions.saved_by_name does not exist" }),
-    true
+  assert.deepEqual(
+    rejectedOptionalColumns({ error: "column builder_page_revisions.saved_by_name does not exist" }),
+    ['saved_by_name']
   );
 });
 
 test('an unrelated failure is NOT treated as a missing column', () => {
   // Retrying an unrelated failure without the author columns would hide the
   // real error and write a revision that silently lost its attribution.
-  assert.equal(rejectsAuthorColumns({ error: 'duplicate key value violates unique constraint' }), false);
-  assert.equal(rejectsAuthorColumns({}), false);
-  assert.equal(rejectsAuthorColumns(null), false);
+  assert.deepEqual(rejectedOptionalColumns({ error: 'duplicate key value violates unique constraint' }), []);
+  assert.deepEqual(rejectedOptionalColumns({}), []);
+  assert.deepEqual(rejectedOptionalColumns(null), []);
 });
 
 test('stripping drops the author columns and nothing else', () => {
@@ -78,7 +78,7 @@ test('stripping drops the author columns and nothing else', () => {
     module_count: 84,
     reason: 'save',
   };
-  const stripped = stripAuthorColumns(row);
+  const stripped = stripColumns(row, ['saved_by', 'saved_by_name']);
   assert.ok(!('saved_by' in stripped));
   assert.ok(!('saved_by_name' in stripped));
   assert.equal(stripped.layout_sections, '[{"id":"s1"}]', 'the layout must survive the retry');

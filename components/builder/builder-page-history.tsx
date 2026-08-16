@@ -29,6 +29,9 @@ export type BuilderPageRevision = {
    *  saved_by columns existed, or an unauthenticated write. */
   savedBy?: string;
   savedByName?: string;
+  /** What the save that replaced this version did to it. "" = recorded before
+   *  the change_summary column existed; the counts stand in for it. */
+  changeSummary?: string;
   createdAt: string;
 };
 
@@ -189,8 +192,9 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
       {!collapsed ? (
         <div className="builder-page-history-body">
           <p className="builder-page-history-intro">
-            Every version this page has been in, newest first. Restoring saves the current
-            version here first, so nothing is ever a one-way door.
+            Every version this page has been in, newest first. Each line says what the
+            next save did to it. Restoring saves the current version here first, so
+            nothing is ever a one-way door.
           </p>
 
           {error ? <p className="builder-page-history-error">{error}</p> : null}
@@ -213,7 +217,12 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
                       {describeReason(revision)}
                     </span>
                   </div>
-                  <span className="builder-page-history-size">{describeSize(revision)}</span>
+                  <span className="builder-page-history-what">
+                    {revision.changeSummary?.trim() ? (
+                      <span className="builder-page-history-change">{revision.changeSummary}</span>
+                    ) : null}
+                    <span className="builder-page-history-size">{describeSize(revision)}</span>
+                  </span>
                   <button
                     className="btn btn-ghost builder-page-history-restore"
                     disabled={Boolean(restoringId)}
