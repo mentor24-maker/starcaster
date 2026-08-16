@@ -76,8 +76,10 @@ container to `scripts/ui/check_panels.mjs`, seed real content into
 `scripts/ui/seed_fixture.mjs` (an empty manager measures nothing and
 passes), and then **prove the check fails** by breaking the layout on
 purpose before you trust the pass.
-- Styles live in `src/css/_builder-react-overrides.css` and
-  `src/css/_builder-react.css` — see `src/css/CLAUDE.md`.
+- **New styles go in `src/css/_builder-react-overrides.css`.** Existing rules
+  also live in `src/css/_builder-react.css`, but that file is regenerated
+  wholesale and a hand edit there disappears at the next regeneration — read
+  it, never write it. See `src/css/CLAUDE.md`, first section.
 
 ## Adding a builder module type
 
@@ -96,7 +98,8 @@ raw user content.
 
 - Layout/style settings persist on the form record's `styles` JSON
   (`lib/crmFormStyles.js`)
-- Public rendering styles live in `src/css/_builder-react.css` — not
-  `_crm.css` (that's the admin preview)
+- Public rendering styles belong to the builder layer, not `_crm.css` (that's
+  the admin preview). Existing ones sit in `src/css/_builder-react.css`; add
+  new ones to `_builder-react-overrides.css` (that file is regenerated)
 - Module center/right alignment must not override the form's internal
   alignment

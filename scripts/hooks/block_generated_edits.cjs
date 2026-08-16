@@ -8,9 +8,41 @@
  *
  * Generated-file map: keep in sync with CLAUDE.md and
  * scripts/check_conventions.cjs.
+ *
+ * TWO CATEGORIES, and the second one is why this hook exists at all now.
+ *
+ * GENERATED are gitignored build artifacts: edit the source, run the rebuild.
+ *
+ * REPLACED_WHOLESALE are files that ARE committed to git and look completely
+ * ordinary in an editor, but a script rewrites them end to end. A hand edit
+ * survives until the next regeneration and then vanishes with no error and no
+ * test failure. `_builder-react.css` lost the CRM modal styles that way in
+ * commit 2bd3018 and Contacts delete stayed broken for a month.
+ *
+ * That rule was already written down — MODULE_UI_DOCTRINE R2 — and already
+ * enforced by check_conventions. Both fire at COMMIT time, which is after the
+ * edit, the rebuild, the screenshots and the verification are all done. The
+ * operator reported on 2026-08-15 that agents fall into it "every time".
+ * Blocking the Edit call is the only version of this rule that lands before
+ * the work is wasted, so it stops depending on an agent reading the doctrine
+ * at the right moment.
  */
 
 const path = require('path');
+
+/**
+ * Committed files that a script rewrites in full. Not "rebuild it" — the fix
+ * is to put the hand-written rule somewhere the regeneration cannot reach.
+ */
+const REPLACED_WHOLESALE = [
+  {
+    file: 'src/css/_builder-react.css',
+    regenerator: 'scripts/extract_builder_css.mjs (npm run extract:builder-css)',
+    instead: 'src/css/_builder-react-overrides.css — imported after this file, so it wins',
+    incident: 'commit 2bd3018 regenerated it and silently deleted the CRM modal styles, '
+      + 'breaking Contacts delete for a month. Nothing tests CSS, so the deletion was silent.',
+  },
+];
 
 const GENERATED = [
   { file: 'public/app-shell.html', source: 'src/layout.html + src/pages/**', cmd: 'npm run build:html' },
@@ -42,6 +74,21 @@ function main(input) {
 
   const root = String(process.env.CLAUDE_PROJECT_DIR || path.join(__dirname, '..', '..'));
   const rel = path.relative(root, path.resolve(filePath)).split(path.sep).join('/');
+
+  const wholesale = REPLACED_WHOLESALE.find((g) => g.file === rel);
+  if (wholesale) {
+    process.stderr.write(
+      `BLOCKED: ${rel} is committed to git but REGENERATED WHOLESALE by\n` +
+      `${wholesale.regenerator}. It replaces the whole file, so a hand edit here\n` +
+      `survives until the next regeneration and then disappears — no error, no failing test.\n` +
+      `\n` +
+      `Put the rule here instead: ${wholesale.instead}\n` +
+      `\n` +
+      `Incident: ${wholesale.incident}\n` +
+      `(Doctrine: docs/MODULE_UI_DOCTRINE.md R2.)\n`
+    );
+    process.exit(2);
+  }
 
   const hit = GENERATED.find((g) => g.file === rel);
   if (!hit) process.exit(0);

@@ -251,11 +251,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }),
     [workspaceThemeStyles, workspaceShellLayers.inlineBackground]
   );
+  // `canvasTheme`, not `draft.theme`. A page stopped carrying its own copy of
+  // the theme when it started following one (#256), so `draft.theme.typography`
+  // can now arrive without a `colors` object at all — and this chain is
+  // unguarded, so reading `.text` off it threw and took the WHOLE editor down
+  // to a blank page, every row and every module with it. `resolveRenderTheme`
+  // always returns a normalized theme, and it is the live one the canvas is
+  // already painting with, which is what these swatches should have offered
+  // from the start.
   const rteThemeColors = [
     ...buildBuilderThemePaletteColors(activeTheme),
-    { label: "Body text", hex: draft.theme.typography.colors.text },
-    { label: "Headings", hex: draft.theme.typography.colors.heading },
-    { label: "Link", hex: draft.theme.typography.colors.link },
+    { label: "Body text", hex: canvasTheme.typography.colors.text },
+    { label: "Headings", hex: canvasTheme.typography.colors.heading },
+    { label: "Link", hex: canvasTheme.typography.colors.link },
   ].filter((c) => Boolean(c.hex));
 
   // --- Data loading ---
