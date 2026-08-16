@@ -566,6 +566,7 @@ App.builder = (function () {
     filters: {
       name: '',
       templateId: '',
+      slug: '',
       visibility: '',
     },
     sort: {
@@ -8299,13 +8300,19 @@ App.builder = (function () {
   function getFilteredSortedPages() {
     const nameFilter = safeText(landingPageTableState.filters.name).toLowerCase();
     const templateFilter = safeText(landingPageTableState.filters.templateId);
+    // The column shows the slug with a leading slash, so a search typed
+    // straight off the screen ("/about") has to match a slug stored without
+    // one ("about").
+    const slugFilter = safeText(landingPageTableState.filters.slug).toLowerCase().replace(/^\//, '');
     const visibilityFilter = safeText(landingPageTableState.filters.visibility).toLowerCase();
 
     const rows = savedPages.filter((item) => {
       const name = safeText(item.name).toLowerCase();
       const templateId = safeText(item.templateId);
+      const slug = safeText(item.slug).toLowerCase();
       if (nameFilter && !name.includes(nameFilter)) return false;
       if (templateFilter && templateId !== templateFilter) return false;
+      if (slugFilter && !slug.includes(slugFilter)) return false;
       const visibilityState = pageVisibilityState(item);
       if (visibilityFilter === 'public' && visibilityState !== 'public') return false;
       if (visibilityFilter === 'private' && visibilityState !== 'private') return false;
@@ -13648,6 +13655,7 @@ App.builder = (function () {
 
     const landingPageNameFilter = byId('builderPagesNameFilter');
     const landingPageTemplateFilter = byId('builderPagesTemplateFilter');
+    const landingPageSlugFilter = byId('builderPagesSlugFilter');
     const landingPageVisibilityFilter = byId('builderPagesVisibilityFilter');
     const landingPageSelectAll = byId('builderPagesSelectAllVisible');
     const landingPageBulkDeleteBtn = byId('builderPagesBulkDeleteBtn');
@@ -13666,6 +13674,13 @@ App.builder = (function () {
     if (landingPageTemplateFilter) {
       landingPageTemplateFilter.addEventListener('change', () => {
         landingPageTableState.filters.templateId = safeText(landingPageTemplateFilter.value);
+        renderPagesTable();
+      });
+    }
+
+    if (landingPageSlugFilter) {
+      landingPageSlugFilter.addEventListener('input', () => {
+        landingPageTableState.filters.slug = safeText(landingPageSlugFilter.value);
         renderPagesTable();
       });
     }
