@@ -197,20 +197,13 @@ export const MODULE_GROUP_ICONS: Partial<Record<ModulePaletteGroup, ReactNode>> 
       <path d="M3 9.5h18M9.5 9.5V19M15 9.5V19" />
     </Icon>
   ),
-  // Cards running off the edge, with scroll arrows.
-  slider: (
+  // A framed item with more waiting either side and dots beneath — true of
+  // both formats, which is the point of the merged module.
+  carousel: (
     <Icon>
-      <rect x="7" y="6" width="10" height="12" rx="2" />
-      <path d="M3.5 9v6M20.5 9v6" />
-      <path d="M4.5 12h-1M20.5 12h-1" />
-    </Icon>
-  ),
-  // Stacked frames advancing.
-  slideshow: (
-    <Icon>
-      <rect x="5.5" y="6" width="13" height="10" rx="2" />
-      <path d="M3 9v4M21 9v4" />
-      <path d="M8.5 19.5h7" />
+      <rect x="7" y="6" width="10" height="11" rx="2" />
+      <path d="M3.5 9v5M20.5 9v5" />
+      <path d="M9 20h6" />
     </Icon>
   ),
   // A row of tiles — the module itself.

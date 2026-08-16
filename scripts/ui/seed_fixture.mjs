@@ -179,6 +179,39 @@ const TUNED = {
       ]),
     },
   },
+  // The carousel, both formats. Same lesson as feature-cards and
+  // program-list: its item manager ships EMPTY from createEmptyModule, so
+  // without real items here the check finds the grid, measures nothing and
+  // passes. Captions ON, because the item sub-row's other four fields are
+  // gated behind that toggle and would otherwise never be measured — the
+  // exact "a control the check cannot see is a control the rule does not
+  // cover" hole. Two items, one missing its link, so the widest control in
+  // the grid (Choose From Gallery) is on screen against a real track.
+  carousel: {
+    name: 'Slideshow',
+    settings: {
+      format: 'slideshow',
+      showCaptions: 'true',
+      captionPosition: 'bottom-left',
+      heightPx: '420',
+      items: JSON.stringify([
+        {
+          id: 'item-1', title: 'Junior Tennis Programs', body: 'Camps, clinics and private lessons all summer.',
+          // Real files in public/, not the plausible-looking paths the older
+          // seeds use: a 404 image collapses to a 20px broken icon, so a frame
+          // that takes its height from its picture measures nothing.
+          imageUrl: '/images/Gemini_Generated_starcaster_banner.png', imageAlt: 'Junior players gathered at the net',
+          linkUrl: '/delray-champions-junior-tennis-high-performance', linkLabel: 'See the schedule',
+          icon: '', iconImageUrl: '',
+        },
+        {
+          id: 'item-2', title: 'Court Fees & Lesson Prices', body: 'Resident and guest rates.',
+          imageUrl: '/images/background_galaxy_1920x1080.jpg', imageAlt: 'Clay courts at sunrise',
+          linkUrl: '', linkLabel: '', icon: '', iconImageUrl: '',
+        },
+      ]),
+    },
+  },
   table: {
     name: 'Contact Strip',
     settings: {
@@ -270,6 +303,25 @@ const PANEL_CHECK_SECTION = {
           ...TUNED.navigation.settings,
           navDropdownStyle: 'mega',
           navMegaPlacement: 'menu',
+        },
+      };
+    })(),
+    // A SECOND carousel, in the cards format. `format` decides which controls
+    // exist — Card Width appears, Transition and the whole Captions group
+    // vanish — so the slideshow module above can only ever measure half of
+    // this panel. Same reasoning as the mega-panel menu directly above.
+    (() => {
+      const base = createEmptyModule('carousel', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-carousel-cards',
+        name: 'Card Slider',
+        settings: {
+          ...base.settings,
+          ...TUNED.carousel.settings,
+          format: 'cards',
+          cardWidth: '280',
+          gap: '16',
         },
       };
     })(),

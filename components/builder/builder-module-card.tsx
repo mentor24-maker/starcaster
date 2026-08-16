@@ -9,9 +9,10 @@ import { BuilderFeatureCardsModuleSettings } from "./builder-feature-cards-modul
 import { BuilderProgramListModuleSettings } from "./builder-program-list-module-settings";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
-  BuilderSlideshowModuleSettings,
-  parseBuilderSlideshowSlides
-} from "./builder-slideshow-module-settings";
+  BuilderCarouselModuleSettings,
+  parseBuilderCarouselItems,
+  resolveCarouselFormat
+} from "./builder-carousel-module-settings";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -175,7 +176,7 @@ const CARD_SIZES = "(max-width: 700px) 100vw, 400px";
  * Adding a module to the shape means adding it here and to the matching CSS
  * selector list in `_builder-react-overrides.css`.
  */
-const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list", "social"]);
+const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "carousel", "program-list", "social"]);
 
 /**
  * The two nudge controls, named and ordered like `MODULE_MARGIN_SIDES` so a
@@ -674,18 +675,55 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
-  if (module.type === "slideshow") {
-    const slides = parseBuilderSlideshowSlides(module.settings);
-    const first = slides[0];
+  if (module.type === "carousel") {
+    // The canvas card is a glance, not the page: one format shows its first
+    // picture with a count, the other shows the shelf. Both read from the same
+    // `items`, which is the point of the merge.
+    const items = parseBuilderCarouselItems(module.settings);
+    const isCards = resolveCarouselFormat(module.settings) === "cards";
+
+    if (items.length === 0) {
+      return (
+        <span className="builder-module-preview-empty">
+          {isCards ? "Add cards in the editor" : "Add slides in the editor"}
+        </span>
+      );
+    }
+
+    if (isCards) {
+      const gap = Number.parseInt(module.settings.gap || "16", 10);
+      const cardWidth = Number.parseInt(module.settings.cardWidth || "280", 10);
+      return (
+        <div className="builder-module-preview-carousel-cards" style={{ gap: `${gap}px` }}>
+          {items.map((item) => (
+            <article
+              key={item.id}
+              className="builder-module-preview-carousel-card"
+              style={{ minWidth: `${cardWidth}px` }}
+            >
+              {item.imageUrl ? (
+                <img
+                  {...imageProps(item.imageUrl, { sizes: "220px" })}
+                  alt={item.imageAlt || item.title || ""}
+                  loading="lazy"
+                />
+              ) : null}
+              <div className="builder-module-preview-carousel-card-copy">
+                <strong>{item.title || "Card title"}</strong>
+                <p>{item.body || "Card body"}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      );
+    }
+
+    const first = items[0];
     return (
-      <div className="builder-module-preview-slideshow">
-        {first ? (
-          <img {...imageProps(first.url)} alt={first.alt || ""} loading="lazy" />
-        ) : (
-          <span className="builder-module-preview-slideshow-empty">Add slides in the editor</span>
-        )}
-        {slides.length > 1 ? (
-          <span className="builder-module-preview-slideshow-count">{slides.length} slides</span>
+      <div className="builder-module-preview-carousel">
+        <img {...imageProps(first.imageUrl)} alt={first.imageAlt || ""} loading="lazy" />
+        {items.length > 1 ? (
+          <span className="builder-module-preview-carousel-count">{items.length} slides</span>
         ) : null}
       </div>
     );
@@ -743,44 +781,6 @@ function renderModulePreview(module: BuilderTemplateModule) {
             <strong>{card.title || "Untitled card"}</strong>
           </article>
         ))}
-      </div>
-    );
-  }
-
-  if (module.type === "slider") {
-    const items = parseSliderItems(module.settings);
-    const gap = Number.parseInt(module.settings.sliderGap || "16", 10);
-    const cardWidth = Number.parseInt(module.settings.sliderCardWidth || "280", 10);
-
-    return (
-      <div className="builder-module-preview-slider" style={{ gap: `${gap}px` }}>
-        {items.length > 0 ? (
-          items.map((item) => (
-            <article
-              key={item.id}
-              className="builder-module-preview-slider-card"
-              style={{ minWidth: `${cardWidth}px` }}
-            >
-              {item.imageUrl ? (
-                <div className="builder-module-preview-slider-image">
-                  <Image
-                    alt={item.title || "Slider item"}
-                    fill
-                    sizes="220px"
-                    src={item.imageUrl}
-                    unoptimized
-                  />
-                </div>
-              ) : null}
-              <div className="builder-module-preview-slider-copy">
-                <strong>{item.title || "Slide title"}</strong>
-                <p>{item.body || "Slide body"}</p>
-              </div>
-            </article>
-          ))
-        ) : (
-          <div className="builder-module-preview-placeholder">Add slider items</div>
-        )}
       </div>
     );
   }
@@ -2313,8 +2313,6 @@ function renderModulePreview(module: BuilderTemplateModule) {
 }
 
 /** Shared with the Feature Cards module — see lib/builder-client/builder-card-items.ts */
-type SliderItem = BuilderCardItem;
-
 type SocialItem = {
   id: string;
   label: string;
@@ -2331,14 +2329,6 @@ function parseHeadlineItems(settings: Record<string, string>): HeadlineItem[] {
 
 function serializeHeadlineItems(items: HeadlineItem[]) {
   return serializeHeadlineRotatorEntries(items);
-}
-
-function parseSliderItems(settings: Record<string, string>): SliderItem[] {
-  return parseBuilderCardItems(settings.sliderItems, "slide", "storage");
-}
-
-function serializeSliderItems(items: SliderItem[]) {
-  return serializeBuilderCardItems(items);
 }
 
 function parseSocialItems(settings: Record<string, string>): SocialItem[] {
@@ -2358,92 +2348,6 @@ function parseSocialItems(settings: Record<string, string>): SocialItem[] {
   } catch {
     return [];
   }
-}
-
-function SliderModuleEditor({
-  module,
-  onUpdateModule
-}: {
-  module: BuilderTemplateModule;
-  onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
-}) {
-  const items = parseSliderItems(module.settings);
-
-  function persist(nextItems: SliderItem[]) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, sliderItems: serializeSliderItems(nextItems) } }));
-  }
-
-  function updateItem(id: string, updates: Partial<SliderItem>) {
-    persist(items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
-  }
-
-  function moveItem(id: string, direction: -1 | 1) {
-    const index = items.findIndex((item) => item.id === id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= items.length) return;
-    const nextItems = [...items];
-    const [moved] = nextItems.splice(index, 1);
-    nextItems.splice(target, 0, moved);
-    persist(nextItems);
-  }
-
-  function removeItem(id: string) { persist(items.filter((item) => item.id !== id)); }
-
-  function addItem() {
-    persist([...items, createBuilderCardItem(items.length + 1, "slide")]);
-  }
-
-  return (
-    <>
-      <div className="builder-slider-design-grid">
-        <BuilderInlineNumberSelectRow>
-          <BuilderInlineNumberSelect
-            label="Card width"
-            value={module.settings.sliderCardWidth ?? "280"}
-            min={180}
-            max={420}
-            step={10}
-            fallback="280"
-            onChange={(value) =>
-              onUpdateModule((current) => ({ ...current, settings: { ...current.settings, sliderCardWidth: value } }))
-            }
-          />
-          <BuilderInlineNumberSelect
-            label="Gap"
-            value={module.settings.sliderGap ?? "16"}
-            min={8}
-            max={40}
-            step={2}
-            fallback="16"
-            onChange={(value) =>
-              onUpdateModule((current) => ({ ...current, settings: { ...current.settings, sliderGap: value } }))
-            }
-          />
-        </BuilderInlineNumberSelectRow>
-      </div>
-      <div className="builder-slider-items">
-        {items.map((item, index) => (
-          <div key={item.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>{item.title || `Slide ${index + 1}`}</strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Delete slide">✕</button>
-              </div>
-            </div>
-            <div className="builder-slider-item-grid">
-              <label className="field"><span>Title</span><input type="text" value={item.title} onChange={(e) => updateItem(item.id, { title: e.target.value })} /></label>
-              <label className="field"><span>Link</span><input type="text" value={item.linkUrl} onChange={(e) => updateItem(item.id, { linkUrl: e.target.value })} placeholder="/path-or-url" /></label>
-              <label className="field builder-slider-item-grid-full"><span>Image URL</span><BuilderImagePickerField value={item.imageUrl} onChange={(url) => updateItem(item.id, { imageUrl: url })} /></label>
-              <label className="field builder-slider-item-grid-full"><span>Description</span><textarea className="builder-textarea" rows={3} value={item.body} onChange={(e) => updateItem(item.id, { body: e.target.value })} placeholder="Add copy for this slide" /></label>
-            </div>
-          </div>
-        ))}
-      </div>
-      <button type="button" className="secondary-button" onClick={addItem}>Add Slide</button>
-    </>
-  );
 }
 
 function SocialShareModuleEditor({
@@ -3054,7 +2958,7 @@ export function BuilderModuleCard({
     const mobileAlignment = module.settings.mobileAlignment ?? "";
     const isVideoModule = module.type === "video" || (module.type === "image" && module.settings.variant === "video");
     const isStandardImage = module.type === "image" && !isVideoModule;
-    const isSlideshowModule = module.type === "slideshow";
+    const isCarouselModule = module.type === "carousel";
     const isFloatingImage = module.type === "floating-image";
     const isReminderModule = module.type === "reminder";
     const isTableModule = module.type === "table";
@@ -3213,7 +3117,7 @@ export function BuilderModuleCard({
 
               Last on the strip by D9: a nudge is the finest adjustment here,
               after the margins that move the whole module. */}
-          {isSlideshowModule
+          {isCarouselModule
             ? MODULE_NUDGE_SIDES.map(({ key, label, hint }) => (
                 <BuilderModuleField key={key} label={label} width="num">
                   <input
@@ -3833,9 +3737,8 @@ export function BuilderModuleCard({
               themePrimaryColor={themePrimaryColor}
             />
           )}
-          {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
-          {module.type === "slideshow" && (
-            <BuilderSlideshowModuleSettings module={module} onUpdateModule={onUpdateModule} />
+          {module.type === "carousel" && (
+            <BuilderCarouselModuleSettings module={module} onUpdateModule={onUpdateModule} />
           )}
           {module.type === "feature-cards" && (
             <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
@@ -3965,7 +3868,6 @@ export function BuilderModuleCard({
           module.type !== "crm-form" &&
           module.type !== "player-portal" &&
           module.type !== "table" &&
-          module.type !== "slider" &&
           module.type !== "social" &&
           module.type !== "navigation" &&
           module.type !== "headline-rotator" &&
@@ -3981,12 +3883,12 @@ export function BuilderModuleCard({
           module.type !== "button" &&
           module.type !== "heading" &&
           module.type !== "blog-post-list" &&
-          /* Nothing reads `module.text` on a slideshow — `SlideshowPreview`
-             renders from `settings.slides` alone — so this was an empty box
+          /* Nothing reads `module.text` on a carousel — `CarouselPreview`
+             renders from `settings.items` alone — so this was an empty box
              sitting under the Settings column with no effect on anything
              (doctrine E7). Excluding it does not touch stored text; it just
              stops offering a control that never did anything. */
-          module.type !== "slideshow" &&
+          module.type !== "carousel" &&
           module.type !== "admin-nav-link" ? (
             <label className="field">
               <span>Content</span>
