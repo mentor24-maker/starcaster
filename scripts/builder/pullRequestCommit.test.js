@@ -119,6 +119,22 @@ test('falls back to HEAD rather than open a PR with an empty title', () => {
   }
 });
 
+test('the PR section still declares what it reads', () => {
+  // Extracting the picker out of ship_thread.cjs deleted the block that looks
+  // up an already-open PR, and the script died with `prNumber is not defined`
+  // the first time it was run for real. `node --check` parses it happily —
+  // syntax was never the problem — and `--dry-run` stops at the uncommitted-
+  // edits guard long before this section, so nothing caught it.
+  const source = fs.readFileSync(path.join(__dirname, '..', 'ship_thread.cjs'), 'utf8');
+  const section = source.slice(source.indexOf('5. PR'));
+  assert.match(section, /let prNumber = null;/, 'prNumber must be declared before it is read');
+  assert.match(section, /'pr', 'list'/, 'ship must still reuse an already-open PR instead of opening a second one');
+  assert.ok(
+    section.indexOf('let prNumber') < section.indexOf('if (prNumber)'),
+    'prNumber must be declared above its first use'
+  );
+});
+
 test('ship asks the picker for the title and writes the re-pin under the shared subject', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'ship_thread.cjs'), 'utf8');
   assert.match(source, /pickPullRequestCommit\(git\)/, 'ship must use the picker');

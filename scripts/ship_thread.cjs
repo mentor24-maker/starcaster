@@ -223,6 +223,11 @@ if (DRY) {
 
 /* ------------------------------------------------------------------ 5. PR */
 
+heading('Pull request');
+let prNumber = null;
+const existing = quiet('gh', ['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number', '--jq', '.[0].number']);
+if (existing.ok && existing.out) prNumber = existing.out.trim();
+
 if (prNumber) {
   say(`    Using the open one: #${prNumber}`);
 } else if (DRY) {
