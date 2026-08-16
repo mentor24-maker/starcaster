@@ -116,6 +116,29 @@ holding the problem.
 built 2026-07-29T21:14:02Z (3 days ago), commit 0a83d71"* can be checked against
 what you actually did.
 
+### 2.4 One button, two possible meanings — ask, never pick
+
+The 💾 on a Builder section could only do one thing: file a **new** saved
+section. Its prompt asked for a name and nothing else. So the operator, who had
+unlocked a shared section, edited it, and wanted the original updated, typed the
+original's name — and got a second saved section carrying the same name while
+the original sat untouched (2026-08-16). Both then appeared in the dropdown.
+
+Nothing failed. No error was possible, because the code never knew there was a
+second reading. That is the shape of it: the ambiguity is invisible from inside
+the implementation, and obvious to the person holding the mouse.
+
+**Do this:** when an action has two defensible readings, name both and make the
+operator choose. Not a `window.confirm` with the second reading hidden behind
+Cancel — both spelled out, with what each one touches. Where one branch reaches
+beyond what is on screen, say how far **before** the click, not in the receipt
+afterwards (`describeCanonicalOverwrite`, and the page list in
+`BuilderSectionSaveModal`).
+
+And when you find one of these, look for the destructive twin: the same dialog
+that stops a duplicate is what stops an accidental overwrite of a section 40
+pages depend on.
+
 ---
 
 ## 3. Designing checks
