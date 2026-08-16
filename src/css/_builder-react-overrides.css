@@ -1175,12 +1175,26 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* --- Card slider format: several items share the frame --- */
 
+/* The row still SCROLLS — a visitor can swipe or drag it, and the arrows and
+   the timer both move it by scrolling — but the scrollbar itself is gone
+   (operator, 2026-08-16). A shelf of cards is not a document; the bar under
+   it read as page furniture and gave away that the loop had ends.
+
+   All three properties are needed for the one effect: Firefox honours
+   `scrollbar-width`, older Edge `-ms-overflow-style`, and everything
+   WebKit/Blink needs the pseudo-element. The `padding-bottom: 4px` that used
+   to reserve room for the bar goes with it. */
 .builder-react-root .builder-preview-carousel-cards {
   display: flex;
   overflow-x: auto;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.builder-react-root .builder-preview-carousel-cards::-webkit-scrollbar {
+  display: none;
 }
 
 .builder-react-root .builder-preview-carousel-card {
