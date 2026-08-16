@@ -4678,6 +4678,33 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* Stale-editor warning. Shown in place of an ordinary error banner when a save
+   was refused because somebody else saved the page first — it carries two
+   actions, so it needs room the one-line .admin-notice does not give it. */
+.builder-react-root .builder-save-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.builder-react-root .builder-save-conflict-lead,
+.builder-react-root .builder-save-conflict-help {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.builder-react-root .builder-save-conflict-help {
+  opacity: 0.85;
+}
+
+.builder-react-root .builder-save-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
 /* ============================================================== */
 /* THE POPPED-OUT MODULE EDITOR (operator, 2026-08-15)             */
 /* ============================================================== */
