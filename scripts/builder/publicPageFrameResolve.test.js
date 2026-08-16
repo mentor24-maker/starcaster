@@ -139,9 +139,11 @@ test('every canonical section on a page resolves, not just the first', () => {
 });
 
 test('the shared resolver is the one from the generated server bundle', () => {
-  // Landmine 1: lib/builder/template.js is generated from builder-template.ts.
-  // If the regen is skipped, the server loses these and this file cannot load.
-  const bundle = require('../../lib/builder/template.js');
+  // Landmine 1: lib/builder/template-frame.js is generated from
+  // builder-template-frame.ts. If the regen is skipped, the server loses these
+  // and this file cannot load. Same bundle routes/builder.js uses for Bulk
+  // Create, so there is exactly one copy of the rule on the server.
+  const bundle = require('../../lib/builder/template-frame.js');
   assert.equal(typeof bundle.resolveFrameSection, 'function');
   assert.equal(typeof bundle.isFrameSection, 'function');
 });
