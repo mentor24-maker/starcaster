@@ -57,12 +57,15 @@ no error. This is CLAUDE.md landmine #1 and the single most dangerous
 step.
 
 ### What is converged, what is not
-- **`slideshow`** (built this session, PR #92) — the only module built to
-  the standard from scratch. Use it as the structural example.
+- **`carousel`** (2026-08-16, PRs #273/#282/#283) — `slideshow` and `slider`
+  merged into one module with a `format` setting. The structural example,
+  and the worked example of retiring a type name without losing documents:
+  `docs/CAROUSEL_MODULE.md`.
+  - `slideshow` was built to the standard from scratch (PR #92); `slider`
+    had been brought only partway — it had *no desktop CSS at all* (rules
+    lived only inside `@media (max-width: 900px)`) until PR #95.
 - **`image`** (PR #103) — the **reference implementation for the settings
   editor layout**. Copy its shape.
-- **`slider`** — brought partway: it had *no desktop CSS at all* (rules
-  lived only inside `@media (max-width: 900px)`) until PR #95.
 - **The other ~49** — unaudited. Assume breakpoint-only CSS, missing
   empty states, hand-rolled settings grids, and settings nothing renders,
   until proven otherwise.
@@ -141,7 +144,7 @@ the pipeline.
 |---|---|---|
 | `86bba3az6` **Responsive image variants** | Spec'd, Discovery done | **Start here.** Existing tooling makes ONE 480px thumbnail; no variant set, no `srcset`. Delray serves 1103×1426 flyers. |
 | `86bba3eug` **Asset promotion not idempotent** | Discovery done | 249 asset rows for 23 images (15 copies of one). Needs dedupe + cleanup pass. |
-| `86bba1e74` **Carousel** | **Ratified, unbuilt** | Decision made: *enhance the existing Card Slider* (auto-advance, dots, image-only card style) rather than add a third module. Backward-compatible defaults required — live tenant sites must not start moving. |
+| `86bba1e74` **Carousel** | **Done** (PRs #273/#282/#283, 2026-08-16) | Went further than ratified: `slideshow` and `slider` MERGED into one `carousel` with a `format` setting, rather than enhancing one of the two. Both palette tiles kept (operator's call). Backward compatibility held — migration is automatic and lossless, and live sites did not start moving because autoplay defaults follow the format. `docs/CAROUSEL_MODULE.md`. |
 | `86bba3ax5` **Image module / settings standard** | **Done** (PR #103) | Reference implementation. |
 | `86bb9zgbe` Crawl priority (menu pages first) | Intake | Menu parent items still link to uncaptured pages. |
 | `86bb9yj74` Repeated site-chrome dedup | Intake | Import chrome once, not per page. |
@@ -216,5 +219,5 @@ task deliver, and let the system emerge from it:
    case rather than in the abstract.
 3. Then propose the schema + scaffold + conformance test as its own
    spec'd project. By then you will have three modules built to standard
-   (slideshow, image, carousel) to generalize from — a much safer base
+   (carousel, image, and one more) to generalize from — a much safer base
    than generalizing from one.

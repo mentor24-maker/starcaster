@@ -155,7 +155,7 @@ by hand.
 big-bang**: any module touched for any reason gets brought to standard in
 that same PR, and the PR says which rules it now meets. A standing audit
 task tracks the highest-traffic modules (`text`, `image`, `heading`,
-`navigation`, `button`, `slider`, `table`, `code`) for deliberate review
+`navigation`, `button`, `carousel`, `table`, `code`) for deliberate review
 rather than accidental discovery.
 
 Three known-weak spots already logged: modules whose CSS may be
