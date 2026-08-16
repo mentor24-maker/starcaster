@@ -187,12 +187,16 @@ by hand, if you ever need it:
 
 ```
 git worktree add .claude/worktrees/<topic> -b <topic> origin/main
-cd .claude/worktrees/<topic> && npm ci && npm run build:assets
+cd .claude/worktrees/<topic> && npm ci && npm run build
 ```
 
 Order matters in that second line: creating the worktree fires `post-checkout`,
-which cannot build before `npm ci` has run — so build the assets afterwards or
-the folder keeps whatever the failed build left behind.
+which cannot build before `npm ci` has run — so build afterwards or the folder
+keeps whatever the failed build left behind. It is the **full** `npm run build`,
+not `build:assets`: the shorter one skips `public/app-shell.html`, which IS the
+admin app, and `lib/builder/template.js`, which the server-side tests require.
+A folder missing those passes review and then serves a 404 to a browser — on
+2026-08-15 that read as `check:panels` being broken and cost an hour twice.
 
 Cleanup is automatic now and should never need thinking about: GitHub deletes
 each branch as its PR merges, `post-merge` deletes the local copy once its work
