@@ -60,6 +60,7 @@ import {
 } from "@/lib/builder-template-frame";
 import {
   buildSavedSectionUsageIndex,
+  describeCanonicalOverwrite,
   describePropagationOutcome,
   describePushImpact,
   type BlockUsage
@@ -79,6 +80,7 @@ import { BuilderSaveDebugPanel } from "./builder/builder-save-debug-panel";
 import { BuilderSectionCard } from "./builder/builder-section-card";
 import { BuilderCenteredModal } from "./builder/builder-centered-modal";
 import { BuilderSaveConflictModal } from "./builder/builder-save-conflict-modal";
+import { BuilderSectionSaveModal } from "./builder/builder-section-save-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
 import {
   BuilderModulePaletteModal,
@@ -188,6 +190,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [draggingLayout, setDraggingLayout] = useState(false);
   const [dragOverSectionGap, setDragOverSectionGap] = useState<number | null>(null);
   const [savedSectionToPlace, setSavedSectionToPlace] = useState<BuilderSavedSectionRecord | null>(null);
+  /**
+   * Which section's Save button is waiting on "overwrite the original, or file
+   * a new one?". Only set for a section that came from a saved section — for
+   * anything else Save has one meaning and asks nothing.
+   */
+  const [sectionSaveChoice, setSectionSaveChoice] = useState<{ sectionId: string; savedSectionId: string } | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isModulePaletteOpen, setIsModulePaletteOpen] = useState(false);
   const [galleryTarget, setGalleryTarget] = useState<GalleryTarget | null>(null);
@@ -231,6 +239,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // in memory, so the manager can show "used on N pages" and a save can say
   // what it is about to rewrite.
   const savedSectionUsage = useMemo(() => buildSavedSectionUsageIndex(pages), [pages]);
+  // The original behind the section whose Save button is waiting on an answer.
+  // Resolved here rather than stored, so a saved section deleted in another tab
+  // closes the dialog instead of offering to overwrite something that is gone.
+  const sectionSaveChoiceMaster = sectionSaveChoice
+    ? savedSections.find((candidate) => candidate.id === sectionSaveChoice.savedSectionId) ?? null
+    : null;
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
   // What the canvas paints type with. The shell colours above already read
   // `linkedTheme` — the live record — while the type vars read the copy frozen
@@ -817,7 +831,36 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setSavedSectionToPlace(savedSection);
   }
 
+  /**
+   * The 💾 button on a section card.
+   *
+   * A section that came from a saved section has TWO possible saves — update
+   * that original, or file a separate copy — and until 2026-08-16 it silently
+   * did the second one, so typing the original's name produced a duplicate
+   * rather than the update the operator meant. Ask instead; the dialog does the
+   * choosing, this only decides whether there is a question to ask.
+   */
   async function saveSection(sectionId: string) {
+    const section = draft.layoutSections.find((candidate) => candidate.id === sectionId);
+
+    if (!section) {
+      return;
+    }
+
+    const savedSectionId = (section as BuilderTemplateSection & { savedSectionId?: string }).savedSectionId;
+
+    // Only when the original still exists — a deleted master leaves the
+    // provenance behind, and offering to overwrite something that is gone
+    // would fail at the PATCH with a 404.
+    if (savedSectionId && savedSections.some((candidate) => candidate.id === savedSectionId)) {
+      setSectionSaveChoice({ sectionId, savedSectionId });
+      return;
+    }
+
+    await saveSectionAsNew(sectionId);
+  }
+
+  async function saveSectionAsNew(sectionId: string) {
     const section = draft.layoutSections.find((candidate) => candidate.id === sectionId);
 
     if (!section) {
@@ -851,6 +894,39 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       setError(null);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save section.");
+    }
+  }
+
+  /**
+   * Push a page section back over the saved section it came from.
+   *
+   * Same write the saved-section manager makes, so it goes out through the same
+   * PATCH and the same fan-out to every page that follows the original — page
+   * tally, undo offer and all. The instance is relinked afterwards because the
+   * original now holds exactly this content, so following it again changes
+   * nothing on screen and stops this copy drifting a second time.
+   */
+  async function overwriteCanonicalFromSection(sectionId: string, savedSectionId: string) {
+    const section = draft.layoutSections.find((candidate) => candidate.id === sectionId);
+    const master = savedSections.find((candidate) => candidate.id === savedSectionId);
+
+    if (!section || !master) {
+      setSectionSaveChoice(null);
+      return;
+    }
+
+    const content = { ...getSectionContent(section), id: master.section.id } as BuilderTemplateSection;
+    const saved = await saveSavedSection(savedSectionId, master.name, content, master.isPrivate === true, {
+      // The dialog just listed every page this touches; a second confirm on top
+      // of it is the kind of nagging people learn to click through.
+      skipImpactConfirm: true,
+      note: "This page still needs saving."
+    });
+
+    setSectionSaveChoice(null);
+
+    if (saved) {
+      updateSection(sectionId, (s) => ({ ...s, savedSectionId, canonical: true } as BuilderTemplateSection));
     }
   }
 
@@ -1281,18 +1357,31 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  async function saveSavedSection(sectionId: string, name: string, section: BuilderTemplateSection, isPrivate: boolean) {
+  async function saveSavedSection(
+    sectionId: string,
+    name: string,
+    section: BuilderTemplateSection,
+    isPrivate: boolean,
+    options: {
+      /** The caller already showed the page list and got an answer. */
+      skipImpactConfirm?: boolean;
+      /** Appended to the outcome message — what is still left to do. */
+      note?: string;
+    } = {}
+  ): Promise<boolean> {
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Saved section name is required.");
-      return;
+      return false;
     }
 
     // Say what this will touch BEFORE writing. Saving a master rewrites the
     // section on every page that follows it, and that fan-out used to be
     // completely silent — see lib/builder-client/shared-block-usage.ts.
-    const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId));
-    if (impact && !window.confirm(impact)) return;
+    if (!options.skipImpactConfirm) {
+      const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId));
+      if (impact && !window.confirm(impact)) return false;
+    }
 
     setIsSaving(true);
     setError(null);
@@ -1323,7 +1412,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       );
       // The route has always returned this tally; it used to be dropped, so a
       // fan-out that half failed reported the same "Saved." as a clean one.
-      setMessage(describePropagationOutcome(data.savedSection.name, data.meta?.propagation));
+      const outcome = describePropagationOutcome(data.savedSection.name, data.meta?.propagation);
+      setMessage(options.note ? `${outcome} ${options.note}` : outcome);
       // Offer the way back, right where the damage is reported. A push that
       // rewrote pages is exactly the moment somebody realises it was wrong.
       const runId = String(data.meta?.propagation?.runId ?? "");
@@ -1331,8 +1421,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       setPropagationUndo(runId && updated ? { runId, pages: updated, name: data.savedSection.name } : null);
       // Those pages now hold new content — refresh so the counts stay true.
       await loadPages();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save saved section.");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -2516,6 +2608,26 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onOverwrite={() => void savePage({ overwriteFrom: saveConflict.liveUpdatedAt })}
           onReload={reloadPageFromServer}
           savedByName={saveConflict.savedByName}
+        />
+      ) : null}
+
+      {sectionSaveChoiceMaster ? (
+        <BuilderSectionSaveModal
+          canonicalName={sectionSaveChoiceMaster.name}
+          impact={describeCanonicalOverwrite(
+            sectionSaveChoiceMaster.name,
+            savedSectionUsage.get(sectionSaveChoiceMaster.id)
+          )}
+          isSaving={isSaving}
+          onCancel={() => setSectionSaveChoice(null)}
+          onOverwrite={() =>
+            void overwriteCanonicalFromSection(sectionSaveChoice!.sectionId, sectionSaveChoice!.savedSectionId)
+          }
+          onSaveAsNew={() => {
+            const { sectionId } = sectionSaveChoice!;
+            setSectionSaveChoice(null);
+            void saveSectionAsNew(sectionId);
+          }}
         />
       ) : null}
 

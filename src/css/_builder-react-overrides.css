@@ -4847,21 +4847,45 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    editing a page that will not save. It reuses the module editor's framing —
    blue banner, 40px corners — so it reads as part of the app, not a browser
    alert. */
-.builder-react-root .builder-save-conflict-body {
+/* The same shape serves any dialog whose job is "these are your choices, and
+   here is what each one does" — the stale-editor one above, and the section
+   Save dialog that asks whether to overwrite the saved section a page section
+   came from (2026-08-16). The rules are shared rather than copied so the two
+   cannot drift into looking like different applications. */
+.builder-react-root .builder-save-conflict-body,
+.builder-react-root .builder-choice-dialog-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3, 12px);
   text-align: left;
 }
 
-.builder-react-root .builder-save-conflict-lead {
+.builder-react-root .builder-save-conflict-lead,
+.builder-react-root .builder-choice-dialog-lead {
   margin: 0;
   line-height: 1.55;
 }
 
+/* The page list behind "and it rewrites these". Scrolls rather than growing the
+   dialog past the screen — a shared header can follow 40 pages. */
+.builder-react-root .builder-choice-dialog-detail-title {
+  margin: 0 0 var(--space-2, 8px);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-choice-dialog-list {
+  margin: 0;
+  padding-left: var(--space-5, 20px);
+  max-height: 168px;
+  overflow-y: auto;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+}
+
 /* What each button does, as a definition list: the term IS the button's label,
    so the reader matches word to word rather than re-reading a paragraph. */
-.builder-react-root .builder-save-conflict-choices {
+.builder-react-root .builder-save-conflict-choices,
+.builder-react-root .builder-choice-dialog-choices {
   display: grid;
   grid-template-columns: max-content 1fr;
   /* The row gap carries real weight here: at 4px the two choices ran together
@@ -4875,18 +4899,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   background: rgba(11, 42, 74, 0.05);
 }
 
-.builder-react-root .builder-save-conflict-choices dt {
+.builder-react-root .builder-save-conflict-choices dt,
+.builder-react-root .builder-choice-dialog-choices dt {
   font-weight: 600;
   white-space: nowrap;
 }
 
-.builder-react-root .builder-save-conflict-choices dd {
+.builder-react-root .builder-save-conflict-choices dd,
+.builder-react-root .builder-choice-dialog-choices dd {
   margin: 0;
   color: var(--ink-muted, #5c6a72);
   line-height: 1.5;
 }
 
-.builder-react-root .builder-save-conflict-actions {
+.builder-react-root .builder-save-conflict-actions,
+.builder-react-root .builder-choice-dialog-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -4896,10 +4923,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* Narrow: the two-column list would crush each description to a word a line. */
 @media (max-width: 560px) {
-  .builder-react-root .builder-save-conflict-choices {
+  .builder-react-root .builder-save-conflict-choices,
+  .builder-react-root .builder-choice-dialog-choices {
     grid-template-columns: 1fr;
   }
-  .builder-react-root .builder-save-conflict-choices dd {
+  .builder-react-root .builder-save-conflict-choices dd,
+  .builder-react-root .builder-choice-dialog-choices dd {
     margin-bottom: var(--space-2, 8px);
   }
 }
