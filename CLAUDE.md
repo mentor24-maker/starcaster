@@ -134,6 +134,19 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     `if (checkEndpointLimit(...)) return true;` is correct. The inverted form
     bails out of every normal request and writes nothing at all — status 0,
     empty body, a completely dead endpoint that still looks fine in review.
+12. **Store calls take the limit FIRST and return an envelope.**
+    `listPages(limit, scope)` — `listPages(scope)` reads the scope as a limit
+    and returns **every project's pages**, which is a tenant leak that looks
+    like a successful query. Every store returns `{ ok, status, data }`, never
+    the row: `job.status` off the envelope is `200`, so a complete job reads
+    as status "200". Unwrap with a `must(res, what)` helper.
+13. **A page write takes `layoutSections` as the ARRAY of sections**, not the
+    `{ sections: [...] }` shape the column stores. The wrong shape does not
+    throw — the serializer reads no sections and writes an **empty page**.
+    Fourteen pages were emptied that way on 2026-08-16, every write reporting
+    success. Spread the page (`{ ...page, layoutSections: next }`) so
+    `pageBackground` and `theme` are not reset, and read the page back after
+    writing before you touch the next one.
 
 ## One worktree per thread
 
