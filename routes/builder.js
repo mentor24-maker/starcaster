@@ -135,6 +135,7 @@ const {
 } = require('../lib/builderPageSnapshotsStore');
 const {
   listPageRevisions,
+  listRunRevisions,
   getPageRevision,
 } = require('../lib/builderPageRevisionsStore');
 const {
@@ -1658,6 +1659,72 @@ async function handle(req, res, pathname, method) {
   const pageRevisionsMatch = String(pathname || '').match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/?$/);
   const pageRevisionRestoreMatch = String(pathname || '')
     .match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/([^/]+)\/restore\/?$/);
+  const propagationUndoMatch = String(pathname || '')
+    .match(/^\/api\/builder\/propagation-runs\/([^/]+)\/undo\/?$/);
+
+  // POST /api/builder/propagation-runs/:runId/undo
+  //
+  // Saving a shared section rewrites it on every page that uses it. Each of
+  // those rewrites already banks a restore point; this puts them all back in
+  // one action, because doing it by hand meant finding and restoring 46 pages
+  // one at a time (2026-07-21, Marinoff) or 35 (2026-08-15, Delray).
+  //
+  // Restoring a run is just the single-page restore repeated, deliberately:
+  // one code path, so "undo a push" and "undo a page" can never drift apart.
+  // Each page banks its CURRENT state first, so the undo is itself undoable.
+  if (propagationUndoMatch && requestMethod === 'POST') {
+    const runId = decodeURIComponent(propagationUndoMatch[1] || '').trim();
+    if (!runId) return sendErr(res, 400, 'propagation run id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const runResult = await listRunRevisions(runId, scope);
+    if (!runResult.ok) {
+      return sendErr(res, runResult.status || 500, runResult.error || 'Could not load that update', {
+        code: runResult.code || null,
+      }), true;
+    }
+    const entries = Array.isArray(runResult.data) ? runResult.data : [];
+    if (!entries.length) {
+      return sendErr(res, 404, 'That update has no restore points left to undo.', { code: 'NOT_FOUND' }), true;
+    }
+
+    // Sequential, not Promise.all. A run can span 46 pages and each restore is
+    // a full layout write; firing them all at once is how the 2026-07-22
+    // propagation got itself killed partway down the list.
+    const restored = [];
+    const failed = [];
+    for (const entry of entries) {
+      const revisionResult = await getPageRevision(entry.id, scope);
+      if (!revisionResult.ok) {
+        failed.push({ pageId: entry.pageId, name: entry.name, error: 'restore point could not be read' });
+        continue;
+      }
+      const revision = revisionResult.data;
+      const result = await updatePage(
+        entry.pageId,
+        {
+          layoutSections: revision.layoutSections,
+          ...(revision.pageBackground ? { pageBackground: revision.pageBackground } : {}),
+          ...(revision.theme ? { theme: revision.theme } : {}),
+        },
+        scope,
+        { reason: 'revert', actor: actorFrom(req) }
+      );
+      if (result.ok) restored.push({ pageId: entry.pageId, name: entry.name });
+      else failed.push({ pageId: entry.pageId, name: entry.name, error: result.error || 'save failed' });
+    }
+
+    // NAMES the pages that did not make it. A partial run that reports success
+    // is the exact failure of PR #21, where a propagation died at 30 of 50
+    // pages and said nothing at all -- and the operator spent a day on
+    // "the Footer will not save".
+    return sendOk(
+      res,
+      200,
+      { restored, failed },
+      { restored, failed },
+      { total: entries.length, restoredCount: restored.length, failedCount: failed.length }
+    ), true;
+  }
 
   // GET /api/builder/landing-pages/:id/revisions — history for one page
   if (pageRevisionsMatch && requestMethod === 'GET') {
