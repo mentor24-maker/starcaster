@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "prepare": "node scripts/install_git_hooks.cjs",
+    "doctor": "node scripts/doctor.mjs",
     "map": "node scripts/repo_map.cjs",
     "tidy": "node scripts/repo_tidy.cjs",
     "thread": "node scripts/new_thread.cjs",
