@@ -77,6 +77,36 @@ function describeReason(revision: BuilderPageRevision): string {
   return who ? `${label} by ${who}` : label;
 }
 
+/** "Today", "Yesterday", or "Fri, Aug 8" — the heading a day's rows sit under. */
+function describeDay(iso: string): string {
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return "Earlier";
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const daysAgo = Math.round((midnight(new Date()) - midnight(when)) / 86400000);
+  if (daysAgo <= 0) return "Today";
+  if (daysAgo === 1) return "Yesterday";
+  return when.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+/**
+ * Split the flat list into day groups, order preserved.
+ *
+ * Retention keeps hourly milestones for a week and daily ones for a month, so
+ * this list now spans days rather than the ninety minutes it used to. Without
+ * headings, "3 hr ago" and a date from last Tuesday sit in one undifferentiated
+ * column and the older entries read as noise.
+ */
+function groupByDay(revisions: BuilderPageRevision[]): Array<{ day: string; rows: BuilderPageRevision[] }> {
+  const groups: Array<{ day: string; rows: BuilderPageRevision[] }> = [];
+  for (const revision of revisions) {
+    const day = describeDay(revision.createdAt);
+    const last = groups[groups.length - 1];
+    if (last && last.day === day) last.rows.push(revision);
+    else groups.push({ day, rows: [revision] });
+  }
+  return groups;
+}
+
 function describeSize(revision: BuilderPageRevision): string {
   const sections = `${revision.sectionCount} section${revision.sectionCount === 1 ? "" : "s"}`;
   const modules = `${revision.moduleCount} module${revision.moduleCount === 1 ? "" : "s"}`;
@@ -208,8 +238,11 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
           ) : null}
 
           {revisions.length ? (
+            groupByDay(revisions).map((group) => (
+            <div className="builder-page-history-day" key={group.day}>
+              <h4 className="builder-page-history-day-heading">{group.day}</h4>
             <ul className="builder-page-history-list">
-              {revisions.map((revision) => (
+              {group.rows.map((revision) => (
                 <li className="builder-page-history-row" key={revision.id}>
                   <div className="builder-page-history-when">
                     <span className="builder-page-history-time">{formatWhen(revision.createdAt)}</span>
@@ -234,6 +267,8 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
                 </li>
               ))}
             </ul>
+            </div>
+            ))
           ) : null}
         </div>
       ) : null}
