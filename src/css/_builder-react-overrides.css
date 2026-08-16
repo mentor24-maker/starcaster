@@ -4511,6 +4511,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: var(--space-3, 12px);
 }
 
+/* Refresh sits beside the text that explains the list, not in the panel
+   heading — the heading is the toggle now, edge to edge, so its arrow lines up
+   with Workspace and the rest. */
+.builder-react-root .builder-page-history-intro-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+}
+
+.builder-react-root .builder-page-history-intro-row .builder-page-history-intro {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
 .builder-react-root .builder-page-history-intro,
 .builder-react-root .builder-page-history-empty {
   margin: 0;
