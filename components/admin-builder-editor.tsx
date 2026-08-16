@@ -66,6 +66,7 @@ import {
   describePushImpact,
   type BlockUsage
 } from "@/lib/shared-block-usage";
+import { diffSavedSectionOverwrite } from "@/lib/saved-section-diff";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -250,6 +251,22 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const sectionSaveChoiceMaster = sectionSaveChoice
     ? savedSections.find((candidate) => candidate.id === sectionSaveChoice.savedSectionId) ?? null
     : null;
+  /**
+   * Not just WHICH pages an overwrite rewrites, but what changes on each.
+   *
+   * Naming a page is enough to make someone hesitate; it is not enough to make
+   * them decide, and that was the last open piece of the operator's 2026-07-21
+   * request. Computed here as a pure function over the pages already in memory
+   * — `GET /api/admin/pages` is a `select=*`, so every page's sections are
+   * already loaded and nothing stands between the click and the answer.
+   */
+  const sectionSaveDiff = useMemo(() => {
+    if (!sectionSaveChoice) return null;
+    const section = draft.layoutSections.find((candidate) => candidate.id === sectionSaveChoice.sectionId);
+    if (!section) return null;
+    // The same content `overwriteCanonicalFromSection` sends to the PATCH.
+    return diffSavedSectionOverwrite(pages, sectionSaveChoice.savedSectionId, getSectionContent(section));
+  }, [sectionSaveChoice, draft.layoutSections, pages]);
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
   // What the canvas paints type with. The shell colours above already read
   // `linkedTheme` — the live record — while the type vars read the copy frozen
@@ -2624,6 +2641,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             sectionSaveChoiceMaster.name,
             savedSectionUsage.get(sectionSaveChoiceMaster.id)
           )}
+          diff={sectionSaveDiff}
           isSaving={isSaving}
           onCancel={() => setSectionSaveChoice(null)}
           onOverwrite={() =>
