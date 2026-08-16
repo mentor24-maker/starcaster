@@ -106,6 +106,18 @@
   --builder-field-long-max: 560px;
 
   /*
+   * The module editor's popped-out dialog: its border, and the background of
+   * the banner across its top (operator, 2026-08-15 — "a bright blue 2px
+   * border… put the About and Done button in a banner with a background
+   * color matching the border color and reverse font color").
+   *
+   * The operator picked the value on 2026-08-15, after seeing it on screen.
+   * White type on it clears 7:1, so the reversed banner is comfortable.
+   */
+  --builder-modal-accent: #004CA6;
+  --builder-modal-accent-ink: #ffffff;
+
+  /*
    * L8 (operator, 2026-08-13): the block has one right edge, and two buttons
    * stacked on it read as a column only if they are the same width. "Choose
    * Icon" and "Choose Image" are different lengths, so the shorter one gets

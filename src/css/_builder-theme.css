@@ -32,6 +32,32 @@
   line-height: var(--bx-line-base, 1.6);
 }
 
+/* THE GAP BETWEEN PARAGRAPHS, which is a different quantity from the gap
+ * between the lines inside one — and on a stack of one-line paragraphs (a
+ * footer link column) it is the only gap there is, so no line-height can
+ * close it. `_builder-react.css` sets `margin: 0 0 0.9rem` here; this
+ * re-opens the bottom edge as a variable the text module's Paragraph Gap
+ * writes on its own container, leaving the same 0.9rem wherever it is unset.
+ *
+ * It lives HERE rather than beside the rule it overrides because
+ * `_builder-react.css` is regenerated wholesale by extract_builder_css.mjs —
+ * commit 2bd3018 lost the CRM modal styles that way. Equal specificity,
+ * imported later (main.css:23 vs :20), so it wins without !important.
+ *
+ * No `.builder-preview-shell` in the selector on purpose: the editor's module
+ * thumbnail renders outside the shell, and the three surfaces are supposed to
+ * agree — same contract as the shared style helpers. */
+.builder-react-root .builder-module-preview-paragraph p,
+.builder-react-root .builder-module-preview-paragraph ul,
+.builder-react-root .builder-module-preview-paragraph ol,
+.builder-react-root .builder-module-preview-paragraph blockquote,
+.builder-react-root .builder-preview-text p,
+.builder-react-root .builder-preview-text ul,
+.builder-react-root .builder-preview-text ol,
+.builder-react-root .builder-preview-text blockquote {
+  margin-bottom: var(--bx-para-gap, 0.9rem);
+}
+
 /* Block children need explicit token rules: paragraphs carry a global
  * `p { color: var(--ink-secondary) }` that out-specifies the container, so the
  * container color never cascades into them. li/blockquote only inherit the

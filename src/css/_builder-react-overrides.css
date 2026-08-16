@@ -62,7 +62,11 @@
 .builder-react-root .builder-meta-grid,
 .builder-react-root .builder-gallery-grid,
 .builder-react-root .builder-gallery-card,
-.builder-react-root .builder-gallery-modal,
+/* The popped-out module editor is deliberately rounder (40px, operator
+   2026-08-15) and this blanket rule carries an `!important`, so it won a
+   40px it was never asked about. Excluded by name rather than answered with
+   a second `!important`: one of those is a conflict, two is an arms race. */
+.builder-react-root .builder-gallery-modal:not(.builder-centered-modal),
 .builder-react-root .builder-gallery-empty,
 .builder-react-root .builder-workspace-empty,
 .builder-react-root .builder-editor-popup,
@@ -2494,7 +2498,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    panel child sit in the same column track as the chrome above it. */
 .builder-react-root .builder-module-editor--feature-cards,
 .builder-react-root .builder-module-editor--program-list,
-.builder-react-root .builder-module-editor--slideshow {
+.builder-react-root .builder-module-editor--slideshow,
+.builder-react-root .builder-module-editor--social {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2518,7 +2523,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-editor--feature-cards > *,
 .builder-react-root .builder-module-editor--program-list > *,
-.builder-react-root .builder-module-editor--slideshow > * {
+.builder-react-root .builder-module-editor--slideshow > *,
+.builder-react-root .builder-module-editor--social > * {
   grid-column: 1;
   min-width: 0;
   /* The row spacing the gap used to give, charged to the rows that exist. */
@@ -2527,18 +2533,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-editor--feature-cards > *:last-child,
 .builder-react-root .builder-module-editor--program-list > *:last-child,
-.builder-react-root .builder-module-editor--slideshow > *:last-child {
+.builder-react-root .builder-module-editor--slideshow > *:last-child,
+.builder-react-root .builder-module-editor--social > *:last-child {
   margin-bottom: 0;
 }
 
 .builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel,
 .builder-react-root .builder-module-editor--program-list > .builder-cards-panel,
-.builder-react-root .builder-module-editor--slideshow > .builder-cards-panel {
+.builder-react-root .builder-module-editor--slideshow > .builder-cards-panel,
+.builder-react-root .builder-module-editor--social > .builder-cards-panel {
   display: contents;
 }
 
 .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings {
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings,
+.builder-react-root .builder-module-editor--social .builder-cards-panel-settings {
   grid-column: 1;
 }
 
@@ -2564,7 +2573,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    implicit grid resolves to the explicit grid's only line, which collapses
    the column to a single row. */
 .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--social .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -4380,6 +4390,42 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--lp-muted, #8590a8);
 }
 
+/*
+ * The row's own "Settings and Styles" bar.
+ *
+ * It sits one level inside the row card, the same depth as a cell's Styles
+ * and Content bars, so it takes the same cell-level colour — one bar shape,
+ * learned once (S1). The generated sheet already paints a bar this way, but
+ * only for headers inside `.builder-column-card`, and this one is a direct
+ * child of the row.
+ *
+ * `--btn-text` rather than a white literal (R3): every other bar in this
+ * stack states its white the same way, and a hex here would be one more
+ * place to find if the chrome ever stops being teal.
+ */
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header {
+  background: var(--builder-header-cell);
+  color: var(--btn-text);
+  border-radius: 14px;
+  padding: 8px 12px;
+}
+
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header:hover {
+  background: var(--builder-header-cell-hover);
+  color: var(--btn-text);
+}
+
+/* The generated sheet turns a COLLAPSED cell bar's title dark (`var(--ink)`),
+   which is right on a pale bar and unreadable on this one. Both states white. */
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label,
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label strong {
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label:hover {
+  color: rgba(255, 255, 255, 0.86);
+}
+
 /* Standard 7: the only breakpoint. It narrows the split to one column and
    releases the coach name from its right edge; it introduces nothing. */
 @media (max-width: 736px) {
@@ -4465,6 +4511,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: var(--space-3, 12px);
 }
 
+/* Refresh sits beside the text that explains the list, not in the panel
+   heading — the heading is the toggle now, edge to edge, so its arrow lines up
+   with Workspace and the rest. */
+.builder-react-root .builder-page-history-intro-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+}
+
+.builder-react-root .builder-page-history-intro-row .builder-page-history-intro {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
 .builder-react-root .builder-page-history-intro,
 .builder-react-root .builder-page-history-empty {
   margin: 0;
@@ -4532,10 +4594,46 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-muted, #5c6a72);
 }
 
-.builder-react-root .builder-page-history-size {
+/* What the next save did, with the counts under it as the secondary fact.
+   Before this column existed the counts were the ONLY fact, and five
+   consecutive rows reading "41 sections · 84 modules" was the result. */
+.builder-react-root .builder-page-history-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-react-root .builder-page-history-change {
   font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+  /* One line, always: the summary already caps its own name list, and a row
+     that wraps turns the list into a wall. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.builder-react-root .builder-page-history-size {
+  font-size: var(--text-xs, 0.78rem);
   color: var(--ink-muted, #5c6a72);
   font-variant-numeric: tabular-nums;
+}
+
+/* Day headings. Retention now keeps hourly milestones for a week and daily
+   ones for a month, so this list spans days rather than the ninety minutes a
+   flat "newest 25" used to cover — without headings the older entries read as
+   noise sitting under the current session. */
+.builder-react-root .builder-page-history-day + .builder-page-history-day {
+  margin-top: var(--space-4, 16px);
+}
+
+.builder-react-root .builder-page-history-day-heading {
+  margin: 0 0 var(--space-1, 4px);
+  font-size: var(--text-xs, 0.78rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #5c6a72);
 }
 
 .builder-react-root .builder-page-history-restore {
@@ -4548,7 +4646,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-page-history-row {
     grid-template-columns: 1fr max-content;
   }
-  .builder-react-root .builder-page-history-size {
+  .builder-react-root .builder-page-history-what {
     grid-column: 1 / -1;
   }
 }
@@ -4676,4 +4774,236 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(6) {
     order: -2;
   }
+}
+
+/* The way back from a shared-section push, offered where the push is
+   reported. A save that rewrote 35 pages is exactly the moment somebody
+   realises it was the wrong save. */
+.builder-react-root .builder-propagation-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  text-align: left;
+}
+
+/* Stale-editor dialog. A save was refused because somebody else saved first,
+   and the operator has a decision to make — so it opens as a modal rather than
+   the inline notice this started as (operator, 2026-08-15). On a long Builder
+   page a banner near the top can sit off screen entirely while they keep
+   editing a page that will not save. It reuses the module editor's framing —
+   blue banner, 40px corners — so it reads as part of the app, not a browser
+   alert. */
+.builder-react-root .builder-save-conflict-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  text-align: left;
+}
+
+.builder-react-root .builder-save-conflict-lead {
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* What each button does, as a definition list: the term IS the button's label,
+   so the reader matches word to word rather than re-reading a paragraph. */
+.builder-react-root .builder-save-conflict-choices {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  /* The row gap carries real weight here: at 4px the two choices ran together
+     as one block of text, and this list exists to be read as two distinct
+     options before clicking one of them. */
+  gap: var(--space-3, 12px) var(--space-3, 12px);
+  align-items: baseline;
+  margin: 0;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: 10px;
+  background: rgba(11, 42, 74, 0.05);
+}
+
+.builder-react-root .builder-save-conflict-choices dt {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-save-conflict-choices dd {
+  margin: 0;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+}
+
+.builder-react-root .builder-save-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-1, 4px);
+}
+
+/* Narrow: the two-column list would crush each description to a word a line. */
+@media (max-width: 560px) {
+  .builder-react-root .builder-save-conflict-choices {
+    grid-template-columns: 1fr;
+  }
+  .builder-react-root .builder-save-conflict-choices dd {
+    margin-bottom: var(--space-2, 8px);
+  }
+}
+
+/* ============================================================== */
+/* THE POPPED-OUT MODULE EDITOR (operator, 2026-08-15)             */
+/* ============================================================== */
+
+/*
+ * The pop-out control moved to the LEFT of the module header, next to the
+ * drag handle and the name. See the comment on the button in
+ * builder-module-card.tsx for why: in a six-column section the right-hand
+ * action cluster is the part that gets clipped, so the control that escapes
+ * a cramped cell was itself unreachable from one.
+ */
+.builder-react-root .builder-module-title > .builder-module-popout {
+  flex: 0 0 auto;
+}
+
+/*
+ * The dialog itself: a 2px bright-blue frame at a 40px radius, with the
+ * title bar as a full-bleed banner in the same blue and its type reversed
+ * out of it. Scoped to `.builder-centered-modal` — the gallery, palette and
+ * rich-text modals share this stylesheet and keep their plain header.
+ *
+ * `padding: 0` (the base modal carries 24px) is what lets the banner reach
+ * the frame; the padding moves onto the banner and the body instead, and
+ * the modal's existing `overflow: hidden` rounds the banner's top corners
+ * against the radius.
+ */
+.builder-react-root .builder-gallery-modal.builder-centered-modal {
+  border: 2px solid var(--builder-modal-accent);
+  border-radius: 40px;
+  padding: 0;
+  gap: 0;
+}
+
+.builder-react-root .builder-centered-modal > .builder-centered-modal-banner {
+  align-items: center;
+  background: var(--builder-modal-accent);
+  color: var(--builder-modal-accent-ink);
+  padding: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-centered-modal > .builder-centered-modal-banner h3 {
+  color: inherit;
+}
+
+/*
+ * Room inside the frame for the body, and a little extra at the sides so a
+ * panel's first column does not run into a 40px curve.
+ */
+.builder-react-root .builder-centered-modal > .builder-gallery-body {
+  padding: var(--space-5, 16px) var(--space-6, 24px) var(--space-6, 24px);
+}
+
+/*
+ * Done, reversed to match the banner. `!important` only because the
+ * low-contrast-button rule near the top of this file gives every
+ * `.secondary-button` a 2px dark-navy border with an `!important` of its own,
+ * and a navy hairline on a blue banner reads as a smudge — an !important can
+ * only be answered by one.
+ */
+.builder-react-root .builder-centered-modal .builder-centered-modal-done {
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid var(--builder-modal-accent-ink) !important;
+  color: var(--builder-modal-accent-ink);
+}
+
+.builder-react-root .builder-centered-modal .builder-centered-modal-done:hover {
+  background: var(--builder-modal-accent-ink);
+  color: var(--builder-modal-accent);
+}
+
+/* ============================================================== */
+/* MATCHED SPACING ROWS (doctrine E4b, operator 2026-08-15)        */
+/* ============================================================== */
+
+/*
+ * The chain-link toggle that turns "V Margin" into "Top Margin" and
+ * "Bottom Margin". It rides INSIDE the control cell, after the number, so
+ * the label track still measures nothing but labels (W0) — and it never
+ * grows: `flex: 0 0 auto` keeps the number select the part that flexes.
+ */
+/* The toggle's footprint, so the row without one lines up with the rows
+   that have one (see the comment on the spacer in builder-spacing-fields). */
+.builder-react-root .builder-module-field-control > .builder-spacing-link-spacer {
+  flex: 0 0 auto;
+  width: 22px;
+  margin-left: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-left: var(--space-2, 6px);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--builder-editor-label, #12395f);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle:hover {
+  border-color: rgba(11, 42, 74, 0.24);
+  background: rgba(11, 42, 74, 0.06);
+}
+
+/* Split apart is the deliberate state, so it is the one that shows. */
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle[aria-pressed="false"] {
+  color: var(--builder-modal-accent, #0d6efd);
+}
+
+/* ============================================================== */
+/* SOCIAL: THE PLATFORM LIST (operator, 2026-08-15)                */
+/* ============================================================== */
+
+/*
+ * The platform rows reuse the Feature Cards item grid wholesale — one grid
+ * for the whole list, `--a`/`--b` pair columns, `data-lattice-pairs="2"`.
+ * These three rules are the only thing Social adds: a grip glyph in the head
+ * row, and the drag feedback that used to live on the per-platform card the
+ * rewrite deleted (a wrapper per item cannot exist inside a shared grid).
+ */
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head[draggable="true"] {
+  cursor: grab;
+}
+
+.builder-react-root .builder-social-item-grip {
+  margin-right: var(--space-2, 6px);
+  color: var(--muted, #445465);
+  font-size: var(--text-sm, 0.82rem);
+  letter-spacing: -0.1em;
+}
+
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head.is-dragging {
+  opacity: 0.55;
+}
+
+/* The row above the one being dropped onto, marked on its own top edge so a
+   grid row can show it without a box of its own to outline. */
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head.is-drop-target {
+  box-shadow: inset 0 2px 0 0 var(--builder-modal-accent, #004ca6);
+}
+
+/* The icon preview sits beside its Choose button in the picker field, which
+   is already a flex row with 40px of room between its parts. */
+.builder-react-root .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > .builder-social-item-icon-preview {
+  flex: 0 0 auto;
+  /* An icon whose file has gone missing renders as its alt text, and the
+     shared preview rule lets that overflow (`overflow: visible`, for icons
+     that paint outside their circle). In a grid row the spill lands on top
+     of the Change Icon button beside it. */
+  overflow: hidden;
 }

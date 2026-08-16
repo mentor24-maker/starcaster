@@ -118,6 +118,29 @@ const TUNED = {
       ]),
     },
   },
+  // The platform list joined the manager family on 2026-08-15, and it is the
+  // third module to need real rows here for the same reason: an empty list
+  // renders no fields, so its lattice would be measured across nothing at all.
+  // Two platforms, one of them missing its icon and its link, so the "Choose
+  // From Gallery" button (the widest control in the grid) is on screen and the
+  // tracks are measured against it.
+  social: {
+    name: 'Social',
+    settings: {
+      socialIconSize: '44',
+      socialGap: '14',
+      socialShowLabels: 'true',
+      socialItems: JSON.stringify([
+        {
+          id: 'facebook', label: 'Facebook', href: 'https://facebook.com/delraytennis',
+          iconUrl: '/images/icon-facebook.svg', backgroundColor: '#1877f2',
+        },
+        {
+          id: 'instagram', label: 'Instagram', href: '', iconUrl: '', backgroundColor: '#c13584',
+        },
+      ]),
+    },
+  },
   // Same lesson as feature-cards, learned again on 2026-08-13: the Programs
   // manager shipped with a staggered, overlapping panel while `check:panels`
   // reported clean, because an empty module renders no fields and a group
@@ -176,6 +199,25 @@ const TUNED = {
       borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
       cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
       backgroundColor: '#ffffff',
+    },
+  },
+  // The rich-text module's Structure / Text / Placement / Frame axes
+  // (2026-08-15). Every frame and spacing setting is non-default and no field
+  // is visibleWhen-gated, so all four columns render every control the panel
+  // has — including "Paragraph Gap", which is the longest label on the Text
+  // axis and therefore the one that sets its track. Real body copy, because
+  // an empty module measures nothing and passes.
+  text: {
+    name: 'Pro Shop',
+    text: '<p><strong>Visit our <a href="/pro-shop">Pro Shop</a> for racket stringing and all your tennis and pickleball needs.</strong></p><p>Stringing, grips, demo racquets and a full pickleball wall.</p>',
+    settings: {
+      size: '66', alignment: 'center',
+      lineHeight: '1.2', paragraphGap: '4',
+      marginTop: '10', marginBottom: '10', marginLeft: '5', marginRight: '5',
+      paddingTop: '15', paddingBottom: '15', paddingLeft: '20', paddingRight: '20',
+      horizontalOffset: '4', verticalOffset: '-4',
+      borderStyle: 'dashed', borderWidth: '2', borderColor: '#0f4f8f', borderRadius: '10',
+      backgroundColor: '#eaf3e2',
     },
   },
   // An EYEBROW heading with its shadow on: the longest labels in the panel

@@ -7,6 +7,24 @@ partial: `public/styles.css` is gitignored (Vercel/CI rebuild it).
 Edits to `public/styles.css` directly are wiped on the next build; edits
 here are invisible until you rebuild.
 
+## STOP — never hand-edit `_builder-react.css`
+
+It is committed to git and looks like any other partial, which is exactly
+the trap. `scripts/extract_builder_css.mjs` **replaces the whole file**, so
+a rule you add here survives until the next regeneration and then vanishes
+— silently, because nothing tests CSS. Commit `2bd3018` deleted the CRM
+modal styles that way and Contacts delete stayed broken for a month.
+
+**Hand-written rules go in `_builder-react-overrides.css`**, imported after
+it so they win. A `PreToolUse` hook now blocks the edit outright
+(`scripts/hooks/block_generated_edits.cjs`), and `check_conventions.cjs`
+blocks the commit as a backstop.
+
+This warning lives here, at the top of the file you are told to read before
+editing CSS, because the rule was already in `docs/MODULE_UI_DOCTRINE.md`
+R2 and agents still fell into it repeatedly (operator, 2026-08-15) — the
+doctrine is not what anyone reads at the moment they reach for a stylesheet.
+
 ## Structure
 
 - `main.css` imports every partial; new partials must be added there
@@ -15,7 +33,9 @@ here are invisible until you rebuild.
   over hardcoded colors
 - `legacy.css` — old rules, including the real nav/menu styles (Top Menu
   hamburger collapse lives here, NOT in `_builder-react.css`)
-- `_builder-react*.css` — React builder editor + public-site module styles
+- `_builder-react.css` — React builder editor + public-site module styles.
+  **Read-only in practice** — regenerated wholesale, see the warning above
+- `_builder-react-overrides.css` — where every hand-written builder rule goes
 - Avoid `!important` except icon-buttons inside grids and third-party
   overrides
 

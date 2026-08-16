@@ -45,9 +45,23 @@ import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const { createRequire } = await import('node:module');
-const { BUILDER_MODULE_TYPES } = createRequire(path.join(ROOT, 'package.json'))(
-  path.join(ROOT, 'lib/builder/template.js')
-);
+// lib/builder/template.js is a GENERATED artifact and a fresh worktree has
+// none. Without this the run dies on a raw MODULE_NOT_FOUND stack that says
+// nothing about which command produces it — which is exactly how it read on
+// 2026-08-15, twice, in two different worktrees.
+let BUILDER_MODULE_TYPES;
+try {
+  ({ BUILDER_MODULE_TYPES } = createRequire(path.join(ROOT, 'package.json'))(
+    path.join(ROOT, 'lib/builder/template.js')
+  ));
+} catch {
+  console.error(
+    '\n[check:panels] lib/builder/template.js is missing — it is a generated file\n' +
+    'and a fresh worktree does not have one.\n\n' +
+    'Run `npm run build:builder-template`.\n'
+  );
+  process.exit(2);
+}
 const EXPECTED_MODULES = BUILDER_MODULE_TYPES.length;
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
 /*
@@ -131,9 +145,16 @@ async function openPanels(page) {
   // Opening it here is the difference between "W0 holds" and "W0 holds on the
   // surfaces we happened to open" — the same blind spot that let six TABLE
   // panels report a clean pass without a heading among them.
+  //
+  // "Section Settings and Styles" is the row's own editor, which folded behind
+  // a bar on 2026-08-15. Expanding a row no longer reveals it, so without this
+  // line the whole row lattice — Structure, Placement, Frame, Visibility —
+  // would drop out of the measurement and the check would go green by seeing
+  // less: 603 groups instead of 615.
   await page.evaluate(() => {
     document.querySelectorAll('button[aria-label]').forEach((button) => {
-      if (/^expand styles$/i.test(button.getAttribute('aria-label') || '')) button.click();
+      const label = button.getAttribute('aria-label') || '';
+      if (/^expand (styles|section settings and styles)$/i.test(label)) button.click();
     });
   });
   await page.waitForTimeout(3000);

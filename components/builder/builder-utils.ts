@@ -487,6 +487,93 @@ export function getPlainTextModuleStyle(settings: Record<string, string>): CSSPr
   return Object.keys(style).length > 0 ? style : undefined;
 }
 
+const TEXT_BORDER_STYLES = new Set(["none", "solid", "dashed", "dotted"]);
+
+/**
+ * Frame + inner spacing for a text block: border, corner radius, the four
+ * padding sides, and the offset nudge. One reader shared by the editor
+ * canvas, the module thumbnail, and the live site, so the three surfaces
+ * cannot drift — same contract as `getImageModuleStyle`.
+ *
+ * Border and padding land on the same div `getTextModuleWidthStyle` sizes,
+ * so the frame wraps the text at its chosen Width rather than spanning the
+ * whole column. `box-sizing: border-box` keeps that Width honest once a
+ * border or padding exists — otherwise a 50%-wide padded block overflows
+ * its column by the padding.
+ */
+export function getTextModuleFrameStyle(settings: Record<string, string>): CSSProperties {
+  const borderWidth = Math.max(Number.parseInt(settings.borderWidth ?? "0", 10) || 0, 0);
+  const borderRadius = Math.max(Number.parseInt(settings.borderRadius ?? "0", 10) || 0, 0);
+  const borderStyle = TEXT_BORDER_STYLES.has(settings.borderStyle ?? "") ? settings.borderStyle : "solid";
+  const hasBorder = borderWidth > 0 && borderStyle !== "none";
+  const padding = getModuleInnerSpacingStyle(settings);
+  const hasPadding = Object.values(padding).some((value) => value !== "0px");
+  const nudgeTransform = getModuleNudgeTransform(settings);
+
+  return {
+    /*
+     * THE FILL IS PART OF THE FRAME (operator, 2026-08-15: "I want the
+     * background color constrained by the boundary").
+     *
+     * It used to be painted by the module WRAPPER in
+     * builder-template-preview.tsx, one box out — which is a different box
+     * in three ways: the wrapper spans the whole column while this div is
+     * as wide as the Width setting says, the wrapper has square corners
+     * while this one has the Radius, and the padding that holds the words
+     * off the border is inside here. So a 66%-wide green text block with a
+     * 20px radius rendered as a full-width green rectangle with square
+     * corners and a rounded border floating inside it.
+     *
+     * Painting it here puts the fill in the same box as the border, the
+     * radius and the padding, which is what "constrained by the boundary"
+     * means. The wrapper skips `text` now (same exclusion navigation, table
+     * and button already had, and for the same reason).
+     */
+    ...(getBuilderBackgroundStyle(getModuleBackgroundSettings(settings)) ?? {}),
+    ...(hasPadding ? padding : {}),
+    ...(hasBorder
+      ? { border: `${borderWidth}px ${borderStyle} ${settings.borderColor || "#214c71"}` }
+      : {}),
+    ...(borderRadius > 0 ? { borderRadius: `${borderRadius}px` } : {}),
+    ...(hasBorder || hasPadding ? { boxSizing: "border-box" as const } : {}),
+    ...(nudgeTransform ? { transform: nudgeTransform } : {})
+  };
+}
+
+/**
+ * A text block's vertical rhythm: how tall each line is, and how far apart the
+ * paragraphs sit. Two different quantities that look like one until the
+ * content is a stack of one-line paragraphs — a footer link column — where the
+ * line height has nothing to act on and the paragraph gap is the whole of the
+ * spacing. The operator hit exactly that on 2026-08-15 and had no control over
+ * either one.
+ *
+ * Both are omitted unless set, so an untouched block keeps inheriting the
+ * theme's `--bx-line-base` and the 0.9rem paragraph gap it shipped with.
+ * Line height is a plain inherited property, so a `line-height` still written
+ * on a `<span>` inside (imported content carries them) out-ranks this — which
+ * is why the editor's LH control clears those as it sets the paragraph.
+ */
+export function getTextModuleRhythmStyle(
+  settings: Record<string, string>
+): CSSProperties | undefined {
+  const style: Record<string, string> = {};
+
+  const lineHeight = Number.parseFloat(settings.lineHeight ?? "");
+  if (Number.isFinite(lineHeight) && lineHeight > 0) {
+    style.lineHeight = String(lineHeight);
+  }
+
+  // 0 is a real value here — paragraphs sitting flush is a legitimate look —
+  // so this checks only that the number parsed.
+  const paragraphGap = Number.parseFloat(settings.paragraphGap ?? "");
+  if (Number.isFinite(paragraphGap) && paragraphGap >= 0) {
+    style["--bx-para-gap"] = `${paragraphGap}px`;
+  }
+
+  return Object.keys(style).length > 0 ? (style as CSSProperties) : undefined;
+}
+
 export function getImageModuleStyle(settings: Record<string, string>): CSSProperties {
   const borderThickness = Number.parseInt(settings.borderThickness ?? "0", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "18", 10);

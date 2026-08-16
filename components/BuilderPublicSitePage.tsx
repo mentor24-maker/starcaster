@@ -16,6 +16,7 @@ import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
   normalizeBuilderDocument,
+  resolveRenderTheme,
 } from "@/lib/builder-template";
 import {
   ADMIN_LOGIN_PATH,
@@ -27,7 +28,13 @@ import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcast
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { registerImageRenditionMap } from "@/lib/image-renditions";
 
-type SiteThemeShell = ThemeShellBackgroundSource & BuilderThemeStyles;
+/**
+ * The live theme record the server attaches to each page
+ * (`enrichPagesWithThemeShell`). It has always carried `typography`; nothing
+ * read it until 2026-08-15, which is why a themed page rendered live colours
+ * and frozen type.
+ */
+type SiteThemeShell = ThemeShellBackgroundSource & BuilderThemeStyles & { typography?: unknown };
 
 type SitePage = {
   name: string;
@@ -73,6 +80,27 @@ function pageThemePalette(page: SitePage) {
     backgroundColor: String(page.backgroundColor || "").trim(),
     accentColor: String(page.accentColor || "").trim(),
   };
+}
+
+/**
+ * Which theme this page paints type with. Exported so the choice is testable on
+ * its own — the component around it needs a browser and a session, and this one
+ * line is the whole of the behaviour.
+ *
+ * Typography resolves against the LIVE theme, exactly as the colours already
+ * do. The guard matters: `themeShell` falls back to the project's FIRST theme
+ * for a page that names none (see enrichPagesWithThemeShell), so handing it
+ * straight to the resolver would restyle pages nobody ever themed.
+ */
+export function pickPageRenderTheme(page: {
+  theme: SitePage["theme"];
+  themeId?: string;
+  themeShell?: SiteThemeShell | null;
+}) {
+  return resolveRenderTheme(
+    page.theme,
+    String(page.themeId || "").trim() ? page.themeShell : null
+  );
 }
 
 function normalizePublicSlug(value: string): string {
@@ -331,6 +359,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   const effectiveThemeStyles = page.themeShell
     ? buildBuilderThemeStyles(page.themeShell)
     : themeStyles;
+  const effectiveTheme = pickPageRenderTheme(page);
   const effectiveThemeShellBackground = coerceThemeShellBackgroundSource(
     page.themeShell ?? themeShellBackground
   );
@@ -356,7 +385,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
         <BuilderTemplatePreview
           layoutSections={sections}
           pageBackground={page.pageBackground}
-          theme={page.theme}
+          theme={effectiveTheme}
           themePalette={themePalette ?? pageThemePalette(page)}
           themeStyles={effectiveThemeStyles}
           themeShellBackground={effectiveThemeShellBackground}

@@ -111,6 +111,8 @@ import {
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
+  getTextModuleRhythmStyle,
   getTextModuleWidthStyle,
   getVideoEmbedSource,
   isVideoMedia
@@ -1700,8 +1702,14 @@ function BuilderSectionPreview({
                     // Table paints its own background on the <table>, which is
                     // where Max Width constrains it. Painting it here too put
                     // the fill across the full column behind a narrow table.
+                    // Text paints its own fill inside the frame, so the fill
+                    // follows the Width, the Radius and the padding rather
+                    // than spanning the column behind them
+                    // (getTextModuleFrameStyle, operator 2026-08-15) — the
+                    // same reason table and button opt out here.
                     ...(module.type === "navigation" ||
                     module.type === "table" ||
+                    module.type === "text" ||
                     isPageOverlayFlowModule ||
                     isSectionOverlayModule ||
                     module.type === "button" ||
@@ -1823,7 +1831,9 @@ function BuilderModulePreview({
         className={`builder-preview-text builder-preview-text-${variant || "default"}`}
         style={{
           ...getTextModuleWidthStyle(module.settings),
-          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+          ...getTextModuleRhythmStyle(module.settings),
+          ...getTextModuleFrameStyle(module.settings)
         }}
         dangerouslySetInnerHTML={{ __html: html || "" }}
       />

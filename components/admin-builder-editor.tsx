@@ -9,6 +9,7 @@ import {
   BUILDER_PREVIEW_STORAGE_KEY,
   createDefaultBackgroundSettings,
   createDefaultTheme,
+  resolveRenderTheme,
   createEmptyModule,
   createEmptySection,
   getLayoutColumns,
@@ -57,6 +58,12 @@ import {
   resolveTemplateSections,
   toTemplateReferences
 } from "@/lib/builder-template-frame";
+import {
+  buildSavedSectionUsageIndex,
+  describePropagationOutcome,
+  describePushImpact,
+  type BlockUsage
+} from "@/lib/shared-block-usage";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -71,6 +78,7 @@ import {
 import { BuilderSaveDebugPanel } from "./builder/builder-save-debug-panel";
 import { BuilderSectionCard } from "./builder/builder-section-card";
 import { BuilderCenteredModal } from "./builder/builder-centered-modal";
+import { BuilderSaveConflictModal } from "./builder/builder-save-conflict-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
 import {
   BuilderModulePaletteModal,
@@ -100,6 +108,23 @@ async function readAdminJson<T extends AdminApiPayload>(response: Response, fall
   }
 
   return data;
+}
+
+/**
+ * " 4 minutes ago" for the stale-editor warning, or "" when the timestamp is
+ * missing or unreadable. The sentence it lands in has to read correctly either
+ * way, so this returns a leading space and the caller never adds punctuation.
+ */
+function describeConflictAge(iso: string): string {
+  if (!iso) return "";
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return "";
+  const minutes = Math.round((Date.now() - when.getTime()) / 60000);
+  if (minutes < 1) return " a moment ago";
+  if (minutes === 1) return " 1 minute ago";
+  if (minutes < 60) return ` ${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? " an hour ago" : ` ${hours} hours ago`;
 }
 
 type AdminBuilderEditorProps = {
@@ -138,6 +163,17 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [repositorySaveActive, setRepositorySaveActive] = useState(false);
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
+  // The page's updatedAt as of the version currently on the canvas. Sent with
+  // every save so the server can refuse to write over somebody else's change
+  // (see isStaleEdit in lib/builderPagesStore.js). It MUST be refreshed from
+  // the save response as well as on hydrate -- a successful save moves the row
+  // forward without re-hydrating the editor, so skipping that makes the second
+  // save of any session collide with the first.
+  const loadedUpdatedAtRef = useRef("");
+  const [saveConflict, setSaveConflict] = useState<{ liveUpdatedAt: string; savedByName: string } | null>(null);
+  const [propagationUndo, setPropagationUndo] =
+    useState<{ runId: string; pages: number; name: string } | null>(null);
+  const [isUndoingPropagation, setIsUndoingPropagation] = useState(false);
   const pageThemeDirtyRef = useRef(false);
   // Template and theme are only written back when the operator actually picked
   // one.  Both selects render blank whenever the stored value isn't among their
@@ -191,7 +227,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // Palette swatches for the RTE toolbar: prefer the linked page theme, then fall back to the
   // first available theme so swatches still appear when no theme is selected on the page.
   const activeTheme = linkedTheme ?? builderThemes[0] ?? null;
+  // How many pages follow each saved section. One pass over the pages already
+  // in memory, so the manager can show "used on N pages" and a save can say
+  // what it is about to rewrite.
+  const savedSectionUsage = useMemo(() => buildSavedSectionUsageIndex(pages), [pages]);
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
+  // What the canvas paints type with. The shell colours above already read
+  // `linkedTheme` — the live record — while the type vars read the copy frozen
+  // into the draft, so editing a theme changed the canvas background and not
+  // its text. Same resolver the public site uses, so the two cannot disagree.
+  const canvasTheme = useMemo(
+    () => resolveRenderTheme(draft.theme, linkedTheme),
+    [draft.theme, linkedTheme]
+  );
   const workspaceShellLayers = useMemo(
     () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
     [draft.pageBackground, linkedTheme]
@@ -207,11 +255,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }),
     [workspaceThemeStyles, workspaceShellLayers.inlineBackground]
   );
+  // `canvasTheme`, not `draft.theme`. A page stopped carrying its own copy of
+  // the theme when it started following one (#256), so `draft.theme.typography`
+  // can now arrive without a `colors` object at all — and this chain is
+  // unguarded, so reading `.text` off it threw and took the WHOLE editor down
+  // to a blank page, every row and every module with it. `resolveRenderTheme`
+  // always returns a normalized theme, and it is the live one the canvas is
+  // already painting with, which is what these swatches should have offered
+  // from the start.
   const rteThemeColors = [
     ...buildBuilderThemePaletteColors(activeTheme),
-    { label: "Body text", hex: draft.theme.typography.colors.text },
-    { label: "Headings", hex: draft.theme.typography.colors.heading },
-    { label: "Link", hex: draft.theme.typography.colors.link },
+    { label: "Body text", hex: canvasTheme.typography.colors.text },
+    { label: "Headings", hex: canvasTheme.typography.colors.heading },
+    { label: "Link", hex: canvasTheme.typography.colors.link },
   ].filter((c) => Boolean(c.hex));
 
   // --- Data loading ---
@@ -475,6 +531,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
 
     hydratedPageSelectionRef.current = selectionKey;
+    loadedUpdatedAtRef.current = page?.updatedAt ?? "";
+    setSaveConflict(null);
     pageThemeDirtyRef.current = false;
     pageTemplateDirtyRef.current = false;
     setDraft(createDraftFromPage(page));
@@ -1230,6 +1288,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       return;
     }
 
+    // Say what this will touch BEFORE writing. Saving a master rewrites the
+    // section on every page that follows it, and that fan-out used to be
+    // completely silent — see lib/builder-client/shared-block-usage.ts.
+    const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId));
+    if (impact && !window.confirm(impact)) return;
+
     setIsSaving(true);
     setError(null);
     setMessage(null);
@@ -1240,7 +1304,15 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmedName, section, isPrivate })
       });
-      const data = await readAdminJson<{ savedSection?: BuilderSavedSectionRecord; error?: string }>(response, "Failed to save saved section.");
+      const data = await readAdminJson<{
+        savedSection?: BuilderSavedSectionRecord;
+        error?: string;
+        meta?: {
+          propagation?: {
+            ok?: boolean; total?: number; updated?: number; failed?: number; runId?: string;
+          };
+        };
+      }>(response, "Failed to save saved section.");
 
       if (!data.savedSection) {
         throw new Error(data.error ?? "Failed to save saved section.");
@@ -1249,7 +1321,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       setSavedSections((current) =>
         current.map((section) => (section.id === data.savedSection!.id ? data.savedSection! : section))
       );
-      setMessage(`Saved section "${data.savedSection.name}".`);
+      // The route has always returned this tally; it used to be dropped, so a
+      // fan-out that half failed reported the same "Saved." as a clean one.
+      setMessage(describePropagationOutcome(data.savedSection.name, data.meta?.propagation));
+      // Offer the way back, right where the damage is reported. A push that
+      // rewrote pages is exactly the moment somebody realises it was wrong.
+      const runId = String(data.meta?.propagation?.runId ?? "");
+      const updated = Number(data.meta?.propagation?.updated ?? 0) || 0;
+      setPropagationUndo(runId && updated ? { runId, pages: updated, name: data.savedSection.name } : null);
+      // Those pages now hold new content — refresh so the counts stay true.
+      await loadPages();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save saved section.");
     } finally {
@@ -1860,13 +1941,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  async function savePage() {
+  /**
+   * @param options.overwriteFrom  The live updatedAt returned by a previous
+   *   409. Passing it re-runs the save against THAT version -- so "overwrite
+   *   anyway" still collides if a third save landed in the meantime, instead
+   *   of switching the guard off and reopening the hole it exists to close.
+   */
+  async function savePage(options: { overwriteFrom?: string } = {}) {
     if (!draft.name.trim()) { setError("Page title is required."); return; }
     // An empty slug is the root/home page (the DB unique index excludes empty
     // slugs). Allow saving an existing root page without a slug; only require
     // one when creating a new page so we don't silently mint duplicate roots.
     if (!selectedPageId && !pageSlug.trim()) { setError("Page slug is required."); return; }
-    setIsSaving(true); setError(null); setMessage(null);
+    setIsSaving(true); setError(null); setMessage(null); setSaveConflict(null);
     try {
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
@@ -1874,6 +1961,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         body: JSON.stringify({
           name: draft.name,
           slug: pageSlug,
+          // Only an existing page can be stale; a create has nothing to collide
+          // with. Blank means "no opinion" and the server lets the save through.
+          ...(selectedPageId
+            ? { expectedUpdatedAt: options.overwriteFrom ?? loadedUpdatedAtRef.current }
+            : {}),
           // Omitted, not nulled, when untouched: the store only writes fields
           // the body actually carries, so leaving them out preserves whatever
           // the row already holds instead of clobbering it with a blank select.
@@ -1886,11 +1978,28 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           layoutSections: draft.layoutSections
         })
       });
+      // Intercepted before readAdminJson, which turns any non-ok response into
+      // a thrown Error and would flatten this into an ordinary red banner.
+      // Nothing was written; the operator still holds every edit they made.
+      if (response.status === 409) {
+        const body = (await response.json().catch(() => ({}))) as {
+          conflict?: { updatedAt?: string; savedByName?: string };
+        };
+        setSaveConflict({
+          liveUpdatedAt: body.conflict?.updatedAt ?? "",
+          savedByName: body.conflict?.savedByName ?? "",
+        });
+        return;
+      }
+
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       if (data.page) {
         pageThemeDirtyRef.current = false;
         pageTemplateDirtyRef.current = false;
         setPageThemeId(data.page.themeId ?? "");
+        // Move our idea of "the version I am editing" forward, or the next save
+        // in this session collides with the one we just made.
+        loadedUpdatedAtRef.current = data.page.updatedAt ?? "";
       }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
       await loadPages();
@@ -1898,6 +2007,72 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save page.");
     } finally { setIsSaving(false); }
+  }
+
+  /**
+   * Put every page a shared-section push rewrote back the way it was.
+   *
+   * Each page banks its CURRENT state first (the restore runs through the
+   * ordinary revert path), so this is itself undoable from each page's history.
+   */
+  async function undoPropagation() {
+    if (!propagationUndo) return;
+    const { runId, pages, name } = propagationUndo;
+    const confirmed = window.confirm(
+      `Undo the update to "${name}"?\n\n` +
+        `${pages} ${pages === 1 ? "page goes" : "pages go"} back to how ${pages === 1 ? "it was" : "they were"} ` +
+        "before you saved it — the WHOLE page, not just the shared part. So anything " +
+        "edited on those pages since then is rolled back too.\n\n" +
+        "The current version of each page is saved to its own history first, so nothing is lost " +
+        "and this can itself be undone."
+    );
+    if (!confirmed) return;
+
+    setIsUndoingPropagation(true);
+    setError(null);
+    try {
+      const response = await builderAdminFetch(`/api/admin/propagation-runs/${runId}/undo`, {
+        method: "POST",
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        restored?: Array<{ name?: string }>;
+        failed?: Array<{ name?: string }>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? "Could not undo that update.");
+
+      const restored = body.restored?.length ?? 0;
+      const failed = body.failed ?? [];
+      if (failed.length) {
+        // NAMES them. A partial undo reporting plain success is the failure
+        // this whole feature exists to stop happening quietly.
+        setError(
+          `Put back ${restored} ${restored === 1 ? "page" : "pages"}, but ${failed.length} could not be restored: ` +
+            `${failed.map((f) => f.name || "(unnamed)").join(", ")}. Their history still holds the old version — ` +
+            "restore those from the page itself."
+        );
+      } else {
+        setMessage(`Undone. ${restored} ${restored === 1 ? "page is" : "pages are"} back to how they were.`);
+      }
+      setPropagationUndo(null);
+      await loadPages();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not undo that update.");
+    } finally {
+      setIsUndoingPropagation(false);
+    }
+  }
+
+  /** Throw away the local draft and pull down whatever is live now. */
+  function reloadPageFromServer() {
+    setSaveConflict(null);
+    setError(null);
+    setMessage(null);
+    // Clearing the hydration key is what makes the effect re-seed the canvas;
+    // without it loadPages refreshes the list and leaves the stale draft in
+    // place, which is the version we are trying to get rid of.
+    hydratedPageSelectionRef.current = "";
+    void loadPages();
   }
 
   async function bulkCreatePages(
@@ -1910,6 +2085,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     const effectiveTheme = selectedTheme?.typography
       ? { ...(template?.theme ?? createDefaultTheme()), typography: selectedTheme.typography }
       : (template?.theme ?? createDefaultTheme());
+    // Take the CURRENT header/menu/footer, not the copy frozen into the
+    // template — same resolution the single-page path already does.
+    const templateSections = resolveTemplateSections(
+      template?.layoutSections ?? [],
+      savedSections,
+      () => crypto.randomUUID()
+    );
     const results = await Promise.all(
       items.map(async (item): Promise<BulkCreateResult> => {
         try {
@@ -1924,7 +2106,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
               templateKind: "modular",
               pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
               theme: effectiveTheme,
-              layoutSections: template?.layoutSections ?? []
+              layoutSections: templateSections
             })
           });
           const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to create page.");
@@ -2309,6 +2491,34 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       {message ? <div className="notice success admin-notice">{message}</div> : null}
       {error ? <div className="notice error admin-notice">{error}</div> : null}
 
+      {propagationUndo ? (
+        <div className="notice admin-notice builder-propagation-undo">
+          <span>
+            That save rewrote <strong>{propagationUndo.pages}</strong>{" "}
+            {propagationUndo.pages === 1 ? "page" : "pages"}. Not what you wanted?
+          </span>
+          <button
+            className="secondary-button"
+            disabled={isUndoingPropagation}
+            onClick={() => void undoPropagation()}
+            type="button"
+          >
+            {isUndoingPropagation ? "Undoing..." : "Undo this update"}
+          </button>
+        </div>
+      ) : null}
+
+      {saveConflict ? (
+        <BuilderSaveConflictModal
+          age={describeConflictAge(saveConflict.liveUpdatedAt)}
+          isSaving={isSaving}
+          onKeepEditing={() => setSaveConflict(null)}
+          onOverwrite={() => void savePage({ overwriteFrom: saveConflict.liveUpdatedAt })}
+          onReload={reloadPageFromServer}
+          savedByName={saveConflict.savedByName}
+        />
+      ) : null}
+
       {builderMode === "pages" ? (
         <AdminLegacyRemindersImportPanel
           pageSlug={pageSlug}
@@ -2373,6 +2583,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       ) : builderMode === "modules" ? (
         <BuilderModuleRepositoryList
           cellModules={cellModules}
+          savedSectionUsage={savedSectionUsage}
           pages={pages}
           products={products}
           galleryMedia={galleryMedia}
@@ -2558,7 +2769,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
                             themeColors={rteThemeColors}
-                            themeStyle={getThemeRootVars(draft.theme)}
+                            themeStyle={getThemeRootVars(canvasTheme)}
                             themeBackgroundColor={activeTheme?.backgroundColor}
                             themePrimaryColor={activeTheme?.primaryColor}
                             onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
@@ -2637,7 +2848,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
                         themeColors={rteThemeColors}
-                        themeStyle={getThemeRootVars(draft.theme)}
+                        themeStyle={getThemeRootVars(canvasTheme)}
                         themeBackgroundColor={activeTheme?.backgroundColor}
                         themePrimaryColor={activeTheme?.primaryColor}
                         onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}

@@ -14,6 +14,8 @@ import {
   getModuleWidthShellStyle,
   getModuleWidthStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
+  getTextModuleRhythmStyle,
   getTextModuleWidthStyle,
   getTableWrapStyle,
   getSectionWidthStyle,
@@ -179,6 +181,105 @@ describe("getTextModuleWidthStyle", () => {
     const right = getTextModuleWidthStyle({ size: "66", alignment: "right" });
     expect(right?.marginLeft).toBe("auto");
     expect(right?.marginRight).toBeUndefined();
+  });
+});
+
+describe("getTextModuleFrameStyle", () => {
+  it("returns an empty style for an untouched module, so existing pages do not move", () => {
+    expect(getTextModuleFrameStyle({})).toEqual({});
+  });
+
+  it("draws the border only once it has width, defaulting to solid", () => {
+    expect(getTextModuleFrameStyle({ borderColor: "#123456" }).border).toBeUndefined();
+    expect(getTextModuleFrameStyle({ borderWidth: "3", borderColor: "#123456" }).border).toBe(
+      "3px solid #123456"
+    );
+    expect(getTextModuleFrameStyle({ borderWidth: "2", borderStyle: "dashed" }).border).toBe(
+      "2px dashed #214c71"
+    );
+  });
+
+  it('draws nothing for style "none" even with a width set', () => {
+    expect(getTextModuleFrameStyle({ borderWidth: "3", borderStyle: "none" }).border).toBeUndefined();
+  });
+
+  it("carries the module's own fill, so it is bounded by the frame", () => {
+    /*
+     * Operator, 2026-08-15: "I want the background color constrained by the
+     * boundary." The fill used to be painted by the module wrapper — a
+     * full-column box with square corners, outside the padding — so a
+     * narrow, rounded, padded text block showed its colour as a rectangle
+     * behind the frame rather than inside it. Here it is one box with the
+     * border and the radius.
+     */
+    const style = getTextModuleFrameStyle({
+      backgroundMode: "color",
+      backgroundColor: "#c8f169",
+      borderRadius: "20",
+      borderWidth: "2"
+    });
+    expect(style.background).toContain("#c8f169");
+    expect(style.borderRadius).toBe("20px");
+
+    // Still nothing on a module that has never been given one (mode "none"),
+    // which is what keeps every existing text block exactly where it is.
+    expect(getTextModuleFrameStyle({}).background).toBeUndefined();
+  });
+
+  it("keeps the Width setting honest once a border or padding exists", () => {
+    expect(getTextModuleFrameStyle({ borderWidth: "2" }).boxSizing).toBe("border-box");
+    expect(getTextModuleFrameStyle({ paddingLeft: "20" }).boxSizing).toBe("border-box");
+    expect(getTextModuleFrameStyle({}).boxSizing).toBeUndefined();
+  });
+
+  it("applies the four padding sides only when one is set", () => {
+    expect(getTextModuleFrameStyle({}).paddingTop).toBeUndefined();
+
+    const style = getTextModuleFrameStyle({ paddingTop: "15", paddingLeft: "20" });
+    expect(style.paddingTop).toBe("15px");
+    expect(style.paddingBottom).toBe("0px");
+    expect(style.paddingLeft).toBe("20px");
+    expect(style.paddingRight).toBe("0px");
+  });
+
+  it("rounds corners and carries the offset nudge", () => {
+    const style = getTextModuleFrameStyle({
+      borderRadius: "10",
+      horizontalOffset: "4",
+      verticalOffset: "-4"
+    });
+    expect(style.borderRadius).toBe("10px");
+    expect(style.transform).toBe("translate(4px, 4px)");
+  });
+});
+
+describe("getTextModuleRhythmStyle", () => {
+  it("is undefined until the operator sets something, so themed text is untouched", () => {
+    expect(getTextModuleRhythmStyle({})).toBeUndefined();
+    expect(getTextModuleRhythmStyle({ lineHeight: "", paragraphGap: "" })).toBeUndefined();
+  });
+
+  it("emits line height on its own", () => {
+    const style = getTextModuleRhythmStyle({ lineHeight: "1.2" }) ?? {};
+    expect(style.lineHeight).toBe("1.2");
+    expect(style).not.toHaveProperty("--bx-para-gap");
+  });
+
+  it("emits the paragraph gap as the custom property the stylesheet reads", () => {
+    const style = (getTextModuleRhythmStyle({ paragraphGap: "4" }) ?? {}) as Record<string, string>;
+    expect(style["--bx-para-gap"]).toBe("4px");
+    expect(style.lineHeight).toBeUndefined();
+  });
+
+  // Paragraphs sitting flush is a real look, so 0 must survive the
+  // truthiness check that drops an unset value.
+  it("keeps a zero gap", () => {
+    const style = (getTextModuleRhythmStyle({ paragraphGap: "0" }) ?? {}) as Record<string, string>;
+    expect(style["--bx-para-gap"]).toBe("0px");
+  });
+
+  it("ignores values that are not numbers", () => {
+    expect(getTextModuleRhythmStyle({ lineHeight: "cozy", paragraphGap: "wide" })).toBeUndefined();
   });
 });
 

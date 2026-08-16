@@ -24,12 +24,16 @@ Tests: `npm run test:builder-ui`.
 - **Width tokens:** `label` (230px), `select-sm` / `select-md` (ch-based),
   `num` (digit-sized via `BuilderNumberSelectControl`), `align`, `color`,
   `check`, `text-md`, `full` (own line).
-- **Spacing is four sides:** `marginTop/Bottom/Left/Right` and
-  `paddingTop/Bottom/Left/Right`, in that order, adjacent in the same
-  strip — never a lone "Margin", never a vertical/horizontal pair. Build
-  them from `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES` (or the
-  `marginFields()` / `paddingFields()` helpers) so the names and the
-  order cannot drift.
+- **Spacing is four sides, shown as two rows:** the keys are still
+  `marginTop/Bottom/Left/Right` and `paddingTop/Bottom/Left/Right` in that
+  order (E4) — never a lone "Margin", never a vertical/horizontal
+  *setting*. What renders is one row per axis, `V Margin` / `H Margin`,
+  each with a chain-link toggle that splits it into its two sides in place,
+  and each splitting on its own when the two sides already differ (E4b,
+  8/15). Never build these by hand: `marginFields()` / `paddingFields()` /
+  `spacingFields()` in a schema panel, `BuilderModuleSpacingFields` in a
+  hand-written strip — all from `builder-spacing-fields.tsx`, which owns
+  the labels, the side order, the legacy fallbacks and the toggle.
 - **Labels never wrap** (`white-space: nowrap`); shorten text instead.
 - **No Advanced section** (master rule A0, 8/13). There is no
   `<details class="hanging-details">` in a module panel and no `advanced:`
@@ -72,8 +76,10 @@ container to `scripts/ui/check_panels.mjs`, seed real content into
 `scripts/ui/seed_fixture.mjs` (an empty manager measures nothing and
 passes), and then **prove the check fails** by breaking the layout on
 purpose before you trust the pass.
-- Styles live in `src/css/_builder-react-overrides.css` and
-  `src/css/_builder-react.css` — see `src/css/CLAUDE.md`.
+- **New styles go in `src/css/_builder-react-overrides.css`.** Existing rules
+  also live in `src/css/_builder-react.css`, but that file is regenerated
+  wholesale and a hand edit there disappears at the next regeneration — read
+  it, never write it. See `src/css/CLAUDE.md`, first section.
 
 ## Adding a builder module type
 
@@ -92,7 +98,8 @@ raw user content.
 
 - Layout/style settings persist on the form record's `styles` JSON
   (`lib/crmFormStyles.js`)
-- Public rendering styles live in `src/css/_builder-react.css` — not
-  `_crm.css` (that's the admin preview)
+- Public rendering styles belong to the builder layer, not `_crm.css` (that's
+  the admin preview). Existing ones sit in `src/css/_builder-react.css`; add
+  new ones to `_builder-react-overrides.css` (that file is regenerated)
 - Module center/right alignment must not override the form's internal
   alignment

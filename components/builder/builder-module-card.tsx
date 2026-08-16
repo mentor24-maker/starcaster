@@ -120,15 +120,18 @@ import {
   getModuleOuterSpacingStyle,
   getTableWrapStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
+  getTextModuleRhythmStyle,
   getTextModuleWidthStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
   isVideoMedia
 } from "./builder-utils";
-import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
+import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
 import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
+import { BuilderTextModuleSettings } from "./builder-text-module-settings";
 import {
   BuilderThemeColorField,
   BuilderThemeColorFieldWithDefault,
@@ -150,8 +153,7 @@ import {
 } from "@/lib/poll-category-list";
 import {
   BuilderInlineNumberSelect,
-  BuilderInlineNumberSelectRow,
-  BuilderNumberSelectControl
+  BuilderInlineNumberSelectRow
 } from "./builder-inline-number-select";
 import { imageProps } from "@/lib/image-renditions";
 
@@ -173,7 +175,7 @@ const CARD_SIZES = "(max-width: 700px) 100vw, 400px";
  * Adding a module to the shape means adding it here and to the matching CSS
  * selector list in `_builder-react-overrides.css`.
  */
-const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list"]);
+const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list", "social"]);
 
 /**
  * The two nudge controls, named and ordered like `MODULE_MARGIN_SIDES` so a
@@ -2297,7 +2299,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
       style={{
         ...getTextModuleWidthStyle(module.settings),
-        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+        ...getTextModuleRhythmStyle(module.settings),
+        ...getTextModuleFrameStyle(module.settings)
       }}
       dangerouslySetInnerHTML={{
         __html: isPlainText
@@ -3091,6 +3095,11 @@ export function BuilderModuleCard({
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
+    // The rich-text editor left the shared chrome on 2026-08-15: its
+    // Background / Alignment / margins / Width now live on the D8 axes in
+    // BuilderTextModuleSettings (E6 — never a second copy). The Simple Text
+    // variant stays on the chrome, so this flag is variant-aware on purpose.
+    const isRichTextModule = module.type === "text" && !isPlainTextVariant(module.settings);
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
 
     /**
@@ -3174,28 +3183,24 @@ export function BuilderModuleCard({
               }
             />
           </BuilderModuleField>
-          {/* W7: the four sides, in the same order `marginFields()` emits them,
-              so the set reads identically on hand-written and generated
-              panels. Each side reads the legacy vertical/horizontal pair when
-              its own key is unset, which is what keeps a page that has not
-              been re-saved showing the numbers it is actually rendering. */}
-          {MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => (
-            <BuilderModuleField key={key} label={label} width="num">
-              <BuilderNumberSelectControl
-                fallback="0"
-                max={160}
-                step={5}
-                min={0}
-                value={module.settings[key] ?? module.settings[legacy] ?? "0"}
-                onChange={(next) =>
-                  onUpdateModule((current) => ({
-                    ...current,
-                    settings: { ...current.settings, [key]: next }
-                  }))
-                }
-              />
-            </BuilderModuleField>
-          ))}
+          {/* One row per axis, splitting into its two sides on the row's own
+              toggle (E4b) — the same component `marginFields()` gives the
+              generated panels, so the set reads identically on hand-written
+              and generated ones. Each side reads the legacy
+              vertical/horizontal pair when its own key is unset, which is
+              what keeps a page that has not been re-saved showing the numbers
+              it is actually rendering. */}
+          <BuilderModuleSpacingFields
+            box="margin"
+            max={160}
+            onChange={(values) =>
+              onUpdateModule((current) => ({
+                ...current,
+                settings: { ...current.settings, ...values }
+              }))
+            }
+            settings={module.settings}
+          />
           {/* The nudge, in the strip rather than beside it (operator,
               2026-08-12: "Add Vertical and Horizontal Offset to the left
               column"). `BuilderModuleOffsetFields` — what the image module
@@ -3259,7 +3264,15 @@ export function BuilderModuleCard({
     <div
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
       style={{
-        ...(module.type !== "button" && !isPollCategoryListModule
+        /*
+         * Text is excluded with Button because its fill now belongs to the
+         * frame INSIDE the card (getTextModuleFrameStyle, 2026-08-15).
+         * Tinting the card as well would paint the same colour twice at two
+         * different sizes and tell the operator the fill spans the card when
+         * on the page it stops at the border. The card keeps the neutral
+         * surface; the preview inside shows what the page will show.
+         */
+        ...(module.type !== "button" && module.type !== "text" && !isPollCategoryListModule
           ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
           : {}),
         // One reader for every type (W7). A floating image and a reminder are
@@ -3280,6 +3293,26 @@ export function BuilderModuleCard({
       ) : null}
       <div aria-expanded={isExpanded} className="builder-module-header" ref={moduleHeaderRef}>
         <div className="builder-module-title">
+          {/*
+            The pop-out sits on the LEFT, with the drag handle and the name,
+            rather than at the end of the action cluster (operator,
+            2026-08-15, with a screenshot of six side-by-side cells to show
+            why). A module in a narrow cell is clipped at its right edge, and
+            the action cluster goes with it — so the one control that ESCAPES
+            the narrow cell was the one the narrow cell hid. The left edge is
+            the only part of a module card that is always on screen.
+          */}
+          {hideHeaderActions ? null : (
+            <button
+              aria-label="Open editor in popup"
+              className={`builder-icon-button builder-module-popout${isPopped ? " builder-icon-button-active" : ""}`}
+              onClick={() => setIsPopped((p) => !p)}
+              title="Open editor in popup"
+              type="button"
+            >
+              ⤢
+            </button>
+          )}
           <div className="builder-module-title-text">
             <strong>{module.name || module.type}</strong>
             <span>{module.type}</span>
@@ -3306,7 +3339,6 @@ export function BuilderModuleCard({
         ) : (
           <div className="builder-section-actions">
             <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
-            <button aria-label="Open editor in popup" className={`builder-icon-button${isPopped ? " builder-icon-button-active" : ""}`} onClick={() => setIsPopped((p) => !p)} title="Open editor in popup" type="button">⤢</button>
             <button aria-label="Move module up" className="builder-icon-button" onClick={onMoveUp} title="Move module up" type="button">↑</button>
             <button aria-label="Move module down" className="builder-icon-button" onClick={onMoveDown} title="Move module down" type="button">↓</button>
             <button
@@ -3563,6 +3595,15 @@ export function BuilderModuleCard({
                   />
                 </BuilderSettingRow>
               </div>
+            ) : isRichTextModule ? (
+              <BuilderTextModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
             ) : isNavigationModule ? null : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
               <div className="builder-floating-image-module-chrome">
                 <BuilderBackgroundControls

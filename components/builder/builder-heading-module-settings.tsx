@@ -2,13 +2,11 @@
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderInlineRichTextEditor } from "./builder-inline-rich-text-editor";
-import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import {
   BuilderSchemaModuleSettings,
   dropShadowFields,
-  MODULE_MARGIN_SIDES,
-  type BuilderSchemaFieldContext,
+  marginFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import {
@@ -321,27 +319,12 @@ export function BuilderHeadingModuleSettings({
               fallback: "left",
               rendersVia: "getHeadingModuleStyle"
             },
-            // The four sides, read through the same table and the same legacy
-            // fallback the renderer resolves with: a table-cell heading is
-            // never normalized, so reading `marginTop` alone would show 0
-            // while the page renders the pair it was saved with.
-            ...MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => ({
-              key,
-              label,
-              width: "num" as const,
-              control: "custom" as const,
-              rendersVia: "getModuleOuterSpacingStyle",
-              render: (ctx: BuilderSchemaFieldContext) => (
-                <BuilderNumberSelectControl
-                  value={ctx.settings[key] ?? ctx.settings[legacy] ?? "0"}
-                  min={0}
-                  max={160}
-                  step={5}
-                  fallback="0"
-                  onChange={(next) => ctx.set(key, next)}
-                />
-              )
-            }))
+            // One row per axis, splitting on its own toggle (E4b). The helper
+            // reads the same legacy fallback the renderer resolves with: a
+            // table-cell heading is never normalized, so reading `marginTop`
+            // alone would show 0 while the page renders the pair it was
+            // saved with.
+            ...marginFields("getModuleOuterSpacingStyle", 160)
           ],
           // D9 rung 6, last on the axis. A5 used to put these in
           // Placement's own Advanced section for exactly this reason —
