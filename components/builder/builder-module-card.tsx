@@ -13,6 +13,7 @@ import {
   parseBuilderCarouselItems,
   resolveCarouselFormat
 } from "./builder-carousel-module-settings";
+import { getCarouselImageFrameStyle } from "@/lib/builder-carousel-image-frame";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -681,6 +682,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
     // `items`, which is the point of the merge.
     const items = parseBuilderCarouselItems(module.settings);
     const isCards = resolveCarouselFormat(module.settings) === "cards";
+    // The same frame the page draws, so the glance does not quietly disagree
+    // with what the operator just set two feet to the right of it.
+    const imageFrame = getCarouselImageFrameStyle(module.settings);
 
     if (items.length === 0) {
       return (
@@ -706,6 +710,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
                   {...imageProps(item.imageUrl, { sizes: "220px" })}
                   alt={item.imageAlt || item.title || ""}
                   loading="lazy"
+                  style={imageFrame}
                 />
               ) : null}
               <div className="builder-module-preview-carousel-card-copy">
@@ -721,7 +726,12 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const first = items[0];
     return (
       <div className="builder-module-preview-carousel">
-        <img {...imageProps(first.imageUrl)} alt={first.imageAlt || ""} loading="lazy" />
+        <img
+          {...imageProps(first.imageUrl)}
+          alt={first.imageAlt || ""}
+          loading="lazy"
+          style={imageFrame}
+        />
         {items.length > 1 ? (
           <span className="builder-module-preview-carousel-count">{items.length} slides</span>
         ) : null}
@@ -3738,7 +3748,11 @@ export function BuilderModuleCard({
             />
           )}
           {module.type === "carousel" && (
-            <BuilderCarouselModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            <BuilderCarouselModuleSettings
+              module={module}
+              themeColors={themeColors}
+              onUpdateModule={onUpdateModule}
+            />
           )}
           {module.type === "feature-cards" && (
             <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
