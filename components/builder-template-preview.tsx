@@ -1801,8 +1801,8 @@ function BuilderModulePreview({
     return <HeadlineRotatorPreview module={module} />;
   }
 
-  if (module.type === "slideshow") {
-    return <SlideshowPreview module={module} />;
+  if (module.type === "carousel") {
+    return <CarouselPreview module={module} />;
   }
 
   if (module.type === "program-list") {
@@ -2012,10 +2012,6 @@ function BuilderModulePreview({
 
   if (module.type === "table") {
     return <TableModulePreview module={module} />;
-  }
-
-  if (module.type === "slider") {
-    return <SliderModulePreview module={module} />;
   }
 
   if (module.type === "social") {
@@ -5178,86 +5174,288 @@ function BlogModulePlaceholder({ type }: { type: string }) {
   );
 }
 
-function SlideshowPreview({
+/**
+ * The Carousel — one renderer for both formats.
+ *
+ * `slideshow` and `slider` were separate module types until 2026-08-16.
+ * They were never two different mechanisms: both hold an ordered row of
+ * items and move through it. They differed in exactly two settings, each
+ * hard-coded at opposite extremes — how many items share the frame, and
+ * whether it advances on its own. Because those were fixed rather than
+ * chosen, neither could ever borrow the other's behaviour: a slideshow had
+ * no arrows and no clickable slides, a card shelf could not rotate.
+ *
+ * `format` is that choice, made once, and everything downstream reads from
+ * it. The union of the two old setting sets applies to both formats except
+ * where a setting is meaningless — see `formatSupports` below, which is the
+ * single place that judgement is written down so the settings panel and this
+ * renderer cannot disagree about it.
+ */
+function CarouselPreview({
   module
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
 }) {
-  const slides = useMemo(() => {
-    try {
-      const raw = JSON.parse(module.settings.slides || "[]");
-      if (!Array.isArray(raw)) return [] as { id: string; url: string; alt: string }[];
-      return raw
-        .map((entry, index) => ({
-          id: String((entry as { id?: string })?.id || `slide-${index}`),
-          url: String((entry as { url?: string })?.url || "").trim(),
-          alt: String((entry as { alt?: string })?.alt || "")
-        }))
-        .filter((slide) => slide.url);
-    } catch {
-      return [] as { id: string; url: string; alt: string }[];
-    }
-  }, [module.settings.slides]);
-  const intervalMs = Math.max(Number.parseInt(module.settings.intervalMs ?? "5000", 10) || 5000, 1000);
-  const transition = module.settings.transition === "fade" ? "fade" : "slide";
-  const heightPx = Number.parseInt(module.settings.heightPx ?? "", 10) || 0;
+  const settings = module.settings;
+  const format = settings.format === "cards" ? "cards" : "slideshow";
+  const isCards = format === "cards";
+
+  // Empty-image items are dropped at display time but kept in storage — a
+  // just-added item must survive until its picture is picked. Cards may
+  // legitimately have no image at all, so they only need SOME content.
+  const items = useMemo(() => {
+    const parsed = parseBuilderCardItems(settings.items, "item");
+    return isCards
+      ? parsed.filter((item) => item.imageUrl || item.title || item.body)
+      : parsed.filter((item) => item.imageUrl);
+  }, [settings.items, isCards]);
+
+  const intervalMs = Math.max(Number.parseInt(settings.intervalMs ?? "5000", 10) || 5000, 1000);
+  const transition = !isCards && settings.transition === "fade" ? "fade" : "slide";
+  const heightPx = Number.parseInt(settings.heightPx ?? "", 10) || 0;
+  const gap = Number.parseInt(settings.gap ?? (isCards ? "16" : "0"), 10) || 0;
+  const cardWidth = Number.parseInt(settings.cardWidth ?? "280", 10) || 280;
+  const autoplay = settings.autoplay === undefined ? !isCards : settings.autoplay !== "false";
+  const pauseOnHover = settings.pauseOnHover !== "false";
+  const loop = settings.loop !== "false";
+  const showArrows = settings.showArrows !== "false";
+  const showDots = settings.showDots === undefined ? !isCards : settings.showDots !== "false";
+  const showCaptions = settings.showCaptions === "true";
+  const captionPosition = settings.captionPosition || "bottom-left";
+
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const count = items.length;
+  const step = cardWidth + gap;
+
+  // Which item the cards format is currently parked on. Derived from scroll
+  // position rather than stored, because the visitor can also drag/swipe the
+  // strip directly — a stored index would immediately disagree with the eye.
+  useEffect(() => {
+    if (!isCards) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    function update() {
+      if (!el) return;
+      setIndex(Math.round(el.scrollLeft / Math.max(step, 1)));
+    }
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [isCards, step, count]);
+
+  const goTo = (next: number) => {
+    if (count === 0) return;
+    const wrapped = loop ? ((next % count) + count) % count : Math.min(Math.max(next, 0), count - 1);
+    if (isCards) {
+      scrollRef.current?.scrollTo({ left: wrapped * step, behavior: "smooth" });
+    }
+    setIndex(wrapped);
+  };
 
   useEffect(() => {
-    if (slides.length <= 1 || paused) return;
+    if (!autoplay || count <= 1 || paused) return;
     const timer = window.setInterval(() => {
-      setIndex((current) => (current + 1) % slides.length);
+      setIndex((current) => {
+        const next = current + 1;
+        // Autoplay respects Loop: without it the run stops on the last item
+        // rather than snapping back to the first.
+        const wrapped = loop ? next % count : Math.min(next, count - 1);
+        if (isCards) scrollRef.current?.scrollTo({ left: wrapped * step, behavior: "smooth" });
+        return wrapped;
+      });
     }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [slides.length, intervalMs, paused]);
+  }, [autoplay, count, paused, intervalMs, isCards, step, loop]);
 
   useEffect(() => {
-    if (index >= slides.length) setIndex(0);
-  }, [slides.length, index]);
+    if (index >= count) setIndex(0);
+  }, [count, index]);
 
-  if (slides.length === 0) {
-    return <div className="builder-preview-slideshow builder-preview-slideshow-empty">Add slides in the editor</div>;
+  if (count === 0) {
+    return (
+      <div className="builder-preview-carousel builder-preview-carousel-empty">
+        {isCards ? "Add cards in the editor" : "Add slides in the editor"}
+      </div>
+    );
   }
 
   // The nudge (operator, 2026-08-12), the same two settings and the same
   // helper the image and heading modules use, so an operator learns it once.
   // `position: relative` only when there is a transform to apply: an
   // unconditional one would become the containing block for any
-  // fixed-position overlay inside the slideshow.
-  const nudgeTransform = getModuleNudgeTransform(module.settings);
-  const frameStyle: CSSProperties = {
-    ...(heightPx > 0 ? { height: `${heightPx}px` } : {}),
-    ...(nudgeTransform ? { transform: nudgeTransform, position: "relative" as const } : {})
+  // fixed-position overlay inside the carousel.
+  const nudgeTransform = getModuleNudgeTransform(settings);
+  const wrapStyle: CSSProperties = nudgeTransform
+    ? { transform: nudgeTransform, position: "relative" }
+    : {};
+  const frameStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
+
+  const atStart = index <= 0;
+  const atEnd = index >= count - 1;
+
+  const caption = (item: (typeof items)[number]) => {
+    if (!showCaptions || (!item.title && !item.body)) return null;
+    return (
+      <div className={`builder-preview-carousel-caption builder-preview-carousel-caption-${captionPosition}`}>
+        {item.title ? <strong>{item.title}</strong> : null}
+        {item.body ? <p>{item.body}</p> : null}
+        {item.linkUrl && item.linkLabel ? (
+          <span className="builder-preview-carousel-caption-link">
+            {item.linkLabel}
+            <span aria-hidden="true"> →</span>
+          </span>
+        ) : null}
+      </div>
+    );
   };
+
+  /** A whole item wrapped in its link, when it has one. */
+  const linked = (item: (typeof items)[number], children: React.ReactNode) =>
+    item.linkUrl ? (
+      <Link className="builder-preview-carousel-link" href={item.linkUrl}>
+        {children}
+      </Link>
+    ) : (
+      children
+    );
+
   return (
     <div
-      className={`builder-preview-slideshow builder-preview-slideshow-${transition}`}
-      style={frameStyle}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      className={`builder-preview-carousel-wrap builder-preview-carousel-wrap-${format}`}
+      style={wrapStyle}
+      onMouseEnter={() => pauseOnHover && setPaused(true)}
+      onMouseLeave={() => pauseOnHover && setPaused(false)}
     >
-      {transition === "slide" ? (
-        <div
-          className="builder-preview-slideshow-track"
-          style={{ transform: `translateX(-${index * 100}%)` }}
+      {showArrows && count > 1 && (!isCards || !atStart || loop) ? (
+        <button
+          type="button"
+          className="builder-preview-carousel-arrow builder-preview-carousel-arrow-left"
+          onClick={() => goTo(index - 1)}
+          disabled={!loop && atStart}
+          aria-label="Previous"
         >
-          {slides.map((slide) => (
-            <img key={slide.id} {...imageProps(slide.url)} alt={slide.alt} loading="lazy" />
+          ‹
+        </button>
+      ) : null}
+
+      {isCards ? (
+        <div
+          className="builder-preview-carousel builder-preview-carousel-cards"
+          ref={scrollRef}
+          style={{ ...frameStyle, gap: `${gap}px` }}
+        >
+          {items.map((item) => (
+            <article
+              key={item.id}
+              className="builder-preview-carousel-card"
+              // Both, not `minWidth` alone: a flex item with `flex: 0 0 auto`
+              // and no width takes its size from its content, so a card
+              // holding a 1920px photo came out 1920px wide.
+              style={{ width: `${cardWidth}px`, minWidth: `${cardWidth}px` }}
+            >
+              {linked(
+                item,
+                <>
+                  {item.imageUrl ? (
+                    <div className="builder-preview-carousel-card-image">
+                      <img
+                        {...imageProps(item.imageUrl, { sizes: `${cardWidth}px` })}
+                        alt={item.imageAlt || item.title || ""}
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="builder-preview-carousel-card-copy">
+                    {item.title ? <strong>{item.title}</strong> : null}
+                    {item.body ? <p>{item.body}</p> : null}
+                    {item.linkUrl && item.linkLabel ? (
+                      <span className="builder-preview-carousel-caption-link">
+                        {item.linkLabel}
+                        <span aria-hidden="true"> →</span>
+                      </span>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </article>
           ))}
         </div>
       ) : (
-        slides.map((slide, slideIndex) => (
-          <img
-            key={slide.id}
-            {...imageProps(slide.url)}
-            alt={slide.alt}
-            loading="lazy"
-            className="builder-preview-slideshow-fade-frame"
-            style={{ opacity: slideIndex === index ? 1 : 0 }}
-          />
-        ))
+        <div
+          className={`builder-preview-carousel builder-preview-carousel-slideshow builder-preview-carousel-anim-${transition}`}
+          style={frameStyle}
+        >
+          {transition === "slide" ? (
+            <div
+              className="builder-preview-carousel-track"
+              style={{ transform: `translateX(-${index * 100}%)`, gap: `${gap}px` }}
+            >
+              {items.map((item) => (
+                <div key={item.id} className="builder-preview-carousel-slide">
+                  {linked(
+                    item,
+                    <>
+                      <img {...imageProps(item.imageUrl)} alt={item.imageAlt} loading="lazy" />
+                      {caption(item)}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            items.map((item, slideIndex) => (
+              <div
+                key={item.id}
+                className="builder-preview-carousel-slide builder-preview-carousel-fade-frame"
+                style={{ opacity: slideIndex === index ? 1 : 0 }}
+                aria-hidden={slideIndex === index ? undefined : true}
+              >
+                {linked(
+                  item,
+                  <>
+                    <img {...imageProps(item.imageUrl)} alt={item.imageAlt} loading="lazy" />
+                    {caption(item)}
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       )}
+
+      {showArrows && count > 1 && (!isCards || !atEnd || loop) ? (
+        <button
+          type="button"
+          className="builder-preview-carousel-arrow builder-preview-carousel-arrow-right"
+          onClick={() => goTo(index + 1)}
+          disabled={!loop && atEnd}
+          aria-label="Next"
+        >
+          ›
+        </button>
+      ) : null}
+
+      {showDots && count > 1 ? (
+        <div className="builder-preview-carousel-dots">
+          {items.map((item, dotIndex) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`builder-preview-carousel-dot${dotIndex === index ? " is-current" : ""}`}
+              onClick={() => goTo(dotIndex)}
+              aria-label={`Go to ${isCards ? "card" : "slide"} ${dotIndex + 1}`}
+              aria-current={dotIndex === index ? "true" : undefined}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -5855,11 +6053,6 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
  * operator can move content between them — see lib/builder-client/
  * builder-card-items.ts. Slider ignores the fields it has no use for.
  */
-type SliderItem = import("@/lib/builder-card-items").BuilderCardItem;
-
-function parseSliderItems(settings: Record<string, string>): SliderItem[] {
-  return parseBuilderCardItems(settings.sliderItems, "slide");
-}
 
 const FEATURE_CARD_ASPECTS: Record<string, string> = {
   "4-3": "4 / 3",
@@ -6194,74 +6387,6 @@ function FeatureCardsModulePreview({
           </article>
         );
       })}
-    </div>
-  );
-}
-
-function SliderModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
-  const items = parseSliderItems(module.settings);
-  const gap = Number.parseInt(module.settings.sliderGap || "16", 10);
-  const cardWidth = Number.parseInt(module.settings.sliderCardWidth || "280", 10);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    function update() {
-      if (!el) return;
-      setCanScrollLeft(el.scrollLeft > 0);
-      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-    }
-
-    update();
-    el.addEventListener("scroll", update);
-    window.addEventListener("resize", update);
-    return () => {
-      el.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [items]);
-
-  function scroll(direction: "left" | "right") {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: direction === "left" ? -320 : 320, behavior: "smooth" });
-  }
-
-  return (
-    <div className="builder-preview-slider-wrap">
-      {canScrollLeft && (
-        <button type="button" className="builder-preview-slider-arrow builder-preview-slider-arrow-left" onClick={() => scroll("left")}>
-          ‹
-        </button>
-      )}
-      <div className="builder-preview-slider" ref={scrollRef} style={{ gap: `${gap}px` }}>
-        {items.map((item) => (
-          <article key={item.id} className="builder-preview-slider-card" style={{ minWidth: `${cardWidth}px` }}>
-            {item.imageUrl ? (
-              <div className="builder-preview-slider-image">
-                <Image alt={item.imageAlt || item.title || "Slider item"} fill sizes="280px" src={item.imageUrl} unoptimized />
-              </div>
-            ) : null}
-            <div className="builder-preview-slider-copy">
-              {item.linkUrl ? (
-                <Link href={item.linkUrl}><strong>{item.title}</strong></Link>
-              ) : (
-                <strong>{item.title}</strong>
-              )}
-              <p>{item.body}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-      {canScrollRight && (
-        <button type="button" className="builder-preview-slider-arrow builder-preview-slider-arrow-right" onClick={() => scroll("right")}>
-          ›
-        </button>
-      )}
     </div>
   );
 }

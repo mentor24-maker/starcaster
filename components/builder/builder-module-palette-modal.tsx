@@ -55,7 +55,7 @@ const GROUP_POPULARITY_ORDER: ModulePaletteGroup[] = [
   "contact-form",
   "crm-form",
   "social-share",
-  "slider",
+  "carousel",
   "speech-bubble",
   "headline-rotator",
   "reminder",
