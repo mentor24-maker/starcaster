@@ -25,6 +25,10 @@ export type BuilderPageRevision = {
   moduleCount: number;
   layoutBytes: number;
   reason: string;
+  /** Who made the save that replaced this version. "" = recorded before the
+   *  saved_by columns existed, or an unauthenticated write. */
+  savedBy?: string;
+  savedByName?: string;
   createdAt: string;
 };
 
@@ -58,6 +62,16 @@ function formatWhen(iso: string): string {
   const hoursAgo = Math.round(minutesAgo / 60);
   if (hoursAgo < 24) return `${hoursAgo} hr ago — ${clock}`;
   return clock;
+}
+
+/**
+ * "Edited by Rich Kaplan", or just "Edited" when the row predates the author
+ * columns. Never "Unknown" -- an em dash is honest, a fake name is not.
+ */
+function describeReason(revision: BuilderPageRevision): string {
+  const label = REASON_LABELS[revision.reason] ?? "Edited";
+  const who = (revision.savedByName ?? "").trim();
+  return who ? `${label} by ${who}` : label;
 }
 
 function describeSize(revision: BuilderPageRevision): string {
@@ -196,7 +210,7 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
                   <div className="builder-page-history-when">
                     <span className="builder-page-history-time">{formatWhen(revision.createdAt)}</span>
                     <span className="builder-page-history-reason">
-                      {REASON_LABELS[revision.reason] ?? "Edited"}
+                      {describeReason(revision)}
                     </span>
                   </div>
                   <span className="builder-page-history-size">{describeSize(revision)}</span>

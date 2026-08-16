@@ -109,6 +109,23 @@ async function readAdminJson<T extends AdminApiPayload>(response: Response, fall
   return data;
 }
 
+/**
+ * " 4 minutes ago" for the stale-editor warning, or "" when the timestamp is
+ * missing or unreadable. The sentence it lands in has to read correctly either
+ * way, so this returns a leading space and the caller never adds punctuation.
+ */
+function describeConflictAge(iso: string): string {
+  if (!iso) return "";
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return "";
+  const minutes = Math.round((Date.now() - when.getTime()) / 60000);
+  if (minutes < 1) return " a moment ago";
+  if (minutes === 1) return " 1 minute ago";
+  if (minutes < 60) return ` ${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? " an hour ago" : ` ${hours} hours ago`;
+}
+
 type AdminBuilderEditorProps = {
   /** Mode to open in when the editor is mounted to edit a specific record (page/template). */
   initialMode?: "templates" | "modules" | "pages";
@@ -145,6 +162,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [repositorySaveActive, setRepositorySaveActive] = useState(false);
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
+  // The page's updatedAt as of the version currently on the canvas. Sent with
+  // every save so the server can refuse to write over somebody else's change
+  // (see isStaleEdit in lib/builderPagesStore.js). It MUST be refreshed from
+  // the save response as well as on hydrate -- a successful save moves the row
+  // forward without re-hydrating the editor, so skipping that makes the second
+  // save of any session collide with the first.
+  const loadedUpdatedAtRef = useRef("");
+  const [saveConflict, setSaveConflict] = useState<{ liveUpdatedAt: string; savedByName: string } | null>(null);
   const pageThemeDirtyRef = useRef(false);
   // Template and theme are only written back when the operator actually picked
   // one.  Both selects render blank whenever the stored value isn't among their
@@ -502,6 +527,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
 
     hydratedPageSelectionRef.current = selectionKey;
+    loadedUpdatedAtRef.current = page?.updatedAt ?? "";
+    setSaveConflict(null);
     pageThemeDirtyRef.current = false;
     pageTemplateDirtyRef.current = false;
     setDraft(createDraftFromPage(page));
@@ -1901,13 +1928,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  async function savePage() {
+  /**
+   * @param options.overwriteFrom  The live updatedAt returned by a previous
+   *   409. Passing it re-runs the save against THAT version -- so "overwrite
+   *   anyway" still collides if a third save landed in the meantime, instead
+   *   of switching the guard off and reopening the hole it exists to close.
+   */
+  async function savePage(options: { overwriteFrom?: string } = {}) {
     if (!draft.name.trim()) { setError("Page title is required."); return; }
     // An empty slug is the root/home page (the DB unique index excludes empty
     // slugs). Allow saving an existing root page without a slug; only require
     // one when creating a new page so we don't silently mint duplicate roots.
     if (!selectedPageId && !pageSlug.trim()) { setError("Page slug is required."); return; }
-    setIsSaving(true); setError(null); setMessage(null);
+    setIsSaving(true); setError(null); setMessage(null); setSaveConflict(null);
     try {
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
@@ -1915,6 +1948,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         body: JSON.stringify({
           name: draft.name,
           slug: pageSlug,
+          // Only an existing page can be stale; a create has nothing to collide
+          // with. Blank means "no opinion" and the server lets the save through.
+          ...(selectedPageId
+            ? { expectedUpdatedAt: options.overwriteFrom ?? loadedUpdatedAtRef.current }
+            : {}),
           // Omitted, not nulled, when untouched: the store only writes fields
           // the body actually carries, so leaving them out preserves whatever
           // the row already holds instead of clobbering it with a blank select.
@@ -1927,11 +1965,28 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           layoutSections: draft.layoutSections
         })
       });
+      // Intercepted before readAdminJson, which turns any non-ok response into
+      // a thrown Error and would flatten this into an ordinary red banner.
+      // Nothing was written; the operator still holds every edit they made.
+      if (response.status === 409) {
+        const body = (await response.json().catch(() => ({}))) as {
+          conflict?: { updatedAt?: string; savedByName?: string };
+        };
+        setSaveConflict({
+          liveUpdatedAt: body.conflict?.updatedAt ?? "",
+          savedByName: body.conflict?.savedByName ?? "",
+        });
+        return;
+      }
+
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       if (data.page) {
         pageThemeDirtyRef.current = false;
         pageTemplateDirtyRef.current = false;
         setPageThemeId(data.page.themeId ?? "");
+        // Move our idea of "the version I am editing" forward, or the next save
+        // in this session collides with the one we just made.
+        loadedUpdatedAtRef.current = data.page.updatedAt ?? "";
       }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
       await loadPages();
@@ -1939,6 +1994,18 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save page.");
     } finally { setIsSaving(false); }
+  }
+
+  /** Throw away the local draft and pull down whatever is live now. */
+  function reloadPageFromServer() {
+    setSaveConflict(null);
+    setError(null);
+    setMessage(null);
+    // Clearing the hydration key is what makes the effect re-seed the canvas;
+    // without it loadPages refreshes the list and leaves the stale draft in
+    // place, which is the version we are trying to get rid of.
+    hydratedPageSelectionRef.current = "";
+    void loadPages();
   }
 
   async function bulkCreatePages(
@@ -2356,6 +2423,37 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
 
       {message ? <div className="notice success admin-notice">{message}</div> : null}
       {error ? <div className="notice error admin-notice">{error}</div> : null}
+
+      {saveConflict ? (
+        <div className="notice error admin-notice builder-save-conflict" role="alert">
+          <p className="builder-save-conflict-lead">
+            <strong>
+              {saveConflict.savedByName || "Somebody else"} saved this page
+              {describeConflictAge(saveConflict.liveUpdatedAt)}.
+            </strong>{" "}
+            Your copy is out of date, so nothing was saved just now — your edits are still here on
+            screen.
+          </p>
+          <p className="builder-save-conflict-help">
+            <strong>Reload the page</strong> throws away your edits and shows you their version.{" "}
+            <strong>Overwrite anyway</strong> saves yours over theirs — their version is kept in Page
+            History, so it can still be brought back.
+          </p>
+          <div className="builder-save-conflict-actions">
+            <button className="submit-button" onClick={reloadPageFromServer} type="button">
+              Reload the page
+            </button>
+            <button
+              className="secondary-button"
+              disabled={isSaving}
+              onClick={() => void savePage({ overwriteFrom: saveConflict.liveUpdatedAt })}
+              type="button"
+            >
+              Overwrite anyway
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {builderMode === "pages" ? (
         <AdminLegacyRemindersImportPanel
