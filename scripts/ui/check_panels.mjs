@@ -45,9 +45,23 @@ import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const { createRequire } = await import('node:module');
-const { BUILDER_MODULE_TYPES } = createRequire(path.join(ROOT, 'package.json'))(
-  path.join(ROOT, 'lib/builder/template.js')
-);
+// lib/builder/template.js is a GENERATED artifact and a fresh worktree has
+// none. Without this the run dies on a raw MODULE_NOT_FOUND stack that says
+// nothing about which command produces it — which is exactly how it read on
+// 2026-08-15, twice, in two different worktrees.
+let BUILDER_MODULE_TYPES;
+try {
+  ({ BUILDER_MODULE_TYPES } = createRequire(path.join(ROOT, 'package.json'))(
+    path.join(ROOT, 'lib/builder/template.js')
+  ));
+} catch {
+  console.error(
+    '\n[check:panels] lib/builder/template.js is missing — it is a generated file\n' +
+    'and a fresh worktree does not have one.\n\n' +
+    'Run `npm run build:builder-template`.\n'
+  );
+  process.exit(2);
+}
 const EXPECTED_MODULES = BUILDER_MODULE_TYPES.length;
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
 /*
