@@ -52,6 +52,7 @@ const activityLog = require('./activityLog');
 const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
+const publish     = require('./publish');
 const builder     = require('./builder');
 const seoAltText  = require('./seoAltText');
 const communityAssets = require('./communityAssets');
@@ -96,6 +97,9 @@ const ROUTE_MODULES = [
   // wizard's routes would start 405-ing with nothing to point at. Matching
   // first costs nothing and removes the dependency.
   themeWizard,
+  // Ahead of `builder`: both claim '/api/builder/*', and publish owns the
+  // narrower '/api/builder/publish' prefix.
+  publish,
   builder,
   siteImport,
   seoAltText,

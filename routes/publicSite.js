@@ -141,17 +141,35 @@ async function handle(req, res, pathname, method) {
       return respondErr(res, req, 404, 'Page not found', { code: 'PAGE_NOT_FOUND' }), true;
     }
 
-    const result = await getPublishedPageForProject(scopedProjectId, slug);
-    if (!result.ok) {
-      return respondErr(res, req, result.status || 500, result.error || 'Failed to load page', {
-        code: result.code || null,
-      }), true;
+    // Prefer the BUILD — the snapshot Publish took — and fall back to
+    // resolving the draft on the way out, which is what every page did before
+    // publishing existed. A project that has never published is served exactly
+    // as it is today, so this cannot be the reason a page stops rendering.
+    const { getPublishedPage } = require('../lib/publishedPageRead');
+    const built = await getPublishedPage(scopedProjectId, slug);
+
+    let page = built;
+    if (!page) {
+      const result = await getPublishedPageForProject(scopedProjectId, slug);
+      if (!result.ok) {
+        return respondErr(res, req, result.status || 500, result.error || 'Failed to load page', {
+          code: result.code || null,
+        }), true;
+      }
+      page = result.data;
     }
 
     const { buildRenditionMapForPages } = require('../lib/assetRenditionsForPages');
-    const renditions = await buildRenditionMapForPages(scopedProjectId, [result.data]);
+    const renditions = await buildRenditionMapForPages(scopedProjectId, [page]);
 
-    return respondJson(res, req, 200, { ok: true, page: result.data, renditions }), true;
+    return respondJson(res, req, 200, {
+      ok: true,
+      page,
+      renditions,
+      // Which of the two answered. Useful in a browser's network tab when a
+      // page looks stale: "draft" means this project has not published it.
+      source: built ? 'published' : 'draft',
+    }), true;
   }
 
   // GET /api/public/admin-pages?projectId=... — restricted admin site pages (admin session required)
