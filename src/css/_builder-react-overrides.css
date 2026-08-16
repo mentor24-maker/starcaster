@@ -1070,52 +1070,173 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-decoration: none;
 }
 
-/* --- Card Slider: desktop layout ------------------------------------------
-   The slider module's layout rules (flex row, card sizing, positioned image
-   frame) existed ONLY inside @media (max-width: 900px) in
-   _builder-react.css, so above 900px the cards had no styling and each
-   `fill` image escaped its card to span the page — the module effectively
-   showed one giant photo instead of a scrollable row. Found 2026-08-06
-   comparing the imported Delray slider against the new slideshow module.
-   Card width/gap still come from the module's inline settings; these rules
-   only supply the structure the mobile block always assumed. -------------- */
+/* --- Carousel module (type: carousel) -------------------------------------
+   One module, two formats. `slideshow` and `slider` were separate module
+   types until 2026-08-16; they held the same thing (an ordered row of items
+   you move through) with two settings hard-coded at opposite extremes, so
+   neither could borrow the other's behaviour. `format` is that choice now.
 
-.builder-react-root .builder-preview-slider-wrap {
+   Structure is shared and the format modifiers change only what has to
+   change — the frame's overflow behaviour and how an item is sized. Arrows,
+   dots and captions belong to the wrap, so they sit identically over both.
+
+   Standard 3: every structural rule lives here at full strength, NOT inside
+   a breakpoint. The Card Slider shipped with its entire desktop layout
+   trapped in `@media (max-width: 900px)` and rendered as one giant photo
+   above that width for its whole life (found 2026-08-06). The breakpoint
+   block at the bottom only ADJUSTS what is already set here.
+   ------------------------------------------------------------------------ */
+
+/* `display: block` is load-bearing, not decoration. The module shell is a
+   flex container and its children inherit rules that make them flex too; as a
+   flex item inside a flex wrap the frame's `height` stopped taking effect and
+   a 420px slideshow rendered at its first image's natural height instead.
+   Neither retired module had a wrapper element, so neither ever hit this. */
+.builder-react-root .builder-preview-carousel-wrap {
+  display: block;
   position: relative;
+  width: 100%;
   max-width: 100%;
 }
 
-.builder-react-root .builder-preview-slider {
-  display: flex;
+/* The same rule again at the specificity it takes to hold it.
+   A section containing any poll module gets `builder-preview-section-poll-row`,
+   whose `.builder-preview-module > *` turns EVERY module in that row into a
+   column flex box with `flex: 1; min-height: 0` — which shrinks a carousel
+   below the Height the operator set. That rule is (0,3,0) with a child
+   combinator and beats the (0,2,0) above, so this one matches it and wins on
+   order (_builder-react-overrides.css is imported after _builder-react.css).
+   Both retired modules had this same collision and neither ever fixed it. */
+.builder-react-root .builder-preview-module > .builder-preview-carousel-wrap {
+  display: block;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.builder-react-root .builder-preview-carousel {
+  position: relative;
+  width: 100%;
   max-width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.builder-react-root .builder-preview-carousel-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--ink-secondary);
+  background: var(--bg-page);
+  border-radius: 8px;
+}
+
+/* --- Slideshow format: one item fills the frame --- */
+
+/* `height: 100%` on both, so a Height setting on the frame actually reaches
+   the picture. With Height on auto it resolves to auto and the image keeps
+   its own proportions — the default the retired slideshow shipped with. */
+.builder-react-root .builder-preview-carousel-track {
+  display: flex;
+  height: 100%;
+  transition: transform 600ms ease;
+}
+
+.builder-react-root .builder-preview-carousel-slide {
+  position: relative;
+  flex: 0 0 100%;
+  min-width: 100%;
+  height: 100%;
+}
+
+.builder-react-root .builder-preview-carousel-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.builder-react-root .builder-preview-carousel-anim-fade {
+  min-height: 200px;
+}
+
+.builder-react-root .builder-preview-carousel-anim-fade .builder-preview-carousel-fade-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 600ms ease;
+}
+
+/* The first frame stays in flow so the container can still take its height
+   from the image when Height is left on auto — absolutely positioning every
+   frame would collapse the box to nothing. */
+.builder-react-root .builder-preview-carousel-anim-fade .builder-preview-carousel-fade-frame:first-child {
+  position: relative;
+}
+
+/* --- Card slider format: several items share the frame --- */
+
+.builder-react-root .builder-preview-carousel-cards {
+  display: flex;
   overflow-x: auto;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 4px;
 }
 
-.builder-react-root .builder-preview-slider-card {
+.builder-react-root .builder-preview-carousel-card {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   scroll-snap-align: start;
 }
 
-.builder-react-root .builder-preview-slider-image {
+/* A DEFINITE height, not a min-height. The retired Card Slider got away with
+   `min-height` because it rendered its picture through next/image `fill`,
+   which is absolutely positioned; a plain `<img>` in the same box has nothing
+   to crop against and hands the card its photo's full height. */
+.builder-react-root .builder-preview-carousel-card-image {
   position: relative;
   width: 100%;
-  min-height: 180px;
+  height: 180px;
   overflow: hidden;
   border-radius: 8px;
 }
 
-.builder-react-root .builder-preview-slider-image img {
+.builder-react-root .builder-preview-carousel-card-image img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  display: block;
 }
 
-/* The scroll arrows had no styling at all — they rendered as bare buttons
-   in the text flow instead of overlaying the strip. */
-.builder-react-root .builder-preview-slider-arrow {
+.builder-react-root .builder-preview-carousel-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 2px 0;
+}
+
+.builder-react-root .builder-preview-carousel-card-copy p {
+  margin: 0;
+}
+
+/* An item's link wraps the whole item, so it must not restyle it — and it
+   must not interrupt the height chain either. The picture sizes itself with
+   `height: 100%`, which resolves against its PARENT; with the link in between
+   at auto height, a linked slide ignored the frame's Height and rendered at
+   its photo's natural size. An unlinked slide beside it obeyed. */
+.builder-react-root .builder-preview-carousel-link {
+  display: block;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* --- Manual controls, shared by both formats ---
+   Neither module had both: the slideshow could not be moved by a visitor at
+   all, and the card slider had arrows but no dots. */
+
+.builder-react-root .builder-preview-carousel-arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
@@ -1123,10 +1244,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--border-light, #d1d5db);
+  border: 1px solid var(--border-light);
   background: rgba(255, 255, 255, 0.92);
-  color: var(--ink-primary, #18324a);
-  font-size: 20px;
+  color: var(--ink-primary);
+  font-size: var(--text-xl);
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -1135,8 +1256,240 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
 
-.builder-react-root .builder-preview-slider-arrow-left { left: 6px; }
-.builder-react-root .builder-preview-slider-arrow-right { right: 6px; }
+.builder-react-root .builder-preview-carousel-arrow[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.builder-react-root .builder-preview-carousel-arrow-left { left: 6px; }
+.builder-react-root .builder-preview-carousel-arrow-right { right: 6px; }
+
+.builder-react-root .builder-preview-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.builder-react-root .builder-preview-carousel-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-preview-carousel-dot.is-current {
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
+}
+
+/* --- Captions (slideshow format) ---
+   The card formats shows title/copy BESIDE the picture; a slideshow item
+   fills the frame, so the same fields appear over it. Off by default, so no
+   slideshow that predates the merge gains text it never had.
+
+   The gradient is on the caption rather than the frame: a photo can be light
+   or dark anywhere, and text over an unknown image is the one place a
+   readability floor cannot be left to the theme. */
+.builder-react-root .builder-preview-carousel-caption {
+  position: absolute;
+  z-index: 1;
+  max-width: min(560px, 80%);
+  padding: 12px 16px;
+  border-radius: 8px;
+  /* Not theme-following, on purpose — see --on-media-ink in _variables.css.
+     This type sits over a photograph nobody has seen, so its contrast cannot
+     be delegated to a tenant theme that might resolve pale-on-pale. */
+  background: var(--on-media-scrim);
+  color: var(--on-media-ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.builder-react-root .builder-preview-carousel-caption strong {
+  display: block;
+  font-size: var(--text-lg);
+  line-height: 1.25;
+}
+
+.builder-react-root .builder-preview-carousel-caption p {
+  margin: 4px 0 0;
+  font-size: var(--text-md);
+  line-height: 1.4;
+}
+
+.builder-react-root .builder-preview-carousel-caption-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-preview-carousel-caption-bottom-left {
+  left: 24px;
+  bottom: 24px;
+}
+
+.builder-react-root .builder-preview-carousel-caption-bottom-center {
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-carousel-caption-top-left {
+  left: 24px;
+  top: 24px;
+}
+
+.builder-react-root .builder-preview-carousel-caption-top-center {
+  left: 50%;
+  top: 24px;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-carousel-caption-center {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+/* --- The canvas card: a glance at the module, not the module --- */
+
+.builder-react-root .builder-module-preview-carousel {
+  position: relative;
+}
+
+.builder-react-root .builder-module-preview-carousel img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.builder-react-root .builder-module-preview-carousel-count {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background: rgba(17, 24, 39, 0.75);
+  color: var(--bg-surface);
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.builder-react-root .builder-module-preview-carousel-cards {
+  display: flex;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-preview-carousel-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.builder-react-root .builder-module-preview-carousel-card img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.builder-react-root .builder-module-preview-carousel-card-copy p {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+
+/* --- The settings panel's item sub-row ---
+   Link, link label, alt/caption title and description ride a row spanning the
+   item grid, which is what the sub-row mechanism exists for (see the item
+   grid block below). W0: the COLUMN is the grid — these fields declare no
+   widths of their own, the auto-fit tracks measure them. */
+.builder-react-root .builder-carousel-item-sub {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16ch, 1fr));
+  gap: var(--space-2, 6px) var(--space-3, 8px);
+  align-items: start;
+}
+
+.builder-react-root .builder-carousel-item-sub-full {
+  grid-column: 1 / -1;
+}
+
+/* --- Carousel: alignment and narrow screens ---
+   The retired types were named in alignment and mobile rules inside
+   _builder-react.css, which is regenerated wholesale and must not be
+   hand-edited (CLAUDE.md). Their carousel equivalents live here instead, so
+   the merged module keeps the behaviour both halves already had. */
+.builder-react-root .builder-preview-module-shell.is-align-center .builder-preview-carousel-wrap {
+  justify-self: center;
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-module-shell.is-align-right .builder-preview-carousel-wrap {
+  justify-self: end;
+  text-align: right;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-wrap,
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel {
+  max-width: 100%;
+}
+
+/* A card sized for a desktop shelf leaves no room for the next one on a
+   phone, so the width setting yields to a viewport-relative one — the
+   !important overrides the module's own inline minWidth, which is the only
+   way an inline style can be answered. */
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-card {
+  width: min(82vw, 320px) !important;
+  min-width: min(82vw, 320px) !important;
+  scroll-snap-align: start;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-card-image {
+  min-height: 180px;
+}
+
+/* A caption inset 24px from the edge of a phone-width photo leaves almost no
+   line to read, and its type has to come down with it. */
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-caption {
+  max-width: 92%;
+  padding: 8px 10px;
+}
+
+@media (max-width: 900px) {
+  .builder-react-root .builder-preview-carousel-wrap,
+  .builder-react-root .builder-preview-carousel {
+    max-width: 100%;
+  }
+  .builder-react-root .builder-preview-carousel-card {
+    width: min(82vw, 320px) !important;
+    min-width: min(82vw, 320px) !important;
+    scroll-snap-align: start;
+  }
+  .builder-react-root .builder-preview-carousel-card-image {
+    min-height: 180px;
+  }
+  .builder-react-root .builder-preview-carousel-caption {
+    max-width: 92%;
+    padding: 8px 10px;
+  }
+  .builder-react-root .builder-preview-carousel-caption strong {
+    font-size: var(--text-md);
+  }
+  .builder-react-root .builder-preview-carousel-caption p {
+    font-size: var(--text-base);
+  }
+}
 
 /* ---------------------------------------------------------------------
    Feature Cards module (type: feature-cards)
@@ -2445,7 +2798,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Slideshow: a slide is an image and its alt text, nothing else, so both fit
    the primary row and there is no sub-row. The image column is wider because
    it carries the URL and the Choose From Gallery button together. */
-.builder-react-root .builder-item-grid--slides {
+.builder-react-root .builder-item-grid--carousel {
   /* The image column carries a URL AND the Choose From Gallery button, which
      is ~200px of that track before the input gets any. At 1.6fr the input came
      out around 140px — "https://astujhe2h" and nothing more. 2.4fr is what
@@ -2498,7 +2851,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    panel child sit in the same column track as the chrome above it. */
 .builder-react-root .builder-module-editor--feature-cards,
 .builder-react-root .builder-module-editor--program-list,
-.builder-react-root .builder-module-editor--slideshow {
+.builder-react-root .builder-module-editor--carousel {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2522,7 +2875,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-editor--feature-cards > *,
 .builder-react-root .builder-module-editor--program-list > *,
-.builder-react-root .builder-module-editor--slideshow > *,
+.builder-react-root .builder-module-editor--carousel > *,
 .builder-react-root .builder-module-editor--social > * {
   grid-column: 1;
   min-width: 0;
@@ -2532,14 +2885,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-editor--feature-cards > *:last-child,
 .builder-react-root .builder-module-editor--program-list > *:last-child,
-.builder-react-root .builder-module-editor--slideshow > *:last-child,
+.builder-react-root .builder-module-editor--carousel > *:last-child,
 .builder-react-root .builder-module-editor--social > *:last-child {
   margin-bottom: 0;
 }
 
 .builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel,
 .builder-react-root .builder-module-editor--program-list > .builder-cards-panel,
-.builder-react-root .builder-module-editor--slideshow > .builder-cards-panel,
+.builder-react-root .builder-module-editor--carousel > .builder-cards-panel,
 .builder-react-root .builder-module-editor--social > .builder-cards-panel {
   display: contents;
 }
@@ -2593,7 +2946,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings {
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
   grid-column: 1;
 }
 
@@ -2610,7 +2963,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * chrome label starts at the same x as every other one in the column.
  */
 .builder-react-root .builder-module-editor--feature-cards .builder-module-chrome,
-.builder-react-root .builder-module-editor--slideshow .builder-module-chrome {
+.builder-react-root .builder-module-editor--carousel .builder-module-chrome {
   flex-direction: column;
   align-items: flex-start;
 }
@@ -2619,7 +2972,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    implicit grid resolves to the explicit grid's only line, which collapses
    the column to a single row. */
 .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -2841,12 +3194,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    row it is supposed to follow. */
 @media (max-width: 1000px) {
   .builder-react-root .builder-module-editor--feature-cards,
-  .builder-react-root .builder-module-editor--slideshow {
+  .builder-react-root .builder-module-editor--carousel {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-  .builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
+  .builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
     grid-column: 1;
     grid-row: auto;
   }
@@ -4847,21 +5200,45 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    editing a page that will not save. It reuses the module editor's framing —
    blue banner, 40px corners — so it reads as part of the app, not a browser
    alert. */
-.builder-react-root .builder-save-conflict-body {
+/* The same shape serves any dialog whose job is "these are your choices, and
+   here is what each one does" — the stale-editor one above, and the section
+   Save dialog that asks whether to overwrite the saved section a page section
+   came from (2026-08-16). The rules are shared rather than copied so the two
+   cannot drift into looking like different applications. */
+.builder-react-root .builder-save-conflict-body,
+.builder-react-root .builder-choice-dialog-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3, 12px);
   text-align: left;
 }
 
-.builder-react-root .builder-save-conflict-lead {
+.builder-react-root .builder-save-conflict-lead,
+.builder-react-root .builder-choice-dialog-lead {
   margin: 0;
   line-height: 1.55;
 }
 
+/* The page list behind "and it rewrites these". Scrolls rather than growing the
+   dialog past the screen — a shared header can follow 40 pages. */
+.builder-react-root .builder-choice-dialog-detail-title {
+  margin: 0 0 var(--space-2, 8px);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-choice-dialog-list {
+  margin: 0;
+  padding-left: var(--space-5, 20px);
+  max-height: 168px;
+  overflow-y: auto;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+}
+
 /* What each button does, as a definition list: the term IS the button's label,
    so the reader matches word to word rather than re-reading a paragraph. */
-.builder-react-root .builder-save-conflict-choices {
+.builder-react-root .builder-save-conflict-choices,
+.builder-react-root .builder-choice-dialog-choices {
   display: grid;
   grid-template-columns: max-content 1fr;
   /* The row gap carries real weight here: at 4px the two choices ran together
@@ -4875,18 +5252,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   background: rgba(11, 42, 74, 0.05);
 }
 
-.builder-react-root .builder-save-conflict-choices dt {
+.builder-react-root .builder-save-conflict-choices dt,
+.builder-react-root .builder-choice-dialog-choices dt {
   font-weight: 600;
   white-space: nowrap;
 }
 
-.builder-react-root .builder-save-conflict-choices dd {
+.builder-react-root .builder-save-conflict-choices dd,
+.builder-react-root .builder-choice-dialog-choices dd {
   margin: 0;
   color: var(--ink-muted, #5c6a72);
   line-height: 1.5;
 }
 
-.builder-react-root .builder-save-conflict-actions {
+.builder-react-root .builder-save-conflict-actions,
+.builder-react-root .builder-choice-dialog-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -4896,10 +5276,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* Narrow: the two-column list would crush each description to a word a line. */
 @media (max-width: 560px) {
-  .builder-react-root .builder-save-conflict-choices {
+  .builder-react-root .builder-save-conflict-choices,
+  .builder-react-root .builder-choice-dialog-choices {
     grid-template-columns: 1fr;
   }
-  .builder-react-root .builder-save-conflict-choices dd {
+  .builder-react-root .builder-save-conflict-choices dd,
+  .builder-react-root .builder-choice-dialog-choices dd {
     margin-bottom: var(--space-2, 8px);
   }
 }

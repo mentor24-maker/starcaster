@@ -16,9 +16,10 @@
  *   Finds the target page, collects image-module URLs in document order
  *   (deduplicated, preserving first appearance), and writes them into the
  *   chosen module's items setting:
- *     slider    → sliderItems  [{id,title,body,imageUrl,linkUrl}]
- *     slideshow → slides       [{id,url,alt}]
- *   Other module types are refused rather than guessed at.
+ *     carousel → items [{id,title,body,imageUrl,imageAlt,linkUrl,...}]
+ *   Both formats share one collection since the 2026-08-16 merge, so the
+ *   module's `format` no longer changes what gets written. Other module
+ *   types are refused rather than guessed at.
  *
  * SAFETY (house one-off conventions)
  * - Dry run by default; --apply writes.
@@ -99,15 +100,12 @@ const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
 /** Module types this script knows how to fill, and how. */
 const FILLABLE = {
-  slider: {
-    settingsKey: 'sliderItems',
+  carousel: {
+    settingsKey: 'items',
     build: (urls) => urls.map((url, i) => ({
-      id: `slide-${i + 1}`, title: '', body: '', imageUrl: url, linkUrl: '',
+      id: `item-${i + 1}`, title: '', body: '', imageUrl: url, imageAlt: '',
+      linkUrl: '', linkLabel: '', icon: '', iconImageUrl: '',
     })),
-  },
-  slideshow: {
-    settingsKey: 'slides',
-    build: (urls) => urls.map((url, i) => ({ id: `slide-${i + 1}`, url, alt: '' })),
   },
 };
 
