@@ -43,28 +43,78 @@ describe("BuilderSchemaModuleSettings", () => {
     expect(html).toContain("builder-module-field--select-sm");
   });
 
-  it("marginFields yields all four sides adjacent in one strip, canonical names (E4/W7)", () => {
+  it("marginFields matches the two sides of each axis into one row (E4b)", () => {
+    // Sides equal (here through the legacy pair the renderer resolves) is the
+    // matched case: two rows, vertical then horizontal, in one strip.
     const html = render({ layout: [[...marginFields("getModuleOuterSpacingStyle")]] }, { horizontalMargin: "10", verticalMargin: "20" });
-    const at = ["Top Margin", "Bottom Margin", "Left Margin", "Right Margin"].map((label) => html.indexOf(label));
+    const at = ["V Margin", "H Margin"].map((label) => html.indexOf(label));
     expect(at.every((index) => index >= 0)).toBe(true);
-    // Side order is fixed: top, bottom, left, right.
     expect([...at].sort((a, b) => a - b)).toEqual(at);
     // Same strip: no strip boundary anywhere between the first and last.
-    expect(html.slice(at[0], at[3])).not.toContain("builder-module-field-strip");
-    // W7 forbids the abbreviations and the pair that preceded the sides.
-    expect(html).not.toContain(">V Margin<");
-    expect(html).not.toContain(">H Margin<");
+    expect(html.slice(at[0], at[1])).not.toContain("builder-module-field-strip");
+    // Matched means matched — the four side rows are not also on screen.
+    expect(html).not.toContain(">Top Margin<");
+    expect(html).not.toContain(">Left Margin<");
+    // The legacy values are what each side reads through (20 vertical, 10
+    // horizontal), so the rows show the numbers the page is rendering.
+    expect(html).toContain('<option value="20" selected="">20</option>');
+    expect(html).toContain('<option value="10" selected="">10</option>');
+    // W7's retired spellings stay retired — V/H is a display mode over the
+    // four side keys, not the old vertical/horizontal setting coming back.
     expect(html).not.toContain(">Vertical Margin<");
     expect(html).not.toContain(">Horizontal Margin<");
   });
 
-  it("paddingFields yields all four sides, same order and names (W7)", () => {
+  it("splits an axis into its two sides when their values differ (E4b)", () => {
+    const html = render(
+      { layout: [[...marginFields("getModuleOuterSpacingStyle")]] },
+      { marginTop: "20", marginBottom: "5", marginLeft: "0", marginRight: "0" }
+    );
+    // Vertical differs, so it shows both sides, in Top/Bottom order (E4).
+    const at = ["Top Margin", "Bottom Margin"].map((label) => html.indexOf(label));
+    expect(at.every((index) => index >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(html).not.toContain(">V Margin<");
+    // Horizontal still matches, so it stays on one row. The two axes are
+    // independent — splitting one does not split the other.
+    expect(html).toContain(">H Margin<");
+  });
+
+  it("declares two axes over the four SIDE keys, not a vertical/horizontal setting (E4)", () => {
+    // Matching is a display mode: the data model is unchanged, which is what
+    // keeps E4's "no padding above, keep the padding on the left" reachable.
+    // What the rows actually write is covered in builder-spacing-fields.test.
+    const fields = marginFields("getModuleOuterSpacingStyle");
+    expect(fields).toHaveLength(2);
+    const keys = fields.flatMap((field) =>
+      field.control === "spacing-pair" ? field.spec.sides.map((side) => side.key) : ["not-a-pair"]
+    );
+    expect(keys).toEqual(["marginTop", "marginBottom", "marginLeft", "marginRight"]);
+  });
+
+  it("paddingFields matches its axes the same way, with padding names (E4b)", () => {
     const html = render({ layout: [[...paddingFields("getModuleInnerSpacingStyle")]] });
-    const at = ["Top Padding", "Bottom Padding", "Left Padding", "Right Padding"].map((label) => html.indexOf(label));
+    const at = ["V Padding", "H Padding"].map((label) => html.indexOf(label));
     expect(at.every((index) => index >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
     // Padding controls never invent margin ones.
     expect(html).not.toContain("Margin");
+  });
+
+  it("every spacing row can reach its two sides — the toggle is never absent", () => {
+    // A0's guard, in the E4b shape: the sides are one click away IN PLACE,
+    // never behind a collapse and never gone. A matched row with no toggle
+    // would be the old vertical/horizontal pair E4 exists to forbid.
+    const matched = render({ layout: [[...marginFields("getModuleOuterSpacingStyle")]] });
+    expect(matched.match(/builder-spacing-link-toggle/g) ?? []).toHaveLength(2);
+    const split = render(
+      { layout: [[...marginFields("getModuleOuterSpacingStyle")]] },
+      { marginTop: "20", marginBottom: "5" }
+    );
+    // Split: one toggle on the axis that is open (on its first row only, so
+    // relinking has one predictable winner) plus one on the matched axis.
+    expect(split.match(/builder-spacing-link-toggle/g) ?? []).toHaveLength(2);
+    expect(split).toContain('aria-label="Match Top Margin and Bottom Margin"');
   });
 
   it("renders advanced strips inside a hanging details block", () => {

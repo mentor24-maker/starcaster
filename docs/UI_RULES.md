@@ -485,6 +485,18 @@ deliberately, and says so.*
   operator. It is not a reason to reintroduce a hiding place (the old A4,
   which survives as A0's own guard).
 
+  **A mode toggle on a row is not a hiding place (8/15).** The matched
+  spacing rows — `V Margin` in place of Top + Bottom, with a chain-link
+  icon that splits it — are doctrine E4b, and they are the shape the
+  operator asked for when he raised this: *"Since we previously abandoned
+  the idea of an 'Advanced' section, I'm thinking inline icons that can
+  toggle between the default 'assumed match' form and the optional
+  'separate values' mode."* What A0 deleted was a **collapse**: a section
+  that took a control off the screen and made you know it was there. A
+  matched row is on the screen, showing the value it is applying, with the
+  split one click away on the row itself. The test: after the click, is the
+  control where you were already looking? Collapse fails it; this passes.
+
 - ~~**A1.** A setting that overrides a theme value lives in Advanced.~~
   **WITHDRAWN 8/13 — see A0.** Theme-backed settings keep the
   `theme-color` control (A2); they simply live on their axis now.
