@@ -483,6 +483,47 @@ complete list from a truncated one — and would have quietly planned against
 **Do this:** a capped list takes `{ limit, offset }` and callers page to
 exhaustion. If a cap must stay, return enough for the caller to detect it.
 
+### 5.13 Nothing here tests CSS, so a green suite says nothing about appearance
+
+Two defects reached the operator on 2026-08-16, hours apart, both in the same
+carousel work, both pure CSS, and every gate was green for both:
+
+- the card picture was pinned at a hard `height: 180px`, so `object-fit:
+  cover` cropped every poster and the Height control looked dead;
+- the card row still carried its scrollbar.
+
+Four tests were written alongside the first fix. **Three of them passed
+against the broken build**, because they read rendered markup and the fault
+was a declaration in a stylesheet. That is not a gap in those tests; it is
+the shape of every test in this repo. `check:ui` parses the CSS corpus but
+only for doctrine rules (breakpoint-only layout, tokens), and `check:panels`
+measures panel geometry, not module rendering.
+
+**Do this:** when a change is visual, the verification is a browser
+measurement or the operator's eye — say which one you did, and never let
+"947 tests passed" stand in for either. For a specific declaration worth
+guarding, read the stylesheet in a test and assert on the rule
+(`builder-carousel-loop.test.ts` does this for the hidden scrollbar,
+`builder-template-preview-carousel.test.tsx` for the unpinned picture
+height). Crude, narrow, and the only guard available — treat each one as a
+scar, not as coverage.
+
+### 5.14 Browser-only behaviour is only real in a browser
+
+The carousel's loop clones the card set, parks on the middle copy, and
+recentres once scrolling settles. Under SSR the container measures zero, so
+`overflows` is false, no clones render, and a markup test sees a plain row —
+it cannot fail. Driving a real browser found two defects nothing else would
+have: presses read off a half-finished scroll position were thrown away
+(eight clicks moved one card), and assigning `scrollLeft` at the seam
+cancelled the smooth scroll in flight, losing a step.
+
+**Do this:** drive the app for anything whose truth is a scroll position, a
+measured size, or a computed style (§5.9). Then pull the arithmetic out into
+pure functions and unit-test *those* — `builder-carousel-loop.ts` exists
+because the seam shift and the shorter-way-round step were the parts that
+were wrong twice, and the only parts that could be tested at all.
+
 ---
 
 ## 6. Working in this repo

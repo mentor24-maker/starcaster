@@ -126,9 +126,11 @@ work. Each has already cost real time.
   gaps, and there are six import enhancements already in the Dev Backlog.
 - Delray is the **top revenue priority** — Rich's vendor application is in
   process. Build accordingly: this is client-facing work, not a sandbox.
-- The **slideshow module** shipped as part of the import work and has not
-  had heavy real-world use yet. Expect it to be an early source of
-  findings.
+- The **carousel module** (formerly the separate slideshow and Card Slider,
+  merged 2026-08-16) shipped as part of the import work and has had little
+  real-world use. It has already been an early source of findings — the
+  operator caught a cropped-image bug and a dead Height control on the live
+  Delray page within hours of the merge. `docs/CAROUSEL_MODULE.md`.
 
 ---
 
