@@ -81,6 +81,14 @@ purpose before you trust the pass.
   wholesale and a hand edit there disappears at the next regeneration — read
   it, never write it. See `src/css/CLAUDE.md`, first section.
 
+## Saved sections — read `docs/SAVED_SECTIONS.md` first
+
+`savedSectionId` and `canonical` are two different questions ("where did this
+come from" vs "does it still follow"), normalization strips both and
+`lib/builder/document.js` re-attaches them by hand, and saving one can rewrite
+40 other pages. The doc has the model, the fan-out, and the four ways this has
+already gone wrong.
+
 ## Adding a builder module type
 
 1. Register the type in `lib/builder-client/builder-template.ts`

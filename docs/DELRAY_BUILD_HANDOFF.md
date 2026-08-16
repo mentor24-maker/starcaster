@@ -89,11 +89,17 @@ paraphrased into nothing and then lost.
 These are the ones that bite during page construction, as opposed to code
 work. Each has already cost real time.
 
-1. **A saved section propagates silently to every page that links it.**
-   Editing a canonical saved section rewrites all linked pages with no
-   preview and no undo — this is what lost the Marinoff menu on 2026-07-21.
-   Before editing a shared header/footer/menu section, know how many pages
-   use it.
+1. **A saved section propagates to every page that links it.** Editing a
+   canonical saved section rewrites all linked pages — that is what lost the
+   Marinoff menu on 2026-07-21, when it happened with no preview and no way
+   back. It is no longer silent: a save now lists the pages it will rewrite
+   before you confirm, reports how many it actually reached, and offers
+   **Undo this update** beside that report. Read the list; the pages on it
+   lose any local edits.
+   Saving a section from inside a page asks whether to overwrite the original
+   or file a new one — before 2026-08-16 it could only file a new one, so
+   typing the original's name produced a duplicate and left the original
+   alone. Full model: `docs/SAVED_SECTIONS.md`.
 2. **Propagation can be cut off mid-run.** Serverless functions freeze:
    a 2026-07-22 propagation updated 30 of 50 pages and left the rest stale,
    which presented as "the Footer won't save". If a shared edit looks
