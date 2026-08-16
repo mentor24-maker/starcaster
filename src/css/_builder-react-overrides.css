@@ -4754,6 +4754,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* The way back from a shared-section push, offered where the push is
+   reported. A save that rewrote 35 pages is exactly the moment somebody
+   realises it was the wrong save. */
+.builder-react-root .builder-propagation-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  text-align: left;
+}
+
 /* Stale-editor warning. Shown in place of an ordinary error banner when a save
    was refused because somebody else saved the page first — it carries two
    actions, so it needs room the one-line .admin-notice does not give it. */

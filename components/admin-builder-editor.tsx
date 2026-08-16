@@ -170,6 +170,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // save of any session collide with the first.
   const loadedUpdatedAtRef = useRef("");
   const [saveConflict, setSaveConflict] = useState<{ liveUpdatedAt: string; savedByName: string } | null>(null);
+  const [propagationUndo, setPropagationUndo] =
+    useState<{ runId: string; pages: number; name: string } | null>(null);
+  const [isUndoingPropagation, setIsUndoingPropagation] = useState(false);
   const pageThemeDirtyRef = useRef(false);
   // Template and theme are only written back when the operator actually picked
   // one.  Both selects render blank whenever the stored value isn't among their
@@ -1303,7 +1306,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const data = await readAdminJson<{
         savedSection?: BuilderSavedSectionRecord;
         error?: string;
-        meta?: { propagation?: { ok?: boolean; total?: number; updated?: number; failed?: number } };
+        meta?: {
+          propagation?: {
+            ok?: boolean; total?: number; updated?: number; failed?: number; runId?: string;
+          };
+        };
       }>(response, "Failed to save saved section.");
 
       if (!data.savedSection) {
@@ -1316,6 +1323,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       // The route has always returned this tally; it used to be dropped, so a
       // fan-out that half failed reported the same "Saved." as a clean one.
       setMessage(describePropagationOutcome(data.savedSection.name, data.meta?.propagation));
+      // Offer the way back, right where the damage is reported. A push that
+      // rewrote pages is exactly the moment somebody realises it was wrong.
+      const runId = String(data.meta?.propagation?.runId ?? "");
+      const updated = Number(data.meta?.propagation?.updated ?? 0) || 0;
+      setPropagationUndo(runId && updated ? { runId, pages: updated, name: data.savedSection.name } : null);
       // Those pages now hold new content — refresh so the counts stay true.
       await loadPages();
     } catch (e) {
@@ -1996,6 +2008,60 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     } finally { setIsSaving(false); }
   }
 
+  /**
+   * Put every page a shared-section push rewrote back the way it was.
+   *
+   * Each page banks its CURRENT state first (the restore runs through the
+   * ordinary revert path), so this is itself undoable from each page's history.
+   */
+  async function undoPropagation() {
+    if (!propagationUndo) return;
+    const { runId, pages, name } = propagationUndo;
+    const confirmed = window.confirm(
+      `Undo the update to "${name}"?\n\n` +
+        `${pages} ${pages === 1 ? "page goes" : "pages go"} back to how ${pages === 1 ? "it was" : "they were"} ` +
+        "before you saved it — the WHOLE page, not just the shared part. So anything " +
+        "edited on those pages since then is rolled back too.\n\n" +
+        "The current version of each page is saved to its own history first, so nothing is lost " +
+        "and this can itself be undone."
+    );
+    if (!confirmed) return;
+
+    setIsUndoingPropagation(true);
+    setError(null);
+    try {
+      const response = await builderAdminFetch(`/api/admin/propagation-runs/${runId}/undo`, {
+        method: "POST",
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        restored?: Array<{ name?: string }>;
+        failed?: Array<{ name?: string }>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? "Could not undo that update.");
+
+      const restored = body.restored?.length ?? 0;
+      const failed = body.failed ?? [];
+      if (failed.length) {
+        // NAMES them. A partial undo reporting plain success is the failure
+        // this whole feature exists to stop happening quietly.
+        setError(
+          `Put back ${restored} ${restored === 1 ? "page" : "pages"}, but ${failed.length} could not be restored: ` +
+            `${failed.map((f) => f.name || "(unnamed)").join(", ")}. Their history still holds the old version — ` +
+            "restore those from the page itself."
+        );
+      } else {
+        setMessage(`Undone. ${restored} ${restored === 1 ? "page is" : "pages are"} back to how they were.`);
+      }
+      setPropagationUndo(null);
+      await loadPages();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not undo that update.");
+    } finally {
+      setIsUndoingPropagation(false);
+    }
+  }
+
   /** Throw away the local draft and pull down whatever is live now. */
   function reloadPageFromServer() {
     setSaveConflict(null);
@@ -2423,6 +2489,23 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
 
       {message ? <div className="notice success admin-notice">{message}</div> : null}
       {error ? <div className="notice error admin-notice">{error}</div> : null}
+
+      {propagationUndo ? (
+        <div className="notice admin-notice builder-propagation-undo">
+          <span>
+            That save rewrote <strong>{propagationUndo.pages}</strong>{" "}
+            {propagationUndo.pages === 1 ? "page" : "pages"}. Not what you wanted?
+          </span>
+          <button
+            className="secondary-button"
+            disabled={isUndoingPropagation}
+            onClick={() => void undoPropagation()}
+            type="button"
+          >
+            {isUndoingPropagation ? "Undoing..." : "Undo this update"}
+          </button>
+        </div>
+      ) : null}
 
       {saveConflict ? (
         <div className="notice error admin-notice builder-save-conflict" role="alert">

@@ -27,6 +27,10 @@ const PATH_REWRITES: Array<[RegExp, string, string]> = [
   [/^\/api\/admin\/pages\/bulk-create-with-model$/, '/api/builder/landing-pages/bulk-create-with-model', 'pages'],
   [/^\/api\/admin\/pages\/populate-from-acquire$/, '/api/builder/landing-pages/populate-from-acquire', 'pages'],
   [/^\/api\/admin\/pages(\/|$)/, '/api/builder/landing-pages$1', 'pages'],
+  // Undo a whole shared-section push. Without this rewrite the call falls
+  // through to a plain fetch, which misses BOTH the /api/builder prefix and
+  // the project-scope headers — a 404 that looks like a missing feature.
+  [/^\/api\/admin\/propagation-runs(\/|$)/, '/api/builder/propagation-runs$1', 'propagation-runs'],
   [/^\/api\/admin\/page-snapshots(\/|$)/, '/api/builder/page-snapshots$1', 'page-snapshots'],
   [/^\/api\/admin\/acquire-runs(\/|$)/, '/api/builder/acquire-runs$1', 'acquire-runs'],
   [/^\/api\/admin\/cell-modules(\/|$)/, '/api/builder/modules$1', 'cell-modules'],
