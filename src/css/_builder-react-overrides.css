@@ -4704,3 +4704,116 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   gap: 8px;
   margin-top: 2px;
 }
+
+/* ============================================================== */
+/* THE POPPED-OUT MODULE EDITOR (operator, 2026-08-15)             */
+/* ============================================================== */
+
+/*
+ * The pop-out control moved to the LEFT of the module header, next to the
+ * drag handle and the name. See the comment on the button in
+ * builder-module-card.tsx for why: in a six-column section the right-hand
+ * action cluster is the part that gets clipped, so the control that escapes
+ * a cramped cell was itself unreachable from one.
+ */
+.builder-react-root .builder-module-title > .builder-module-popout {
+  flex: 0 0 auto;
+}
+
+/*
+ * The dialog itself: a 2px bright-blue frame at a 40px radius, with the
+ * title bar as a full-bleed banner in the same blue and its type reversed
+ * out of it. Scoped to `.builder-centered-modal` — the gallery, palette and
+ * rich-text modals share this stylesheet and keep their plain header.
+ *
+ * `padding: 0` (the base modal carries 24px) is what lets the banner reach
+ * the frame; the padding moves onto the banner and the body instead, and
+ * the modal's existing `overflow: hidden` rounds the banner's top corners
+ * against the radius.
+ */
+.builder-react-root .builder-gallery-modal.builder-centered-modal {
+  border: 2px solid var(--builder-modal-accent);
+  border-radius: 40px;
+  padding: 0;
+  gap: 0;
+}
+
+.builder-react-root .builder-centered-modal > .builder-centered-modal-banner {
+  align-items: center;
+  background: var(--builder-modal-accent);
+  color: var(--builder-modal-accent-ink);
+  padding: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-centered-modal > .builder-centered-modal-banner h3 {
+  color: inherit;
+}
+
+/*
+ * Room inside the frame for the body, and a little extra at the sides so a
+ * panel's first column does not run into a 40px curve.
+ */
+.builder-react-root .builder-centered-modal > .builder-gallery-body {
+  padding: var(--space-5, 16px) var(--space-6, 24px) var(--space-6, 24px);
+}
+
+/*
+ * Done, reversed to match the banner. `!important` only because the
+ * low-contrast-button rule near the top of this file gives every
+ * `.secondary-button` a 2px dark-navy border with an `!important` of its own,
+ * and a navy hairline on a blue banner reads as a smudge — an !important can
+ * only be answered by one.
+ */
+.builder-react-root .builder-centered-modal .builder-centered-modal-done {
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid var(--builder-modal-accent-ink) !important;
+  color: var(--builder-modal-accent-ink);
+}
+
+.builder-react-root .builder-centered-modal .builder-centered-modal-done:hover {
+  background: var(--builder-modal-accent-ink);
+  color: var(--builder-modal-accent);
+}
+
+/* ============================================================== */
+/* MATCHED SPACING ROWS (doctrine E4b, operator 2026-08-15)        */
+/* ============================================================== */
+
+/*
+ * The chain-link toggle that turns "V Margin" into "Top Margin" and
+ * "Bottom Margin". It rides INSIDE the control cell, after the number, so
+ * the label track still measures nothing but labels (W0) — and it never
+ * grows: `flex: 0 0 auto` keeps the number select the part that flexes.
+ */
+/* The toggle's footprint, so the row without one lines up with the rows
+   that have one (see the comment on the spacer in builder-spacing-fields). */
+.builder-react-root .builder-module-field-control > .builder-spacing-link-spacer {
+  flex: 0 0 auto;
+  width: 22px;
+  margin-left: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-left: var(--space-2, 6px);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--builder-editor-label, #12395f);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle:hover {
+  border-color: rgba(11, 42, 74, 0.24);
+  background: rgba(11, 42, 74, 0.06);
+}
+
+/* Split apart is the deliberate state, so it is the one that shows. */
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle[aria-pressed="false"] {
+  color: var(--builder-modal-accent, #0d6efd);
+}

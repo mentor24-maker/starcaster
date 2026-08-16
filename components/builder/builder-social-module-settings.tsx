@@ -13,7 +13,7 @@ import {
   BuilderNumberSelectControl
 } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
-import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
+import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
   BuilderThemeColorField,
@@ -90,9 +90,14 @@ export function BuilderSocialModuleSettings({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   function updateSetting(key: string, value: string) {
+    updateSettings({ [key]: value });
+  }
+
+  /** Several settings in one update — a matched spacing row writes both sides. */
+  function updateSettings(values: Record<string, string>) {
     onUpdateModule((current) => ({
       ...current,
-      settings: { ...current.settings, [key]: value }
+      settings: { ...current.settings, ...values }
     }));
   }
 
@@ -248,19 +253,14 @@ export function BuilderSocialModuleSettings({
               onChange={(alignment) => updateSetting("alignment", alignment)}
             />
           </BuilderModuleField>
-          {/* W7 names and side order, from the same table marginFields() uses. */}
-          {MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => (
-            <BuilderModuleField key={key} label={label} width="num">
-              <BuilderNumberSelectControl
-                value={module.settings[key] ?? module.settings[legacy] ?? "0"}
-                min={0}
-                max={160}
-                step={5}
-                fallback="0"
-                onChange={(next) => updateSetting(key, next)}
-              />
-            </BuilderModuleField>
-          ))}
+          {/* W7 names and side order, E4b pairing — the same component
+              marginFields() gives a generated panel. */}
+          <BuilderModuleSpacingFields
+            box="margin"
+            max={160}
+            onChange={updateSettings}
+            settings={module.settings}
+          />
         </BuilderModuleFieldStrip>
       </div>
 
