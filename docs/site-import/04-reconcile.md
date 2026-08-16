@@ -128,3 +128,66 @@ footer chrome is gone from all twelve.
 12 pages paired automatically, all but one on an exact menu-label match;
 83 set aside — of which only **4** are real pages needing a human call
 (`/programs`, `/course`, `/events-calendar`, `/programs/adult-clinics`).
+
+---
+
+# Phase 3b: the image top-up (`--images`)
+
+Content reconciliation moves every image the capture put IN the content.
+It cannot move what was never there: the old site's gallery and carousels
+loaded their pictures with JavaScript, so those images never appeared in
+the HTML the capture reads. The crawler downloaded them anyway — there was
+simply nowhere in the content flow to put them. That left the Photo Gallery
+page with 43 of its photos downloaded and none of them on the page.
+
+No guessing is needed to fix it. The import already recorded, for every
+downloaded asset, which original page referenced it
+(`app_site_import_assets.referenced_by`). With the Phase 3 pairings that
+says exactly which images belong on which new page.
+
+```
+lib/site-import/image-topup.ts       pure engine
+scripts/site_import_reconcile.mjs    --images (separate, deliberate step)
+scripts/site-import/image-topup.test.js   16 tests
+```
+
+## Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | **`--images` is a separate flag**, never part of a default run. | It copies files into durable storage and creates asset rows. That is not something a content run should do as a side effect — the same reasoning as the mapper's `--nav`. |
+| 2 | **A photo's identity is its filename stem, not its URL.** Size variants (`-768x576`, `-scaled`), resize queries and promotion prefixes all collapse to one photo. | WordPress serves the same picture under four URLs. Comparing URLs is how a gallery ends up with every photo in it three times. On this job it collapsed 476 files. |
+| 3 | **Of several size variants, take the largest file.** | It is the original; the rest are derivatives. |
+| 4 | **Furniture images are excluded by repetition** — referenced by ≥50% of captured pages. | Same rule as section and prose chrome. 605 excluded here: the logo, social icons, the "powered by" badge. |
+| 5 | **≥5 images ⇒ one slideshow; fewer ⇒ individual image modules.** | A gallery's worth of pictures is what the old page WAS; two pictures are easier to move around as separate modules. |
+| 6 | **Files are copied into `SiteImportApplied/<projectId>/topup/` before any page references them.** | The capture leaves them in `SiteImport/<jobId>/`, a namespace explicitly designed to be cleaned up. A page must never depend on it (Phase 2 decision 7). |
+| 7 | **Every placed image is registered in the Assets library** with tags `site-import`, `image-topup`. | Otherwise it renders but is invisible to the Assets screen and its "Used In" column. |
+| 8 | **A per-page cap is reported, never silently applied.** | `report.capped` is part of the accounting identity, so a truncation cannot read as completeness. |
+
+## Accounting
+
+`captured === furniture + sizeVariants + already + capped + planned`, per
+page and in total. A run whose numbers do not balance refuses to place
+anything.
+
+## Traps
+
+1. **`listAssets` capped at 2,000 rows with no way to page.** This job
+   recorded 2,067, so a caller could not tell a complete list from a
+   truncated one. It now takes `{ limit, offset }`.
+2. **After content lands there are no pairings left.** Filling a page
+   consumes its `PLACEHOLDER SECTION`, which makes it ineligible — correct
+   for content, useless for a step that works on already-filled pages. The
+   pairings are recovered from `reconciledFromPath`, stamped on every
+   copied module, and are now also recorded on the job checkpoint.
+3. **`--apply` returned early when there was no content to write**, which
+   silently skipped `--images` on exactly the re-run where it was wanted.
+
+## Result of the first run
+
+73 images placed across 7 pages (photo-gallery 43, junior-programs 17,
+blog 6, four pages with 1–2 each), 45 MB copied. Excluded: 605 furniture,
+476 duplicate size variants, 83 already on the page. Verified against the
+database: every image in the durable namespace, all 73 reachable, all 73
+registered in the Assets library, each block sitting between the page's
+content and its footer.

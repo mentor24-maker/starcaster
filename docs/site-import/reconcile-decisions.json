@@ -6,7 +6,7 @@
     "This file outranks every score and is the record of why each call was made."
   ],
   "jobId": "simp_1786047449851_duiqnj",
-  "generatedAt": "2026-08-16T08:13:14.633Z",
+  "generatedAt": "2026-08-16T08:47:39.754Z",
   "decisions": {
     "course": "our-mission",
     "events-calendar": "events",
@@ -17,12 +17,14 @@
     "tag-us-open": "",
     "category-tennis-professionals": "",
     "tag-tennis": "",
+    "contact-us": "",
     "delray-beach-tennis-january-20th-2018-biggest-wanna-workout-this-year-with-over-35-participants": "",
     "tag-pickleball": "",
     "delray-beach-youth-tennis-foundation-3rd-annual-tennis-tournament": "",
     "jeff-bingo-with-jamie-corsillo-ballboy-at-delray-beach-open-and-recipient-of-tennis-scholorship": "",
     "delray-beach-youth-tennis-foundation-inspires-children-in-the-community": "",
     "bryan-brothers-tennis-clinic-at-delray-open-2018": "",
+    "programs-league": "",
     "welcome-marius-copos-delray-beach-head-tennis-professional": "",
     "from-us-open-to-delray-tennis-play-delray-after-school-program": "",
     "email-club": "",
@@ -32,6 +34,7 @@
     "tag-davis-cup": "",
     "pickleball-schedule": "",
     "round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018": "",
+    "course-fees": "",
     "usta-boys-18-16-national-clay-court-championships-delray-beach-tennis-center": "",
     "tag-tennis-programs": "",
     "tennis-membership-information-summer-membership-application-2018": "",
@@ -52,6 +55,7 @@
     "tag-mixers": "",
     "meet-tennis-coach-brent-wellman-delray-beach-junior-tennis-director": "",
     "tag-drills": "",
+    "course-blog": "",
     "tag-events": "",
     "author-delraybeachtennis": "",
     "tag-team-tennis": "",
@@ -66,25 +70,33 @@
     "delray-beach-tennis-center-hosting-the-national-clay-championships-from-july-14th-july-22nd": "",
     "delray-beach-open-tennis-tournament-visit-historic-delray-beach-events": "",
     "author-jcdgroup": "",
+    "course-lessons": "",
     "another-packed-house-for-the-saturday-morning-tennis-workout-clinic-at-the-delray-beach-tennis-center": "",
     "delray-beach-junior-tennis-program": "",
     "stroke-of-the-week": "",
+    "programs-junior": "",
     "us-open-update": "",
     "delray-beach-tennis-center-saturday-clinic-full-house": "",
     "category-uncategorized": "",
     "tag-jeff-bingo": "",
     "delray-beach-tennis-center-after-school-program": "",
     "tag-tennis-awards": "",
+    "contact-us-directions": "",
     "tag-clinics": "",
     "category-adult-tennis": "",
+    "course-instruct-staff": "",
+    "course-photo-gallery": "",
     "pickleball-in-delray-beach": "",
+    "programs-special-events": "",
     "category-pickleball": "",
     "womens-doubles-round-robin-tennis-april-27th-and-april-30th": "",
     "delray-beach-tennis-round-robin-mixers": "",
+    "job-opportunity": "",
     "visit-the-sundy-house-restaurant-inn-and-botanical-garden-in-delray-beach": "",
     "july-4th-tennis-mixer-progressive-mixed-doubles-round-robin-delray-beach-tennis": "",
     "pickleball-strategies-and-techniques-for-the-intermediate-player": "",
     "claymates-princess-ll-red-division-winners-with-coach-jeff-delray-beach-tennis": "",
+    "programs-pickleball": "",
     "princess-ll-blue-claymates-tennis-team-a-successful-season": "",
     "delray-beach-tennis-center-complimentary-labor-day-mixer-for-members-only": "",
     "davis-cup-at-delray-beach-tennis-center": "",
@@ -92,33 +104,128 @@
     "pickleball-social-mixer-at-delray-beach-tennis-center-picklers-unite-on-july-4th": "",
     "meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray": ""
   },
-  "appliedByThisFile": [
-    {
-      "sourceSlug": "course",
-      "originalPath": "/course",
-      "title": "Overview of the Delray Beach Tennis Center",
-      "pairedWith": "our-mission",
-      "by": "decision file",
-      "modules": 1
-    },
-    {
-      "sourceSlug": "events-calendar",
-      "originalPath": "/events-calendar",
-      "title": "Events Calendar",
-      "pairedWith": "events",
-      "by": "decision file",
-      "modules": 19
-    },
-    {
-      "sourceSlug": "programs-adult-clinics",
-      "originalPath": "/programs/adult-clinics",
-      "title": "Adult Clinics",
-      "pairedWith": "tennis-drills-clinics",
-      "by": "decision file",
-      "modules": 21
-    }
-  ],
+  "appliedByThisFile": [],
   "notes": [
+    {
+      "sourceSlug": "course-photo-gallery",
+      "originalPath": "/course/photo-gallery",
+      "title": "Photo Gallery",
+      "setAsideBecause": "best match scored 0.50, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "photos (0.50, fuzzy-nav-label)",
+        "court-status (0.23, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-fees",
+      "originalPath": "/course/fees",
+      "title": "Court Fees",
+      "setAsideBecause": "best match scored 0.33, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.33, fuzzy-nav-label)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-junior",
+      "originalPath": "/programs/junior",
+      "title": "Junior Programs",
+      "setAsideBecause": "best match scored 0.33, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "junior-tournaments (0.33, fuzzy-nav-label)",
+        "program-guide (0.33, fuzzy-nav-label)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-league",
+      "originalPath": "/programs/league",
+      "title": "Women's League Info",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "program-guide (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-blog",
+      "originalPath": "/course/blog",
+      "title": "Blog",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-lessons",
+      "originalPath": "/course/lessons",
+      "title": "Lesson Prices",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-pickleball",
+      "originalPath": "/programs/pickleball",
+      "title": "Pickleball",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "program-guide (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-instruct-staff",
+      "originalPath": "/course/instruct-staff",
+      "title": "Managers & Instructional Staff",
+      "setAsideBecause": "best match scored 0.23, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.23, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-special-events",
+      "originalPath": "/programs/special-events",
+      "title": "Special Events",
+      "setAsideBecause": "best match scored 0.23, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "program-guide (0.23, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "contact-us",
+      "originalPath": "/contact-us",
+      "title": "Contact Us",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
     {
       "sourceSlug": "programs",
       "originalPath": "/programs",
@@ -128,6 +235,54 @@
       "bestCandidates": []
     },
     {
+      "sourceSlug": "course",
+      "originalPath": "/course",
+      "title": "Overview of the Delray Beach Tennis Center",
+      "setAsideBecause": "decision file names \"our-mission\", which has no PLACEHOLDER SECTION to fill",
+      "class": "nav-page",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "events-calendar",
+      "originalPath": "/events-calendar",
+      "title": "Events Calendar",
+      "setAsideBecause": "decision file names \"events\", which has no PLACEHOLDER SECTION to fill",
+      "class": "nav-page",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "programs-adult-clinics",
+      "originalPath": "/programs/adult-clinics",
+      "title": "Adult Clinics",
+      "setAsideBecause": "decision file names \"tennis-drills-clinics\", which has no PLACEHOLDER SECTION to fill",
+      "class": "nav-page",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "contact-us-directions",
+      "originalPath": "/contact-us/directions",
+      "title": "Directions & Hours",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "job-opportunity",
+      "originalPath": "/job-opportunity",
+      "title": "Job Opportunity",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
       "sourceSlug": "email-club",
       "originalPath": "/email-club",
       "title": "Join Our Email List",
@@ -135,8 +290,8 @@
       "class": "orphan",
       "bestCandidates": [
         "mailing-list (0.50, fuzzy-title)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -147,8 +302,8 @@
       "class": "orphan",
       "bestCandidates": [
         "delray-beach-open (0.50, fuzzy-title)",
-        "pickleball (0.33, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -158,9 +313,9 @@
       "setAsideBecause": "not linked from the original site menu",
       "class": "orphan",
       "bestCandidates": [
-        "junior-programs (0.40, fuzzy-title)",
         "delray-beach-open (0.33, fuzzy-title)",
-        "tennis (0.20, fuzzy-title)"
+        "tennis (0.20, fuzzy-title)",
+        "tennis-mixers (0.17, fuzzy-title)"
       ]
     },
     {
@@ -170,9 +325,9 @@
       "setAsideBecause": "not linked from the original site menu",
       "class": "orphan",
       "bestCandidates": [
-        "tennis-drills-clinics (0.25, fuzzy-title)",
         "delray-beach-open (0.25, fuzzy-title)",
-        "tennis (0.14, fuzzy-title)"
+        "tennis (0.14, fuzzy-title)",
+        "tennis-mixers (0.13, fuzzy-title)"
       ]
     },
     {
@@ -208,7 +363,7 @@
       "bestCandidates": [
         "tennis (0.13, fuzzy-title)",
         "tennis-mixers (0.11, fuzzy-title)",
-        "womens-league (0.11, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -220,7 +375,7 @@
       "bestCandidates": [
         "tennis (0.13, fuzzy-title)",
         "tennis-mixers (0.11, fuzzy-title)",
-        "tennis-drills-clinics (0.10, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -231,8 +386,8 @@
       "class": "orphan",
       "bestCandidates": [
         "tennis (0.10, fuzzy-title)",
-        "junior-programs (0.09, fuzzy-title)",
-        "tennis-mixers (0.09, fuzzy-title)"
+        "tennis-mixers (0.09, fuzzy-title)",
+        "junior-tournaments (0.09, fuzzy-title)"
       ]
     },
     {
@@ -242,9 +397,9 @@
       "setAsideBecause": "not linked from the original site menu",
       "class": "orphan",
       "bestCandidates": [
-        "pickleball (0.09, fuzzy-title)",
         "junior-tournaments (0.08, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -256,7 +411,7 @@
       "bestCandidates": [
         "tennis (0.08, fuzzy-title)",
         "tennis-mixers (0.07, fuzzy-title)",
-        "tennis-drills-clinics (0.07, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -272,18 +427,6 @@
       ]
     },
     {
-      "sourceSlug": "elite-tennis",
-      "originalPath": "/elite-tennis",
-      "title": "Tennis Drills, Clinics, Mixers and More",
-      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
-      "class": "post",
-      "bestCandidates": [
-        "tennis-drills-clinics (0.60, fuzzy-title)",
-        "tennis (0.45, fuzzy-slug)",
-        "tennis-mixers (0.40, fuzzy-title)"
-      ]
-    },
-    {
       "sourceSlug": "tennis-program",
       "originalPath": "/tennis-program",
       "title": "Tennis Program",
@@ -291,32 +434,20 @@
       "class": "post",
       "bestCandidates": [
         "tennis (0.50, fuzzy-title)",
-        "junior-programs (0.33, fuzzy-title)",
-        "tennis-mixers (0.33, fuzzy-title)"
+        "tennis-mixers (0.33, fuzzy-title)",
+        "program-guide (0.33, fuzzy-title)"
       ]
     },
     {
-      "sourceSlug": "pickleball-schedule",
-      "originalPath": "/pickleball-schedule",
-      "title": "Pickleball Schedule",
+      "sourceSlug": "elite-tennis",
+      "originalPath": "/elite-tennis",
+      "title": "Tennis Drills, Clinics, Mixers and More",
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "pickleball (0.50, fuzzy-title)",
-        "weekly-schedule (0.33, fuzzy-title)",
+        "tennis (0.45, fuzzy-slug)",
+        "tennis-mixers (0.40, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "spring-and-summer-junior-tennis-programs",
-      "originalPath": "/spring-and-summer-junior-tennis-programs",
-      "title": "Spring and Summer Junior Tennis Programs",
-      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
-      "class": "post",
-      "bestCandidates": [
-        "junior-programs (0.40, fuzzy-title)",
-        "tennis (0.20, fuzzy-title)",
-        "tennis-mixers (0.17, fuzzy-title)"
       ]
     },
     {
@@ -327,20 +458,20 @@
       "class": "post",
       "bestCandidates": [
         "delray-beach-open (0.38, fuzzy-title)",
-        "events (0.13, fuzzy-title)",
-        "tennis (0.13, fuzzy-title)"
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
       ]
     },
     {
-      "sourceSlug": "introduction-to-pickleball-101",
-      "originalPath": "/introduction-to-pickleball-101",
-      "title": "Introduction to Pickleball 101",
+      "sourceSlug": "pickleball-schedule",
+      "originalPath": "/pickleball-schedule",
+      "title": "Pickleball Schedule",
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "pickleball (0.33, fuzzy-title)",
+        "weekly-schedule (0.33, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -364,7 +495,7 @@
       "bestCandidates": [
         "delray-beach-open (0.29, fuzzy-title)",
         "tennis (0.17, fuzzy-title)",
-        "junior-programs (0.14, fuzzy-title)"
+        "tennis-mixers (0.14, fuzzy-title)"
       ]
     },
     {
@@ -400,7 +531,7 @@
       "bestCandidates": [
         "delray-beach-open (0.25, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -412,7 +543,7 @@
       "bestCandidates": [
         "delray-beach-open (0.25, fuzzy-title)",
         "tennis (0.14, fuzzy-title)",
-        "junior-programs (0.13, fuzzy-title)"
+        "tennis-mixers (0.13, fuzzy-title)"
       ]
     },
     {
@@ -424,7 +555,7 @@
       "bestCandidates": [
         "delray-beach-open (0.22, fuzzy-title)",
         "tennis (0.13, fuzzy-title)",
-        "junior-programs (0.11, fuzzy-title)"
+        "tennis-mixers (0.11, fuzzy-title)"
       ]
     },
     {
@@ -472,7 +603,7 @@
       "bestCandidates": [
         "delray-beach-open (0.22, fuzzy-title)",
         "tennis (0.13, fuzzy-title)",
-        "junior-programs (0.11, fuzzy-title)"
+        "tennis-mixers (0.11, fuzzy-title)"
       ]
     },
     {
@@ -482,9 +613,21 @@
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "tennis-drills-clinics (0.22, fuzzy-title)",
         "delray-beach-open (0.22, fuzzy-title)",
-        "tennis (0.13, fuzzy-title)"
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "spring-and-summer-junior-tennis-programs",
+      "originalPath": "/spring-and-summer-junior-tennis-programs",
+      "title": "Spring and Summer Junior Tennis Programs",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.20, fuzzy-title)",
+        "tennis-mixers (0.17, fuzzy-title)",
+        "junior-tournaments (0.17, fuzzy-title)"
       ]
     },
     {
@@ -494,9 +637,9 @@
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "events (0.20, fuzzy-title)",
         "tennis (0.20, fuzzy-title)",
-        "tennis-mixers (0.17, fuzzy-title)"
+        "tennis-mixers (0.17, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -508,7 +651,7 @@
       "bestCandidates": [
         "delray-beach-open (0.20, fuzzy-title)",
         "tennis (0.11, fuzzy-title)",
-        "junior-programs (0.10, fuzzy-title)"
+        "tennis-mixers (0.10, fuzzy-title)"
       ]
     },
     {
@@ -520,19 +663,7 @@
       "bestCandidates": [
         "delray-beach-open (0.20, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "pickleball-strategies-and-techniques-for-the-intermediate-player",
-      "originalPath": "/pickleball-strategies-and-techniques-for-the-intermediate-player",
-      "title": "Pickleball Strategies and Techniques for the Intermediate Player",
-      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
-      "class": "post",
-      "bestCandidates": [
-        "pickleball (0.20, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -592,7 +723,7 @@
       "bestCandidates": [
         "tennis (0.17, fuzzy-title)",
         "tennis-mixers (0.14, fuzzy-title)",
-        "tennis-drills-clinics (0.13, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -602,9 +733,9 @@
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "tennis-drills-clinics (0.17, fuzzy-title)",
         "delray-beach-open (0.17, fuzzy-title)",
-        "tennis (0.09, fuzzy-title)"
+        "tennis (0.09, fuzzy-title)",
+        "tennis-mixers (0.08, fuzzy-title)"
       ]
     },
     {
@@ -616,7 +747,7 @@
       "bestCandidates": [
         "tennis-mixers (0.17, fuzzy-title)",
         "delray-beach-open (0.15, fuzzy-title)",
-        "pickleball (0.08, fuzzy-title)"
+        "tennis (0.08, fuzzy-title)"
       ]
     },
     {
@@ -663,8 +794,8 @@
       "class": "post",
       "bestCandidates": [
         "delray-beach-open (0.14, fuzzy-slug)",
-        "court-fees (0.11, fuzzy-title)",
-        "court-status (0.11, fuzzy-title)"
+        "court-status (0.11, fuzzy-title)",
+        "tennis (0.07, fuzzy-slug)"
       ]
     },
     {
@@ -675,8 +806,8 @@
       "class": "post",
       "bestCandidates": [
         "delray-beach-open (0.14, fuzzy-slug)",
-        "pickleball (0.13, fuzzy-title)",
-        "court-fees (0.11, fuzzy-title)"
+        "court-status (0.11, fuzzy-title)",
+        "tennis (0.07, fuzzy-slug)"
       ]
     },
     {
@@ -698,9 +829,9 @@
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "events (0.11, fuzzy-title)",
         "tennis (0.11, fuzzy-title)",
-        "court-fees (0.10, fuzzy-title)"
+        "court-status (0.10, fuzzy-title)",
+        "pro-shop (0.10, fuzzy-title)"
       ]
     },
     {
@@ -712,7 +843,7 @@
       "bestCandidates": [
         "tennis (0.09, fuzzy-title)",
         "tennis-mixers (0.08, fuzzy-title)",
-        "tennis-drills-clinics (0.08, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -724,7 +855,7 @@
       "bestCandidates": [
         "tennis (0.08, fuzzy-title)",
         "tennis-mixers (0.07, fuzzy-title)",
-        "womens-league (0.07, fuzzy-title)"
+        "delray-beach-open (0.07, fuzzy-title)"
       ]
     },
     {
@@ -735,8 +866,20 @@
       "class": "post",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "introduction-to-pickleball-101",
+      "originalPath": "/introduction-to-pickleball-101",
+      "title": "Introduction to Pickleball 101",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -747,8 +890,20 @@
       "class": "post",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "pickleball-strategies-and-techniques-for-the-intermediate-player",
+      "originalPath": "/pickleball-strategies-and-techniques-for-the-intermediate-player",
+      "title": "Pickleball Strategies and Techniques for the Intermediate Player",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -760,55 +915,7 @@
       "bestCandidates": [
         "tennis (0.50, fuzzy-title)",
         "tennis-mixers (0.33, fuzzy-title)",
-        "tennis-drills-clinics (0.25, fuzzy-title)"
-      ]
-    },
-    {
-      "sourceSlug": "tag-pickleball",
-      "originalPath": "/tag/pickleball",
-      "title": "pickleball Archives",
-      "setAsideBecause": "WordPress archive listing, not a content page",
-      "class": "archive",
-      "bestCandidates": [
-        "pickleball (0.50, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "tag-events",
-      "originalPath": "/tag/events",
-      "title": "events Archives",
-      "setAsideBecause": "WordPress archive listing, not a content page",
-      "class": "archive",
-      "bestCandidates": [
-        "events (0.50, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "category-pickleball",
-      "originalPath": "/category/pickleball",
-      "title": "Pickleball Archives",
-      "setAsideBecause": "WordPress archive listing, not a content page",
-      "class": "archive",
-      "bestCandidates": [
-        "pickleball (0.50, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "category-events",
-      "originalPath": "/category/events",
-      "title": "Events Archives",
-      "setAsideBecause": "WordPress archive listing, not a content page",
-      "class": "archive",
-      "bestCandidates": [
-        "events (0.50, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -820,7 +927,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "tennis-drills-clinics (0.20, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -832,7 +939,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "tennis-drills-clinics (0.20, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -843,8 +950,8 @@
       "class": "archive",
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
-        "junior-programs (0.25, fuzzy-title)",
-        "tennis-mixers (0.25, fuzzy-title)"
+        "tennis-mixers (0.25, fuzzy-title)",
+        "program-guide (0.25, fuzzy-title)"
       ]
     },
     {
@@ -856,7 +963,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "tennis-drills-clinics (0.20, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -868,7 +975,7 @@
       "bestCandidates": [
         "tennis-mixers (0.33, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -880,7 +987,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "tennis-drills-clinics (0.20, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -892,7 +999,7 @@
       "bestCandidates": [
         "junior-tournaments (0.33, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -904,7 +1011,7 @@
       "bestCandidates": [
         "junior-tournaments (0.33, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -916,7 +1023,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "tennis-drills-clinics (0.20, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -928,7 +1035,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "tennis-drills-clinics (0.20, fuzzy-title)"
+        "mailing-list (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -952,19 +1059,7 @@
       "bestCandidates": [
         "delray-beach-open (0.25, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "tag-drills",
-      "originalPath": "/tag/drills",
-      "title": "drills Archives",
-      "setAsideBecause": "WordPress archive listing, not a content page",
-      "class": "archive",
-      "bestCandidates": [
-        "tennis-drills-clinics (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -988,19 +1083,19 @@
       "bestCandidates": [
         "delray-beach-open (0.25, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)"
       ]
     },
     {
-      "sourceSlug": "tag-clinics",
-      "originalPath": "/tag/clinics",
-      "title": "clinics Archives",
+      "sourceSlug": "tag-pickleball",
+      "originalPath": "/tag/pickleball",
+      "title": "pickleball Archives",
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "tennis-drills-clinics (0.25, fuzzy-title)",
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1011,8 +1106,8 @@
       "class": "archive",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1023,8 +1118,8 @@
       "class": "archive",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1035,8 +1130,8 @@
       "class": "archive",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1047,8 +1142,32 @@
       "class": "archive",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-drills",
+      "originalPath": "/tag/drills",
+      "title": "drills Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-events",
+      "originalPath": "/tag/events",
+      "title": "events Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1059,8 +1178,8 @@
       "class": "archive",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1071,8 +1190,44 @@
       "class": "archive",
       "bestCandidates": [
         "mailing-list (0.00, fuzzy-nav-label)",
-        "events (0.00, fuzzy-nav-label)",
-        "court-fees (0.00, fuzzy-nav-label)"
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-clinics",
+      "originalPath": "/tag/clinics",
+      "title": "clinics Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-pickleball",
+      "originalPath": "/category/pickleball",
+      "title": "Pickleball Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-events",
+      "originalPath": "/category/events",
+      "title": "Events Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
       ]
     }
   ]
