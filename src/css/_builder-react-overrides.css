@@ -2498,8 +2498,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    panel child sit in the same column track as the chrome above it. */
 .builder-react-root .builder-module-editor--feature-cards,
 .builder-react-root .builder-module-editor--program-list,
-.builder-react-root .builder-module-editor--slideshow,
-.builder-react-root .builder-module-editor--social {
+.builder-react-root .builder-module-editor--slideshow {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2545,9 +2544,56 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: contents;
 }
 
+/* ------------------------------------------------------------------------
+   SOCIAL RUNS THE SAME EDITOR AT THREE COLUMNS (operator, 2026-08-16:
+   "arrange the settings in two columns with the social icons in a third").
+
+   Everything above still applies — the children flatten, the rows carry
+   their own spacing, the gap is horizontal only — except the track list and
+   which column each half lands in, which is all this block changes.
+
+   The list column is the wide one on purpose. The two settings columns are
+   short label/control pairs that measure themselves (W0); the platform rows
+   hold a URL, and at an equal third that field came out about 120px wide.
+   1fr · 1fr · 1.6fr is that measurement, not a guess: it is the narrowest
+   third column in which the Link field clears --builder-field-long-max's
+   readable half at 1440, the narrowest width the check runs.
+   ------------------------------------------------------------------------ */
+.builder-react-root .builder-module-editor--social {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 0 var(--space-6, 24px);
+  align-items: start;
+}
+
+/* The editor's own children — the "Settings" heading the module card puts
+   above every two-column panel — stay in column 1 with the settings. */
+.builder-react-root .builder-module-editor--social > * {
+  grid-column: 1;
+}
+
+/* Column 1 takes the module's own settings, column 2 the Frame axis. The
+   pair is placed by document order rather than by name, so adding a third
+   settings group later is a track, not a rewrite. */
+.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(1) {
+  grid-column: 1;
+}
+.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(2) {
+  grid-column: 2;
+  grid-row: 1 / span 100;
+  align-self: start;
+}
+
+/* `span 100` rather than `1 / -1`, for the reason the two-column version
+   gives: -1 on an implicit grid collapses the column to a single row. */
+.builder-react-root .builder-module-editor--social .builder-cards-panel-items {
+  grid-column: 3;
+  grid-row: 1 / span 100;
+  align-self: start;
+}
+
 .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings,
-.builder-react-root .builder-module-editor--social .builder-cards-panel-settings {
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings {
   grid-column: 1;
 }
 
@@ -2573,8 +2619,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    implicit grid resolves to the explicit grid's only line, which collapses
    the column to a single row. */
 .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items,
-.builder-react-root .builder-module-editor--social .builder-cards-panel-items {
+.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -3416,8 +3461,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* Neither title is a row of the lattice — both span the tracks. The
    sub-heading keeps its rule above it, now drawn across the whole column
-   rather than around a nested box. */
+   rather than around a nested box.
+
+   The COLUMN heading is the third of them, and it was missed until Social
+   took a second settings column on 2026-08-16: left in one cell it pushed
+   every pair below it along by one, so the Frame column rendered its swatch
+   in the label track and its label in the control track, all the way down.
+   A heading is never a row of the lattice — say so once, for all three. */
 .builder-react-root .is-lattice .builder-schema-panel-column > .builder-schema-group-title,
+.builder-react-root .is-lattice .builder-schema-panel-column > .builder-cards-panel-heading,
 .builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-group-subtitle {
   grid-column: 1 / -1;
 }

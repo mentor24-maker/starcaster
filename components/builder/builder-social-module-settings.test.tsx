@@ -32,20 +32,30 @@ function socialHtml(settings: Record<string, string> = {}) {
  * its Label input over the word Background.
  */
 describe("Social settings editor", () => {
-  it("is a two-column panel: module settings left, platforms right", () => {
+  it("is a three-column panel: settings, Frame, platforms (operator 8/16)", () => {
     const html = socialHtml({ socialItems: ITEMS });
-    expect(html).toContain("builder-cards-panel-settings");
+    // TWO settings columns now — nine Frame controls stacked under the other
+    // nine made the settings side twice the height of anything beside it.
+    expect([...html.matchAll(/builder-cards-panel-settings/g)]).toHaveLength(2);
     expect(html).toContain("builder-cards-panel-items");
-    // The settings half borrows the generator's column, which is what makes
-    // its strips one-control-per-row and shares the label track (W0).
-    expect(html).toContain("builder-schema-panel-column");
+    // Each borrows the generator's column, which is what makes its strips
+    // one-control-per-row and shares the label track (W0).
+    expect([...html.matchAll(/builder-schema-panel-column/g)]).toHaveLength(2);
+    // Left to right: the module's own settings, Frame, then the list.
+    const order = ["Structure", "Placement", "Frame", "Platforms"].map((title) => html.indexOf(`>${title}<`));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
   it("puts the platform list in ONE lattice grid the check can see", () => {
     const html = socialHtml({ socialItems: ITEMS });
     // Without data-lattice-pairs the list is invisible to check_panels, and
     // an invisible manager is how two staggered panels shipped in one week.
-    expect(html).toContain('data-lattice-pairs="2"');
+    // ONE pair since the list moved to a third of the panel: at two, each
+    // half left a URL about 120px wide.
+    expect(html).toContain('data-lattice-pairs="1"');
+    expect(html).not.toContain("builder-card-field--a");
+    expect(html).not.toContain("builder-card-field--b");
     // One head row per platform, named — no per-item wrapper, which would
     // take a single grid cell and break the shared tracks.
     expect([...html.matchAll(/builder-card-editor-head/g)]).toHaveLength(2);
@@ -68,11 +78,15 @@ describe("Social settings editor", () => {
 
   it("names its axes and orders them Structure → Placement → Frame (D8/D9)", () => {
     const html = socialHtml({ socialItems: ITEMS });
-    const at = ["Structure", "Placement", "Frame"].map((title) =>
+    const at = ["Structure", "Placement"].map((title) =>
       html.indexOf(`builder-schema-group-title">${title}<`)
     );
     expect(at.every((index) => index >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
+    // Frame names a whole column now, so it carries the column heading rather
+    // than a group title — the same size and role as "Platforms" beside it.
+    expect(html).toContain('builder-cards-panel-heading">Frame<');
+    expect(at[1]).toBeLessThan(html.indexOf('builder-cards-panel-heading">Frame<'));
   });
 
   it("offers the module's spacing as matched rows (E4b)", () => {

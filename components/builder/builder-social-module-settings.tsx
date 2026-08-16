@@ -74,14 +74,17 @@ type BuilderSocialModuleSettingsProps = {
  *
  * What it is now, and why each part:
  *
- *   TWO COLUMNS (D2/L6a) — module settings left, the platform list right,
- *   the same 50/50 editor Feature Cards, Slideshow and Programs use. S1:
- *   learn one manager, know them all.
+ *   THREE COLUMNS (D2/L6a) — the module's own settings, then Frame, then
+ *   the platform list, on the same editor grid Feature Cards, Slideshow and
+ *   Programs run at two (S1: learn one manager, know them all). The operator
+ *   asked for the third on 2026-08-16, and the reason is height: nine Frame
+ *   controls stacked under the other nine made the settings side twice the
+ *   length of anything beside it.
  *
- *   THE LATTICE (W0) — the settings column is `builder-schema-panel-column`
+ *   THE LATTICE (W0) — each settings column is `builder-schema-panel-column`
  *   and the list is `builder-cards-panel-fields`, so labels and controls
  *   land in ONE grid per column and line up by construction rather than by
- *   matching numbers. `data-lattice-pairs="2"` puts the list under
+ *   matching numbers. `data-lattice-pairs` puts the list under
  *   `check_panels`, which is what stops it drifting back.
  *
  *   NO COLLAPSES (A0) — Border & Shadow came out of its `<details>`, and the
@@ -318,17 +321,25 @@ export function BuilderSocialModuleSettings({
           />
         </BuilderModuleFieldStrip>
 
-        {/* Frame is the icon's own box: what fills it, what outlines it, how
-            round it is, and last (D9) the shadow it casts. A7 files this one
-            here rather than on Text because the renderer paints it as a
-            `box-shadow` on the icon, not a shadow on any letters.
+      </div>
 
-            Not `dropShadowFields()` (the schema's shared block): that helper
-            emits schema fields for a generated panel, and it gates its parts
-            behind an on/off flag this module has never had — the renderer
-            decides "is there a shadow" from the four numbers themselves, so
-            adding the flag would mean a migration for every live footer. */}
-        <div className="builder-schema-group-title">Frame</div>
+      {/* COLUMN 2 — Frame: the icon's own box. What fills it, what outlines
+          it, how round it is, and last (D9) the shadow it casts. A7 files the
+          shadow here rather than on Text because the renderer paints it as a
+          `box-shadow` on the icon, not a shadow on any letters.
+
+          Its own column rather than the tail of the first one (operator,
+          2026-08-16: "arrange the settings in two columns with the social
+          icons in a third") — nine controls, which was more than half the
+          height of the settings side on its own.
+
+          Not `dropShadowFields()` (the schema's shared block): that helper
+          emits schema fields for a generated panel, and it gates its parts
+          behind an on/off flag this module has never had — the renderer
+          decides "is there a shadow" from the four numbers themselves, so
+          adding the flag would mean a migration for every live footer. */}
+      <div className="builder-cards-panel-settings builder-schema-panel-column">
+        <div className="builder-cards-panel-heading">Frame</div>
         <BuilderModuleFieldStrip>
           <BuilderModuleField label="Icon Fill" width="color">
             <BuilderThemeColorField
@@ -416,16 +427,20 @@ export function BuilderSocialModuleSettings({
         </BuilderModuleFieldStrip>
       </div>
 
-      {/* THE PLATFORM LIST — one grid for the whole list, not a grid per
-          platform, which is what makes row 2's fields start where row 1's do
-          (W0's mechanism; see the note over `.builder-cards-panel-fields`).
-          Each field declares its pair-column: Label and Link identify the
-          platform, Fill and Icon dress it. */}
+      {/* COLUMN 3 — THE PLATFORM LIST. One grid for the whole list, not a
+          grid per platform, which is what makes row 2's fields start where
+          row 1's do (W0's mechanism; see the note over
+          `.builder-cards-panel-fields`).
+
+          ONE pair-column, not two: at a third of the panel each half of a
+          2x2 would leave a URL about 120px wide. Every field spans the row
+          instead, so a link is readable at the width the column actually
+          has. `data-lattice-pairs="1"` tells check_panels the same thing. */}
       <div className="builder-cards-panel-items">
         <div className="builder-cards-panel-heading">Platforms</div>
         <div
           className="builder-cards-panel-fields"
-          data-lattice-pairs="2"
+          data-lattice-pairs="1"
           onDragOver={(event) => {
             event.preventDefault();
             event.dataTransfer.dropEffect = "move";
@@ -469,7 +484,7 @@ export function BuilderSocialModuleSettings({
                   </div>
                 </div>
 
-                <BuilderModuleField label="Label" width="text-md" className="builder-card-field--a">
+                <BuilderModuleField label="Label" width="text-md" className="builder-card-field--wide">
                   <input
                     type="text"
                     value={item.label}
@@ -478,7 +493,7 @@ export function BuilderSocialModuleSettings({
                     aria-label={`${itemName} label`}
                   />
                 </BuilderModuleField>
-                <BuilderModuleField label="Link" width="text-md" className="builder-card-field--b">
+                <BuilderModuleField label="Link" width="text-md" className="builder-card-field--wide">
                   <input
                     type="text"
                     value={item.href}
@@ -487,7 +502,7 @@ export function BuilderSocialModuleSettings({
                     aria-label={`${itemName} link`}
                   />
                 </BuilderModuleField>
-                <BuilderModuleField label="Fill" width="color" className="builder-card-field--a">
+                <BuilderModuleField label="Fill" width="color" className="builder-card-field--wide">
                   <BuilderThemeColorField
                     dialogLabel="Platform icon background"
                     fallback={DEFAULT_SOCIAL_ICON_BACKGROUND}
