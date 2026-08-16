@@ -111,10 +111,10 @@
    * border… put the About and Done button in a banner with a background
    * color matching the border color and reverse font color").
    *
-   * #0d6efd rather than a brighter blue because the banner reverses white
-   * type out of it: this clears 4.5:1, an iOS-style #0a84ff does not.
+   * The operator picked the value on 2026-08-15, after seeing it on screen.
+   * White type on it clears 7:1, so the reversed banner is comfortable.
    */
-  --builder-modal-accent: #0d6efd;
+  --builder-modal-accent: #004CA6;
   --builder-modal-accent-ink: #ffffff;
 
   /*
