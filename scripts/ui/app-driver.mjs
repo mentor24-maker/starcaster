@@ -22,6 +22,8 @@
  * confident pass. `activeSection()` is the only correct root for a query,
  * and `revealPanels()` only ever opens things inside it.
  */
+import { createHash } from 'node:crypto';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,8 +49,165 @@ function assertLocal(url) {
   }
 }
 
+/**
+ * ARE WE MEASURING THIS CHECKOUT'S BUILD?
+ *
+ * Two ways to be looking at the wrong app, both of which cost real time on
+ * 2026-08-15 and neither of which looks like an environment problem from the
+ * output:
+ *
+ *  1. `public/builder-bundle.js` on disk is older than the source it comes
+ *     from. The server has no build step — it serves whatever file is there —
+ *     so the browser gets the LAST build, not your change.
+ *  2. BASE_URL points at another checkout's server. In a worktree this is the
+ *     default: 3001 is wherever `npm run dev` happened to be started, which is
+ *     usually the main folder. The harness then drives someone else's code and
+ *     reports the result as yours.
+ *
+ * Both surface downstream as an assertion that makes no sense — on 2026-08-15
+ * as "No panels carrying `.is-lattice` were found", which reads as "the
+ * navigation broke" and sent the investigation into the check itself. The
+ * bundle was simply stale; one `npm run build:builder` fixed it.
+ *
+ * Comparing the SERVED bytes to the LOCAL bytes catches both at once, and
+ * catches them before a browser opens.
+ */
+let freshnessCheck = null;
+
+/** Memoised: launch() runs once per width, and the answer cannot change mid-run. */
+function assertServingThisCheckout(baseUrl) {
+  if (!freshnessCheck) freshnessCheck = checkServingThisCheckout(baseUrl);
+  return freshnessCheck;
+}
+
+/**
+ * The built files the harness drives. A missing or stale one is not a subtle
+ * problem: app-shell.html IS the admin app, so without it the browser gets a
+ * 404 and every later assertion measures an empty page.
+ */
+const REQUIRED_ARTIFACTS = [
+  {
+    file: 'public/app-shell.html',
+    sources: ['src/layout.html', 'src/pages'],
+    rebuild: 'npm run build:html',
+    note: 'this file IS the admin app; without it the browser loads nothing to measure',
+  },
+  {
+    file: 'public/builder-bundle.js',
+    sources: ['components', 'lib/builder-client', 'builder-react-entry.tsx'],
+    rebuild: 'npm run build:builder',
+    note: 'the Builder UI',
+  },
+  {
+    file: 'public/styles.css',
+    sources: ['src/css'],
+    rebuild: 'npm run build:css',
+    note: 'every width this harness measures comes from here',
+  },
+];
+
+async function checkServingThisCheckout(baseUrl) {
+  const missing = [];
+  const stale = [];
+
+  for (const artifact of REQUIRED_ARTIFACTS) {
+    const full = path.join(ROOT, artifact.file);
+    let built;
+    try {
+      built = (await stat(full)).mtimeMs;
+    } catch {
+      missing.push(artifact);
+      continue;
+    }
+    if ((await newestMtime(artifact.sources)) > built) stale.push(artifact);
+  }
+
+  if (missing.length) {
+    throw new Error(
+      'This checkout has not been built — the harness drives the BUILT app, not the source.\n\n' +
+      missing.map((a) => `  missing: ${a.file}  (${a.note})`).join('\n') +
+      '\n\nRun `npm run build` once in this folder.\n' +
+      'A fresh worktree only gets `npm run build:assets`, which does not produce these.\n' +
+      'On 2026-08-15 the missing file was app-shell.html, and the check reported it as\n' +
+      '"No panels carrying `.is-lattice` were found" — which reads like the navigation\n' +
+      'broke and sent the investigation into the check itself.'
+    );
+  }
+
+  if (stale.length) {
+    throw new Error(
+      'Built files are OLDER than the source they come from.\n' +
+      'The dev server has no build step — it serves the file on disk — so the browser\n' +
+      'would load your PREVIOUS build and every measurement would describe code you\n' +
+      'are not testing.\n\n' +
+      stale.map((a) => `  stale: ${a.file}  →  ${a.rebuild}`).join('\n') + '\n'
+    );
+  }
+
+  // The bundle is the cheapest byte-for-byte proof that the server on this
+  // port is THIS folder's. In a worktree, 3001 is usually the main checkout.
+  const local = await readFile(path.join(ROOT, 'public', 'builder-bundle.js'));
+  let served;
+  try {
+    const res = await fetch(`${baseUrl}/builder-bundle.js`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    served = Buffer.from(await res.arrayBuffer());
+  } catch (e) {
+    throw new Error(
+      `Could not fetch ${baseUrl}/builder-bundle.js (${e.message}).\n` +
+      'Is the app running? Start it with `npm run dev` in this folder.'
+    );
+  }
+
+  const digest = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 12);
+  if (digest(served) !== digest(local)) {
+    throw new Error(
+      `The app at ${baseUrl} is serving a DIFFERENT build than this checkout.\n` +
+      `  served: ${digest(served)}   this folder: ${digest(local)}\n\n` +
+      "Almost always this means another worktree's `npm run dev` owns that port,\n" +
+      'so the harness would drive that folder\'s code and report it as yours.\n\n' +
+      "Start this folder's own server on its own port and point the harness at it:\n" +
+      '  PORT=3009 npm run dev\n' +
+      '  UI_HARNESS_BASE_URL=http://localhost:3009 npm run check:panels'
+    );
+  }
+}
+
+/** Newest mtime across a set of files and/or directories, 0 if none exist. */
+async function newestMtime(targets) {
+  let newest = 0;
+  async function walk(target) {
+    let info;
+    try {
+      info = await stat(target);
+    } catch {
+      return;
+    }
+    if (info.isFile()) {
+      newest = Math.max(newest, info.mtimeMs);
+      return;
+    }
+    if (!info.isDirectory()) return;
+    for (const entry of await readdir(target, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      await walk(path.join(target, entry.name));
+    }
+  }
+  for (const target of targets) await walk(path.join(ROOT, target));
+  return newest;
+}
+
 export async function launch({ width = 1440, height = 1000, headless = true } = {}) {
   assertLocal(BASE_URL);
+  try {
+    await assertServingThisCheckout(BASE_URL);
+  } catch (e) {
+    // Printed and exited here rather than thrown on: every caller is a
+    // top-level await, so a thrown error surfaces as a stack trace with the
+    // explanation buried in it. This message IS the fix instructions.
+    console.error(`\n[ui-harness] ${e.message}\n`);
+    process.exit(2);
+  }
   const browser = await chromium.launch({ headless });
   const page = await browser.newPage({ viewport: { width, height } });
 

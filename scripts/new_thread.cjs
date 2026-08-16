@@ -84,8 +84,20 @@ run('npm', ['ci'], { cwd: dest, stdio: ['ignore', 'ignore', 'inherit'] });
 // would reach up to the parent checkout and write bundles referencing
 // ../../../node_modules. build_pinned_assets now refuses that, so the folder
 // simply has no artifacts until here.
+// The FULL build, not just the pinned assets.
+//
+// build_pinned_assets alone produces builder-bundle.js and styles.css but not
+// app-shell.html, which IS the admin app — so a fresh worktree could pass every
+// test and still serve a 404 to a browser. On 2026-08-15 that swallowed an hour
+// twice: `npm run check:panels` reported "No panels carrying `.is-lattice` were
+// found", which reads as a broken check rather than a folder that was never
+// built. lib/builder/template.js was missing for the same reason, and took the
+// server-side test suite down with it.
+//
+// Costs about half a minute more than the old step, once, and makes the folder
+// something you can actually run.
 console.log('[thread] Building this folder’s own bundles…');
-run('node', [path.join(dest, 'scripts', 'build_pinned_assets.mjs')], { cwd: dest });
+run('npm', ['run', 'build'], { cwd: dest, stdio: ['ignore', 'ignore', 'inherit'] });
 
 console.log(`
 [thread] Ready.
