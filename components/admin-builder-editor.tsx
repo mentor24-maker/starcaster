@@ -52,6 +52,7 @@ import {
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList, pageVisibilityFromRecord, pageVisibilityToFlags, type PageVisibility } from "./builder/builder-page-list";
 import { BuilderPageHistory } from "./builder/builder-page-history";
+import { BuilderPublishPanel } from "./builder/builder-publish-panel";
 import {
   applyTemplateFrame,
   describeTemplateFrameChange,
@@ -184,6 +185,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [galleryMedia, setGalleryMedia] = useState<AdminMediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Bumped after a page save so the Publish count reflects what just changed
+  // rather than what was true when the panel mounted. A stale count is the one
+  // way this panel could actively mislead.
+  const [publishRefreshKey, setPublishRefreshKey] = useState(0);
   const [dragOverWorkspace, setDragOverWorkspace] = useState(false);
   const [draggingLayout, setDraggingLayout] = useState(false);
   const [dragOverSectionGap, setDragOverSectionGap] = useState<number | null>(null);
@@ -2002,6 +2007,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         loadedUpdatedAtRef.current = data.page.updatedAt ?? "";
       }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
+      setPublishRefreshKey((current) => current + 1);
       await loadPages();
       if (data.page?.id) setSelectedPageId(data.page.id);
     } catch (e) {
@@ -2663,6 +2669,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onDeleteSnapshot={(id) => void deleteSnapshot(id)}
         />
       )}
+
+      {/* Publish sits with the page list, not inside a page: it is a
+          site-level action, and the COUNT has to be visible whether or not a
+          page happens to be open. A step you can forget is worse than no step. */}
+      {builderMode === "pages" ? (
+        <BuilderPublishPanel refreshKey={publishRefreshKey} />
+      ) : null}
 
       {builderMode === "pages" && selectedPageId ? (
         <BuilderPageHistory
