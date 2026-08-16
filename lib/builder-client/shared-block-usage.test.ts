@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSavedSectionUsageIndex,
+  describeCanonicalOverwrite,
   describePropagationOutcome,
   describePushImpact,
   describeUsage,
@@ -86,6 +87,35 @@ describe('what the operator reads', () => {
     expect(text).toContain('updates it on 40 pages');
     expect(text).toContain('…and 28 more');
     expect(text).not.toContain('Page 40');
+  });
+
+  it('spells out what overwriting the original does, and to which pages', () => {
+    const impact = describeCanonicalOverwrite('Footer Menu', {
+      following: 3, independent: 1, pages: 3, pageLabels: ['Home', 'About', 'Contact'],
+    });
+    expect(impact.summary).toContain('Replaces “Footer Menu” itself');
+    expect(impact.summary).toContain('the 3 pages that follow it');
+    expect(impact.pageLabels).toEqual(['Home', 'About', 'Contact']);
+    expect(impact.more).toBe(0);
+  });
+
+  it('still asks when nothing follows the original yet', () => {
+    // Unlike describePushImpact, this one never returns "no question to ask" —
+    // the choice between updating the original and filing a copy stands even
+    // when the original is used nowhere else. That IS the bug it exists for.
+    const impact = describeCanonicalOverwrite('Footer Menu', undefined);
+    expect(impact.summary).toContain('Replaces “Footer Menu” itself');
+    expect(impact.summary).toContain('No other page follows it yet');
+    expect(impact.pageLabels).toEqual([]);
+  });
+
+  it('caps the overwrite page list the same way the confirm text does', () => {
+    const labels = Array.from({ length: 40 }, (_, i) => `Page ${i + 1}`);
+    const impact = describeCanonicalOverwrite('Header', {
+      following: 40, independent: 0, pages: 40, pageLabels: labels,
+    });
+    expect(impact.pageLabels).toHaveLength(12);
+    expect(impact.more).toBe(28);
   });
 
   it('reports what actually happened, including a partial failure', () => {
