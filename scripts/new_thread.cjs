@@ -79,6 +79,22 @@ run('git', ['worktree', 'add', dest, '-b', topic, base]);
 console.log('[thread] Installing dependencies (about a minute, and its own copy on purpose)…');
 run('npm', ['ci'], { cwd: dest, stdio: ['ignore', 'ignore', 'inherit'] });
 
+// Settings are deliberately not in git, so a fresh worktree starts unable to
+// reach ANY database — every store call fails, and the app looks broken in a
+// way that points at the code rather than at the folder. Carry the main
+// checkout's settings across so the folder can actually run.
+//
+// Copied, not symlinked: a link would make an edit here silently rewrite the
+// main checkout's settings, and pointing one thread at production would
+// quietly repoint every other thread too.
+const envSource = path.join(mainRoot, '.env.local');
+if (fs.existsSync(envSource)) {
+  fs.copyFileSync(envSource, path.join(dest, '.env.local'));
+  console.log('[thread] Copied your .env.local across.');
+} else {
+  console.log('[thread] No .env.local in the main folder — this one will have none either.');
+}
+
 // AFTER the install, never before. Creating the worktree fires post-checkout,
 // which tries to build while this folder still has no dependencies — esbuild
 // would reach up to the parent checkout and write bundles referencing
