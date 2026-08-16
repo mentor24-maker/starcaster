@@ -188,8 +188,17 @@ export function BuilderCarouselModuleSettings({
 
           <div className="builder-schema-group-title">Size</div>
           <BuilderModuleFieldStrip>
-            {/* 0 means "auto" — the carousel takes its height from the image. */}
-            <BuilderModuleField label="Height (0 = auto)" width="num">
+            {/* 0 means "auto" — the picture keeps its own proportions.
+                The label names what the number actually sizes, which is not
+                the same thing in the two formats: the slideshow's frame IS
+                the picture, while a card slider's row takes its height from
+                the cards in it, so there the setting is the card picture's
+                height. Naming it "Height" in both left the operator setting a
+                number that visibly did nothing (2026-08-16). */}
+            <BuilderModuleField
+              label={isCards ? "Image height (0 = auto)" : "Height (0 = auto)"}
+              width="num"
+            >
               <BuilderNumberSelectControl
                 value={settings.heightPx || "0"}
                 min={0}

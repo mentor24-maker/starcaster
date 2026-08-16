@@ -5295,7 +5295,24 @@ function CarouselPreview({
   const wrapStyle: CSSProperties = nudgeTransform
     ? { transform: nudgeTransform, position: "relative" }
     : {};
-  const frameStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
+  /**
+   * Where Height lands depends on the format, because the two formats have
+   * different things whose height an operator is actually setting.
+   *
+   * Slideshow: the frame IS the picture, so Height sizes the frame.
+   * Cards: the frame is a scrolling row whose height comes from the cards in
+   *   it — sizing the frame just adds an empty band underneath (operator,
+   *   2026-08-16: "the images in this slideshow are being cut off, and
+   *   neither auto (0) nor a larger size changes the height"). What Height
+   *   means on a shelf of cards is how tall each card's PICTURE is.
+   *
+   * Auto (0) leaves the picture at its own proportions rather than cropping
+   * it to a fixed box, which is the other half of that report: the card
+   * image used to be a hard 180px with `object-fit: cover`, so a poster lost
+   * its top and bottom and no setting could give them back.
+   */
+  const frameStyle: CSSProperties = heightPx > 0 && !isCards ? { height: `${heightPx}px` } : {};
+  const cardImageStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
 
   const atStart = index <= 0;
   const atEnd = index >= count - 1;
@@ -5364,7 +5381,7 @@ function CarouselPreview({
                 item,
                 <>
                   {item.imageUrl ? (
-                    <div className="builder-preview-carousel-card-image">
+                    <div className="builder-preview-carousel-card-image" style={cardImageStyle}>
                       <img
                         {...imageProps(item.imageUrl, { sizes: `${cardWidth}px` })}
                         alt={item.imageAlt || item.title || ""}
