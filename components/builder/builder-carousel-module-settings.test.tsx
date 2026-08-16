@@ -148,6 +148,52 @@ describe("format-specific controls", () => {
 });
 
 /**
+ * The image frame, asked for on 2026-08-16. It is one of the few groups here
+ * that is NOT format-specific: the operator asked for a border "that applies
+ * to all images", so both formats get the identical set.
+ */
+describe("image border controls", () => {
+  it("offers the whole set on both formats", () => {
+    for (const format of ["slideshow", "cards"]) {
+      const html = panelHtml({ format });
+      expect(html).toContain(">Image Border<");
+      for (const label of [">Style<", ">Border<", ">Border Color<", ">Radius<", ">Drop Shadow<"]) {
+        expect(html).toContain(label);
+      }
+    }
+  });
+
+  it("keeps the shadow's own numbers behind its checkbox", () => {
+    // Five dead number boxes is what an Advanced section used to hide, and A0
+    // retired those — so they appear when the shadow does, and not before.
+    const off = panelHtml();
+    for (const label of [">Shadow Color<", ">Shadow X<", ">Shadow Blur<", ">Shadow Opacity<"]) {
+      expect(off).not.toContain(label);
+    }
+    const on = panelHtml({ imageShadow: "true" });
+    for (const label of [">Shadow Color<", ">Shadow X<", ">Shadow Y<", ">Shadow Blur<", ">Shadow Spread<", ">Shadow Opacity<"]) {
+      expect(on).toContain(label);
+    }
+  });
+
+  it("sits after Size and before the items", () => {
+    const html = panelHtml({ format: "cards" });
+    expect(html.indexOf(">Size<")).toBeLessThan(html.indexOf(">Image Border<"));
+    expect(html.indexOf(">Image Border<")).toBeLessThan(html.indexOf("builder-item-grid--carousel"));
+  });
+
+  it("shows the frame an untouched carousel already has", () => {
+    // 8px is what the stylesheet rounded both formats by before this control
+    // existed; a panel that showed 0 there would be lying about the page.
+    const html = panelHtml();
+    const at = html.indexOf(">Radius<");
+    const select = html.slice(html.indexOf("<select", at), html.indexOf("</select>", at));
+    expect(select).toContain('value="8"');
+    expect(select).toContain('selected=""');
+  });
+});
+
+/**
  * W8, widened to spacing 2026-08-12. Operator: "slideshow module also has
  * sizes incremented by 1 that should be 5."
  *

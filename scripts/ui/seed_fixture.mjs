@@ -187,6 +187,10 @@ const TUNED = {
   // exact "a control the check cannot see is a control the rule does not
   // cover" hole. Two items, one missing its link, so the widest control in
   // the grid (Choose From Gallery) is on screen against a real track.
+  // Drop shadow ON for the same reason captions are: the six shadow controls
+  // added 2026-08-16 only render once the box is ticked, so an unticked
+  // fixture measures the Image Border strip at half its width and reports OK
+  // on controls it never saw.
   carousel: {
     name: 'Slideshow',
     settings: {
@@ -194,6 +198,8 @@ const TUNED = {
       showCaptions: 'true',
       captionPosition: 'bottom-left',
       heightPx: '420',
+      imageBorderWidth: '6',
+      imageShadow: 'true',
       items: JSON.stringify([
         {
           id: 'item-1', title: 'Junior Tennis Programs', body: 'Camps, clinics and private lessons all summer.',

@@ -211,6 +211,108 @@ describe("carousel height", () => {
 });
 
 /**
+ * The image frame — border, corner and drop shadow (operator, 2026-08-16:
+ * "full border control that applies to all images, including dropshadows").
+ *
+ * Asserted on the RENDERED page for the reason the Height tests above record:
+ * a control whose value reaches no element looks identical in the panel to
+ * one that works (doctrine E7). Where the frame LANDS is the whole question
+ * here — the slideshow's frame is the picture, a card's picture is its own
+ * box — and it is exactly what a settings-level test cannot see.
+ */
+describe("carousel image frame", () => {
+  const cards = (settings = {}) =>
+    render({ type: "carousel", settings: { format: "cards", items: LEGACY_SLIDER_ITEMS, ...settings } });
+
+  const cardImageTag = (html: string) => {
+    const at = html.indexOf("builder-preview-carousel-card-image");
+    return html.slice(html.lastIndexOf("<div", at), html.indexOf(">", at) + 1);
+  };
+
+  const slideshowFrameTag = (html: string) => {
+    const at = html.indexOf("builder-preview-carousel-slideshow");
+    return html.slice(html.lastIndexOf("<div", at), html.indexOf(">", at) + 1);
+  };
+
+  it("puts the border on the slideshow's frame, which IS its picture", () => {
+    const tag = slideshowFrameTag(slideshow({ imageBorderWidth: "8", imageBorderColor: "#ff0000" }));
+    expect(tag).toContain("border:8px solid #ff0000");
+  });
+
+  it("puts the border on each card's picture, not on the row or the copy", () => {
+    const html = cards({ imageBorderWidth: "4", imageBorderColor: "#00ff00" });
+    expect(cardImageTag(html)).toContain("border:4px solid #00ff00");
+    // The row is the scroller; a border there would frame the whole shelf.
+    const row = html.slice(
+      html.indexOf("builder-preview-carousel-cards"),
+      html.indexOf("builder-preview-carousel-card-image")
+    );
+    expect(row).not.toContain("border:4px");
+  });
+
+  it("gives every card the same frame — there is no per-item version", () => {
+    const html = cards({ imageBorderWidth: "4" });
+    expect([...html.matchAll(/border:4px solid/g)]).toHaveLength(2);
+  });
+
+  it("rounds both formats by 8px when nobody has touched the setting", () => {
+    expect(slideshowFrameTag(slideshow())).toContain("border-radius:8px");
+    expect(cardImageTag(cards())).toContain("border-radius:8px");
+  });
+
+  it("squares the corners when the operator asks for 0", () => {
+    expect(slideshowFrameTag(slideshow({ imageBorderRadius: "0" }))).toContain("border-radius:0px");
+  });
+
+  it("keeps the height setting alongside the frame", () => {
+    // Both land on the same element in each format, so one must not eat the
+    // other — the bug this style of merge invites.
+    expect(slideshowFrameTag(slideshow({ heightPx: "420", imageBorderWidth: "2" }))).toContain(
+      "height:420px"
+    );
+    const tag = cardImageTag(cards({ heightPx: "300", imageBorderWidth: "2" }));
+    expect(tag).toContain("height:300px");
+    expect(tag).toContain("border:2px");
+  });
+
+  it("draws the drop shadow on the picture in both formats", () => {
+    expect(slideshowFrameTag(slideshow({ imageShadow: "true" }))).toContain(
+      "box-shadow:0px 6px 18px 0px rgba(0, 0, 0, 0.3)"
+    );
+    expect(cardImageTag(cards({ imageShadow: "true" }))).toContain("box-shadow:0px 6px 18px");
+  });
+
+  /**
+   * `overflow-x: auto` on the card row clips the vertical axis whether or not
+   * anything asks it to, so a shadow under a card is cut off at the card's
+   * own edge. The row is given room instead — vertically only, because
+   * horizontal padding would move every scroll offset the card loop counts in.
+   */
+  it("makes room under the cards for the shadow to fall into", () => {
+    const html = cards({ imageShadow: "true" });
+    const row = html.slice(
+      html.indexOf("builder-preview-carousel-cards"),
+      html.indexOf("builder-preview-carousel-card-image")
+    );
+    expect(row).toContain("padding-top:24px");
+    expect(row).toContain("padding-bottom:24px");
+  });
+
+  it("adds no gutter when there is no shadow to make room for", () => {
+    // The row's own tag, not the page: the section around it carries padding
+    // of its own and an assertion over the document would read that instead.
+    const html = cards();
+    const at = html.indexOf("builder-preview-carousel-cards");
+    const rowTag = html.slice(html.lastIndexOf("<div", at), html.indexOf(">", at) + 1);
+    expect(rowTag).not.toContain("padding-top:");
+  });
+
+  it("leaves the slideshow's frame unpadded — nothing clips it", () => {
+    expect(slideshowFrameTag(slideshow({ imageShadow: "true" }))).not.toContain("padding-top");
+  });
+});
+
+/**
  * The nudge, added 2026-08-12 with the two controls in the panel's left
  * column and inherited unchanged by the merged module.
  *
