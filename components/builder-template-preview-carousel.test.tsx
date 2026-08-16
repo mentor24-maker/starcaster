@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { createDefaultBackgroundSettings, normalizeLayoutSections } from "@/lib/builder-template";
@@ -136,6 +137,76 @@ describe("carousel — the union of the two modules", () => {
 
   it("keeps fade on the slideshow format", () => {
     expect(slideshow({ transition: "fade" })).toContain("builder-preview-carousel-fade");
+  });
+});
+
+/**
+ * Height, per format.
+ *
+ * These exist because the merged module shipped with Height wired to the
+ * frame in BOTH formats, which on a card slider is an element whose height
+ * comes from its cards — so the number changed nothing visible except the
+ * empty band it added underneath, while a hard-coded 180px picture box
+ * cropped every card image (operator, 2026-08-16). The renderer tests above
+ * all passed throughout: they asserted the setting was READ, never that it
+ * reached the thing an operator was looking at.
+ */
+describe("carousel height", () => {
+  const cards = (settings = {}) =>
+    render({ type: "carousel", settings: { format: "cards", items: LEGACY_SLIDER_ITEMS, ...settings } });
+
+  it("sizes a slideshow's frame", () => {
+    expect(slideshow({ heightPx: "420" })).toContain("height:420px");
+  });
+
+  it("sizes a card's picture, not the row it scrolls in", () => {
+    const html = cards({ heightPx: "600" });
+    // The picture box carries it...
+    const imageBox = html.slice(html.indexOf("builder-preview-carousel-card-image"));
+    expect(imageBox).toContain("height:600px");
+    // ...and the scrolling row does not, or the row grows past its cards and
+    // leaves the empty band the operator reported.
+    const row = html.slice(html.indexOf("builder-preview-carousel-cards"), html.indexOf("builder-preview-carousel-card-image"));
+    expect(row).not.toContain("height:600px");
+  });
+
+  // Scoped to the picture's own tag: the surrounding page carries plenty of
+  // unrelated zeroes (`--builder-section-min-height:0px`), and an assertion
+  // over the whole document would catch those instead.
+  const cardImageTag = (html: string) => {
+    const at = html.indexOf("builder-preview-carousel-card-image");
+    return html.slice(html.lastIndexOf("<div", at), html.indexOf(">", at) + 1);
+  };
+
+  it("leaves the picture unbounded on auto, so nothing is cropped", () => {
+    expect(cardImageTag(cards({ heightPx: "0" }))).not.toContain("height");
+  });
+
+  it("treats a missing height the same as auto", () => {
+    expect(cardImageTag(cards())).not.toContain("height");
+  });
+
+  /**
+   * The OTHER half of the same bug lived in CSS, where no markup test can
+   * reach it: `.builder-preview-carousel-card-image` carried `height: 180px`,
+   * so `object-fit: cover` cropped every card picture to that box no matter
+   * what the markup said. Three of the tests written alongside this one
+   * passed happily against the broken build for exactly that reason, which is
+   * worth stating rather than quietly deleting them.
+   *
+   * So this one reads the stylesheet. Crude, and the only kind of guard the
+   * repo has for CSS at all (CLAUDE.md: "nothing tests CSS") — but it fails
+   * for real if a future edit pins that box's height again.
+   */
+  it("does not pin the picture's height in CSS either", () => {
+    const css = readFileSync(
+      new URL("../src/css/_builder-react-overrides.css", import.meta.url),
+      "utf8"
+    );
+    const at = css.indexOf(".builder-react-root .builder-preview-carousel-card-image {");
+    expect(at).toBeGreaterThan(-1);
+    const rule = css.slice(at, css.indexOf("}", at));
+    expect(rule).not.toMatch(/(^|[^-])height\s*:/m);
   });
 });
 

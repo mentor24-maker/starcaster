@@ -1190,18 +1190,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   scroll-snap-align: start;
 }
 
-/* A DEFINITE height, not a min-height. The retired Card Slider got away with
-   `min-height` because it rendered its picture through next/image `fill`,
-   which is absolutely positioned; a plain `<img>` in the same box has nothing
-   to crop against and hands the card its photo's full height. */
+/* NO height here — it comes from the Height setting as an inline style, or
+   not at all.
+
+   This rule carried a hard `height: 180px` for one day. It was put there to
+   stop a card taking its photo's full 1920px height, which the retired Card
+   Slider avoided only because it rendered through next/image `fill`. But a
+   fixed box plus `object-fit: cover` crops every picture to that box, so a
+   poster lost its top and bottom and the Height control could not give them
+   back (operator, 2026-08-16). The card's WIDTH already bounds the picture;
+   its height should follow the picture unless the operator says otherwise. */
 .builder-react-root .builder-preview-carousel-card-image {
   position: relative;
   width: 100%;
-  height: 180px;
   overflow: hidden;
   border-radius: 8px;
 }
 
+/* `height: 100%` resolves against the box: to the Height setting when there
+   is one (so `object-fit: cover` crops to it, deliberately), and to auto when
+   there is not (so the picture keeps its own proportions and nothing is cut
+   off). One rule, both behaviours, no branch. */
 .builder-react-root .builder-preview-carousel-card-image img {
   width: 100%;
   height: 100%;
@@ -1455,9 +1464,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   scroll-snap-align: start;
 }
 
-.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-card-image {
-  min-height: 180px;
-}
+/* No min-height on a phone either — same reason. The card is already narrow,
+   so a picture at its own proportions is short, not sprawling. */
 
 /* A caption inset 24px from the edge of a phone-width photo leaves almost no
    line to read, and its type has to come down with it. */
@@ -1476,9 +1484,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     min-width: min(82vw, 320px) !important;
     scroll-snap-align: start;
   }
-  .builder-react-root .builder-preview-carousel-card-image {
-    min-height: 180px;
-  }
+
   .builder-react-root .builder-preview-carousel-caption {
     max-width: 92%;
     padding: 8px 10px;
