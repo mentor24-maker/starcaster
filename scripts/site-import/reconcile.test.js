@@ -21,6 +21,7 @@ const assert = require('node:assert/strict');
 const {
   reconcile,
   reportReconciles,
+  mergeDecisions,
   classifySource,
   detectChromeSignatures,
   detectSiteSuffix,
@@ -586,4 +587,48 @@ test('a furniture form only one page carries is left alone', () => {
   const prefixes = commonPrefix(texts);
   assert.ok(prefixes.some((p) => texts[0].startsWith(p)), 'the repeated form is stripped');
   assert.ok(!prefixes.some((p) => texts[3].startsWith(p)), 'the one-off form is not');
+});
+
+// --- the decisions file is a permanent record ---------------------------
+
+test('a decision that worked survives being written back', () => {
+  // The bug: a decision moves its page OUT of the set-aside list, so
+  // rebuilding the file from that list alone dropped the entry and the very
+  // next run un-paired the page. The file silently erased every decision
+  // that succeeded.
+  const decisions = { 'programs-adult-clinics': 'tennis-drills-clinics' };
+  const out = reconcile({ ...fixture(), decisions });
+  assert.equal(
+    out.pairings.find((p) => p.sourceSlug === 'programs-adult-clinics')?.targetSlug,
+    'tennis-drills-clinics',
+    'precondition: the decision pairs the page'
+  );
+  assert.ok(
+    !out.setAside.some((s) => s.sourceSlug === 'programs-adult-clinics'),
+    'precondition: a paired page leaves the set-aside list'
+  );
+
+  const written = mergeDecisions(decisions, out);
+  assert.equal(written['programs-adult-clinics'], 'tennis-drills-clinics');
+});
+
+test('decisions are stable across repeated runs', () => {
+  const start = { 'programs-adult-clinics': 'tennis-drills-clinics', 'tag-tennis': null };
+  let decisions = start;
+  let paired = 0;
+  for (let run = 0; run < 3; run += 1) {
+    const out = reconcile({ ...fixture(), decisions });
+    if (run === 0) paired = out.pairings.length;
+    assert.equal(out.pairings.length, paired, `run ${run + 1} paired a different number of pages`);
+    decisions = mergeDecisions(decisions, out);
+  }
+  assert.equal(decisions['programs-adult-clinics'], 'tennis-drills-clinics');
+  assert.equal(decisions['tag-tennis'], null);
+});
+
+test('undecided pages are offered, never overwritten', () => {
+  const out = reconcile(fixture());
+  const written = mergeDecisions({ 'tag-tennis': null }, out);
+  assert.equal(written['tag-tennis'], null, 'an existing call is untouched');
+  assert.equal(written['bryan-brothers-clinic'], '', 'a new page is offered as undecided');
 });

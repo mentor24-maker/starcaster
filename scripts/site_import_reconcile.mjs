@@ -125,7 +125,7 @@ if (/localhost|127\.0\.0\.1/.test(process.env.SUPABASE_URL) && !flag('--allow-lo
 const store = require('./lib/siteImportStore.js');
 const pagesStore = require('./lib/builderPagesStore.js');
 const snapshotsStore = require('./lib/builderPageSnapshotsStore.js');
-const { reconcile, reportReconciles, toPath } = require('./lib/site-import/dist/reconcile.js');
+const { reconcile, reportReconciles, toPath, mergeDecisions } = require('./lib/site-import/dist/reconcile.js');
 
 const JOB_ID = flagValue('--job');
 const APPLY = flag('--apply');
@@ -238,13 +238,8 @@ function writeDecisionsFile(output, decisions) {
     // likely to be a real page the score merely could not prove.
     return (b.candidates[0]?.score || 0) - (a.candidates[0]?.score || 0);
   });
-  const entries = {};
-  for (const item of ordered) {
-    // Preserve what the operator already decided; offer "" for the rest.
-    entries[item.sourceSlug] = Object.prototype.hasOwnProperty.call(decisions, item.sourceSlug)
-      ? decisions[item.sourceSlug]
-      : '';
-  }
+  const entries = mergeDecisions(decisions, output);
+
   const notes = ordered.map((item) => ({
     sourceSlug: item.sourceSlug,
     originalPath: item.sourcePath,
@@ -253,6 +248,19 @@ function writeDecisionsFile(output, decisions) {
     class: item.sourceClass,
     bestCandidates: item.candidates.map((c) => `${c.targetSlug} (${c.score.toFixed(2)}, ${c.reason})`),
   }));
+
+  // Pages paired BY this file are recorded too, so the file explains every
+  // call it is making rather than only the ones still outstanding.
+  const applied = output.pairings
+    .filter((p) => p.reason === 'decision-file')
+    .map((p) => ({
+      sourceSlug: p.sourceSlug,
+      originalPath: p.sourcePath,
+      title: p.sourceTitle,
+      pairedWith: p.targetSlug,
+      by: 'decision file',
+      modules: p.moduleCount,
+    }));
   const payload = {
     _readme: [
       'Fill in "decisions" to resolve the review pile, then re-run the script.',
@@ -263,11 +271,13 @@ function writeDecisionsFile(output, decisions) {
     jobId: JOB_ID,
     generatedAt: new Date().toISOString(),
     decisions: entries,
+    appliedByThisFile: applied,
     notes,
   };
   mkdirSync(path.dirname(DECISIONS_PATH), { recursive: true });
   writeFileSync(DECISIONS_PATH, `${JSON.stringify(payload, null, 2)}\n`);
-  log(`\nDecisions file: ${path.relative(ROOT, DECISIONS_PATH)} (${notes.length} pages awaiting a call)`);
+  const undecided = Object.values(entries).filter((v) => v === '').length;
+  log(`\nDecisions file: ${path.relative(ROOT, DECISIONS_PATH)} — ${applied.length} call(s) applied, ${undecided} still undecided`);
 }
 
 async function main() {

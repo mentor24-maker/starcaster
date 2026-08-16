@@ -888,6 +888,27 @@ export function reconcile(options: ReconcileOptions): ReconcileOutput {
 }
 
 /**
+ * Rebuild the decisions map for writing back to disk.
+ *
+ * The trap this exists to close: a decision that WORKED moves its page out
+ * of the set-aside list, so rebuilding the file from that list alone drops
+ * the entry — and the very next run un-pairs the page. The file silently
+ * erased every decision that succeeded. It must only ever gain entries.
+ */
+export function mergeDecisions(
+  existing: Record<string, string | null>,
+  output: ReconcileOutput
+): Record<string, string | null> {
+  const next: Record<string, string | null> = { ...existing };
+  for (const item of output.setAside) {
+    if (!Object.prototype.hasOwnProperty.call(next, item.sourceSlug)) {
+      next[item.sourceSlug] = ''; // undecided
+    }
+  }
+  return next;
+}
+
+/**
  * Every imported page must be accounted for exactly once. A dry run whose
  * numbers do not add up must refuse to apply — the same rule Phase 2 uses,
  * for the same reason: a page that quietly falls out of both lists is
