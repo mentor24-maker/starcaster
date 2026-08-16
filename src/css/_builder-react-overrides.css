@@ -62,7 +62,11 @@
 .builder-react-root .builder-meta-grid,
 .builder-react-root .builder-gallery-grid,
 .builder-react-root .builder-gallery-card,
-.builder-react-root .builder-gallery-modal,
+/* The popped-out module editor is deliberately rounder (40px, operator
+   2026-08-15) and this blanket rule carries an `!important`, so it won a
+   40px it was never asked about. Excluded by name rather than answered with
+   a second `!important`: one of those is a conflict, two is an arms race. */
+.builder-react-root .builder-gallery-modal:not(.builder-centered-modal),
 .builder-react-root .builder-gallery-empty,
 .builder-react-root .builder-workspace-empty,
 .builder-react-root .builder-editor-popup,
