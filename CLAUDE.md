@@ -134,6 +134,26 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     `if (checkEndpointLimit(...)) return true;` is correct. The inverted form
     bails out of every normal request and writes nothing at all — status 0,
     empty body, a completely dead endpoint that still looks fine in review.
+
+12. **A tenant-scoped table needs BOTH `project_id` and `owner_user_id`.**
+    `lib/projectScope.js` decides whether to stamp a tenant by probing the
+    table for both (`select=project_id,owner_user_id`). A table carrying only
+    `project_id` fails that probe, and `scopedInsertRow` quietly stops stamping
+    **either** column — the insert still succeeds, nothing errors, and the rows
+    land with no tenant.
+    It cost twice on 2026-08-16. `builder_published_pages` wrote ten rows with
+    a blank `project_id` and every published page then read back as
+    unpublished — caught in minutes because the feature visibly did not work.
+    `builder_page_revisions` had the same gap since it shipped and nobody
+    noticed for two days, because its reads filter by `page_id` and skip the
+    project scope too, so Page History behaved perfectly while all 550
+    production rows sat untenanted.
+    **The visible failure is the lucky one.** If a new table is scoped, give it
+    both columns; if a store writes through `scopedInsertRow`, check the rows
+    afterwards rather than trusting the insert's success.
+    A dozen older tables still have this gap (`git grep -l 'project_id text'
+    docs/SQL | xargs grep -L owner_user_id`); they are only a problem where a
+    store actually uses `scopedInsertRow`.
 12. **Store calls take the limit FIRST and return an envelope.**
     `listPages(limit, scope)` — `listPages(scope)` reads the scope as a limit
     and returns **every project's pages**, which is a tenant leak that looks
@@ -233,6 +253,24 @@ both use, from one shared module so they can never disagree.
 `git worktree list` shows every active thread; `git worktree remove
 .claude/worktrees/<topic>` cleans one up. Caveat: `.git/hooks` is **shared**
 across worktrees, so `npm install` in one reinstalls hooks for all of them.
+
+**Dev servers collide on port 3001, and `pkill` is a shared-resource action.**
+Every worktree's `npm run dev` wants the same port, so the first one started
+owns it and the others silently fail — which means a browser check can be
+driven against ANOTHER thread's code and reported as yours. On 2026-08-16 that
+produced a page that appeared to 404, and a fix was nearly written for a bug
+that did not exist; the same session had already killed a teammate's server
+with `pkill -f "node server.js"`, which matches every worktree at once.
+Start this folder's own server on its own port and point the harness at it:
+
+```
+PORT=3057 node server.js
+UI_HARNESS_BASE_URL=http://localhost:3057 npm run check:panels
+```
+
+`scripts/ui/app-driver.mjs` now refuses to run when the app on the target port
+is serving a different build than the checkout, and names the fix. Trust that
+message: it is almost always another worktree, not your code.
 
 Run the real `npm ci` — **never symlink `node_modules` to another checkout**
 to save the ~270MB. Builds are supposed to be a function of the source, and a
