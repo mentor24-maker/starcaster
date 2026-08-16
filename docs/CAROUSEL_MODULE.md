@@ -124,7 +124,13 @@ Two things worth not re-breaking:
    slideshow frame and the card picture by 8px each, long before either had a
    control. Any other default would have restyled every live carousel the day
    this shipped — the setting is new, the appearance is not.
-2. **The card row gets a vertical gutter when the shadow is on.**
+2. **The card row's rounding follows the setting, and holds no number of its
+   own.** The row clips to its own `border-radius`, so while that was a hard
+   8px in CSS the outer corners of the first and last card stayed rounded no
+   matter what the pictures said — Radius 0 was square everywhere except the
+   two corners anyone looks at first (operator, 2026-08-16: *"allow the radius
+   to go all the way to 0px"*).
+3. **The card row gets a vertical gutter when the shadow is on.**
    `overflow-x: auto` clips the *other* axis whether or not anything asks it
    to — there is no scrolling one axis while the other overflows visibly — so
    without it the shadow stops dead at the bottom of the card. The gutter is

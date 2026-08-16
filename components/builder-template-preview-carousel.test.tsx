@@ -262,6 +262,23 @@ describe("carousel image frame", () => {
 
   it("squares the corners when the operator asks for 0", () => {
     expect(slideshowFrameTag(slideshow({ imageBorderRadius: "0" }))).toContain("border-radius:0px");
+    expect(cardImageTag(cards({ imageBorderRadius: "0" }))).toContain("border-radius:0px");
+  });
+
+  /**
+   * Operator, 2026-08-16: "allow the radius to go all the way to 0px". The
+   * control offered 0 from the day it shipped, but the card ROW carries its
+   * own 8px rounding in CSS and clips to it, so the outer corners of the
+   * first and last card stayed rounded whatever the pictures said — square
+   * everywhere except the two corners anyone would look at first.
+   */
+  it("stops the card row rounding more than its cards do", () => {
+    const rowTag = (html: string) => {
+      const at = html.indexOf("builder-preview-carousel-cards");
+      return html.slice(html.lastIndexOf("<div", at), html.indexOf(">", at) + 1);
+    };
+    expect(rowTag(cards({ imageBorderRadius: "0" }))).toContain("border-radius:0px");
+    expect(rowTag(cards({ imageBorderRadius: "24" }))).toContain("border-radius:24px");
   });
 
   it("keeps the height setting alongside the frame", () => {

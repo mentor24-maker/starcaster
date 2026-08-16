@@ -5472,7 +5472,12 @@ function CarouselPreview({
   const frameStyle: CSSProperties = {
     ...(heightPx > 0 && !isCards ? { height: `${heightPx}px` } : {}),
     ...(shadowGutter > 0 ? { paddingTop: `${shadowGutter}px`, paddingBottom: `${shadowGutter}px` } : {}),
-    ...(isCards ? {} : imageFrame)
+    // The card row carries its OWN rounding in CSS (8px) and clips to it,
+    // which shaves the outer corners of the first and last card whatever the
+    // pictures are set to — so Radius 0 could not actually reach square
+    // (operator, 2026-08-16: "allow the radius to go all the way to 0px").
+    // The row follows the setting instead of holding a number of its own.
+    ...(isCards ? { borderRadius: imageFrame.borderRadius } : imageFrame)
   };
   const cardImageStyle: CSSProperties = {
     ...(heightPx > 0 ? { height: `${heightPx}px` } : {}),

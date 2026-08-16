@@ -191,6 +191,13 @@ describe("image border controls", () => {
     expect(select).toContain('value="8"');
     expect(select).toContain('selected=""');
   });
+
+  it("offers 0 — square corners are a choice, not just the floor", () => {
+    const html = panelHtml();
+    const at = html.indexOf(">Radius<");
+    const select = html.slice(html.indexOf("<select", at), html.indexOf("</select>", at));
+    expect(select).toContain('value="0"');
+  });
 });
 
 /**
