@@ -88,7 +88,21 @@ function assertServingThisCheckout(baseUrl) {
 const REQUIRED_ARTIFACTS = [
   {
     file: 'public/app-shell.html',
-    sources: ['src/layout.html', 'src/pages'],
+    // NO staleness check, deliberately. `npm run build` generates this from
+    // src/layout.html and THEN pin_asset_versions rewrites src/layout.html to
+    // stamp the new `?v=` hashes into it — so after any build that changes CSS
+    // or the bundle, the source is legitimately newer than the artifact and an
+    // mtime comparison reports a folder that is perfectly current as stale.
+    //
+    // That false positive fired on the very first real use of this check
+    // (2026-08-15) and it is the worse failure: a guard that cries wolf after
+    // every styling build is a guard people learn to ignore, which is how the
+    // thing it guards gets through. The pins themselves are already covered by
+    // `npm run check:assets`, which compares content rather than timestamps.
+    //
+    // Existence is still checked, and that is the case that actually cost the
+    // hour: the file missing entirely.
+    sources: [],
     rebuild: 'npm run build:html',
     note: 'this file IS the admin app; without it the browser loads nothing to measure',
   },
@@ -119,6 +133,8 @@ async function checkServingThisCheckout(baseUrl) {
       missing.push(artifact);
       continue;
     }
+    // An artifact with no declared sources opts out of the staleness check;
+    // newestMtime([]) is 0, which is never greater than a real mtime.
     if ((await newestMtime(artifact.sources)) > built) stale.push(artifact);
   }
 
