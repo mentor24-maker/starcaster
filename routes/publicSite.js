@@ -2,7 +2,11 @@
 
 const { sendJson, sendErr, sendStatus, isHeadRequest, getUrlObj, getPublicSiteDomainParam } = require('./http');
 const { findProjectByDomain, getPublicProjectById } = require('../lib/projectsStore');
-const { listPublishedPagesForProject, listRestrictedAdminSitePagesForProject } = require('../lib/builderPagesStore');
+const {
+  listPublishedPagesForProject,
+  getPublishedPageForProject,
+  listRestrictedAdminSitePagesForProject,
+} = require('../lib/builderPagesStore');
 const { getAdminSession } = require('../lib/projectAdminStore');
 const projectAdmin = require('./projectAdmin');
 const {
@@ -107,6 +111,47 @@ async function handle(req, res, pathname, method) {
     const renditions = await buildRenditionMapForPages(scopedProjectId, result.data);
 
     return respondJson(res, req, 200, { ok: true, pages: result.data, renditions }), true;
+  }
+
+  // GET /api/public/page?projectId=...&slug=... — ONE published page.
+  //
+  // The site used to fetch every published page and pick one in the browser:
+  // 1.36 MB across the wire on Marinoff (51 pages) to show roughly 30 KB of
+  // page. This answers with the page asked for.
+  //
+  // /api/public/pages stays. The site-search RESULTS module builds its index
+  // from every page and genuinely needs them all — it is now the only thing
+  // that asks for the whole site, and it only loads on a results page.
+  if (pathname === '/api/public/page' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    const { searchParams } = getUrlObj(req);
+    const projectId = String(searchParams.get('projectId') || '').trim();
+    if (!projectId) return respondErr(res, req, 400, 'projectId is required'), true;
+
+    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+
+    const scopedProjectId = bind.projectId || projectId;
+    const slug = String(searchParams.get('slug') || '');
+
+    // A private slug is never served here — that path requires an admin
+    // session and has its own endpoint. Answering 404 rather than 403 keeps
+    // this endpoint from confirming which private pages exist.
+    const { isPrivateSiteSlug } = require('../lib/builder-client/public-site-page-slugs');
+    if (isPrivateSiteSlug(slug)) {
+      return respondErr(res, req, 404, 'Page not found', { code: 'PAGE_NOT_FOUND' }), true;
+    }
+
+    const result = await getPublishedPageForProject(scopedProjectId, slug);
+    if (!result.ok) {
+      return respondErr(res, req, result.status || 500, result.error || 'Failed to load page', {
+        code: result.code || null,
+      }), true;
+    }
+
+    const { buildRenditionMapForPages } = require('../lib/assetRenditionsForPages');
+    const renditions = await buildRenditionMapForPages(scopedProjectId, [result.data]);
+
+    return respondJson(res, req, 200, { ok: true, page: result.data, renditions }), true;
   }
 
   // GET /api/public/admin-pages?projectId=... — restricted admin site pages (admin session required)
