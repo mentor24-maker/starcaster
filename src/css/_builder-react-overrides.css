@@ -4598,6 +4598,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-variant-numeric: tabular-nums;
 }
 
+/* Day headings. Retention now keeps hourly milestones for a week and daily
+   ones for a month, so this list spans days rather than the ninety minutes a
+   flat "newest 25" used to cover — without headings the older entries read as
+   noise sitting under the current session. */
+.builder-react-root .builder-page-history-day + .builder-page-history-day {
+  margin-top: var(--space-4, 16px);
+}
+
+.builder-react-root .builder-page-history-day-heading {
+  margin: 0 0 var(--space-1, 4px);
+  font-size: var(--text-xs, 0.78rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #5c6a72);
+}
+
 .builder-react-root .builder-page-history-restore {
   white-space: nowrap;
   width: fit-content;
