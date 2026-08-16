@@ -206,3 +206,30 @@ database: every image in the durable namespace, all 73 reachable, all 73
 registered in the Assets library exactly once, each block sitting between
 the page's content and its footer. A third run placed the same 73 and
 added zero library rows, which is the idempotence check.
+
+---
+
+## Where the Delray work ended up (2026-08-16)
+
+The reconcile and top-up ran against a **scratch** project, per Phase 2
+decision 8. The operator then deleted the old, empty
+"Delray Beach Tennis Club" project and renamed the scratch one, so:
+
+| | |
+|---|---|
+| Project | `proj_1786047238296_opepjk` — **Delray Beach Tennis Center**, slug `delray-beach-tennis-center` |
+| Was | `Delray Tennis Center` / `scratch-site-import-test` |
+| Import job | `simp_1786047449851_duiqnj` |
+| Contents | 131 pages, 401 assets |
+| Serving | `domain = delraytennis.starcaster.pro` (the `domain` field routes the public site, not the slug) |
+
+The old project (`proj_1780601126203_f3v0m1`) is gone and owned nothing —
+0 pages, 0 assets, 0 saved sections. Deleting it exposed a separate defect
+that blocked deleting **any** project; see DOCTRINE §5.13 and
+`docs/SQL/fix_dev_sessions_project_id_type.sql`.
+
+**One thing was lost with it:** that project was the only record of
+`delraytennis.com`, in its `project_url` and `website` fields. No project
+carries that value now. It is a record, not routing — the real cutover is
+the `domain` field here plus the Vercel alias — but it should be set on this
+project when the site goes live.

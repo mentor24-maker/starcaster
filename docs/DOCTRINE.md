@@ -233,6 +233,26 @@ and "contains a space" for one problem. A quoted key also fails the prefix check
 problem — so errors suppress warnings for the same value, and the space rule
 matches spaces and tabs only.
 
+### 3.11 A survey that skips what it cannot read has not surveyed anything
+
+Asked whether deleting a project would harm a sibling, a sweep of all 95
+project-scoped tables reported "nothing anywhere is owned by the old
+project" — and the delete then failed outright. The sweep was written as
+`if (error) continue`, so nineteen tables were never actually checked, and
+one of them was `dev_sessions`, whose `project_id` is the wrong TYPE. That
+table was both the answer to the question and the reason the operation
+broke, and it had been silently discarded.
+
+The re-probe was nearly as misleading: a `HEAD`-style count request returns
+no response body, so every one of those errors came back with an empty
+message. "Error, but blank" reads as noise rather than a finding.
+
+**Do this:** a sweep reports three numbers — checked, empty, and **could not
+check** — and the third is never folded into the second (§3.2). When a
+probe errors, print the code and the message before deciding it is
+uninteresting, and re-issue it in a form that actually returns an error body.
+An advisory given from a partial sweep should say which parts were partial.
+
 ### 3.9 The second run is a different program — run it before you believe the first
 
 Reconciling the delraytennis import shipped three defects in one afternoon,
@@ -482,6 +502,23 @@ complete list from a truncated one — and would have quietly planned against
 
 **Do this:** a capped list takes `{ limit, offset }` and callers page to
 exhaustion. If a cap must stay, return enough for the caller to detect it.
+
+### 5.13 Project ids are TEXT — a table that picks its own type breaks far more than itself
+
+`dev_sessions_setup.sql` declared `project_id BIGINT` while every project id
+on this platform is text (`proj_1780601126203_f3v0m1`). Postgres does not
+return zero rows for that, it refuses the query — so the column broke two
+unrelated things and neither pointed at it. Deleting **any** project failed,
+because the purge walks every project-scoped table and returns the first
+error; and scoping Ask Roger sessions to a project had never worked at all,
+which nobody noticed because every row had a NULL project. The operator's
+error message named a type, not a table.
+
+**Do this:** new project-scoped tables use `project_id TEXT`, matching
+`app_projects.id`. A routine that sweeps every table must survive one bad
+table and say which one — dying on the weakest member makes the whole
+operation impossible and names the wrong culprit. Report the defect rather
+than skipping it silently, or the schema stays broken forever (§3.2).
 
 ---
 
