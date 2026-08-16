@@ -454,6 +454,34 @@ function assertLattice(panels, width) {
       );
     }
 
+    /*
+     * THE PAIR IS STILL A PAIR — every control sits to the RIGHT of its own
+     * label.
+     *
+     * Added 2026-08-16, from a failure this check watched go by. Social took
+     * a second settings column, and its column heading was left occupying one
+     * grid cell instead of spanning both tracks. That pushed every pair below
+     * it along by one: the swatch rendered in the label track and the word
+     * "Icon Fill" in the control track, all the way down the column. Nine
+     * rows of scrambled panel, obvious the moment a person looked at it — and
+     * a clean run here, because everything above measures whether the rows
+     * agree with EACH OTHER, and a whole column shifted by one cell agrees
+     * with itself perfectly.
+     *
+     * One pixel of tolerance: a control whose box starts exactly where its
+     * label's does is a `full` field spanning the tracks, and those are
+     * already out of scope above.
+     */
+    for (const f of placed) {
+      if (f.fieldX + 1 < f.labelBoxX) {
+        failures.push(
+          `${where}: "${f.name}" renders its control LEFT of its own label ` +
+          `(control@${f.fieldX}, label@${f.labelBoxX}) — the label/control pairing has slipped a cell, ` +
+          'usually a heading or a wrapper taking a grid cell instead of spanning the tracks'
+        );
+      }
+    }
+
     // L4: a label wider than its track is a cropped word, which the lattice
     // must never buy. The answer is a shorter label or a wider token — never
     // a per-field override.

@@ -165,6 +165,16 @@ as a rule first, then gets a checker where one is possible.
   block. Until something measures the outline, this one is **[eye]** — the
   operator's, usually, which is exactly the cost it is meant to remove.
 
+  **A related blind spot, closed 2026-08-16.** "Rows against each other" was
+  also why a whole column shifted one grid cell to the left could pass: every
+  label still lined up with every other label, and every control with every
+  other control — the column agreed with itself perfectly while rendering
+  each swatch in the label track and each label in the control track. Social
+  did exactly that when its second settings column's heading took one cell
+  instead of spanning the tracks. `check_panels` now also asserts that each
+  control renders to the RIGHT of its own label, which fails a slipped pair
+  without needing anything to measure the outline.
+
 ## D — Density and layout of panels
 
 *Umbrella: compact forms — no wasted screen, no scrolling that a better
