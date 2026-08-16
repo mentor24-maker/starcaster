@@ -78,6 +78,7 @@ import {
 import { BuilderSaveDebugPanel } from "./builder/builder-save-debug-panel";
 import { BuilderSectionCard } from "./builder/builder-section-card";
 import { BuilderCenteredModal } from "./builder/builder-centered-modal";
+import { BuilderSaveConflictModal } from "./builder/builder-save-conflict-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
 import {
   BuilderModulePaletteModal,
@@ -2508,34 +2509,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       ) : null}
 
       {saveConflict ? (
-        <div className="notice error admin-notice builder-save-conflict" role="alert">
-          <p className="builder-save-conflict-lead">
-            <strong>
-              {saveConflict.savedByName || "Somebody else"} saved this page
-              {describeConflictAge(saveConflict.liveUpdatedAt)}.
-            </strong>{" "}
-            Your copy is out of date, so nothing was saved just now — your edits are still here on
-            screen.
-          </p>
-          <p className="builder-save-conflict-help">
-            <strong>Reload the page</strong> throws away your edits and shows you their version.{" "}
-            <strong>Overwrite anyway</strong> saves yours over theirs — their version is kept in Page
-            History, so it can still be brought back.
-          </p>
-          <div className="builder-save-conflict-actions">
-            <button className="submit-button" onClick={reloadPageFromServer} type="button">
-              Reload the page
-            </button>
-            <button
-              className="secondary-button"
-              disabled={isSaving}
-              onClick={() => void savePage({ overwriteFrom: saveConflict.liveUpdatedAt })}
-              type="button"
-            >
-              Overwrite anyway
-            </button>
-          </div>
-        </div>
+        <BuilderSaveConflictModal
+          age={describeConflictAge(saveConflict.liveUpdatedAt)}
+          isSaving={isSaving}
+          onKeepEditing={() => setSaveConflict(null)}
+          onOverwrite={() => void savePage({ overwriteFrom: saveConflict.liveUpdatedAt })}
+          onReload={reloadPageFromServer}
+          savedByName={saveConflict.savedByName}
+        />
       ) : null}
 
       {builderMode === "pages" ? (
