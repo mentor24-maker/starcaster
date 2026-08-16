@@ -5306,6 +5306,164 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* ---- The per-page diff inside that dialog -------------------------------
+   The page list above answers WHICH pages an overwrite rewrites; this answers
+   what changes on each, which is the half that lets someone decide rather than
+   only hesitate (operator's 2026-07-21 request, after 46 Marinoff pages).
+
+   Pages that change identically share one block, so the layout's whole job is
+   to make the odd one out obvious: a group with no visible change is muted and
+   starts shut, a group with real changes starts open. Forty pages of which
+   thirty-eight are identical is mostly noise, and that noise is what hides the
+   other two. */
+.builder-react-root .builder-section-diff-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  /* Scrolls rather than pushing the buttons off screen — one of them rewrites
+     the site, so it has to stay reachable however long the list runs. */
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: var(--space-1, 4px);
+}
+
+.builder-react-root .builder-section-diff-truncated {
+  margin: 0 0 var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: 8px;
+  /* A caution wash rather than a brand colour: the text itself stays on a
+     token so it follows the theme. */
+  background: rgba(180, 83, 9, 0.08);
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+.builder-react-root .builder-section-diff-group {
+  border: 1px solid rgba(11, 42, 74, 0.12);
+  border-radius: 10px;
+  background: rgba(11, 42, 74, 0.03);
+}
+
+.builder-react-root .builder-section-diff-group[data-unchanged="true"] {
+  background: transparent;
+  opacity: 0.72;
+}
+
+/* The heading is one wrapping row: how many pages, how many changes, and which
+   pages. It stays visible whether the detail is open or not, so the panel can
+   never fill with one group and hide that another exists. */
+.builder-react-root .builder-section-diff-group-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  line-height: 1.5;
+}
+
+.builder-react-root summary.builder-section-diff-group-heading {
+  cursor: pointer;
+  /* A flex summary drops the browser's own disclosure triangle, and without one
+     nothing says the block opens and shuts. It is drawn back by hand below. */
+  list-style: none;
+}
+
+.builder-react-root summary.builder-section-diff-group-heading::-webkit-details-marker {
+  display: none;
+}
+
+.builder-react-root summary.builder-section-diff-group-heading::before {
+  content: "▸";
+  flex: 0 0 auto;
+  width: 0.9em;
+  color: var(--ink-muted, #5c6a72);
+  font-size: 0.75em;
+}
+
+.builder-react-root .builder-section-diff-group[open] > summary::before {
+  content: "▾";
+}
+
+/* The unchanged group has no arrow, so its text lines up with the others. */
+.builder-react-root .builder-section-diff-group[data-unchanged="true"] .builder-section-diff-group-heading {
+  padding-left: calc(var(--space-3, 12px) + 0.9em + var(--space-2, 8px));
+}
+
+.builder-react-root .builder-section-diff-group-count {
+  font-weight: 600;
+}
+
+.builder-react-root .builder-section-diff-group-verdict {
+  color: var(--ink-muted, #5c6a72);
+}
+
+/* A separator, so "4 changes" and the page names beside it do not read as one
+   run-on phrase. */
+.builder-react-root .builder-section-diff-group-pages::before {
+  content: "· ";
+}
+
+.builder-react-root .builder-section-diff-group-pages {
+  color: var(--ink-muted, #5c6a72);
+  /* Takes the rest of the row, and wraps under the count when there is no room
+     rather than pushing the dialog sideways. */
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.builder-react-root .builder-section-diff-changes {
+  margin: 0;
+  padding: 0 var(--space-3, 12px) var(--space-3, 12px)
+    calc(var(--space-3, 12px) + 0.9em + var(--space-2, 8px));
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.builder-react-root .builder-section-diff-change-label {
+  display: block;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-section-diff-change-detail {
+  display: block;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+}
+
+/* "was" over "now" rather than side by side: the two strings are page copy of
+   unpredictable length, and a two-column layout makes the shorter one look
+   like the change rather than the value. */
+.builder-react-root .builder-section-diff-values {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.builder-react-root .builder-section-diff-value {
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+  /* Page copy can be one long unbroken string; it wraps rather than forcing
+     the dialog sideways. */
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-section-diff-value em {
+  display: inline-block;
+  min-width: 3em;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink-muted, #5c6a72);
+  opacity: 0.75;
+}
+
+.builder-react-root .builder-section-diff-value[data-side="after"] {
+  color: var(--ink, #16323f);
+}
+
 /* ============================================================== */
 /* THE POPPED-OUT MODULE EDITOR (operator, 2026-08-15)             */
 /* ============================================================== */
