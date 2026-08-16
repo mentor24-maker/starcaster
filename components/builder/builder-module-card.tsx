@@ -175,7 +175,7 @@ const CARD_SIZES = "(max-width: 700px) 100vw, 400px";
  * Adding a module to the shape means adding it here and to the matching CSS
  * selector list in `_builder-react-overrides.css`.
  */
-const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list"]);
+const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list", "social"]);
 
 /**
  * The two nudge controls, named and ordered like `MODULE_MARGIN_SIDES` so a
@@ -3264,7 +3264,15 @@ export function BuilderModuleCard({
     <div
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
       style={{
-        ...(module.type !== "button" && !isPollCategoryListModule
+        /*
+         * Text is excluded with Button because its fill now belongs to the
+         * frame INSIDE the card (getTextModuleFrameStyle, 2026-08-15).
+         * Tinting the card as well would paint the same colour twice at two
+         * different sizes and tell the operator the fill spans the card when
+         * on the page it stops at the border. The card keeps the neutral
+         * surface; the preview inside shows what the page will show.
+         */
+        ...(module.type !== "button" && module.type !== "text" && !isPollCategoryListModule
           ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
           : {}),
         // One reader for every type (W7). A floating image and a reminder are

@@ -203,6 +203,29 @@ describe("getTextModuleFrameStyle", () => {
     expect(getTextModuleFrameStyle({ borderWidth: "3", borderStyle: "none" }).border).toBeUndefined();
   });
 
+  it("carries the module's own fill, so it is bounded by the frame", () => {
+    /*
+     * Operator, 2026-08-15: "I want the background color constrained by the
+     * boundary." The fill used to be painted by the module wrapper — a
+     * full-column box with square corners, outside the padding — so a
+     * narrow, rounded, padded text block showed its colour as a rectangle
+     * behind the frame rather than inside it. Here it is one box with the
+     * border and the radius.
+     */
+    const style = getTextModuleFrameStyle({
+      backgroundMode: "color",
+      backgroundColor: "#c8f169",
+      borderRadius: "20",
+      borderWidth: "2"
+    });
+    expect(style.background).toContain("#c8f169");
+    expect(style.borderRadius).toBe("20px");
+
+    // Still nothing on a module that has never been given one (mode "none"),
+    // which is what keeps every existing text block exactly where it is.
+    expect(getTextModuleFrameStyle({}).background).toBeUndefined();
+  });
+
   it("keeps the Width setting honest once a border or padding exists", () => {
     expect(getTextModuleFrameStyle({ borderWidth: "2" }).boxSizing).toBe("border-box");
     expect(getTextModuleFrameStyle({ paddingLeft: "20" }).boxSizing).toBe("border-box");
