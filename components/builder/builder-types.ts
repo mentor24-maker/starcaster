@@ -140,8 +140,12 @@ export const modulePaletteGroups: Array<{
   { value: "social-share", label: "Social Share", icon: "↗", description: "Share buttons with dynamic post text from the current poll." },
   { value: "social", label: "Social", icon: "@", description: "Linked rows of social icons and profile badges." },
   { value: "table", label: "Tables", icon: "⊞", description: "Data tables with configurable columns and rows." },
-  { value: "slider", label: "Sliders", icon: "⇆", description: "Horizontally scrollable bars of managed cards." },
-  { value: "slideshow", label: "Slideshow", icon: "🖼", description: "Full-width auto-rotating image slideshow." },
+  {
+    value: "carousel",
+    label: "Carousel",
+    icon: "⇆",
+    description: "An ordered row of images or cards, shown one at a time or several at once."
+  },
   {
     value: "feature-cards",
     label: "Feature Cards",
@@ -660,27 +664,34 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     text: "",
     settings: { variant: "standard" }
   },
+  /* Two tiles, one module type (operator, 2026-08-16: "keep both tiles").
+     `slideshow` and `slider` merged into `carousel`; the tiles survive as
+     PRESETS because they are how an operator thinks about the choice — you
+     know whether you want one big picture or a shelf of cards before you
+     place anything. All either tile does is preset `format`, and the Format
+     dropdown in the panel flips between them afterwards without rebuilding
+     the module or retyping its content. */
   {
-    id: "slider-standard",
-    type: "slider",
-    group: "slider",
-    label: "Card Slider",
-    icon: "⇆",
-    description: "A horizontal scroller of cards that can hold linked visual highlights.",
-    name: "",
-    text: "",
-    settings: { variant: "standard" }
-  },
-  {
-    id: "slideshow-standard",
-    type: "slideshow",
-    group: "slideshow",
+    id: "carousel-slideshow",
+    type: "carousel",
+    group: "carousel",
     label: "Slideshow",
     icon: "🖼",
-    description: "A full-width auto-rotating slideshow of images.",
+    description: "One image at a time, full width, advancing on its own.",
     name: "",
     text: "",
-    settings: {}
+    settings: { format: "slideshow" }
+  },
+  {
+    id: "carousel-cards",
+    type: "carousel",
+    group: "carousel",
+    label: "Card Slider",
+    icon: "⇆",
+    description: "A horizontal shelf of linked cards with images and copy.",
+    name: "",
+    text: "",
+    settings: { format: "cards" }
   },
   {
     id: "feature-cards-standard",

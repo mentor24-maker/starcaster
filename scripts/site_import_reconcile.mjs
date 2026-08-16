@@ -55,6 +55,11 @@
  *   --decisions <path>    use a different decisions file
  *   --write-decisions     refresh the decisions file from this run
  *   --keep-placeholder    leave PLACEHOLDER SECTION above the new content
+ *   --images              ALSO place the images the capture downloaded but
+ *                         never put on a page (galleries, carousels). A
+ *                         separate, deliberate step: it copies files and
+ *                         creates asset rows, so it never runs by default.
+ *   --image-limit <n>     cap images placed per page (0 = no cap)
  *   --keep-boilerplate    keep the WordPress site-title block on each section
  *   --force-section <id>  overwrite one hash-protected section (repeatable)
  *   --allow-local         permit a localhost database (local testing only)
@@ -121,17 +126,28 @@ if (/localhost|127\.0\.0\.1/.test(process.env.SUPABASE_URL) && !flag('--allow-lo
   console.error('Refusing a localhost database (--allow-local overrides for local testing).');
   process.exit(1);
 }
+if (flag('--images') && flag('--apply') && !process.env.BLOB_READ_WRITE_TOKEN) {
+  console.error('BLOB_READ_WRITE_TOKEN is missing — --images copies files into durable storage.');
+  process.exit(1);
+}
 
 const store = require('./lib/siteImportStore.js');
+const assetsStore = require('./lib/assetsStore.js');
+const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const pagesStore = require('./lib/builderPagesStore.js');
 const snapshotsStore = require('./lib/builderPageSnapshotsStore.js');
 const { reconcile, reportReconciles, toPath, mergeDecisions } = require('./lib/site-import/dist/reconcile.js');
+const {
+  planImageTopUp, buildTopUpSection, topUpReconciles, topUpSectionId, photoStem,
+} = require('./lib/site-import/dist/image-topup.js');
 
 const JOB_ID = flagValue('--job');
 const APPLY = flag('--apply');
 const KEEP_PLACEHOLDER = flag('--keep-placeholder');
 const KEEP_BOILERPLATE = flag('--keep-boilerplate');
 const WRITE_DECISIONS = flag('--write-decisions');
+const IMAGES = flag('--images');
+const IMAGE_LIMIT = Math.max(0, Number(flagValue('--image-limit') || 0) || 0);
 const FORCED_SECTIONS = new Set(flagValues('--force-section'));
 const DECISIONS_PATH = flagValue('--decisions') || path.join(ROOT, 'docs/site-import/reconcile-decisions.json');
 const BACKUP_DIR = path.join(ROOT, 'docs/SQL/backups');
@@ -280,6 +296,249 @@ function writeDecisionsFile(output, decisions) {
   log(`\nDecisions file: ${path.relative(ROOT, DECISIONS_PATH)} — ${applied.length} call(s) applied, ${undecided} still undecided`);
 }
 
+
+/** Every image URL on a page's imported sections — module settings and inline. */
+function imageUrlsOnPage(sections) {
+  const out = [];
+  for (const section of sections) {
+    for (const module of section.modules || []) {
+      const st = module.settings || {};
+      const url = st.url || st.imageUrl || st.src;
+      if (url && (module.type === 'image' || module.type === 'slideshow')) out.push(String(url));
+      // `items` is the carousel's key; `slides` is the retired slideshow
+      // spelling, still found in documents written before the merge.
+      for (const key of ['items', 'slides']) {
+        if (!st[key]) continue;
+        try {
+          for (const entry of JSON.parse(st[key]) || []) {
+            const u = entry?.imageUrl || entry?.url;
+            if (u) out.push(String(u));
+          }
+        } catch { /* a malformed blob just means we place a few duplicates */ }
+      }
+      if (typeof module.text === 'string') {
+        for (const m of module.text.matchAll(/<img[^>]+src\s*=\s*["\']([^"\']+)["\']/gi)) out.push(m[1]);
+      }
+    }
+  }
+  return out;
+}
+
+/** Page every row: the delraytennis job alone downloaded over 2,000 assets. */
+async function fetchAllImportAssets(jobId) {
+  const all = [];
+  const PAGE = 1000;
+  for (let page = 0; ; page += 1) {
+    const res = await store.listAssets(jobId, { limit: PAGE, offset: page * PAGE });
+    const batch = res?.ok === false ? null : (res?.data ?? res);
+    if (!Array.isArray(batch) || !batch.length) break;
+    all.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return all;
+}
+
+async function copyToDurable(fromUrl, pathname, mimeType) {
+  const res = await fetch(fromUrl, { signal: AbortSignal.timeout(60000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${fromUrl}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const up = must(await uploadBufferToBlobAtPath({ pathname, mimeType, fileBuffer: buffer }), `copy ${pathname}`);
+  return up.location;
+}
+
+
+
+/**
+ * Pairings for the image step, which runs AFTER content has landed.
+ *
+ * Once a page has been filled its PLACEHOLDER SECTION is gone, so it is no
+ * longer an eligible target and reconcile() reports zero pairings — correct
+ * for content (a built page must never be overwritten) and useless here.
+ * Every copied module carries `reconciledFromPath`, so the pages themselves
+ * are the record of what was paired with what.
+ */
+function pairingsFromProvenance(pages) {
+  const seen = new Set();
+  const out = [];
+  for (const page of pages) {
+    for (const section of docSections(page)) {
+      if (!String(section.id).startsWith('recs_')) continue;
+      for (const module of section.modules || []) {
+        const from = module?.settings?.reconciledFromPath;
+        if (!from) continue;
+        const key = `${from}|${page.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          sourcePath: toPath(from),
+          targetId: String(page.id),
+          targetSlug: String(page.slug || ''),
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** Live pairings plus everything already applied, de-duplicated. */
+function allPairings(livePairings, pages) {
+  const merged = [];
+  const seen = new Set();
+  for (const p of [...livePairings, ...pairingsFromProvenance(pages)]) {
+    const key = `${p.sourcePath}|${p.targetId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(p);
+  }
+  return merged;
+}
+
+/**
+ * The image top-up. Deliberately a separate flagged step: it copies files
+ * into durable storage and creates asset rows, which is not something a
+ * default dry-run-then-apply should do as a side effect.
+ */
+async function runImageTopUp({ job, scope, pairings, pagesById, projectId, snapshot, backupDir }) {
+  log('\n================ IMAGES ================');
+  const rawAssets = await fetchAllImportAssets(job.id);
+  const images = rawAssets.filter(
+    (a) => /^image\//.test(a.mimeType || a.mime_type || '') && (a.status === 'downloaded')
+  );
+  log(`Import downloaded ${rawAssets.length} file(s), ${images.length} of them images.`);
+
+  const assets = images.map((a) => {
+    const refs = a.referencedBy || a.referenced_by || [];
+    return {
+      originalUrl: a.originalUrl || a.original_url || '',
+      storageUrl: a.storageUrl || a.storage_url || '',
+      mimeType: a.mimeType || a.mime_type || '',
+      byteSize: Number(a.byteSize || a.byte_size || 0) || 0,
+      width: Number(a.width || 0) || 0,
+      height: Number(a.height || 0) || 0,
+      altText: a.altText || a.alt_text || '',
+      referencedPaths: (Array.isArray(refs) ? refs : [])
+        .map((r) => toPath(r?.pageUrl || r?.page_url || ''))
+        .filter(Boolean),
+    };
+  }).filter((a) => a.storageUrl && a.referencedPaths.length);
+
+  const targets = pairings.map((p) => {
+    const page = pagesById.get(p.targetId);
+    // "Already on the page" must NOT count this step's own section, or a
+    // re-run sees every image as already present and places nothing — which
+    // would freeze a page on whatever shape the first run happened to write.
+    const own = page ? topUpSectionId(String(page.id)) : '';
+    const sections = page
+      ? docSections(page).filter((s) => String(s.id).startsWith('recs') && String(s.id) !== own)
+      : [];
+    return {
+      sourcePath: p.sourcePath,
+      targetId: p.targetId,
+      targetSlug: p.targetSlug,
+      alreadyOnPage: imageUrlsOnPage(sections),
+    };
+  });
+
+  const { plans, report } = planImageTopUp({ assets, targets, limitPerPage: IMAGE_LIMIT });
+
+  log('\npage                      captured  furniture  sizeVariants  already  capped  toPlace  as');
+  for (const row of report.byPage) {
+    log(`${row.targetSlug.padEnd(24)} ${String(row.captured).padStart(8)} ${String(row.furniture).padStart(10)} ${String(row.variants).padStart(13)} ${String(row.already).padStart(8)} ${String(row.capped).padStart(7)} ${String(row.planned).padStart(8)}  ${row.planned ? row.presentation : '-'}`);
+  }
+  const mb = (plans.reduce((n, p) => n + p.totalBytes, 0) / 1048576).toFixed(1);
+  log(`\nTo place: ${report.planned} image(s) across ${plans.length} page(s), ${mb} MB copied into durable storage.`);
+  log(`Excluded: ${report.furnitureExcluded} site furniture, ${report.variantsCollapsed} duplicate size variants, ${report.alreadyOnPage} already on the page${report.capped ? `, ${report.capped} over the --image-limit` : ''}.`);
+
+  const balances = topUpReconciles(report);
+  log(`Accounting: every captured image is in exactly one bucket — ${balances ? 'OK' : 'MISMATCH'}`);
+  if (!balances) {
+    console.error('Image accounting does not balance — refusing to place images.');
+    process.exit(1);
+  }
+  if (!APPLY) {
+    log('\nDry run — no files copied, no pages changed.');
+    return;
+  }
+  if (!plans.length) { log('Nothing to place.'); return; }
+
+  const durable = `SiteImportApplied/${projectId}/topup`;
+
+  // createAsset always inserts, so a second run would register all 73 images
+  // again — the blob copy overwrites in place and looks idempotent, which is
+  // exactly what makes the duplicated library rows easy to miss.
+  const existingAssets = must(await assetsStore.listAssets(scope), 'list project assets');
+  const knownLocations = new Set(
+    (Array.isArray(existingAssets) ? existingAssets : [])
+      .map((a) => String(a.location || a.file_url || '')).filter(Boolean)
+  );
+  let placed = 0;
+  let registered = 0;
+  let alreadyRegistered = 0;
+  for (const plan of plans) {
+    const page = must(await pagesStore.getPage(plan.targetId, scope), `get ${plan.targetSlug}`);
+    writeFileSync(path.join(backupDir, `${plan.targetSlug}.images-before.json`), `${JSON.stringify(page, null, 2)}\n`);
+
+    // Copy first, then register, then write the page — so a page never
+    // references a file that is not there yet.
+    const urlByOriginal = new Map();
+    for (const image of plan.images) {
+      const stem = photoStem(image.originalUrl) || 'image';
+      const target = `${durable}/${plan.targetSlug}/${stem}`;
+      const url = await copyToDurable(image.storageUrl, target, /\.png$/i.test(stem) ? 'image/png' : 'image/jpeg');
+      urlByOriginal.set(image.originalUrl, url);
+
+      if (knownLocations.has(url)) { alreadyRegistered += 1; continue; }
+      knownLocations.add(url);
+      registered += 1;
+      must(await assetsStore.createAsset({
+        assetName: stem,
+        assetType: 'Image',
+        category: 'Site Import',
+        location: url,
+        size: image.byteSize,
+        imageWidth: image.width,
+        imageHeight: image.height,
+        caption: image.alt,
+        topic: `Imported from ${plan.sourcePaths.join(', ')}`,
+        tags: ['site-import', 'image-topup'],
+      }, scope), `register asset ${stem}`);
+    }
+    log(`  ${plan.targetSlug}: copied ${plan.images.length} file(s)`);
+
+    const section = buildTopUpSection(plan, (image) => urlByOriginal.get(image.originalUrl) || image.storageUrl);
+    const current = docSections(page);
+    // Sit directly after the content this run already placed, so images stay
+    // above the footer rather than below the copyright.
+    const withoutOld = current.filter((s) => String(s.id) !== String(section.id));
+    let at = withoutOld.length;
+    for (let i = withoutOld.length - 1; i >= 0; i -= 1) {
+      if (String(withoutOld[i].id).startsWith('recs_')) { at = i + 1; break; }
+    }
+    const nextSections = [...withoutOld.slice(0, at), section, ...withoutOld.slice(at)];
+
+    must(await pagesStore.updatePage(
+      plan.targetId,
+      { ...page, layoutSections: nextSections },
+      scope,
+      { previous: page, reason: 'save', actor: 'site-import-reconcile-images' }
+    ), `update ${plan.targetSlug}`);
+
+    const after = must(await pagesStore.getPage(plan.targetId, scope), `verify ${plan.targetSlug}`);
+    const afterSections = docSections(after);
+    const landed = afterSections.find((s) => String(s.id) === String(section.id));
+    const landedImages = landed ? imageUrlsOnPage([landed]).length : 0;
+    if (afterSections.length !== nextSections.length || landedImages !== plan.images.length) {
+      console.error(`\n${plan.targetSlug}: expected ${nextSections.length} sections with ${plan.images.length} images, found ${afterSections.length} with ${landedImages}.`);
+      console.error('STOPPING before any further page is touched.');
+      console.error(`Restore: POST /api/builder/page-snapshots/${snapshot.id}/restore`);
+      process.exit(1);
+    }
+    placed += plan.images.length;
+    log(`  ${plan.targetSlug}: placed ${plan.images.length} as ${plan.presentation}, verified on the page`);
+  }
+  log(`\nImages placed: ${placed}. Asset library: ${registered} new row(s), ${alreadyRegistered} already registered.`);
+}
+
 async function main() {
   const job = must(await store.getJob(JOB_ID), 'get job');
   if (job.status !== 'complete') {
@@ -392,6 +651,13 @@ async function main() {
   if (WRITE_DECISIONS || !APPLY) writeDecisionsFile(output, decisions);
 
   if (!APPLY) {
+    if (IMAGES) {
+      await runImageTopUp({
+        job, scope, pairings: allPairings(output.pairings, full), projectId,
+        pagesById: new Map(full.map((p) => [String(p.id), p])),
+        snapshot: null, backupDir: null,
+      });
+    }
     log('\nDry run complete. Nothing was written.');
     log('Resolve the review pile in the decisions file, then re-run with --apply.');
     return;
@@ -400,10 +666,14 @@ async function main() {
     console.error('\nReport does not reconcile — refusing to apply.');
     process.exit(1);
   }
-  if (!output.plans.length) {
+  // No content left to place is normal on a re-run — the placeholders are
+  // gone because this tool already filled them. It must not short-circuit
+  // --images, which works on pages that are ALREADY filled.
+  if (!output.plans.length && !IMAGES) {
     log('\nNothing to write.');
     return;
   }
+  if (!output.plans.length) log('\nNo new content sections to place — going straight to images.');
 
   // --- writes start here -------------------------------------------------
   const snapshot = must(await snapshotsStore.createPageSnapshot(
@@ -493,10 +763,26 @@ async function main() {
         at: new Date().toISOString(),
         snapshotId: snapshot.id,
         pagesWritten: written,
+        pairings: output.pairings.map((p) => ({
+          sourcePath: p.sourcePath, targetId: p.targetId, targetSlug: p.targetSlug,
+        })),
         sectionHashes: nextHashes,
       },
     },
   }), 'record reconcile checkpoint');
+
+  if (IMAGES) {
+    const fresh = [];
+    for (const summary of list) {
+      const page = must(await pagesStore.getPage(summary.id, scope), `re-read ${summary.id}`);
+      if (page) fresh.push(page);
+    }
+    await runImageTopUp({
+      job, scope, pairings: allPairings(output.pairings, fresh), projectId,
+      pagesById: new Map(fresh.map((p) => [String(p.id), p])),
+      snapshot, backupDir,
+    });
+  }
 
   log(`\nApplied. ${written} page(s) written, ${skippedProtected} section(s) protected.`);
   log(`Backups: ${path.relative(ROOT, backupDir)}`);

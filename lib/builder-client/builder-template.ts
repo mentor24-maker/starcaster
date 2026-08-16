@@ -88,8 +88,7 @@ export const BUILDER_MODULE_TYPES = [
   "contact-form",
   "player-portal",
   "table",
-  "slider",
-  "slideshow",
+  "carousel",
   "feature-cards",
   "program-list",
   "social",
@@ -1730,8 +1729,32 @@ function normalizeCellColor(
   );
 }
 
+/**
+ * Type names that no longer exist, and what they became.
+ *
+ * `slideshow` and `slider` merged into `carousel` on 2026-08-16: they were
+ * one machine with two settings locked to opposite extremes — one item
+ * visible and moving by itself, versus many items visible and moved by
+ * hand — so neither could ever borrow the other's behaviour. `format`
+ * carries that distinction now (see `migrateCarouselSettings`).
+ *
+ * These entries are PERMANENT. An unrecognized type falls through to
+ * "text" at the bottom of this function, which silently replaces a page's
+ * module with an empty text block on the next load — no error, no undo
+ * (CLAUDE.md landmine 1). Old documents keep arriving from page revisions,
+ * saved sections, imports and backups long after a rename, so a retired
+ * name is never removed from this map, only added to.
+ */
+const RETIRED_MODULE_TYPES: Record<string, BuilderTemplateModuleType> = {
+  slideshow: "carousel",
+  slider: "carousel"
+};
+
 export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
   const type = safeText(value, 40).toLowerCase();
+
+  const retired = RETIRED_MODULE_TYPES[type];
+  if (retired) return retired;
 
   if (
     type === "navigation" ||
@@ -1749,8 +1772,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "contact-form" ||
     type === "player-portal" ||
     type === "table" ||
-    type === "slider" ||
-    type === "slideshow" ||
+    type === "carousel" ||
     type === "feature-cards" ||
     type === "program-list" ||
     type === "social" ||
@@ -1820,6 +1842,10 @@ export function normalizeModuleSettings(value: unknown) {
             // Slider had been capped at 10k since it shipped.
             : normalizedKey === "cards" ||
                 normalizedKey === "sliderItems" ||
+                // The carousel's unified collection. Exempted from the day it
+                // was named rather than a month later, which is the mistake
+                // `sliderItems` records directly above.
+                normalizedKey === "items" ||
                 // `programs` holds every class a club runs, each with its own
                 // sessions, price bands and bullets — fifteen programs is
                 // ordinary for one tennis centre, and the whole collection is
@@ -1920,6 +1946,102 @@ function migrateSpacingPairToSides(
 
   delete settings[legacyVerticalKey];
   delete settings[legacyHorizontalKey];
+}
+
+const CAROUSEL_CAPTION_POSITIONS = new Set([
+  "bottom-left",
+  "bottom-center",
+  "top-left",
+  "top-center",
+  "center"
+]);
+
+/**
+ * Fold the two retired collections into the carousel's one.
+ *
+ * The old shapes were a strict subset relationship, which is why the merge
+ * could be automatic and lossless in the first place:
+ *
+ *   slideshow  slides      [{ id, url, alt }]
+ *   slider     sliderItems [{ id, title, body, imageUrl, imageAlt, linkUrl,
+ *                            linkLabel, icon, iconImageUrl }]
+ *
+ * A slide is a card with only its picture filled in, so `url` → `imageUrl`
+ * and `alt` → `imageAlt` and the rest arrive empty. Nothing is discarded in
+ * either direction, and the surviving shape is the card — deliberately the
+ * SAME field names `feature-cards` uses (`builder-card-items.ts`), so content
+ * still moves between the two without retyping.
+ *
+ * Which key a document arrives with is also the only honest evidence of what
+ * the operator built, so it seeds `format` — a document that never named a
+ * format still renders as the module it was authored as.
+ *
+ * Deliberately hand-rolled rather than reusing `parseBuilderCardItems`:
+ * that module resolves asset URLs through browser-only code and is
+ * explicitly NOT importable here (see its header note) — this file bundles
+ * for the server too. This transform only renames keys.
+ */
+function migrateCarouselSettings(settings: Record<string, string>) {
+  const readArray = (raw: string | undefined): Record<string, unknown>[] => {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const str = (value: unknown) => (typeof value === "string" ? value : value == null ? "" : String(value));
+
+  const toItem = (entry: Record<string, unknown>, index: number) => ({
+    id: str(entry?.id) || `item-${index + 1}`,
+    title: str(entry?.title),
+    body: str(entry?.body),
+    // `url` is the slideshow spelling, `imageUrl` the slider's.
+    imageUrl: str(entry?.imageUrl ?? entry?.url),
+    imageAlt: str(entry?.imageAlt ?? entry?.alt),
+    linkUrl: str(entry?.linkUrl),
+    linkLabel: str(entry?.linkLabel),
+    icon: str(entry?.icon),
+    iconImageUrl: str(entry?.iconImageUrl)
+  });
+
+  const hasItems = typeof settings.items === "string" && settings.items !== "";
+  const legacySlides = readArray(settings.slides);
+  const legacyCards = readArray(settings.sliderItems);
+
+  if (!hasItems) {
+    // Both keys present at once has never been written by any code path, but a
+    // hand-edited or merged document could carry it. Concatenating is the only
+    // choice that cannot silently drop content.
+    const merged = [...legacySlides, ...legacyCards];
+    settings.items = JSON.stringify(merged.map(toItem));
+  } else {
+    settings.items = JSON.stringify(readArray(settings.items).map(toItem));
+  }
+
+  if (!settings.format) {
+    settings.format = legacyCards.length || (settings.sliderItems !== undefined && !legacySlides.length)
+      ? "cards"
+      : "slideshow";
+  }
+
+  // The old spellings, carried over before the keys are dropped. `sliderHeight`
+  // is not among them: it was written onto every Card Slider ever created and
+  // read by absolutely nothing, so there is no value in it to preserve.
+  if (settings.cardWidth === undefined && settings.sliderCardWidth !== undefined) {
+    settings.cardWidth = settings.sliderCardWidth;
+  }
+  if (settings.gap === undefined && settings.sliderGap !== undefined) {
+    settings.gap = settings.sliderGap;
+  }
+
+  delete settings.slides;
+  delete settings.sliderItems;
+  delete settings.sliderCardWidth;
+  delete settings.sliderGap;
+  delete settings.sliderHeight;
 }
 
 export function normalizeBuilderModuleSettingsForType(
@@ -2091,7 +2213,47 @@ export function normalizeBuilderModuleSettingsForType(
     }
   }
 
-  if (type === "slideshow") {
+  if (type === "carousel") {
+    migrateCarouselSettings(settings);
+
+    settings.format = settings.format === "cards" ? "cards" : "slideshow";
+    const isCards = settings.format === "cards";
+
+    // Fade means nothing when several items share the frame — there is no
+    // single item to fade between — so the cards format is always "slide".
+    settings.transition = !isCards && settings.transition === "fade" ? "fade" : "slide";
+
+    // Autoplay is what a slideshow IS and what a card shelf is not, so the
+    // default follows the format. A stored value always wins: an operator who
+    // switches format keeps the playback they chose.
+    settings.autoplay = settings.autoplay === "" || settings.autoplay === undefined
+      ? String(!isCards)
+      : String(settings.autoplay !== "false");
+    settings.intervalMs = normalizeSpacingValue(settings.intervalMs, "5000", 1000, 20000);
+    settings.pauseOnHover = String(settings.pauseOnHover !== "false");
+    settings.loop = String(settings.loop !== "false");
+
+    // Manual controls. Neither module had both: the slideshow had no way for a
+    // visitor to move it at all, and the slider had arrows but no dots.
+    settings.showArrows = settings.showArrows === "" || settings.showArrows === undefined
+      ? "true"
+      : String(settings.showArrows !== "false");
+    settings.showDots = settings.showDots === "" || settings.showDots === undefined
+      ? String(!isCards)
+      : String(settings.showDots !== "false");
+
+    settings.heightPx = normalizeSpacingValue(settings.heightPx, "0", 0, 900);
+    settings.gap = normalizeSpacingValue(settings.gap, isCards ? "16" : "0", 0, 40);
+    settings.cardWidth = normalizeSpacingValue(settings.cardWidth, "280", 180, 420);
+
+    // Captions ride on the same title/body/link every item already carries, so
+    // turning them on never asks for content to be retyped — and they default
+    // OFF so no existing slideshow gains text it never had.
+    settings.showCaptions = String(settings.showCaptions === "true");
+    settings.captionPosition = CAROUSEL_CAPTION_POSITIONS.has(settings.captionPosition ?? "")
+      ? settings.captionPosition
+      : "bottom-left";
+
     // The nudge, added 2026-08-12. Clamped here rather than trusted from the
     // document, the same as every other module that offers it — an imported
     // page can carry anything in these keys.
@@ -2732,12 +2894,17 @@ export function createEmptyModule(
           imageUrl: "",
           buttonLabel: "Buy on Redbubble"
         }
-      : type === "slideshow"
+      : type === "carousel"
       ? {
-          slides: "[]",
+          // Seeded as a slideshow because that is what the bare type means
+          // with nothing else said. The palette's Card Slider tile overrides
+          // `format` at creation, and `normalizeBuilderModuleSettingsForType`
+          // supplies every format-dependent default from there.
+          format: "slideshow",
+          items: "[]",
           intervalMs: "5000",
           transition: "slide",
-          heightPx: ""
+          heightPx: "0"
         }
       : type === "feature-cards"
       ? {
@@ -2867,14 +3034,7 @@ export function createEmptyModule(
                 rowCount: 2
               })
             }
-        : type === "slider"
-            ? {
-                sliderGap: "16",
-                sliderCardWidth: "280",
-                sliderHeight: "auto",
-                sliderItems: JSON.stringify([])
-              }
-            : type === "social"
+        : type === "social"
               ? {
                   socialIconSize: "44",
                   socialGap: "14",

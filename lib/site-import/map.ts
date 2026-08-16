@@ -815,15 +815,33 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
           flushProse();
           modules.push({
             id: nextModuleId(el.sourceId),
-            type: "slideshow",
+            // The `carousel` module in its slideshow format — `slideshow`
+            // was its own type until the 2026-08-16 merge. Written in the
+            // new shape directly rather than relying on the normalizer's
+            // migration, so an import produces the same document a hand-built
+            // page does.
+            type: "carousel",
             column: "main",
             name: "Imported slideshow",
             text: "",
             settings: {
-              slides: JSON.stringify(slideshowLead.slides),
+              format: "slideshow",
+              items: JSON.stringify(
+                slideshowLead.slides.map((slide) => ({
+                  id: slide.id,
+                  title: "",
+                  body: "",
+                  imageUrl: slide.url,
+                  imageAlt: slide.alt,
+                  linkUrl: "",
+                  linkLabel: "",
+                  icon: "",
+                  iconImageUrl: "",
+                }))
+              ),
               intervalMs: "5000",
               transition: "slide",
-              heightPx: "",
+              heightPx: "0",
               importSourceIds: slideshowLead.allIds.join(","),
             },
           });

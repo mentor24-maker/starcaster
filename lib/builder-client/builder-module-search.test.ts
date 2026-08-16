@@ -74,7 +74,11 @@ describe("searchModulePalette", () => {
   });
 
   it("puts the module above the category when both match the same word", () => {
-    const hits = search("slideshow");
+    // "table" rather than "slideshow": Slideshow was its own category until
+    // the 2026-08-16 carousel merge, and is now a tile inside one — so the
+    // word no longer matches a category at all and the comparison this test
+    // exists to make would have nothing to compare.
+    const hits = search("table");
     const firstItem = hits.findIndex((hit) => hit.kind === "item");
     const firstGroup = hits.findIndex((hit) => hit.kind === "group");
 

@@ -132,6 +132,55 @@ export function describePushImpact(name: string, usage: BlockUsage | null | unde
   return lines.join('\n');
 }
 
+export type CanonicalOverwriteImpact = {
+  /** One sentence: what saving over the master does. */
+  summary: string;
+  /** Pages that will be rewritten, capped for display. */
+  pageLabels: string[];
+  /** How many following pages are not in `pageLabels`. */
+  more: number;
+};
+
+/**
+ * The same warning as {@link describePushImpact}, but broken into parts so a
+ * dialog can lay it out instead of pouring it into a `window.confirm`.
+ *
+ * This one is shown when Save is clicked on a section INSIDE a page — where
+ * "save" used to mean only "file a brand new copy", so an edit meant to correct
+ * the shared original quietly became a second saved section with the same name
+ * (operator, 2026-08-16). Unlike the push warning it never returns null: the
+ * question there is "shall I interrupt you?", the question here is "which of
+ * these two saves did you mean?", and that has to be asked even when nothing
+ * else follows the master yet.
+ */
+export function describeCanonicalOverwrite(
+  name: string,
+  usage: BlockUsage | null | undefined
+): CanonicalOverwriteImpact {
+  const label = String(name ?? '').trim() || 'the saved section';
+  const pages = usage?.pages ?? 0;
+
+  // Typographic quotes, unlike the plain ones in describePushImpact: that text
+  // goes into a window.confirm, this text is rendered beside the dialog's own
+  // “…” and the two styles side by side read as two different voices.
+  if (pages < 1) {
+    return {
+      summary: `Replaces “${label}” itself. No other page follows it yet, so nothing else changes.`,
+      pageLabels: [],
+      more: 0,
+    };
+  }
+
+  const pageLabels = (usage?.pageLabels ?? []).slice(0, PREVIEW_LIMIT);
+  return {
+    summary: `Replaces “${label}” itself, and rewrites it on ${
+      pages === 1 ? 'the 1 page' : `the ${pages} pages`
+    } that follow it. Any local edits on those pages are replaced.`,
+    pageLabels,
+    more: Math.max(0, pages - pageLabels.length),
+  };
+}
+
 export type PropagationTally = {
   ok?: boolean;
   total?: number;
