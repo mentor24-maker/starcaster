@@ -632,3 +632,50 @@ test('undecided pages are offered, never overwritten', () => {
   assert.equal(written['tag-tennis'], null, 'an existing call is untouched');
   assert.equal(written['bryan-brothers-clinic'], '', 'a new page is offered as undecided');
 });
+
+// --- the write shape ------------------------------------------------------
+
+/**
+ * These do not test the engine; they pin the CONTRACT the runner has to meet.
+ * The first version of the runner passed `layoutSections: { sections: [...] }`
+ * — the shape the database column has — instead of the array the serializer
+ * wants. It emptied fourteen pages in a row, and every write reported success.
+ */
+
+test('layoutSections must be the ARRAY of sections', () => {
+  const sections = [{ id: 'recs_1', title: 'Imported', layout: 'single', modules: [{ id: 'recm_1', type: 'text', text: '<p>real content</p>' }] }];
+
+  const right = serializeBuilderDocument({ layoutSections: sections });
+  const rightSections = Array.isArray(right) ? right : right.sections;
+  assert.equal(rightSections.length, 1, 'the array form keeps the section');
+  assert.equal(rightSections[0].modules.length, 1);
+});
+
+test('wrapping the sections in an object silently yields an EMPTY page', () => {
+  const sections = [{ id: 'recs_1', title: 'Imported', layout: 'single', modules: [{ id: 'recm_1', type: 'text', text: '<p>real content</p>' }] }];
+
+  // The exact mistake: passing the column's shape instead of the array.
+  const wrong = serializeBuilderDocument({ layoutSections: { sections } });
+  const wrongSections = Array.isArray(wrong) ? wrong : wrong.sections;
+  assert.equal(
+    wrongSections.length, 0,
+    'this is the trap — it does not throw, it returns an empty page'
+  );
+});
+
+test('spreading the page preserves background and theme through a section edit', () => {
+  // Passing layoutSections alone drops pageBackground and theme to defaults,
+  // which is a quieter version of the same data loss.
+  const page = {
+    layoutSections: [{ id: 'a', title: 'Old', layout: 'single', modules: [] }],
+    pageBackground: { mode: 'color', color: '#004295', color2: '', imageUrl: '', styleKey: '', opacity: 1 },
+  };
+  const next = [{ id: 'b', title: 'New', layout: 'single', modules: [{ id: 'm', type: 'text', text: '<p>x</p>' }] }];
+
+  const kept = serializeBuilderDocument({ ...page, layoutSections: next });
+  assert.equal(kept.pageBackground.mode, 'color');
+  assert.equal(kept.pageBackground.color, '#004295');
+
+  const lost = serializeBuilderDocument({ layoutSections: next });
+  assert.notEqual(lost.pageBackground?.mode, 'color', 'precondition: passing sections alone loses it');
+});

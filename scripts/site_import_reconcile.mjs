@@ -451,15 +451,39 @@ async function main() {
     const at = anchor === -1 ? Math.min(plan.insertAt, kept.length) : Math.min(anchor, kept.length);
     const nextSections = [...kept.slice(0, at), ...insertable, ...kept.slice(at)];
 
+    // `layoutSections` must be the ARRAY of sections, with pageBackground and
+    // theme as siblings — wrapping it in { sections: [...] } makes the
+    // serializer read no sections at all and write an EMPTY page. Spreading
+    // the page keeps every field that is not being changed.
     must(await pagesStore.updatePage(
       plan.targetId,
-      { layoutSections: { ...(page.layoutSections || {}), sections: nextSections } },
+      { ...page, layoutSections: nextSections },
       scope,
       { previous: page, reason: 'save', actor: 'site-import-reconcile' }
     ), `update ${plan.targetSlug}`);
+
+    // Read it back before touching another page. A write that silently
+    // normalizes to nothing looks identical to a success from here, and the
+    // first version of this script emptied fourteen pages in a row that way.
+    const after = must(await pagesStore.getPage(plan.targetId, scope), `verify ${plan.targetSlug}`);
+    const afterSections = docSections(after);
+    const expected = nextSections.length;
+    const landed = new Set(afterSections.map((s) => String(s.id)));
+    const missing = insertable.filter((s) => !landed.has(String(s.id)));
+    if (afterSections.length !== expected || missing.length) {
+      console.error(
+        `\n${plan.targetSlug}: wrote ${expected} section(s) but the page now has ` +
+        `${afterSections.length}${missing.length ? `, missing ${missing.map((s) => s.id).join(', ')}` : ''}.`
+      );
+      console.error('STOPPING before any further page is touched.');
+      console.error(`Restore: POST /api/builder/page-snapshots/${snapshot.id}/restore`);
+      console.error(`Per-page backups: ${path.relative(ROOT, backupDir)}`);
+      process.exit(1);
+    }
+
     for (const section of insertable) nextHashes[String(section.id)] = sectionHash(section);
     written += 1;
-    log(`  ${plan.targetSlug}: wrote ${insertable.length} section(s)`);
+    log(`  ${plan.targetSlug}: wrote ${insertable.length} section(s), verified ${afterSections.length} on the page`);
   }
 
   must(await store.updateJob(JOB_ID, {
