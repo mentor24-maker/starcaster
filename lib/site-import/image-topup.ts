@@ -268,6 +268,13 @@ export function planImageTopUp(options: TopUpOptions): { plans: TopUpPlan[]; rep
   };
 }
 
+/**
+ * The gallery module's current name. `slideshow` and `slider` merged into
+ * `carousel` on 2026-08-16; both old names still resolve, so emitting one is
+ * silently accepted and silently migrated forever after.
+ */
+export const CAROUSEL_MODULE_TYPE = 'carousel';
+
 /** Deterministic, so a re-run replaces its own section instead of adding another. */
 export function topUpSectionId(targetId: string): string {
   return `recsimg_${String(targetId).replace(/[^a-zA-Z0-9]/g, '')}`.slice(0, 120);
@@ -289,10 +296,16 @@ export function buildTopUpSection(
   };
 
   if (plan.presentation === 'slideshow') {
-    const slides = plan.images.map((image, index) => ({
+    // `carousel`, NOT `slideshow`. The two modules merged on 2026-08-16 and
+    // the old name is a retired alias: writing it still WORKS, because the
+    // normalizer rewrites retired names on read — which is exactly why the
+    // mistake is invisible. The document would sit in the database in a shape
+    // no current code writes, migrated on every single load until someone
+    // happens to save the page. Emit what the module is actually called.
+    const items = plan.images.map((image, index) => ({
       id: `${sectionId}-s${index}`,
-      url: urlFor(image),
-      alt: image.alt,
+      imageUrl: urlFor(image),
+      imageAlt: image.alt,
     }));
     return {
       id: sectionId,
@@ -300,16 +313,21 @@ export function buildTopUpSection(
       layout: 'single',
       widthMode: 'contained',
       modules: [{
-        id: `${sectionId}-slideshow`,
-        type: 'slideshow',
+        id: `${sectionId}-carousel`,
+        type: CAROUSEL_MODULE_TYPE,
         column: 'main',
         name: 'Imported gallery',
         text: '',
         settings: {
-          slides: JSON.stringify(slides),
+          items: JSON.stringify(items),
+          // One picture at a time, moving by itself — the "slideshow" half of
+          // the merged module, as opposed to a shelf of cards.
+          format: 'slideshow',
+          autoplay: 'true',
           intervalMs: '5000',
           transition: 'slide',
-          heightPx: '',
+          showArrows: 'true',
+          showDots: 'true',
           ...provenance,
         },
       }],

@@ -159,7 +159,7 @@ scripts/site-import/image-topup.test.js   16 tests
 | 2 | **A photo's identity is its filename stem, not its URL.** Size variants (`-768x576`, `-scaled`), resize queries and promotion prefixes all collapse to one photo. | WordPress serves the same picture under four URLs. Comparing URLs is how a gallery ends up with every photo in it three times. On this job it collapsed 476 files. |
 | 3 | **Of several size variants, take the largest file.** | It is the original; the rest are derivatives. |
 | 4 | **Furniture images are excluded by repetition** — referenced by ≥50% of captured pages. | Same rule as section and prose chrome. 605 excluded here: the logo, social icons, the "powered by" badge. |
-| 5 | **≥5 images ⇒ one slideshow; fewer ⇒ individual image modules.** | A gallery's worth of pictures is what the old page WAS; two pictures are easier to move around as separate modules. |
+| 5 | **≥5 images ⇒ one `carousel` in `format: "slideshow"`; fewer ⇒ individual image modules.** | A gallery's worth of pictures is what the old page WAS; two pictures are easier to move around as separate modules. |
 | 6 | **Files are copied into `SiteImportApplied/<projectId>/topup/` before any page references them.** | The capture leaves them in `SiteImport/<jobId>/`, a namespace explicitly designed to be cleaned up. A page must never depend on it (Phase 2 decision 7). |
 | 7 | **Every placed image is registered in the Assets library** with tags `site-import`, `image-topup`. | Otherwise it renders but is invisible to the Assets screen and its "Used In" column. |
 | 8 | **A per-page cap is reported, never silently applied.** | `report.capped` is part of the accounting identity, so a truncation cannot read as completeness. |
@@ -182,6 +182,20 @@ anything.
    copied module, and are now also recorded on the job checkpoint.
 3. **`--apply` returned early when there was no content to write**, which
    silently skipped `--images` on exactly the re-run where it was wanted.
+4. **The module is `carousel`, not `slideshow`.** `slideshow` and `slider`
+   merged into `carousel` on 2026-08-16 and the old names are PERMANENT
+   aliases, so writing one is accepted, renders correctly, and leaves the
+   document in a shape no current code writes — migrated on every load
+   until someone happens to save the page. A stale local copy of the
+   generated `lib/builder/template.js` hid this; CI, which builds fresh,
+   caught it. A test now asserts the emitted type survives the real
+   serializer unchanged, so any future rename fails loudly.
+5. **`createAsset` always inserts.** The blob copy overwrites in place and
+   looks idempotent, so a second run silently registered all 73 images
+   again. Registration now skips a location already in the library.
+6. **"Already on the page" must exclude the step's own section**, or a
+   re-run sees every image as present and places nothing — freezing the
+   page on whatever shape the first run happened to write.
 
 ## Result of the first run
 
@@ -189,5 +203,6 @@ anything.
 blog 6, four pages with 1–2 each), 45 MB copied. Excluded: 605 furniture,
 476 duplicate size variants, 83 already on the page. Verified against the
 database: every image in the durable namespace, all 73 reachable, all 73
-registered in the Assets library, each block sitting between the page's
-content and its footer.
+registered in the Assets library exactly once, each block sitting between
+the page's content and its footer. A third run placed the same 73 and
+added zero library rows, which is the idempotence check.

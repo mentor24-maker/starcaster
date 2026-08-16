@@ -305,10 +305,16 @@ function imageUrlsOnPage(sections) {
       const st = module.settings || {};
       const url = st.url || st.imageUrl || st.src;
       if (url && (module.type === 'image' || module.type === 'slideshow')) out.push(String(url));
-      if (module.type === 'slideshow' && st.slides) {
+      // `items` is the carousel's key; `slides` is the retired slideshow
+      // spelling, still found in documents written before the merge.
+      for (const key of ['items', 'slides']) {
+        if (!st[key]) continue;
         try {
-          for (const slide of JSON.parse(st.slides) || []) if (slide?.url) out.push(String(slide.url));
-        } catch { /* a malformed slides blob just means we place a few duplicates */ }
+          for (const entry of JSON.parse(st[key]) || []) {
+            const u = entry?.imageUrl || entry?.url;
+            if (u) out.push(String(u));
+          }
+        } catch { /* a malformed blob just means we place a few duplicates */ }
       }
       if (typeof module.text === 'string') {
         for (const m of module.text.matchAll(/<img[^>]+src\s*=\s*["\']([^"\']+)["\']/gi)) out.push(m[1]);
@@ -418,7 +424,13 @@ async function runImageTopUp({ job, scope, pairings, pagesById, projectId, snaps
 
   const targets = pairings.map((p) => {
     const page = pagesById.get(p.targetId);
-    const sections = page ? docSections(page).filter((s) => String(s.id).startsWith('recs')) : [];
+    // "Already on the page" must NOT count this step's own section, or a
+    // re-run sees every image as already present and places nothing — which
+    // would freeze a page on whatever shape the first run happened to write.
+    const own = page ? topUpSectionId(String(page.id)) : '';
+    const sections = page
+      ? docSections(page).filter((s) => String(s.id).startsWith('recs') && String(s.id) !== own)
+      : [];
     return {
       sourcePath: p.sourcePath,
       targetId: p.targetId,
@@ -450,7 +462,18 @@ async function runImageTopUp({ job, scope, pairings, pagesById, projectId, snaps
   if (!plans.length) { log('Nothing to place.'); return; }
 
   const durable = `SiteImportApplied/${projectId}/topup`;
+
+  // createAsset always inserts, so a second run would register all 73 images
+  // again — the blob copy overwrites in place and looks idempotent, which is
+  // exactly what makes the duplicated library rows easy to miss.
+  const existingAssets = must(await assetsStore.listAssets(scope), 'list project assets');
+  const knownLocations = new Set(
+    (Array.isArray(existingAssets) ? existingAssets : [])
+      .map((a) => String(a.location || a.file_url || '')).filter(Boolean)
+  );
   let placed = 0;
+  let registered = 0;
+  let alreadyRegistered = 0;
   for (const plan of plans) {
     const page = must(await pagesStore.getPage(plan.targetId, scope), `get ${plan.targetSlug}`);
     writeFileSync(path.join(backupDir, `${plan.targetSlug}.images-before.json`), `${JSON.stringify(page, null, 2)}\n`);
@@ -464,6 +487,9 @@ async function runImageTopUp({ job, scope, pairings, pagesById, projectId, snaps
       const url = await copyToDurable(image.storageUrl, target, /\.png$/i.test(stem) ? 'image/png' : 'image/jpeg');
       urlByOriginal.set(image.originalUrl, url);
 
+      if (knownLocations.has(url)) { alreadyRegistered += 1; continue; }
+      knownLocations.add(url);
+      registered += 1;
       must(await assetsStore.createAsset({
         assetName: stem,
         assetType: 'Image',
@@ -477,7 +503,7 @@ async function runImageTopUp({ job, scope, pairings, pagesById, projectId, snaps
         tags: ['site-import', 'image-topup'],
       }, scope), `register asset ${stem}`);
     }
-    log(`  ${plan.targetSlug}: copied ${plan.images.length} image(s) into the asset library`);
+    log(`  ${plan.targetSlug}: copied ${plan.images.length} file(s)`);
 
     const section = buildTopUpSection(plan, (image) => urlByOriginal.get(image.originalUrl) || image.storageUrl);
     const current = docSections(page);
@@ -510,7 +536,7 @@ async function runImageTopUp({ job, scope, pairings, pagesById, projectId, snaps
     placed += plan.images.length;
     log(`  ${plan.targetSlug}: placed ${plan.images.length} as ${plan.presentation}, verified on the page`);
   }
-  log(`\nImages placed: ${placed}`);
+  log(`\nImages placed: ${placed}. Asset library: ${registered} new row(s), ${alreadyRegistered} already registered.`);
 }
 
 async function main() {

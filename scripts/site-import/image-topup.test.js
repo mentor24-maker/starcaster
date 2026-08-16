@@ -20,6 +20,7 @@ const {
   topUpReconciles,
   topUpSectionId,
   SLIDESHOW_THRESHOLD,
+  CAROUSEL_MODULE_TYPE,
 } = require('../../lib/site-import/dist/image-topup.js');
 const { serializeBuilderDocument } = require('../../lib/builder/document.js');
 
@@ -176,10 +177,10 @@ test('a gallery-sized set becomes one slideshow', () => {
 
   const section = buildTopUpSection(plans[0], (i) => `https://cdn.test/${photoStem(i.originalUrl)}`);
   assert.equal(section.modules.length, 1);
-  assert.equal(section.modules[0].type, 'slideshow');
-  const slides = JSON.parse(section.modules[0].settings.slides);
-  assert.equal(slides.length, plans[0].images.length);
-  assert.ok(slides.every((s) => s.url.startsWith('https://cdn.test/')), 'slides use the durable URL');
+  assert.equal(section.modules[0].type, CAROUSEL_MODULE_TYPE);
+  const items = JSON.parse(section.modules[0].settings.items);
+  assert.equal(items.length, plans[0].images.length);
+  assert.ok(items.every((s) => s.imageUrl.startsWith('https://cdn.test/')), 'items use the durable URL');
 });
 
 test('a handful of pictures stays as individual image modules', () => {
@@ -207,12 +208,12 @@ test('the built section survives the real document serializer', () => {
   const doc = serializeBuilderDocument({ layoutSections: [section] });
   const sections = Array.isArray(doc) ? doc : doc.sections;
   assert.equal(sections.length, 1);
-  assert.equal(sections[0].modules[0].type, 'slideshow', 'not coerced to text');
-  assert.ok(sections[0].modules[0].settings.slides, 'the slides survive');
+  assert.equal(sections[0].modules[0].type, CAROUSEL_MODULE_TYPE, 'not coerced to text');
+  assert.ok(sections[0].modules[0].settings.items, 'the items survive');
   assert.equal(
-    JSON.parse(sections[0].modules[0].settings.slides).length,
+    JSON.parse(sections[0].modules[0].settings.items).length,
     plans[0].images.length,
-    'and no slide is dropped by normalization'
+    'and no image is dropped by normalization'
   );
 });
 
@@ -230,4 +231,33 @@ test('the top-level totals agree with the per-page rows', () => {
   for (const key of ['planned', 'capped', 'furnitureExcluded', 'variantsCollapsed', 'alreadyOnPage']) {
     assert.equal(typeof report[key], 'number', `${key} must be a number, not undefined`);
   }
+});
+
+
+test('the emitted module type is the CURRENT one, not a retired alias', () => {
+  // `slideshow` and `slider` were merged into `carousel`. A retired name is
+  // still ACCEPTED — the normalizer rewrites it on read — so writing one
+  // works, renders, and leaves the document in a shape no current code
+  // writes, migrated on every load. CI caught exactly this; a stale local
+  // copy of the generated template did not.
+  const { plans } = planImageTopUp(galleryFixture());
+  const section = buildTopUpSection(plans[0], (i) => i.storageUrl);
+  const emitted = section.modules[0].type;
+
+  const doc = serializeBuilderDocument({ layoutSections: [section] });
+  const sections = Array.isArray(doc) ? doc : doc.sections;
+  assert.equal(
+    sections[0].modules[0].type, emitted,
+    `the serializer rewrote "${emitted}" to "${sections[0].modules[0].type}" — emit the current name`
+  );
+});
+
+test('the carousel is configured as a slideshow, not a card shelf', () => {
+  const { plans } = planImageTopUp(galleryFixture());
+  const section = buildTopUpSection(plans[0], (i) => i.storageUrl);
+  const doc = serializeBuilderDocument({ layoutSections: [section] });
+  const sections = Array.isArray(doc) ? doc : doc.sections;
+  const settings = sections[0].modules[0].settings;
+  assert.equal(settings.format, 'slideshow', 'one image at a time');
+  assert.equal(settings.autoplay, 'true', 'a gallery plays by itself');
 });
