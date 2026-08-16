@@ -165,6 +165,13 @@ does not get to route around a standing decision (`docs/DOCTRINE.md` §6.6).
 Squash-merge discards the merge commits anyway, so it costs nothing.
 `scripts/builder/shipThread.test.js` fails if a future edit reintroduces one.
 
+**Three merges in `main` are named after housekeeping, not their work** —
+`ship` used to title the PR from `git log -1`, which by then was often its own
+asset-pin commit, and a squash-merge makes that title permanent. Fixed
+(`scripts/builder/pullRequestCommit.js`); the three that already landed are
+listed with their real subjects in `docs/MISLABELED_MERGES.md`. They are not
+being renamed, because that means force-pushing shared history.
+
 **The `?v=` asset pins no longer conflict.** Those four committed HTML files
 carry hashes rebuilt from whatever the build produced, so any two branches
 touching styling collide there even when neither edited a word of markup — it
@@ -187,12 +194,16 @@ by hand, if you ever need it:
 
 ```
 git worktree add .claude/worktrees/<topic> -b <topic> origin/main
-cd .claude/worktrees/<topic> && npm ci && npm run build:assets
+cd .claude/worktrees/<topic> && npm ci && npm run build
 ```
 
 Order matters in that second line: creating the worktree fires `post-checkout`,
-which cannot build before `npm ci` has run — so build the assets afterwards or
-the folder keeps whatever the failed build left behind.
+which cannot build before `npm ci` has run — so build afterwards or the folder
+keeps whatever the failed build left behind. It is the **full** `npm run build`,
+not `build:assets`: the shorter one skips `public/app-shell.html`, which IS the
+admin app, and `lib/builder/template.js`, which the server-side tests require.
+A folder missing those passes review and then serves a 404 to a browser — on
+2026-08-15 that read as `check:panels` being broken and cost an hour twice.
 
 Cleanup is automatic now and should never need thinking about: GitHub deletes
 each branch as its PR merges, `post-merge` deletes the local copy once its work

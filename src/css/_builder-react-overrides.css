@@ -4578,10 +4578,46 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-muted, #5c6a72);
 }
 
-.builder-react-root .builder-page-history-size {
+/* What the next save did, with the counts under it as the secondary fact.
+   Before this column existed the counts were the ONLY fact, and five
+   consecutive rows reading "41 sections · 84 modules" was the result. */
+.builder-react-root .builder-page-history-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-react-root .builder-page-history-change {
   font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+  /* One line, always: the summary already caps its own name list, and a row
+     that wraps turns the list into a wall. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.builder-react-root .builder-page-history-size {
+  font-size: var(--text-xs, 0.78rem);
   color: var(--ink-muted, #5c6a72);
   font-variant-numeric: tabular-nums;
+}
+
+/* Day headings. Retention now keeps hourly milestones for a week and daily
+   ones for a month, so this list spans days rather than the ninety minutes a
+   flat "newest 25" used to cover — without headings the older entries read as
+   noise sitting under the current session. */
+.builder-react-root .builder-page-history-day + .builder-page-history-day {
+  margin-top: var(--space-4, 16px);
+}
+
+.builder-react-root .builder-page-history-day-heading {
+  margin: 0 0 var(--space-1, 4px);
+  font-size: var(--text-xs, 0.78rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #5c6a72);
 }
 
 .builder-react-root .builder-page-history-restore {
@@ -4594,7 +4630,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-page-history-row {
     grid-template-columns: 1fr max-content;
   }
-  .builder-react-root .builder-page-history-size {
+  .builder-react-root .builder-page-history-what {
     grid-column: 1 / -1;
   }
 }
@@ -4722,6 +4758,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(6) {
     order: -2;
   }
+}
+
+/* The way back from a shared-section push, offered where the push is
+   reported. A save that rewrote 35 pages is exactly the moment somebody
+   realises it was the wrong save. */
+.builder-react-root .builder-propagation-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  text-align: left;
 }
 
 /* Stale-editor warning. Shown in place of an ordinary error banner when a save
