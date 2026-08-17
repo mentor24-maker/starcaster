@@ -85,6 +85,17 @@ jobs:
         # can turn it red.
         run: npm run check:ui
 
+      - name: Retired AI model ids (blocking)
+        # Same reasoning as the UI doctrine step above, and the same reason it
+        # is not folded into the advisory conventions run below: a retired model
+        # id is a dead endpoint, not a style nit. It fails quietly — the
+        # provider 404s one call, a fallback ladder moves on, and the feature
+        # keeps working on a shrinking set of live models. Four features were
+        # carrying ids dead since Feb/Apr 2026 and nothing looked wrong. The
+        # repo is clean today, so this gate is green and only NEW ids turn it
+        # red.
+        run: npm run check:models
+
       - name: Convention checks (advisory)
         # Non-blocking until the 7 pre-existing button-in-<th> violations
         # are cleaned up; then drop continue-on-error to make it a gate.

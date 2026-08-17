@@ -18,6 +18,13 @@
  *   4. UI doctrine checks — delegated to scripts/check_ui_doctrine.cjs
  *      (docs/MODULE_UI_DOCTRINE.md). Field strips, H/V margin pairing,
  *      breakpoint-only layout CSS, hex literals, the regenerated CSS layer.
+ *   5. Retired AI model ids — delegated to scripts/check_model_ids.cjs.
+ *
+ * NOTE: in CI this whole script runs with continue-on-error (pre-existing
+ * button-in-<th> violations), so it is ADVISORY there. Anything that must
+ * actually block needs its own CI step as well — `npm run check:ui` and
+ * `npm run check:models` are exactly that. Pre-commit does block, so checks
+ * surfaced here still gate local commits.
  *
  * Generated-file list: keep in sync with .gitignore ("Build artifacts"
  * block), CLAUDE.md, and scripts/hooks/block_generated_edits.cjs.
@@ -149,6 +156,15 @@ function main() {
   const { failures: uiFailures, notes: uiNotes } = uiDoctrine.run({ all: MODE_ALL });
   for (const note of uiNotes) console.log(`[conventions] ${note}`);
   failures.push(...uiFailures);
+
+  // Retired AI model ids. Also its own module, and — like check:ui — its own
+  // BLOCKING CI step (`npm run check:models`), because this script runs under
+  // continue-on-error in CI and a rule that only lives here can never fail a
+  // build. Surfaced here as well so pre-commit catches it, where blocking works.
+  const modelIds = require('./check_model_ids.cjs');
+  const { failures: modelFailures, notes: modelNotes } = modelIds.run({ all: MODE_ALL });
+  for (const note of modelNotes) console.log(`[conventions] ${note}`);
+  failures.push(...modelFailures);
 
   if (failures.length) {
     console.error('\n[conventions] Commit blocked — fix the following (or SKIP_CONVENTIONS=1 with a stated reason):\n');
