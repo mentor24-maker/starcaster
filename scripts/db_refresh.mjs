@@ -149,6 +149,38 @@ if (!prodUrl) {
   );
 }
 
+// --- reaching production ----------------------------------------------------
+
+/**
+ * Split the connection string into the environment variables libpq reads.
+ *
+ * WHY, and it is not decoration: passing the URL as an argument puts the
+ * password in the process table, where `ps` shows it to every user on the
+ * machine and to anything that scrapes process lists. The first version of
+ * this script did exactly that, and the password appeared in a routine
+ * diagnostic within minutes of the first real run.
+ *
+ * libpq reads PGPASSWORD and friends from the environment instead, which
+ * `ps` does not print. Every psql and pg_dump call below goes through here.
+ */
+function connectionEnv(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    die('The production connection string is not a valid URL.');
+  }
+  return {
+    PGHOST: parsed.hostname,
+    PGPORT: parsed.port || '5432',
+    PGUSER: decodeURIComponent(parsed.username),
+    PGPASSWORD: decodeURIComponent(parsed.password),
+    PGDATABASE: parsed.pathname.replace(/^\//, '') || 'postgres',
+  };
+}
+
+const PROD_ENV = connectionEnv(prodUrl);
+
 // --- running commands -------------------------------------------------------
 
 function inContainer(script, { input, env: extraEnv = {}, quiet = false } = {}) {
@@ -174,9 +206,9 @@ function local(sql, { quiet = false } = {}) {
 
 /** Run SQL against PRODUCTION, read-only. The URL never reaches argv. */
 function prod(sql) {
-  return inContainer('psql "$PGURL" -X -q -t -A -v ON_ERROR_STOP=1 -f -', {
+  return inContainer('psql -X -q -t -A -v ON_ERROR_STOP=1 -f -', {
     input: sql,
-    env: { PGURL: prodUrl },
+    env: PROD_ENV,
   }).trim();
 }
 
@@ -253,8 +285,35 @@ step('2. Copying production down');
 // this database actually needs are re-applied in step 4.
 const DUMP_FLAGS = '--schema=public --no-owner --no-privileges --quote-all-identifiers';
 
+/**
+ * Tables whose STRUCTURE comes across but whose CONTENTS do not.
+ *
+ * Not a size optimisation — a correctness one. These five hold 260 MB of the
+ * 415 MB dump, and on 2026-08-16 the connection died partway through
+ * `training_corpus`: "SSL SYSCALL error: EOF detected". The shared pooler will
+ * not hold a single copy stream open long enough. Excluding them takes the
+ * copy from fifteen minutes and failing to about two and succeeding.
+ *
+ * None of them is needed to develop against. They are history, analytics and
+ * training material — the app reads them, but never to render a page you are
+ * working on. The tables still exist locally, so any code that queries them
+ * works; it just finds them empty.
+ *
+ * If you are working ON one of these features, take it off this list and
+ * expect a slower, more fragile copy.
+ */
+const STRUCTURE_ONLY = [
+  'training_corpus',          // 113 MB — AI training material
+  'builder_page_snapshots',   //  51 MB — page history
+  'observe_usage_logs',       //  50 MB — analytics
+  'builder_page_revisions',   //  50 MB — page history
+  'acquire_youtube_comments', //   9 MB — harvested comments
+];
+
+const EXCLUDE_DATA = STRUCTURE_ONLY.map((t) => `--exclude-table-data="public.${t}"`).join(' ');
+
 try {
-  inContainer(`pg_dump "$PGURL" ${DUMP_FLAGS} --schema-only -f /tmp/sc_schema.sql`, { env: { PGURL: prodUrl } });
+  inContainer(`pg_dump ${DUMP_FLAGS} --schema-only -f /tmp/sc_schema.sql`, { env: PROD_ENV });
   const size = inContainer('wc -c < /tmp/sc_schema.sql').trim();
   done(`Structure copied (${Math.round(Number(size) / 1024)} KB).`);
 } catch (error) {
@@ -262,7 +321,23 @@ try {
 }
 
 try {
-  inContainer(`pg_dump "$PGURL" ${DUMP_FLAGS} --data-only --disable-triggers -f /tmp/sc_data.sql`, { env: { PGURL: prodUrl } });
+  // --enable-row-security is load-bearing and worth understanding.
+  //
+  // 71 tables have row-level security on. pg_dump refuses to dump ANY of them
+  // without this flag — not because our login cannot see the rows (it can;
+  // docs/SQL/starcaster_readonly_role.sql gives it a permissive SELECT policy
+  // on every one) but because pg_dump cannot verify that from the outside, and
+  // will not risk writing a partial dump that looks complete.
+  //
+  // Passing the flag tells it "yes, dump what this login can see". That is
+  // only correct while every RLS table carries that policy. A table added
+  // later without one would come across EMPTY and silently — the precise
+  // failure mode pg_dump was protecting us from.
+  //
+  // So the flag is paired with step 7, which compares every table's row count
+  // against production. The guarantee is not "this cannot happen"; it is
+  // "this cannot happen quietly".
+  inContainer(`pg_dump ${DUMP_FLAGS} ${EXCLUDE_DATA} --data-only --disable-triggers --enable-row-security -f /tmp/sc_data.sql`, { env: PROD_ENV });
   const size = inContainer('wc -c < /tmp/sc_data.sql').trim();
   done(`Content copied (${Math.round(Number(size) / 1024 / 1024)} MB).`);
 } catch (error) {
@@ -280,6 +355,72 @@ try {
   done('Old copy cleared.');
 } catch (error) {
   die('Could not clear the old local database.\n  ' + explain(error));
+}
+
+// Extensions have to exist BEFORE the structure loads, because tables declare
+// columns of their types. `pg_dump --schema=public` does not carry them:
+// extensions belong to the database rather than to a schema, so restricting
+// the dump to one schema drops them silently — and the failure surfaces
+// hundreds of lines later as "type public.vector does not exist", which reads
+// like a corrupt dump rather than a missing extension.
+//
+// Asked of production rather than hardcoded, so a new extension added there
+// is picked up here without anyone remembering to edit this list.
+try {
+  const names = prod(`
+    select e.extname from pg_extension e
+      join pg_namespace n on n.oid = e.extnamespace
+     where n.nspname = 'public' order by 1;
+  `).split('\n').map((s) => s.trim()).filter(Boolean);
+
+  if (names.length) {
+    local(names.map((n) => `create extension if not exists "${n}" with schema public;`).join('\n'));
+    done(`Extensions restored: ${names.join(', ')}.`);
+  } else {
+    done('No extensions needed in this schema.');
+  }
+} catch (error) {
+  die(
+    'Could not restore the database extensions.\n  ' + explain(error),
+    'The structure will not load without them. If one is unavailable locally, it has to be installed in the Supabase image.',
+  );
+}
+
+// Security policies name the roles they apply to, and loading one whose role
+// is absent fails with `role "x" does not exist` nine thousand lines in. The
+// local stack has Supabase's own roles (anon, authenticated, service_role) but
+// not any added to production by hand — including starcaster_readonly, which
+// this very feature added.
+//
+// Created NOLOGIN: local copies need the NAME to exist so policies attach to
+// something, and nothing should ever be able to connect as them.
+try {
+  const referenced = prod(`
+    select distinct r from pg_policies, unnest(roles) r
+     where schemaname = 'public' and r <> 'public' order by 1;
+  `).split('\n').map((s) => s.trim()).filter(Boolean);
+
+  const created = [];
+  for (const role of referenced) {
+    const exists = local(`select count(*) from pg_roles where rolname = '${role.replace(/'/g, "''")}';`);
+    if (Number(exists) === 0) {
+      local(`create role "${role.replace(/"/g, '""')}" nologin;`);
+      created.push(role);
+    }
+  }
+  if (created.length) done(`Roles created so the security policies attach: ${created.join(', ')}.`);
+  else done('All roles the policies reference already exist.');
+} catch (error) {
+  die('Could not create the roles the security policies reference.\n  ' + explain(error));
+}
+
+// The dump opens with its own CREATE SCHEMA, which would now collide with the
+// one made above. Drop that single line rather than skipping errors wholesale,
+// so every OTHER error in the file still stops the run.
+try {
+  inContainer(`sed -i -E '/^CREATE SCHEMA "?public"?;/d' /tmp/sc_schema.sql`);
+} catch (error) {
+  die('Could not prepare the structure file.\n  ' + explain(error));
 }
 
 try {
@@ -349,14 +490,18 @@ const SCRUBS = [
   {
     table: 'people',
     what: 'names, emails, phones and social handles',
+    // Blanks, not nulls: nearly every column on this table is NOT NULL, so
+    // the obvious `= null` scrub fails on the first one and leaves REAL
+    // details in place — which the run reports as a failure rather than
+    // quietly skipping, because a half-scrubbed table is the worst outcome.
     sql: `update people set
             first_name = 'Test', last_name = 'Person ' || left(md5(id::text), 6),
-            middle_name = null,
+            middle_name = '',
             email = 'person+' || left(md5(id::text), 8) || '@example.invalid',
             phone = '555-02' || lpad((abs(hashtext(id::text)) % 100)::text, 2, '0'),
-            company = 'Example Co', city = 'Springfield',
-            website = null, youtube = null, instagram = null, tiktok = null,
-            facebook = null, x = null, bluesky = null, patreon = null, linkedin = null,
+            company = 'Example Co', city = 'Springfield', country = 'US',
+            website = '', youtube = '', instagram = '', tiktok = '',
+            facebook = '', x = '', bluesky = '', patreon = '', linkedin = '',
             custom_fields = '{}'::jsonb;`,
   },
   {
@@ -387,8 +532,12 @@ const SCRUBS = [
   },
   {
     table: 'app_project_admin_users',
-    what: "tenant admins' addresses",
-    sql: `update app_project_admin_users set email = 'tenantadmin+' || left(md5(id::text), 8) || '@example.invalid';`,
+    what: "tenant admins' addresses and passwords",
+    // Their password hashes are hashes of real passwords chosen by real
+    // tenant admins. Same treatment as the platform accounts in step 6.
+    sql: `update app_project_admin_users set
+            email = 'tenantadmin+' || left(md5(id::text), 8) || '@example.invalid',
+            password_hash = 'disabled:no-login-on-local-copies';`,
   },
   {
     table: 'app_project_support_requests',
@@ -476,31 +625,71 @@ if (users === null) {
 
 step('7. Checking what actually arrived');
 
-const CHECK_TABLES = [
-  'app_projects',
-  'builder_landing_page',
-  'builder_saved_sections',
-  'builder_themes',
-  'assets',
-  'contacts',
-  'people',
-  'app_auth_users',
-];
+// EVERY table, not a chosen few. Row-level security means a table can arrive
+// empty without anything failing, and a spot-check of eight tables would have
+// missed it on the other hundred and twenty-eight.
+const COUNT_ALL = `
+  select relname || '|' || (xpath('/row/c/text()', census))[1]::text as line
+    from (
+      select c.relname,
+             query_to_xml(format('select count(*) as c from public.%I', c.relname), false, true, '') as census
+        from pg_class c
+       where c.relnamespace = 'public'::regnamespace
+         and c.relkind = 'r'
+    ) counted
+   order by relname;
+`;
+
+function census(where) {
+  const runner = where === 'prod' ? prod : local;
+  const rows = new Map();
+  for (const line of runner(COUNT_ALL).split('\n')) {
+    const [table, value] = line.trim().split('|');
+    if (table) rows.set(table, Number(value) || 0);
+  }
+  return rows;
+}
 
 let mismatches = 0;
-for (const table of CHECK_TABLES) {
-  const there = count('prod', table);
-  const here = count('local', table);
-  if (there === null || here === null) {
-    warn(`${table} — could not compare.`);
-    continue;
+try {
+  const there = census('prod');
+  const here = census('local');
+
+  const skipped = [];
+  const emptied = [];
+  const differing = [];
+  const missing = [];
+
+  for (const [table, count] of there) {
+    if (!here.has(table)) {
+      missing.push(table);
+    } else if (STRUCTURE_ONLY.includes(table)) {
+      skipped.push(`${table} (${count} rows in production)`);
+    } else if (here.get(table) !== count) {
+      // An RLS table arriving at zero is the specific failure --enable-row-security
+      // makes possible, so name it separately from an ordinary mismatch.
+      (count > 0 && here.get(table) === 0 ? emptied : differing).push(`${table} (${count} → ${here.get(table)})`);
+    }
   }
-  if (there === here) {
-    done(`${table} — ${here}`);
-  } else {
-    mismatches += 1;
-    fail(`${table} — production has ${there}, this copy has ${here}.`);
+
+  mismatches = emptied.length + differing.length + missing.length;
+
+  done(`Compared all ${there.size} tables.`);
+  if (skipped.length) {
+    say(`${dim('·')} ${dim(`${skipped.length} table(s) copied structure-only, on purpose: ${skipped.join(', ')}`)}`);
   }
+  if (missing.length) fail(`${missing.length} table(s) did not come across at all.`, missing.join(', '));
+  if (emptied.length) {
+    fail(
+      `${emptied.length} table(s) arrived EMPTY — almost certainly a missing read policy.`,
+      `${emptied.join(', ')}\n    Fix: re-run docs/SQL/starcaster_readonly_role.sql, which adds a policy for any new table.`,
+    );
+  }
+  if (differing.length) fail(`${differing.length} table(s) have different counts.`, differing.join(', '));
+  if (!mismatches) done('Every table matches production exactly.');
+} catch (error) {
+  fail('Could not compare the two databases — cannot confirm this copy is complete.', explain(error));
+  mismatches = 1;
 }
 
 // Tidy up the dumps: they hold a full copy of production's content.
