@@ -1883,6 +1883,22 @@ function stripOverlayOnlyImageSettings(settings: Record<string, string>) {
   }
 }
 
+/**
+ * Rotation Rate, in turns per minute, for the two effects that rotate
+ * (added 2026-08-16). Only stamped when the effect actually uses it, so a
+ * page whose image has no effect does not gain a setting it will never read —
+ * and 25 is the speed Spin has always run at, so an existing page is
+ * unchanged either way.
+ */
+function normalizeImageEffectSettings(settings: Record<string, string>) {
+  if (settings.effect !== "spin" && settings.effect !== "tumbleweed") {
+    delete settings.effectRotationRate;
+    return;
+  }
+
+  settings.effectRotationRate = normalizeSpacingValue(settings.effectRotationRate, "25", 1, 600);
+}
+
 export function resolveBuilderModuleType(
   rawType: unknown,
   settings: Record<string, string>
@@ -2188,6 +2204,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
+    normalizeImageEffectSettings(settings);
   }
 
   if (type === "floating-image") {
@@ -2200,6 +2217,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
     settings.zIndex = normalizeSpacingValue(settings.zIndex, "20", -999, 999999);
+    normalizeImageEffectSettings(settings);
 
     const trigger = normalizeModuleTrigger(settings[MODULE_TRIGGER_SETTING_KEY]);
     const anchor = safeText(settings.overlayAnchor, 24) || "center";

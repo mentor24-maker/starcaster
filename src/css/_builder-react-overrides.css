@@ -5810,3 +5810,73 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: inline-flex;
   align-items: center;
 }
+
+/* ---------------------------------------------------------------------------
+   Image effects: Cruise, Tumbleweed, and the Rotation Rate control
+   ---------------------------------------------------------------------------
+   Both effects have been offered in the Image and Floating Image panels since
+   the Normie port and NEITHER had a rule anywhere in this repo — the panel set
+   `starcaster-effect-cruise` / `-tumbleweed` on the figure and no stylesheet
+   answered, so the picture just sat there. Reported by the operator
+   2026-08-16 on the Delray home page.
+
+   Written here rather than in `_builder-react.css` per doctrine R2: that file
+   is regenerated wholesale and a hand-written rule in it disappears silently
+   at the next regeneration.
+
+   Travel is ±100vw, the same idiom the ported `normie-slide` keyframes use, so
+   the image enters off-screen and leaves off-screen whatever the section is
+   doing. `.starcaster-effect-motion-clip` (already in the renderer for exactly
+   these two effects) is what stops that from scrolling the page sideways.
+
+   Tumbleweed turns AND travels in one animation, with the number of turns
+   supplied by `--sc-effect-spins` — the renderer works it out from the
+   operator's Rotation Rate and the travel time, so a rate means the same
+   number of turns per minute here as it does on Spin. The variable sits in a
+   `calc()` inside the keyframe rather than being animated itself, which is
+   what keeps the transform interpolating normally.
+   --------------------------------------------------------------------------- */
+
+@keyframes sc-effect-cruise {
+  from {
+    transform: translateX(-100vw);
+  }
+
+  to {
+    transform: translateX(100vw);
+  }
+}
+
+.builder-react-root .starcaster-effect-cruise {
+  animation: sc-effect-cruise var(--sc-effect-travel-duration, 8s) linear infinite;
+}
+
+@keyframes sc-effect-tumbleweed {
+  from {
+    transform: translateX(-100vw) rotate(0turn);
+  }
+
+  to {
+    transform: translateX(100vw) rotate(calc(var(--sc-effect-spins, 3.33) * 1turn));
+  }
+}
+
+.builder-react-root .starcaster-effect-tumbleweed {
+  animation: sc-effect-tumbleweed var(--sc-effect-travel-duration, 8s) linear infinite;
+}
+
+/* Spin keeps its keyframes from `_builder-react.css`; only the speed moves
+   here, so a page that never set a rate runs at the 2.4s it always ran at. */
+.builder-react-root .starcaster-effect-spin {
+  animation-duration: var(--sc-effect-rotation-duration, 2.4s);
+}
+
+/* R6: motion is decoration on all four of these — a visitor who has asked
+   their system for less of it gets the picture, standing still. */
+@media (prefers-reduced-motion: reduce) {
+  .builder-react-root .starcaster-effect-cruise,
+  .builder-react-root .starcaster-effect-tumbleweed,
+  .builder-react-root .starcaster-effect-spin {
+    animation: none;
+  }
+}
