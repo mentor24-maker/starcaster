@@ -81,6 +81,15 @@ purpose before you trust the pass.
   wholesale and a hand edit there disappears at the next regeneration — read
   it, never write it. See `src/css/CLAUDE.md`, first section.
 
+## Image effects — read `docs/IMAGE_EFFECTS.md` first
+
+The `image` / `floating-image` motion settings (Cruise, Tumbleweed, Spin and
+the eight controls behind them). The doc carries the unit decisions, the
+two-element/three-property structure the motions need, and the four traps —
+including the one that started it: **a class name is not a rendering**. Two of
+these effects were offered for months with no stylesheet rule behind them, and
+an E7 audit walked straight past it because the setting DID reach a renderer.
+
 ## Saved sections — read `docs/SAVED_SECTIONS.md` first
 
 `savedSectionId` and `canonical` are two different questions ("where did this
