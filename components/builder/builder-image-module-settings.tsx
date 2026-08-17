@@ -1,10 +1,24 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import {
+  DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
+  DEFAULT_IMAGE_EFFECT_DELAY,
+  DEFAULT_IMAGE_EFFECT_DIRECTION,
+  DEFAULT_IMAGE_EFFECT_REPEAT,
+  DEFAULT_IMAGE_EFFECT_SPEED,
+  DEFAULT_IMAGE_EFFECT_FREQUENCY,
   DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
+  IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
+  IMAGE_EFFECT_DELAY_OPTIONS,
+  IMAGE_EFFECT_DIRECTION_OPTIONS,
+  IMAGE_EFFECT_REPEAT_OPTIONS,
+  IMAGE_EFFECT_SPEED_OPTIONS,
+  IMAGE_EFFECT_FREQUENCY_OPTIONS,
   IMAGE_EFFECT_OPTIONS,
   IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
-  imageEffectRotates
+  imageEffectBounces,
+  imageEffectRotates,
+  imageEffectTravels
 } from "./builder-image-effects";
 import {
   BuilderSchemaModuleSettings,
@@ -29,7 +43,11 @@ type BuilderImageModuleSettingsProps = {
   onUploadMedia?: (file: File | null) => void;
 };
 
-const SIZE_OPTIONS = ["10", "15", "25", "33", "50", "66", "75", "90", "100"];
+// 5% joined the list 2026-08-17: 10% of a column is 112px on the operator's
+// page and ~190px on a full-bleed section, so a decorative graphic had no way
+// to be small. `getModuleWidthPercent` clamped anything under 10 back up to
+// it, so the floor moved there in the same change.
+const SIZE_OPTIONS = ["5", "10", "15", "25", "33", "50", "66", "75", "90", "100"];
 
 /**
  * Shared "prime" image controls, used by the image module and by nested
@@ -257,6 +275,44 @@ export function BuilderImageModuleSettings({
           ],
           [
             {
+              key: "effectDirection",
+              label: "Direction",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_DIRECTION,
+              options: IMAGE_EFFECT_DIRECTION_OPTIONS,
+              // Which way it goes, straight after WHAT it does: the biggest
+              // blast radius on the axis after the effect itself (D9).
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
+              key: "effectSpeed",
+              label: "Speed",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_SPEED,
+              options: IMAGE_EFFECT_SPEED_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
+              key: "effectRepeat",
+              label: "Repeat",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_REPEAT,
+              options: IMAGE_EFFECT_REPEAT_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
               key: "effectRotationRate",
               label: "Rotation Rate",
               width: "select-md",
@@ -266,6 +322,46 @@ export function BuilderImageModuleSettings({
               // Only Spin and Tumbleweed turn. Shown beside the Effect that
               // gates it (D9) rather than greyed out on every other one.
               visibleWhen: (settings) => imageEffectRotates(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
+              key: "effectFrequency",
+              label: "Frequency",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_FREQUENCY,
+              options: IMAGE_EFFECT_FREQUENCY_OPTIONS,
+              // Only Tumbleweed leaves the midline, so only Tumbleweed can be
+              // asked how often (D9: gated field beside what gates it).
+              visibleWhen: (settings) => imageEffectBounces(settings.effect),
+              rendersVia: "getImageEffectStageStyle"
+            }
+          ],
+          [
+            {
+              key: "effectBounceHeight",
+              label: "Bounce Height",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
+              options: IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
+              // How high, under how often — the pair reads as one idea, and
+              // both are gated by the same effect (D9).
+              visibleWhen: (settings) => imageEffectBounces(settings.effect),
+              rendersVia: "getImageEffectStageStyle"
+            }
+          ],
+          [
+            {
+              key: "effectDelay",
+              label: "Start Delay",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_DELAY,
+              options: IMAGE_EFFECT_DELAY_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
               rendersVia: "getImageEffectStyle"
             }
           ]

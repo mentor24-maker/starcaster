@@ -7,10 +7,24 @@ import {
 } from "@/lib/game-floating-image-trigger";
 import { isGameModuleTrigger } from "@/lib/module-trigger";
 import {
+  DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
+  DEFAULT_IMAGE_EFFECT_DELAY,
+  DEFAULT_IMAGE_EFFECT_DIRECTION,
+  DEFAULT_IMAGE_EFFECT_REPEAT,
+  DEFAULT_IMAGE_EFFECT_SPEED,
+  DEFAULT_IMAGE_EFFECT_FREQUENCY,
   DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
+  IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
+  IMAGE_EFFECT_DELAY_OPTIONS,
+  IMAGE_EFFECT_DIRECTION_OPTIONS,
+  IMAGE_EFFECT_REPEAT_OPTIONS,
+  IMAGE_EFFECT_SPEED_OPTIONS,
+  IMAGE_EFFECT_FREQUENCY_OPTIONS,
   IMAGE_EFFECT_OPTIONS,
   IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
-  imageEffectRotates
+  imageEffectBounces,
+  imageEffectRotates,
+  imageEffectTravels
 } from "./builder-image-effects";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderSettingRow } from "./builder-setting-row";
@@ -41,7 +55,11 @@ const OVERLAY_ANCHOR_OPTIONS = [
   { value: "bottom-right", label: "Bottom Right" }
 ] as const;
 
-const SIZE_OPTIONS = ["10", "15", "25", "33", "50", "66", "75", "90", "100"] as const;
+// 5% joined the list 2026-08-17: 10% of a column is 112px on the operator's
+// page and ~190px on a full-bleed section, so a decorative graphic had no way
+// to be small. `getModuleWidthPercent` clamped anything under 10 back up to
+// it, so the floor moved there in the same change.
+const SIZE_OPTIONS = ["5", "10", "15", "25", "33", "50", "66", "75", "90", "100"] as const;
 
 // Effects come from the shared list (builder-image-effects.ts) — the floating
 // image and the standard image had two copies of it, which is how both panels
@@ -280,6 +298,38 @@ export function BuilderFloatingImageModuleSettings({
               rendersVia: "getImageEffectClassName"
             },
             {
+              key: "effectDirection",
+              label: "Direction",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_DIRECTION,
+              options: IMAGE_EFFECT_DIRECTION_OPTIONS,
+              // Which way it goes, straight after WHAT it does: the biggest
+              // blast radius on the axis after the effect itself (D9).
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            },
+            {
+              key: "effectSpeed",
+              label: "Speed",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_SPEED,
+              options: IMAGE_EFFECT_SPEED_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            },
+            {
+              key: "effectRepeat",
+              label: "Repeat",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_REPEAT,
+              options: IMAGE_EFFECT_REPEAT_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            },
+            {
               key: "effectRotationRate",
               label: "Rotation Rate",
               width: "select-md",
@@ -288,7 +338,37 @@ export function BuilderFloatingImageModuleSettings({
               fallback: DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
               visibleWhen: (settings) => imageEffectRotates(settings.effect),
               rendersVia: "getImageEffectStyle"
-            }
+            },
+            {
+              key: "effectFrequency",
+              label: "Frequency",
+              width: "select-md",
+              control: "select",
+              options: IMAGE_EFFECT_FREQUENCY_OPTIONS,
+              fallback: DEFAULT_IMAGE_EFFECT_FREQUENCY,
+              visibleWhen: (settings) => imageEffectBounces(settings.effect),
+              rendersVia: "getImageEffectStageStyle"
+            },
+            {
+              key: "effectBounceHeight",
+              label: "Bounce Height",
+              width: "select-md",
+              control: "select",
+              options: IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
+              fallback: DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
+              visibleWhen: (settings) => imageEffectBounces(settings.effect),
+              rendersVia: "getImageEffectStageStyle"
+            },
+            {
+              key: "effectDelay",
+              label: "Start Delay",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_DELAY,
+              options: IMAGE_EFFECT_DELAY_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            },
           ],
           [
             {

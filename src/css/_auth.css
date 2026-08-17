@@ -114,6 +114,66 @@
   color: #e5e7eb;
 }
 
+/* "Explore" — the way into the product tour at /explore, and the one
+   invitation on this screen. Orbitron (loaded by its own <link> in
+   src/layout.html) for a futuristic, elegant, bold single word.
+
+   Centred under the BODY COPY, not under the whole column: the column is
+   52.5rem wide while the copy caps at 43.75rem, so centring in the column
+   would drift the word right of the text it belongs to. Matching the copy's
+   own width expression keeps the two locked together at every size. */
+.auth-intro-explore {
+  display: block;
+  align-self: flex-start;
+  width: min(43.75rem, 100cqw);
+  /* The copy column itself overflows the viewport on a phone (a pre-existing
+     landing-page bug — the sign-in card's form will not shrink below ~443px
+     and it sets the single-column grid track). Centring inside an overflowing
+     box pushed the word off the right edge, so cap this element at the width
+     actually on screen: it then centres in what the reader can see. On any
+     screen wide enough for the copy to fit, this cap never applies. */
+  max-width: calc(100vw - 2.5rem);
+  margin: 0;
+  padding: 0.25rem 0;
+  text-align: center;
+  font-family: 'Orbitron', 'Space Grotesk', system-ui, sans-serif;
+  font-size: clamp(1.5rem, 2.4vw, 2.15rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  /* letter-spacing also trails the final letter, which drags the word half a
+     space left of true centre. Indenting by the same amount puts it back. */
+  text-indent: 0.16em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--brand-electric, #00bfff);
+  text-decoration: none;
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+}
+
+/* The halo: three stacked shadows — a tight bright core, a mid bloom, and a
+   wide soft wash — which reads as light coming off the letters rather than
+   the single flat blur one shadow gives. */
+.auth-intro-explore:hover,
+.auth-intro-explore:focus-visible {
+  color: var(--brand-electric-bright, #7df9ff);
+  text-shadow:
+    0 0 8px var(--brand-halo-near, rgba(125, 249, 255, 0.95)),
+    0 0 22px var(--brand-halo-mid, rgba(125, 249, 255, 0.7)),
+    0 0 46px var(--brand-halo-far, rgba(0, 191, 255, 0.5));
+}
+
+/* Keyboard users get the glow too, plus a ring — a glow alone is a colour
+   change, and colour alone is not a focus indicator. */
+.auth-intro-explore:focus-visible {
+  outline: 2px solid var(--brand-electric-bright, #7df9ff);
+  outline-offset: 8px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-intro-explore { transition: none; }
+}
+
 .auth-logo {
   width: min(100%, 840px);
   height: auto;
