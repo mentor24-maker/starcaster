@@ -381,7 +381,8 @@ is CSS: **a class name is not a rendering.** Nothing in this repo tests CSS
 a setting dies quietly. `components/builder/builder-image-effects.test.ts`
 closes it for this family by reading `src/css/` and failing when an offered
 effect has no rule — the cheap shape of check for any setting whose only
-consumer is a stylesheet.
+consumer is a stylesheet. The full record, including the three other traps the
+same work turned up, is `docs/IMAGE_EFFECTS.md`.
 
 ### 1b. Rendered UI — the published page
 
