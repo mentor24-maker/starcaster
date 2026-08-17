@@ -37,7 +37,7 @@ There is deliberately no command going the other way. Local is a scratch copy.
 
 ### What is deliberately NOT copied
 
-Five tables come across empty — structure only. They held 260 MB of the
+Six tables come across empty — structure only. They held 260 MB of the
 415 MB dump, and the connection died partway through `training_corpus` on the
 first real run. Excluding them took the copy from fifteen minutes and failing
 to about two and succeeding.
@@ -49,6 +49,14 @@ to about two and succeeding.
 | `builder_page_revisions` | page history |
 | `observe_usage_logs` | analytics |
 | `acquire_youtube_comments` | harvested comments |
+| `observe_page_views` | analytics |
+
+`observe_page_views` was added on 2026-08-17, after the production database
+spent an evening unresponsive from an exhausted Disk IO budget. It is a pure
+log with no local value, and `pg_stat_statements` showed its `COPY` running on
+every one of that day's six refresh runs. **Every table left on this list costs
+production disk IO each time anyone refreshes** — that is the reason to keep the
+list short, over and above the copy being faster (see `docs/DOCTRINE.md` §1.5).
 
 Nothing needed to build a page. The tables still exist, so code that queries
 them works — it just finds them empty. Working on one of those features?

@@ -308,6 +308,7 @@ const STRUCTURE_ONLY = [
   'observe_usage_logs',       //  50 MB — analytics
   'builder_page_revisions',   //  50 MB — page history
   'acquire_youtube_comments', //   9 MB — harvested comments
+  'observe_page_views',       //  10 MB — analytics
 ];
 
 const EXCLUDE_DATA = STRUCTURE_ONLY.map((t) => `--exclude-table-data="public.${t}"`).join(' ');
