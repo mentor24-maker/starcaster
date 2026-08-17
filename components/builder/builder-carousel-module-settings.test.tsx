@@ -43,14 +43,25 @@ function panelHtml(settings: Record<string, string> = {}) {
  * of `label.field` boxes that looked perfectly reasonable in TSX.
  */
 describe("Carousel settings editor", () => {
-  it("renders only the right column — the left one is the module chrome", () => {
+  it("leaves column 1 to the module chrome, which it does not render", () => {
     const html = panelHtml();
     expect(html).toContain("builder-cards-panel");
     expect(html).toContain("builder-cards-panel-items");
-    // Operator, 2026-08-12: Playback moved out of the left column, which left
-    // it holding nothing this component renders. A settings half here again
-    // means the split has drifted back.
-    expect(html).not.toContain("builder-cards-panel-settings");
+    /**
+     * Operator, 2026-08-12: Playback moved out of the left column, leaving it
+     * holding nothing this component renders — the chrome fills it by itself,
+     * from `builder-module-card.tsx`.
+     *
+     * This used to assert that no `builder-cards-panel-settings` existed at
+     * all, which stopped being the right test on 2026-08-16 when Image Border
+     * took a column of its own (the operator's second column, not a rebuilt
+     * first one). What must never come back is the CHROME, so that is what is
+     * named now — a duplicate Label or margin here would be two controls
+     * writing one setting, which is the drift the original guard was for.
+     */
+    for (const chrome of [">Label<", ">Background<", ">Alignment<", ">V Margin<", ">H Margin<"]) {
+      expect(html).not.toContain(chrome);
+    }
   });
 
   it("puts Format first, then playback, then the items", () => {
@@ -144,6 +155,85 @@ describe("format-specific controls", () => {
     expect(panelHtml({ format: "slideshow", showCaptions: "true" })).toContain(">Caption title<");
     // The link is the exception — a slide can be clickable with no text.
     expect(panelHtml({ format: "slideshow" })).toContain(">Link<");
+  });
+});
+
+/**
+ * The image frame, asked for on 2026-08-16. It is one of the few groups here
+ * that is NOT format-specific: the operator asked for a border "that applies
+ * to all images", so both formats get the identical set.
+ */
+describe("image border controls", () => {
+  it("offers the whole set on both formats", () => {
+    for (const format of ["slideshow", "cards"]) {
+      const html = panelHtml({ format });
+      expect(html).toContain(">Image Border<");
+      for (const label of [">Style<", ">Border<", ">Border Color<", ">Radius<", ">Drop Shadow<"]) {
+        expect(html).toContain(label);
+      }
+    }
+  });
+
+  it("keeps the shadow's own numbers behind its checkbox", () => {
+    // Five dead number boxes is what an Advanced section used to hide, and A0
+    // retired those — so they appear when the shadow does, and not before.
+    const off = panelHtml();
+    for (const label of [">Shadow Color<", ">Shadow X<", ">Shadow Blur<", ">Shadow Opacity<"]) {
+      expect(off).not.toContain(label);
+    }
+    const on = panelHtml({ imageShadow: "true" });
+    for (const label of [">Shadow Color<", ">Shadow X<", ">Shadow Y<", ">Shadow Blur<", ">Shadow Spread<", ">Shadow Opacity<"]) {
+      expect(on).toContain(label);
+    }
+  });
+
+  /**
+   * Operator, 2026-08-16: "move the border controls into its own column to
+   * the right of Settings". A column, not a group: it is placed by document
+   * order (the CSS puts the panel's settings half in track 2 and its items
+   * half in track 3), so its position in the markup IS the layout.
+   */
+  it("is its own column between the chrome and the carousel", () => {
+    const html = panelHtml({ format: "cards" });
+    const column = html.indexOf("builder-cards-panel-settings");
+    const items = html.indexOf("builder-cards-panel-items");
+    expect(column).toBeGreaterThan(-1);
+    expect(column).toBeLessThan(items);
+    // Its own column name, at column size rather than group size.
+    expect(html).toContain('class="builder-cards-panel-heading">Image Border<');
+    // And it is a lattice column of its own, so its labels stop setting the
+    // track for Format, Loop and Gap.
+    const heading = html.indexOf(">Image Border<");
+    expect(html.lastIndexOf("builder-schema-panel-column", heading)).toBeGreaterThan(-1);
+  });
+
+  it("keeps the carousel's own groups out of it", () => {
+    const html = panelHtml({ format: "cards" });
+    const border = html.indexOf(">Image Border<");
+    const carousel = html.indexOf("builder-cards-panel-items");
+    // Everything the module does that is not the picture frame stays in the
+    // column to its right.
+    for (const group of [">Format<", ">Playback<", ">Controls<", ">Size<"]) {
+      expect(html.indexOf(group)).toBeGreaterThan(carousel);
+    }
+    expect(border).toBeLessThan(carousel);
+  });
+
+  it("shows the frame an untouched carousel already has", () => {
+    // 8px is what the stylesheet rounded both formats by before this control
+    // existed; a panel that showed 0 there would be lying about the page.
+    const html = panelHtml();
+    const at = html.indexOf(">Radius<");
+    const select = html.slice(html.indexOf("<select", at), html.indexOf("</select>", at));
+    expect(select).toContain('value="8"');
+    expect(select).toContain('selected=""');
+  });
+
+  it("offers 0 — square corners are a choice, not just the floor", () => {
+    const html = panelHtml();
+    const at = html.indexOf(">Radius<");
+    const select = html.slice(html.indexOf("<select", at), html.indexOf("</select>", at));
+    expect(select).toContain('value="0"');
   });
 });
 

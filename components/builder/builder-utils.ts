@@ -404,9 +404,19 @@ export function getSectionBackgroundStyle(section: BuilderTemplateSection): CSSP
   return getBuilderBackgroundStyle(section.background);
 }
 
+/**
+ * The floor was 10 until 2026-08-17, and 10% of a column is not small.
+ * The operator's tennis ball sat in a 1120px column, so its smallest
+ * reachable size was 112px — and on a full-bleed section it would have been
+ * 192px. A decorative graphic had no way to be decorative.
+ *
+ * Lowering the floor cannot move an existing page: a value below 10 was
+ * clamped UP to 10 before, so no module has one stored, and no panel offered
+ * one. It only opens room underneath.
+ */
 export function getModuleWidthPercent(settings: Record<string, string>) {
   const size = Number.parseInt(settings.size ?? "100", 10);
-  return Math.min(Math.max(Number.isFinite(size) ? size : 100, 10), 100);
+  return Math.min(Math.max(Number.isFinite(size) ? size : 100, 5), 100);
 }
 
 export function getModuleWidthStyle(settings: Record<string, string>): CSSProperties {
@@ -580,6 +590,30 @@ export function getImageModuleStyle(settings: Record<string, string>): CSSProper
 
   return {
     ...getModuleWidthStyle(settings),
+    // A PICTURE NEVER RENDERS BIGGER THAN THE FILE IT CAME FROM (2026-08-17).
+    // Width is a share of the column, which says nothing about how many pixels
+    // the file actually has: the operator's 400px tennis ball at 25% of a
+    // full-bleed section was being blown up to ~480px, which is both larger
+    // than he wanted and softer than the file he uploaded. `max-content` on a
+    // figure whose image is `width: 100%` resolves to that image's own pixel
+    // width, so the frame stops there and the picture stays sharp.
+    //
+    // Only applied when there IS a picture. An empty module renders a text
+    // placeholder instead, and capping THAT at its max-content would shrink
+    // the drop target to the width of the words "Choose an image".
+    //
+    // Checked before shipping rather than reasoned about: 54 images across 12
+    // live pages on both tenant sites, none rendering more than 5% above its
+    // natural width, so no live page moves. (Nothing in this repo tests CSS —
+    // doctrine 5.13 — so the survey IS the evidence.)
+    // `max-content` on its own, NOT `min(100%, max-content)` — the tidier
+    // looking version is invalid CSS and the browser drops the whole
+    // declaration, which is how the first cut of this shipped a cap that
+    // computed to `none`. Intrinsic keywords are not allowed inside `min()`.
+    // Nothing is lost: `max-width` can only ever shrink a box, so the 100%
+    // guard it replaces was already unreachable — `width` here is a
+    // percentage of the container and cannot exceed it.
+    ...(settings.url ? { maxWidth: "max-content" } : {}),
     // Padding sits INSIDE the frame — between the border and the picture —
     // which is the half of "all margin and padding" the image module never
     // had (operator, 2026-08-11). Margin, the space outside the frame, comes

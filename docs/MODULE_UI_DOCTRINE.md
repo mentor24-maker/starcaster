@@ -364,6 +364,25 @@ The opposite error was real in the same audit: `horizontalOffset` and
 `verticalOffset` genuinely were dead, and were removed. **Trace the helpers,
 not just the literals.**
 
+**A third species, and the audit above walked straight past it (2026-08-16):**
+a control whose setting DOES reach the render path, where the render path has
+nothing to say about it. The Image and Floating Image panels had offered
+Cruise and Tumbleweed since the Normie port; both reached
+`getImageEffectClassName`, which duly put `starcaster-effect-cruise` /
+`-tumbleweed` on the figure — **and no stylesheet in this repo ever defined
+either class**. The operator picked Tumbleweed on the Delray home page and got
+a still picture and no error. The same drift ran the other way at the same
+time: five effects with full keyframes (`flips`, `slide`, `cartwheels`,
+`parkour`, `axis-rotate`) that no panel offers.
+
+Walking "editor → renderer" is therefore not the whole of E7 when the renderer
+is CSS: **a class name is not a rendering.** Nothing in this repo tests CSS
+(§R2's incident, and `docs/DOCTRINE.md` 5.13), so the last hop is exactly where
+a setting dies quietly. `components/builder/builder-image-effects.test.ts`
+closes it for this family by reading `src/css/` and failing when an offered
+effect has no rule — the cheap shape of check for any setting whose only
+consumer is a stylesheet.
+
 ### 1b. Rendered UI — the published page
 
 #### R1. Layout CSS may never live only inside a breakpoint `[auto]`

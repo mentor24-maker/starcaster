@@ -23,6 +23,10 @@ const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
 import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
 import { carouselSeamShift, carouselShortestDelta } from "@/lib/builder-carousel-loop";
+import {
+  getCarouselImageFrameStyle,
+  getCarouselImageShadowGutter
+} from "@/lib/builder-carousel-image-frame";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
@@ -172,6 +176,17 @@ function normalizeNavPath(value: string) {
     normalized = `/${normalized}`;
   }
   return normalized === "/home" ? "/" : normalized;
+}
+
+// The home item never takes the active highlight. Landing on "/" is the
+// default state of the site rather than a place you navigated to, so lighting
+// up Home reads as a stuck button; every other page still highlights.
+// It also mops up bare "#" hrefs, which normalize to "/" and would otherwise
+// all light up on the home page.
+function isNavPathActive(href: string, activePath: string) {
+  const normalized = normalizeNavPath(href || "#");
+  if (normalized === "/") return false;
+  return normalized === activePath;
 }
 
 function toPublicHref(href: string): string {
@@ -5442,8 +5457,43 @@ function CarouselPreview({
    * image used to be a hard 180px with `object-fit: cover`, so a poster lost
    * its top and bottom and no setting could give them back.
    */
-  const frameStyle: CSSProperties = heightPx > 0 && !isCards ? { height: `${heightPx}px` } : {};
-  const cardImageStyle: CSSProperties = heightPx > 0 ? { height: `${heightPx}px` } : {};
+  /**
+   * The border, corner and drop shadow, one set for every picture in the
+   * module (operator, 2026-08-16). Where it LANDS differs by format for the
+   * same reason Height does — what the operator means by "the image" is the
+   * frame on a slideshow and each card's picture on a shelf:
+   *
+   * Slideshow: the frame is the picture, and it already clips to itself
+   *   (`overflow: hidden`), so a border drawn on it is a mount around the
+   *   photo and the radius rounds the photo inside it.
+   * Cards: the picture's own box, so the copy under it keeps its square
+   *   corners and sits outside the frame.
+   *
+   * Both boxes already carried a hard `border-radius: 8px` in the stylesheet,
+   * which is why 8 is the resolver's default rather than 0.
+   */
+  const imageFrame = getCarouselImageFrameStyle(settings);
+  /**
+   * Room for the shadow to fall into. `overflow-x: auto` on the card row
+   * clips the other axis whether or not anything asks it to, so without this
+   * the shadow stops dead at the bottom of the card. Vertical only — see
+   * `getCarouselImageShadowGutter`.
+   */
+  const shadowGutter = isCards ? getCarouselImageShadowGutter(settings) : 0;
+  const frameStyle: CSSProperties = {
+    ...(heightPx > 0 && !isCards ? { height: `${heightPx}px` } : {}),
+    ...(shadowGutter > 0 ? { paddingTop: `${shadowGutter}px`, paddingBottom: `${shadowGutter}px` } : {}),
+    // The card row carries its OWN rounding in CSS (8px) and clips to it,
+    // which shaves the outer corners of the first and last card whatever the
+    // pictures are set to — so Radius 0 could not actually reach square
+    // (operator, 2026-08-16: "allow the radius to go all the way to 0px").
+    // The row follows the setting instead of holding a number of its own.
+    ...(isCards ? { borderRadius: imageFrame.borderRadius } : imageFrame)
+  };
+  const cardImageStyle: CSSProperties = {
+    ...(heightPx > 0 ? { height: `${heightPx}px` } : {}),
+    ...imageFrame
+  };
 
   const atStart = index <= 0;
   const atEnd = index >= count - 1;
@@ -5879,7 +5929,7 @@ function NavMegaItem({
   }
 
   const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
-  const isActive = normalizeNavPath(item.href || "#") === activePath;
+  const isActive = isNavPathActive(item.href || "#", activePath);
   const featureImage = item.featureImage ? resolvePublicBuilderAssetUrl(item.featureImage) : "";
 
   return (
@@ -5931,7 +5981,7 @@ function NavMegaItem({
               ) : null}
               {column.links.map((link) => {
                 const linkHref = previewMode ? toPreviewHref(link.href || "#") : toPublicHref(link.href || "#");
-                const linkActive = normalizeNavPath(link.href || "#") === activePath;
+                const linkActive = isNavPathActive(link.href || "#", activePath);
                 return (
                   <Link
                     key={link.id ?? `${linkHref}-${link.label}`}
@@ -6081,7 +6131,7 @@ function NavigationModulePreview({
       <div className="site-nav-items" id={menuId}>
       {topLevelItems.map((item) => {
         const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
-        const isActive = normalizeNavPath(item.href || "#") === activePath;
+        const isActive = isNavPathActive(item.href || "#", activePath);
         const itemId = item.id ?? `${href}-${item.label}`;
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
         const rawWidth = itemSizing === "custom" && item.width ? item.width.trim() : undefined;
@@ -6137,7 +6187,7 @@ function NavigationModulePreview({
             <div className="site-nav-dropdown-menu">
               {children.map((child) => {
                 const childHref = previewMode ? toPreviewHref(child.href || "#") : toPublicHref(child.href || "#");
-                const childActive = normalizeNavPath(child.href || "#") === activePath;
+                const childActive = isNavPathActive(child.href || "#", activePath);
                 return (
                   <Link
                     key={child.id ?? `${childHref}-${child.label}`}

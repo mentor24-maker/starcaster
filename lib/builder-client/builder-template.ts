@@ -1883,6 +1883,48 @@ function stripOverlayOnlyImageSettings(settings: Record<string, string>) {
   }
 }
 
+/**
+ * Rotation Rate, in turns per minute, for the two effects that rotate
+ * (added 2026-08-16). Only stamped when the effect actually uses it, so a
+ * page whose image has no effect does not gain a setting it will never read —
+ * and 25 is the speed Spin has always run at, so an existing page is
+ * unchanged either way.
+ */
+function normalizeImageEffectSettings(settings: Record<string, string>) {
+  // Direction belongs to the two travelling effects, and is stored only when
+  // it is not the default — a page that never chose one carries no key.
+  if (settings.effect === "cruise" || settings.effect === "tumbleweed") {
+    if (settings.effectDirection !== "rtl") delete settings.effectDirection;
+    if (settings.effectRepeat !== "once") delete settings.effectRepeat;
+    settings.effectSpeed = normalizeSpacingValue(settings.effectSpeed, "8", 1, 600);
+    settings.effectDelay = normalizeSpacingValue(settings.effectDelay, "0", 0, 120);
+  } else {
+    delete settings.effectDirection;
+    delete settings.effectRepeat;
+    delete settings.effectSpeed;
+    delete settings.effectDelay;
+  }
+
+  if (settings.effect !== "spin" && settings.effect !== "tumbleweed") {
+    delete settings.effectRotationRate;
+    delete settings.effectFrequency;
+    delete settings.effectBounceHeight;
+    return;
+  }
+
+  settings.effectRotationRate = normalizeSpacingValue(settings.effectRotationRate, "25", 1, 600);
+
+  // Frequency — hops per crossing — belongs to Tumbleweed alone; Spin turns in
+  // place and never leaves the midline.
+  if (settings.effect === "tumbleweed") {
+    settings.effectFrequency = normalizeSpacingValue(settings.effectFrequency, "4", 1, 60);
+    settings.effectBounceHeight = normalizeSpacingValue(settings.effectBounceHeight, "50", 0, 1000);
+  } else {
+    delete settings.effectFrequency;
+    delete settings.effectBounceHeight;
+  }
+}
+
 export function resolveBuilderModuleType(
   rawType: unknown,
   settings: Record<string, string>
@@ -2188,6 +2230,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
+    normalizeImageEffectSettings(settings);
   }
 
   if (type === "floating-image") {
@@ -2200,6 +2243,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
     settings.zIndex = normalizeSpacingValue(settings.zIndex, "20", -999, 999999);
+    normalizeImageEffectSettings(settings);
 
     const trigger = normalizeModuleTrigger(settings[MODULE_TRIGGER_SETTING_KEY]);
     const anchor = safeText(settings.overlayAnchor, 24) || "center";

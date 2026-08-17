@@ -2870,8 +2870,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    become items of THIS grid instead of a nested one — that is what lets a
    panel child sit in the same column track as the chrome above it. */
 .builder-react-root .builder-module-editor--feature-cards,
-.builder-react-root .builder-module-editor--program-list,
-.builder-react-root .builder-module-editor--carousel {
+.builder-react-root .builder-module-editor--program-list {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2918,8 +2917,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ------------------------------------------------------------------------
-   SOCIAL RUNS THE SAME EDITOR AT THREE COLUMNS (operator, 2026-08-16:
-   "arrange the settings in two columns with the social icons in a third").
+   SOCIAL AND CAROUSEL RUN THE SAME EDITOR AT THREE COLUMNS — Social on
+   2026-08-16 ("arrange the settings in two columns with the social icons in
+   a third"), Carousel the same day ("move the border controls into its own
+   column to the right of Settings").
 
    Everything above still applies — the children flatten, the rows carry
    their own spacing, the gap is horizontal only — except the track list and
@@ -2939,19 +2940,69 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-items: start;
 }
 
+/*
+ * The carousel joins Social's three-column track list, and its top-level
+ * strips have to be able to FIT the narrower first column.
+ *
+ * The module's Label row is a bare field strip directly under the editor —
+ * not inside `.builder-module-chrome`, so the lattice rule that turns a
+ * chrome field into `display: contents` never reached it. Its field was a
+ * flex box carrying BOTH the label and a control at the declared `text-md`
+ * width, so the box measured 292px while holding 370px of content: it
+ * overflowed by the width of the word "Label" and, at a third of the editor,
+ * ran 41px into Image Border and printed over that column's first label
+ * (measured at 1440 in the live editor).
+ *
+ * `check:panels` cannot see this. It checks alignment WITHIN a column, not
+ * one column landing on the next — the same blind spot the doctrine names
+ * for anything it has no shape for.
+ *
+ * The fix is the treatment every other lattice row already gets: the strip
+ * is the grid, the field disappears into it (`display: contents`), and the
+ * control track is `minmax(0, max-content)` so it shrinks when the column is
+ * narrow instead of overflowing it. No width is set on any field — W0's
+ * prohibition stands.
+ */
+.builder-react-root .builder-module-editor--carousel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 0 var(--space-6, 24px);
+  align-items: start;
+}
+
+.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: max-content minmax(0, max-content);
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip .builder-module-field {
+  display: contents;
+}
+
 /* The editor's own children — the "Settings" heading the module card puts
    above every two-column panel — stay in column 1 with the settings. */
-.builder-react-root .builder-module-editor--social > * {
+.builder-react-root .builder-module-editor--social > *,
+.builder-react-root .builder-module-editor--carousel > * {
   grid-column: 1;
 }
 
 /* Column 1 takes the module's own settings, column 2 the Frame axis. The
    pair is placed by document order rather than by name, so adding a third
-   settings group later is a track, not a rewrite. */
+   settings group later is a track, not a rewrite.
+
+   The carousel renders ONE of these — Image Border — so it is selected by
+   class alone, with no `nth-of-type` to match. Worth saying why, because
+   `:last-of-type` looks like the tidy way to cover both panels and is a
+   trap: it counts DIVS, not the class, and the last div here is the item
+   column — so it would have matched nothing and quietly dropped Social's
+   second column back into the first. */
 .builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(1) {
   grid-column: 1;
 }
-.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(2) {
+.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(2),
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -2959,16 +3010,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* `span 100` rather than `1 / -1`, for the reason the two-column version
    gives: -1 on an implicit grid collapses the column to a single row. */
-.builder-react-root .builder-module-editor--social .builder-cards-panel-items {
+.builder-react-root .builder-module-editor--social .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
   grid-column: 3;
   grid-row: 1 / span 100;
   align-self: start;
 }
 
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
-.builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
   grid-column: 1;
 }
+
 
 /*
  * The chrome STACKS in these two, instead of flowing (operator, 2026-08-12:
@@ -2990,9 +3042,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
    implicit grid resolves to the explicit grid's only line, which collapses
-   the column to a single row. */
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-.builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
+   the column to a single row.
+
+   Feature Cards only. The carousel's item column moved to track 3 with the
+   three-column block above, and while it was still named here as well it
+   landed back in track 2 — on top of Image Border, since a later rule of
+   equal specificity wins. Caught by measuring the live editor; the two
+   columns reported the same x. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -3220,6 +3277,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
   .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
   .builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  /* The carousel's middle column has to give up its row-1 placement for the
+     same reason the item column does: pinned to row 1 in a single-track grid
+     it would sit ON the chrome instead of under it. */
+  .builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
     grid-column: 1;
     grid-row: auto;
   }
@@ -5744,4 +5809,163 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-publish-label-group {
   display: inline-flex;
   align-items: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Image effects: Cruise, Tumbleweed, and the controls that drive them
+   ---------------------------------------------------------------------------
+   Both effects were offered in the Image and Floating Image panels since the
+   Normie port and NEITHER had a rule anywhere in this repo — the panel set
+   `starcaster-effect-cruise` / `-tumbleweed` on the figure and no stylesheet
+   answered, so the picture just sat there. Reported by the operator
+   2026-08-16 on the Delray home page.
+
+   Written here rather than in `_builder-react.css` per doctrine R2: that file
+   is regenerated wholesale and a hand-written rule in it disappears silently
+   at the next regeneration.
+
+   THREE MOTIONS ON TWO ELEMENTS. Travel, spin and hop each carry their own
+   rate, and three animations cannot share one `transform` — the last one to
+   touch it wins and the other two vanish. So the figure animates the two
+   INDEPENDENT transform properties at once (`translate` for the travel,
+   `rotate` for the spin), and the hop rides a wrapper element's `translate`,
+   which is a third property on a different box. All three compose, and each
+   keeps a duration of its own.
+   --------------------------------------------------------------------------- */
+
+/* THE CORRIDOR IS THE FULL PAGE, NOT THE COLUMN (operator, 2026-08-17: "though
+   the section is full width, this module is contained — we need to break it
+   out of its container"). Measured on the live Delray page: a 1440px viewport,
+   a full-width section, and the ball travelling inside a 1120px window because
+   the section's 110px padding and the column's 50px were still in force. It
+   appeared and vanished 160px in from each edge.
+
+   `50% - 50vw` walks the clip back from the centre of its container to the
+   centre of the viewport, so the corridor lands edge to edge and CORRECTS
+   ITSELF if the padding above it ever changes — the same self-correcting shape
+   `.builder-preview-section-full-width` uses for the page margin, rather than
+   a number copied from today's theme.
+
+   The overshoot that idiom is normally criticised for (100vw counts the
+   scrollbar; the page then scrolls sideways by its width) cannot happen here:
+   this element clips its own children horizontally, and `max-width: 100%` on
+   the shell above stops the box itself from becoming the overflow. Verified in
+   a browser at 1440 / 768 / 390 rather than argued — see the PR.
+
+   NOT in the editor's module card. That card renders the same component at
+   thumbnail size (`.builder-module-preview-image`), and a 100vw child inside a
+   settings panel is a card that bursts its own editor. The rendered page — the
+   canvas, the preview and the public site — is what breaks out. */
+.builder-react-root .starcaster-effect-motion-clip:not(:has(.builder-module-preview-image)) {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Travel: one crossing, edge to edge. `translate` rather than
+   `transform: translateX` so the spin can run beside it on `rotate`. */
+@keyframes sc-effect-travel {
+  from {
+    translate: -100vw 0;
+  }
+
+  to {
+    translate: 100vw 0;
+  }
+}
+
+/* One turn. Speed comes from the duration, so this serves Spin (turning in
+   place) and Tumbleweed (turning as it goes) from the same six lines. */
+@keyframes sc-effect-turn {
+  from {
+    rotate: 0turn;
+  }
+
+  to {
+    rotate: 1turn;
+  }
+}
+
+/* One hop. A bounce is not a sine wave: leaving the ground is `ease-out` and
+   falling back is `ease-in`, which is the pairing the ported `normie-bounce`
+   keyframes use and the difference between a ball and a bobbing balloon.
+
+   The height is a PERCENTAGE, and for `translate` that means a share of the
+   element's own height — so the arc scales with the picture instead of a
+   fixed 50px hop looking enormous under a small ball and invisible under a
+   big one. It is the operator's Bounce Height since 2026-08-17; the fallback
+   here is only what an un-migrated page falls back to, and it matches
+   DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT so the two cannot drift. */
+@keyframes sc-effect-hop {
+  0% {
+    translate: 0 0;
+    animation-timing-function: ease-out;
+  }
+
+  50% {
+    translate: 0 calc(-1 * var(--sc-effect-bounce, 50%));
+    animation-timing-function: ease-in;
+  }
+
+  100% {
+    translate: 0 0;
+  }
+}
+
+/* Direction is `animation-direction`, not a second set of keyframes: one
+   value applies to every animation in the shorthand list above, so `reverse`
+   turns the travel AND the spin around together. A ball crossing right to
+   left rolls anticlockwise, which is the half a mirrored travel would miss. */
+.builder-react-root .starcaster-effect-cruise {
+  animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-travel-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+.builder-react-root .starcaster-effect-tumbleweed {
+  animation:
+    sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
+    sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  /* TWO values, and the second is why Repeat could not be one keyword: a flat
+     `1` here would stop the spin after a single turn and the ball would slide
+     the rest of the crossing. The renderer works out how many turns fit. */
+  animation-iteration-count:
+    var(--sc-effect-travel-iterations, infinite),
+    var(--sc-effect-turn-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+/* Frequency arrives as a duration: the renderer divides one crossing by the
+   number of hops the operator asked for, so "4 per crossing" stays four
+   however long the crossing is. */
+.builder-react-root .starcaster-effect-hop-stage {
+  display: block;
+  width: 100%;
+  animation: sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-hop-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+/* Spin moves off the ported `normie-spin` (which animates `transform`) onto
+   the same `rotate` keyframes Tumbleweed uses, so one turn is defined once.
+   The default duration is the 2.4s it has always run at. */
+.builder-react-root .starcaster-effect-spin {
+  animation: sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+}
+
+/* R6: motion is decoration on all of these — a visitor who has asked their
+   system for less of it gets the picture, standing still. */
+@media (prefers-reduced-motion: reduce) {
+  .builder-react-root .starcaster-effect-cruise,
+  .builder-react-root .starcaster-effect-tumbleweed,
+  .builder-react-root .starcaster-effect-hop-stage,
+  .builder-react-root .starcaster-effect-spin {
+    animation: none;
+  }
 }

@@ -13,6 +13,7 @@ import {
   parseBuilderCarouselItems,
   resolveCarouselFormat
 } from "./builder-carousel-module-settings";
+import { getCarouselImageFrameStyle } from "@/lib/builder-carousel-image-frame";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -110,7 +111,6 @@ import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-set
 import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
-import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderImagePreview } from "./builder-image-preview";
 import {
   getAlignmentClass,
@@ -681,6 +681,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
     // `items`, which is the point of the merge.
     const items = parseBuilderCarouselItems(module.settings);
     const isCards = resolveCarouselFormat(module.settings) === "cards";
+    // The same frame the page draws, so the glance does not quietly disagree
+    // with what the operator just set two feet to the right of it.
+    const imageFrame = getCarouselImageFrameStyle(module.settings);
 
     if (items.length === 0) {
       return (
@@ -706,6 +709,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
                   {...imageProps(item.imageUrl, { sizes: "220px" })}
                   alt={item.imageAlt || item.title || ""}
                   loading="lazy"
+                  style={imageFrame}
                 />
               ) : null}
               <div className="builder-module-preview-carousel-card-copy">
@@ -721,7 +725,12 @@ function renderModulePreview(module: BuilderTemplateModule) {
     const first = items[0];
     return (
       <div className="builder-module-preview-carousel">
-        <img {...imageProps(first.imageUrl)} alt={first.imageAlt || ""} loading="lazy" />
+        <img
+          {...imageProps(first.imageUrl)}
+          alt={first.imageAlt || ""}
+          loading="lazy"
+          style={imageFrame}
+        />
         {items.length > 1 ? (
           <span className="builder-module-preview-carousel-count">{items.length} slides</span>
         ) : null}
@@ -3116,8 +3125,16 @@ export function BuilderModuleCard({
               field, so they share the one label track by construction.
 
               Last on the strip by D9: a nudge is the finest adjustment here,
-              after the margins that move the whole module. */}
-          {isCarouselModule
+              after the margins that move the whole module.
+
+              The image module joined the Carousel here on 2026-08-16. It had
+              kept the standalone `BuilderModuleOffsetFields` block on the
+              grounds that its editor was "one full-width column, where a
+              captioned row costs nothing" — but the editor has been three axis
+              columns since D8, so the block was two rows measuring their own
+              label track above three that measured another, which is the
+              stagger the operator saw. */}
+          {isCarouselModule || isStandardImage
             ? MODULE_NUDGE_SIDES.map(({ key, label, hint }) => (
                 <BuilderModuleField key={key} label={label} width="num">
                   <input
@@ -3530,32 +3547,14 @@ export function BuilderModuleCard({
               margins but whose own editor never offered them. */}
           {needsRestoredChrome ? sharedModuleChrome : null}
 
-          {/* Image keeps the standalone block — its editor is one full-width
-              column, where a captioned row costs nothing. Slideshow's two
-              nudge fields live in the chrome strip instead; see
-              MODULE_NUDGE_SIDES. */}
-          {isStandardImage ? (
-            <BuilderModuleOffsetFields
-              horizontalOffset={module.settings.horizontalOffset ?? "0"}
-              verticalOffset={module.settings.verticalOffset ?? "0"}
-              onHorizontalOffsetChange={(horizontalOffset) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, horizontalOffset }
-                }))
-              }
-              onVerticalOffsetChange={(verticalOffset) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, verticalOffset }
-                }))
-              }
-            />
-          ) : null}
-
-          {(isStandardImage || isVideoModule) && (
+          {/* The image module's offsets moved into the chrome strip above (see
+              MODULE_NUDGE_SIDES); its URL, Link, New Tab and gallery buttons
+              moved into its own schema panel, where they share the Content
+              column's label track instead of each hand-rolled block measuring
+              its own. What is left below belongs to the video module. */}
+          {isVideoModule && (
             <label className="field">
-              <span>{isVideoModule ? "Video embed URL" : "URL"}</span>
+              <span>Video embed URL</span>
               <input
                 type="text"
                 value={module.settings.url ?? ""}
@@ -3568,38 +3567,17 @@ export function BuilderModuleCard({
                     }
                   }))
                 }
-                placeholder={
-                  isVideoModule
-                    ? "YouTube, Vimeo, embed URL, or uploaded video"
-                    : "https://..."
-                }
+                placeholder="YouTube, Vimeo, embed URL, or uploaded video"
               />
             </label>
           )}
 
-          {isStandardImage ? (
-            <label className="field">
-              <span>Link</span>
-              <input
-                type="text"
-                value={module.settings.linkUrl ?? ""}
-                onChange={(event) =>
-                  onUpdateModule((current) => ({
-                    ...current,
-                    settings: { ...current.settings, linkUrl: normalizeBuilderAssetUrl(event.target.value) }
-                  }))
-                }
-                placeholder="/path-or-url"
-              />
-            </label>
-          ) : null}
-
-          {(isVideoModule || isStandardImage) ? (
+          {isVideoModule ? (
             <label className="field builder-checkbox-field">
               <span>New Tab</span>
               <input
                 type="checkbox"
-                checked={isVideoModule ? module.settings.newTab !== "false" : module.settings.newTab === "true"}
+                checked={module.settings.newTab !== "false"}
                 onChange={(event) =>
                   onUpdateModule((current) => ({
                     ...current,
@@ -3675,7 +3653,7 @@ export function BuilderModuleCard({
             </div>
           ) : null}
 
-          {(isStandardImage || isVideoModule) ? (
+          {isVideoModule ? (
             <div className="builder-media-actions">
               <button className="secondary-button builder-gallery-button" onClick={onOpenGallery} type="button">Choose From Gallery</button>
               <label className="secondary-button builder-gallery-button builder-upload-button">
@@ -3714,7 +3692,14 @@ export function BuilderModuleCard({
           ) : null}
 
           {isStandardImage ? (
-            <BuilderImageModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            <BuilderImageModuleSettings
+              includeMedia
+              module={module}
+              themeColors={themeColors}
+              onOpenGallery={onOpenGallery}
+              onUpdateModule={onUpdateModule}
+              onUploadMedia={onUploadMedia}
+            />
           ) : null}
 
           {module.type === "heading" ? (
@@ -3738,7 +3723,11 @@ export function BuilderModuleCard({
             />
           )}
           {module.type === "carousel" && (
-            <BuilderCarouselModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            <BuilderCarouselModuleSettings
+              module={module}
+              themeColors={themeColors}
+              onUpdateModule={onUpdateModule}
+            />
           )}
           {module.type === "feature-cards" && (
             <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />

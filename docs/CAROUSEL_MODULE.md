@@ -37,6 +37,7 @@ tiles create the same module and differ only in the `format` they preset.
 |---|---|
 | Public renderer (canvas, `/builder-preview`, live sites) | `components/builder-template-preview.tsx` → `CarouselPreview` |
 | Loop arithmetic (pure, unit-tested) | `lib/builder-client/builder-carousel-loop.ts` |
+| Image border / shadow (pure, unit-tested) | `lib/builder-client/builder-carousel-image-frame.ts` |
 | Settings panel | `components/builder/builder-carousel-module-settings.tsx` |
 | Canvas card preview | `components/builder/builder-module-card.tsx` |
 | Type, defaults, migration | `lib/builder-client/builder-template.ts` (search `carousel`) |
@@ -73,6 +74,8 @@ renders nothing.
 | Gap | `gap` | |
 | Show captions | `showCaptions` | **slideshow only**; off by default |
 | Caption position | `captionPosition` | 5 positions |
+| Image border | `imageBorderStyle` `imageBorderWidth` `imageBorderColor` `imageBorderRadius` | one frame for every picture — see below |
+| Image drop shadow | `imageShadow` + `…Color` `…X` `…Y` `…Blur` `…Spread` `…Opacity` | off by default |
 | Items | `items` | the shared card shape |
 
 ### Height means different things, on purpose
@@ -90,6 +93,51 @@ on a card slider.
 This was wrong on the day of the merge and is worth not re-breaking: the
 card picture was pinned at a hard `180px`, which cropped every poster and
 made the Height control appear dead (PR #282).
+
+---
+
+## The image frame — border, corner, drop shadow
+
+Added 2026-08-16: *"the carousel module is currently missing controls for the
+border of the images. We should have full border control that applies to all
+images, including dropshadows."*
+
+One set of settings for **both formats and every item** — that is what was
+asked for, and it is also what a carousel is: a row of pictures shown
+together, so a border only some of them carried would read as a mistake.
+There is deliberately no per-item override.
+
+Resolved in one pure place, `lib/builder-client/builder-carousel-image-frame.ts`,
+read by the public renderer and by the canvas glance so the two cannot drift.
+
+**Where it lands differs by format**, for the same reason Height does:
+
+- **Slideshow** — the frame *is* the picture, and it already clips to itself
+  (`overflow: hidden`), so the border is a mount around the photo and the
+  radius rounds the photo inside it.
+- **Cards** — each card's picture box, so the copy underneath keeps its square
+  corners and sits outside the frame.
+
+Two things worth not re-breaking:
+
+1. **The radius default is 8, not 0.** The stylesheet already rounded the
+   slideshow frame and the card picture by 8px each, long before either had a
+   control. Any other default would have restyled every live carousel the day
+   this shipped — the setting is new, the appearance is not.
+2. **The card row's rounding follows the setting, and holds no number of its
+   own.** The row clips to its own `border-radius`, so while that was a hard
+   8px in CSS the outer corners of the first and last card stayed rounded no
+   matter what the pictures said — Radius 0 was square everywhere except the
+   two corners anyone looks at first (operator, 2026-08-16: *"allow the radius
+   to go all the way to 0px"*).
+3. **The card row gets a vertical gutter when the shadow is on.**
+   `overflow-x: auto` clips the *other* axis whether or not anything asks it
+   to — there is no scrolling one axis while the other overflows visibly — so
+   without it the shadow stops dead at the bottom of the card. The gutter is
+   vertical only: horizontal padding on a scroll container moves every scroll
+   offset, and the card loop's arithmetic is measured in those offsets. The
+   sideways spill is still clipped at the frame edge, where the row visibly
+   continues anyway.
 
 ---
 

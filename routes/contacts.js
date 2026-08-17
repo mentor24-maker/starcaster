@@ -564,7 +564,6 @@ async function handleContacts(req, res, pathname, method) {
     const contextDump = contextLines.join('\n\n');
 
     // Step 3: Trigger Vertex AI Inference natively
-    const { consultRoger } = require('../lib/rogerClient');
     const prompt = `You are an AI Synthesizer mapping a Hybrid Persona Voice.
 Analyze the following CRM contact profiles which represent several distinct experts.
 Synthesize their collective conversational style, backgrounds, and notes into a unified "Voice Guideline Matrix" defining Tone, Pacing, Lexicon, and core themes. 
@@ -575,9 +574,11 @@ Output solely the Voice Guidelines overview in highly professional markdown plai
 RAW CONTACT MATRIX:
 ${contextDump}`;
 
-    // Note: Since we are querying directly, we use queryGemini via our standard wrapper optionally 
-    // but RogerClient consultRoger protocol enforces JSON. We will explicitly use queryGemini directly!
-    const { queryGemini } = require('../lib/rogerClient');
+    // queryGemini() directly rather than queryAgentPersona(): the persona wrapper
+    // forces its reply through a JSON envelope, and this endpoint wants markdown
+    // prose. (queryGemini still sets responseMimeType to JSON internally — see
+    // lib/aiClient.js — which is why the prompt above has to ask for plain text.)
+    const { queryGemini } = require('../lib/aiClient');
     const systemPrompt = "You are a master communications architect and Voice Synthesizer.";
     
     let synthesizedVoice = "";

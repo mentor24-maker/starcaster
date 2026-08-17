@@ -48,3 +48,6 @@ supabase/.temp/
 
 # Screenshots from `npm run check:screens` — local artifacts, never committed
 .ui-check/
+
+# Playwright scratch profile written by scripts/capture_platform_screenshots.js
+.playwright/

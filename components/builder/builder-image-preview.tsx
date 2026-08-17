@@ -12,21 +12,15 @@ import {
   isVideoMedia
 } from "./builder-utils";
 import { imageProps, sizesForWidthPercent } from "@/lib/image-renditions";
+import {
+  getImageEffectClassName,
+  getImageEffectStageStyle,
+  getImageEffectStyle,
+  imageEffectBounces,
+  usesHorizontalMotionClip
+} from "./builder-image-effects";
 
-export function getImageEffectClassName(effect: string | undefined) {
-  if (effect === "bounce") return " starcaster-effect-bounce";
-  if (effect === "fast-bounce") return " starcaster-effect-fast-bounce";
-  if (effect === "big-bounce") return " starcaster-effect-big-bounce";
-  if (effect === "spin") return " starcaster-effect-spin";
-  if (effect === "cruise") return " starcaster-effect-cruise";
-  if (effect === "tumbleweed") return " starcaster-effect-tumbleweed";
-  return "";
-}
-
-/** Cruise / tumbleweed keyframes move ±100vw and can force a horizontal scrollbar that reads like a bottom progress bar. */
-export function usesHorizontalMotionClip(effect: string | undefined): boolean {
-  return effect === "cruise" || effect === "tumbleweed";
-}
+export { getImageEffectClassName, usesHorizontalMotionClip };
 
 type BuilderImagePreviewProps = {
   module: BuilderTemplateModule;
@@ -66,6 +60,13 @@ export function BuilderImagePreview({
   const opensInNewTab = module.settings.newTab === "true";
   const effect = module.settings.effect;
   const effectClass = getImageEffectClassName(effect);
+  // Rotation Rate reaches the keyframes as a CSS variable on the figure, so
+  // one stylesheet rule serves every rate rather than one class per speed.
+  const effectStyle = getImageEffectStyle(module.settings);
+  // The hop rides its own element: the figure is already animating `translate`
+  // for the travel, and one element cannot animate one property twice.
+  const hopStageStyle = getImageEffectStageStyle(module.settings);
+  const hops = imageEffectBounces(effect);
   const motionClip = usesHorizontalMotionClip(effect);
   const resolvedVariant = variant ?? module.settings.variant ?? "default";
   // Offer the browser the scaled-down copies of this picture, and tell it how
@@ -83,7 +84,7 @@ export function BuilderImagePreview({
   const figure = (
     <figure
       className={`${imageClassName} builder-preview-image-${resolvedVariant}${effectClass}`}
-      style={imageStyle}
+      style={effectStyle ? { ...imageStyle, ...effectStyle } : imageStyle}
     >
       {mediaUrl ? (
         isVideoMedia(mediaUrl) ? (
@@ -116,7 +117,19 @@ export function BuilderImagePreview({
       className={`builder-preview-image-shell${floating ? " builder-preview-image-shell-overlay" : ""}`}
       style={shellStyle}
     >
-      {motionClip ? <div className="starcaster-effect-motion-clip">{figure}</div> : figure}
+      {motionClip ? (
+        <div className="starcaster-effect-motion-clip">
+          {hops ? (
+            <div className="starcaster-effect-hop-stage" style={hopStageStyle}>
+              {figure}
+            </div>
+          ) : (
+            figure
+          )}
+        </div>
+      ) : (
+        figure
+      )}
     </div>
   );
 }
