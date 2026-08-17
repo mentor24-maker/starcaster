@@ -205,36 +205,63 @@
    the word plus three spreading blurs — the plate makes the word sit ON white,
    the blurs carry the fade out from there.
 
-   At rest that is an intense white barely wider than the letters; at full it
-   reaches ~100px past the word. Every radius, spread and alpha is driven off
-   --halo, so approaching grows the body of light rather than just brightening
-   a fixed shape. */
+   The plate is absent at rest and GROWS out of nothing as the cursor closes:
+   it scales from zero while it fades in, so approaching opens the light up
+   rather than switching a fixed shape on. Every radius, spread and alpha is
+   driven off --halo as well, so the growth compounds. */
 .auth-intro-explore-word::before {
   content: '';
   position: absolute;
+
+  /* --halo rests at 0.42 rather than 0, so driving anything off it directly
+     would leave the plate half-present at rest. --swell re-bases it: 0 when the
+     cursor is away, 1 on the centre letter. max() floors it, because a
+     negative blur radius is invalid and CSS drops the whole declaration
+     silently when it sees one. */
+  --swell: max(0, (var(--halo) - 0.42) / 0.58);
+
+  /* How far the oval's edge is feathered. In em so it tracks the responsive
+     font size, and read by both the blur and the inset below. */
+  --fuzz: 0.28em;
+
   /* An OVAL, not a pill. The difference matters for sizing: a pill's straight
      flanks sit flush against the text, but an ellipse curves away from its own
      corners, so a box merely wrapping the word would let the E and the final E
      poke out through the curve. An ellipse with semi-axes a and b contains a
      half-width w and half-height h only while (w/a)² + (h/b)² ≤ 1; these
      insets put the word's corners at ~0.90 of that limit, leaving margin for
-     the wider letterforms other sizes produce. */
-  inset: -0.32em -1.15em;
+     the wider letterforms other sizes produce.
+
+     Then grown by --fuzz on every side to pay for the blur. A Gaussian blur of
+     radius r leaves the half-opacity contour on the original edge and eats r
+     inward from full opacity, so an unpadded box would hand back a plate whose
+     solid centre no longer reaches under the letters. Growing by exactly r
+     puts the solid core back where the hard-edged version had its edge. */
+  inset: calc(-0.32em - var(--fuzz)) calc(-1.15em - var(--fuzz));
   z-index: -1;
   border-radius: 50%;
 
-  /* --halo rests at 0.42 rather than 0, so driving anything off it directly
-     would leave the pill half-present at rest. --swell re-bases it: 0 when the
-     cursor is away, 1 on the centre letter. max() floors it, because a
-     negative blur radius is invalid and CSS drops the whole declaration
-     silently when it sees one. */
-  --swell: max(0, (var(--halo) - 0.42) / 0.58);
+  /* The fuzzy edge. border-radius gives a mathematically exact ellipse — a
+     visible hard line where white meets galaxy, which reads as a plate laid on
+     the page rather than as light. Blurring the whole pseudo-element dissolves
+     that line and softens the box-shadow layers with it, so plate and glow
+     become one continuous falloff.
 
-  /* The pill is PURE white and fades in as a whole, rather than sitting there
+     filter is applied in the element's own coordinate space and transform maps
+     the result, so the scale below shrinks the blur along with everything
+     else — a half-size oval gets half the feather, which is what keeps the
+     small early stages from looking like fog. */
+  filter: blur(var(--fuzz));
+
+  /* Grows out of nothing. transform-origin is the default centre, so it opens
+     from the middle of the word in both directions at once. */
+  transform: scale(var(--swell));
+
+  /* The plate is PURE white and fades in as a whole, rather than sitting there
      permanently at partial alpha. That distinction is what makes it read as
      white rather than off-white: a 0.88-alpha white over a dark galaxy
      composites to grey, however white the colour value says it is. Fading the
-     element's opacity instead means the pill is either absent or genuinely
+     element's opacity instead means the plate is either absent or genuinely
      full white, never a muddy blend of the two. */
   opacity: var(--swell);
   background: rgb(var(--brand-halo-rgb, 255, 255, 255));
@@ -247,7 +274,8 @@
       rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5);
   /* Short, so following the cursor still feels immediate, but long enough to
      smooth the jump back to resting when the pointer leaves. */
-  transition: opacity 0.12s linear, box-shadow 0.12s linear;
+  transition: opacity 0.12s linear, transform 0.12s linear,
+    box-shadow 0.12s linear;
 }
 
 /* Pointer on the word, and the keyboard equivalent. Also the whole effect's
@@ -302,6 +330,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .auth-intro-explore { transition: none; }
+  /* The plate now scales as well as fades, which is motion in its own right.
+     Killing the transition leaves the effect intact — the cursor still opens
+     the light — but it snaps to each size rather than sliding between them. */
+  .auth-intro-explore-word::before { transition: none; }
 }
 
 .auth-logo {
