@@ -5812,10 +5812,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ---------------------------------------------------------------------------
-   Image effects: Cruise, Tumbleweed, and the Rotation Rate control
+   Image effects: Cruise, Tumbleweed, and the controls that drive them
    ---------------------------------------------------------------------------
-   Both effects have been offered in the Image and Floating Image panels since
-   the Normie port and NEITHER had a rule anywhere in this repo — the panel set
+   Both effects were offered in the Image and Floating Image panels since the
+   Normie port and NEITHER had a rule anywhere in this repo — the panel set
    `starcaster-effect-cruise` / `-tumbleweed` on the figure and no stylesheet
    answered, so the picture just sat there. Reported by the operator
    2026-08-16 on the Delray home page.
@@ -5824,58 +5824,125 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    is regenerated wholesale and a hand-written rule in it disappears silently
    at the next regeneration.
 
-   Travel is ±100vw, the same idiom the ported `normie-slide` keyframes use, so
-   the image enters off-screen and leaves off-screen whatever the section is
-   doing. `.starcaster-effect-motion-clip` (already in the renderer for exactly
-   these two effects) is what stops that from scrolling the page sideways.
-
-   Tumbleweed turns AND travels in one animation, with the number of turns
-   supplied by `--sc-effect-spins` — the renderer works it out from the
-   operator's Rotation Rate and the travel time, so a rate means the same
-   number of turns per minute here as it does on Spin. The variable sits in a
-   `calc()` inside the keyframe rather than being animated itself, which is
-   what keeps the transform interpolating normally.
+   THREE MOTIONS ON TWO ELEMENTS. Travel, spin and hop each carry their own
+   rate, and three animations cannot share one `transform` — the last one to
+   touch it wins and the other two vanish. So the figure animates the two
+   INDEPENDENT transform properties at once (`translate` for the travel,
+   `rotate` for the spin), and the hop rides a wrapper element's `translate`,
+   which is a third property on a different box. All three compose, and each
+   keeps a duration of its own.
    --------------------------------------------------------------------------- */
 
-@keyframes sc-effect-cruise {
+/* THE CORRIDOR IS THE FULL PAGE, NOT THE COLUMN (operator, 2026-08-17: "though
+   the section is full width, this module is contained — we need to break it
+   out of its container"). Measured on the live Delray page: a 1440px viewport,
+   a full-width section, and the ball travelling inside a 1120px window because
+   the section's 110px padding and the column's 50px were still in force. It
+   appeared and vanished 160px in from each edge.
+
+   `50% - 50vw` walks the clip back from the centre of its container to the
+   centre of the viewport, so the corridor lands edge to edge and CORRECTS
+   ITSELF if the padding above it ever changes — the same self-correcting shape
+   `.builder-preview-section-full-width` uses for the page margin, rather than
+   a number copied from today's theme.
+
+   The overshoot that idiom is normally criticised for (100vw counts the
+   scrollbar; the page then scrolls sideways by its width) cannot happen here:
+   this element clips its own children horizontally, and `max-width: 100%` on
+   the shell above stops the box itself from becoming the overflow. Verified in
+   a browser at 1440 / 768 / 390 rather than argued — see the PR.
+
+   NOT in the editor's module card. That card renders the same component at
+   thumbnail size (`.builder-module-preview-image`), and a 100vw child inside a
+   settings panel is a card that bursts its own editor. The rendered page — the
+   canvas, the preview and the public site — is what breaks out. */
+.builder-react-root .starcaster-effect-motion-clip:not(:has(.builder-module-preview-image)) {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Travel: one crossing, edge to edge. `translate` rather than
+   `transform: translateX` so the spin can run beside it on `rotate`. */
+@keyframes sc-effect-travel {
   from {
-    transform: translateX(-100vw);
+    translate: -100vw 0;
   }
 
   to {
-    transform: translateX(100vw);
+    translate: 100vw 0;
+  }
+}
+
+/* One turn. Speed comes from the duration, so this serves Spin (turning in
+   place) and Tumbleweed (turning as it goes) from the same six lines. */
+@keyframes sc-effect-turn {
+  from {
+    rotate: 0turn;
+  }
+
+  to {
+    rotate: 1turn;
+  }
+}
+
+/* One hop. A bounce is not a sine wave: leaving the ground is `ease-out` and
+   falling back is `ease-in`, which is the pairing the ported `normie-bounce`
+   keyframes use and the difference between a ball and a bobbing balloon.
+
+   The height is a PERCENTAGE, and for `translate` that means a share of the
+   element's own height — so the arc scales with the picture instead of a
+   fixed 45px hop looking enormous under a small ball and invisible under a
+   big one. */
+@keyframes sc-effect-hop {
+  0% {
+    translate: 0 0;
+    animation-timing-function: ease-out;
+  }
+
+  50% {
+    translate: 0 calc(-1 * var(--sc-effect-bounce, 45%));
+    animation-timing-function: ease-in;
+  }
+
+  100% {
+    translate: 0 0;
   }
 }
 
 .builder-react-root .starcaster-effect-cruise {
-  animation: sc-effect-cruise var(--sc-effect-travel-duration, 8s) linear infinite;
-}
-
-@keyframes sc-effect-tumbleweed {
-  from {
-    transform: translateX(-100vw) rotate(0turn);
-  }
-
-  to {
-    transform: translateX(100vw) rotate(calc(var(--sc-effect-spins, 3.33) * 1turn));
-  }
+  animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
 }
 
 .builder-react-root .starcaster-effect-tumbleweed {
-  animation: sc-effect-tumbleweed var(--sc-effect-travel-duration, 8s) linear infinite;
+  animation:
+    sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
+    sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
 }
 
-/* Spin keeps its keyframes from `_builder-react.css`; only the speed moves
-   here, so a page that never set a rate runs at the 2.4s it always ran at. */
+/* Frequency arrives as a duration: the renderer divides one crossing by the
+   number of hops the operator asked for, so "4 per crossing" stays four
+   however long the crossing is. */
+.builder-react-root .starcaster-effect-hop-stage {
+  display: block;
+  width: 100%;
+  animation: sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
+}
+
+/* Spin moves off the ported `normie-spin` (which animates `transform`) onto
+   the same `rotate` keyframes Tumbleweed uses, so one turn is defined once.
+   The default duration is the 2.4s it has always run at. */
 .builder-react-root .starcaster-effect-spin {
-  animation-duration: var(--sc-effect-rotation-duration, 2.4s);
+  animation: sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
 }
 
-/* R6: motion is decoration on all four of these — a visitor who has asked
-   their system for less of it gets the picture, standing still. */
+/* R6: motion is decoration on all of these — a visitor who has asked their
+   system for less of it gets the picture, standing still. */
 @media (prefers-reduced-motion: reduce) {
   .builder-react-root .starcaster-effect-cruise,
   .builder-react-root .starcaster-effect-tumbleweed,
+  .builder-react-root .starcaster-effect-hop-stage,
   .builder-react-root .starcaster-effect-spin {
     animation: none;
   }

@@ -1,9 +1,12 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import {
+  DEFAULT_IMAGE_EFFECT_FREQUENCY,
   DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
+  IMAGE_EFFECT_FREQUENCY_OPTIONS,
   IMAGE_EFFECT_OPTIONS,
   IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
+  imageEffectBounces,
   imageEffectRotates
 } from "./builder-image-effects";
 import {
@@ -29,7 +32,11 @@ type BuilderImageModuleSettingsProps = {
   onUploadMedia?: (file: File | null) => void;
 };
 
-const SIZE_OPTIONS = ["10", "15", "25", "33", "50", "66", "75", "90", "100"];
+// 5% joined the list 2026-08-17: 10% of a column is 112px on the operator's
+// page and ~190px on a full-bleed section, so a decorative graphic had no way
+// to be small. `getModuleWidthPercent` clamped anything under 10 back up to
+// it, so the floor moved there in the same change.
+const SIZE_OPTIONS = ["5", "10", "15", "25", "33", "50", "66", "75", "90", "100"];
 
 /**
  * Shared "prime" image controls, used by the image module and by nested
@@ -267,6 +274,20 @@ export function BuilderImageModuleSettings({
               // gates it (D9) rather than greyed out on every other one.
               visibleWhen: (settings) => imageEffectRotates(settings.effect),
               rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
+              key: "effectFrequency",
+              label: "Frequency",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_FREQUENCY,
+              options: IMAGE_EFFECT_FREQUENCY_OPTIONS,
+              // Only Tumbleweed leaves the midline, so only Tumbleweed can be
+              // asked how often (D9: gated field beside what gates it).
+              visibleWhen: (settings) => imageEffectBounces(settings.effect),
+              rendersVia: "getImageEffectStageStyle"
             }
           ]
         ]
