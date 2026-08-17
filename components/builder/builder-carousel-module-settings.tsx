@@ -4,6 +4,17 @@ import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import {
+  BuilderThemeColorControlWithDefault,
+  type BuilderThemePalette
+} from "./builder-theme-color-field";
+import {
+  CAROUSEL_BORDER_STYLES,
+  CAROUSEL_IMAGE_FRAME_DEFAULTS,
+  CAROUSEL_IMAGE_FRAME_LIMITS,
+  carouselBorderStyle,
+  carouselImageShadowIsOn
+} from "@/lib/builder-carousel-image-frame";
+import {
   parseBuilderCardItems,
   serializeBuilderCardItems,
   createBuilderCardItem,
@@ -49,9 +60,18 @@ export function parseBuilderCarouselItems(settings: Record<string, string>): Bui
   return parseBuilderCardItems(settings.items, "item", "storage");
 }
 
+const CAROUSEL_BORDER_STYLE_LABELS: Record<string, string> = {
+  none: "None",
+  solid: "Solid",
+  dashed: "Dashed",
+  dotted: "Dotted",
+  double: "Double"
+};
+
 type BuilderCarouselModuleSettingsProps = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
 /**
@@ -71,13 +91,18 @@ type BuilderCarouselModuleSettingsProps = {
  * has no use for them — a disabled control still reads as "a thing this
  * module does", which is exactly the confusion the merge is meant to end.
  *
+ * Image Border (2026-08-16) is deliberately NOT one of those three: the
+ * operator asked for a border "that applies to all images", so both formats
+ * get the identical set and every item in the module wears it.
+ *
  * Not schema-driven, for the same reason Feature Cards is not: the item
  * manager is a bespoke item grid, so the two columns are the module's own CSS
  * rather than the generator's axis lattice.
  */
 export function BuilderCarouselModuleSettings({
   module,
-  onUpdateModule
+  onUpdateModule,
+  themeColors = []
 }: BuilderCarouselModuleSettingsProps) {
   const settings = module.settings;
   const format = resolveCarouselFormat(settings);
@@ -230,6 +255,135 @@ export function BuilderCarouselModuleSettings({
                 onChange={(gap) => set("gap", gap)}
               />
             </BuilderModuleField>
+          </BuilderModuleFieldStrip>
+
+          {/* One frame, every picture, both formats — the operator asked for
+              "full border control that applies to ALL images" (2026-08-16),
+              so there is no per-item override to get out of step. Numbers,
+              limits and the resolved CSS all come from
+              `builder-carousel-image-frame.ts`; this panel only names them,
+              which is what stops the control and the renderer disagreeing.
+
+              Order is D9, blast radius descending: the border (style, then
+              width, colour, corner) and then the shadow, which is the last
+              thing anyone reaches for. The shadow's own detail appears only
+              once it is switched on — a dozen dead numbers is what an
+              Advanced section used to hide, and A0 retired those. */}
+          <div className="builder-schema-group-title">Image Border</div>
+          <BuilderModuleFieldStrip>
+            <BuilderModuleField label="Style" width="select-md">
+              <select
+                value={carouselBorderStyle(settings.imageBorderStyle)}
+                onChange={(event) => set("imageBorderStyle", event.target.value)}
+              >
+                {CAROUSEL_BORDER_STYLES.map((value) => (
+                  <option key={value} value={value}>
+                    {CAROUSEL_BORDER_STYLE_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </BuilderModuleField>
+            {/* 0 is no border at all, which is what every existing carousel
+                has — this ships invisible until it is asked for. */}
+            <BuilderModuleField label="Border" width="num">
+              <BuilderNumberSelectControl
+                value={settings.imageBorderWidth ?? String(CAROUSEL_IMAGE_FRAME_DEFAULTS.borderWidth)}
+                min={CAROUSEL_IMAGE_FRAME_LIMITS.borderWidth.min}
+                max={CAROUSEL_IMAGE_FRAME_LIMITS.borderWidth.max}
+                fallback={String(CAROUSEL_IMAGE_FRAME_DEFAULTS.borderWidth)}
+                onChange={(imageBorderWidth) => set("imageBorderWidth", imageBorderWidth)}
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Border Color" width="color">
+              <BuilderThemeColorControlWithDefault
+                value={settings.imageBorderColor ?? ""}
+                defaultColor={CAROUSEL_IMAGE_FRAME_DEFAULTS.borderColor}
+                themeColors={themeColors}
+                dialogLabel="Image border color"
+                onChange={(imageBorderColor) => set("imageBorderColor", imageBorderColor)}
+              />
+            </BuilderModuleField>
+            {/* 8 is what the stylesheet already rounded both formats by, so
+                an untouched carousel keeps the corners it has always had. */}
+            <BuilderModuleField label="Radius" width="num">
+              <BuilderNumberSelectControl
+                value={settings.imageBorderRadius ?? String(CAROUSEL_IMAGE_FRAME_DEFAULTS.radius)}
+                min={CAROUSEL_IMAGE_FRAME_LIMITS.radius.min}
+                max={CAROUSEL_IMAGE_FRAME_LIMITS.radius.max}
+                step={2}
+                fallback={String(CAROUSEL_IMAGE_FRAME_DEFAULTS.radius)}
+                onChange={(imageBorderRadius) => set("imageBorderRadius", imageBorderRadius)}
+              />
+            </BuilderModuleField>
+            <BuilderModuleField label="Drop Shadow" width="check">
+              <input
+                type="checkbox"
+                checked={carouselImageShadowIsOn(settings)}
+                onChange={(event) => set("imageShadow", String(event.target.checked))}
+              />
+            </BuilderModuleField>
+            {carouselImageShadowIsOn(settings) ? (
+              <>
+                <BuilderModuleField label="Shadow Color" width="color">
+                  <BuilderThemeColorControlWithDefault
+                    value={settings.imageShadowColor ?? ""}
+                    defaultColor={CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowColor}
+                    themeColors={themeColors}
+                    dialogLabel="Image drop shadow color"
+                    onChange={(imageShadowColor) => set("imageShadowColor", imageShadowColor)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Shadow X" width="num">
+                  <BuilderNumberSelectControl
+                    value={settings.imageShadowX ?? String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowX)}
+                    min={CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.min}
+                    max={CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.max}
+                    fallback={String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowX)}
+                    onChange={(imageShadowX) => set("imageShadowX", imageShadowX)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Shadow Y" width="num">
+                  <BuilderNumberSelectControl
+                    value={settings.imageShadowY ?? String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowY)}
+                    min={CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.min}
+                    max={CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.max}
+                    fallback={String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowY)}
+                    onChange={(imageShadowY) => set("imageShadowY", imageShadowY)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Shadow Blur" width="num">
+                  <BuilderNumberSelectControl
+                    value={settings.imageShadowBlur ?? String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowBlur)}
+                    min={CAROUSEL_IMAGE_FRAME_LIMITS.shadowBlur.min}
+                    max={CAROUSEL_IMAGE_FRAME_LIMITS.shadowBlur.max}
+                    step={2}
+                    fallback={String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowBlur)}
+                    onChange={(imageShadowBlur) => set("imageShadowBlur", imageShadowBlur)}
+                  />
+                </BuilderModuleField>
+                <BuilderModuleField label="Shadow Spread" width="num">
+                  <BuilderNumberSelectControl
+                    value={settings.imageShadowSpread ?? String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowSpread)}
+                    min={CAROUSEL_IMAGE_FRAME_LIMITS.shadowSpread.min}
+                    max={CAROUSEL_IMAGE_FRAME_LIMITS.shadowSpread.max}
+                    fallback={String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowSpread)}
+                    onChange={(imageShadowSpread) => set("imageShadowSpread", imageShadowSpread)}
+                  />
+                </BuilderModuleField>
+                {/* Without this a shadow is flat black, which no photograph
+                    wants. 30% is the softness the default X/Y/Blur assume. */}
+                <BuilderModuleField label="Shadow Opacity" width="num">
+                  <BuilderNumberSelectControl
+                    value={settings.imageShadowOpacity ?? String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowOpacity)}
+                    min={CAROUSEL_IMAGE_FRAME_LIMITS.shadowOpacity.min}
+                    max={CAROUSEL_IMAGE_FRAME_LIMITS.shadowOpacity.max}
+                    step={5}
+                    fallback={String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowOpacity)}
+                    onChange={(imageShadowOpacity) => set("imageShadowOpacity", imageShadowOpacity)}
+                  />
+                </BuilderModuleField>
+              </>
+            ) : null}
           </BuilderModuleFieldStrip>
 
           {supports.captions ? (
