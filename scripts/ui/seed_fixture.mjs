@@ -218,6 +218,31 @@ const TUNED = {
       ]),
     },
   },
+  // The standalone image module. It was seeded before 2026-08-16 the way
+  // every type is — straight out of `createEmptyModule`, so with no picture,
+  // no link and no effect. That is how its panel drifted into five separate
+  // mini-layouts stacked above its axis columns with every check green: an
+  // empty module renders half its controls, and a control the check cannot
+  // see is a control the rule does not cover.
+  // `effect: 'tumbleweed'` is the same point at field level — Rotation Rate
+  // is visibleWhen-gated behind a rotating effect and would never be measured
+  // with the effect left at None.
+  image: {
+    name: 'Court Photo',
+    settings: {
+      url: '/images/Gemini_Generated_starcaster_banner.png',
+      alt: 'Clay courts at sunrise',
+      linkUrl: '/delray-champions-junior-tennis-high-performance',
+      newTab: 'true',
+      size: '50',
+      alignment: 'center',
+      paddingTop: '10', paddingBottom: '10', paddingLeft: '20', paddingRight: '20',
+      marginTop: '10', marginBottom: '10', marginLeft: '5', marginRight: '5',
+      horizontalOffset: '4', verticalOffset: '-4',
+      borderThickness: '4', borderColor: '#0f4f8f', borderRadius: '20',
+      effect: 'tumbleweed', effectRotationRate: '40',
+    },
+  },
   table: {
     name: 'Contact Strip',
     settings: {
