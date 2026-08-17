@@ -390,9 +390,10 @@ async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
 
-  // Legacy /api/develop/* paths (pre-migration) — alias to /api/builder/*
-  // Excludes /api/develop/devAgent which has its own route module.
-  if (pathname.startsWith('/api/develop/') && !pathname.startsWith('/api/develop/devAgent')) {
+  // Legacy /api/develop/* paths (pre-migration) — alias to /api/builder/*.
+  // The devAgent exclusion that used to sit here went with the Dev Agent
+  // (retired 2026-08-17); no route module claims that prefix any more.
+  if (pathname.startsWith('/api/develop/')) {
     pathname = pathname.replace('/api/develop/', '/api/builder/');
   }
 
