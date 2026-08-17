@@ -5595,7 +5595,7 @@ App.youtube = (function () {
     ].forEach(function(entry) {
       var sortBtn = document.getElementById(entry[0]);
       if (!sortBtn) return;
-      sortBtn.addEventListener('click', function() {
+      var toggleSort = function() {
         var key = entry[1];
         if (youtubeResearchTableSort.key === key) {
           youtubeResearchTableSort.dir = youtubeResearchTableSort.dir === 'asc' ? 'desc' : 'asc';
@@ -5604,6 +5604,17 @@ App.youtube = (function () {
           youtubeResearchTableSort.dir = key === 'title' || key === 'channel_name' ? 'asc' : 'desc';
         }
         renderYoutubeResearchRunsTable();
+      };
+      sortBtn.addEventListener('click', toggleSort);
+      // These headers are <th tabindex="0">, not <button>, so Enter/Space do not
+      // fire a click for free the way they would on a real button. Bind them
+      // explicitly or the columns become mouse-only — same pattern as
+      // public/js/assetPicker.js.
+      sortBtn.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleSort();
+        }
       });
     });
     [
