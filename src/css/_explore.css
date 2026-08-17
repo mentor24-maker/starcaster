@@ -9,6 +9,32 @@
   color: var(--ink-primary, #111827);
 }
 
+/* Arrives white and clears over three seconds, so the page emerges out of the
+   flash that brought you here rather than cutting to it. CSS-only and
+   pointer-events: none from the first frame — it must never be able to eat a
+   click, and it must never depend on JS to get out of the way. `forwards`
+   holds it transparent afterwards. */
+.explore-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--on-media-ink, #fff);
+  opacity: 1;
+  animation: explore-veil-clear 3s ease-out forwards;
+}
+
+@keyframes explore-veil-clear {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Arriving to a blank white screen that slowly clears is exactly what someone
+   with this preference is asking not to have. */
+@media (prefers-reduced-motion: reduce) {
+  .explore-veil { display: none; }
+}
+
 /* ── Hero ─────────────────────────────────────────────────────────────── */
 /* The image comes in as --explore-hero-image from the page's inline style —
    esbuild bundles this stylesheet and would try to resolve a url() here as a
