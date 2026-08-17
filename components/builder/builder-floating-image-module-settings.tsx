@@ -6,6 +6,12 @@ import {
   normalizeGameFloatingImageDurationMs
 } from "@/lib/game-floating-image-trigger";
 import { isGameModuleTrigger } from "@/lib/module-trigger";
+import {
+  DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
+  IMAGE_EFFECT_OPTIONS,
+  IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
+  imageEffectRotates
+} from "./builder-image-effects";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderSettingRow } from "./builder-setting-row";
 import {
@@ -37,15 +43,9 @@ const OVERLAY_ANCHOR_OPTIONS = [
 
 const SIZE_OPTIONS = ["10", "15", "25", "33", "50", "66", "75", "90", "100"] as const;
 
-const EFFECT_OPTIONS = [
-  { value: "none", label: "None" },
-  { value: "bounce", label: "Bounce" },
-  { value: "fast-bounce", label: "Fast Bounce" },
-  { value: "big-bounce", label: "Big Bounce" },
-  { value: "spin", label: "Spin" },
-  { value: "cruise", label: "Cruise" },
-  { value: "tumbleweed", label: "Tumbleweed" }
-] as const;
+// Effects come from the shared list (builder-image-effects.ts) — the floating
+// image and the standard image had two copies of it, which is how both panels
+// came to offer Cruise and Tumbleweed while neither had a stylesheet rule.
 
 export function BuilderFloatingImageModuleSettings({
   module,
@@ -264,15 +264,30 @@ export function BuilderFloatingImageModuleSettings({
       {
         title: "Frame",
         strips: [
+          // Effect and its Rotation Rate stay on Frame here rather than
+          // getting the Effects column the standard image now has: this panel
+          // already runs Content / Structure / Placement / Frame, and four
+          // axes is the generator's hard ceiling. A fifth column is a design
+          // question for the operator, not something to squeeze in.
           [
             {
               key: "effect",
               label: "Effect",
               width: "select-md",
               control: "select",
-              options: [...EFFECT_OPTIONS],
+              options: IMAGE_EFFECT_OPTIONS,
               fallback: "none",
               rendersVia: "getImageEffectClassName"
+            },
+            {
+              key: "effectRotationRate",
+              label: "Rotation Rate",
+              width: "select-md",
+              control: "select",
+              options: IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
+              fallback: DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
+              visibleWhen: (settings) => imageEffectRotates(settings.effect),
+              rendersVia: "getImageEffectStyle"
             }
           ],
           [
