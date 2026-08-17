@@ -64,6 +64,7 @@
     "extract:builder-css": "node scripts/extract_builder_css.mjs",
     "check:ui": "node scripts/check_ui_doctrine.cjs --all",
     "check:models": "node scripts/check_model_ids.cjs --all",
+    "check:ai-metering": "node scripts/check_ai_metering.cjs",
     "check:screens": "node scripts/ui/check_screens.mjs",
     "seed:ui-fixture": "node scripts/ui/seed_fixture.mjs",
     "check:ui:report": "node scripts/check_ui_doctrine.cjs --report",
