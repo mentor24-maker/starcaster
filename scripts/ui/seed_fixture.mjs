@@ -242,6 +242,7 @@ const TUNED = {
       borderThickness: '4', borderColor: '#0f4f8f', borderRadius: '20',
       effect: 'tumbleweed', effectRotationRate: '40', effectFrequency: '6',
       effectBounceHeight: '150', effectDirection: 'rtl',
+      effectSpeed: '16', effectRepeat: 'once', effectDelay: '2',
     },
   },
   table: {

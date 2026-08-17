@@ -2,11 +2,17 @@ import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import {
   DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
+  DEFAULT_IMAGE_EFFECT_DELAY,
   DEFAULT_IMAGE_EFFECT_DIRECTION,
+  DEFAULT_IMAGE_EFFECT_REPEAT,
+  DEFAULT_IMAGE_EFFECT_SPEED,
   DEFAULT_IMAGE_EFFECT_FREQUENCY,
   DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
   IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
+  IMAGE_EFFECT_DELAY_OPTIONS,
   IMAGE_EFFECT_DIRECTION_OPTIONS,
+  IMAGE_EFFECT_REPEAT_OPTIONS,
+  IMAGE_EFFECT_SPEED_OPTIONS,
   IMAGE_EFFECT_FREQUENCY_OPTIONS,
   IMAGE_EFFECT_OPTIONS,
   IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
@@ -283,6 +289,30 @@ export function BuilderImageModuleSettings({
           ],
           [
             {
+              key: "effectSpeed",
+              label: "Speed",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_SPEED,
+              options: IMAGE_EFFECT_SPEED_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
+              key: "effectRepeat",
+              label: "Repeat",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_REPEAT,
+              options: IMAGE_EFFECT_REPEAT_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
               key: "effectRotationRate",
               label: "Rotation Rate",
               width: "select-md",
@@ -321,6 +351,18 @@ export function BuilderImageModuleSettings({
               // both are gated by the same effect (D9).
               visibleWhen: (settings) => imageEffectBounces(settings.effect),
               rendersVia: "getImageEffectStageStyle"
+            }
+          ],
+          [
+            {
+              key: "effectDelay",
+              label: "Start Delay",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_DELAY,
+              options: IMAGE_EFFECT_DELAY_OPTIONS,
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
             }
           ]
         ]

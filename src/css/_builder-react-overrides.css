@@ -5920,6 +5920,9 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .starcaster-effect-cruise {
   animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
   animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-travel-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
 }
 
 .builder-react-root .starcaster-effect-tumbleweed {
@@ -5927,6 +5930,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
     sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
   animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  /* TWO values, and the second is why Repeat could not be one keyword: a flat
+     `1` here would stop the spin after a single turn and the ball would slide
+     the rest of the crossing. The renderer works out how many turns fit. */
+  animation-iteration-count:
+    var(--sc-effect-travel-iterations, infinite),
+    var(--sc-effect-turn-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
 }
 
 /* Frequency arrives as a duration: the renderer divides one crossing by the
@@ -5936,6 +5947,9 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: block;
   width: 100%;
   animation: sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-hop-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
 }
 
 /* Spin moves off the ported `normie-spin` (which animates `transform`) onto

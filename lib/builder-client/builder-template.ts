@@ -1895,8 +1895,14 @@ function normalizeImageEffectSettings(settings: Record<string, string>) {
   // it is not the default — a page that never chose one carries no key.
   if (settings.effect === "cruise" || settings.effect === "tumbleweed") {
     if (settings.effectDirection !== "rtl") delete settings.effectDirection;
+    if (settings.effectRepeat !== "once") delete settings.effectRepeat;
+    settings.effectSpeed = normalizeSpacingValue(settings.effectSpeed, "8", 1, 600);
+    settings.effectDelay = normalizeSpacingValue(settings.effectDelay, "0", 0, 120);
   } else {
     delete settings.effectDirection;
+    delete settings.effectRepeat;
+    delete settings.effectSpeed;
+    delete settings.effectDelay;
   }
 
   if (settings.effect !== "spin" && settings.effect !== "tumbleweed") {

@@ -91,6 +91,55 @@ export const IMAGE_EFFECT_DIRECTION_OPTIONS: { value: string; label: string }[] 
 
 export const DEFAULT_IMAGE_EFFECT_DIRECTION = "ltr";
 
+/**
+ * Speed — how long ONE crossing takes, in seconds (operator, 2026-08-17).
+ * The label says Speed and the numbers say seconds, so both halves are on the
+ * option: a bare "16" under a field called Speed reads as fast, and it is the
+ * slowest thing on the list.
+ *
+ * Everything else that is counted PER CROSSING follows it automatically —
+ * four hops stay four hops whether the trip takes three seconds or thirty,
+ * which is the whole reason Frequency was defined that way.
+ */
+export const IMAGE_EFFECT_SPEED_OPTIONS: { value: string; label: string }[] = [
+  { value: "2", label: "Very Fast (2s)" },
+  { value: "4", label: "Fast (4s)" },
+  { value: "8", label: "Medium (8s)" },
+  { value: "16", label: "Slow (16s)" },
+  { value: "30", label: "Very Slow (30s)" },
+  { value: "60", label: "Drifting (60s)" }
+];
+
+/**
+ * Repeat. "Once" is for a graphic that should cross when the page opens and
+ * then be gone — a mascot that runs past, not a loop the visitor watches for
+ * as long as they stay.
+ */
+export const IMAGE_EFFECT_REPEAT_OPTIONS: { value: string; label: string }[] = [
+  { value: "loop", label: "Forever" },
+  { value: "once", label: "Once" }
+];
+
+/**
+ * Start Delay. This one exists for a specific failure: put two of these on a
+ * page and they leave together, cross together and land together, which reads
+ * as one mechanism rather than two objects. A different delay on each is what
+ * separates them.
+ */
+export const IMAGE_EFFECT_DELAY_OPTIONS: { value: string; label: string }[] = [
+  { value: "0", label: "None" },
+  { value: "1", label: "1s" },
+  { value: "2", label: "2s" },
+  { value: "3", label: "3s" },
+  { value: "5", label: "5s" },
+  { value: "8", label: "8s" },
+  { value: "12", label: "12s" }
+];
+
+export const DEFAULT_IMAGE_EFFECT_SPEED = "8";
+export const DEFAULT_IMAGE_EFFECT_REPEAT = "loop";
+export const DEFAULT_IMAGE_EFFECT_DELAY = "0";
+
 export const DEFAULT_IMAGE_EFFECT_ROTATION_RATE = "25";
 
 export const DEFAULT_IMAGE_EFFECT_FREQUENCY = "4";
@@ -125,7 +174,10 @@ export const IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS: { value: string; label: string 
  */
 export const DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT = "50";
 
-/** How long one crossing takes for the travelling effects, in seconds. */
+/**
+ * How long one crossing takes when the operator has not chosen a Speed.
+ * Must stay equal to DEFAULT_IMAGE_EFFECT_SPEED — a test holds them together.
+ */
 export const IMAGE_EFFECT_TRAVEL_SECONDS = 8;
 
 export function getImageEffectClassName(effect: string | undefined) {
@@ -174,6 +226,22 @@ export function normalizeImageEffectFrequency(value: string | undefined): number
   return Math.min(Math.max(parsed, 1), 60);
 }
 
+export function normalizeImageEffectSpeed(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return IMAGE_EFFECT_TRAVEL_SECONDS;
+  return Math.min(Math.max(parsed, 1), 600);
+}
+
+export function normalizeImageEffectDelay(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(parsed, 0), 120);
+}
+
+export function imageEffectRunsOnce(settings: Record<string, string>): boolean {
+  return imageEffectTravels(settings.effect) && settings.effectRepeat === "once";
+}
+
 export function normalizeImageEffectBounceHeight(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed)) return Number(DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT);
@@ -184,24 +252,39 @@ export function normalizeImageEffectBounceHeight(value: string | undefined): num
 
 const seconds = (value: number) => `${Math.round(value * 1000) / 1000}s`;
 
-/**
- * The variables the FIGURE needs — spin speed. Travel speed is a constant
- * today; it reads from a variable so a Speed control is one field away.
- */
+/** The variables the FIGURE needs — travel speed, spin speed, direction, repeat. */
 export function getImageEffectStyle(settings: Record<string, string>): CSSProperties | undefined {
   const rotates = imageEffectRotates(settings.effect);
   const travels = imageEffectTravels(settings.effect);
   if (!rotates && !travels) return undefined;
 
   const rate = normalizeImageEffectRotationRate(settings.effectRotationRate);
+  const turnSeconds = 60 / rate;
+  const travelSeconds = normalizeImageEffectSpeed(settings.effectSpeed);
+  const delay = normalizeImageEffectDelay(settings.effectDelay);
+  const once = imageEffectRunsOnce(settings);
 
   return {
-    ...(rotates ? { "--sc-effect-rotation-duration": seconds(60 / rate) } : {}),
+    ...(rotates ? { "--sc-effect-rotation-duration": seconds(turnSeconds) } : {}),
+    ...(travels ? { "--sc-effect-travel-duration": seconds(travelSeconds) } : {}),
     // ONE keyword drives both the travel and the spin, which is the point:
     // `reverse` runs every animation on the figure backwards, so a ball
     // heading left also turns the way a ball heading left turns. Reversing the
     // travel alone would have it sliding backwards on its own axis.
-    ...(travels && settings.effectDirection === "rtl" ? { "--sc-effect-direction": "reverse" } : {})
+    ...(travels && settings.effectDirection === "rtl" ? { "--sc-effect-direction": "reverse" } : {}),
+    ...(delay > 0 ? { "--sc-effect-delay": seconds(delay) } : {}),
+    // "Once" has to be counted per animation, not declared once for all of
+    // them. A flat `animation-iteration-count: 1` would stop the SPIN after a
+    // single turn — 1.5s of it — and the ball would slide the remaining six
+    // seconds of the crossing without turning. So the travel runs once and the
+    // spin runs however many turns fit inside that crossing.
+    ...(once
+      ? {
+          "--sc-effect-travel-iterations": "1",
+          "--sc-effect-turn-iterations": String(Math.max(1, Math.round(travelSeconds / turnSeconds))),
+          "--sc-effect-fill": "forwards"
+        }
+      : {})
   } as CSSProperties;
 }
 
@@ -215,9 +298,17 @@ export function getImageEffectStageStyle(settings: Record<string, string>): CSSP
 
   const frequency = normalizeImageEffectFrequency(settings.effectFrequency);
   const height = normalizeImageEffectBounceHeight(settings.effectBounceHeight);
+  const travelSeconds = normalizeImageEffectSpeed(settings.effectSpeed);
+  const delay = normalizeImageEffectDelay(settings.effectDelay);
 
   return {
-    "--sc-effect-bounce-duration": seconds(IMAGE_EFFECT_TRAVEL_SECONDS / frequency),
-    "--sc-effect-bounce": `${height}%`
+    "--sc-effect-bounce-duration": seconds(travelSeconds / frequency),
+    "--sc-effect-bounce": `${height}%`,
+    ...(delay > 0 ? { "--sc-effect-delay": seconds(delay) } : {}),
+    // The hop count for one crossing IS the Frequency — which is the payoff
+    // for defining Frequency per crossing rather than per second.
+    ...(imageEffectRunsOnce(settings)
+      ? { "--sc-effect-hop-iterations": String(frequency), "--sc-effect-fill": "forwards" }
+      : {})
   } as CSSProperties;
 }
