@@ -166,26 +166,27 @@
      stands alone at rest once the pill has faded out from under it.
 
      text-shadow has no spread, so stacking centred copies only ever piles up
-     density against the glyph; it cannot push an outline outward. What does
-     is OFFSETTING copies around a circle: twelve shadows at 10px radius with
-     a 5px blur, which lay down an even 10px collar with a soft edge. Radius
-     and blur are the two numbers to touch if this wants tuning.
+     density against the glyph; it cannot push a shape outward. Offsetting
+     copies around a circle can — but a wide ring of near-opaque copies reads
+     as a balloon, an inflated collar with its own edge, which is what the
+     first version was. A glow instead wants the brightness packed AGAINST
+     the letters and falling away: a tight 5px ring, blurred wider than its
+     own radius, at half alpha so the overlaps build intensity rather than
+     opacity — then two centred layers to carry the falloff out.
 
      Applied here rather than on the word span so it lands on the text only —
      ::before carries no text, so it is untouched by this. */
   text-shadow:
-    10px 0 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    8.7px 5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    5px 8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    0 10px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    -5px 8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    -8.7px 5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    -10px 0 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    -8.7px -5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    -5px -8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    0 -10px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    5px -8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
-    8.7px -5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92);
+    5px 0 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    3.5px 3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    0 5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    -3.5px 3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    -5px 0 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    -3.5px -3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    0 -5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    3.5px -3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    0 0 16px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.55),
+    0 0 28px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.35);
 }
 
 /* The halo is drawn on this inner span, which is only as wide as the word.
@@ -211,9 +212,16 @@
 .auth-intro-explore-word::before {
   content: '';
   position: absolute;
-  inset: -0.14em -0.3em;
+  /* An OVAL, not a pill. The difference matters for sizing: a pill's straight
+     flanks sit flush against the text, but an ellipse curves away from its own
+     corners, so a box merely wrapping the word would let the E and the final E
+     poke out through the curve. An ellipse with semi-axes a and b contains a
+     half-width w and half-height h only while (w/a)² + (h/b)² ≤ 1; these
+     insets put the word's corners at ~0.90 of that limit, leaving margin for
+     the wider letterforms other sizes produce. */
+  inset: -0.32em -1.15em;
   z-index: -1;
-  border-radius: 999px;
+  border-radius: 50%;
 
   /* --halo rests at 0.42 rather than 0, so driving anything off it directly
      would leave the pill half-present at rest. --swell re-bases it: 0 when the
