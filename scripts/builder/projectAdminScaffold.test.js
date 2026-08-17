@@ -112,7 +112,7 @@ test('the Admin Header keeps the site design and swaps in the admin menu', () =>
   );
 });
 
-test('the Admin Header keeps logo and menu, drops visitor CTAs, and adds Logout', () => {
+test('the Admin Header keeps logo and menu and drops visitor CTAs', () => {
   const source = publicHeader();
   const section = buildAdminHeaderSection(source, { makeId: idFactory() });
 
@@ -123,11 +123,19 @@ test('the Admin Header keeps logo and menu, drops visitor CTAs, and adds Logout'
   assert.ok(section.modules.some((m) => m.type === 'image'), 'the logo stays');
   assert.ok(section.modules.some((m) => m.type === 'navigation'), 'the menu stays');
 
-  const logout = section.modules.find((m) => /admin-logout/.test(String(m.text || '')));
-  assert.ok(logout, 'the admin header must offer a way out');
-
   // What was left out is reportable BEFORE the write, not discoverable on the page.
   assert.deepEqual(adminHeaderDroppedTypes(source), ['button']);
+});
+
+test('the Admin Header carries no Logout link — the corner button is the way out', () => {
+  // Two controls doing one job. BuilderPublicSitePage renders the fixed corner
+  // button as "Logout" on every admin page (isAdminAreaPage), so a text link in
+  // the header as well was redundant (operator, 2026-08-17).
+  const section = buildAdminHeaderSection(publicHeader(), { makeId: idFactory() });
+  assert.equal(
+    section.modules.some((m) => /admin-logout/.test(String(m.text || ''))),
+    false
+  );
 });
 
 test('module ids are regenerated, so the copy never collides with the original', () => {
