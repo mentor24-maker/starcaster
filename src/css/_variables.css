@@ -45,6 +45,13 @@
   --brand-accent: #17b7ee;
   --brand-accent-bright: #6fd8ff;
   --brand-accent-ink: #0b8dc0;
+  /* Electric blue + its halo — the login screen's "Explore" invitation. The
+     halo values are rgba on purpose: they are glow layers, not surfaces. */
+  --brand-electric: #00bfff;
+  --brand-electric-bright: #7df9ff;
+  --brand-halo-near: rgba(125, 249, 255, 0.95);
+  --brand-halo-mid: rgba(125, 249, 255, 0.7);
+  --brand-halo-far: rgba(0, 191, 255, 0.5);
   --surface-night: #0f172a;
   --surface-night-deep: #020817;
   --surface-night-soft: #1e293b;
