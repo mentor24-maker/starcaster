@@ -2870,8 +2870,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    become items of THIS grid instead of a nested one — that is what lets a
    panel child sit in the same column track as the chrome above it. */
 .builder-react-root .builder-module-editor--feature-cards,
-.builder-react-root .builder-module-editor--program-list,
-.builder-react-root .builder-module-editor--carousel {
+.builder-react-root .builder-module-editor--program-list {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2918,8 +2917,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ------------------------------------------------------------------------
-   SOCIAL RUNS THE SAME EDITOR AT THREE COLUMNS (operator, 2026-08-16:
-   "arrange the settings in two columns with the social icons in a third").
+   SOCIAL AND CAROUSEL RUN THE SAME EDITOR AT THREE COLUMNS — Social on
+   2026-08-16 ("arrange the settings in two columns with the social icons in
+   a third"), Carousel the same day ("move the border controls into its own
+   column to the right of Settings").
 
    Everything above still applies — the children flatten, the rows carry
    their own spacing, the gap is horizontal only — except the track list and
@@ -2939,19 +2940,69 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-items: start;
 }
 
+/*
+ * The carousel joins Social's three-column track list, and its top-level
+ * strips have to be able to FIT the narrower first column.
+ *
+ * The module's Label row is a bare field strip directly under the editor —
+ * not inside `.builder-module-chrome`, so the lattice rule that turns a
+ * chrome field into `display: contents` never reached it. Its field was a
+ * flex box carrying BOTH the label and a control at the declared `text-md`
+ * width, so the box measured 292px while holding 370px of content: it
+ * overflowed by the width of the word "Label" and, at a third of the editor,
+ * ran 41px into Image Border and printed over that column's first label
+ * (measured at 1440 in the live editor).
+ *
+ * `check:panels` cannot see this. It checks alignment WITHIN a column, not
+ * one column landing on the next — the same blind spot the doctrine names
+ * for anything it has no shape for.
+ *
+ * The fix is the treatment every other lattice row already gets: the strip
+ * is the grid, the field disappears into it (`display: contents`), and the
+ * control track is `minmax(0, max-content)` so it shrinks when the column is
+ * narrow instead of overflowing it. No width is set on any field — W0's
+ * prohibition stands.
+ */
+.builder-react-root .builder-module-editor--carousel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 0 var(--space-6, 24px);
+  align-items: start;
+}
+
+.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: max-content minmax(0, max-content);
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip .builder-module-field {
+  display: contents;
+}
+
 /* The editor's own children — the "Settings" heading the module card puts
    above every two-column panel — stay in column 1 with the settings. */
-.builder-react-root .builder-module-editor--social > * {
+.builder-react-root .builder-module-editor--social > *,
+.builder-react-root .builder-module-editor--carousel > * {
   grid-column: 1;
 }
 
 /* Column 1 takes the module's own settings, column 2 the Frame axis. The
    pair is placed by document order rather than by name, so adding a third
-   settings group later is a track, not a rewrite. */
+   settings group later is a track, not a rewrite.
+
+   The carousel renders ONE of these — Image Border — so it is selected by
+   class alone, with no `nth-of-type` to match. Worth saying why, because
+   `:last-of-type` looks like the tidy way to cover both panels and is a
+   trap: it counts DIVS, not the class, and the last div here is the item
+   column — so it would have matched nothing and quietly dropped Social's
+   second column back into the first. */
 .builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(1) {
   grid-column: 1;
 }
-.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(2) {
+.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(2),
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -2959,16 +3010,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* `span 100` rather than `1 / -1`, for the reason the two-column version
    gives: -1 on an implicit grid collapses the column to a single row. */
-.builder-react-root .builder-module-editor--social .builder-cards-panel-items {
+.builder-react-root .builder-module-editor--social .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
   grid-column: 3;
   grid-row: 1 / span 100;
   align-self: start;
 }
 
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
-.builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
   grid-column: 1;
 }
+
 
 /*
  * The chrome STACKS in these two, instead of flowing (operator, 2026-08-12:
@@ -2990,9 +3042,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
    implicit grid resolves to the explicit grid's only line, which collapses
-   the column to a single row. */
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-.builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
+   the column to a single row.
+
+   Feature Cards only. The carousel's item column moved to track 3 with the
+   three-column block above, and while it was still named here as well it
+   landed back in track 2 — on top of Image Border, since a later rule of
+   equal specificity wins. Caught by measuring the live editor; the two
+   columns reported the same x. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -3220,6 +3277,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
   .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
   .builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  /* The carousel's middle column has to give up its row-1 placement for the
+     same reason the item column does: pinned to row 1 in a single-track grid
+     it would sit ON the chrome instead of under it. */
+  .builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
     grid-column: 1;
     grid-row: auto;
   }
