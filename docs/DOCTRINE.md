@@ -77,6 +77,67 @@ also return 400 for a value they refuse — YouTube answers an invalid API key
 that way. Translating centrally sent the operator hunting for a value that was
 already set. See the comment in `codeFromHttpStatus()`.
 
+### 1.5 A whole site failing uniformly is capacity, not code
+
+**Incident (2026-08-16).** Both client sites started answering 404. Nothing had
+deployed. The shape of the failure was the diagnosis: **every** request failed,
+**identically**, after **the same ~10 seconds** — which is `lib/supabase.js`'s
+own timeout expiring, not a route being wrong. A code defect produces variety;
+a capacity limit produces uniformity.
+
+Two separate throttles were involved, and they are easy to confuse:
+
+1. **Organization quota + spend cap.** The org had exceeded its included quota
+   on one meter (Storage Image Transformations, 131 of 100). With a spend cap
+   enabled, Supabase does not bill the overage — it makes projects
+   **unresponsive**. Removing the cap starts a restore.
+2. **Project Disk IO budget.** Small compute sizes get a daily burst budget over
+   a low baseline. Spend it and the instance throttles to baseline, which reads
+   as unresponsive too. Supabase emails about this one; the email arrived at
+   8pm, two hours after the outage began, and was the first thing that named
+   the real cause.
+
+Removing the spend cap did not fix it, because the second limit was also hit.
+The project needed a restart, and the restore took far longer than the
+dashboard's "up to 5 minutes".
+
+**Do this:** when everything fails the same way at the same latency, check the
+platform's own meters and email before reading any code. The distinguishing
+observation is the *timing*: identical failures at exactly your client
+timeout mean the dependency never answered.
+
+**Careful:** `000` (nothing answered) and `522` (edge answered, origin did not)
+are different states, and the change from one to the other is evidence that
+something you did is taking effect. Do not read them as the same outage.
+
+### 1.6 Rank queries by disk reads before optimizing anything for IO
+
+**Incident (2026-08-16).** Chasing the disk IO above, code reading produced a
+confident and wrong answer. Every public page view really does read *all* of a
+project's pages with their full layout JSON and discard all but one — measured
+at 2.83 MB across 95 pages on Delray. It looked like the leak. It was named as
+the leak, with a recommendation to change how publishing works on two live
+client sites.
+
+`pg_stat_statements` disproved it in one query. That statement sat 14th, with a
+**99.9% cache-hit rate and 2 MB** read from disk across 626 calls: it lives in
+RAM and barely touches the disk. The actual top consumers were
+`COPY "public"."<table>" TO stdout` — `pg_dump` — from six runs of
+`npm run db:refresh` against production while that command was being debugged.
+Roughly 85% of the window's disk reads, and the `assets` copy alone held IO for
+50 seconds a call.
+
+**Do this:** before optimizing for IO, rank by `shared_blks_read` in
+`pg_stat_statements` and read the cache-hit column beside it. A query with a
+99.9% hit rate is not your disk problem, however wasteful it looks on paper —
+and the real answer may not be product traffic at all. See
+`docs/runbook-supabase-capacity.md` for the query.
+
+**Corollary:** a payload measurement is not an IO measurement. Bytes on the
+wire and blocks off the disk are different numbers with different causes, and
+2.83 MB of JSON crossing the network says nothing about whether it came from
+cache.
+
 ---
 
 ## 2. Error messages
@@ -561,6 +622,31 @@ pure functions and unit-test *those* — `builder-carousel-loop.ts` exists
 because the seam shift and the shorter-way-round step were the parts that
 were wrong twice, and the only parts that could be tested at all.
 
+### 5.16 A public page view still reads the whole project — measured, and cleared
+
+`getPublishedPageForProject` answers one page by calling
+`listPublishedPagesForProject`, which selects every public page of the project
+with its full `layout_sections`, resolves each canonical section against its
+master, enriches all of them with theme data, and then returns one. Its own
+comment says so on purpose: *"the payload win is in what crosses the WIRE, not
+in the query."*
+
+That is only reached when a project has never published — and as of 2026-08-17
+`builder_published_pages` is empty for every project, so it is the path every
+public page view takes. Publishing materialises each page and
+`lib/publishedPageRead.js` then answers with a single row.
+
+**This was investigated as the cause of the 2026-08-16 IO outage and ruled out**
+(§1.6): 626 calls, 99.9% cache-hit, 2 MB off disk. It is a latency and CPU cost
+— about 121 ms a call, growing with the page count — not a disk one.
+
+**Do this:** if you arrive here hunting IO, stop; it has been measured. If you
+arrive hunting latency, it is real, and there are two fixes: publish (free, no
+code, but it changes the operator's workflow from "edits are live" to "edits go
+live on Publish", which is a decision, not a cleanup), or select one row in SQL
+and accept that the publish/private filters and the frame resolution then exist
+twice.
+
 ---
 
 ## 6. Working in this repo
@@ -761,6 +847,9 @@ Worth knowing before they cost an hour.
 | Google API key: `Requests from referer <empty> are blocked` | HTTP-referrer restriction on a key used **server-side** — a server sends no `Referer` | Application restrictions → None; restrict by **API** instead. Allow ~5 min to propagate; no redeploy needed |
 | `supabase start` prints no keys | Postgres was SIGKILLed (unclean Docker shutdown) | `docker start supabase_db_starcaster`, let it recover, then `supabase stop` && `supabase start`. Run `supabase stop` before shutting down the Mac |
 | X: "API key expired" / 401 after months of working | X invalidates tokens on password change, permission edits without regenerating, or key regeneration | Regenerate the Access Token **and** Secret; permissions must be Read and Write *before* generating |
+| Every tenant site 404s at once, each after ~10s, nothing deployed | Supabase unreachable — a quota or Disk IO limit, not code (§1.5) | `docs/runbook-supabase-capacity.md` |
+| Supabase project "unresponsive" while usage shows one meter over quota | **Spend cap on**: Supabase withholds service instead of billing the overage | Billing → Change spend cap → disable. Operator's decision; it costs money |
+| Restore stuck "Unhealthy" well past the promised 5 minutes | Disk IO budget also exhausted, so the restore itself is throttled | Restart the project (Settings → General → Restart) |
 
 **Local database:** `supabase/migrations/` is **not** the schema source of truth
 — it holds three files. `docs/SQL/*.sql`, applied by hand, is. Never run
