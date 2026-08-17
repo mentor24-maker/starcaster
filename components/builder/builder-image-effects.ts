@@ -78,9 +78,52 @@ export const IMAGE_EFFECT_FREQUENCY_OPTIONS: { value: string; label: string }[] 
  * 25 turns/min is 2.4s a turn — exactly the speed Spin has always run at, so
  * every page that already uses it renders unchanged.
  */
+/**
+ * Direction of travel (operator, 2026-08-17). Offered on Cruise as well as
+ * Tumbleweed: it is one motion underneath, and a control that appears on one
+ * of two identical travels is a control the operator has to remember the
+ * exception for.
+ */
+export const IMAGE_EFFECT_DIRECTION_OPTIONS: { value: string; label: string }[] = [
+  { value: "ltr", label: "Left to Right" },
+  { value: "rtl", label: "Right to Left" }
+];
+
+export const DEFAULT_IMAGE_EFFECT_DIRECTION = "ltr";
+
 export const DEFAULT_IMAGE_EFFECT_ROTATION_RATE = "25";
 
 export const DEFAULT_IMAGE_EFFECT_FREQUENCY = "4";
+
+/**
+ * Bounce Height, as a share of the PICTURE'S OWN height (operator,
+ * 2026-08-17: "it has a pretty shallow bounce, and I don't seem to have a way
+ * to control that" — it did not, the arc was a constant in the stylesheet).
+ *
+ * A share rather than a pixel count because the hop should stay in proportion
+ * when the picture is resized: 100% is "one whole picture off the ground"
+ * whether that picture is a 60px ball or a 600px banner. A fixed 50px hop is
+ * enormous under the first and invisible under the second — the same reason
+ * the arc was written as a percentage in the first place.
+ */
+export const IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS: { value: string; label: string }[] = [
+  { value: "10", label: "10%" },
+  { value: "25", label: "25%" },
+  { value: "50", label: "50%" },
+  { value: "75", label: "75%" },
+  { value: "100", label: "100%" },
+  { value: "150", label: "150%" },
+  { value: "200", label: "200%" },
+  { value: "300", label: "300%" },
+  { value: "500", label: "500%" }
+];
+
+/**
+ * 50% is where the stylesheet's constant sat (45%), rounded onto the list.
+ * The two are indistinguishable on screen, so no page visibly moves — and the
+ * operator wanted a bigger hop anyway, which is now one dropdown away.
+ */
+export const DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT = "50";
 
 /** How long one crossing takes for the travelling effects, in seconds. */
 export const IMAGE_EFFECT_TRAVEL_SECONDS = 8;
@@ -101,6 +144,11 @@ export function getImageEffectClassName(effect: string | undefined) {
  * 2026-08-17, to break the corridor out of whatever column contains it.
  */
 export function usesHorizontalMotionClip(effect: string | undefined): boolean {
+  return effect === "cruise" || effect === "tumbleweed";
+}
+
+/** The effects that cross the page — Direction applies to these. */
+export function imageEffectTravels(effect: string | undefined): boolean {
   return effect === "cruise" || effect === "tumbleweed";
 }
 
@@ -126,6 +174,14 @@ export function normalizeImageEffectFrequency(value: string | undefined): number
   return Math.min(Math.max(parsed, 1), 60);
 }
 
+export function normalizeImageEffectBounceHeight(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return Number(DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT);
+  // 0 is allowed and means "travel flat" — the same picture Cruise gives, but
+  // reachable without losing the spin.
+  return Math.min(Math.max(parsed, 0), 1000);
+}
+
 const seconds = (value: number) => `${Math.round(value * 1000) / 1000}s`;
 
 /**
@@ -133,10 +189,20 @@ const seconds = (value: number) => `${Math.round(value * 1000) / 1000}s`;
  * today; it reads from a variable so a Speed control is one field away.
  */
 export function getImageEffectStyle(settings: Record<string, string>): CSSProperties | undefined {
-  if (!imageEffectRotates(settings.effect)) return undefined;
+  const rotates = imageEffectRotates(settings.effect);
+  const travels = imageEffectTravels(settings.effect);
+  if (!rotates && !travels) return undefined;
 
   const rate = normalizeImageEffectRotationRate(settings.effectRotationRate);
-  return { "--sc-effect-rotation-duration": seconds(60 / rate) } as CSSProperties;
+
+  return {
+    ...(rotates ? { "--sc-effect-rotation-duration": seconds(60 / rate) } : {}),
+    // ONE keyword drives both the travel and the spin, which is the point:
+    // `reverse` runs every animation on the figure backwards, so a ball
+    // heading left also turns the way a ball heading left turns. Reversing the
+    // travel alone would have it sliding backwards on its own axis.
+    ...(travels && settings.effectDirection === "rtl" ? { "--sc-effect-direction": "reverse" } : {})
+  } as CSSProperties;
 }
 
 /**
@@ -148,5 +214,10 @@ export function getImageEffectStageStyle(settings: Record<string, string>): CSSP
   if (!imageEffectBounces(settings.effect)) return undefined;
 
   const frequency = normalizeImageEffectFrequency(settings.effectFrequency);
-  return { "--sc-effect-bounce-duration": seconds(IMAGE_EFFECT_TRAVEL_SECONDS / frequency) } as CSSProperties;
+  const height = normalizeImageEffectBounceHeight(settings.effectBounceHeight);
+
+  return {
+    "--sc-effect-bounce-duration": seconds(IMAGE_EFFECT_TRAVEL_SECONDS / frequency),
+    "--sc-effect-bounce": `${height}%`
+  } as CSSProperties;
 }

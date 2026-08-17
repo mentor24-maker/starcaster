@@ -1891,9 +1891,18 @@ function stripOverlayOnlyImageSettings(settings: Record<string, string>) {
  * unchanged either way.
  */
 function normalizeImageEffectSettings(settings: Record<string, string>) {
+  // Direction belongs to the two travelling effects, and is stored only when
+  // it is not the default — a page that never chose one carries no key.
+  if (settings.effect === "cruise" || settings.effect === "tumbleweed") {
+    if (settings.effectDirection !== "rtl") delete settings.effectDirection;
+  } else {
+    delete settings.effectDirection;
+  }
+
   if (settings.effect !== "spin" && settings.effect !== "tumbleweed") {
     delete settings.effectRotationRate;
     delete settings.effectFrequency;
+    delete settings.effectBounceHeight;
     return;
   }
 
@@ -1903,8 +1912,10 @@ function normalizeImageEffectSettings(settings: Record<string, string>) {
   // place and never leaves the midline.
   if (settings.effect === "tumbleweed") {
     settings.effectFrequency = normalizeSpacingValue(settings.effectFrequency, "4", 1, 60);
+    settings.effectBounceHeight = normalizeSpacingValue(settings.effectBounceHeight, "50", 0, 1000);
   } else {
     delete settings.effectFrequency;
+    delete settings.effectBounceHeight;
   }
 }
 
