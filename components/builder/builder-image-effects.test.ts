@@ -6,8 +6,11 @@ import {
   IMAGE_EFFECT_OPTIONS,
   IMAGE_EFFECT_TRAVEL_SECONDS,
   getImageEffectClassName,
+  getImageEffectStageStyle,
   getImageEffectStyle,
+  imageEffectBounces,
   imageEffectRotates,
+  normalizeImageEffectFrequency,
   normalizeImageEffectRotationRate
 } from "./builder-image-effects";
 
@@ -31,6 +34,16 @@ describe("image effects", () => {
       .filter((className) => !builderCss.includes(`.${className} {`));
 
     expect(missing).toEqual([]);
+  });
+
+  /**
+   * The hop rides a wrapper element, so its class is not in the option list
+   * and the sweep above cannot see it — exactly the kind of gap that let
+   * Cruise and Tumbleweed ship unstyled in the first place.
+   */
+  it("the hop stage has a rule too", () => {
+    expect(builderCss).toContain(".starcaster-effect-hop-stage {");
+    expect(builderCss).toContain("@keyframes sc-effect-hop");
   });
 
   it("names a class for every option, and nothing for None", () => {
@@ -58,11 +71,35 @@ describe("image effects", () => {
     expect(DEFAULT_IMAGE_EFFECT_ROTATION_RATE).toBe("25");
   });
 
-  it("turns a rate into turns-per-crossing for tumbleweed, so both effects mean the same speed", () => {
-    // 60 turns/min across an 8s crossing is 8 turns.
+  it("gives tumbleweed the same turn duration as spin, so one rate means one speed", () => {
     expect(getImageEffectStyle({ effect: "tumbleweed", effectRotationRate: "60" })).toEqual({
-      "--sc-effect-spins": String(60 * (IMAGE_EFFECT_TRAVEL_SECONDS / 60))
+      "--sc-effect-rotation-duration": "1s"
     });
+  });
+
+  it("turns Frequency into the duration of ONE hop", () => {
+    // 4 hops across an 8s crossing is a 2s hop.
+    expect(getImageEffectStageStyle({ effect: "tumbleweed", effectFrequency: "4" })).toEqual({
+      "--sc-effect-bounce-duration": `${IMAGE_EFFECT_TRAVEL_SECONDS / 4}s`
+    });
+    expect(getImageEffectStageStyle({ effect: "tumbleweed" })).toEqual({
+      "--sc-effect-bounce-duration": "2s"
+    });
+  });
+
+  it("only tumbleweed leaves the midline", () => {
+    expect(imageEffectBounces("tumbleweed")).toBe(true);
+    expect(imageEffectBounces("spin")).toBe(false);
+    expect(imageEffectBounces("cruise")).toBe(false);
+    expect(getImageEffectStageStyle({ effect: "cruise", effectFrequency: "4" })).toBeUndefined();
+    expect(getImageEffectStageStyle({ effect: "spin", effectFrequency: "4" })).toBeUndefined();
+  });
+
+  it("falls back rather than emitting a hop of zero seconds", () => {
+    expect(normalizeImageEffectFrequency("")).toBe(4);
+    expect(normalizeImageEffectFrequency("junk")).toBe(4);
+    expect(normalizeImageEffectFrequency("0")).toBe(1);
+    expect(normalizeImageEffectFrequency("9999")).toBe(60);
   });
 
   it("has nothing to say about an effect that does not rotate", () => {

@@ -7,9 +7,12 @@ import {
 } from "@/lib/game-floating-image-trigger";
 import { isGameModuleTrigger } from "@/lib/module-trigger";
 import {
+  DEFAULT_IMAGE_EFFECT_FREQUENCY,
   DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
+  IMAGE_EFFECT_FREQUENCY_OPTIONS,
   IMAGE_EFFECT_OPTIONS,
   IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
+  imageEffectBounces,
   imageEffectRotates
 } from "./builder-image-effects";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
@@ -41,7 +44,11 @@ const OVERLAY_ANCHOR_OPTIONS = [
   { value: "bottom-right", label: "Bottom Right" }
 ] as const;
 
-const SIZE_OPTIONS = ["10", "15", "25", "33", "50", "66", "75", "90", "100"] as const;
+// 5% joined the list 2026-08-17: 10% of a column is 112px on the operator's
+// page and ~190px on a full-bleed section, so a decorative graphic had no way
+// to be small. `getModuleWidthPercent` clamped anything under 10 back up to
+// it, so the floor moved there in the same change.
+const SIZE_OPTIONS = ["5", "10", "15", "25", "33", "50", "66", "75", "90", "100"] as const;
 
 // Effects come from the shared list (builder-image-effects.ts) — the floating
 // image and the standard image had two copies of it, which is how both panels
@@ -288,6 +295,16 @@ export function BuilderFloatingImageModuleSettings({
               fallback: DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
               visibleWhen: (settings) => imageEffectRotates(settings.effect),
               rendersVia: "getImageEffectStyle"
+            },
+            {
+              key: "effectFrequency",
+              label: "Frequency",
+              width: "select-md",
+              control: "select",
+              options: IMAGE_EFFECT_FREQUENCY_OPTIONS,
+              fallback: DEFAULT_IMAGE_EFFECT_FREQUENCY,
+              visibleWhen: (settings) => imageEffectBounces(settings.effect),
+              rendersVia: "getImageEffectStageStyle"
             }
           ],
           [

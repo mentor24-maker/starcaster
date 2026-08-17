@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 /**
- * Image module effects — the option list, the class names, and the CSS
+ * Image module effects — the option lists, the class names, and the CSS
  * variables that drive them.
  *
  * ONE list, read by the image panel, the floating-image panel and the
@@ -18,6 +18,15 @@ import type { CSSProperties } from "react";
  * They are left as they are: reachable only by hand-editing a setting, which
  * is where they already were, and adding them is a design question for the
  * operator rather than a bug fix.
+ *
+ * THREE MOTIONS, THREE PROPERTIES (2026-08-17). Travel, spin and hop each
+ * needed its own rate, and three rates cannot share one `transform` — the
+ * last animation to touch it wins. They are split across the independent
+ * transform properties instead: the figure animates `translate` (travel) and
+ * `rotate` (spin) at once, and the hop rides a wrapper element's `translate`.
+ * The first cut folded the spin count into the travel keyframes as a
+ * multiplier, which worked until Frequency arrived and a fourth number had
+ * nowhere to live.
  */
 
 export const IMAGE_EFFECT_OPTIONS: { value: string; label: string }[] = [
@@ -49,10 +58,29 @@ export const IMAGE_EFFECT_ROTATION_RATE_OPTIONS: { value: string; label: string 
 ];
 
 /**
+ * Frequency — how many times the object leaves the midline and comes back to
+ * it while crossing the page (operator, 2026-08-17). Counted per crossing
+ * rather than per second so it stays a shape you can picture: "4" is four
+ * hops from one edge to the other, however long that takes.
+ */
+export const IMAGE_EFFECT_FREQUENCY_OPTIONS: { value: string; label: string }[] = [
+  { value: "1", label: "1 per crossing" },
+  { value: "2", label: "2 per crossing" },
+  { value: "3", label: "3 per crossing" },
+  { value: "4", label: "4 per crossing" },
+  { value: "6", label: "6 per crossing" },
+  { value: "8", label: "8 per crossing" },
+  { value: "12", label: "12 per crossing" },
+  { value: "16", label: "16 per crossing" }
+];
+
+/**
  * 25 turns/min is 2.4s a turn — exactly the speed Spin has always run at, so
  * every page that already uses it renders unchanged.
  */
 export const DEFAULT_IMAGE_EFFECT_ROTATION_RATE = "25";
+
+export const DEFAULT_IMAGE_EFFECT_FREQUENCY = "4";
 
 /** How long one crossing takes for the travelling effects, in seconds. */
 export const IMAGE_EFFECT_TRAVEL_SECONDS = 8;
@@ -67,7 +95,11 @@ export function getImageEffectClassName(effect: string | undefined) {
   return "";
 }
 
-/** Cruise / tumbleweed keyframes move ±100vw and can force a horizontal scrollbar that reads like a bottom progress bar. */
+/**
+ * Cruise / tumbleweed travel a whole viewport width in each direction, so
+ * they need the clip — both to stop the page scrolling sideways and, since
+ * 2026-08-17, to break the corridor out of whatever column contains it.
+ */
 export function usesHorizontalMotionClip(effect: string | undefined): boolean {
   return effect === "cruise" || effect === "tumbleweed";
 }
@@ -77,31 +109,44 @@ export function imageEffectRotates(effect: string | undefined): boolean {
   return effect === "spin" || effect === "tumbleweed";
 }
 
+/** The effects Frequency applies to. */
+export function imageEffectBounces(effect: string | undefined): boolean {
+  return effect === "tumbleweed";
+}
+
 export function normalizeImageEffectRotationRate(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed)) return Number(DEFAULT_IMAGE_EFFECT_ROTATION_RATE);
   return Math.min(Math.max(parsed, 1), 600);
 }
 
+export function normalizeImageEffectFrequency(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return Number(DEFAULT_IMAGE_EFFECT_FREQUENCY);
+  return Math.min(Math.max(parsed, 1), 60);
+}
+
+const seconds = (value: number) => `${Math.round(value * 1000) / 1000}s`;
+
 /**
- * The CSS variables an effect needs, or undefined when it needs none.
- *
- * Tumbleweed rotates and travels in ONE animation (a single `transform`
- * keyframe pair), so the number of turns is baked in rather than timed: a
- * second animation on a wrapper element would have meant a second DOM node
- * in a renderer four other module types share.
+ * The variables the FIGURE needs — spin speed. Travel speed is a constant
+ * today; it reads from a variable so a Speed control is one field away.
  */
 export function getImageEffectStyle(settings: Record<string, string>): CSSProperties | undefined {
-  const effect = settings.effect;
-  if (!imageEffectRotates(effect)) return undefined;
+  if (!imageEffectRotates(settings.effect)) return undefined;
 
   const rate = normalizeImageEffectRotationRate(settings.effectRotationRate);
+  return { "--sc-effect-rotation-duration": seconds(60 / rate) } as CSSProperties;
+}
 
-  if (effect === "tumbleweed") {
-    return {
-      "--sc-effect-spins": String(Math.round(((rate * IMAGE_EFFECT_TRAVEL_SECONDS) / 60) * 100) / 100)
-    } as CSSProperties;
-  }
+/**
+ * The variables the HOP STAGE needs. Frequency is a count per crossing and
+ * the stylesheet wants a duration, so the conversion happens here, once,
+ * rather than in a `calc()` that would have to know the travel time twice.
+ */
+export function getImageEffectStageStyle(settings: Record<string, string>): CSSProperties | undefined {
+  if (!imageEffectBounces(settings.effect)) return undefined;
 
-  return { "--sc-effect-rotation-duration": `${Math.round((60 / rate) * 1000) / 1000}s` } as CSSProperties;
+  const frequency = normalizeImageEffectFrequency(settings.effectFrequency);
+  return { "--sc-effect-bounce-duration": seconds(IMAGE_EFFECT_TRAVEL_SECONDS / frequency) } as CSSProperties;
 }

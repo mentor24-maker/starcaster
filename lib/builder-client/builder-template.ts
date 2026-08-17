@@ -1893,10 +1893,19 @@ function stripOverlayOnlyImageSettings(settings: Record<string, string>) {
 function normalizeImageEffectSettings(settings: Record<string, string>) {
   if (settings.effect !== "spin" && settings.effect !== "tumbleweed") {
     delete settings.effectRotationRate;
+    delete settings.effectFrequency;
     return;
   }
 
   settings.effectRotationRate = normalizeSpacingValue(settings.effectRotationRate, "25", 1, 600);
+
+  // Frequency — hops per crossing — belongs to Tumbleweed alone; Spin turns in
+  // place and never leaves the midline.
+  if (settings.effect === "tumbleweed") {
+    settings.effectFrequency = normalizeSpacingValue(settings.effectFrequency, "4", 1, 60);
+  } else {
+    delete settings.effectFrequency;
+  }
 }
 
 export function resolveBuilderModuleType(

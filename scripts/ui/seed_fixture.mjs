@@ -240,7 +240,7 @@ const TUNED = {
       marginTop: '10', marginBottom: '10', marginLeft: '5', marginRight: '5',
       horizontalOffset: '4', verticalOffset: '-4',
       borderThickness: '4', borderColor: '#0f4f8f', borderRadius: '20',
-      effect: 'tumbleweed', effectRotationRate: '40',
+      effect: 'tumbleweed', effectRotationRate: '40', effectFrequency: '6',
     },
   },
   table: {
