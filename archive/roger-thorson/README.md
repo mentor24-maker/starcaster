@@ -44,12 +44,18 @@ how the bus worked, it is all still here.
    continues turns a hard failure into a permanent silent one. A missing prompt
    file should have refused to start, not shrugged.
 
-2. **The persona/protocol constants still live in `lib/rogerClient.js`.** That
-   file was left in place deliberately — despite its name it is the app's
-   **shared AI client**, exporting `queryGemini`, `queryAnthropic` and
-   `queryOpenAI`, which Contacts and the tweet OCR path both depend on. Deleting
-   it to "finish removing Roger" would break live features that have nothing to
-   do with this experiment.
+2. **The client these scripts imported has been renamed.** `lib/rogerClient.js`
+   is now **`lib/aiClient.js`** — despite the old name it was always the app's
+   shared AI client, exporting `queryGemini`, `queryAnthropic` and `queryOpenAI`,
+   which Contacts and the tweet OCR path both depend on. Deleting it to "finish
+   removing Roger" would have broken live features unrelated to this experiment,
+   so it was renamed rather than removed. `consultRoger()` is now
+   `queryAgentPersona()`.
+
+   The two `bin/` scripts here still `require('../lib/rogerClient')`. That path
+   was already dead the moment they moved into `archive/` (it resolves relative
+   to this folder), and it is left as-is: these are a record, not runnable code.
+   Reviving one means repointing it at `lib/aiClient.js` and renaming the call.
 
 ## What was deliberately left alone
 

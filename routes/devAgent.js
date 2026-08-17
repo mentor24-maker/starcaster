@@ -2,7 +2,7 @@
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { listRogerChats, createRogerChat, updateRogerChat, listRogerSessions, createRogerSession, updateRogerSession, evaluateAndUpdateTaskStatus, createMessageLink, listPendingCommands } = require('../lib/rogerChatsStore');
-const { consultRoger } = require('../lib/rogerClient');
+const { queryAgentPersona } = require('../lib/aiClient');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 const { uploadAssetToBlob } = require('../lib/blobStorage');
 const {
@@ -207,7 +207,7 @@ async function handle(req, res, pathname, requestMethod) {
   }
 
   if (pathname === '/api/develop/devAgent/test' && requestMethod === 'GET') {
-    const geminiRes = await consultRoger([ { role: 'user', content: 'Ping' } ], { agentRole: 'roger' });
+    const geminiRes = await queryAgentPersona([ { role: 'user', content: 'Ping' } ], { agentRole: 'roger' });
     if (!geminiRes.ok) {
        return sendErr(res, 502, `AI Test Failed: ${geminiRes.error}`), true;
     }
@@ -407,14 +407,14 @@ async function handle(req, res, pathname, requestMethod) {
         });
       }
 
-      console.log(`[Worker] Executing inference loop via consultRoger for ${respondingAgent}...`);
+      console.log(`[Worker] Executing inference loop via queryAgentPersona for ${respondingAgent}...`);
       
       let timer;
       const timeoutPromise = new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error('Inference timed out after 60 seconds')), 60000);
       });
       const geminiRes = await Promise.race([
-        consultRoger(messages, { agentRole: respondingAgent }),
+        queryAgentPersona(messages, { agentRole: respondingAgent }),
         timeoutPromise
       ]).finally(() => clearTimeout(timer));
 
@@ -564,7 +564,7 @@ async function handle(req, res, pathname, requestMethod) {
       };
     });
 
-    const geminiRes = await consultRoger(messages, { agentRole: respondingAgent });
+    const geminiRes = await queryAgentPersona(messages, { agentRole: respondingAgent });
     if (!geminiRes.ok) {
       const isQuotaErr = geminiRes.error && (geminiRes.error.toLowerCase().includes('quota') || geminiRes.error.toLowerCase().includes('demand'));
       if (isQuotaErr) {
