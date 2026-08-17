@@ -161,6 +161,31 @@
      one, so the halo still burns with JS off, on a phone, or before the
      script has seen its first mouse move. */
   --halo: 0.42;
+
+  /* A white outline on the LETTERS, fixed at every distance — this is what
+     stands alone at rest once the pill has faded out from under it.
+
+     text-shadow has no spread, so stacking centred copies only ever piles up
+     density against the glyph; it cannot push an outline outward. What does
+     is OFFSETTING copies around a circle: twelve shadows at 10px radius with
+     a 5px blur, which lay down an even 10px collar with a soft edge. Radius
+     and blur are the two numbers to touch if this wants tuning.
+
+     Applied here rather than on the word span so it lands on the text only —
+     ::before carries no text, so it is untouched by this. */
+  text-shadow:
+    10px 0 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    8.7px 5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    5px 8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    0 10px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    -5px 8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    -8.7px 5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    -10px 0 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    -8.7px -5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    -5px -8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    0 -10px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    5px -8.7px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92),
+    8.7px -5px 5px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.92);
 }
 
 /* The halo is drawn on this inner span, which is only as wide as the word.
@@ -190,24 +215,31 @@
   z-index: -1;
   border-radius: 999px;
 
-  /* --halo rests at 0.42 rather than 0, so driving the radii off it directly
-     would leave a wide glow standing at rest. --swell re-bases it: 0 when the
+  /* --halo rests at 0.42 rather than 0, so driving anything off it directly
+     would leave the pill half-present at rest. --swell re-bases it: 0 when the
      cursor is away, 1 on the centre letter. max() floors it, because a
      negative blur radius is invalid and CSS drops the whole declaration
-     silently when it sees one. Measured reach: ~20px at rest, ~95px at full. */
+     silently when it sees one. */
   --swell: max(0, (var(--halo) - 0.42) / 0.58);
 
-  background: rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.88 + var(--swell) * 0.12));
+  /* The pill is PURE white and fades in as a whole, rather than sitting there
+     permanently at partial alpha. That distinction is what makes it read as
+     white rather than off-white: a 0.88-alpha white over a dark galaxy
+     composites to grey, however white the colour value says it is. Fading the
+     element's opacity instead means the pill is either absent or genuinely
+     full white, never a muddy blend of the two. */
+  opacity: var(--swell);
+  background: rgb(var(--brand-halo-rgb, 255, 255, 255));
   box-shadow:
     0 0 calc(6px + var(--swell) * 20px) calc(1px + var(--swell) * 6px)
-      rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.65 + var(--swell) * 0.35)),
+      rgba(var(--brand-halo-rgb, 255, 255, 255), 0.9),
     0 0 calc(14px + var(--swell) * 54px) calc(2px + var(--swell) * 14px)
-      rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.34 + var(--swell) * 0.46)),
+      rgba(var(--brand-halo-rgb, 255, 255, 255), 0.72),
     0 0 calc(24px + var(--swell) * 74px) calc(5px + var(--swell) * 17px)
-      rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.16 + var(--swell) * 0.34));
+      rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5);
   /* Short, so following the cursor still feels immediate, but long enough to
      smooth the jump back to resting when the pointer leaves. */
-  transition: background 0.12s linear, box-shadow 0.12s linear;
+  transition: opacity 0.12s linear, box-shadow 0.12s linear;
 }
 
 /* Pointer on the word, and the keyboard equivalent. Also the whole effect's
