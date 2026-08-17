@@ -114,6 +114,41 @@
   color: #e5e7eb;
 }
 
+/* "Explore" — the way into the product tour at /explore. Sits directly under
+   the closer line, deliberately large enough to read as the page's one
+   invitation rather than a footnote. */
+.auth-intro-explore {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  align-self: flex-start;
+  margin-top: -1rem;
+  padding: 0.25rem 0;
+  font-size: clamp(1.5rem, 2.4vw, 2.15rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--brand-accent, #17b7ee);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.auth-intro-explore svg {
+  width: 0.85em;
+  height: 0.85em;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.auth-intro-explore:hover,
+.auth-intro-explore:focus-visible {
+  color: var(--brand-accent-bright, #6fd8ff);
+  border-bottom-color: var(--brand-accent-bright, #6fd8ff);
+}
+.auth-intro-explore:hover svg,
+.auth-intro-explore:focus-visible svg {
+  transform: translateX(0.2em);
+}
+
 .auth-logo {
   width: min(100%, 840px);
   height: auto;

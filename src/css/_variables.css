@@ -37,6 +37,17 @@
    * near-white rather than a tint of any brand colour.
    */
   --mark-bg: #fff3b0;
+
+  /* Marketing chrome — the login screen and the /explore product tour.
+     These are StarCaster's own brand surfaces, not tenant-themed UI, so they
+     do not follow a project theme. Named here so the pages can reference
+     tokens rather than repeating hex literals. */
+  --brand-accent: #17b7ee;
+  --brand-accent-bright: #6fd8ff;
+  --brand-accent-ink: #0b8dc0;
+  --surface-night: #0f172a;
+  --surface-night-deep: #020817;
+  --surface-night-soft: #1e293b;
   
   /* Sizing */
   --radius-btn: 10px;
