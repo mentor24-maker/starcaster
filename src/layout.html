@@ -33,7 +33,7 @@
        above already loads for the Builder — so it needs no font link of its
        own. (It briefly had one for Orbitron; that was dropped when the link
        was restyled to match the logo's letterforms.) -->
-  <link rel="stylesheet" href="/styles.css?v=a60b079c" />
+  <link rel="stylesheet" href="/styles.css?v=99525b14" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -400,10 +400,11 @@
   <!-- Module order matters: core first, then features, then app (orchestrator) last -->
 
   <script src="/shared/composeXPost.js?v=b63ab285"></script>
-  <!-- Ignition effect for the login screen's "Explore" link. Self-contained and
-       optional: the anchor keeps a real href, so the click still navigates if
-       this never loads. -->
-  <script src="/shared/exploreFlash.js?v=b1783991"></script>
+  <!-- Proximity halo + ignition for the login screen's "Explore" link.
+       Self-contained and optional: the anchor keeps a real href and the CSS
+       carries a resting halo, so the link still glows, still lights on hover,
+       and still navigates if this never loads. -->
+  <script src="/shared/exploreLink.js?v=15d91f3c"></script>
   <script src="/js/core.js?v=ac73db13"></script>
   <script src="/js/estimatedProgress.js?v=54666829"></script>
   <script src="/js/projectContext.js?v=065576d8"></script>

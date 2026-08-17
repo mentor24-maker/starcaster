@@ -143,7 +143,7 @@
      lack; Questrial and Didact Gothic match too but ship at weight 400 only,
      so neither can carry "bolder".) */
   font-family: 'Poppins', 'Century Gothic', system-ui, sans-serif;
-  font-size: clamp(2.1rem, 3.6vw, 3.25rem);
+  font-size: clamp(2.52rem, 4.32vw, 3.9rem);
   font-weight: 800;
   font-style: italic;
   letter-spacing: 0.06em;
@@ -152,28 +152,38 @@
   text-indent: 0.06em;
   line-height: 1.25;
   text-transform: uppercase;
-  color: var(--brand-electric, #0d6ecd);
+  color: var(--brand-royal, #4169e1);
   text-decoration: none;
-  /* The halo is on at rest, not only on hover: three stacked shadows — tight
-     core, mid bloom, wide wash — read as light coming off the letters, where
-     one shadow only ever reads as blur. */
+
+  /* --halo is the volume dial, 0 (far away) to 1 (cursor on the word).
+     public/shared/exploreLink.js writes it from the cursor's distance, the
+     same idea the tractor-nav module uses, except continuous rather than in
+     discrete rings. The value here is the resting one, so the halo still
+     glows at a decent volume with JS off, on a phone, or before the script
+     has seen its first mouse move.
+
+     Every layer scales both its blur radius and its alpha off that one
+     number, which is why the halo gains VOLUME as you approach rather than
+     just brightness — a bigger, softer body of light, not a harder edge. */
+  --halo: 0.42;
   text-shadow:
-    0 0 10px var(--brand-halo-near, rgba(125, 200, 255, 0.75)),
-    0 0 26px var(--brand-halo-mid, rgba(90, 170, 255, 0.55)),
-    0 0 60px var(--brand-halo-far, rgba(20, 110, 220, 0.45));
-  transition: color 0.28s ease, text-shadow 0.28s ease;
+    0 0 calc(6px + var(--halo) * 12px)
+      rgba(var(--brand-halo-inner-rgb, 150, 190, 255), calc(0.30 + var(--halo) * 0.65)),
+    0 0 calc(16px + var(--halo) * 34px)
+      rgba(var(--brand-halo-mid-rgb, 90, 140, 255), calc(0.18 + var(--halo) * 0.62)),
+    0 0 calc(34px + var(--halo) * 96px)
+      rgba(var(--brand-halo-outer-rgb, 40, 90, 225), calc(0.12 + var(--halo) * 0.48));
+  /* Short, so following the cursor still feels immediate, but long enough to
+     smooth the jump back to resting when the pointer leaves. */
+  transition: text-shadow 0.12s linear;
 }
 
-/* Hover pushes the same three layers brighter and wider, and adds a fourth
-   that only shows here — the halo grows rather than switching on. */
+/* Pointer actually on the word, and the keyboard equivalent. Also the whole
+   effect's fallback: with no JS, --halo never moves, so hover alone still
+   takes the halo to full. */
 .auth-intro-explore:hover,
 .auth-intro-explore:focus-visible {
-  color: var(--brand-electric-bright, #2f9dff);
-  text-shadow:
-    0 0 14px var(--brand-halo-near-lit, rgba(170, 225, 255, 0.95)),
-    0 0 38px var(--brand-halo-mid-lit, rgba(110, 190, 255, 0.8)),
-    0 0 90px var(--brand-halo-far-lit, rgba(30, 130, 255, 0.6)),
-    0 0 150px var(--brand-halo-wide-lit, rgba(20, 110, 220, 0.45));
+  --halo: 1;
 }
 
 /* Clicked: the halo snaps shut first, so the flash that follows reads as the
@@ -196,7 +206,11 @@
   will-change: transform;
   transform: translateZ(0) scale(0);
   transition-property: transform;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.9, 1);
+  /* Bursts, then eases out. The curve leaves the origin at a steep slope and
+     flattens hard toward the end (an "ease-out-expo"), so the circle throws
+     itself open and then drifts the last of the way — the previous curve was
+     the mirror of this and crept before it rushed. */
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   background: radial-gradient(
     circle closest-side,
     var(--on-media-ink, #fff) 0%,
