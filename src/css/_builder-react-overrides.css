@@ -5893,8 +5893,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
    The height is a PERCENTAGE, and for `translate` that means a share of the
    element's own height — so the arc scales with the picture instead of a
-   fixed 45px hop looking enormous under a small ball and invisible under a
-   big one. */
+   fixed 50px hop looking enormous under a small ball and invisible under a
+   big one. It is the operator's Bounce Height since 2026-08-17; the fallback
+   here is only what an un-migrated page falls back to, and it matches
+   DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT so the two cannot drift. */
 @keyframes sc-effect-hop {
   0% {
     translate: 0 0;
@@ -5902,7 +5904,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 
   50% {
-    translate: 0 calc(-1 * var(--sc-effect-bounce, 45%));
+    translate: 0 calc(-1 * var(--sc-effect-bounce, 50%));
     animation-timing-function: ease-in;
   }
 
@@ -5911,14 +5913,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* Direction is `animation-direction`, not a second set of keyframes: one
+   value applies to every animation in the shorthand list above, so `reverse`
+   turns the travel AND the spin around together. A ball crossing right to
+   left rolls anticlockwise, which is the half a mirrored travel would miss. */
 .builder-react-root .starcaster-effect-cruise {
   animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
 }
 
 .builder-react-root .starcaster-effect-tumbleweed {
   animation:
     sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
     sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
 }
 
 /* Frequency arrives as a duration: the renderer divides one crossing by the
