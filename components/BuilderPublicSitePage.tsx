@@ -20,6 +20,7 @@ import {
 } from "@/lib/builder-template";
 import {
   ADMIN_LOGIN_PATH,
+  adminCornerLink,
   getAdminAuthHeaders,
   isAdminNavCookieSet,
   redirectAfterAdminLogout,
@@ -366,6 +367,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   }
 
   const slug = normalizePublicSlug(window.location.pathname || "/");
+
+  /** Admin on the public site, Logout inside the admin area. See adminCornerLink. */
+  const cornerLink = adminCornerLink(slug, { isAdminNav });
+
   const sections = isPrivateSiteSlug(slug)
     ? page.layoutSections
     : filterPublicSections(page.layoutSections);
@@ -380,14 +385,14 @@ export function BuilderPublicSitePage({ projectId }: Props) {
 
   return (
     <>
-      {isAdminNav ? (
+      {cornerLink ? (
         <a
           ref={adminLinkRef}
-          href={ADMIN_LOGIN_PATH}
+          href={cornerLink.href}
           className="site-admin-nav-link"
-          aria-label="Admin"
+          aria-label={cornerLink.ariaLabel}
         >
-          Admin
+          {cornerLink.label}
         </a>
       ) : null}
       <BuilderViewportShellLayout
