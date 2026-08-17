@@ -102,19 +102,41 @@ function checkPublicJsFreeze(addedFiles) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. No interactive elements inside <th>
+// 3. No nested SORT control inside <th>
 // ---------------------------------------------------------------------------
+//
+// House style (see public/js/assetPicker.js, which implements it): the sort id
+// rides on the <th> itself and JS appends the arrow to textContent. A nested
+// <button> gets the click but leaves the header cell itself inert, so keyboard
+// and screen-reader users land on a control the table does not treat as the
+// column header.
+//
+// This rule is about SORT controls only. It used to flag ANY <button>/<a> in a
+// <th>, which made it a false-positive generator: bulk-action rows
+// (.crud-bulk-actions), action-column buttons (.actions-col), header filter
+// controls and go-links are all deliberate, documented patterns, and one match
+// was a code comment describing the correct approach. Seven "violations" were
+// six legitimate ones, which is exactly why this check sat behind
+// continue-on-error in CI and stopped meaning anything.
+//
+// So: match a nested button/anchor only when its own id or class says "sort".
 
-const TH_BUTTON_RE = /<th\b[^>]*>(?:(?!<\/th>)[\s\S])*?<(?:button|a)[\s>]/i;
+const TH_SORT_RE = /<th\b[^>]*>(?:(?!<\/th>)[\s\S])*?<(?:button|a)\b[^>]*(?:id|class)\s*=\s*["'][^"']*sort[^"']*["']/i;
 
 function checkButtonInTh() {
+  const advice = 'Put the sort id on the <th> itself and let JS append the arrow — see public/js/assetPicker.js.';
   if (MODE_ALL) {
-    const files = sh("git ls-files 'src/pages/*.html' 'src/pages/**/*.html' 'public/js/*.js'")
+    const files = sh("git ls-files 'src/pages/*.html' 'src/pages/**/*.html' 'public/js/*.js' 'components/**/*.tsx'")
       .split('\n').filter(Boolean);
     for (const file of files) {
-      const content = require('fs').readFileSync(file, 'utf8');
-      if (TH_BUTTON_RE.test(content)) {
-        failures.push(`Interactive element inside <th> in ${file} — put the sort id on the <th>, not a nested button/link.`);
+      let content;
+      try {
+        content = require('fs').readFileSync(file, 'utf8');
+      } catch {
+        continue;
+      }
+      if (TH_SORT_RE.test(content)) {
+        failures.push(`Nested sort control inside <th> in ${file} — ${advice}`);
       }
     }
     return;
@@ -123,8 +145,8 @@ function checkButtonInTh() {
   const diff = sh('git diff --cached --unified=0 -- src/pages public/js components');
   const added = diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
   for (const line of added) {
-    if (/<th\b[^>]*>\s*<(button|a)[\s>]/i.test(line)) {
-      failures.push(`Interactive element inside <th> in staged change: ${line.slice(0, 120)}\n  Put the sort id on the <th> itself (see src/css/CLAUDE.md).`);
+    if (TH_SORT_RE.test(line)) {
+      failures.push(`Nested sort control inside <th> in staged change: ${line.trim().slice(0, 110)}\n  ${advice}`);
     }
   }
 }
