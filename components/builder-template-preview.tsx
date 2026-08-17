@@ -178,6 +178,17 @@ function normalizeNavPath(value: string) {
   return normalized === "/home" ? "/" : normalized;
 }
 
+// The home item never takes the active highlight. Landing on "/" is the
+// default state of the site rather than a place you navigated to, so lighting
+// up Home reads as a stuck button; every other page still highlights.
+// It also mops up bare "#" hrefs, which normalize to "/" and would otherwise
+// all light up on the home page.
+function isNavPathActive(href: string, activePath: string) {
+  const normalized = normalizeNavPath(href || "#");
+  if (normalized === "/") return false;
+  return normalized === activePath;
+}
+
 function toPublicHref(href: string): string {
   const clean = href.trim();
   if (!clean || clean === "#" || /^https?:/i.test(clean) || clean.startsWith("mailto:")) return clean || "#";
@@ -5918,7 +5929,7 @@ function NavMegaItem({
   }
 
   const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
-  const isActive = normalizeNavPath(item.href || "#") === activePath;
+  const isActive = isNavPathActive(item.href || "#", activePath);
   const featureImage = item.featureImage ? resolvePublicBuilderAssetUrl(item.featureImage) : "";
 
   return (
@@ -5970,7 +5981,7 @@ function NavMegaItem({
               ) : null}
               {column.links.map((link) => {
                 const linkHref = previewMode ? toPreviewHref(link.href || "#") : toPublicHref(link.href || "#");
-                const linkActive = normalizeNavPath(link.href || "#") === activePath;
+                const linkActive = isNavPathActive(link.href || "#", activePath);
                 return (
                   <Link
                     key={link.id ?? `${linkHref}-${link.label}`}
@@ -6120,7 +6131,7 @@ function NavigationModulePreview({
       <div className="site-nav-items" id={menuId}>
       {topLevelItems.map((item) => {
         const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
-        const isActive = normalizeNavPath(item.href || "#") === activePath;
+        const isActive = isNavPathActive(item.href || "#", activePath);
         const itemId = item.id ?? `${href}-${item.label}`;
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
         const rawWidth = itemSizing === "custom" && item.width ? item.width.trim() : undefined;
@@ -6176,7 +6187,7 @@ function NavigationModulePreview({
             <div className="site-nav-dropdown-menu">
               {children.map((child) => {
                 const childHref = previewMode ? toPreviewHref(child.href || "#") : toPublicHref(child.href || "#");
-                const childActive = normalizeNavPath(child.href || "#") === activePath;
+                const childActive = isNavPathActive(child.href || "#", activePath);
                 return (
                   <Link
                     key={child.id ?? `${childHref}-${child.label}`}
