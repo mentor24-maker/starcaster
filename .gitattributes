@@ -16,3 +16,9 @@ src/layout.html             merge=asset-pins
 public/about.html           merge=asset-pins
 public/site.html            merge=asset-pins
 public/builder-preview.html merge=asset-pins
+public/explore.html         merge=asset-pins
+
+# Adding a committed HTML file that carries a `?v=` pin? Add it here in the
+# same commit. public/explore.html shipped in #301 without this line and the
+# very next branch that touched styling hit exactly the conflict this file
+# exists to prevent.
