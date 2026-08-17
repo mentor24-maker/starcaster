@@ -45,13 +45,19 @@
   --brand-accent: #17b7ee;
   --brand-accent-bright: #6fd8ff;
   --brand-accent-ink: #0b8dc0;
-  /* Electric blue + its halo — the login screen's "Explore" invitation. The
-     halo values are rgba on purpose: they are glow layers, not surfaces. */
-  --brand-electric: #00bfff;
-  --brand-electric-bright: #7df9ff;
-  --brand-halo-near: rgba(125, 249, 255, 0.95);
-  --brand-halo-mid: rgba(125, 249, 255, 0.7);
-  --brand-halo-far: rgba(0, 191, 255, 0.5);
+  /* The login screen's "Explore" invitation. A deep blue core inside a light
+     blue halo — the same relationship the logo uses, inverted: the wordmark is
+     pale (#a0d0ff) strokes over a deep glow, this is a deep core throwing a
+     pale one. The halo values are rgba on purpose: glow layers, not surfaces. */
+  --brand-electric: #0d6ecd;
+  --brand-electric-bright: #2f9dff;
+  --brand-halo-near: rgba(125, 200, 255, 0.75);
+  --brand-halo-mid: rgba(90, 170, 255, 0.55);
+  --brand-halo-far: rgba(20, 110, 220, 0.45);
+  --brand-halo-near-lit: rgba(170, 225, 255, 0.95);
+  --brand-halo-mid-lit: rgba(110, 190, 255, 0.8);
+  --brand-halo-far-lit: rgba(30, 130, 255, 0.6);
+  --brand-halo-wide-lit: rgba(20, 110, 220, 0.45);
   --surface-night: #0f172a;
   --surface-night-deep: #020817;
   --surface-night-soft: #1e293b;
