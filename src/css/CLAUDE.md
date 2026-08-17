@@ -25,6 +25,23 @@ editing CSS, because the rule was already in `docs/MODULE_UI_DOCTRINE.md`
 R2 and agents still fell into it repeatedly (operator, 2026-08-15) — the
 doctrine is not what anyone reads at the moment they reach for a stylesheet.
 
+## Two CSS traps that cost real time here
+
+**An invalid value drops the WHOLE declaration, silently.**
+`max-width: min(100%, max-content)` looks reasonable and is not legal — an
+intrinsic keyword cannot go inside `min()` — so the browser discarded it and
+the computed value was `none`. It read correctly in the diff, in review and in
+the source, and did nothing (2026-08-17, the image never-upscale cap). If a
+value is doing anything clever, read it back with `getComputedStyle` in a real
+browser before believing it.
+
+**One `animation-*` longhand applies to EVERY animation on the element.**
+An element running two animations and given `animation-iteration-count: 1`
+stops both. Give the longhand one value per animation, comma-separated, or the
+second motion dies while the first keeps going. Same fact used deliberately:
+one `animation-direction: reverse` turns a travel and its spin around
+together. Worked example: `docs/IMAGE_EFFECTS.md`.
+
 ## Structure
 
 - `main.css` imports every partial; new partials must be added there
