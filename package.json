@@ -70,7 +70,8 @@
     "check:nav-controls": "node scripts/ui/check_nav_controls.mjs",
     "check:panels": "node scripts/ui/check_panels.mjs",
     "test:hooks": "node --test scripts/hooks/*.test.js",
-    "sql:handoff": "node scripts/sql_handoff.cjs"
+    "sql:handoff": "node scripts/sql_handoff.cjs",
+    "db:refresh": "doppler run --project starcaster --config dev --no-check-version -- node scripts/db_refresh.mjs"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
