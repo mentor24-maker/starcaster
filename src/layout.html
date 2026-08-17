@@ -29,12 +29,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Builder heading fonts (keep in sync with BUILDER_GOOGLE_FONTS_HREF in components/builder/builder-utils.ts) -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@400;700;900&family=Lora:wght@400;500;600;700&display=swap" />
-  <!-- Marketing chrome only — the "Explore" link on the login screen. Kept in a
-       separate <link> on purpose: the list above mirrors BUILDER_HEADING_FONTS,
-       and adding Orbitron to it would offer it in the Builder's font picker
-       without it being loaded on published tenant sites. -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=1c97d692" />
+  <!-- The "Explore" link on the login screen is set in Poppins, which the list
+       above already loads for the Builder — so it needs no font link of its
+       own. (It briefly had one for Orbitron; that was dropped when the link
+       was restyled to match the logo's letterforms.) -->
+  <link rel="stylesheet" href="/styles.css?v=a60b079c" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -413,6 +412,10 @@
   <!-- Module order matters: core first, then features, then app (orchestrator) last -->
 
   <script src="/shared/composeXPost.js?v=b63ab285"></script>
+  <!-- Ignition effect for the login screen's "Explore" link. Self-contained and
+       optional: the anchor keeps a real href, so the click still navigates if
+       this never loads. -->
+  <script src="/shared/exploreFlash.js?v=b1783991"></script>
   <script src="/js/core.js?v=ac73db13"></script>
   <script src="/js/estimatedProgress.js?v=54666829"></script>
   <script src="/js/projectContext.js?v=065576d8"></script>
