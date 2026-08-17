@@ -136,30 +136,74 @@
   margin: 0;
   padding: 0.25rem 0;
   text-align: center;
-  font-family: 'Orbitron', 'Space Grotesk', system-ui, sans-serif;
-  font-size: clamp(1.5rem, 2.4vw, 2.15rem);
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  /* Poppins matches the logo's letterforms — geometric, single-storey 'a',
+     circular bowls — and italic caps echo the slant of the Starcaster
+     wordmark itself. Already loaded for the Builder, so it costs no request.
+     (Century Gothic is the closer match but is a system font many machines
+     lack; Questrial and Didact Gothic match too but ship at weight 400 only,
+     so neither can carry "bolder".) */
+  font-family: 'Poppins', 'Century Gothic', system-ui, sans-serif;
+  font-size: clamp(2.1rem, 3.6vw, 3.25rem);
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.06em;
   /* letter-spacing also trails the final letter, which drags the word half a
      space left of true centre. Indenting by the same amount puts it back. */
-  text-indent: 0.16em;
-  line-height: 1.3;
+  text-indent: 0.06em;
+  line-height: 1.25;
   text-transform: uppercase;
-  color: var(--brand-electric, #00bfff);
+  color: var(--brand-electric, #0d6ecd);
   text-decoration: none;
-  transition: color 0.25s ease, text-shadow 0.25s ease;
+  /* The halo is on at rest, not only on hover: three stacked shadows — tight
+     core, mid bloom, wide wash — read as light coming off the letters, where
+     one shadow only ever reads as blur. */
+  text-shadow:
+    0 0 10px var(--brand-halo-near, rgba(125, 200, 255, 0.75)),
+    0 0 26px var(--brand-halo-mid, rgba(90, 170, 255, 0.55)),
+    0 0 60px var(--brand-halo-far, rgba(20, 110, 220, 0.45));
+  transition: color 0.28s ease, text-shadow 0.28s ease;
 }
 
-/* The halo: three stacked shadows — a tight bright core, a mid bloom, and a
-   wide soft wash — which reads as light coming off the letters rather than
-   the single flat blur one shadow gives. */
+/* Hover pushes the same three layers brighter and wider, and adds a fourth
+   that only shows here — the halo grows rather than switching on. */
 .auth-intro-explore:hover,
 .auth-intro-explore:focus-visible {
-  color: var(--brand-electric-bright, #7df9ff);
+  color: var(--brand-electric-bright, #2f9dff);
   text-shadow:
-    0 0 8px var(--brand-halo-near, rgba(125, 249, 255, 0.95)),
-    0 0 22px var(--brand-halo-mid, rgba(125, 249, 255, 0.7)),
-    0 0 46px var(--brand-halo-far, rgba(0, 191, 255, 0.5));
+    0 0 14px var(--brand-halo-near-lit, rgba(170, 225, 255, 0.95)),
+    0 0 38px var(--brand-halo-mid-lit, rgba(110, 190, 255, 0.8)),
+    0 0 90px var(--brand-halo-far-lit, rgba(30, 130, 255, 0.6)),
+    0 0 150px var(--brand-halo-wide-lit, rgba(20, 110, 220, 0.45));
+}
+
+/* Clicked: the halo snaps shut first, so the flash that follows reads as the
+   word igniting rather than as a glow that merely got bigger. */
+.auth-intro-explore.is-igniting,
+.auth-intro-explore.is-igniting:hover {
+  text-shadow: none;
+  transition: text-shadow 0.14s ease-in, color 0.14s ease-in;
+}
+
+/* The bloom: a white circle from the centre of the word, solid to 60% of its
+   radius and feathered from there, scaled until the solid part clears the
+   furthest corner. Sizing and origin are set in public/shared/exploreFlash.js,
+   which also holds navigation back until this finishes. */
+.explore-flash {
+  position: fixed;
+  z-index: 9999;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+  transform: translateZ(0) scale(0);
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.9, 1);
+  background: radial-gradient(
+    circle closest-side,
+    var(--on-media-ink, #fff) 0%,
+    var(--on-media-ink, #fff) 60%,
+    rgba(255, 255, 255, 0.85) 78%,
+    rgba(255, 255, 255, 0) 100%
+  );
 }
 
 /* Keyboard users get the glow too, plus a ring — a glow alone is a colour
