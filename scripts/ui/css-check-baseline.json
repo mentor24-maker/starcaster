@@ -1,0 +1,20 @@
+{
+  "C3 | src/css/_builder-react.css | font-family var(--font-poll-question)": 2,
+  "C3 | src/css/legacy.css | background var(--bg-body)": 4,
+  "C3 | src/css/legacy.css | background var(--bg)": 1,
+  "C3 | src/css/legacy.css | background var(--c-surface)": 1,
+  "C3 | src/css/legacy.css | border var(--border-color)": 1,
+  "C3 | src/css/legacy.css | border-bottom var(--border-color)": 1,
+  "C3 | src/css/legacy.css | border-color var(--border-hover)": 1,
+  "C3 | src/css/legacy.css | border-radius var(--radius-sm)": 4,
+  "C3 | src/css/legacy.css | border-top var(--accent-warning)": 1,
+  "C3 | src/css/legacy.css | box-shadow var(--primary-color-rgb)": 1,
+  "C3 | src/css/legacy.css | box-shadow var(--shadow-sm)": 8,
+  "C3 | src/css/legacy.css | color var(--accent-hover)": 1,
+  "C3 | src/css/legacy.css | color var(--c-text-soft)": 1,
+  "C3 | src/css/legacy.css | color var(--meta)": 1,
+  "C3 | src/css/legacy.css | color var(--text-dark)": 5,
+  "C3 | src/css/legacy.css | color var(--text-muted)": 2,
+  "C3 | src/css/legacy.css | color var(--text-primary)": 2,
+  "C3 | src/css/legacy.css | font-family var(--font-mono)": 1
+}
