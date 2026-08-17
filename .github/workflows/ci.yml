@@ -76,17 +76,38 @@ jobs:
         run: npm run test:site-import
 
       - name: UI doctrine (blocking)
-        # docs/MODULE_UI_DOCTRINE.md. Deliberately a SEPARATE, blocking step:
-        # the conventions check below is advisory because of pre-existing
-        # button-in-<th> violations, and folding the UI rules into it would
-        # have made them advisory too — which is precisely how every previous
-        # UI rule in this repo decayed into a suggestion. These checks are
-        # clean repo-wide today, so this gate is green and only NEW violations
-        # can turn it red.
+        # docs/MODULE_UI_DOCTRINE.md. Kept as a SEPARATE step: it was split out
+        # when the conventions check below still ran advisory, because folding
+        # the UI rules into an advisory step would have made them advisory too —
+        # precisely how every previous UI rule in this repo decayed into a
+        # suggestion. That step now blocks as well, but these stay separate so a
+        # failure names which body of rules broke. Clean repo-wide today, so
+        # this gate is green and only NEW violations can turn it red.
         run: npm run check:ui
 
-      - name: Convention checks (advisory)
-        # Non-blocking until the 7 pre-existing button-in-<th> violations
-        # are cleaned up; then drop continue-on-error to make it a gate.
-        continue-on-error: true
+      - name: Retired AI model ids (blocking)
+        # Same reasoning as the UI doctrine step above, and the same reason it
+        # is not folded into the advisory conventions run below: a retired model
+        # id is a dead endpoint, not a style nit. It fails quietly — the
+        # provider 404s one call, a fallback ladder moves on, and the feature
+        # keeps working on a shrinking set of live models. Four features were
+        # carrying ids dead since Feb/Apr 2026 and nothing looked wrong. The
+        # repo is clean today, so this gate is green and only NEW ids turn it
+        # red.
+        run: npm run check:models
+
+      - name: Convention checks (blocking)
+        # Was advisory (continue-on-error) from the day it was added, waiting on
+        # "the 7 pre-existing button-in-<th> violations". Six of those seven
+        # turned out not to be violations — bulk-action rows, action-column
+        # buttons, a header filter control, and one code COMMENT describing the
+        # correct pattern. The rule was written as "no interactive element in a
+        # <th>" when the actual house rule is "no nested SORT control in a
+        # <th>". Narrowing it to that left one real violation, which is fixed,
+        # so this is now a gate.
+        #
+        # It is clean repo-wide today. If it ever goes red on something that is
+        # genuinely fine, narrow the rule — do not put continue-on-error back.
+        # An advisory gate is how the UI rules decayed into suggestions, which
+        # is why check:ui and check:models had to be split out above.
         run: node scripts/check_conventions.cjs --all
