@@ -40,10 +40,18 @@ Mapped from Marinoff production, 2026-08-16:
 
 **The Admin Header** is a saved section created once per project, from the
 project's own menu-bearing header section. It keeps the tenant's design — the
-background, layout, spacing, logo — and changes three things: the navigation
-module lists the admin pages, the visitor-facing calls to action are dropped
-(Delray's "Book a Court" and "Register"; Marinoff's language switcher and
-social row), and a Logout link is added.
+background, layout, spacing, logo — and changes two things: the navigation
+module lists the admin pages, and the visitor-facing calls to action are
+dropped (Delray's "Book a Court" and "Register"; Marinoff's language switcher
+and social row).
+
+**Signing out is not in the header.** The fixed corner button that
+`BuilderPublicSitePage` shows to anyone carrying the admin nav cookie says
+"Admin" on the public site and **"Logout" on every admin page**
+(`adminCornerLink`). A header link as well was two controls doing one job, so
+the scaffold stopped adding one on 2026-08-17;
+`scripts/remove_admin_header_logout_link.mjs --project <id>` cleans it out of a
+project scaffolded before that.
 
 It is found by content, not by name — "the frame section containing a
 `navigation` module". Marinoff calls its header "Header"; Delray splits chrome
