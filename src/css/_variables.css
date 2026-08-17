@@ -51,10 +51,8 @@
      values because their alpha is computed — rgba(var(--triplet), calc(...)) —
      so the glow can swell continuously instead of switching between two
      fixed states. */
-  --brand-royal: #4169e1;
-  --brand-halo-inner-rgb: 150, 190, 255;
-  --brand-halo-mid-rgb: 90, 140, 255;
-  --brand-halo-outer-rgb: 40, 90, 225;
+  --brand-explore-ink: #030382;
+  --brand-halo-rgb: 255, 255, 255;
   --surface-night: #0f172a;
   --surface-night-deep: #020817;
   --surface-night-soft: #1e293b;

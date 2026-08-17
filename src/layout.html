@@ -33,7 +33,7 @@
        above already loads for the Builder — so it needs no font link of its
        own. (It briefly had one for Orbitron; that was dropped when the link
        was restyled to match the logo's letterforms.) -->
-  <link rel="stylesheet" href="/styles.css?v=99525b14" />
+  <link rel="stylesheet" href="/styles.css?v=ccfa670c" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -61,7 +61,10 @@
             </p>
           </div>
           <p class="auth-intro-closer">Less broadcasting. More real connection.</p>
-          <a class="auth-intro-explore" href="/explore">Explore</a>
+          <!-- The inner span is what the halo is drawn on. The <a> stays a
+               full-width block because that is what centres the word under the
+               body copy; a glow hung on it would be 700px wide. -->
+          <a class="auth-intro-explore" href="/explore"><span class="auth-intro-explore-word">Explore</span></a>
         </div>
         <div class="auth-card">
         <h2 id="authModeLabel">Sign in</h2>
@@ -404,7 +407,7 @@
        Self-contained and optional: the anchor keeps a real href and the CSS
        carries a resting halo, so the link still glows, still lights on hover,
        and still navigates if this never loads. -->
-  <script src="/shared/exploreLink.js?v=15d91f3c"></script>
+  <script src="/shared/exploreLink.js?v=f4449aa3"></script>
   <script src="/js/core.js?v=ac73db13"></script>
   <script src="/js/estimatedProgress.js?v=54666829"></script>
   <script src="/js/projectContext.js?v=065576d8"></script>

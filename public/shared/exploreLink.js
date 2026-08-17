@@ -26,6 +26,7 @@
   'use strict';
 
   var SELECTOR = '.auth-intro-explore';
+  var WORD_SELECTOR = '.auth-intro-explore-word';
   var COLLAPSE_MS = 150;  // halo snaps shut
   var BLOOM_MS = 520;     // white circle expands to fill
   var HOLD_MS = 90;       // beat on full white before the page changes
@@ -54,7 +55,9 @@
   }
 
   function runFlash(link, href) {
-    var rect = link.getBoundingClientRect();
+    // Origin from the word, not the anchor: the anchor is a full-width block,
+    // so its box would put the bloom's centre right only by coincidence.
+    var rect = (link.querySelector(WORD_SELECTOR) || link).getBoundingClientRect();
     var originX = rect.left + rect.width / 2;
     var originY = rect.top + rect.height / 2;
 
@@ -150,32 +153,65 @@
   }
 
   /**
+   * The box of the letter at the centre of the word — the "L" of EXPLORE.
+   *
+   * The halo keeps intensifying all the way in to that letter rather than
+   * maxing out at the edge of the word, so crossing the E is not the end of
+   * the effect. Measured off a Range over the actual character so it stays
+   * right whatever the word, the font or the size; falls back to a slice of
+   * the word's own width if Range is unavailable.
+   */
+  function centreLetterRect(word) {
+    var node = word.firstChild;
+    if (!node || node.nodeType !== 3 || !document.createRange) return null;
+    var text = node.nodeValue || '';
+    if (!text.length) return null;
+    var mid = Math.floor(text.length / 2);
+    try {
+      var range = document.createRange();
+      range.setStart(node, mid);
+      range.setEnd(node, Math.min(mid + 1, text.length));
+      var rect = range.getBoundingClientRect();
+      return rect && rect.width ? rect : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /**
    * How lit the halo should be for a cursor at (x, y).
    *
-   * Distance is measured to the nearest point of the word's box, not to its
-   * centre — "EXPLORE" is far wider than it is tall, and measuring from the
-   * centre would make the halo respond differently depending on whether you
-   * approached the E or the middle. Nearest-edge makes the swell even all the
-   * way round.
+   * Distance runs to the CENTRE of the word, not to its nearest edge, and hits
+   * full only once the cursor is inside the centre letter. That is what keeps
+   * the halo building as you travel across the word instead of snapping to
+   * maximum the moment you touch it.
    */
-  function haloFor(rect, x, y) {
-    var dx = Math.max(rect.left - x, 0, x - rect.right);
-    var dy = Math.max(rect.top - y, 0, y - rect.bottom);
-    var dist = Math.sqrt(dx * dx + dy * dy);
+  function haloFor(centreX, centreY, coreRadius, x, y) {
+    var dist = Math.sqrt((x - centreX) * (x - centreX) + (y - centreY) * (y - centreY));
+    if (dist <= coreRadius) return 1;
     if (dist >= REACH_PX) return REST_HALO;
-    var closeness = 1 - dist / REACH_PX;
+    var closeness = 1 - (dist - coreRadius) / (REACH_PX - coreRadius);
     var eased = Math.pow(closeness, FALLOFF);
     return REST_HALO + (1 - REST_HALO) * eased;
   }
 
-  function trackProximity(link) {
+  function trackProximity(link, word) {
     var pending = false;
     var lastX = 0;
     var lastY = 0;
 
     function apply() {
       pending = false;
-      link.style.setProperty('--halo', haloFor(link.getBoundingClientRect(), lastX, lastY).toFixed(3));
+      var rect = word.getBoundingClientRect();
+      var letter = centreLetterRect(word);
+      // Half the centre letter's diagonal: inside it, the halo is at full.
+      var coreRadius = letter
+        ? Math.sqrt(letter.width * letter.width + letter.height * letter.height) / 2
+        : Math.min(rect.width, rect.height) / 2;
+      link.style.setProperty(
+        '--halo',
+        haloFor(rect.left + rect.width / 2, rect.top + rect.height / 2, coreRadius, lastX, lastY).toFixed(3)
+      );
     }
 
     // Coalesce to one write per frame: mousemove fires far faster than the
@@ -209,10 +245,11 @@
     document.body.addEventListener('click', onClick);
 
     var link = document.querySelector(SELECTOR);
+    var word = link && link.querySelector(WORD_SELECTOR);
     // Touch devices never fire mousemove, so the resting halo simply stands;
     // reduced motion opts out of the swell for the same reason it opts out of
     // the flash.
-    if (link && !prefersReducedMotion()) trackProximity(link);
+    if (link && word && !prefersReducedMotion()) trackProximity(link, word);
   }
 
   if (document.readyState === 'loading') {

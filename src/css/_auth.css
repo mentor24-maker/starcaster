@@ -115,8 +115,7 @@
 }
 
 /* "Explore" — the way into the product tour at /explore, and the one
-   invitation on this screen. Orbitron (loaded by its own <link> in
-   src/layout.html) for a futuristic, elegant, bold single word.
+   invitation on this screen.
 
    Centred under the BODY COPY, not under the whole column: the column is
    52.5rem wide while the copy caps at 43.75rem, so centring in the column
@@ -152,35 +151,68 @@
   text-indent: 0.06em;
   line-height: 1.25;
   text-transform: uppercase;
-  color: var(--brand-royal, #4169e1);
+  color: var(--brand-explore-ink, #030382);
   text-decoration: none;
 
-  /* --halo is the volume dial, 0 (far away) to 1 (cursor on the word).
-     public/shared/exploreLink.js writes it from the cursor's distance, the
-     same idea the tractor-nav module uses, except continuous rather than in
-     discrete rings. The value here is the resting one, so the halo still
-     glows at a decent volume with JS off, on a phone, or before the script
-     has seen its first mouse move.
-
-     Every layer scales both its blur radius and its alpha off that one
-     number, which is why the halo gains VOLUME as you approach rather than
-     just brightness — a bigger, softer body of light, not a harder edge. */
+  /* --halo is the volume dial, 0 (far away) to 1 (cursor on the L at the
+     centre of the word). public/shared/exploreLink.js writes it from the
+     cursor's distance — the same idea the tractor-nav module uses, except
+     continuous rather than in discrete rings. The value here is the resting
+     one, so the halo still burns with JS off, on a phone, or before the
+     script has seen its first mouse move. */
   --halo: 0.42;
-  text-shadow:
-    0 0 calc(6px + var(--halo) * 12px)
-      rgba(var(--brand-halo-inner-rgb, 150, 190, 255), calc(0.30 + var(--halo) * 0.65)),
-    0 0 calc(16px + var(--halo) * 34px)
-      rgba(var(--brand-halo-mid-rgb, 90, 140, 255), calc(0.18 + var(--halo) * 0.62)),
-    0 0 calc(34px + var(--halo) * 96px)
-      rgba(var(--brand-halo-outer-rgb, 40, 90, 225), calc(0.12 + var(--halo) * 0.48));
-  /* Short, so following the cursor still feels immediate, but long enough to
-     smooth the jump back to resting when the pointer leaves. */
-  transition: text-shadow 0.12s linear;
 }
 
-/* Pointer actually on the word, and the keyboard equivalent. Also the whole
-   effect's fallback: with no JS, --halo never moves, so hover alone still
-   takes the halo to full. */
+/* The halo is drawn on this inner span, which is only as wide as the word.
+   isolation + a negative z-index put it behind the letters without escaping
+   into the page: inline text always paints above a negative-z-index child of
+   the same stacking context. */
+.auth-intro-explore-word {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+
+/* text-shadow cannot do this: it has blur but no SPREAD, so it can only ever
+   feather outward from the letterforms and never lay down a solid body of
+   light behind them. A box-shadow can, so the halo is a white plate sized to
+   the word plus three spreading blurs — the plate makes the word sit ON white,
+   the blurs carry the fade out from there.
+
+   At rest that is an intense white barely wider than the letters; at full it
+   reaches ~100px past the word. Every radius, spread and alpha is driven off
+   --halo, so approaching grows the body of light rather than just brightening
+   a fixed shape. */
+.auth-intro-explore-word::before {
+  content: '';
+  position: absolute;
+  inset: -0.14em -0.3em;
+  z-index: -1;
+  border-radius: 999px;
+
+  /* --halo rests at 0.42 rather than 0, so driving the radii off it directly
+     would leave a wide glow standing at rest. --swell re-bases it: 0 when the
+     cursor is away, 1 on the centre letter. max() floors it, because a
+     negative blur radius is invalid and CSS drops the whole declaration
+     silently when it sees one. Measured reach: ~20px at rest, ~95px at full. */
+  --swell: max(0, (var(--halo) - 0.42) / 0.58);
+
+  background: rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.88 + var(--swell) * 0.12));
+  box-shadow:
+    0 0 calc(6px + var(--swell) * 20px) calc(1px + var(--swell) * 6px)
+      rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.65 + var(--swell) * 0.35)),
+    0 0 calc(14px + var(--swell) * 54px) calc(2px + var(--swell) * 14px)
+      rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.34 + var(--swell) * 0.46)),
+    0 0 calc(24px + var(--swell) * 74px) calc(5px + var(--swell) * 17px)
+      rgba(var(--brand-halo-rgb, 255, 255, 255), calc(0.16 + var(--swell) * 0.34));
+  /* Short, so following the cursor still feels immediate, but long enough to
+     smooth the jump back to resting when the pointer leaves. */
+  transition: background 0.12s linear, box-shadow 0.12s linear;
+}
+
+/* Pointer on the word, and the keyboard equivalent. Also the whole effect's
+   fallback: with no JS, --halo never moves, so hover alone still takes the
+   halo to full. */
 .auth-intro-explore:hover,
 .auth-intro-explore:focus-visible {
   --halo: 1;
