@@ -1,13 +1,18 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import {
+  DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
+  DEFAULT_IMAGE_EFFECT_DIRECTION,
   DEFAULT_IMAGE_EFFECT_FREQUENCY,
   DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
+  IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
+  IMAGE_EFFECT_DIRECTION_OPTIONS,
   IMAGE_EFFECT_FREQUENCY_OPTIONS,
   IMAGE_EFFECT_OPTIONS,
   IMAGE_EFFECT_ROTATION_RATE_OPTIONS,
   imageEffectBounces,
-  imageEffectRotates
+  imageEffectRotates,
+  imageEffectTravels
 } from "./builder-image-effects";
 import {
   BuilderSchemaModuleSettings,
@@ -264,6 +269,20 @@ export function BuilderImageModuleSettings({
           ],
           [
             {
+              key: "effectDirection",
+              label: "Direction",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_DIRECTION,
+              options: IMAGE_EFFECT_DIRECTION_OPTIONS,
+              // Which way it goes, straight after WHAT it does: the biggest
+              // blast radius on the axis after the effect itself (D9).
+              visibleWhen: (settings) => imageEffectTravels(settings.effect),
+              rendersVia: "getImageEffectStyle"
+            }
+          ],
+          [
+            {
               key: "effectRotationRate",
               label: "Rotation Rate",
               width: "select-md",
@@ -286,6 +305,20 @@ export function BuilderImageModuleSettings({
               options: IMAGE_EFFECT_FREQUENCY_OPTIONS,
               // Only Tumbleweed leaves the midline, so only Tumbleweed can be
               // asked how often (D9: gated field beside what gates it).
+              visibleWhen: (settings) => imageEffectBounces(settings.effect),
+              rendersVia: "getImageEffectStageStyle"
+            }
+          ],
+          [
+            {
+              key: "effectBounceHeight",
+              label: "Bounce Height",
+              width: "select-md",
+              control: "select",
+              fallback: DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
+              options: IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
+              // How high, under how often — the pair reads as one idea, and
+              // both are gated by the same effect (D9).
               visibleWhen: (settings) => imageEffectBounces(settings.effect),
               rendersVia: "getImageEffectStageStyle"
             }
