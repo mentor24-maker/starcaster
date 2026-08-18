@@ -39,6 +39,7 @@ Newest first. One row per file actually run against production.
 
 | Date | File | What it did |
 |---|---|---|
+| 2026-08-18 | `docs/SQL/starcaster_readonly_role.sql` (re-run) | **Pending.** PR #334 enabled row security on 65 more tables; the file must be re-run or those 65 copy across empty on the next `db:refresh`. Idempotent — adds the missing policies, changes nothing else. |
 | 2026-08-16 | `docs/SQL/starcaster_readonly_role.sql` | Created the `starcaster_readonly` login and gave it read-only access, so `npm run db:refresh` can copy production down without being able to change it. Adds a login and read policies; touches no existing data. |
 
 ## Before this file existed

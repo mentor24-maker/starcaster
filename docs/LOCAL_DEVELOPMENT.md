@@ -199,6 +199,13 @@ cannot happen quietly."**
 If a table reports as empty, re-run the SQL file above; it adds a policy for
 any table that lacks one.
 
+**Every time row security is switched on for a table, that file must be
+re-run.** PR #334 enabled it on 65 more tables on 2026-08-18; until the file
+is re-run, all 65 copy across empty. `db:refresh` reports it rather than
+handing over a hollow database, but the refresh stays broken until the
+policies exist. Treat "enabled RLS on a table" and "re-ran
+`starcaster_readonly_role.sql`" as one step, not two.
+
 ## What local still will not tell you
 
 - **Custom domains.** Localhost skips host binding, so tenant sites on their

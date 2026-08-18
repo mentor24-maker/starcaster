@@ -1,14 +1,54 @@
 # Waiting to be filed in ClickUp
 
-ClickUp refused every write on 2026-08-17 and again on 2026-08-18 with
-`Rate limit exceeded. Please wait 919 minutes` — roughly 15 hours from the
-second attempt. These tasks exist only here until someone files them.
+These tasks exist only here until someone files them.
+
+**Why they are parked, corrected.** The first attempt read the claude.ai
+connector's `Rate limit exceeded. Please wait 919 minutes` as ClickUp being
+unavailable. PR #328 established that is the *connector's* rolling 24-hour
+write budget, not ClickUp's — ClickUp's own API allows ~100 requests per
+minute and was never blocked. `npm run clickup` goes straight at it and needs
+only a personal API token in the terminal window
+(`export CLICKUP_API_TOKEN=pk_...`), which is the operator's keystroke.
+
+So these are waiting on a token, not on a clock.
 
 **They are not a plan. They are the outstanding work**, written as tasks so
 they can be pasted straight into the Starcaster **Loop Queue** list
 (`901418546619`) with no rewriting.
 
 Delete each block once it is filed.
+
+---
+
+## 0. URGENT — 65 tables would copy across EMPTY
+
+**List:** Loop Queue · **Status:** Queued · **Priority:** Urgent
+
+PR #334 enabled row-level security on 65 more tables. `starcaster_readonly`
+has a read policy on the original 71 and none on the new 65, so
+`npm run db:refresh` would copy those 65 across **empty**.
+
+Step 7 of `db:refresh` compares every table against production and would
+report it loudly rather than handing over a hollow database — that is the
+design working — but the refresh is broken until the policies exist.
+
+**The fix is already written and needs no code change.** Re-run
+`docs/SQL/starcaster_readonly_role.sql`; it loops over every table with row
+security on and is idempotent, so it adds the missing 65 and leaves the rest
+alone.
+
+This is the standing consequence of #334 rather than a one-off: **every future
+change that enables row security on a table needs that file re-run**, or the
+next refresh quietly loses those rows. Worth adding to whatever checklist
+covers enabling RLS.
+
+### Acceptance criteria
+
+- `docs/SQL/starcaster_readonly_role.sql` re-run against production.
+- The check at the bottom of it shows policies_created equal to
+  tables_with_row_security.
+- A `npm run db:refresh` completes with "Every table matches production
+  exactly."
 
 ---
 
@@ -106,23 +146,7 @@ worktree's server and returned `Not found`.
 
 ---
 
-## 4. 32 worktrees, several finished
-
-**List:** Loop Queue · **Status:** Queued · **Priority:** Low
-
-`git worktree list` shows 32 folders. Several are merged and idle; several
-hold unshipped commits. `npm run tidy` will not touch anything with unmerged
-work, so this is safe, but it needs a person to look at what is genuinely
-still live.
-
-### Acceptance criteria
-
-- `npm run map` output reviewed with the operator.
-- Merged worktrees removed; branches with real work listed with what they hold.
-
----
-
-## 5. Doctrine: the empty-table trap
+## 4. Doctrine: the empty-table trap
 
 **List:** Loop Queue · **Status:** Queued · **Priority:** Normal
 
