@@ -4,6 +4,7 @@ import ActiveCampaignsList from './components/campaigns/ActiveCampaignsList';
 import AssociationsPanelHost from './components/associations/associations-panel';
 import AssetRenditionsPanel from './components/assets/asset-renditions-panel';
 import InvitationsPanel from './components/invitations/invitations-panel';
+import AiSpendPanel from './components/observe/ai-spend-panel';
 import NoWorkspacePanel from './components/invitations/no-workspace-panel';
 
 // Host ids that should receive an Associations panel. The vanilla screen names
@@ -26,6 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (assetRenditionsHost) {
     createRoot(assetRenditionsHost).render(<AssetRenditionsPanel />);
+  }
+
+  const aiSpendHost = document.getElementById('aiSpendReactRoot');
+
+  if (aiSpendHost) {
+    createRoot(aiSpendHost).render(<AiSpendPanel />);
   }
 
   const invitationsHost = document.getElementById('invitationsReactRoot');
