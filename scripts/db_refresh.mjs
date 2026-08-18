@@ -693,6 +693,20 @@ try {
   mismatches = 1;
 }
 
+// Record when this ran. `doctor` used to be asked "is my copy current?" and
+// could only answer "this database keeps no record of which changes have been
+// applied" — true, and useless. Local mirrors production after a refresh, so
+// the honest question is not which migrations are applied but how long ago the
+// mirror was taken. Gitignored: it describes this laptop, not the project.
+try {
+  fs.writeFileSync(
+    path.join(ROOT, '.local-db-refreshed'),
+    JSON.stringify({ at: new Date().toISOString(), pages: count('local', 'builder_landing_page') }, null, 2) + '\n',
+  );
+} catch (_) {
+  couldNotDo.push('Could not record when this refresh happened, so `doctor` will not know how stale you are.');
+}
+
 // Tidy up the dumps: they hold a full copy of production's content.
 try {
   inContainer('rm -f /tmp/sc_schema.sql /tmp/sc_data.sql');

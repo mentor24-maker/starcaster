@@ -272,43 +272,48 @@ if (dbTarget === 'unknown') {
 } else if (dbTarget === 'production') {
   unknown('Did not check the database contents.', 'This only applies to your local copy.');
 } else if (!containersUp) {
-  unknown(
-    `Cannot tell how current your copy is (${migrationFiles.length} change files on disk).`,
-    'The local database is not running.',
-  );
+  unknown('Cannot tell how current your copy is.', 'The local database is not running.');
 } else {
-  const ledger = sh('docker', [
-    'exec',
-    DB_CONTAINER,
-    'psql',
-    '-U',
-    'postgres',
-    '-d',
-    'postgres',
-    '-tAc',
-    'select version from supabase_migrations.schema_migrations order by version',
-  ]);
+  // The question this SHOULD answer.
+  //
+  // The first version compared migration files on disk against the database's
+  // migration ledger, and reported — correctly — that there was no ledger to
+  // compare against. True, and useless: it named a real problem the operator
+  // could do nothing with, on every single run.
+  //
+  // `db:refresh` copies production wholesale, so afterwards local IS
+  // production. The honest question is not which changes are applied, it is
+  // how old the copy is. That has an answer.
+  let stamp = null;
+  try {
+    stamp = JSON.parse(fs.readFileSync(path.join(ROOT, '.local-db-refreshed'), 'utf8'));
+  } catch (_) {
+    stamp = null;
+  }
 
-  if (!ledger.ok) {
-    // The honest answer, and the reason Phase 1 exists. A database restored
-    // from a dump carries no record of which changes it has — so "5 pending"
-    // would be a guess, and "up to date" would be a lie.
+  const pages = (() => {
+    const out = sh('docker', ['exec', DB_CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-tAc',
+      'select count(*) from builder_landing_page']);
+    return out.ok ? Number(out.text.trim()) : null;
+  })();
+
+  if (!stamp?.at) {
     bad(
-      'This database keeps no record of which changes have been applied.',
-      'npm run db:refresh      (not built yet — this is the next piece of work)',
-      `${migrationFiles.length} change files on disk, and no way to tell which of them this copy already has.`,
+      'This copy has never been refreshed from production — or was made before the tool existed.',
+      'npm run db:refresh      (about two minutes)',
+      pages === null ? undefined : `It currently holds ${pages} Builder pages.`,
     );
   } else {
-    const applied = new Set(ledger.text.split('\n').map((line) => line.trim()).filter(Boolean));
-    const pending = migrationFiles.filter((name) => !applied.has(name.slice(0, 14)));
-    if (pending.length === 0) {
-      ok(`Up to date. ${dim(`(${migrationFiles.length} change files, all applied)`)}`);
+    const days = Math.floor((Date.now() - Date.parse(stamp.at)) / 86400000);
+    const when = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+    const age = days === 1 ? 'a day old' : `${days} days old`;
+    const detail = pages === null ? '' : `${pages} Builder pages.`;
+    if (days >= 7) {
+      bad(`Your copy of production is ${age}.`, 'npm run db:refresh      (about two minutes)', detail);
     } else {
-      bad(
-        `${pending.length} database change${pending.length === 1 ? '' : 's'} you do not have yet.`,
-        'npm run db:refresh      (not built yet — this is the next piece of work)',
-        pending.join(', '),
-      );
+      // Refreshing costs production disk IO — six runs in a day left it
+      // unresponsive on 2026-08-17 — so this says "fine" rather than nudging.
+      ok(`Copied from production ${when}. ${dim(detail)}`);
     }
   }
 }

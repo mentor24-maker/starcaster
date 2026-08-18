@@ -115,6 +115,19 @@ if (fs.existsSync(envSource)) {
 console.log('[thread] Building this folder’s own bundles…');
 run('npm', ['run', 'build'], { cwd: dest, stdio: ['ignore', 'ignore', 'inherit'] });
 
+// End by SHOWING the folder's state rather than asserting it is ready.
+// `thread` used to print "Ready." whether or not Docker was running or the
+// database was reachable, so the first sign of trouble was the app
+// misbehaving several minutes later. doctor is read-only and takes a moment.
+console.log('\n[thread] Checking this folder…');
+try {
+  execFileSync('node', [path.join(dest, 'scripts', 'doctor.mjs')], { cwd: dest, stdio: 'inherit' });
+} catch (_) {
+  // A non-zero exit means doctor found something to fix, and it has already
+  // printed what and how. The folder itself is still built and usable, so
+  // this must not fail the command.
+}
+
 console.log(`
 [thread] Ready.
 

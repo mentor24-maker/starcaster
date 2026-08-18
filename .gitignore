@@ -51,3 +51,6 @@ supabase/.temp/
 
 # Playwright scratch profile written by scripts/capture_platform_screenshots.js
 .playwright/
+
+# Records when this laptop last ran `npm run db:refresh` (see scripts/doctor.mjs)
+.local-db-refreshed
