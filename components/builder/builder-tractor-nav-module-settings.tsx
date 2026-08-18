@@ -8,6 +8,8 @@ import {
 import { type BuilderThemePalette } from "./builder-theme-color-field";
 import {
   PROXIMITY_EFFECT_OPTIONS,
+  PROXIMITY_PLACEMENT_OPTIONS,
+  proximityIsInline,
   proximityIsContinuous,
   proximityUsesRings
 } from "@/lib/proximity-effects";
@@ -267,7 +269,8 @@ export function BuilderTractorNavModuleSettings({
               bare: true,
               render: () => (
                 <span className="builder-module-offset-hint">
-                  Sizes are in px; positions are px from the ring center.
+                  Sizes are in pixels. Positions are explained on the Placement
+                  axis, where they live.
                 </span>
               )
             }
@@ -277,6 +280,19 @@ export function BuilderTractorNavModuleSettings({
       {
         title: "Placement",
         strips: [
+          [
+            {
+              // First on the axis: it decides what Position X and Y are
+              // measured FROM, which is the largest blast radius here (D9).
+              key: "placement",
+              label: "Sits",
+              width: "select-md",
+              control: "select",
+              fallback: "window",
+              options: [...PROXIMITY_PLACEMENT_OPTIONS],
+              rendersVia: "BuilderTractorNavModule"
+            }
+          ],
           [
             {
               key: "posX",
@@ -326,6 +342,38 @@ export function BuilderTractorNavModuleSettings({
                   value={settings.zIndex || "-9999"}
                   onChange={(event) => set("zIndex", event.target.value)}
                 />
+              )
+            }
+          ],
+          [
+            {
+              key: "placementNote",
+              label: "",
+              width: "full",
+              control: "custom",
+              bare: true,
+              render: ({ settings }) => (
+                <span className="builder-module-offset-hint">
+                  {proximityIsInline(settings.placement) ? (
+                    <>
+                      <strong>In Place:</strong> the effect sits where this
+                      module sits — centred across its cell, at the module's own
+                      point in the column — and scrolls with the page. Position
+                      X and Y nudge it from there, in pixels; positive Y moves
+                      it up. A negative Z-Index is treated as 0 here, because
+                      behind the cell&rsquo;s own background means invisible.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Window Center:</strong> the effect is pinned to the
+                      middle of the browser window and does not scroll — the
+                      cell it lives in has no bearing on where it appears.
+                      Position X and Y are pixels from that centre; positive Y
+                      moves it up. Choose <em>In Place</em> if you want it to
+                      belong to this cell.
+                    </>
+                  )}
+                </span>
               )
             }
           ]

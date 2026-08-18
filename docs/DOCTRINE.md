@@ -138,6 +138,40 @@ wire and blocks off the disk are different numbers with different causes, and
 2.83 MB of JSON crossing the network says nothing about whether it came from
 cache.
 
+### 1.7 A quota that blocks writes but not reads looks exactly like an outage
+
+**Incident (2026-08-17).** Five ClickUp writes failed in a row with "Rate limit
+exceeded. Please wait 1171 minutes" — nearly twenty hours. It read as the whole
+integration being down account-wide, and the work (a task and a wrap-up post)
+was parked in a file on the Desktop to wait it out.
+
+Two things made it look worse than it was. Plain reads (`search`,
+`get_workspace_hierarchy`) kept answering normally throughout, so the failures
+looked arbitrary rather than budgeted. And the chat endpoints reported **"wait
+NaN minutes"** — a JavaScript not-a-number leaking into operator-facing text,
+which reads as a broken connector rather than a spent allowance.
+
+The countdown itself was honest: four readings taken across three hours (1171,
+1023, 998, 992 minutes) all resolved to a single fixed reset, matching the raw
+`retryAfter` to within eleven seconds. It was a real rolling ~24h window.
+
+**The part that mattered: there were two limits, not one.** The *connector*
+(claude.ai's ClickUp bridge) budgets writes over ~24 hours. ClickUp's own API
+limits by the MINUTE — about 100 requests, reset in 60 seconds — and was
+nowhere near its ceiling. A personal API token talking straight to
+`api.clickup.com` was never blocked at all. Nothing had to wait.
+
+**Do this:** when a hosted integration reports a limit measured in *hours*, it
+is the integration's quota, not the upstream provider's — provider limits are
+almost always per-minute. Check whether a direct path exists before waiting.
+`scripts/clickup_direct.mjs` is that path here (`whoami`, `task`, `chat`); it
+prints the provider's true `x-ratelimit-*` headers so the two buckets can be
+told apart, and reads a created task back before claiming success.
+
+**Corollary:** a retry-after rendered as `NaN`, `undefined` or `Infinity` is not
+evidence about the wait. It means the value was missing — go and find the real
+one before planning around the number on the screen.
+
 ---
 
 ## 2. Error messages
@@ -694,6 +728,59 @@ code, but it changes the operator's workflow from "edits are live" to "edits go
 live on Publish", which is a decision, not a cleanup), or select one row in SQL
 and accept that the publish/private filters and the frame resolution then exist
 twice.
+
+### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed`
+
+`position: fixed` means "fixed to the browser window" only while **no ancestor
+has a `transform`, `filter`, `perspective`, `backdrop-filter`, `will-change`
+naming one of those, or a paint/layout `contain`**. Any of them makes that
+ancestor the containing block instead, and every percentage, `vw`/`vh` and
+`inset` on the fixed element silently starts measuring from it.
+
+The trap is that **the value can be a no-op and the capture still happens**.
+`blur(0px)`, `scale(1)` and `translate(0)` change nothing you can see, and
+change everything about where a fixed child lands.
+
+Every themed builder column carried:
+
+```css
+backdrop-filter: blur(var(--lp-blur, 0));
+```
+
+and Container Blur defaults to 0. So every column on every themed page ran
+`backdrop-filter: blur(0px)` — invisible, and a containing block for anything
+fixed inside it. The proximity-effect module asked for the centre of the
+browser window and landed at the centre of whichever **cell** it had been
+dropped in; measured on the live site at 1600×900 it sat 232px right and 16px
+down of where it asked to be, and the offset was exactly the column's origin.
+Moving the module to a different cell moved the effect, which is the opposite
+of what `fixed` promises. Fixed 2026-08-18 (#327): `getBuilderThemeStyleVars`
+emits `--lp-backdrop` as the whole filter — the keyword `none` at zero — and
+`_builder-theme.css` reads that.
+
+**It was never about that module.** Any modal, dropdown, toast or overlay
+rendered with `position: fixed` inside a builder column had the same fate for
+as long as the rule existed. Nothing looked wrong in the stylesheet, and a
+zero-radius blur does not stand out in devtools unless you already suspect it.
+
+**No check covers this and none easily could.** `check:css` asks which
+declarations the browser KEPT — and it kept this one; the declaration is
+valid, applied, and doing exactly what it says. The fault is a side effect of
+a valid value, which is a different question from the one that harness asks.
+
+**Do this:**
+
+- Never emit a filter, transform or backdrop-filter for a zero setting. Emit
+  the keyword `none`. Build the whole property in the variable
+  (`--lp-backdrop: none`), never a bare number the stylesheet wraps in a
+  function it cannot opt out of.
+- When a fixed element lands somewhere unexplainable, walk its ancestors for
+  those six properties before doubting your own arithmetic. If the offset
+  equals some ancestor's origin, that ancestor is the containing block.
+- Positioning bugs are measured, not eyeballed: read
+  `getBoundingClientRect()` against the window centre and compare numbers.
+  Both halves of this one were found that way and neither was obvious on
+  screen.
 
 ---
 

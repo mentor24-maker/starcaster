@@ -127,6 +127,54 @@ custom-rendered controls, nothing enforces that. Filed for its own thread.
 
 ---
 
+## Placement — where the effect sits
+
+| Mode | Means |
+|---|---|
+| **Window Center** (default) | Pinned to the middle of the browser window. Ignores the layout, does not scroll. Right for a page-wide backdrop. |
+| **In Place** | Centred in the cell the module lives in, scrolling with the page. |
+
+Position X and Y are pixels **from whichever centre the mode picked**, and
+**positive Y moves the effect up**. The panel note says which centre is in
+force and changes as you switch modes, because the same two numbers mean two
+different things.
+
+A negative Z-Index is lifted to 0 for In Place. -9999 is right for a window
+backdrop — behind the entire page — and in a cell it puts the effect behind
+that cell's own background, where it is simply invisible. That reads as
+"switching to In Place broke it", so it is clamped and the note says so.
+
+---
+
+## Trap 6: `backdrop-filter: blur(0px)` silently captured every fixed element
+
+The module positions itself with `position: fixed` and `left: calc(50vw …)`.
+That is only fixed to the WINDOW if no ancestor has a `transform`, `filter`,
+`perspective` or `backdrop-filter` — any of those makes that ancestor the
+containing block instead, and the percentages quietly start measuring from it.
+
+Every themed builder column carried `backdrop-filter: blur(var(--lp-blur, 0))`,
+and Container Blur defaults to 0. So every column on every themed page had
+`backdrop-filter: blur(0px)` — **visually nothing, structurally a containing
+block** — and any fixed element inside one was trapped in that column.
+
+The operator reported it as: module set to the centre, module placed in the
+right-hand cell of a two-cell section, effect appears at the bottom of that
+column. Measured on the live page at 1600×900, the stage's centre was
+**232px right and 16px down** of the window centre it had asked for; the offset
+was exactly the column's own origin. Moving the module to a different cell
+moved the effect, which is the opposite of what "fixed" promises.
+
+`getBuilderThemeStyleVars` now emits `--lp-backdrop` as the whole filter —
+the keyword `none` at zero, `blur(Npx)` otherwise — and the rule reads that
+instead. Tested in `builder-utils.test.ts`.
+
+**This was never only about this module.** Any modal, dropdown or overlay
+rendered with `position: fixed` inside a builder column had the same fate, and
+a zero-value filter is invisible in devtools unless you already suspect it.
+
+---
+
 ## Adding a preset
 
 1. Add it to `PROXIMITY_EFFECT_OPTIONS`.

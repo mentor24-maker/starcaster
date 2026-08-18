@@ -1622,6 +1622,21 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   vars["--lp-border-thickness"] = `${borderThickness}px`;
   vars["--lp-radius"] = `${borderRadius}px`;
   vars["--lp-blur"] = `${containerBlur}px`;
+  /*
+   * The backdrop-filter as a WHOLE, so it can be the keyword `none` rather
+   * than a zero-radius blur.
+   *
+   * `backdrop-filter: blur(0px)` is visually nothing and structurally
+   * enormous: any value other than `none` makes the element a containing
+   * block for `position: fixed` descendants. Container Blur defaults to 0, so
+   * every themed column on every page was quietly capturing anything fixed
+   * inside it — the proximity module asked to sit at the centre of the window
+   * and landed at the centre of whichever cell it happened to be in, and any
+   * modal or overlay rendered inside a column had the same fate.
+   *
+   * --lp-blur is left in place because legacy.css still reads it.
+   */
+  vars["--lp-backdrop"] = containerBlur > 0 ? `blur(${containerBlur}px)` : "none";
   vars["--lp-filter"] = contrastLevel > 0 ? `contrast(${1 + contrastLevel / 100})` : "none";
   vars["--bx-theme-padding-top"] = `${topMargin}px`;
   vars["--bx-theme-padding-bottom"] = `${bottomMargin}px`;
