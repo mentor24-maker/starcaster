@@ -8,10 +8,46 @@ where you find out whether something works.
 ```
 npm run doctor      # what is up, what is stale, which database am I on
 npm run db:refresh  # make my copy match production (about two minutes)
+npm run db:use      # which database am I on? (add `local` or `cloud` to switch)
 ```
 
-`doctor` is read-only and always safe to run. `db:refresh` replaces your local
-database and refuses to run against anything that is not localhost.
+`doctor` and a bare `db:use` are read-only and always safe to run. `db:refresh`
+replaces your local database and refuses to run against anything that is not
+localhost.
+
+## Switching databases
+
+```
+npm run db:use          # just tells you which one you are on
+npm run db:use local    # your own machine
+npm run db:use cloud    # the live database - asks first
+```
+
+It rewrites only the three settings that choose the database, leaving the other
+seventy-odd lines of `.env.local` exactly as they were, and it reads the file
+back afterwards to confirm the switch actually took.
+
+**The values are fetched, never stored.** Local settings come from
+`supabase status`, cloud settings from Doppler `prd`, both asked at the moment
+of the switch. Nothing can go stale, and no production credential is written
+into a file this repo maintains. The old `.env.local.cloud-backup` and
+`.env.local.localdb-backup` files are what this replaces - hand-maintained
+copies that drifted silently and told you nothing about which was active.
+
+**`cloud` makes you type the word `production`,** not press `y`. The whole
+point of this setup is moving work off production; a switch that costs nothing
+to flick is one that gets flicked absent-mindedly.
+
+**`npm run dev` refuses to start against the live database.** Nothing used to
+ask - a checkout left pointing at the cloud started up looking exactly like a
+local one, and the first clue was a change appearing on a client's site. If you
+genuinely need it, `ALLOW_CLOUD_DEV=1 npm run dev`. Having to type that is the
+control.
+
+The strip across the top of the admin app tells you the same thing at a glance,
+and all three - banner, switcher and guard - decide "is this local?" with the
+same shared function (`lib/environmentBanner.js`), so they cannot drift apart
+about the one question the whole setup rests on.
 
 A normal session:
 
