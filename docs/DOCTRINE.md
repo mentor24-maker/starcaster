@@ -848,7 +848,7 @@ Worth knowing before they cost an hour.
 | `supabase start` prints no keys | Postgres was SIGKILLed (unclean Docker shutdown) | `docker start supabase_db_starcaster`, let it recover, then `supabase stop` && `supabase start`. Run `supabase stop` before shutting down the Mac |
 | X: "API key expired" / 401 after months of working | X invalidates tokens on password change, permission edits without regenerating, or key regeneration | Regenerate the Access Token **and** Secret; permissions must be Read and Write *before* generating |
 | Every tenant site 404s at once, each after ~10s, nothing deployed | Supabase unreachable — a quota or Disk IO limit, not code (§1.5) | `docs/runbook-supabase-capacity.md` |
-| Supabase project "unresponsive" while usage shows one meter over quota | **Spend cap on**: Supabase withholds service instead of billing the overage | Billing → Change spend cap → disable. Operator's decision; it costs money |
+| Supabase project "unresponsive" while usage shows one meter over quota | **Spend cap on**: Supabase withholds service instead of billing the overage | Billing → Change spend cap → disable. Operator's decision; it costs money. **Standing decision (2026-08-17): the cap stays OFF** — if you find it on, it flipped back; see the standing-decision block in `docs/runbook-supabase-capacity.md` |
 | Restore stuck "Unhealthy" well past the promised 5 minutes | Disk IO budget also exhausted, so the restore itself is throttled | Restart the project (Settings → General → Restart) |
 
 **Local database:** `supabase/migrations/` is **not** the schema source of truth
