@@ -5969,3 +5969,71 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     animation: none;
   }
 }
+
+/* ── Module Library breadcrumb ─────────────────────────────────────────────
+ *
+ * "Module Categories › Image", under the modal's title.
+ *
+ * These three class names shipped with NO stylesheet rule behind them
+ * anywhere in the repo — the markup named them and nothing ever matched. The
+ * result was not an unstyled-but-readable trail, it was worse in two ways at
+ * once, and both are things an unstyled element inherits rather than lacks:
+ *
+ *   1. INVISIBLE. The "Module Categories" crumb is a real <button>, and the
+ *      app has a global `button, .btn { color: var(--btn-text) }` — white,
+ *      because nearly every button here is a filled dark one. A bare button on
+ *      the white modal therefore rendered white on white. It was not missing;
+ *      it was there and unreadable, which is why it read as "overwritten".
+ *   2. COLLIDED. The <nav> was `display: block`, so the separator and the
+ *      current page had nothing between them: "Module Categories›Image".
+ *
+ * The same shape as the trap in docs/IMAGE_EFFECTS.md — a class name is not a
+ * rendering. A class that styles nothing is silent here: no test in this repo
+ * sees CSS, and the markup review looks completely correct.
+ */
+.builder-react-root .builder-module-palette-breadcrumb {
+  display: flex;
+  align-items: baseline;
+  /* Wraps rather than pushing the modal's header actions off the row when a
+     category name is long. */
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: var(--text-base);
+  line-height: 1.3;
+}
+
+/* Undo the global filled-button styling explicitly rather than relying on
+   this rule simply coming later: the crumb is a button for the keyboard and
+   the screen reader, and a link for the eye. */
+.builder-react-root .builder-module-palette-breadcrumb-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink-secondary, #475569);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-link:hover {
+  color: var(--ink-primary, #000);
+  text-decoration: underline;
+}
+
+/* Colour alone is not a focus indicator. */
+.builder-react-root .builder-module-palette-breadcrumb-link:focus-visible {
+  outline: 2px solid var(--brand-electric-bright, #7df9ff);
+  outline-offset: 2px;
+  border-radius: 3px;
+  color: var(--ink-primary, #000);
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-sep {
+  color: var(--ink-muted, #94a3b8);
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-current {
+  color: var(--ink-primary, #000);
+  font-weight: 600;
+}
