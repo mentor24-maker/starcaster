@@ -20,6 +20,7 @@ import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
+import { normalizeProximityEffectSettings } from "./proximity-effects";
 
 /**
  * Section (row) column structures. Values are named for their `fr` ratio;
@@ -2099,6 +2100,13 @@ export function normalizeBuilderModuleSettingsForType(
   migrateSpacingPairToSides(settings, "margin", "verticalMargin", "horizontalMargin");
 
   if (type === "tractor-nav") {
+    /* The module draws one of several proximity effects; "rings" is the
+       original and stays the default, so every page that predates the picker
+       keeps rendering what it already rendered. normalizeProximityEffectSettings
+       deliberately does NOT delete the keys the chosen preset ignores — see the
+       note on it; a ring layout somebody tuned by hand must survive a flick to
+       Glow and back. */
+    normalizeProximityEffectSettings(settings);
     if (!settings.color)        settings.color        = "#0000ff";
     if (!settings.dotSize)      settings.dotSize      = "10";
     if (!settings.dotHoverColor) settings.dotHoverColor = "#ffffff";
