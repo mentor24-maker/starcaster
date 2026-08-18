@@ -599,6 +599,7 @@ describe("getBuilderThemeStyleVars", () => {
     expect(vars["--lp-border-thickness"]).toBe("2px");
     expect(vars["--lp-radius"]).toBe("16px");
     expect(vars["--lp-blur"]).toBe("4px");
+    expect(vars["--lp-backdrop"]).toBe("blur(4px)");
     expect(vars["--lp-filter"]).toBe("contrast(1.2)");
     expect(vars["--lp-accent"]).toBe("#1a4f81");
     expect(vars).not.toHaveProperty("--lp-background");
@@ -1171,5 +1172,32 @@ describe("image module padding", () => {
     expect(getImageModuleStyle({ verticalPadding: "9999" }).paddingTop).toBe("160px");
     expect(getImageModuleStyle({ verticalPadding: "-40" }).paddingTop).toBe("0px");
     expect(getImageModuleStyle({ verticalPadding: "abc" }).paddingTop).toBe("0px");
+  });
+});
+
+describe("container blur of zero", () => {
+  /*
+   * `backdrop-filter: blur(0px)` looks like nothing and behaves like a
+   * containing block: any value other than `none` captures every
+   * position:fixed descendant. Container Blur defaults to 0, so until
+   * 2026-08-17 every themed column on every page silently trapped anything
+   * fixed inside it. The proximity module asked for the centre of the window
+   * and landed at the centre of whichever cell it sat in.
+   */
+  it("emits the keyword none, never a zero-radius blur", () => {
+    const vars = getBuilderThemeStyleVars({ containerBlur: 0 } as never) as Record<string, string>;
+    expect(vars["--lp-backdrop"]).toBe("none");
+  });
+
+  it("emits none when the setting is absent or unparseable", () => {
+    for (const styles of [{}, { containerBlur: "" }, { containerBlur: "wide" }]) {
+      const vars = getBuilderThemeStyleVars(styles as never) as Record<string, string>;
+      expect(vars["--lp-backdrop"]).toBe("none");
+    }
+  });
+
+  it("still emits a real filter when somebody actually wants blur", () => {
+    const vars = getBuilderThemeStyleVars({ containerBlur: 9 } as never) as Record<string, string>;
+    expect(vars["--lp-backdrop"]).toBe("blur(9px)");
   });
 });

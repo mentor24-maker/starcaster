@@ -213,6 +213,9 @@ export const modulePaletteItems: ModulePaletteItem[] = [
       // "rings" is the original effect and stays the default, so a module
       // added before the Effect picker existed keeps drawing what it drew.
       effect: "rings",
+      // "window" is what the module has always done; changing the default
+      // would move every effect already on a page.
+      placement: "window",
       reach: "460",
       falloff: "2",
       color: "#0000ff",
