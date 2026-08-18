@@ -117,6 +117,27 @@ including the one that started it: **a class name is not a rendering**. Two of
 these effects were offered for months with no stylesheet rule behind them, and
 an E7 audit walked straight past it because the setting DID reach a renderer.
 
+## Proximity effects — read `docs/PROXIMITY_EFFECTS.md` first
+
+The `tractor-nav` module (UI: TractorNav, filed under Special Effects) and the
+shared cursor-distance driver in `lib/builder-client/proximity-effects.ts`. The
+geometry is pure arithmetic and unit-tested there on purpose — it is the only
+part of an effect a test in this repo can hold still.
+
+Six traps, and none of them announced itself:
+
+- the rings rendered in a ROW, not concentrically, for two months on live
+  tenant sites, while the card preview in the same file drew them correctly;
+- an inline `transform` beat the animated one, so Spotlight rendered
+  pixel-identical to Glow and Glow only *appeared* to grow;
+- `mousemove` bound to an element at `z-index: -9999`, so the handler never
+  fired on a real page;
+- `check:panels` passed while measuring the panel two `visibleWhen`-gated
+  fields short;
+- and `backdrop-filter: blur(0px)` on every themed column captured the
+  module's `position: fixed` — see DOCTRINE §5.17, which is a platform trap,
+  not a module one.
+
 ## Saved sections — read `docs/SAVED_SECTIONS.md` first
 
 `savedSectionId` and `canonical` are two different questions ("where did this
