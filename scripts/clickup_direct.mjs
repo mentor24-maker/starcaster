@@ -34,7 +34,7 @@ const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
 // The operator's ClickUp user id. Assignment is his inbox signal: a task in
 // "Needs your input" / "Ready to launch" must carry it, a task in a machine
 // status must not (loop-build SKILL.md, "Assignment is the handoff signal").
-const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
+const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 54254347);
 const OPERATOR_STATUSES = ['needs your input', 'ready to launch'];
 const PRIORITY = { urgent: 1, high: 2, normal: 3, low: 4 };
 const PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 };
@@ -275,7 +275,7 @@ if (cmd === 'whoami') {
   const task = arg('task'), status = arg('status');
   if (!task || !status) usage();
   if (flag('assign') && !arg('assign')) {
-    console.error('--assign needs a user id after it (e.g. --assign 48012725); refusing to guess.');
+    console.error('--assign needs a user id after it (e.g. --assign 54254347); refusing to guess.');
     process.exit(2);
   }
   const assignId = arg('assign') ? Number(arg('assign')) : null;
