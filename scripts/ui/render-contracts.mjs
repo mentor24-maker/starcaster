@@ -25,6 +25,126 @@ const BANNER = '/images/Gemini_Generated_starcaster_banner.png';
 /** Settings shared by the image contracts, so a change of picture is one edit. */
 const PICTURE = { url: BANNER, alt: 'Contract fixture picture', size: '40' };
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * THE SETTINGS SWEEP — coverage nobody has to remember to write.
+ *
+ * Everything above is a hand-written contract: it exists because a specific
+ * thing broke and someone encoded it. That only ever covers the bugs we have
+ * already had. The two sweeps below are driven from the option lists and the
+ * stylesheet instead, so a setting added tomorrow is covered tomorrow.
+ *
+ * They answer two different questions, and the difference matters:
+ *
+ *   EFFECT SWEEP  — does every effect the panels OFFER actually animate?
+ *     This is the one that would have caught the dead Tumbleweed on the day
+ *     it shipped, with no foresight required.
+ *
+ *   DIFFERENTIAL  — does changing a setting change what renders at all?
+ *     A control that moves nothing fails by construction.
+ *
+ * WHAT THE DIFFERENTIAL CANNOT DO, stated plainly so nobody reads more into a
+ * green run than it earns: it proves something changed, not that it changed
+ * CORRECTLY. It cannot tell a bounce from a wobble. It is a dead-control
+ * detector, not a design reviewer — the operator's eye is still the judge of
+ * whether a thing looks right (docs/DOCTRINE.md §5.14).
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * The effect values the panels offer, read from the source of truth rather
+ * than copied. A hand-listed roster is the same failure one step later: add an
+ * effect, forget the list, and the sweep passes without ever seeing it.
+ */
+export function imageEffectOptionsFromSource(text) {
+  const block = text.match(/IMAGE_EFFECT_OPTIONS[^=]*=\s*\[([\s\S]*?)\];/);
+  if (!block) return [];
+  return [...block[1].matchAll(/value:\s*["']([^"']+)["']/g)]
+    .map((m) => m[1])
+    .filter((value) => value !== 'none');
+}
+
+/** Structural wrappers, not effects — they carry no `starcaster-effect-<name>` meaning. */
+const EFFECT_STRUCTURE_CLASSES = new Set(['motion-clip', 'motion-stage', 'hop-stage']);
+
+/**
+ * Effect classes the stylesheet defines. Compared against the offered list to
+ * surface the OPPOSITE gap from the dead Tumbleweed: keyframes that exist and
+ * appear in no panel, reachable only by hand-editing a setting.
+ */
+export function effectClassesInCss(text) {
+  const found = new Set();
+  for (const match of text.matchAll(/\.starcaster-effect-([a-z0-9-]+)/g)) {
+    if (!EFFECT_STRUCTURE_CLASSES.has(match[1])) found.add(match[1]);
+  }
+  return found;
+}
+
+/** One image module carrying the effect under test. */
+export function effectSweepModule(effect) {
+  return { type: 'image', settings: { ...PICTURE, effect, effectSpeed: '8', effectRotationRate: '30' } };
+}
+
+/**
+ * Settings whose only consumer is a stylesheet, and the two values that must
+ * render differently. `from` is the default; `to` is far enough away that the
+ * difference cannot be a rounding artefact.
+ *
+ * GROWS BY BOY-SCOUT CONVERGENCE, the way the module standards did: when you
+ * touch a module's panel, add its CSS-only settings here. A setting absent
+ * from this list is a setting nothing proves is alive.
+ */
+export const RENDER_DIFFERENTIALS = [
+  {
+    id: 'image-speed',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'tumbleweed' } },
+    setting: 'effectSpeed', from: '8', to: '30',
+    why: 'Speed is the crossing duration; if it stops reaching the stylesheet every crossing takes 8s forever.',
+  },
+  {
+    id: 'image-rotation-rate',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'spin' } },
+    setting: 'effectRotationRate', from: '25', to: '120',
+    why: 'Rotation Rate was the first control added to this feature; it is the shape every later one copied.',
+  },
+  {
+    id: 'image-bounce-height',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'tumbleweed' } },
+    setting: 'effectBounceHeight', from: '50', to: '400',
+    why: 'The hop height rides a CSS variable on a wrapper element — a hop of the wrong size looks deliberate.',
+  },
+  {
+    id: 'image-frequency',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'tumbleweed' } },
+    setting: 'effectFrequency', from: '4', to: '14',
+    why: 'Frequency is per CROSSING rather than per second, so it is computed rather than passed straight through.',
+  },
+  {
+    id: 'image-direction',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'cruise' } },
+    setting: 'effectDirection', from: 'ltr', to: 'rtl',
+    why: 'Left-to-right is the ABSENCE of a variable rather than a second keyword, which is easy to break silently.',
+  },
+  {
+    id: 'image-delay',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'cruise' } },
+    setting: 'effectDelay', from: '0', to: '9',
+    why: 'Start Delay is only written when non-zero — a conditional emit is exactly where a control goes dead.',
+  },
+  {
+    id: 'image-border-radius',
+    module: { type: 'image', settings: { ...PICTURE } },
+    setting: 'borderRadius', from: '0', to: '40',
+    why: 'A frame setting with no effect involved, so the sweep is not only ever measuring animations.',
+  },
+  {
+    id: 'text-line-height',
+    module: { type: 'text', text: '<p>Two lines of body copy for the differential to measure against.</p>', settings: {} },
+    setting: 'lineHeight', from: '1.2', to: '2.4',
+    why: 'A non-image module, so a regression in the shared spacing pipeline is visible here too.',
+  },
+];
+
 export const RENDER_CONTRACTS = [
   {
     id: 'image-effect-actually-animates',
