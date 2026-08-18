@@ -21,6 +21,7 @@ const { analyzeRunPages } = require('../lib/patternAnalysis');
 const { listHandlers: listContentHandlers, createHandler: createContentHandler, deleteHandler: deleteContentHandler, toggleHandler: toggleContentHandler } = require('../lib/contentHandlersStore');
 const { runPeerDiscovery } = require('../lib/peerDiscovery');
 const { requestProjectScope } = require('../lib/requestProjectScope');
+const { recordAiUsage } = require('../lib/aiUsage');
 const {
   listWebsitePeers,
   getWebsitePeer,
@@ -1352,6 +1353,14 @@ async function handle(req, res, pathname, method) {
     if (!aiRes.ok) {
       return sendErr(res, 502, String(aiBody?.error?.message || 'Anthropic request failed')), true;
     }
+
+    await recordAiUsage({
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      feature: 'acquire_content_handler_generate',
+      body: aiBody,
+      scope: requestProjectScope(req),
+    });
 
     const rawText = String(aiBody?.content?.[0]?.text || '').trim();
     let handler;
