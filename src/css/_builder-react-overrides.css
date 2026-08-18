@@ -5969,3 +5969,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     animation: none;
   }
 }
+
+/* TEMPORARY — proving the CI gate catches this. Reverted in the next commit. */
+.sc-ci-gate-proof {
+  max-width: min(100%, max-content);
+}
