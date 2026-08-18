@@ -36,8 +36,14 @@ The ids, written down exactly once, here:
 | Workspace ("Alphire AI Agency") | `90141423066` |
 | Starcaster **space** | `90146476303` |
 | **Loop Queue list** | `901418546619` |
-| The operator (Dane) | `48012725` |
+| The operator (Dane, as **Pulse** / mentor24 — the login he actually sits in) | `54254347` |
 | The bus (party-line chat) | `2kydhxeu-474` |
+
+**Identity trap (found 2026-08-18, same day it was wired):** Dane has TWO member
+accounts in this workspace — Pulse/mentor24 (`54254347`, Administrator, the one
+he works in) and Dane/dane@alphire.agency (`48012725`, a regular member). The
+operator inbox is **Pulse**. Assigning `48012725` sends handoffs to a My Work
+page nobody is looking at.
 
 **Id trap (cost an hour on 2026-08-18):** a space id where a list id belongs
 earns ClickUp's misleading "Team not authorized" 401. When in doubt,
