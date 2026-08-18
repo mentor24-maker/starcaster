@@ -6,6 +6,11 @@ import {
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { type BuilderThemePalette } from "./builder-theme-color-field";
+import {
+  PROXIMITY_EFFECT_OPTIONS,
+  proximityIsContinuous,
+  proximityUsesRings
+} from "@/lib/proximity-effects";
 
 type Props = {
   module: BuilderTemplateModule;
@@ -18,6 +23,24 @@ const RANGE_READOUT_STYLE = { marginLeft: 8, fontSize: 12, minWidth: 36 } as con
 
 function isLinearSizing(settings: Record<string, string>): boolean {
   return (settings.sizingMode || "linear") === "linear";
+}
+
+/*
+ * Gates, 2026-08-17. The module now draws one of several proximity effects,
+ * and most of these controls belong to exactly one of them — Ring Count means
+ * nothing to a Glow, Reach means nothing to Rings (their reach IS the outer
+ * ring, and a second number that silently disagreed with the drawn circle
+ * would be a control that looks like it works and does not).
+ *
+ * Nothing is shown greyed out. A dead control is the bug the image-effects
+ * work was born from; hiding is the house answer.
+ */
+function isRings(settings: Record<string, string>): boolean {
+  return proximityUsesRings(settings.effect);
+}
+
+function isContinuous(settings: Record<string, string>): boolean {
+  return proximityIsContinuous(settings.effect);
 }
 
 export function BuilderTractorNavModuleSettings({
@@ -87,6 +110,17 @@ export function BuilderTractorNavModuleSettings({
         strips: [
           [
             {
+              // First on the axis: it decides what every control below it
+              // means, which is the largest blast radius on the module (D9).
+              key: "effect",
+              label: "Effect",
+              width: "select-md",
+              control: "select",
+              fallback: "rings",
+              options: [...PROXIMITY_EFFECT_OPTIONS],
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
               key: "dotSize",
               label: "Dot Size",
               width: "num",
@@ -104,6 +138,7 @@ export function BuilderTractorNavModuleSettings({
               min: 1,
               max: 30,
               fallback: "10",
+              visibleWhen: isRings,
               rendersVia: "BuilderTractorNavModule"
             },
             {
@@ -112,6 +147,7 @@ export function BuilderTractorNavModuleSettings({
               width: "select-md",
               control: "select",
               fallback: "linear",
+              visibleWhen: isRings,
               options: [
                 { value: "linear", label: "Linear" },
                 { value: "geometric", label: "Power Curve" }
@@ -128,7 +164,7 @@ export function BuilderTractorNavModuleSettings({
               min: 2,
               max: 200,
               fallback: "10",
-              visibleWhen: isLinearSizing,
+              visibleWhen: (settings) => isRings(settings) && isLinearSizing(settings),
               rendersVia: "BuilderTractorNavModule"
             },
             {
@@ -140,7 +176,9 @@ export function BuilderTractorNavModuleSettings({
               max: 1400,
               step: 10,
               fallback: "600",
-              visibleWhen: (settings) => !isLinearSizing(settings),
+              // Rings on Linear sizing derive their outer edge from Ring Step,
+              // so the number would be inert there and nowhere else.
+              visibleWhen: (settings) => !isRings(settings) || !isLinearSizing(settings),
               rendersVia: "BuilderTractorNavModule"
             },
             {
@@ -148,7 +186,7 @@ export function BuilderTractorNavModuleSettings({
               label: "Curve",
               width: "text-md",
               control: "custom",
-              visibleWhen: (settings) => !isLinearSizing(settings),
+              visibleWhen: (settings) => isRings(settings) && !isLinearSizing(settings),
               rendersVia: "BuilderTractorNavModule",
               render: ({ settings, set }) => (
                 <>
@@ -162,6 +200,59 @@ export function BuilderTractorNavModuleSettings({
                   />
                   <span style={RANGE_READOUT_STYLE}>{parseFloat(settings.curve || "2").toFixed(1)}</span>
                 </>
+              )
+            }
+          ],
+          [
+            {
+              key: "reach",
+              label: "Reach",
+              width: "num",
+              control: "number",
+              min: 40,
+              max: 2000,
+              step: 10,
+              fallback: "460",
+              visibleWhen: isContinuous,
+              rendersVia: "BuilderTractorNavModule"
+            },
+            {
+              key: "falloff",
+              label: "Falloff",
+              width: "text-md",
+              control: "custom",
+              visibleWhen: isContinuous,
+              rendersVia: "BuilderTractorNavModule",
+              render: ({ settings, set }) => (
+                <>
+                  <input
+                    type="range"
+                    min={1}
+                    max={5}
+                    step={0.1}
+                    value={settings.falloff || "2"}
+                    onChange={(event) => set("falloff", event.target.value)}
+                  />
+                  <span style={RANGE_READOUT_STYLE}>{parseFloat(settings.falloff || "2").toFixed(1)}</span>
+                </>
+              )
+            }
+          ],
+          [
+            {
+              key: "reachNote",
+              label: "",
+              width: "full",
+              control: "custom",
+              bare: true,
+              visibleWhen: isContinuous,
+              render: () => (
+                <span className="builder-module-offset-hint">
+                  Reach is how far away the cursor is first felt, in pixels.
+                  Falloff shapes the approach: 1 rises steadily the whole way
+                  in, higher numbers hold the effect back until the cursor is
+                  close and then open it quickly.
+                </span>
               )
             }
           ],
@@ -251,6 +342,7 @@ export function BuilderTractorNavModuleSettings({
               label: "Inner Opacity",
               width: "text-md",
               control: "custom",
+              visibleWhen: isRings,
               rendersVia: "BuilderTractorNavModule",
               render: ({ settings, set }) => (
                 <>
@@ -274,6 +366,7 @@ export function BuilderTractorNavModuleSettings({
               min: 0,
               max: 50,
               fallback: "10",
+              visibleWhen: isRings,
               rendersVia: "BuilderTractorNavModule"
             },
             {
@@ -281,6 +374,7 @@ export function BuilderTractorNavModuleSettings({
               label: "Transition",
               width: "text-md",
               control: "custom",
+              visibleWhen: isRings,
               rendersVia: "BuilderTractorNavModule",
               render: ({ settings, set }) => (
                 <>
@@ -304,6 +398,7 @@ export function BuilderTractorNavModuleSettings({
               width: "full",
               control: "custom",
               bare: true,
+              visibleWhen: isRings,
               render: () => (
                 <span className="builder-module-offset-hint">
                   Opacity Step is % per ring; Transition is the hover fade in ms.
@@ -317,7 +412,7 @@ export function BuilderTractorNavModuleSettings({
               label: "Color",
               width: "color",
               control: "color",
-              dialogLabel: "Ring color",
+              dialogLabel: "Effect color",
               fallback: "#0000ff",
               rendersVia: "BuilderTractorNavModule"
             },
@@ -328,6 +423,7 @@ export function BuilderTractorNavModuleSettings({
               control: "color",
               dialogLabel: "Dot hover color",
               fallback: "#ffffff",
+              visibleWhen: isRings,
               rendersVia: "BuilderTractorNavModule"
             }
           ]

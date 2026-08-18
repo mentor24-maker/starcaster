@@ -202,6 +202,11 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     name: "",
     text: "",
     settings: {
+      // "rings" is the original effect and stays the default, so a module
+      // added before the Effect picker existed keeps drawing what it drew.
+      effect: "rings",
+      reach: "460",
+      falloff: "2",
       color: "#0000ff",
       dotSize: "10",
       dotHoverColor: "#ffffff",

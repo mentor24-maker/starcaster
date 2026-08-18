@@ -339,6 +339,26 @@ const PANEL_CHECK_SECTION = {
         },
       };
     })(),
+    // A SECOND proximity-effect module, on a CONTINUOUS preset. Rings is the
+    // default, and Reach and Falloff are `visibleWhen: isContinuous`, so the
+    // module above renders neither and the check measured a panel two fields
+    // short while reporting a clean pass. Caught by dumping the field names
+    // the run actually saw rather than by trusting the green line — same hole
+    // as the mega-panel menu and the cards carousel around it.
+    (() => {
+      const base = createEmptyModule('tractor-nav', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-tractor-nav-glow',
+        name: 'Proximity Effect (Glow)',
+        settings: {
+          ...base.settings,
+          effect: 'glow',
+          reach: '460',
+          falloff: '2',
+        },
+      };
+    })(),
     // A SECOND carousel, in the cards format. `format` decides which controls
     // exist — Card Width appears, Transition and the whole Captions group
     // vanish — so the slideshow module above can only ever measure half of
