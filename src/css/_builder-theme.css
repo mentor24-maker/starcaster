@@ -258,7 +258,10 @@
 }
 
 .builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-column:not(.builder-preview-column-navigation):not(.builder-preview-column-overlay-flow):not(.builder-preview-column-overlay-slot) {
-  backdrop-filter: blur(var(--lp-blur, 0));
+  /* The whole filter, not a radius — see --lp-backdrop in builder-utils.ts.
+     blur(0px) is a no-op to look at and makes this column the containing
+     block for every position:fixed descendant inside it. */
+  backdrop-filter: var(--lp-backdrop, none);
 }
 
 .builder-react-root .builder-preview-shell.has-builder-theme-styles .builder-preview-column:not(.builder-preview-column-navigation):not(.builder-preview-column-overlay-flow):not(.builder-preview-column-overlay-slot)[style*="border"] {

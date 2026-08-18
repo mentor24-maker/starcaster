@@ -5,9 +5,12 @@ import {
   normalizeProximityEffect,
   normalizeProximityEffectSettings,
   normalizeProximityFalloff,
+  normalizeProximityPlacement,
   normalizeProximityReach,
+  proximityIsInline,
   proximityIsContinuous,
   proximityValue,
+  proximityZIndex,
   ringOpacity
 } from "./proximity-effects";
 
@@ -185,5 +188,40 @@ describe("normalizers", () => {
     normalizeProximityEffectSettings(glow);
     expect(glow.reach).toBe("460");
     expect(glow.falloff).toBe("2");
+  });
+});
+
+describe("placement", () => {
+  it("defaults to Window Center, so nothing already on a page moves", () => {
+    const settings: Record<string, string> = {};
+    normalizeProximityEffectSettings(settings);
+    expect(settings.placement).toBe("window");
+    expect(proximityIsInline(settings.placement)).toBe(false);
+  });
+
+  it("falls back to Window Center for a value nobody recognises", () => {
+    expect(normalizeProximityPlacement("floating")).toBe("window");
+    expect(normalizeProximityPlacement(undefined)).toBe("window");
+    expect(normalizeProximityPlacement("inline")).toBe("inline");
+  });
+
+  it("lifts a negative z-index off the floor for In Place only", () => {
+    // -9999 is right for a window backdrop — behind the whole page. In place
+    // it puts the effect behind its OWN cell's background, where it is simply
+    // gone, and that reads as "switching to In Place broke it".
+    expect(proximityZIndex(-9999, "inline")).toBe(0);
+    expect(proximityZIndex(-1, "inline")).toBe(0);
+    expect(proximityZIndex(-9999, "window")).toBe(-9999);
+  });
+
+  it("keeps any z-index the operator chose that is not negative", () => {
+    expect(proximityZIndex(40, "inline")).toBe(40);
+    expect(proximityZIndex(0, "inline")).toBe(0);
+    expect(proximityZIndex(40, "window")).toBe(40);
+  });
+
+  it("survives a z-index that did not parse", () => {
+    expect(proximityZIndex(Number.NaN, "inline")).toBe(0);
+    expect(proximityZIndex(Number.NaN, "window")).toBe(-9999);
   });
 });

@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import {
   activeRingIndex,
+  proximityIsInline,
+  proximityZIndex,
   computeRingSizes,
   DEFAULT_PROXIMITY_EFFECT,
   normalizeProximityFalloff,
@@ -246,7 +248,8 @@ export function TractorNavRuntime({ settings }: { settings: TractorNavSettings }
 
   const posX = parseInt(settings.posX || "0") || 0;
   const posY = parseInt(settings.posY || "0") || 0;
-  const zIndex = parseInt(settings.zIndex || "-9999");
+  const inline = proximityIsInline(settings.placement);
+  const zIndex = proximityZIndex(parseInt(settings.zIndex || "-9999"), settings.placement);
   const dotUrl = (settings.dotUrl || "").trim();
   const dotNewTab = settings.dotNewTab === "true";
 
@@ -393,13 +396,63 @@ export function TractorNavRuntime({ settings }: { settings: TractorNavSettings }
           .znav-ring, .znav-glow, .znav-dot { transition: none; }
         }
       `}</style>
+      {/*
+        * The anchor is what In Place measures its 50% against, and it is
+        * stretched over the whole CELL rather than sitting at the module's
+        * own line in the flow.
+        *
+        * Both were tried. A zero-height anchor puts the effect wherever the
+        * module happens to sit in the column, which for the usual case — the
+        * only module in the cell — is the very top, with half the light
+        * hanging outside the cell above it. Stretching to the cell puts it in
+        * the middle of the box the operator was looking at when they said
+        * "centre of the cell", which is the thing they actually asked for.
+        *
+        * inset:0 with height:0 on the wrapper itself: absolutely positioned,
+        * so it is out of flow and cannot push the page around — decoration
+        * that changes the layout when you switch it on is worse than none —
+        * and it resolves against the nearest positioned ancestor, which for
+        * a builder page is the cell (every column carries position:relative).
+        * If some future wrapper is positioned first, the effect falls back to
+        * that wrapper's box, which is still local and still sensible.
+        *
+        * Rendered in both modes rather than conditionally, because a fixed
+        * child is positioned against the viewport regardless of what wraps
+        * it; one DOM shape keeps the two modes from drifting.
+        */}
+      <div
+        className="znav-anchor"
+        style={
+          inline
+            ? { position: "absolute", inset: 0, pointerEvents: "none" }
+            : { position: "relative", width: "100%", height: 0 }
+        }
+      >
       <div
         ref={rootRef}
         className="znav-stage"
         style={{
-          position: "fixed",
-          left: `calc(50vw + ${posX}px)`,
-          top: `calc(50vh + ${-posY}px)`,
+          /*
+           * Two placements, and the difference is which box the percentages
+           * are measured against.
+           *
+           * WINDOW: position:fixed, so 50vw/50vh is the middle of the browser
+           * window and the effect ignores the layout and does not scroll.
+           * Note that a fixed element is only really fixed to the window if no
+           * ancestor has a transform, filter or backdrop-filter — any of those
+           * makes that ancestor the containing block instead. Every themed
+           * column used to carry `backdrop-filter: blur(0px)` for exactly no
+           * visual reason, which is what made these numbers unpredictable; see
+           * --lp-backdrop in builder-utils.ts.
+           *
+           * IN PLACE: position:absolute against the zero-height anchor below,
+           * which is the full width of the cell and sits at the module's own
+           * point in the flow. So 50% across is the middle of the cell, 50%
+           * down is where the module is, and the effect scrolls with the page.
+           */
+          position: inline ? "absolute" : "fixed",
+          left: inline ? `calc(50% + ${posX}px)` : `calc(50vw + ${posX}px)`,
+          top: inline ? `calc(50% + ${-posY}px)` : `calc(50vh + ${-posY}px)`,
           // The stage is the effect's own extent, and every layer is centred
           // inside it. That shared centre is what makes the rings concentric
           // and what the distance is measured from.
@@ -425,6 +478,7 @@ export function TractorNavRuntime({ settings }: { settings: TractorNavSettings }
             transform: `translate(-50%, -50%) ${dotScale}`
           }}
         />
+      </div>
       </div>
     </>
   );
