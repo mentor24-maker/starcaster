@@ -170,7 +170,7 @@ export const modulePaletteGroups: Array<{
     value: "special-effects",
     label: "Special Effects",
     icon: "🪄",
-    description: "Confetti bursts and saved celebration effects for buttons, page load, and the game layer."
+    description: "Confetti bursts, proximity effects that answer the cursor, and saved celebration effects for buttons, page load, and the game layer."
   },
   {
     value: "admin",
@@ -193,12 +193,20 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { variant: "site-nav" }
   },
   {
+    // Filed under Special Effects, not Navigation (2026-08-17). It is a
+    // decorative cursor effect that happens to be able to carry a link, and
+    // the operator looked for it under Special Effects and Images before
+    // asking where it was. The id keeps its "navigation-" prefix because it is
+    // persisted on saved modules; only the browsing group moved.
     id: "navigation-tractor-nav",
     type: "tractor-nav",
-    group: "navigation",
+    group: "special-effects",
     label: "TractorNav",
     icon: "⊙",
-    description: "Proximity-aware overlay: concentric hover rings that pulse as the cursor approaches a center link.",
+    // The label stays TractorNav — it is the name in the docs, the tickets and
+    // the operator's head. The words people would actually SEARCH for live
+    // here instead, because scoreModuleMatch reads the description too.
+    description: "Proximity effect: a dot that answers the cursor. Rings (concentric circles), Glow, Spotlight or Swell, and it can carry a link.",
     name: "",
     text: "",
     settings: {
