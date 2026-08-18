@@ -36,14 +36,24 @@ The ids, written down exactly once, here:
 | Workspace ("Alphire AI Agency") | `90141423066` |
 | Starcaster **space** | `90146476303` |
 | **Loop Queue list** | `901418546619` |
-| The operator (Dane, as **Pulse** / mentor24 — the login he actually sits in) | `54254347` |
+| The operator's inbox (Dane's **developer** account, dane@alphire.agency) | `48012725` |
+| The machine (**Pulse** / mentor24 — the service account; do NOT assign it) | `54254347` |
 | The bus (party-line chat) | `2kydhxeu-474` |
 
-**Identity trap (found 2026-08-18, same day it was wired):** Dane has TWO member
-accounts in this workspace — Pulse/mentor24 (`54254347`, Administrator, the one
-he works in) and Dane/dane@alphire.agency (`48012725`, a regular member). The
-operator inbox is **Pulse**. Assigning `48012725` sends handoffs to a My Work
-page nobody is looking at.
+**The two-account model (ratified 2026-08-18, after one same-day reversal —
+read this before "fixing" either id):** Dane is TWO members of this workspace,
+by design:
+
+- **Pulse / mentor24 (`54254347`) is the machine.** It is the Administrator,
+  it holds the API token, and every write the loops and scripts make appears
+  as Pulse. It is a service account. **Never assign tasks to it** — ClickUp
+  does not notify a user about their own actions, so Pulse assigning Pulse is
+  a handoff with no ping, and an inbox mixed with automation is not an inbox.
+- **Dane / dane@alphire.agency (`48012725`) is the human.** His daily login,
+  his developer seat, his My Work. All operator handoffs assign this id, so
+  every assignment is Pulse→Dane: a real notification, and an activity trail
+  where "Pulse did it" always means the machine and "Dane did it" always
+  means him.
 
 **Id trap (cost an hour on 2026-08-18):** a space id where a list id belongs
 earns ClickUp's misleading "Team not authorized" 401. When in doubt,
