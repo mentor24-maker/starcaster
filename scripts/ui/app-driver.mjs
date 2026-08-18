@@ -213,6 +213,26 @@ async function newestMtime(targets) {
   return newest;
 }
 
+/**
+ * The two guards above, for a check that opens its own browser.
+ *
+ * `check_render.mjs` needs a context built with `reducedMotion` pinned, which
+ * `launch()` does not offer — but it must not skip the freshness guard to get
+ * it, because "the app on that port is another worktree's" is exactly the
+ * failure this file exists to catch. Exported rather than copied, so there is
+ * one implementation and the two checks can never disagree about what a
+ * current build is.
+ */
+export async function ensureBuildIsCurrent(baseUrl = BASE_URL) {
+  assertLocal(baseUrl);
+  try {
+    await assertServingThisCheckout(baseUrl);
+  } catch (e) {
+    console.error(`\n[ui-harness] ${e.message}\n`);
+    process.exit(2);
+  }
+}
+
 export async function launch({ width = 1440, height = 1000, headless = true } = {}) {
   assertLocal(BASE_URL);
   try {
