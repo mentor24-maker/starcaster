@@ -8127,16 +8127,58 @@ CREATE POLICY "Users govern their own proxy personas" ON "public"."influencer_pe
 ALTER TABLE "public"."acquire_job_mirror" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: acquire_youtube_comment_records; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."acquire_youtube_comment_records" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: acquire_youtube_comments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."acquire_youtube_comments" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: acquire_youtube_details; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."acquire_youtube_details" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: acquire_youtube_topics; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."acquire_youtube_topics" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: acquire_youtube_videos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE "public"."acquire_youtube_videos" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: activity_log; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."activity_log" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: agent_messages; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE "public"."agent_messages" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: app_auth_sessions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."app_auth_sessions" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: app_auth_users; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."app_auth_users" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: app_credential_identities; Type: ROW SECURITY; Schema: public; Owner: -
@@ -8169,10 +8211,22 @@ ALTER TABLE "public"."app_project_admin_sessions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."app_project_admin_users" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: app_project_memberships; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."app_project_memberships" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: app_project_support_requests; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE "public"."app_project_support_requests" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: app_projects; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."app_projects" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: app_site_import_assets; Type: ROW SECURITY; Schema: public; Owner: -
@@ -8191,6 +8245,18 @@ ALTER TABLE "public"."app_site_import_jobs" ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE "public"."asset_associations" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: asset_categories; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."asset_categories" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: assets; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."assets" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: assets_video_curation; Type: ROW SECURITY; Schema: public; Owner: -
@@ -8229,10 +8295,40 @@ ALTER TABLE "public"."blog_posts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."builder_clusters" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: builder_email_templates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_email_templates" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: builder_extensions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_extensions" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: builder_extensions_manager; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_extensions_manager" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: builder_forms; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_forms" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: builder_icons; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE "public"."builder_icons" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: builder_landing_page; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_landing_page" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: builder_landing_page_marinoff_bak_20260717; Type: ROW SECURITY; Schema: public; Owner: -
@@ -8247,6 +8343,12 @@ ALTER TABLE "public"."builder_landing_page_marinoff_bak_20260717" ENABLE ROW LEV
 ALTER TABLE "public"."builder_module_classes" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: builder_modules; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_modules" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: builder_page_revisions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -8257,6 +8359,12 @@ ALTER TABLE "public"."builder_page_revisions" ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE "public"."builder_page_snapshots" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: builder_page_templates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_page_templates" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: builder_poll_options; Type: ROW SECURITY; Schema: public; Owner: -
@@ -8295,16 +8403,82 @@ ALTER TABLE "public"."builder_published_pages" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."builder_saved_sections" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: builder_themes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."builder_themes" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: campaign_events; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."campaign_events" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: campaigns; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."campaigns" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: channels; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."channels" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: connection_ops_state; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE "public"."connection_ops_state" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: contact_field_configs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."contact_field_configs" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: contact_personas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."contact_personas" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: contact_project_invitations; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE "public"."contact_project_invitations" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: contact_sources; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."contact_sources" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: contact_statuses; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."contact_statuses" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: contact_types; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."contact_types" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: contacts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."contacts" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: content_item_assets; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."content_item_assets" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: content_items; Type: ROW SECURITY; Schema: public; Owner: -
@@ -8317,6 +8491,12 @@ ALTER TABLE "public"."content_items" ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE "public"."content_transform_handlers" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: content_types; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."content_types" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: crm_configs; Type: ROW SECURITY; Schema: public; Owner: -
@@ -8397,6 +8577,12 @@ ALTER TABLE "public"."direct_acquire_runs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."engage_social_posts" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: engage_youtube_comment_agents; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."engage_youtube_comment_agents" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: game_level_events; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -8451,6 +8637,162 @@ ALTER TABLE "public"."influencer_persona_harvests" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."influencer_personas" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: leads; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."leads" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: memories; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."memories" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_articles; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_articles" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_comments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_comments" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_content_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_content_items" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_content_types; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_content_types" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_ctas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_ctas" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_descriptions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_descriptions" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_ebooks; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_ebooks" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_emails; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_emails" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_formats; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_formats" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_hashtags; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_hashtags" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_headlines; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_headlines" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_keywords; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_keywords" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_pitches; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_pitches" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_posts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_posts" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_prompts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_prompts" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_reports; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_reports" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_subheadings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_subheadings" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_subject_lines; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_subject_lines" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_taglines; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_taglines" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_tags; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_tags" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_topics; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_topics" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_transcripts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_transcripts" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_tweets; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_tweets" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: messaging_white_papers; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."messaging_white_papers" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: messaging_wyr_questions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -8499,6 +8841,12 @@ ALTER TABLE "public"."project_oauth_handoffs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."project_social_credentials" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: promo_lead_field_configs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."promo_lead_field_configs" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: promo_memories; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -8509,6 +8857,18 @@ ALTER TABLE "public"."promo_memories" ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE "public"."reddit_harvest_runs" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: segment_types; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."segment_types" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: segments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."segments" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: acquire_job_mirror starcaster_readonly_select; Type: POLICY; Schema: public; Owner: -
@@ -8967,10 +9327,40 @@ ALTER TABLE "public"."theme_wizard_sessions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."training_corpus" ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: training_rules_guides; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."training_rules_guides" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: training_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."training_settings" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: training_taxonomy; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."training_taxonomy" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: website_peers; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."website_peers" ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: x_harvest_runs; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE "public"."x_harvest_runs" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: youtube_comment_runs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE "public"."youtube_comment_runs" ENABLE ROW LEVEL SECURITY;
 
 --
 -- PostgreSQL database dump complete
