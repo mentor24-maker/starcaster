@@ -96,6 +96,16 @@ jobs:
         # red.
         run: npm run check:models
 
+      - name: AI token metering coverage (blocking)
+        # A model call that records nothing is invisible spending. The meter was
+        # restored repo-wide on 2026-08-17 (13 call sites); this gate keeps it
+        # that way, because the failure mode is silence — the feature works, the
+        # bill grows, and the Observe total quietly under-reports. Blocking for
+        # the same reason as the two gates above: an advisory version of this
+        # would decay, and the number is what the operator uses to decide
+        # whether an AI feature is safe to leave running.
+        run: npm run check:ai-metering
+
       - name: Convention checks (blocking)
         # Was advisory (continue-on-error) from the day it was added, waiting on
         # "the 7 pre-existing button-in-<th> violations". Six of those seven
