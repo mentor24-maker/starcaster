@@ -39,7 +39,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   animationNamesFromDeclaration,
+  classSelectorsInCss,
   customPropertiesInSource,
+  prefixedClassesInSource,
   scanCssSource,
   varUsesFromValue,
 } from './css-source-scan.mjs';
@@ -66,6 +68,27 @@ const CSS_DIR = path.join(ROOT, 'src', 'css');
  */
 const RUNTIME_PROPERTY_SOURCES = ['components', 'lib', 'public/js', 'public/shared', 'src'];
 const RUNTIME_PROPERTY_EXTS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.html']);
+
+/**
+ * C4 — class families where an unstyled class means something is missing.
+ *
+ * A REGISTRY, NOT A GLOBAL SWEEP, and that is the whole design. Most class
+ * names in this codebase are legitimately unstyled — JS hooks, test selectors,
+ * third-party markup — so a global version would open with hundreds of
+ * findings, all of them fine, and be switched off inside a day. These two
+ * families are the ones where the rendered appearance IS the class's job:
+ *
+ *   starcaster-effect-  the original bug. Cruise and Tumbleweed were offered
+ *                       for months with no rule behind them.
+ *   builder-preview-    everything a visitor actually sees on a page.
+ *
+ * Add a prefix when a new family earns it. An unstyled class is a FINDING, not
+ * automatically a defect — a test hook has every right to carry no styles —
+ * so the baseline is where that judgement gets recorded rather than argued
+ * about twice.
+ */
+const EMITTED_CLASS_PREFIXES = ['starcaster-effect-', 'builder-preview-'];
+const EMITTED_CLASS_SOURCES = ['components', 'lib/builder-client'];
 
 /**
  * Findings already in the corpus when this check was written.
@@ -274,6 +297,67 @@ for (const d of declarations) {
   }
 }
 
+// ---------------------------------------------------------------- C4
+const styledClasses = new Set();
+for (const sheet of sheets) {
+  const text = await readFile(path.join(ROOT, sheet.rel), 'utf8');
+  for (const name of classSelectorsInCss(text)) styledClasses.add(name);
+}
+
+async function walkSources(dir, visit) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) { await walkSources(full, visit); continue; }
+    if (!/\.tsx?$/.test(entry.name)) continue;
+    // A test asserting on a class name is not the code EMITTING one.
+    if (/\.test\./.test(entry.name)) continue;
+    await visit(full, await readFile(full, 'utf8'));
+  }
+}
+
+let classesSeen = 0;
+for (const dir of EMITTED_CLASS_SOURCES) {
+  await walkSources(path.join(ROOT, dir), async (file, text) => {
+    const rel = path.relative(ROOT, file);
+    for (const hit of prefixedClassesInSource(text, EMITTED_CLASS_PREFIXES)) {
+      classesSeen += 1;
+      if (styledClasses.has(hit.name)) continue;
+      findings.push({
+        code: 'C4',
+        file: rel,
+        line: hit.line,
+        detail: hit.name,
+        message: `\`${hit.name}\` is put on an element here and NO stylesheet defines it. ` +
+          'Either it is dead decoration, or a rule that was meant to exist does not — the ' +
+          'symptom is a class that looks like it does something and does nothing. ' +
+          '(If it is a deliberate hook with no appearance of its own, baseline it.)',
+      });
+    }
+  });
+}
+
+/*
+ * Same rule as everywhere else: finding nothing to look at is a failure. If the
+ * scan stops matching — a moved folder, a renamed prefix, a JSX style this
+ * regex does not know — C4 would pass silently forever while covering nothing.
+ */
+if (!classesSeen) {
+  console.error(
+    `\n[check:css] C4 found NO class names matching ${EMITTED_CLASS_PREFIXES.join(', ')} in ` +
+    `${EMITTED_CLASS_SOURCES.join(', ')}.\n` +
+    'That is a failure rather than a pass: the assertion would be vacuous. Either the source\n' +
+    'moved, or prefixedClassesInSource stopped matching how these components write classes.\n'
+  );
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------- baseline
 const baseline = UPDATE_BASELINE ? {} : await readBaseline();
 const counted = new Map();
@@ -308,10 +392,16 @@ if (fresh.length) {
     console.error(`  ✗ ${f.code}  ${f.file}:${f.line}\n      ${f.message}`);
   }
   console.error(
-    '\nThese are read back from a real browser, so "it looks correct" is not a\n' +
-    'counter-argument — the engine has already refused them. Fix the source in\n' +
-    'src/css/, never public/styles.css, and never src/css/_builder-react.css\n' +
-    '(regenerated wholesale — put the fix in _builder-react-overrides.css).\n'
+    '\nC1 is read back from a REAL BROWSER, so "it looks correct in the source" is not a\n' +
+    'counter-argument — the engine has already refused it. C2, C3 and C4 are read from\n' +
+    'the source itself: an animation with no keyframes, a variable defined nowhere, a\n' +
+    'class no stylesheet mentions.\n\n' +
+    'Fix the source in src/css/, never public/styles.css, and never\n' +
+    'src/css/_builder-react.css (regenerated wholesale — put the fix in\n' +
+    '_builder-react-overrides.css).\n\n' +
+    'A C4 hit that is a deliberate hook with no appearance of its own is not a defect.\n' +
+    'Record that decision with `npm run check:css -- --update-baseline` rather than\n' +
+    'deleting the prefix, so the next one still gets asked about.\n'
   );
   process.exit(1);
 }

@@ -145,6 +145,36 @@ test('finds a custom property defined outside CSS, in both shapes it takes', asy
   assert.ok(found.has('--auth-bg-image'));
 });
 
+test('collects every class a selector mentions, including compound ones', async () => {
+  const { classSelectorsInCss } = await load();
+  const found = classSelectorsInCss('.a .b > .c:hover, .d.e { color: red }');
+  for (const name of ['a', 'b', 'c', 'd', 'e']) assert.ok(found.has(name), name);
+});
+
+test('finds prefixed classes the code emits, with the line to open', async () => {
+  const { prefixedClassesInSource } = await load();
+  const hits = prefixedClassesInSource(
+    'const a = 1;\n<div className="starcaster-effect-spin" />\n',
+    ['starcaster-effect-']
+  );
+  assert.deepEqual(hits, [{ name: 'starcaster-effect-spin', line: 2 }]);
+});
+
+test('says nothing about a class it cannot resolve from the text', async () => {
+  const { prefixedClassesInSource } = await load();
+  // Interpolated and concatenated names are unknowable here, and reporting
+  // the fragment would flag working code. The effect sweep in check:render
+  // covers the dynamic case by enumerating the real option list instead.
+  assert.deepEqual(
+    prefixedClassesInSource('`starcaster-effect-${value}`', ['starcaster-effect-']),
+    []
+  );
+  assert.deepEqual(
+    prefixedClassesInSource('"builder-preview-image-" + variant', ['builder-preview-']),
+    []
+  );
+});
+
 test('splits only on top-level commas', async () => {
   const { splitTopLevel } = await load();
   assert.deepEqual(splitTopLevel('a, b'), ['a', ' b']);

@@ -16,5 +16,8 @@
   "C3 | src/css/legacy.css | color var(--text-dark)": 5,
   "C3 | src/css/legacy.css | color var(--text-muted)": 2,
   "C3 | src/css/legacy.css | color var(--text-primary)": 2,
-  "C3 | src/css/legacy.css | font-family var(--font-mono)": 1
+  "C3 | src/css/legacy.css | font-family var(--font-mono)": 1,
+  "C4 | components/builder-template-preview-client.tsx | builder-preview-loading": 1,
+  "C4 | components/builder-template-preview.tsx | builder-preview-carousel-slideshow": 1,
+  "C4 | components/builder-template-preview.tsx | builder-preview-social-icon-img": 1
 }

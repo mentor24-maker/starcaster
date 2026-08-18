@@ -257,6 +257,40 @@ export function scanCssSource(text, file = '') {
  * whole image-effects system as undefined, which is the kind of noise that
  * gets a check switched off.
  */
+/** Every class name any selector in a stylesheet mentions. */
+export function classSelectorsInCss(text) {
+  const found = new Set();
+  for (const match of text.matchAll(/\.([A-Za-z][A-Za-z0-9_-]*)/g)) found.add(match[1]);
+  return found;
+}
+
+/**
+ * Class names the code can put on an element, restricted to declared prefixes.
+ *
+ * A GLOBAL SWEEP WOULD BE NOISE AND WOULD GET SWITCHED OFF. Most class names
+ * here are legitimately unstyled — JS hooks, test selectors, third-party
+ * markup — so this only ever asks about families where an unstyled class means
+ * something is missing.
+ *
+ * Concatenated and interpolated names are SKIPPED rather than guessed at:
+ * `starcaster-effect-${value}` and `builder-preview-image-` + variant cannot be
+ * resolved from the text, and reporting the fragment would flag working code.
+ * Those dynamic cases are covered instead by the effect sweep in
+ * `check:render`, which enumerates the real option list.
+ */
+export function prefixedClassesInSource(text, prefixes) {
+  const found = [];
+  const pattern = new RegExp(`(${prefixes.join('|')})([a-z0-9-]*)`, 'g');
+  for (const match of text.matchAll(pattern)) {
+    const name = match[0];
+    const next = text[match.index + name.length];
+    // `foo-${bar}` — interpolated, and `foo-` — concatenated. Both unknowable.
+    if (next === '$' || name.endsWith('-')) continue;
+    found.push({ name, line: text.slice(0, match.index).split('\n').length });
+  }
+  return found;
+}
+
 export function customPropertiesInSource(text) {
   const found = new Set();
   // Two shapes, because a property gets set from outside CSS in two ways:
