@@ -74,11 +74,22 @@ belongs to the operator** — an agent must not click it.
 > $31.08, so the overage the cap was "protecting" against was about **six
 > dollars**. Two client sites returning 404s is not worth six dollars.
 >
-> **It has already flipped back once.** It was disabled during the 2026-08-16
-> incident, and on 2026-08-17 at 4:57pm the billing page read *"Spend cap is
-> enabled"* again — nobody recorded re-enabling it. **Read the dashboard before
-> stating its state; never quote this file as evidence of what is live.**
-> Dashboard → organization → Billing → **Cost Control**.
+> **It has now flipped back TWICE, both on 2026-08-17.** Disabled during the
+> 2026-08-16 incident; found *enabled* again at 4:57pm and disabled a second
+> time; found *enabled* again that evening and disabled a third time. Nobody
+> re-enabled it on either occasion.
+>
+> Twice is not a slip, it is a pattern, and the cause is unknown — a Supabase
+> default reasserting itself, a plan-level rule, or something in the dashboard
+> that re-applies the cap when another billing setting is touched. Until
+> somebody finds out which, **treat the cap as a setting that turns itself back
+> on.** Check it whenever you are in the billing page anyway, and check it first
+> whenever a tenant site is unreachable — the fastest way to spend an hour on
+> this is to assume it is still off because someone turned it off yesterday.
+>
+> **Read the dashboard before stating its state; never quote this file as
+> evidence of what is live.** Dashboard → organization → Billing →
+> **Cost Control**.
 >
 > **What this decision does not buy you.** The cap is not a cost control, and
 > turning it off removes the only automatic ceiling that existed. There is no
