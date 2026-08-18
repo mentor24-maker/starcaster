@@ -14,6 +14,17 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — A place for visitors to report a broken page (#341)
+
+First of five pieces building the in-app Bug Report tool. This one is
+plumbing only — no button anyone can click yet (that's a later piece) — but
+it lays a safe place to send reports to. Any tenant site can now POST a bug
+report (what's wrong, what page, who reported it) to a new endpoint, which
+checks the report isn't spam, isn't absurdly long, and isn't falsely claiming
+to come from a signed-in staff member before saving it. Each report is kept
+strictly to the site that reported it, matching the rule every other table
+in this database follows. Nothing changes yet for anyone using the app.
+
 ## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai
