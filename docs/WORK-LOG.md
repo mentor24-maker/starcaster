@@ -14,20 +14,22 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-18 — The loops get their own door into ClickUp (#PR)
+## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai
 connector, which has a shared usage allowance that every agent session drains
 together — when it ran out, the loops went blind and work stopped, twice in two
-days. Now the loops talk to ClickUp directly using the project's own key (kept
-in the Doppler vault, never seen by any agent), through new commands in
-`scripts/clickup_direct.mjs`: list the queue, read a task, move its status
-(verified by reading it back), hand a task to Dane or take it off his list, and
-comment. ClickUp's own allowance is a hundred requests a minute — far more than
-the loops can use — so this failure simply stops existing. Also fixed a trap
-where the skills wrote down the Starcaster *space* id where the Loop Queue
-*list* id belonged, which ClickUp punishes with an unrelated-sounding
-"Team not authorized" error.
+days. Now the loops talk to ClickUp directly (`npm run clickup`) using the
+project's own key, kept in the Doppler vault and never seen by any agent. The
+new commands cover the whole loop: list the queue sorted so the first line is
+always the right task to take, claim a task safely so two loops can never grab
+the same one, read a task and its comments, move statuses with the handoff to
+Dane handled automatically, and comment — every write verified by reading the
+result back, so a save that silently didn't stick is impossible to mistake for
+a success. Also fixed a trap where the skills wrote down the Starcaster *space*
+id where the Loop Queue *list* id belonged, which ClickUp punishes with an
+unrelated-sounding "Team not authorized" error — the ids now live in one
+place, `docs/LOOP_ENGINEERING.md`.
 
 ## 2026-07-28 — Safety check for "local dev mode" detection (#52)
 

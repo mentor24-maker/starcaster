@@ -164,9 +164,11 @@ nowhere near its ceiling. A personal API token talking straight to
 **Do this:** when a hosted integration reports a limit measured in *hours*, it
 is the integration's quota, not the upstream provider's — provider limits are
 almost always per-minute. Check whether a direct path exists before waiting.
-`scripts/clickup_direct.mjs` is that path here (`whoami`, `task`, `chat`); it
-prints the provider's true `x-ratelimit-*` headers so the two buckets can be
-told apart, and reads a created task back before claiming success.
+`scripts/clickup_direct.mjs` is that path here — run as `npm run clickup --
+<command>`, it covers the full loop surface (queue/get/comments/status/
+comment/task/chat/lists; bare `npm run clickup` prints the list). It prints
+the provider's true `x-ratelimit-*` headers so the two buckets can be told
+apart, and verifies every write by reading the result back.
 
 **Corollary:** a retry-after rendered as `NaN`, `undefined` or `Infinity` is not
 evidence about the wait. It means the value was missing — go and find the real

@@ -1,25 +1,29 @@
 #!/usr/bin/env node
 /**
- * clickup_direct.mjs — file ClickUp tasks and chat posts through ClickUp's OWN
- * REST API, bypassing the claude.ai ClickUp connector.
+ * clickup_direct.mjs — the loops' own door into ClickUp: read the queue,
+ * claim a task, move statuses, hand work to and from the operator, comment,
+ * and post to the bus — through ClickUp's OWN REST API, bypassing the
+ * claude.ai connector.
  *
- * WHY THIS EXISTS (2026-08-17). The connector enforces a rolling ~24h budget on
- * WRITES. When it is spent, `create_task` and `send_chat_message` fail while
- * plain reads keep working, so it presents as a random outage rather than a
- * quota. ClickUp's own limits are a different bucket entirely — roughly 100
- * requests per MINUTE, reset in 60 seconds — so a personal API token still
- * works when the connector is exhausted. See DOCTRINE 1.7.
+ * WHY THIS EXISTS (2026-08-17, extended 2026-08-18). The connector enforces a
+ * rolling budget shared by every agent session at once. When it is spent,
+ * requests fail with junk wait times ("NaN minutes", "207 minutes"), which
+ * presents as a random outage. ClickUp's own limits are a different bucket —
+ * roughly 100 requests per MINUTE, reset in 60 seconds — far beyond what the
+ * loops can use. See DOCTRINE 1.7.
  *
  * The token is read from the environment, never printed and never logged.
- * Agents do not handle the live value (DOCTRINE 4.1); the operator exports it.
+ * Agents do not handle the live value (DOCTRINE 4.1). The sanctioned way to
+ * supply it is Doppler, which holds it in the `starcaster/dev` config:
  *
- *   export CLICKUP_API_TOKEN=pk_...
- *   node scripts/clickup_direct.mjs whoami
- *   node scripts/clickup_direct.mjs task --list <id> --name "..." --body-file body.md \
- *        [--status Queued] [--priority high] [--id-out .id]
- *   node scripts/clickup_direct.mjs chat --channel <id> --body-file post.md
+ *   npm run clickup -- whoami          # package.json wraps this in doppler run
  *
- * Body may also come from stdin with `--body-file -`.
+ * Run `npm run clickup` with no arguments for the full command list; usage()
+ * below is the single source of truth for the command surface.
+ *
+ * Machine-first output contract: data goes to stdout (tab-separated where a
+ * caller would parse it); counts, rate-limit lines and diagnostics go to
+ * stderr. Piping stdout is always safe.
  */
 
 import { readFileSync } from 'node:fs';
@@ -27,11 +31,21 @@ import { writeFileSync } from 'node:fs';
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
+// The operator's ClickUp user id. Assignment is his inbox signal: a task in
+// "Needs your input" / "Ready to launch" must carry it, a task in a machine
+// status must not (loop-build SKILL.md, "Assignment is the handoff signal").
+const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
+const OPERATOR_STATUSES = ['needs your input', 'ready to launch'];
 const PRIORITY = { urgent: 1, high: 2, normal: 3, low: 4 };
+const PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 };
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`);
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+}
+
+function flag(name) {
+  return process.argv.includes(`--${name}`);
 }
 
 function readBody(spec) {
@@ -39,8 +53,9 @@ function readBody(spec) {
 }
 
 /**
- * Report ClickUp's real rate-limit state from the response headers. Printing
- * the true numbers is the whole point: the connector's own error text is not
+ * Report ClickUp's real rate-limit state from the response headers, on
+ * stderr so it never contaminates parseable stdout. Printing the true
+ * numbers is the whole point: the connector's own error text is not
  * trustworthy about this (it says "NaN minutes" on the chat endpoints).
  */
 function reportLimits(res) {
@@ -50,7 +65,7 @@ function reportLimits(res) {
   if (!limit && !remaining) return;
   const secs = reset ? Number(reset) - Math.floor(Date.now() / 1000) : NaN;
   const resetTxt = Number.isFinite(secs) ? ` (resets in ${Math.max(0, secs)}s)` : '';
-  console.log(`  ClickUp's own limit: ${remaining ?? '?'} of ${limit ?? '?'} left this minute${resetTxt}`);
+  console.error(`  ClickUp's own limit: ${remaining ?? '?'} of ${limit ?? '?'} left this minute${resetTxt}`);
 }
 
 async function call(method, path, body) {
@@ -70,8 +85,20 @@ function die(label, { res, json, text }) {
   console.error(json?.err || json?.error || text.slice(0, 500));
   // Say what to do in terms of the thing the operator touches (DOCTRINE 2.2).
   if (res.status === 401) {
-    console.error('\n401 means the token is wrong or expired — not that ClickUp is down.');
-    console.error('Re-copy it: ClickUp -> your avatar (bottom-left) -> Settings -> Apps -> API Token.');
+    if (/team not authorized/i.test(String(json?.err || json?.error || text))) {
+      // 2026-08-18: a space id where a list id belongs earns exactly this
+      // error, and it reads like an account problem. Say so at the moment it
+      // happens, not in a doc nobody re-reads mid-failure.
+      console.error('\n"Team not authorized" here usually means the ID is the wrong KIND of thing —');
+      console.error('a space id where a list id belongs (the Starcaster SPACE is 90146476303;');
+      console.error('the Loop Queue LIST is 901418546619). Run `npm run clickup -- lists --space <id>`');
+      console.error('to resolve list ids by name before blaming the token.');
+    } else {
+      console.error('\n401 means the token is wrong or expired — not that ClickUp is down.');
+      console.error('The token lives in Doppler (starcaster/dev, CLICKUP_API_TOKEN); run through');
+      console.error('`npm run clickup -- ...` so doppler supplies it. Only if Doppler has lost it');
+      console.error('should a human re-copy it: ClickUp -> avatar -> Settings -> Apps -> API Token.');
+    }
   }
   if (res.status === 429) {
     console.error('\n429 is ClickUp itself throttling, and it clears in under a minute.');
@@ -81,26 +108,51 @@ function die(label, { res, json, text }) {
 }
 
 function usage(code = 2) {
-  console.error('Usage: node scripts/clickup_direct.mjs <whoami|task|chat|queue|get|status|comment|lists> [options]');
+  console.error('Usage: node scripts/clickup_direct.mjs <command> [options]   (run via `npm run clickup -- <command> ...`)');
   console.error('  whoami');
-  console.error('  task --list <id> --name "<name>" --body-file <file|-> [--status S] [--priority urgent|high|normal|low] [--id-out <file>]');
+  console.error('  task --list <id> --name "<name>" --body-file <file|-> [--status S] [--priority urgent|high|normal|low] [--tags a,b] [--id-out <file>]');
   console.error('  chat --channel <id> --body-file <file|->');
-  console.error('  queue --list <id> [--status "Queued"]     list open tasks, one per line: id <TAB> status <TAB> priority <TAB> name');
-  console.error('  get --task <id>                            print a task: header lines, then "---", then the body markdown');
-  console.error('  status --task <id> --status "In review" [--assign <userId>] [--clear-assignees]');
-  console.error('                                             move a task (and hand it to/from the operator), verified by read-back');
-  console.error('  comment --task <id> --body-file <file|->   add a comment to a task');
+  console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
+  console.error('                                             id <TAB> status <TAB> priority <TAB> created <TAB> name');
+  console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
+  console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
+  console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
+  console.error('                                             move a task; operator statuses auto-assign the operator,');
+  console.error('                                             machine statuses auto-clear; --if-status makes it a safe claim;');
+  console.error('                                             status AND assignees verified from the write response');
+  console.error('  comment --task <id> --body-file <file|->   add a comment, verified by reading the comments back');
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
   process.exit(code);
 }
 
 if (!TOKEN) {
-  console.error('CLICKUP_API_TOKEN is not set in this terminal window.\n');
-  console.error('Get one: ClickUp -> your avatar (bottom-left) -> Settings -> Apps -> API Token.');
-  console.error('Then, in this same window:\n');
-  console.error('  export CLICKUP_API_TOKEN=pk_your_token_here\n');
-  console.error('It lasts only for that window. Never commit it, and never paste it into a file.');
+  console.error('CLICKUP_API_TOKEN is not set in this environment.\n');
+  console.error('The sanctioned route is Doppler, which already holds the token:');
+  console.error('  npm run clickup -- <command> ...');
+  console.error('(package.json wraps the script in `doppler run --project starcaster --config dev`.)\n');
+  console.error('Only if Doppler is unavailable should a HUMAN export a token by hand —');
+  console.error('agents never handle the live value (DOCTRINE 4.1).');
   process.exit(2);
+}
+
+/** Every page of a list's open tasks. The endpoint caps at 100 per page and
+ *  a first-page-only read silently starves everything past it (DOCTRINE 5.12). */
+async function fetchAllTasks(list) {
+  const tasks = [];
+  for (let page = 0; page < 50; page++) {
+    const out = await call('GET', `/api/v2/list/${list}/task?archived=false&page=${page}`);
+    if (!out.res.ok) die('list tasks', out);
+    tasks.push(...out.json.tasks);
+    if (out.json.last_page !== false || out.json.tasks.length === 0) {
+      return { tasks, res: out.res };
+    }
+  }
+  console.error('Stopped after 50 pages — the list is implausibly large; treat this output as INCOMPLETE.');
+  return { tasks, res: null };
+}
+
+function assigneeNames(t) {
+  return (t.assignees || []).map((a) => `${a.username} (${a.id})`).join(', ') || '(nobody)';
 }
 
 const cmd = process.argv[2];
@@ -116,11 +168,13 @@ if (cmd === 'whoami') {
   const list = arg('list'), name = arg('name'), bodyFile = arg('body-file');
   if (!list || !name || !bodyFile) usage();
 
+  const tags = arg('tags') ? arg('tags').split(',').map((s) => s.trim()).filter(Boolean) : undefined;
   const out = await call('POST', `/api/v2/list/${list}/task`, {
     name,
     markdown_description: readBody(bodyFile),
     status: arg('status') || undefined,
     priority: PRIORITY[arg('priority', '')] || undefined,
+    tags,
   });
   if (!out.res.ok) die('create task', out);
 
@@ -165,19 +219,25 @@ if (cmd === 'whoami') {
 } else if (cmd === 'queue') {
   const list = arg('list');
   if (!list) usage();
-  // The status filter happens server-side so an empty result really means
-  // "nothing in that status", not "nothing on page one".
   const status = arg('status');
-  const filter = status ? `&statuses%5B%5D=${encodeURIComponent(status.toLowerCase())}` : '';
-  const out = await call('GET', `/api/v2/list/${list}/task?archived=false${filter}`);
-  if (!out.res.ok) die('list tasks', out);
-  // Machine-first output: one task per line, tab-separated, so a caller can
-  // cut/awk it without scraping prose. Humans read it fine too.
-  for (const t of out.json.tasks) {
-    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', t.name].join('\t'));
+  const { tasks, res } = await fetchAllTasks(list);
+  // Filter locally, case-insensitively — the same matching the `status`
+  // command's verify uses — so a casing mismatch cannot masquerade as an
+  // empty queue the way a server-side filter miss would.
+  const wanted = status
+    ? tasks.filter((t) => (t.status?.status ?? '').toLowerCase() === status.toLowerCase())
+    : tasks;
+  // The loops claim "the oldest Queued task, highest priority first": encode
+  // that rule here, so the first output line IS the task to claim.
+  wanted.sort((a, b) =>
+    (PRIORITY_RANK[a.priority?.priority] ?? 9) - (PRIORITY_RANK[b.priority?.priority] ?? 9)
+    || Number(a.date_created) - Number(b.date_created));
+  for (const t of wanted) {
+    const created = new Date(Number(t.date_created)).toISOString().slice(0, 10);
+    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', created, t.name].join('\t'));
   }
-  console.error(`${out.json.tasks.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list}`);
-  reportLimits(out.res);
+  console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
+  if (res) reportLimits(res);
 
 } else if (cmd === 'get') {
   const task = arg('task');
@@ -189,54 +249,124 @@ if (cmd === 'whoami') {
   console.log(`name:     ${t.name}`);
   console.log(`status:   ${t.status?.status ?? '?'}`);
   console.log(`priority: ${t.priority?.priority ?? 'none'}`);
-  console.log(`assigned: ${(t.assignees || []).map((a) => `${a.username} (${a.id})`).join(', ') || '(nobody)'}`);
+  console.log(`assigned: ${assigneeNames(t)}`);
   console.log(`list:     ${t.list?.name} (${t.list?.id})`);
   console.log(`url:      ${t.url}`);
   console.log('---');
   console.log(t.markdown_description || t.description || '(no body)');
   reportLimits(out.res);
 
+} else if (cmd === 'comments') {
+  const task = arg('task');
+  if (!task) usage();
+  const out = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!out.res.ok) die('read comments', out);
+  const comments = (out.json.comments || []).slice().reverse(); // API is newest-first; oldest first reads as a story
+  for (const c of comments) {
+    const when = new Date(Number(c.date)).toISOString().slice(0, 16).replace('T', ' ');
+    console.log(`[${when}] ${c.user?.username ?? '?'} (comment ${c.id}):`);
+    console.log(c.comment_text || '(empty)');
+    console.log('---');
+  }
+  console.error(`${comments.length} comment(s) on task ${task}`);
+  reportLimits(out.res);
+
 } else if (cmd === 'status') {
   const task = arg('task'), status = arg('status');
   if (!task || !status) usage();
-  // Assignment is the operator's inbox signal (loop-build SKILL.md): a task
-  // entering "Needs your input" gets Dane assigned; a task entering any
-  // machine status gets its assignees cleared so it leaves his list.
-  const assignees = {};
-  if (arg('assign')) assignees.add = [Number(arg('assign'))];
-  if (process.argv.includes('--clear-assignees')) {
-    const current = await call('GET', `/api/v2/task/${task}`);
-    if (!current.res.ok) die('read task before clearing assignees', current);
-    const ids = (current.json.assignees || []).map((a) => a.id);
-    if (ids.length) assignees.rem = ids;
+  if (flag('assign') && !arg('assign')) {
+    console.error('--assign needs a user id after it (e.g. --assign 48012725); refusing to guess.');
+    process.exit(2);
   }
+  const assignId = arg('assign') ? Number(arg('assign')) : null;
+  if (assignId !== null && !Number.isInteger(assignId)) {
+    console.error(`--assign got "${arg('assign')}", which is not a numeric ClickUp user id.`);
+    process.exit(2);
+  }
+
+  // One read up front: it powers the --if-status claim guard, the
+  // clear-assignees list, and the was→now line in the report.
+  const before = await call('GET', `/api/v2/task/${task}`);
+  if (!before.res.ok) die('read task before update', before);
+  const was = before.json.status?.status ?? '?';
+
+  const ifStatus = arg('if-status');
+  if (ifStatus && was.toLowerCase() !== ifStatus.toLowerCase()) {
+    console.error(`NOT claimed: expected status "${ifStatus}" but the task is "${was}" —`);
+    console.error('another loop or the operator got there first. Pick the next task instead.');
+    process.exit(3);
+  }
+
+  // The handoff rule, enforced where every handoff passes (so it cannot be
+  // forgotten at a call site): operator statuses carry the operator,
+  // machine statuses carry nobody. Explicit flags override; --no-auto-assign
+  // opts out entirely.
+  const toOperator = OPERATOR_STATUSES.includes(status.toLowerCase());
+  let add = assignId !== null ? [assignId] : [];
+  let clearing = flag('clear-assignees');
+  if (!flag('no-auto-assign')) {
+    if (toOperator && add.length === 0) add = [OPERATOR_ID];
+    if (!toOperator && !clearing && add.length === 0) clearing = true;
+  }
+  const rem = clearing
+    ? (before.json.assignees || []).map((a) => a.id).filter((id) => !add.includes(id))
+    : [];
+
   const body = { status };
-  if (assignees.add || assignees.rem) body.assignees = assignees;
+  if (add.length || rem.length) body.assignees = { add, rem };
   const out = await call('PUT', `/api/v2/task/${task}`, body);
   if (!out.res.ok) die('set status', out);
-  // A 200 proves a write happened, not that the right thing landed — the
-  // same rule the task command follows. Read it back.
-  const check = await call('GET', `/api/v2/task/${task}`);
-  if (!check.res.ok) {
-    console.error('WARNING: status was sent, but reading the task back failed — verify by eye.');
-    process.exit(1);
-  }
-  const now = check.json.status?.status ?? '?';
+
+  // Verify from the write's OWN response — server-authoritative post-update
+  // state, no second request, no window for a parallel loop to muddy the
+  // comparison. Status AND assignees: a 200 with the assignee half dropped
+  // is the silent handoff loss this command exists to prevent.
+  const t = out.json;
+  const now = t.status?.status ?? '?';
   if (now.toLowerCase() !== status.toLowerCase()) {
-    console.error(`Status did NOT stick: asked for "${status}", task now reads "${now}".`);
+    console.error(`Status did NOT stick: asked for "${status}", the write came back "${now}".`);
     console.error('Usually the list does not have that status — statuses are per-list in ClickUp.');
     process.exit(1);
   }
-  console.log(`Task ${task} is now "${now}" (verified by reading it back).`);
-  reportLimits(check.res);
+  const finalIds = (t.assignees || []).map((a) => a.id);
+  for (const id of add) {
+    if (!finalIds.includes(id)) {
+      console.error(`Assignee did NOT stick: asked to assign ${id}, the task carries [${finalIds.join(', ')}].`);
+      console.error('The status moved, but the handoff signal is missing — fix the assignment before relying on it.');
+      process.exit(1);
+    }
+  }
+  if (clearing) {
+    const leftover = finalIds.filter((id) => !add.includes(id));
+    if (leftover.length) {
+      console.error(`Assignees did NOT clear: [${leftover.join(', ')}] still on the task.`);
+      process.exit(1);
+    }
+  }
+  console.log(`Task ${task}: "${was}" -> "${now}", assigned: ${assigneeNames(t)} (verified from the write response).`);
+  reportLimits(out.res);
 
 } else if (cmd === 'comment') {
   const task = arg('task'), bodyFile = arg('body-file');
   if (!task || !bodyFile) usage();
-  const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: readBody(bodyFile) });
+  const sent = readBody(bodyFile);
+  const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: sent });
   if (!out.res.ok) die('add comment', out);
-  console.log(`Comment ${out.json.id ?? '(id unknown)'} added to task ${task}.`);
-  reportLimits(out.res);
+  const newId = String(out.json.id ?? '');
+  // Read the comments back: a write that normalizes to nothing looks exactly
+  // like a success (DOCTRINE 3.10).
+  const check = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!check.res.ok) {
+    console.error('WARNING: comment posted, but reading comments back failed — verify by eye.');
+    process.exit(1);
+  }
+  const found = (check.json.comments || []).find((c) => String(c.id) === newId);
+  if (!found || !(found.comment_text || '').trim()) {
+    console.error(`Comment did NOT land intact: id ${newId || '(none)'} ${found ? 'saved empty' : 'not found on the task'}.`);
+    process.exit(1);
+  }
+  console.log(`Comment ${newId} added to task ${task} (${found.comment_text.length} characters, verified by reading it back).`);
+  reportLimits(check.res);
 
 } else if (cmd === 'lists') {
   // Exists because of 2026-08-18: 90146476303 (the Starcaster SPACE) was
@@ -244,16 +374,19 @@ if (cmd === 'whoami') {
   // with "Team not authorized" — an error about the wrong thing entirely.
   const space = arg('space');
   if (!space) usage();
-  const folderless = await call('GET', `/api/v2/space/${space}/list?archived=false`);
-  if (!folderless.res.ok) die('list lists', folderless);
+  const [folderless, folders] = await Promise.all([
+    call('GET', `/api/v2/space/${space}/list?archived=false`),
+    call('GET', `/api/v2/space/${space}/folder?archived=false`),
+  ]);
+  // A resolver that silently omits the folders it could not read would
+  // recreate the very trap it exists to fix (DOCTRINE 3.11): fail loudly.
+  if (!folderless.res.ok || !folderless.json) die('list folderless lists', folderless);
+  if (!folders.res.ok || !folders.json) die('list folders', folders);
   for (const l of folderless.json.lists) console.log(`${l.id}\t${l.name}`);
-  const folders = await call('GET', `/api/v2/space/${space}/folder?archived=false`);
-  if (folders.res.ok) {
-    for (const f of folders.json.folders) {
-      for (const l of f.lists || []) console.log(`${l.id}\t${f.name} / ${l.name}`);
-    }
+  for (const f of folders.json.folders) {
+    for (const l of f.lists || []) console.log(`${l.id}\t${f.name} / ${l.name}`);
   }
-  reportLimits(folderless.res);
+  reportLimits(folders.res);
 
 } else {
   usage();

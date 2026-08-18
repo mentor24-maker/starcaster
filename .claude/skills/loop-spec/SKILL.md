@@ -16,11 +16,12 @@ write any code here. You produce well-formed tasks.
 
 - A rough idea or goal from the operator (one sentence is fine to start).
 - Optionally: a target ClickUp list name (default: **"Loop Queue"**, list id
-  `901418546619`, in the **Starcaster** space — whose *space* id is
-  `90146476303`; never use a space id where a list id belongs, ClickUp
-  answers that mistake with a misleading "Team not authorized" error).
-  If the connector is rate-limited, file tasks through the direct script:
-  `doppler run --project starcaster --config dev -- node scripts/clickup_direct.mjs task --list 901418546619 --name "..." --status Queued --body-file -`
+  `901418546619` — ids and the space-vs-list trap are documented once in
+  `docs/LOOP_ENGINEERING.md` §"ClickUp access"). File tasks through the
+  direct script, which carries priority and tags and verifies the body saved:
+  `npm run clickup -- task --list 901418546619 --name "..." --status Queued --priority high --tags "epic-name" --body-file -`
+  (body on stdin). The connector works too when its budget allows, but the
+  direct route is the one that cannot be starved by other sessions.
 
 ## Workflow
 

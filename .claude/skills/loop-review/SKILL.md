@@ -14,44 +14,42 @@ check.
 
 ## ClickUp access: use the direct script, not the connector
 
-Every ClickUp touch in this loop goes through `scripts/clickup_direct.mjs`
-run under Doppler (which supplies the token; you never see or handle it):
+Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
+standalone command each time (shell functions do not survive between tool
+calls). Doppler supplies the token; you never see or handle it. The command
+list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
+§"ClickUp access". The moves this loop makes:
 
 ```bash
-CU() { doppler run --project starcaster --config dev -- node scripts/clickup_direct.mjs "$@"; }
-CU queue --list 901418546619 --status "In review"   # what needs reviewing
-CU get --task <id>                                  # the task, header + body
-CU status --task <id> --status "Ready to launch" --assign 48012725
-CU status --task <id> --status Queued --clear-assignees
-CU comment --task <id> --body-file -                # body on stdin
-CU chat --channel 2kydhxeu-474 --body-file -        # post to the bus
+npm run clickup -- queue --list 901418546619 --status "In review"   # FIRST LINE is the one to review
+npm run clickup -- get --task <id>                                  # the task, header + body
+npm run clickup -- comments --task <id>                             # the comments — the PR URL lives here
+npm run clickup -- status --task <id> --status "Ready to launch"    # pass (Dane auto-assigned)
+npm run clickup -- status --task <id> --status Queued               # send back (assignees auto-cleared)
+npm run clickup -- comment --task <id> --body-file -                # body on stdin
+npm run clickup -- chat --channel 2kydhxeu-474 --body-file -        # post to the bus
 ```
 
-The claude.ai ClickUp connector is a shared rolling budget that all sessions
-drain together; when it is spent, it fails with junk wait times. ClickUp's own
-API allows 100 requests/minute, which this loop cannot exhaust. Use the
-connector only if the direct script itself is broken, and say so in the run
-report. **Id trap:** `90146476303` is the Starcaster *space*; the Loop Queue
-*list* is `901418546619`.
+Use the connector only if the direct script itself is broken, and say so in
+the run report.
 
 ## Workflow
 
 1. **Claim the next task.** Find the oldest task with status `In review` in the
-   **Loop Queue** list (id `901418546619`). If none, report
-   "nothing to review" and stop. Read the task and find its PR URL from the
-   comments.
+   **Loop Queue** list (id `901418546619`) — the queue command's first line.
+   If none, report "nothing to review" and stop. Read the task
+   (`get`), then read its comments (`comments`) to find the PR URL the build
+   loop posted there.
 
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
 
    **Assignment is the handoff signal.** Dane finds his work through ClickUp's
    own *Assigned to me*, not a hand-built filter — a filtered view cannot span
-   the Starcaster and Dane of Earth spaces, but assignment does. In the same
-   `CU status` call that sets the status:
-
-   - `Ready to launch` or `Needs your input` → **assign Dane** (user id
-     `48012725`).
-   - `Queued` (sending it back to the build loop) → **clear all assignees**.
+   the Starcaster and Dane of Earth spaces, but assignment does.
+   `npm run clickup -- status` enforces the mapping automatically and
+   verifies it stuck: `Ready to launch` / `Needs your input` assign Dane,
+   `Queued` clears assignees. Flags exist only to deviate.
 
 2. **Check out the PR in a worktree.** Reuse the build worktree if present, or
    add one from the PR branch. Run `npm ci` if dependencies changed.
