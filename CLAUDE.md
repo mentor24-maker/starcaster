@@ -309,6 +309,28 @@ Before reporting a task complete, run and state the results of:
    outright rather than passing silently, which is the specific hole that
    let both of those panels through.
 
+7. **`npm run check:render` if you changed what a module RENDERS** — its
+   markup, its animation, or the CSS behind either. It drives a real browser
+   over `builder-preview.html` and needs **no database, no login and no
+   fixture**, so it costs about 30 seconds:
+
+   ```
+   PORT=3058 node server.js
+   UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:render
+   ```
+
+   New rendering behaviour means a contract in
+   `scripts/ui/render-contracts.mjs` — and **break it on purpose and watch it
+   fail before believing the pass.** That step is not ceremony: it has caught
+   two assertions that could not fail, including one where the check was
+   comparing a setting to itself.
+
+`npm run check:css` is deliberately absent from this list: CI runs it on
+every pull request, so it is the one visual gate nobody has to remember.
+What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
+§5.14 — read that before treating a green run as proof a page looks right.
+Neither of them can tell a bounce from a wobble.
+
 "It should work" is not done. Passing commands are done.
 
 ## Session-close capture (binding)

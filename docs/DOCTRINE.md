@@ -581,7 +581,7 @@ table and say which one — dying on the weakest member makes the whole
 operation impossible and names the wrong culprit. Report the defect rather
 than skipping it silently, or the schema stays broken forever (§3.2).
 
-### 5.14 Nothing here tests CSS, so a green suite says nothing about appearance
+### 5.14 A green suite still says nothing about appearance — but CSS is no longer untested
 
 Two defects reached the operator on 2026-08-16, hours apart, both in the same
 carousel work, both pure CSS, and every gate was green for both:
@@ -599,12 +599,60 @@ measures panel geometry, not module rendering.
 
 **Do this:** when a change is visual, the verification is a browser
 measurement or the operator's eye — say which one you did, and never let
-"947 tests passed" stand in for either. For a specific declaration worth
-guarding, read the stylesheet in a test and assert on the rule
-(`builder-carousel-loop.test.ts` does this for the hidden scrollbar,
-`builder-template-preview-carousel.test.tsx` for the unpinned picture
-height). Crude, narrow, and the only guard available — treat each one as a
-scar, not as coverage.
+"947 tests passed" stand in for either. That has not changed and is the
+part of this rule that never expires.
+
+#### What now exists (2026-08-17), and exactly what it does not cover
+
+Three defects in the image-effects work were invisible to every gate — an
+effect offered for months with no stylesheet rule behind it, a `max-width`
+the browser silently threw away, and an iteration count that would have
+stopped the spin with the crossing. All three were caught by hand, driving a
+browser and reading computed styles, which is a harness rather than a habit.
+So it was built (#315, #318, #320, #322):
+
+| Check | Asks | Runs |
+|---|---|---|
+| `npm run check:css` | Which declarations did the browser actually KEEP? Plus: an `animation-name` with no keyframes, a `var(--x)` defined nowhere and given no fallback, a class the code emits that no stylesheet defines. | **CI, every PR**, ~1s |
+| `npm run check:render` | Does the rendered module animate, cap its size, and count its animations separately? Contracts in `scripts/ui/render-contracts.mjs`. | by hand, ~30s |
+| the differential (inside `check:render`) | Does changing a setting change ANYTHING a person could see? Every effect the panels offer must produce a live animation. | with the above |
+
+**What they do NOT cover, and this is the important half:**
+
+- **Nothing here can tell you a page looks good.** The differential proves
+  something changed, never that it changed *correctly* — it cannot tell a
+  bounce from a wobble. It is a dead-control detector, not a design reviewer.
+- `check:render` sees only what its contracts and registry name. A module
+  with no contract has no coverage.
+- Horizontal-overflow on a rendered page is **not** asserted anywhere: the
+  Builder preview shell clips it, so the assertion was written, tried, and
+  deleted when it could not be made to fail.
+- Only the `image` module family has real contracts today.
+
+So the first paragraph stands: **the verification for a visual change is
+still a browser measurement or the operator's eye.** These checks widen what
+a machine can notice; they do not replace looking.
+
+Three things learned building them, each of which turned a check that looked
+like it worked into one that did:
+
+1. `getComputedStyle().animationName` **reports animations the engine cannot
+   run** — with `animation: real 5s, ghost 5s` and no `ghost` keyframes it
+   returns `"real, ghost"`. Motion assertions use `getAnimations()`, which
+   lists only what is really running.
+2. `getComputedStyle` **enumerates custom properties**. Every effect setting
+   reaches the page as a `--sc-effect-*` variable, so a diff of computed
+   styles was comparing the SETTING to itself and passing on a control that
+   had been frozen dead. A variable nobody reads is the same species as a
+   class nobody styles.
+3. Reading a validity test off a shorthand is wrong: `border: none` sets
+   seventeen longhands and still reads back as an empty string. Count what
+   the declaration set, do not read the value back.
+
+For a specific declaration worth guarding, reading the stylesheet in a test
+still works and is still cheap (`builder-carousel-loop.test.ts` for the
+hidden scrollbar, `builder-template-preview-carousel.test.tsx` for the
+unpinned picture height). Treat each as a scar, not as coverage.
 
 ### 5.15 Browser-only behaviour is only real in a browser
 

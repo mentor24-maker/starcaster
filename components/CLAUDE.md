@@ -81,6 +81,33 @@ purpose before you trust the pass.
   wholesale and a hand edit there disappears at the next regeneration — read
   it, never write it. See `src/css/CLAUDE.md`, first section.
 
+### Changing what a module RENDERS: `npm run check:render`
+
+`check:panels` measures the **editor**. What the visitor sees is measured by
+`check:render`, which drives a real browser over `builder-preview.html` and
+needs no database, no login and no fixture:
+
+```
+PORT=3058 node server.js
+UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:render
+```
+
+New rendering behaviour — markup, animation, or the CSS behind either — means
+a contract in `scripts/ui/render-contracts.mjs`. A CSS-only setting also wants
+a line in the differential registry in that file, which fails when a setting
+changes nothing a person could see.
+
+**Then break it on purpose and watch it fail before you believe the pass.**
+This caught two assertions here that could not fail: one that compared a
+setting to itself (the browser lists custom properties among computed styles,
+so `--sc-effect-*` changing WAS the "difference"), and one that measured
+animations parked at time zero, where a small hop and a huge hop sit in the
+same place.
+
+And a green run is not proof the page looks right. `docs/DOCTRINE.md` §5.14
+says exactly what these checks do and do not cover — the differential proves
+something changed, never that it changed correctly.
+
 ## Image effects — read `docs/IMAGE_EFFECTS.md` first
 
 The `image` / `floating-image` motion settings (Cruise, Tumbleweed, Spin and

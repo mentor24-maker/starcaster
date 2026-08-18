@@ -155,11 +155,21 @@ Five effects have the opposite gap and still do: `flips`, `slide`,
 hand-editing a setting, which is where they already were; surfacing or
 deleting them is a design question for the operator.
 
-**Guard:** `builder-image-effects.test.ts` reads `src/css/` and fails when an
-offered effect has no rule. Cheap, and the right shape of check for any
-setting whose only consumer is a stylesheet — nothing in this repo tests CSS
-(`docs/DOCTRINE.md` 5.13), so that last hop is exactly where a feature dies
-quietly.
+**Guards, in the order they would now catch it.** As of 2026-08-17 this is no
+longer the only one, and the last hop is no longer unwatched:
+
+- `npm run check:css` — in CI on every pull request. C2 fails an
+  `animation-name` with no `@keyframes`; C4 fails a `starcaster-effect-*`
+  class no stylesheet defines.
+- `npm run check:render` — its effect sweep reads `IMAGE_EFFECT_OPTIONS` and
+  requires **every offered effect to produce a live animation**. This is the
+  one that would have caught Cruise and Tumbleweed on the day they shipped,
+  with no foresight required.
+- `builder-image-effects.test.ts` — reads `src/css/` and fails when an offered
+  effect has no rule. Narrower than the two above and kept as the scar it is.
+
+The five effects below are **reported by name** on every `check:render` run
+now, rather than waiting to be noticed.
 
 ### 2. An invalid CSS value drops the whole declaration
 
@@ -222,8 +232,24 @@ label on purpose and watching it fail** before the pass was believed.
 7. Extend `builder-image-effects.test.ts`, and if the setting has a fallback
    in the stylesheet, assert the two copies match. Two copies of one default
    is how a panel comes to disagree with the page.
-8. Run `npm run check:panels`, then break the layout on purpose and watch it
-   fail before believing the pass.
+8. **Add it to the differential registry** in
+   `scripts/ui/render-contracts.mjs` (`RENDER_DIFFERENTIALS`) — a
+   `{setting, from, to}` triple whose two values must render differently.
+   Without that line, nothing proves the new control does anything at all.
+   A whole new *effect* needs no entry: the sweep reads
+   `IMAGE_EFFECT_OPTIONS` and already requires every offered effect to
+   produce a live animation.
+9. Run `npm run check:panels` for the editor, then
+   `npm run check:render` for the page (`PORT=3058 node server.js` first),
+   and break each on purpose to watch it fail before believing the pass.
+
+`npm run check:css` runs in CI on every pull request and will catch the two
+mistakes this feature has already made in the stylesheet: a value the browser
+throws away, and an `animation-name` with no `@keyframes` behind it.
+
+**What none of them can tell you is whether it looks right.** The
+differential proves a setting changed something, never that it changed
+correctly — it cannot tell a bounce from a wobble (`docs/DOCTRINE.md` §5.14).
 
 **The Effects column holds eight controls and the panel generator caps a
 module at four axes.** One or two more settings fit; past that the question is
