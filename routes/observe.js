@@ -184,7 +184,7 @@ async function pingOpenclaw(req, res) {
 
 // Ensure `sendJson` is accessible since it's used inside ping handles
 const { sendJson } = require('./http');
-const { getUsageAnalytics, recordPageView, listPageViews } = require('../lib/observeStore');
+const { getUsageAnalytics, getAiSpendSummary, recordPageView, listPageViews } = require('../lib/observeStore');
 
 async function handle(req, res, pathname, method) {
   if (!pathname.startsWith('/api/observe')) return false;
@@ -200,6 +200,11 @@ async function handle(req, res, pathname, method) {
   if (method === 'GET') {
      if (pathname === '/api/observe/usage-reports') {
         const payload = await getUsageAnalytics(scope);
+        if (!payload.ok) return sendErr(res, 500, payload.error), true;
+        return sendOk(res, 200, payload.data), true;
+     }
+     if (pathname === '/api/observe/ai-spend') {
+        const payload = await getAiSpendSummary(20000, scope, req.query?.since || null);
         if (!payload.ok) return sendErr(res, 500, payload.error), true;
         return sendOk(res, 200, payload.data), true;
      }
