@@ -138,6 +138,40 @@ wire and blocks off the disk are different numbers with different causes, and
 2.83 MB of JSON crossing the network says nothing about whether it came from
 cache.
 
+### 1.7 A quota that blocks writes but not reads looks exactly like an outage
+
+**Incident (2026-08-17).** Five ClickUp writes failed in a row with "Rate limit
+exceeded. Please wait 1171 minutes" — nearly twenty hours. It read as the whole
+integration being down account-wide, and the work (a task and a wrap-up post)
+was parked in a file on the Desktop to wait it out.
+
+Two things made it look worse than it was. Plain reads (`search`,
+`get_workspace_hierarchy`) kept answering normally throughout, so the failures
+looked arbitrary rather than budgeted. And the chat endpoints reported **"wait
+NaN minutes"** — a JavaScript not-a-number leaking into operator-facing text,
+which reads as a broken connector rather than a spent allowance.
+
+The countdown itself was honest: four readings taken across three hours (1171,
+1023, 998, 992 minutes) all resolved to a single fixed reset, matching the raw
+`retryAfter` to within eleven seconds. It was a real rolling ~24h window.
+
+**The part that mattered: there were two limits, not one.** The *connector*
+(claude.ai's ClickUp bridge) budgets writes over ~24 hours. ClickUp's own API
+limits by the MINUTE — about 100 requests, reset in 60 seconds — and was
+nowhere near its ceiling. A personal API token talking straight to
+`api.clickup.com` was never blocked at all. Nothing had to wait.
+
+**Do this:** when a hosted integration reports a limit measured in *hours*, it
+is the integration's quota, not the upstream provider's — provider limits are
+almost always per-minute. Check whether a direct path exists before waiting.
+`scripts/clickup_direct.mjs` is that path here (`whoami`, `task`, `chat`); it
+prints the provider's true `x-ratelimit-*` headers so the two buckets can be
+told apart, and reads a created task back before claiming success.
+
+**Corollary:** a retry-after rendered as `NaN`, `undefined` or `Infinity` is not
+evidence about the wait. It means the value was missing — go and find the real
+one before planning around the number on the screen.
+
 ---
 
 ## 2. Error messages
