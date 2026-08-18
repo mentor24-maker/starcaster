@@ -32,8 +32,15 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import { BASE_URL, ensureBuildIsCurrent } from './app-driver.mjs';
-import { RENDER_CONTRACTS } from './render-contracts.mjs';
+import {
+  RENDER_CONTRACTS,
+  RENDER_DIFFERENTIALS,
+  effectClassesInCss,
+  effectSweepModule,
+  imageEffectOptionsFromSource,
+} from './render-contracts.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
@@ -60,9 +67,19 @@ const WIDTH = Number(process.env.UI_HARNESS_WIDTH || 1440);
 /** Long enough for an animation's currentTime to move visibly past jitter. */
 const SETTLE_MS = 600;
 
-/** A whole page document carrying exactly one module. */
-function documentFor(spec) {
+function moduleFrom(spec, index) {
   const base = createEmptyModule(spec.type, 'main');
+  return {
+    ...base,
+    id: `module-render-contract-${spec.type}-${index}`,
+    name: spec.type,
+    text: spec.text ?? base.text ?? '',
+    settings: { ...base.settings, ...(spec.settings || {}) },
+  };
+}
+
+/** A whole page document carrying the given modules, in order. */
+function documentFor(...specs) {
   return {
     name: 'Render Contract',
     layoutSections: [{
@@ -72,13 +89,7 @@ function documentFor(spec) {
       locked: false,
       alignment: 'left',
       widthMode: 'contained',
-      modules: [{
-        ...base,
-        id: `module-render-contract-${spec.type}`,
-        name: spec.type,
-        text: spec.text ?? base.text ?? '',
-        settings: { ...base.settings, ...(spec.settings || {}) },
-      }],
+      modules: specs.map(moduleFrom),
     }],
   };
 }
@@ -140,6 +151,143 @@ function sample(page, selector, read, settleMs) {
   }, { selector, read, settleMs });
 }
 
+/**
+ * WHAT THE MODULE RENDERS, AS A COMPARABLE FINGERPRINT.
+ *
+ * Two exclusions carry the whole idea, and getting either wrong turns this
+ * into a check that passes on the exact bug it was built for:
+ *
+ *  1. CLASS NAMES ARE NOT IN THE FINGERPRINT. "A class name is not a
+ *     rendering" is the lesson this feature was born from — Cruise and
+ *     Tumbleweed set classes nobody had styled. Including the class attribute
+ *     would make every dead effect look like a change.
+ *  2. `animation-*` COMPUTED STYLES ARE NOT IN IT EITHER, because
+ *     getComputedStyle reports animations the engine cannot run: with
+ *     `animation: real 5s, ghost 5s` and no `ghost` keyframes it returns
+ *     "real, ghost". A ghost declaration would read as a difference. Real
+ *     animations come from getAnimations(), which only ever lists what is
+ *     actually running.
+ *
+ * What is left is what a person would see: computed style, real animations,
+ * and size. Animations are paused at time zero first, or two samples of the
+ * same thing differ by however many milliseconds apart they were taken.
+ */
+function compareRenderedModules(page) {
+  return page.evaluate(() => {
+    /*
+     * SAMPLED AT SEVERAL PHASES, NOT JUST AT REST.
+     *
+     * Animations are paused and scrubbed to fixed times so the reading is
+     * deterministic — but scrubbing to 0 alone is not enough, and that cost a
+     * false failure: a 50% hop and a 400% hop are both at their STARTING
+     * position at time zero, so Bounce Height read as a dead control. Anything
+     * a keyframe drives is only visible part-way through, so the fingerprint
+     * is the render at rest AND part-way through.
+     */
+    const PHASES = [0, 700, 1500];
+
+    const scrub = (ms) => {
+      for (const animation of document.getAnimations()) {
+        try { animation.pause(); animation.currentTime = ms; } catch { /* not all are seekable */ }
+      }
+    };
+
+    const modules = [...document.querySelectorAll('.builder-preview-module')];
+    if (modules.length !== 2) return { modules: modules.length };
+
+    const snapshot = (module) => {
+      const elements = [module, ...module.querySelectorAll('*')].map((el) => {
+        const cs = getComputedStyle(el);
+        const styles = {};
+        for (const prop of cs) {
+          // See (2) above. `transition-*` goes too: it describes what WOULD
+          // happen on a state change, not what is rendered now.
+          if (prop.startsWith('animation') || prop.startsWith('transition')) continue;
+          // (3) CUSTOM PROPERTIES ARE INPUTS, NOT OUTPUTS — and getComputedStyle
+          // enumerates them (457 properties on a bare div, `--sc-test` among
+          // them). The renderer passes every effect setting in as a
+          // `--sc-effect-*` variable, so leaving these in meant the
+          // differential compared the SETTING to itself: freezing both the
+          // travel and the hop duration so Speed changed nothing a person
+          // could see still "passed", because the variable had changed.
+          //
+          // A variable nobody reads is the same species as a class nobody
+          // styled — a declaration, not a rendering. Caught by breaking the
+          // differential on purpose and watching it stay green, twice.
+          if (prop.startsWith('--')) continue;
+          styles[prop] = cs.getPropertyValue(prop);
+        }
+        const rect = el.getBoundingClientRect();
+        return {
+          tag: el.tagName.toLowerCase(),
+          styles,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        };
+      });
+
+      const animations = module.getAnimations({ subtree: true }).map((a) => {
+        const timing = a.effect ? a.effect.getTiming() : {};
+        return {
+          name: a.animationName,
+          duration: String(timing.duration ?? ''),
+          iterations: String(timing.iterations ?? ''),
+          delay: String(timing.delay ?? ''),
+          direction: String(timing.direction ?? ''),
+          easing: String(timing.easing ?? ''),
+        };
+      });
+
+      return { elements, animations };
+    };
+
+    // Compared IN THE PAGE rather than shipped to node: 457 computed
+    // properties across every element, at three phases, for two modules is a
+    // megabyte of strings that only ever gets diffed anyway.
+    const notes = [];
+    const a0 = snapshot(modules[0]);
+    const b0 = snapshot(modules[1]);
+    const animA = JSON.stringify(a0.animations);
+    const animB = JSON.stringify(b0.animations);
+    if (animA !== animB) notes.push(`animations ${animA || '[]'} → ${animB || '[]'}`);
+    if (a0.elements.length !== b0.elements.length) {
+      notes.push(`element count ${a0.elements.length} → ${b0.elements.length}`);
+    }
+
+    for (const phase of PHASES) {
+      scrub(phase);
+      const a = snapshot(modules[0]);
+      const b = snapshot(modules[1]);
+      const shared = Math.min(a.elements.length, b.elements.length);
+      for (let i = 0; i < shared; i += 1) {
+        const ea = a.elements[i];
+        const eb = b.elements[i];
+        const at = phase ? ` @${phase}ms` : '';
+        if (ea.width !== eb.width || ea.height !== eb.height) {
+          notes.push(`<${ea.tag}>${at} size ${ea.width}x${ea.height} → ${eb.width}x${eb.height}`);
+        }
+        for (const prop of Object.keys(ea.styles)) {
+          if (ea.styles[prop] !== eb.styles[prop]) {
+            notes.push(`<${ea.tag}>${at} ${prop}: ${ea.styles[prop]} → ${eb.styles[prop]}`);
+          }
+        }
+      }
+      if (notes.length) break; // one real difference is enough
+    }
+
+    return { modules: modules.length, identical: notes.length === 0, notes: notes.slice(0, 5) };
+  });
+}
+
+/** Live animations anywhere in the first rendered module, for the effect sweep. */
+function animationsInFirstModule(page) {
+  return page.evaluate(() => {
+    const module = document.querySelector('.builder-preview-module');
+    if (!module) return null;
+    return module.getAnimations({ subtree: true }).map((a) => a.animationName);
+  });
+}
+
 await ensureBuildIsCurrent(BASE_URL);
 
 const browser = await chromium.launch({ headless: true });
@@ -156,7 +304,9 @@ const context = await browser.newContext({
 await context.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, (route) => route.abort());
 
 const failures = [];
+const notices = [];
 let measured = 0;
+let sweepsRun = 0;
 
 try {
   const page = await context.newPage();
@@ -227,6 +377,125 @@ try {
     const problem = contract.expect(result);
     if (problem) failures.push(`${contract.id}: ${problem}`);
   }
+
+  /*
+   * PROVE THE INSTRUMENT BEFORE TRUSTING ITS READINGS.
+   *
+   * The differential below concludes "this setting is dead" from two
+   * fingerprints being identical. That inference is only sound if two renders
+   * of the SAME thing are reliably identical — if the fingerprint carries any
+   * noise (a font arriving late, a measured position, a timestamp), then every
+   * differential passes for the wrong reason and the sweep is decoration.
+   *
+   * So: render one module twice, same settings, and require no difference at
+   * all. This must be the first thing that fails when the method rots.
+   */
+  await render(page, documentFor(
+    { type: 'image', settings: { url: '/images/Gemini_Generated_starcaster_banner.png', alt: 'control', size: '40', effect: 'tumbleweed' } },
+    { type: 'image', settings: { url: '/images/Gemini_Generated_starcaster_banner.png', alt: 'control', size: '40', effect: 'tumbleweed' } },
+  ));
+  const control = await compareRenderedModules(page);
+  if (control.modules !== 2) {
+    failures.push(
+      `differential control: expected 2 modules on the page, found ${control.modules}. ` +
+      'Nothing below this can be trusted.'
+    );
+  } else if (!control.identical) {
+    failures.push(
+      'differential control: two renders of the IDENTICAL module differ, so the fingerprint carries ' +
+      `noise and every differential result below is meaningless — ${control.notes.join('; ')}`
+    );
+  }
+
+  /*
+   * THE EFFECT SWEEP — every effect the panels offer must actually animate.
+   *
+   * Driven from IMAGE_EFFECT_OPTIONS rather than a list kept here, so an
+   * effect added tomorrow is covered tomorrow. This is the check that would
+   * have caught Cruise and Tumbleweed on the day they shipped: both were
+   * offered for months with no stylesheet rule behind them, and the only
+   * symptom was a picture that did not move.
+   */
+  const effectsSource = await readFile(path.join(ROOT, 'components/builder/builder-image-effects.ts'), 'utf8');
+  const offered = imageEffectOptionsFromSource(effectsSource);
+  if (!offered.length) {
+    failures.push(
+      'the effect sweep read ZERO effects out of components/builder/builder-image-effects.ts. ' +
+      'That is a failure rather than a pass — the sweep would otherwise verify nothing while looking green. ' +
+      'IMAGE_EFFECT_OPTIONS has probably been reshaped; fix imageEffectOptionsFromSource.'
+    );
+  }
+  for (const effect of offered) {
+    await render(page, documentFor(effectSweepModule(effect)));
+    const running = await animationsInFirstModule(page);
+    if (running === null) {
+      failures.push(`effect "${effect}": the module did not render at all, so nothing was measured.`);
+      continue;
+    }
+    sweepsRun += 1;
+    if (!running.length) {
+      failures.push(
+        `effect "${effect}" is offered in the panel but renders NO live animation — the class is set and ` +
+        'the engine runs nothing. This is the Cruise/Tumbleweed bug: a stylesheet rule is missing, and ' +
+        'the only symptom a person sees is a picture that does not move.'
+      );
+    }
+  }
+
+  /*
+   * THE DIFFERENTIAL — a control that changes nothing fails by construction.
+   *
+   * Both variants render on ONE page, which is not just faster: two modules in
+   * the same document share fonts, layout pass and clock, so a difference
+   * between them cannot be an artefact of two separate page loads.
+   */
+  for (const diff of RENDER_DIFFERENTIALS) {
+    const variant = (value) => ({
+      ...diff.module,
+      settings: { ...diff.module.settings, [diff.setting]: value },
+    });
+    await render(page, documentFor(variant(diff.from), variant(diff.to)));
+    const pair = await compareRenderedModules(page);
+    if (pair.modules !== 2) {
+      failures.push(
+        `${diff.id}: expected both variants to render, found ${pair.modules} module(s). NOTHING WAS MEASURED.`
+      );
+      continue;
+    }
+    sweepsRun += 1;
+    if (pair.identical) {
+      failures.push(
+        `${diff.id}: setting \`${diff.setting}\` from "${diff.from}" to "${diff.to}" on a ${diff.module.type} ` +
+        'module changes NOTHING about what renders — same computed styles, same animations, same sizes. ' +
+        `The control is dead. (${diff.why})`
+      );
+    }
+  }
+  /*
+   * THE OPPOSITE GAP, REPORTED RATHER THAN FAILED.
+   *
+   * The dead Tumbleweed was a panel option with no stylesheet rule. The mirror
+   * image also exists: full keyframes in the CSS that appear in no panel,
+   * reachable only by hand-editing a setting. That is not a bug the build can
+   * decide — surfacing them or deleting them is the operator's call — but it
+   * must not be silent either, because "nobody mentioned it" is how they came
+   * to sit there unnoticed in the first place (DOCTRINE §3.11: a sweep reports
+   * what it could not settle).
+   */
+  const cssText = [
+    await readFile(path.join(ROOT, 'src/css/_builder-react.css'), 'utf8'),
+    await readFile(path.join(ROOT, 'src/css/_builder-react-overrides.css'), 'utf8'),
+  ].join('\n');
+  const styled = effectClassesInCss(cssText);
+  const orphans = [...styled].filter((name) => !offered.includes(name)).sort();
+  if (orphans.length) {
+    notices.push(
+      `${orphans.length} effect(s) have keyframes in the stylesheet and appear in NO panel: ` +
+      `${orphans.join(', ')}. They are reachable only by hand-editing a page's settings. ` +
+      'Surfacing them or deleting them is a design decision, not a build failure — but they should ' +
+      'not sit unnoticed, which is exactly how the unstyled effects lasted months.'
+    );
+  }
 } finally {
   await browser.close();
 }
@@ -239,18 +508,23 @@ if (!measured) {
   process.exit(1);
 }
 
+for (const notice of notices) console.log(`[check:render] NOTE — ${notice}`);
+
 if (failures.length) {
   console.error(`\n[check:render] FAILED — ${failures.length} problem(s):\n`);
   for (const f of failures) console.error(`  ✗ ${f}`);
   console.error(
     '\nThese are read out of a real browser, so "the setting reaches the renderer" is not a\n' +
     'counter-argument — what renders is what this measured. Each contract in\n' +
-    'scripts/ui/render-contracts.mjs carries the incident it guards; read the `why`.\n'
+    'scripts/ui/render-contracts.mjs carries the incident it guards; read the `why`.\n' +
+    '\nA differential failure means a control changed NOTHING a person could see. It does not\n' +
+    'mean the change is wrong when it passes: a difference proves something moved, never that\n' +
+    'it moved correctly. That judgement is still the operator\'s eye.\n'
   );
   process.exit(1);
 }
 
 console.log(
-  `[check:render] OK — ${measured}/${RENDER_CONTRACTS.length} contract(s) measured at ${WIDTH}px ` +
-  'against a real browser.'
+  `[check:render] OK — ${measured}/${RENDER_CONTRACTS.length} contract(s), ` +
+  `${sweepsRun} swept render(s) at ${WIDTH}px against a real browser.`
 );
