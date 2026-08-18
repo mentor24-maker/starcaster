@@ -19,6 +19,48 @@ cannot be invoked by name and `/loop 30m loop-build` fails to find it.
 | 2. Build | `loop-build` | Picks the next task, builds it in its own worktree, passes all build gates, opens a PR | Agent, on a loop |
 | 3. Review | `loop-review` | Independently verifies each PR, then pings you to merge — or sends it back with notes | Agent, on a loop |
 
+## ClickUp access — the single source of truth for ids and commands
+
+Every ClickUp touch by a loop goes through **`npm run clickup -- <command>`**
+(`scripts/clickup_direct.mjs`, wrapped in Doppler by package.json so the token
+is supplied without any agent or human handling it — DOCTRINE 4.1). The
+claude.ai connector's shared rolling budget starves under loop traffic and
+fails with junk wait times; ClickUp's own API allows ~100 requests/minute,
+which the loops cannot exhaust. Use the connector only when the direct script
+itself is broken, and say so in the run report.
+
+The ids, written down exactly once, here:
+
+| Thing | Id |
+|---|---|
+| Workspace ("Alphire AI Agency") | `90141423066` |
+| Starcaster **space** | `90146476303` |
+| **Loop Queue list** | `901418546619` |
+| The operator (Dane) | `48012725` |
+| The bus (party-line chat) | `2kydhxeu-474` |
+
+**Id trap (cost an hour on 2026-08-18):** a space id where a list id belongs
+earns ClickUp's misleading "Team not authorized" 401. When in doubt,
+`npm run clickup -- lists --space 90146476303` resolves list ids by name.
+
+The everyday commands (run `npm run clickup` bare for the full list):
+
+```bash
+npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
+npm run clickup -- get --task <id>                             # header + body
+npm run clickup -- comments --task <id>                        # where the PR URL lives
+npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
+npm run clickup -- status --task <id> --status "Needs your input"            # auto-assigns Dane
+npm run clickup -- comment --task <id> --body-file -           # body on stdin
+npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
+```
+
+`status` enforces the handoff rule by itself: moving into `Needs your input`
+or `Ready to launch` assigns Dane automatically, moving into any machine
+status clears assignees, and both halves of the write are verified from the
+response. `--if-status` makes a claim safe against a parallel loop: it exits
+code 3 without writing if the task has already moved.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
@@ -142,7 +184,12 @@ day one.
    `docs/CLICKUP_VIEWS.md` for why a saved view was tried and dropped.
 4. Confirm the skills live in `.claude/skills/` — Claude Code discovers skills
    nowhere else, so a skill parked in another folder cannot be invoked by name.
-5. Do a **dry run:** spec 1–2 tiny test-coverage tasks, run one `loop-build`
+5. Confirm Doppler holds the ClickUp token in the config this machine uses:
+   `npm run clickup -- whoami` must print "Token valid. Acting as: ...". If it
+   does not, the OPERATOR (never an agent) adds it once:
+   `pbpaste | tr -d '[:space:]' | doppler secrets set CLICKUP_API_TOKEN --project starcaster --config dev`
+   with the token on the clipboard.
+6. Do a **dry run:** spec 1–2 tiny test-coverage tasks, run one `loop-build`
    pass, watch it produce a clean PR, then run one `loop-review` pass. Only
    after that cycle works should you trust it with real feature work.
 

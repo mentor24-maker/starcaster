@@ -11,12 +11,33 @@ See `docs/LOOP_ENGINEERING.md` for the whole system.
 Each run of this skill builds **one** task into **one** PR. When run under
 `/loop`, it repeats, draining the queue one clean PR at a time.
 
+## ClickUp access: use the direct script, not the connector
+
+Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
+standalone command each time (shell functions do not survive between tool
+calls). Doppler supplies the token; you never see or handle it. The command
+list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
+§"ClickUp access". The moves this loop makes:
+
+```bash
+npm run clickup -- queue --list 901418546619 --status Queued   # FIRST LINE is the task to claim
+npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim; exit 3 = someone beat you, take the next
+npm run clickup -- status --task <id> --status "In review"                   # hand off (assignees auto-cleared)
+npm run clickup -- status --task <id> --status "Needs your input"            # escalate (Dane auto-assigned)
+npm run clickup -- comment --task <id> --body-file -                         # body on stdin
+```
+
+Use the connector only if the direct script itself is broken, and say so in
+the run report.
+
 ## Workflow
 
 1. **Claim the next task.** Find the oldest `Queued` task (highest priority
-   first) in the **Loop Queue** list (Starcaster space, id `90146476303`). If
-   none, report "queue empty" and stop — do not invent work. Set its status to
-   `Building` so a parallel build loop won't grab the same one.
+   first) in the **Loop Queue** list (id `901418546619`). If
+   none, report "queue empty" and stop — do not invent work. Claim it with
+   `--status Building --if-status Queued`: the guard makes the claim atomic,
+   so a parallel build loop that got there first shows up as exit code 3 —
+   take the next task instead of proceeding.
 
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
@@ -29,15 +50,18 @@ Each run of this skill builds **one** task into **one** PR. When run under
    cannot span the Starcaster and Dane of Earth spaces, but assignment does.
    So the rule is mechanical:
 
-   - Moving a ticket **into** `Needs your input` → **assign Dane**
-     (user id `48012725`) in the same `clickup_update_task` call.
+   - Moving a ticket **into** `Needs your input` → Dane must be assigned.
    - Moving a ticket into any machine status (`Queued`, `Building`,
-     `In review`) → **clear all assignees**, so it leaves his list the moment
-     it stops being his.
+     `In review`) → assignees must be cleared, so it leaves his list the
+     moment it stops being his.
+
+   `npm run clickup -- status` enforces both automatically and verifies the
+   assignee half of the write — you only need flags to deviate.
 
    A ticket sitting in a machine status with Dane still assigned is a bug: it
-   puts noise in the one view he trusts. When you claim a task in step 1, clear
-   its assignees along with setting `Building`.
+   puts noise in the one view he trusts. The claim in step 1 clears assignees
+   automatically; if the status command ever reports an assignee that did not
+   stick or clear, treat that as a failed handoff, not a cosmetic detail.
 
 2. **Get an isolated workspace — MANDATORY.** Create a dedicated worktree and
    branch off the latest main. Never build in a shared folder; never edit main.
