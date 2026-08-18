@@ -6,8 +6,12 @@ on:
     branches: [main]
 
 env:
-  # Playwright is a devDependency used only by local tooling — skip the
-  # ~100MB browser download in CI.
+  # Skip the browser download during `npm ci` — Playwright would otherwise
+  # fetch every engine (~100MB each) on every run. CI needs exactly one, and
+  # the "Chromium for check:css" step below installs and caches it explicitly.
+  #
+  # This used to say Playwright was "used only by local tooling", which stopped
+  # being true when check:css became a gate.
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
 jobs:
@@ -31,6 +35,48 @@ jobs:
       # because it takes milliseconds.
       - name: Syntax check (browser JS)
         run: npm run check:syntax
+
+      # THE FIRST BROWSER IN CI, and the reason it is worth the ~30s cold
+      # install: nothing in this repo tests CSS (DOCTRINE §5.14), and the one
+      # check that did measure a browser — check:panels — reached the operator
+      # twice with a broken panel because it needs a database and a login, so
+      # it only ever ran when a person remembered. It did not get remembered.
+      #
+      # check:css needs none of that: no server, no database, no login, no
+      # fixture. Only one browser engine is fetched, and only when the cache
+      # misses, so the steady-state cost is a few seconds of cache restore.
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        id: chromium-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          # Keyed on the Playwright version, not the lockfile hash: the browser
+          # only changes when Playwright does, so an unrelated dependency bump
+          # must not throw away a perfectly good 100MB download.
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Chromium for check:css
+        if: steps.chromium-cache.outputs.cache-hit != 'true'
+        # The workflow-level skip flag has to be lifted for THIS command, or
+        # the explicit install obeys it and silently downloads nothing — which
+        # would surface later as a missing-executable error in the check,
+        # pointing at the wrong thing entirely.
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+        run: npx playwright install --with-deps chromium
+
+      # Runs BEFORE the build, deliberately: it reads `src/css/` and the other
+      # committed sources, never a build artifact. Proved rather than assumed —
+      # deleting every generated file and re-running gives byte-identical
+      # output (18,128 declarations, 4,007 pairs, 19 keyframes, 410 custom
+      # properties). So it belongs with the other cheap gates up here, where a
+      # broken stylesheet is reported in about a second.
+      - name: CSS the browser actually keeps (blocking)
+        run: npm run check:css
 
       - name: Typecheck
         run: npm run typecheck
