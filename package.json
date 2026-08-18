@@ -17,6 +17,7 @@
     "check:build-paths": "node scripts/check_build_paths.cjs",
     "check:assets": "node scripts/check_asset_versions.cjs",
     "check:syntax": "node scripts/check_syntax.cjs",
+    "check:css": "node scripts/ui/check_css.mjs",
     "bust": "node scripts/bump_cache.js",
     "build:builder": "node scripts/build_builder_bundle.mjs",
     "build:css": "npm run build:styles && node scripts/pin_asset_versions.cjs",
