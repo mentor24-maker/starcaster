@@ -12,10 +12,32 @@ Each run verifies **one** task's PR. Run under `/loop` it keeps the review queue
 drained so the operator only ever sees PRs that already passed an independent
 check.
 
+## ClickUp access: use the direct script, not the connector
+
+Every ClickUp touch in this loop goes through `scripts/clickup_direct.mjs`
+run under Doppler (which supplies the token; you never see or handle it):
+
+```bash
+CU() { doppler run --project starcaster --config dev -- node scripts/clickup_direct.mjs "$@"; }
+CU queue --list 901418546619 --status "In review"   # what needs reviewing
+CU get --task <id>                                  # the task, header + body
+CU status --task <id> --status "Ready to launch" --assign 48012725
+CU status --task <id> --status Queued --clear-assignees
+CU comment --task <id> --body-file -                # body on stdin
+CU chat --channel 2kydhxeu-474 --body-file -        # post to the bus
+```
+
+The claude.ai ClickUp connector is a shared rolling budget that all sessions
+drain together; when it is spent, it fails with junk wait times. ClickUp's own
+API allows 100 requests/minute, which this loop cannot exhaust. Use the
+connector only if the direct script itself is broken, and say so in the run
+report. **Id trap:** `90146476303` is the Starcaster *space*; the Loop Queue
+*list* is `901418546619`.
+
 ## Workflow
 
 1. **Claim the next task.** Find the oldest task with status `In review` in the
-   **Loop Queue** list (Starcaster space, id `90146476303`). If none, report
+   **Loop Queue** list (id `901418546619`). If none, report
    "nothing to review" and stop. Read the task and find its PR URL from the
    comments.
 
@@ -25,7 +47,7 @@ check.
    **Assignment is the handoff signal.** Dane finds his work through ClickUp's
    own *Assigned to me*, not a hand-built filter — a filtered view cannot span
    the Starcaster and Dane of Earth spaces, but assignment does. In the same
-   `clickup_update_task` call that sets the status:
+   `CU status` call that sets the status:
 
    - `Ready to launch` or `Needs your input` → **assign Dane** (user id
      `48012725`).

@@ -81,10 +81,16 @@ function die(label, { res, json, text }) {
 }
 
 function usage(code = 2) {
-  console.error('Usage: node scripts/clickup_direct.mjs <whoami|task|chat> [options]');
+  console.error('Usage: node scripts/clickup_direct.mjs <whoami|task|chat|queue|get|status|comment|lists> [options]');
   console.error('  whoami');
   console.error('  task --list <id> --name "<name>" --body-file <file|-> [--status S] [--priority urgent|high|normal|low] [--id-out <file>]');
   console.error('  chat --channel <id> --body-file <file|->');
+  console.error('  queue --list <id> [--status "Queued"]     list open tasks, one per line: id <TAB> status <TAB> priority <TAB> name');
+  console.error('  get --task <id>                            print a task: header lines, then "---", then the body markdown');
+  console.error('  status --task <id> --status "In review" [--assign <userId>] [--clear-assignees]');
+  console.error('                                             move a task (and hand it to/from the operator), verified by read-back');
+  console.error('  comment --task <id> --body-file <file|->   add a comment to a task');
+  console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
   process.exit(code);
 }
 
@@ -155,6 +161,99 @@ if (cmd === 'whoami') {
   if (!out.res.ok) die('send chat message', out);
   console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
   reportLimits(out.res);
+
+} else if (cmd === 'queue') {
+  const list = arg('list');
+  if (!list) usage();
+  // The status filter happens server-side so an empty result really means
+  // "nothing in that status", not "nothing on page one".
+  const status = arg('status');
+  const filter = status ? `&statuses%5B%5D=${encodeURIComponent(status.toLowerCase())}` : '';
+  const out = await call('GET', `/api/v2/list/${list}/task?archived=false${filter}`);
+  if (!out.res.ok) die('list tasks', out);
+  // Machine-first output: one task per line, tab-separated, so a caller can
+  // cut/awk it without scraping prose. Humans read it fine too.
+  for (const t of out.json.tasks) {
+    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', t.name].join('\t'));
+  }
+  console.error(`${out.json.tasks.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list}`);
+  reportLimits(out.res);
+
+} else if (cmd === 'get') {
+  const task = arg('task');
+  if (!task) usage();
+  const out = await call('GET', `/api/v2/task/${task}?include_markdown_description=true`);
+  if (!out.res.ok) die('get task', out);
+  const t = out.json;
+  console.log(`id:       ${t.id}`);
+  console.log(`name:     ${t.name}`);
+  console.log(`status:   ${t.status?.status ?? '?'}`);
+  console.log(`priority: ${t.priority?.priority ?? 'none'}`);
+  console.log(`assigned: ${(t.assignees || []).map((a) => `${a.username} (${a.id})`).join(', ') || '(nobody)'}`);
+  console.log(`list:     ${t.list?.name} (${t.list?.id})`);
+  console.log(`url:      ${t.url}`);
+  console.log('---');
+  console.log(t.markdown_description || t.description || '(no body)');
+  reportLimits(out.res);
+
+} else if (cmd === 'status') {
+  const task = arg('task'), status = arg('status');
+  if (!task || !status) usage();
+  // Assignment is the operator's inbox signal (loop-build SKILL.md): a task
+  // entering "Needs your input" gets Dane assigned; a task entering any
+  // machine status gets its assignees cleared so it leaves his list.
+  const assignees = {};
+  if (arg('assign')) assignees.add = [Number(arg('assign'))];
+  if (process.argv.includes('--clear-assignees')) {
+    const current = await call('GET', `/api/v2/task/${task}`);
+    if (!current.res.ok) die('read task before clearing assignees', current);
+    const ids = (current.json.assignees || []).map((a) => a.id);
+    if (ids.length) assignees.rem = ids;
+  }
+  const body = { status };
+  if (assignees.add || assignees.rem) body.assignees = assignees;
+  const out = await call('PUT', `/api/v2/task/${task}`, body);
+  if (!out.res.ok) die('set status', out);
+  // A 200 proves a write happened, not that the right thing landed — the
+  // same rule the task command follows. Read it back.
+  const check = await call('GET', `/api/v2/task/${task}`);
+  if (!check.res.ok) {
+    console.error('WARNING: status was sent, but reading the task back failed — verify by eye.');
+    process.exit(1);
+  }
+  const now = check.json.status?.status ?? '?';
+  if (now.toLowerCase() !== status.toLowerCase()) {
+    console.error(`Status did NOT stick: asked for "${status}", task now reads "${now}".`);
+    console.error('Usually the list does not have that status — statuses are per-list in ClickUp.');
+    process.exit(1);
+  }
+  console.log(`Task ${task} is now "${now}" (verified by reading it back).`);
+  reportLimits(check.res);
+
+} else if (cmd === 'comment') {
+  const task = arg('task'), bodyFile = arg('body-file');
+  if (!task || !bodyFile) usage();
+  const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: readBody(bodyFile) });
+  if (!out.res.ok) die('add comment', out);
+  console.log(`Comment ${out.json.id ?? '(id unknown)'} added to task ${task}.`);
+  reportLimits(out.res);
+
+} else if (cmd === 'lists') {
+  // Exists because of 2026-08-18: 90146476303 (the Starcaster SPACE) was
+  // written down where a LIST id belonged, and ClickUp answers that mistake
+  // with "Team not authorized" — an error about the wrong thing entirely.
+  const space = arg('space');
+  if (!space) usage();
+  const folderless = await call('GET', `/api/v2/space/${space}/list?archived=false`);
+  if (!folderless.res.ok) die('list lists', folderless);
+  for (const l of folderless.json.lists) console.log(`${l.id}\t${l.name}`);
+  const folders = await call('GET', `/api/v2/space/${space}/folder?archived=false`);
+  if (folders.res.ok) {
+    for (const f of folders.json.folders) {
+      for (const l of f.lists || []) console.log(`${l.id}\t${f.name} / ${l.name}`);
+    }
+  }
+  reportLimits(folderless.res);
 
 } else {
   usage();

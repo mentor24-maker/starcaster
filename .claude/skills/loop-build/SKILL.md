@@ -11,10 +11,32 @@ See `docs/LOOP_ENGINEERING.md` for the whole system.
 Each run of this skill builds **one** task into **one** PR. When run under
 `/loop`, it repeats, draining the queue one clean PR at a time.
 
+## ClickUp access: use the direct script, not the connector
+
+Every ClickUp touch in this loop goes through `scripts/clickup_direct.mjs`
+run under Doppler (which supplies the token; you never see or handle it):
+
+```bash
+CU() { doppler run --project starcaster --config dev -- node scripts/clickup_direct.mjs "$@"; }
+CU queue --list 901418546619 --status Queued        # what is claimable
+CU get --task <id>                                  # the task, header + body
+CU status --task <id> --status Building --clear-assignees
+CU status --task <id> --status "Needs your input" --assign 48012725
+CU comment --task <id> --body-file -                # body on stdin
+```
+
+The claude.ai ClickUp connector is a shared rolling budget that all sessions
+drain together; when it is spent, it fails with junk wait times ("NaN
+minutes"). ClickUp's own API allows 100 requests/minute, which this loop
+cannot exhaust. Use the connector only if the direct script itself is broken,
+and say so in the run report. **Id trap:** `90146476303` is the Starcaster
+*space*; the Loop Queue *list* is `901418546619`. `CU lists --space <id>`
+resolves names to list ids when in doubt.
+
 ## Workflow
 
 1. **Claim the next task.** Find the oldest `Queued` task (highest priority
-   first) in the **Loop Queue** list (Starcaster space, id `90146476303`). If
+   first) in the **Loop Queue** list (id `901418546619`). If
    none, report "queue empty" and stop — do not invent work. Set its status to
    `Building` so a parallel build loop won't grab the same one.
 
@@ -30,10 +52,10 @@ Each run of this skill builds **one** task into **one** PR. When run under
    So the rule is mechanical:
 
    - Moving a ticket **into** `Needs your input` → **assign Dane**
-     (user id `48012725`) in the same `clickup_update_task` call.
+     (user id `48012725`) in the same call: `--assign 48012725`.
    - Moving a ticket into any machine status (`Queued`, `Building`,
-     `In review`) → **clear all assignees**, so it leaves his list the moment
-     it stops being his.
+     `In review`) → **clear all assignees** (`--clear-assignees`), so it
+     leaves his list the moment it stops being his.
 
    A ticket sitting in a machine status with Dane still assigned is a bug: it
    puts noise in the one view he trusts. When you claim a task in step 1, clear
