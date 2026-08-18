@@ -76,7 +76,9 @@
     "test:hooks": "node --test scripts/hooks/*.test.js",
     "sql:handoff": "node scripts/sql_handoff.cjs",
     "db:refresh": "doppler run --project starcaster --config dev --no-check-version -- node scripts/db_refresh.mjs",
-    "db:use": "node scripts/db_use.mjs"
+    "db:use": "node scripts/db_use.mjs",
+    "schema:snapshot": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs snapshot",
+    "schema:check": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs check"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

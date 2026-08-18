@@ -118,6 +118,31 @@ on a laptop.
 **A failed scrub is reported as a failure, never skipped.** A half-scrubbed
 table is the worst outcome, because it looks done.
 
+## Knowing what production's structure is
+
+```
+npm run schema:check      # has production moved away from the recorded structure?
+npm run schema:snapshot   # bring the record up to date after applying SQL
+```
+
+`docs/schema/production.sql` is a committed record of what production's
+structure actually is. It is a **record, not something to run**.
+
+It exists because on 2026-08-16 nobody could state what production's schema
+was: 185 hand-run files in `docs/SQL`, five in `supabase/migrations` never
+applied anywhere, and a README pointing at a tracker that did not exist. The
+local copy was thirteen days adrift and no tool could say by how much.
+
+**How schema changes ship has not changed** — `docs/DOCTRINE.md` §6.5 and §7:
+the SQL goes in `docs/SQL/`, reaches you as a GitHub URL, you apply it in the
+Supabase editor. What is new is the record and the check, so *"did something
+reach production without being written down?"* became a question with an
+answer. Log what you apply in [`MIGRATIONS_APPLIED.md`](MIGRATIONS_APPLIED.md)
+and re-snapshot afterwards.
+
+`schema:check` is read-only and cheap — structure only, no contents — so unlike
+`db:refresh` it costs production almost no disk IO.
+
 ## The production credential
 
 `db:refresh` reads production through `starcaster_readonly`, a login that
