@@ -168,6 +168,27 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     `pageBackground` and `theme` are not reset, and read the page back after
     writing before you touch the next one.
 
+## Working locally
+
+Production is not where you find out whether something works. Full guide:
+**`docs/LOCAL_DEVELOPMENT.md`**.
+
+```
+npm run doctor        # what is up, what is stale, which database am I on
+npm run db:refresh    # make this copy match production (about two minutes)
+npm run db:use        # which database am I on? add local/cloud to switch
+npm run schema:check  # has production's structure moved away from the record?
+```
+
+The admin app carries a strip across the top saying which database it is
+talking to, `npm run dev` refuses to start against the live one without
+`ALLOW_CLOUD_DEV=1`, and all three read the same classifier
+(`lib/environmentBanner.js`) so they cannot disagree.
+
+**`db:refresh` costs production disk IO.** Six runs in one day exhausted the
+budget and left every tenant site down on 2026-08-17 (`docs/DOCTRINE.md` §1.5).
+Weekly is the rhythm; `doctor` says when you have drifted.
+
 ## One worktree per thread
 
 Two sessions in one folder share a single working tree and a single HEAD: a
@@ -331,7 +352,24 @@ What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
 §5.14 — read that before treating a green run as proof a page looks right.
 Neither of them can tell a bounce from a wobble.
 
-"It should work" is not done. Passing commands are done.
+7. **Say where you looked at it.** Not a command — a sentence naming the
+   screen you opened and what you saw. Every gate above can pass on a change
+   that is visibly broken: nothing here tests CSS, and the panel bugs of
+   2026-08-12, 08-13 and 08-16 all reached the operator green. The local app
+   is the only place that catches them, and it is now trustworthy — real
+   pages, real assets, and `npm run doctor` to prove the folder is sound.
+
+   ```
+   npm run doctor        # is this folder actually able to run?
+   npm run dev           # http://localhost:3001
+   ```
+
+   Two worktrees cannot share port 3001; give this one its own
+   (`PORT=3057 node server.js`) or you will check another thread's code and
+   report it as yours.
+
+"It should work" is not done. Passing commands are done — and for anything
+with a visible surface, so is having looked at it.
 
 ## Session-close capture (binding)
 
