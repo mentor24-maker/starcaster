@@ -5,6 +5,13 @@
  * and post to the bus — through ClickUp's OWN REST API, bypassing the
  * claude.ai connector.
  *
+ * bus-relay (2026-08-18) is the operator-facing half of the same door: a
+ * comment he leaves on an open "Agent Response" task is not itself wired to
+ * anything (ClickUp has no outbound hook on its own Reply button), so this
+ * is the poller that notices it and puts it on the bus where a CC-starcaster
+ * session will actually see it. Not real-time by design — run it on a
+ * schedule (a `/loop` timer or a scheduled routine), not on every keystroke.
+ *
  * WHY THIS EXISTS (2026-08-17, extended 2026-08-18). The connector enforces a
  * rolling budget shared by every agent session at once. When it is spent,
  * requests fail with junk wait times ("NaN minutes", "207 minutes"), which
@@ -38,6 +45,19 @@ const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
 const OPERATOR_STATUSES = ['needs your input', 'ready to launch'];
 const PRIORITY = { urgent: 1, high: 2, normal: 3, low: 4 };
 const PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 };
+
+// bus-relay defaults: the "Agent Response" list in the Dane of Earth space,
+// and the party-line bus channel, so the common case needs no flags at all
+// (a cron line should not have to carry these ids). Both are overridable —
+// same pattern as WORKSPACE/OPERATOR_ID above — in case the list or channel
+// ever moves.
+const AGENT_RESPONSE_LIST = process.env.CLICKUP_AGENT_RESPONSE_LIST || '901418805125';
+const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+const BUS_RELAY_OPEN_STATUSES = ['pending response', 'responding'];
+// The dedup marker. A threaded reply starting with this exact prefix means
+// "already relayed" — checked by prefix, not just presence-of-any-reply, so
+// a human reply to Dane's comment can never be mistaken for our own marker.
+const BUS_RELAY_MARKER = '[bus-relay]';
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -122,6 +142,10 @@ function usage(code = 2) {
   console.error('                                             status AND assignees verified from the write response');
   console.error('  comment --task <id> --body-file <file|->   add a comment, verified by reading the comments back');
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
+  console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run]');
+  console.error('                                             relay the operator\'s new comments on open tasks to the bus;');
+  console.error('                                             defaults to the Agent Response list and the bus channel;');
+  console.error('                                             --dry-run prints what it would relay without posting or marking');
   process.exit(code);
 }
 
@@ -387,6 +411,73 @@ if (cmd === 'whoami') {
     for (const l of f.lists || []) console.log(`${l.id}\t${f.name} / ${l.name}`);
   }
   reportLimits(folders.res);
+
+} else if (cmd === 'bus-relay') {
+  const list = arg('list', AGENT_RESPONSE_LIST);
+  const channel = arg('channel', BUS_CHANNEL);
+  const statuses = (arg('statuses') || BUS_RELAY_OPEN_STATUSES.join(','))
+    .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const dryRun = flag('dry-run');
+
+  const { tasks, res: listRes } = await fetchAllTasks(list);
+  const open = tasks.filter((t) => statuses.includes((t.status?.status ?? '').toLowerCase()));
+  console.error(`${open.length} open task(s) of ${tasks.length} total in list ${list} (statuses: ${statuses.join(', ')})`);
+
+  let relayed = 0, skipped = 0;
+  // Report what could not be checked rather than silently passing over it
+  // (DOCTRINE 3.11) — a task this script could not read is a task whose
+  // comments might be sitting unrelayed, not a clean zero.
+  const unchecked = [];
+
+  for (const t of open) {
+    const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
+    if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
+    const fromOperator = (commentsOut.json.comments || [])
+      .filter((c) => Number(c.user?.id) === OPERATOR_ID);
+
+    for (const c of fromOperator) {
+      const repliesOut = await call('GET', `/api/v2/comment/${c.id}/reply`);
+      if (!repliesOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: could not read replies`); continue; }
+      const replies = repliesOut.json.comments || repliesOut.json.replies || [];
+      const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
+      if (already) { skipped++; continue; }
+
+      const when = new Date(Number(c.date)).toISOString().slice(0, 16).replace('T', ' ');
+      console.error(`\nRelaying: task "${t.name}" (${t.id}), comment ${c.id} [${when}]`);
+      if (dryRun) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; continue; }
+
+      const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
+      const busOut = await call('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`, {
+        type: 'message', content: busBody, content_format: 'text/md',
+      });
+      if (!busOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: bus post failed, NOT marked relayed (will retry next run)`); continue; }
+
+      // Mark relayed by replying on Dane's own comment. Deliberately AFTER
+      // the bus post, not before: if this write fails, the worst case is a
+      // harmless duplicate relay next run — the alternative order risks
+      // marking a comment "relayed" that the bus never actually got.
+      const markerText = `${BUS_RELAY_MARKER} sent to channel ${channel} at ${new Date().toISOString()}`;
+      const markOut = await call('POST', `/api/v2/comment/${c.id}/reply`, { comment_text: markerText });
+      if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: relayed to bus but could not write the dedup marker — will re-relay next run`); relayed++; continue; }
+
+      // Verify the marker actually landed, same discipline as `comment`'s
+      // read-back (DOCTRINE 3.10) — a 200 here is not proof it stuck.
+      const verify = await call('GET', `/api/v2/comment/${c.id}/reply`);
+      const stuck = verify.res.ok && (verify.json.comments || verify.json.replies || [])
+        .some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
+      if (!stuck) unchecked.push(`${t.id} comment ${c.id}: relayed to bus but the dedup marker did not verify — will re-relay next run`);
+      console.error(`  posted to bus, marker ${stuck ? 'verified' : 'UNVERIFIED'}`);
+      relayed++;
+    }
+  }
+
+  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was posted)' : ''}`);
+  if (unchecked.length) {
+    console.error('\nCould not fully verify:');
+    for (const line of unchecked) console.error(`  - ${line}`);
+  }
+  if (listRes) reportLimits(listRes);
+  if (unchecked.length) process.exit(1);
 
 } else {
   usage();
