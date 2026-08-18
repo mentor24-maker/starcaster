@@ -58,6 +58,36 @@ enormous headroom.
 Disabling the spend cap starts a restore. **That is a billing decision and it
 belongs to the operator** — an agent must not click it.
 
+> ### Standing decision: the spend cap stays OFF
+>
+> **Decided by Dane on 2026-08-17.** The cap is disabled, so overages are
+> billed and the sites keep serving.
+>
+> The name is misleading and the setting runs backwards from what it sounds
+> like. A spend cap is **not** a spending limit — it is a service kill switch.
+> Cap ON means Supabase refuses to bill past the included quota and restricts
+> the database instead, which is what took `delraytennis.starcaster.pro` and
+> `brandonmarinoff.com` down for two and a half hours on 2026-08-16. Cap OFF
+> means the overage lands on the invoice and the sites stay up.
+>
+> The trade was priced before it was made: base plan $25/month, projected
+> $31.08, so the overage the cap was "protecting" against was about **six
+> dollars**. Two client sites returning 404s is not worth six dollars.
+>
+> **It has already flipped back once.** It was disabled during the 2026-08-16
+> incident, and on 2026-08-17 at 4:57pm the billing page read *"Spend cap is
+> enabled"* again — nobody recorded re-enabling it. **Read the dashboard before
+> stating its state; never quote this file as evidence of what is live.**
+> Dashboard → organization → Billing → **Cost Control**.
+>
+> **What this decision does not buy you.** The cap is not a cost control, and
+> turning it off removes the only automatic ceiling that existed. There is no
+> configurable billing-alert threshold in Supabase to replace it — the usage
+> page and Supabase's own automatic quota emails are the whole safety net, and
+> that email arrived two hours late during the outage. The bill is watched by a
+> person, on purpose. Anyone reversing this decision is choosing client
+> downtime over an unplanned charge, which is a call only the operator makes.
+
 **Project Disk IO budget** — the project's own page, plus your email. Small
 compute sizes (`t4g.nano`, Micro) run at a low baseline with a daily burst
 budget on top. Spend the budget and the instance throttles to baseline, which
