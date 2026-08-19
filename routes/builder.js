@@ -191,6 +191,7 @@ const { listContacts, createContact, updateContact, rowToContact } = require('..
 const { savePollSubmission, getPollResults } = require('../lib/pollSubmissionsStore');
 const {
   listSavedSections,
+  getSavedSection,
   createSavedSection,
   updateSavedSection,
   deleteSavedSection,
@@ -2140,6 +2141,14 @@ async function handle(req, res, pathname, method) {
   const savedSectionMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)$/);
   if (savedSectionMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
+    // Read BEFORE the patch overwrites it — this is the "before" a following
+    // page's drift is measured against, not the new content about to land.
+    // Best-effort: a missing/unreadable previous row just disables the drift
+    // check for this push (propagateCanonicalSection fails open on it), it
+    // must never block the save itself.
+    const beforeResult = await getSavedSection(savedSectionMatch[1], scope).catch(() => null);
+    const previousSection = beforeResult && beforeResult.ok ? beforeResult.data.section : null;
+
     const result = await updateSavedSection(savedSectionMatch[1], {
       name: body.name,
       section: body.section,
@@ -2152,7 +2161,7 @@ async function handle(req, res, pathname, method) {
       savedSectionMatch[1],
       result.data.section,
       scope,
-      { actor: actorFrom(req) },
+      { actor: actorFrom(req), previousSection, overwriteDrifted: body.overwriteDrifted === true },
     );
     return sendOk(res, 200, result.data, { savedSection: result.data }, { propagation }), true;
   }
@@ -2160,6 +2169,26 @@ async function handle(req, res, pathname, method) {
     const result = await deleteSavedSection(savedSectionMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete saved section'), true;
     return sendOk(res, 200, result.data, { savedSection: result.data }), true;
+  }
+
+  // POST /api/builder/saved-sections/:id/force-propagate — the explicit
+  // opt-in to overwrite pages a normal push skipped for having local changes.
+  // Re-reads the section's CURRENT (already-saved) content and re-runs the
+  // push with the drift check off, rather than asking the client to resend
+  // the whole section body a second time.
+  const forcePropagateMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)\/force-propagate$/);
+  if (forcePropagateMatch && requestMethod === 'POST') {
+    const currentResult = await getSavedSection(forcePropagateMatch[1], scope);
+    if (!currentResult.ok) {
+      return sendErr(res, currentResult.status || 404, currentResult.error || 'Saved section not found'), true;
+    }
+    const propagation = await propagateCanonicalSection(
+      forcePropagateMatch[1],
+      currentResult.data.section,
+      scope,
+      { actor: actorFrom(req), overwriteDrifted: true },
+    );
+    return sendOk(res, 200, {}, {}, { propagation }), true;
   }
 
   if (pathname === '/api/builder/products' && requestMethod === 'GET') {

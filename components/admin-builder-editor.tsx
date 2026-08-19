@@ -64,9 +64,11 @@ import {
   describeCanonicalOverwrite,
   describePropagationOutcome,
   describePushImpact,
+  driftedFollowingPages,
   type BlockUsage
 } from "@/lib/shared-block-usage";
 import { diffSavedSectionOverwrite } from "@/lib/saved-section-diff";
+import { getSectionContent, hasSectionDrifted } from "@/lib/section-drift";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -178,6 +180,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [propagationUndo, setPropagationUndo] =
     useState<{ runId: string; pages: number; name: string } | null>(null);
   const [isUndoingPropagation, setIsUndoingPropagation] = useState(false);
+  // Sync 5/7: pages a push skipped because they were hand-edited on their
+  // own, still following the section that skipped them. The explicit
+  // opt-in to overwrite them anyway lives here, right where the skip was
+  // reported — not buried behind a checkbox nobody would find before saving.
+  const [driftedSkip, setDriftedSkip] =
+    useState<{ savedSectionId: string; name: string; pageLabels: string[] } | null>(null);
+  const [isForcingDrifted, setIsForcingDrifted] = useState(false);
   const pageThemeDirtyRef = useRef(false);
   // Template and theme are only written back when the operator actually picked
   // one.  Both selects render blank whenever the stored value isn't among their
@@ -267,6 +276,15 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // The same content `overwriteCanonicalFromSection` sends to the PATCH.
     return diffSavedSectionOverwrite(pages, sectionSaveChoice.savedSectionId, getSectionContent(section));
   }, [sectionSaveChoice, draft.layoutSections, pages]);
+  /**
+   * Which following pages this overwrite will SKIP rather than rewrite —
+   * a copy already hand-edited on its own page, measured against the
+   * master's content as it stands right now, before this save lands.
+   */
+  const sectionSaveDrift = useMemo(() => {
+    if (!sectionSaveChoice || !sectionSaveChoiceMaster) return { count: 0, pageLabels: [] };
+    return driftedFollowingPages(pages, sectionSaveChoice.savedSectionId, sectionSaveChoiceMaster.section);
+  }, [sectionSaveChoice, sectionSaveChoiceMaster, pages]);
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
   // What the canvas paints type with. The shell colours above already read
   // `linkedTheme` — the live record — while the type vars read the copy frozen
@@ -952,11 +970,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  function getSectionContent(section: BuilderTemplateSection) {
-    const { id, savedSectionId, canonical, ...content } = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
-    return content;
-  }
-
   async function handleToggleSectionCanonical(sectionId: string, checked: boolean) {
     const section = draft.layoutSections.find((s) => s.id === sectionId);
     if (!section) return;
@@ -976,10 +989,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       return;
     }
 
-    const localJson = JSON.stringify(getSectionContent(section));
-    const masterJson = JSON.stringify(getSectionContent(master.section));
-
-    if (localJson === masterJson) {
+    if (!hasSectionDrifted(section, master.section)) {
       updateSection(sectionId, (s) => ({ ...s, canonical: true }));
       return;
     }
@@ -1400,8 +1410,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // Say what this will touch BEFORE writing. Saving a master rewrites the
     // section on every page that follows it, and that fan-out used to be
     // completely silent — see lib/builder-client/shared-block-usage.ts.
+    // The master's CURRENT content (before this save lands) is what a
+    // drifted copy is measured against — never the new content about to
+    // be written, which every following page differs from by definition.
+    const currentMaster = savedSections.find((ss) => ss.id === sectionId)?.section ?? null;
+    const drift = driftedFollowingPages(pages, sectionId, currentMaster);
     if (!options.skipImpactConfirm) {
-      const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId));
+      const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId), drift.count);
       if (impact && !window.confirm(impact)) return false;
     }
 
@@ -1421,6 +1436,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         meta?: {
           propagation?: {
             ok?: boolean; total?: number; updated?: number; failed?: number; runId?: string;
+            skipped?: Array<{ pageId?: string; name?: string }>;
           };
         };
       }>(response, "Failed to save saved section.");
@@ -1435,6 +1451,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       // The route has always returned this tally; it used to be dropped, so a
       // fan-out that half failed reported the same "Saved." as a clean one.
       const outcome = describePropagationOutcome(data.savedSection.name, data.meta?.propagation);
+      const skippedForDrift = data.meta?.propagation?.skipped ?? [];
+      setDriftedSkip(
+        skippedForDrift.length
+          ? { savedSectionId: sectionId, name: data.savedSection.name, pageLabels: skippedForDrift.map((p) => p.name || "Untitled page") }
+          : null
+      );
       setMessage(options.note ? `${outcome} ${options.note}` : outcome);
       // Offer the way back, right where the damage is reported. A push that
       // rewrote pages is exactly the moment somebody realises it was wrong.
@@ -2178,6 +2200,47 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
+  /**
+   * The explicit opt-in: overwrite the pages the last push skipped for
+   * having local changes. Re-reads the section's already-saved content
+   * server-side rather than resending it — nothing here re-saves the master,
+   * it only re-runs the push with the drift check turned off.
+   */
+  async function forceOverwriteDrifted() {
+    if (!driftedSkip) return;
+    const { savedSectionId, name, pageLabels } = driftedSkip;
+    const confirmed = window.confirm(
+      `Overwrite the local changes on ${pageLabels.length === 1 ? "this page" : `these ${pageLabels.length} pages`}?\n\n` +
+        pageLabels.map((label) => `  • ${label}`).join("\n") +
+        "\n\nEach page's current version is saved to its own history first, so this can itself be undone."
+    );
+    if (!confirmed) return;
+
+    setIsForcingDrifted(true);
+    setError(null);
+    try {
+      const response = await builderAdminFetch(`/api/admin/saved-sections/${savedSectionId}/force-propagate`, {
+        method: "POST",
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        propagation?: { updated?: number; failed?: number; runId?: string };
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? "Could not overwrite those pages.");
+
+      const updated = body.propagation?.updated ?? 0;
+      setMessage(`Overwrote ${updated} ${updated === 1 ? "page" : "pages"} with "${name}".`);
+      const runId = String(body.propagation?.runId ?? "");
+      if (runId && updated) setPropagationUndo({ runId, pages: updated, name });
+      setDriftedSkip(null);
+      await loadPages();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not overwrite those pages.");
+    } finally {
+      setIsForcingDrifted(false);
+    }
+  }
+
   /** Throw away the local draft and pull down whatever is live now. */
   function reloadPageFromServer() {
     setSaveConflict(null);
@@ -2623,6 +2686,24 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         </div>
       ) : null}
 
+      {driftedSkip ? (
+        <div className="notice admin-notice builder-propagation-drift-skip">
+          <span>
+            <strong>{driftedSkip.pageLabels.length}</strong>{" "}
+            {driftedSkip.pageLabels.length === 1 ? "page has" : "pages have"} local changes and{" "}
+            {driftedSkip.pageLabels.length === 1 ? "was" : "were"} skipped. Overwrite anyway?
+          </span>
+          <button
+            className="secondary-button"
+            disabled={isForcingDrifted}
+            onClick={() => void forceOverwriteDrifted()}
+            type="button"
+          >
+            {isForcingDrifted ? "Overwriting..." : "Overwrite anyway"}
+          </button>
+        </div>
+      ) : null}
+
       {saveConflict ? (
         <BuilderSaveConflictModal
           age={describeConflictAge(saveConflict.liveUpdatedAt)}
@@ -2639,7 +2720,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           canonicalName={sectionSaveChoiceMaster.name}
           impact={describeCanonicalOverwrite(
             sectionSaveChoiceMaster.name,
-            savedSectionUsage.get(sectionSaveChoiceMaster.id)
+            savedSectionUsage.get(sectionSaveChoiceMaster.id),
+            sectionSaveDrift.pageLabels
           )}
           diff={sectionSaveDiff}
           isSaving={isSaving}
@@ -2893,9 +2975,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                       <div className="builder-sections">
                         {draft.layoutSections.map((section, sectionIndex) => {
                           const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
-                          const canonicalSourceName = sectionAny.savedSectionId
-                            ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
+                          const canonicalMaster = sectionAny.savedSectionId
+                            ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)
                             : undefined;
+                          const canonicalSourceName = canonicalMaster?.name;
+                          const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
+                            && hasSectionDrifted(section, canonicalMaster!.section);
                           return (
                           <Fragment key={section.id}>
                           {renderSectionGapDropZone(sectionIndex)}
@@ -2911,6 +2996,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             isCollapsed={collapsedSectionIds.includes(section.id)}
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
+                            hasDrifted={hasDrifted}
                             themeColors={rteThemeColors}
                             themeStyle={getThemeRootVars(canvasTheme)}
                             themeBackgroundColor={activeTheme?.backgroundColor}
@@ -2972,9 +3058,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                   <div className="builder-sections">
                     {draft.layoutSections.map((section, sectionIndex) => {
                       const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
-                      const canonicalSourceName = sectionAny.savedSectionId
-                        ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
+                      const canonicalMaster = sectionAny.savedSectionId
+                        ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)
                         : undefined;
+                      const canonicalSourceName = canonicalMaster?.name;
+                      const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
+                        && hasSectionDrifted(section, canonicalMaster!.section);
                       return (
                       <Fragment key={section.id}>
                       {renderSectionGapDropZone(sectionIndex)}
@@ -2990,6 +3079,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         isCollapsed={collapsedSectionIds.includes(section.id)}
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
+                        hasDrifted={hasDrifted}
                         themeColors={rteThemeColors}
                         themeStyle={getThemeRootVars(canvasTheme)}
                         themeBackgroundColor={activeTheme?.backgroundColor}

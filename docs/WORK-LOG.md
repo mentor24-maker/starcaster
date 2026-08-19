@@ -14,6 +14,20 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — A shared section can no longer silently swallow a local edit (#343)
+
+Shared sections (the same header, footer or banner reused on many pages) work
+by staying linked to a master copy — save the master, every linked page
+follows. Until now, a page that had been hand-edited directly while still
+linked looked completely identical to an ordinary linked page, so a routine
+master edit would silently flatten it along with everything else. Now the
+Builder can tell the difference: a page whose copy has drifted from the
+master shows a "Changed" badge, a master save skips those pages by default
+and says so before you click ("34 pages will update, 2 have local changes and
+will be skipped"), and after saving there's a one-click way to overwrite them
+anyway if that's really what you wanted. Nothing about an ordinary push
+changed for the 34 pages that hadn't drifted.
+
 ## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai

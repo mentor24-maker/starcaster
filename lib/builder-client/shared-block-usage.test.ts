@@ -5,8 +5,10 @@ import {
   describePropagationOutcome,
   describePushImpact,
   describeUsage,
+  driftedFollowingPages,
   savedSectionUsage,
   type UsagePage,
+  type UsagePageWithContent,
 } from './shared-block-usage';
 
 const MENU = 'saved_section_menu';
@@ -128,5 +130,75 @@ describe('what the operator reads', () => {
     // The case that used to be invisible: a fan-out that half worked.
     expect(describePropagationOutcome('Menu', { updated: 30, failed: 5 }))
       .toContain('5 pages could not be updated');
+  });
+
+  it('names the pages a fan-out skipped for having local changes', () => {
+    expect(describePropagationOutcome('Menu', { updated: 32, failed: 0, skipped: [{ name: 'Rates' }, { name: 'FAQ' }] }))
+      .toBe('Saved "Menu" and updated 32 pages. 2 pages have local changes and were skipped.');
+    expect(describePropagationOutcome('Menu', { updated: 0, failed: 0, skipped: [{ name: 'Rates' }] }))
+      .toBe('Saved "Menu". 1 page has local changes and was skipped — nothing else changed.');
+    // No skipped key at all (an older caller) must read exactly as before.
+    expect(describePropagationOutcome('Menu', { updated: 5, failed: 0 }))
+      .toBe('Saved "Menu" and updated 5 pages.');
+  });
+});
+
+describe('drift: a following copy edited on its own page', () => {
+  const master = { title: 'Footer', modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'Call us', settings: {} }] };
+
+  function pageWithContent(name: string, section: Record<string, unknown> | null): UsagePageWithContent {
+    return {
+      name,
+      slug: name.toLowerCase(),
+      layoutSections: section
+        ? [{ savedSectionId: FOOTER, canonical: true, title: 'Footer', modules: master.modules, ...section }]
+        : [],
+    };
+  }
+
+  it('an untouched copy is not reported as drifted', () => {
+    const pages = [pageWithContent('Home', {})];
+    expect(driftedFollowingPages(pages, FOOTER, master)).toEqual({ count: 0, pageLabels: [] });
+  });
+
+  it('a hand-edited copy is named', () => {
+    const pages = [
+      pageWithContent('Home', {}),
+      pageWithContent('Rates', { modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'EDITED', settings: {} }] }),
+    ];
+    expect(driftedFollowingPages(pages, FOOTER, master)).toEqual({ count: 1, pageLabels: ['Rates'] });
+  });
+
+  it('an unfollowed (independent) copy is never counted as drifted — it opted out on purpose', () => {
+    const pages = [pageWithContent('Rates', { canonical: false, modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'EDITED', settings: {} }] })];
+    expect(driftedFollowingPages(pages, FOOTER, master).count).toBe(0);
+  });
+
+  it('with no master to compare against, nothing is ever reported as drifted', () => {
+    const pages = [pageWithContent('Rates', { modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'EDITED', settings: {} }] })];
+    expect(driftedFollowingPages(pages, FOOTER, null)).toEqual({ count: 0, pageLabels: [] });
+  });
+
+  it('describePushImpact splits the count into "will update" and "will be skipped"', () => {
+    const text = describePushImpact('Footer', { following: 3, independent: 0, pages: 3, pageLabels: ['Home', 'Rates', 'FAQ'] }, 1);
+    expect(text).toContain('updates it on 2 pages');
+    expect(text).toContain('1 page has local changes and will be skipped');
+  });
+
+  it('describeCanonicalOverwrite does the same for the save-modal impact', () => {
+    const impact = describeCanonicalOverwrite(
+      'Footer',
+      { following: 3, independent: 0, pages: 3, pageLabels: ['Home', 'Rates', 'FAQ'] },
+      ['Rates']
+    );
+    expect(impact.summary).toContain('2 pages');
+    expect(impact.summary).toContain('1 page has local changes and will be skipped');
+    expect(impact.driftedPageLabels).toEqual(['Rates']);
+  });
+
+  it('with no drifted pages, both descriptions read exactly as they did before Sync 5/7', () => {
+    const usage = { following: 3, independent: 0, pages: 3, pageLabels: ['Home', 'About', 'Contact'] };
+    expect(describePushImpact('Footer', usage)).not.toContain('will be skipped');
+    expect(describeCanonicalOverwrite('Footer', usage).summary).not.toContain('will be skipped');
   });
 });
