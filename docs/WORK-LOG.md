@@ -14,6 +14,21 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Test coverage for the module trigger picker (#350)
+
+Modules like Game can be set to fire on a button click, on page load, or as a
+game trigger. That choice is read from a settings field with no guardrail of
+its own — if the stored value is ever missing, blank, or something nobody
+recognizes, the code is supposed to quietly fall back to "Button Click" rather
+than break. This adds tests that lock that fallback behavior in place: every
+allowed choice is read back correctly, anything unrecognized (including empty
+or whitespace) lands on the button fallback, and the "is this a game trigger"
+check is true only when the resolved choice is actually "game." No production
+code changed — this is test coverage only, written against the existing
+helper functions in `lib/builder-client/module-trigger.ts`.
+
+---
+
 ## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai
