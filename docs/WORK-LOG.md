@@ -14,6 +14,16 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Test coverage for the "no more polls" message picker (#348)
+
+The small piece of code that decides what message a player sees when
+they've run out of polls to answer (wrong category, ran out of preferred
+categories, none published at all, etc.) had no test coverage. Added tests
+locking in that every one of those seven situations shows its own message
+rather than a blank or a generic one, and that an unrecognized situation
+still shows something sensible instead of nothing. No behavior changed —
+this only makes sure the existing behavior can't quietly break later.
+
 ## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai
