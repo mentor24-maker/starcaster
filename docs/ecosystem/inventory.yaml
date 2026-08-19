@@ -1,0 +1,410 @@
+# ============================================================================
+# THE DEVELOPMENT ECOSYSTEM — source of truth
+# ============================================================================
+#
+# This file is the thing a human edits. The diagram, the Obsidian pages and
+# the links are all GENERATED from it — nobody ever drags a box.
+#
+# Not to be confused with the vault's `doctrine/ECOSYSTEM.md`, which is the
+# BUSINESS ecosystem (Dane, Alphire, Starcaster, Normie, DEO, clients). This
+# file is the DEVELOPMENT ecosystem: machines, repos, services, jobs, wires.
+#
+# Touched on decision, not on schedule — same rule as doctrine. If you change
+# how the system is wired, change this the same day.
+#
+# ---------------------------------------------------------------------------
+# OBJECT FIELDS
+#   id       required  slug, unique, stable. Used for note filenames and SVG
+#                      element ids, so renaming one renames a file. Think
+#                      before changing an id.
+#   name     required  display name on the diagram
+#   kind     required  machine | repo | runtime | service | datastore | job |
+#                      surface | secrets | external | agent
+#   layer    required  workstations | local-dev | production | coordination |
+#                      external
+#                      Nothing renders layers yet. It is here from day one so
+#                      drill-down views are a rendering change, not a rewrite.
+#   summary  required  ONE line. If a stranger reads only this, they should
+#                      know what the thing is.
+#   note     optional  path of its page in the vault, relative to wiki/ecosystem
+#   host     optional  id of the object it runs on
+#   detail   optional  free-form map: anything worth recording that is not a
+#                      relationship (versions, ids, paths, schedules)
+#   probe    optional  how the drift check verifies this object exists.
+#                      Absent = cannot be checked automatically, and the drift
+#                      check must SAY SO rather than silently passing it.
+#
+# RELATIONSHIP FIELDS
+#   from, to required  object ids. Dangling ids are an error, not a warning.
+#   label    required  what the arrow means, in words
+#   kind     optional  runs | deploys-to | reads | writes | schedules |
+#                      authenticates-to | coordinates | builds
+# ============================================================================
+
+meta:
+  title: Starcaster Development Ecosystem
+  updated: 2026-08-19
+  note: >
+    Generated outputs land in the vault at wiki/ecosystem/. The generators
+    live in this repo because the vault's rulebook forbids building machinery
+    inside itself (~/vault/CLAUDE.md, "Layers" and "Maintenance rhythm").
+
+objects:
+
+  # ---------------------------------------------------------------- machines
+  - id: macbook-pro
+    name: MacBook Pro
+    kind: machine
+    layer: workstations
+    summary: Dane's portable machine — where he works interactively, and closes at the end of the day.
+    detail:
+      user: mentor
+      home: /Users/mentor
+      container_runtime: Docker Desktop
+      role: interactive work; not trusted for scheduled jobs because it sleeps and travels
+    probe: hostname
+
+  - id: mac-mini
+    name: Mac Mini
+    kind: machine
+    layer: workstations
+    summary: The always-on machine — never sleeps, logs itself back in after a power cut, and codes while Dane is elsewhere.
+    detail:
+      user: daneofearth
+      home: /Users/daneofearth
+      hardware: Apple M4, 16 GB RAM, 228 GB disk
+      os: macOS 26.5.1
+      container_runtime: Colima
+      auto_login: daneofearth
+      filevault: 'off — deliberately, so it restarts unattended'
+      power: sleep 0, disksleep 0, autorestart 1
+      reachable: ssh mac-mini (key-based, from the MacBook)
+      commissioned: 2026-08-19
+    probe: ssh
+
+  # ------------------------------------------------------------------- repos
+  - id: repo-starcaster
+    name: starcaster
+    kind: repo
+    layer: workstations
+    summary: The platform — multi-tenant admin app plus the visual site Builder that publishes tenant public sites.
+    detail:
+      remote: https://github.com/mentor24-maker/starcaster.git
+      path: ~/WebApps/starcaster
+      deploys_from: main (auto-deploys to production on merge)
+    probe: git-remote
+
+  - id: repo-normie
+    name: normie
+    kind: repo
+    layer: workstations
+    summary: Sibling codebase — the DEO polling game; shares the Builder schema with Starcaster.
+    detail:
+      remote: https://github.com/mentor24-maker/normie.git
+      path: ~/WebApps/normie
+    probe: git-remote
+
+  - id: repo-pulse
+    name: pulse
+    kind: repo
+    layer: workstations
+    summary: The scheduled-pipeline runner behind channel-steward and librarian-sweep.
+    detail:
+      remote: https://github.com/mentor24-maker/pulse.git
+      path: ~/pulse
+    probe: git-remote
+
+  - id: repo-vault
+    name: vault
+    kind: repo
+    layer: workstations
+    summary: Dane's second brain — doctrine, wiki and raw source material, and the home of every generated page this diagram links to.
+    detail:
+      remote: https://github.com/mentor24-maker/daneofearth-vault.git
+      path: ~/vault
+      layers: inbox/, raw/, wiki/, doctrine/
+      rule: private, always; doctrine is human-ratified and agents never write to it directly
+    probe: git-remote
+
+  # --------------------------------------------------------------- local dev
+  - id: colima
+    name: Colima
+    kind: runtime
+    layer: local-dev
+    summary: Runs the hidden Linux machine that containers need on a Mac — CLI-only, so it starts from a background job with no desktop.
+    host: mac-mini
+    detail:
+      why_not_docker_desktop: Docker Desktop is an app that wants a logged-in desktop; wrong shape for a headless box
+      resources: 4 CPU, 8 GB RAM, 60 GB disk
+      autostart: com.starcaster.colima LaunchAgent
+    probe: command
+
+  - id: docker
+    name: Docker
+    kind: runtime
+    layer: local-dev
+    summary: Runs the containers. Provided by Colima on the Mini and by Docker Desktop on the MacBook.
+    detail:
+      note: the two machines differ here — first thing to check if something is container-related and machine-specific
+    probe: docker-info
+
+  - id: supabase-local
+    name: Local Supabase stack
+    kind: datastore
+    layer: local-dev
+    summary: A throwaway copy of production in twelve containers — the only thing that lets the visual checks run at all.
+    host: docker
+    detail:
+      postgres: '17.6'
+      refreshed_by: npm run db:refresh
+      refresh_rhythm: weekly, and ONE machine owns it — six runs in a day took every client site dark for 2.5h on 2026-08-17
+      login: localdev123 (this copy only)
+      gates_that_need_it: check:panels, check:screens (they refuse to run against a non-local database)
+      components:
+        - supabase_db_starcaster
+        - supabase_auth_starcaster
+        - supabase_rest_starcaster
+        - supabase_storage_starcaster
+        - supabase_studio_starcaster
+        - supabase_kong_starcaster
+        - supabase_realtime_starcaster
+        - supabase_inbucket_starcaster
+        - supabase_vector_starcaster
+        - supabase_analytics_starcaster
+        - supabase_pg_meta_starcaster
+        - supabase_edge_runtime_starcaster
+    probe: docker-containers
+
+  # -------------------------------------------------------------- production
+  - id: vercel
+    name: Vercel
+    kind: service
+    layer: production
+    summary: Hosts the live platform. Merging to main deploys it — there is no separate deploy step.
+    detail:
+      gotcha: env vars are baked in at BUILD time; changing one in the dashboard does NOT reach the running deployment until a redeploy
+    probe: none
+
+  - id: supabase-cloud
+    name: Supabase (production)
+    kind: datastore
+    layer: production
+    summary: The real database. Every tenant's content lives here, and its disk-IO budget is the one physical limit that actually binds.
+    detail:
+      rls: all 136 tables have row-level security on since 2026-08-18
+      constraint: disk IO — exhausted on 2026-08-17 by repeated production dumps, not by page reads
+    probe: none
+
+  - id: tenant-sites
+    name: Tenant public sites
+    kind: service
+    layer: production
+    summary: Client websites served from Builder pages on their own custom domains.
+    detail:
+      live: brandonmarinoff.com
+      platform_domain: starcaster.pro
+    probe: none
+
+  # ------------------------------------------------------------ scheduled jobs
+  - id: job-bus-relay
+    name: bus-relay
+    kind: job
+    layer: coordination
+    summary: Every hour, relays Dane's new ClickUp task comments onto the party line so agents see what he said.
+    host: macbook-pro
+    detail:
+      label: com.starcaster.bus-relay
+      schedule: hourly
+      must_run_in: exactly one place — two machines running it double-posts to the bus
+      pending_move: to mac-mini (Phase 5)
+    probe: launchctl
+
+  - id: job-channel-steward
+    name: channel-steward
+    kind: job
+    layer: coordination
+    summary: Runs every fifteen minutes to keep the Pulse channels tended.
+    host: macbook-pro
+    detail:
+      label: com.danechristensen.pulse.channel-steward
+      schedule: every 15 minutes
+      pending_move: to mac-mini (Phase 5)
+    probe: launchctl
+
+  - id: job-librarian-sweep
+    name: librarian-sweep
+    kind: job
+    layer: coordination
+    summary: Daily pass over the vault, checking doctrine status headers and reporting what drifted.
+    host: macbook-pro
+    detail:
+      label: com.danechristensen.pulse.librarian-sweep
+      schedule: daily
+      pending_move: to mac-mini (Phase 5)
+    probe: launchctl
+
+  - id: job-colima
+    name: colima autostart
+    kind: job
+    layer: local-dev
+    summary: Brings the container runtime up after a reboot, so the Mini's database is there without anyone touching a screen.
+    host: mac-mini
+    detail:
+      label: com.starcaster.colima
+      schedule: at login (auto-login makes that "at boot")
+    probe: launchctl
+
+  # ----------------------------------------------------------- coordination
+  - id: clickup-bus
+    name: The bus (party line)
+    kind: surface
+    layer: coordination
+    summary: The shared ClickUp chat where every agent and Dane post decisions — the record that outlives any one session.
+    detail:
+      channel_id: 2kydhxeu-474
+      convention: sign every post with the agent's name, e.g. [CC-starcaster]
+    probe: clickup-id
+
+  - id: clickup-loop-queue
+    name: Loop Queue
+    kind: surface
+    layer: coordination
+    summary: The work queue the build and review loops drain, one pull request at a time.
+    detail:
+      list_id: '901418546619'
+      statuses: Queued -> Building -> In review -> Needs your input / Ready to launch -> Live
+      operator_statuses: 'Needs your input, Ready to launch — machines never set these except to hand work over'
+    probe: clickup-id
+
+  - id: loop-spec
+    name: loop-spec
+    kind: agent
+    layer: coordination
+    summary: Turns a rough idea from Dane into small, independently-shippable tasks. The only manual step of the loop.
+    probe: skill-file
+
+  - id: loop-build
+    name: loop-build
+    kind: agent
+    layer: coordination
+    summary: Claims a queued task and builds it into a pull request in its own worktree. Never edits main, never merges.
+    probe: skill-file
+
+  - id: loop-review
+    name: loop-review
+    kind: agent
+    layer: coordination
+    summary: Independently verifies a built pull request, then either readies it for Dane's merge or sends it back with notes.
+    probe: skill-file
+
+  # ---------------------------------------------------------------- secrets
+  - id: doppler
+    name: Doppler
+    kind: secrets
+    layer: coordination
+    summary: Holds every credential. Nothing is copied between machines — each one fetches what it needs at run time.
+    detail:
+      configs: starcaster/dev, starcaster/prd
+      mac_mini_auth: service token, scoped to the repo folder, no expiry
+      macbook_auth: interactive login
+      rule: agents write the tooling; Dane types the value
+    probe: command
+
+  # --------------------------------------------------------------- external
+  - id: github
+    name: GitHub
+    kind: external
+    layer: external
+    summary: Where the four repos live and where CI runs on every pull request.
+    detail:
+      account: mentor24-maker
+    probe: gh-auth
+
+  - id: anthropic
+    name: Anthropic
+    kind: external
+    layer: external
+    summary: Supplies the model attention every agent runs on — one subscription, shared across every session on every machine.
+    detail:
+      constraint: >
+        THE binding throttle. An unattended machine that burns the rolling window
+        overnight locks Dane out of his own morning. See BOOTSTRAP-CAPACITY.
+    probe: none
+
+  - id: clickup-api
+    name: ClickUp API
+    kind: external
+    layer: external
+    summary: The write path behind every task, comment and bus post the agents make.
+    detail:
+      route: npm run clickup (direct, token from Doppler) — not the claude.ai connector, which has a small rolling write quota
+    probe: none
+
+  - id: social-apis
+    name: Social platform APIs
+    kind: external
+    layer: external
+    summary: Meta, Instagram, X and Google endpoints the campaigns layer publishes through.
+    detail:
+      working: X (direct), Instagram, Facebook
+      broken: TikTok has no client and fails at publish
+    probe: none
+
+relationships:
+
+  # what runs where
+  - {from: repo-starcaster, to: macbook-pro, label: checked out on, kind: runs}
+  - {from: repo-starcaster, to: mac-mini, label: checked out on, kind: runs}
+  - {from: repo-normie, to: mac-mini, label: checked out on, kind: runs}
+  - {from: repo-pulse, to: mac-mini, label: checked out on, kind: runs}
+  - {from: repo-vault, to: mac-mini, label: checked out on, kind: runs}
+  - {from: colima, to: mac-mini, label: runs on, kind: runs}
+  - {from: docker, to: colima, label: provided by, kind: runs}
+  - {from: supabase-local, to: docker, label: runs in, kind: runs}
+
+  # the local development loop
+  - {from: repo-starcaster, to: supabase-local, label: visual gates read, kind: reads}
+  - {from: supabase-local, to: supabase-cloud, label: db:refresh copies down (weekly, one machine), kind: reads}
+
+  # shipping
+  - {from: repo-starcaster, to: github, label: pull requests + CI, kind: builds}
+  - {from: github, to: vercel, label: merge to main deploys, kind: deploys-to}
+  - {from: vercel, to: supabase-cloud, label: reads and writes, kind: reads}
+  - {from: vercel, to: tenant-sites, label: serves, kind: deploys-to}
+
+  # the loop machinery
+  - {from: loop-spec, to: clickup-loop-queue, label: files tasks into, kind: writes}
+  - {from: clickup-loop-queue, to: loop-build, label: hands a task to, kind: coordinates}
+  - {from: loop-build, to: github, label: opens a pull request on, kind: writes}
+  - {from: loop-build, to: clickup-loop-queue, label: moves to In review, kind: writes}
+  - {from: clickup-loop-queue, to: loop-review, label: hands a PR to, kind: coordinates}
+  - {from: loop-review, to: clickup-loop-queue, label: readies for Dane's merge, kind: writes}
+  - {from: loop-build, to: anthropic, label: spends model attention, kind: authenticates-to}
+  - {from: loop-review, to: anthropic, label: spends model attention, kind: authenticates-to}
+
+  # scheduled work
+  - {from: job-bus-relay, to: macbook-pro, label: scheduled on, kind: schedules}
+  - {from: job-channel-steward, to: macbook-pro, label: scheduled on, kind: schedules}
+  - {from: job-librarian-sweep, to: macbook-pro, label: scheduled on, kind: schedules}
+  - {from: job-colima, to: mac-mini, label: scheduled on, kind: schedules}
+  - {from: job-bus-relay, to: clickup-bus, label: posts to, kind: writes}
+  - {from: job-bus-relay, to: clickup-api, label: reads comments through, kind: reads}
+  - {from: job-librarian-sweep, to: repo-vault, label: sweeps, kind: reads}
+  - {from: job-channel-steward, to: repo-pulse, label: run by, kind: runs}
+  - {from: job-librarian-sweep, to: repo-pulse, label: run by, kind: runs}
+  - {from: job-colima, to: colima, label: starts, kind: runs}
+
+  # credentials
+  - {from: macbook-pro, to: doppler, label: interactive login, kind: authenticates-to}
+  - {from: mac-mini, to: doppler, label: service token, kind: authenticates-to}
+  - {from: repo-starcaster, to: doppler, label: reads secrets at run time, kind: reads}
+  - {from: macbook-pro, to: github, label: gh auth, kind: authenticates-to}
+  - {from: mac-mini, to: github, label: gh auth, kind: authenticates-to}
+  - {from: mac-mini, to: anthropic, label: Claude Code signed in, kind: authenticates-to}
+  - {from: macbook-pro, to: anthropic, label: Claude Code signed in, kind: authenticates-to}
+
+  # publishing
+  - {from: vercel, to: social-apis, label: campaigns publish through, kind: writes}
+
+  # the record
+  - {from: clickup-bus, to: repo-vault, label: decisions land as doctrine, kind: writes}
