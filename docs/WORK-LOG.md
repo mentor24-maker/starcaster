@@ -14,6 +14,18 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Shipping cleanly no longer LOOKS like it broke (#346)
+
+Merging a finished piece of work with `npm run ship` was printing a scary
+red error at the very end, even when everything genuinely worked — the
+error came from a GitHub tool trying to also switch this computer's local
+copy off the branch it just deleted, which never works from the kind of
+folder every piece of work here happens in, and never mattered anyway,
+since a separate step already handles that cleanup properly. That tool call
+is now told to skip the part that always failed and never did anything
+useful. A successful ship now looks like what it is — clean — and, just as
+important, still reports a real failure honestly when one actually happens.
+
 ## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai
