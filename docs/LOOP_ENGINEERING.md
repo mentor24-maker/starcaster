@@ -77,6 +77,26 @@ status clears assignees, and both halves of the write are verified from the
 response. `--if-status` makes a claim safe against a parallel loop: it exits
 code 3 without writing if the task has already moved.
 
+**Urgent is the human lane (ratified 2026-08-18).** The queue sorts
+priority-then-age, so an Urgent flag is a human override that outranks
+everything the loop decided — with no other machinery needed, as long as
+agents cannot set it themselves. `task --priority urgent` and
+`priority --task <id> --priority urgent` both refuse outright unless
+`--operator-asked` is also passed:
+
+```bash
+npm run clickup -- task --list 901418546619 --name "..." --priority urgent --body-file -    # REFUSED
+npm run clickup -- task --list 901418546619 --name "..." --priority urgent --operator-asked --body-file -   # OK — the operator asked for this
+npm run clickup -- priority --task <id> --priority high      # lowering never needs the flag
+npm run clickup -- priority --task <id> --priority urgent --operator-asked   # raising to urgent does
+```
+
+`--operator-asked` is not a permission check — nothing here can verify who
+actually typed the command. It is the agent's own written claim that the
+operator asked for Urgent, sitting in shell history and the session
+transcript where it can be checked later. Loop-filed tasks (`loop-spec`) are
+High or below by default; Urgent only on the operator's explicit word.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
