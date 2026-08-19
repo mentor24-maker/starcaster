@@ -66,6 +66,11 @@ function branchInventory() {
       where: onMac && onGitHub
         ? 'on your Mac and GitHub'
         : (onMac ? 'on your Mac only' : 'on GitHub only'),
+      // Stamped by `npm run thread` (Charter Q1) — branch-scoped git config,
+      // so it reads back the same regardless of which worktree (if any) this
+      // branch is currently checked out in. '' for a branch predating the
+      // stamp, or one made by hand outside `npm run thread`.
+      clickupTaskId: onMac ? git(['config', '--get', `branch.${name}.clickup-task`], '') : '',
     };
   });
 }
@@ -130,6 +135,35 @@ function mainWorktree(worktrees = worktreeInventory()) {
   return worktrees.find((w) => w.isMain) || null;
 }
 
+/**
+ * Is a branch's stamped ClickUp task (Charter Q1) still open?
+ *
+ * `clickup_direct.mjs task-open` uses THREE exit codes on purpose — 0 open,
+ * 1 confirmed closed, 3 could not tell (network/auth/rate-limit) — because a
+ * caller here is deciding whether to DELETE a branch. Collapsing "could not
+ * tell" into either open or closed would be wrong in one direction or the
+ * other; only a clean, confirmed 1 may ever say 'closed'.
+ *
+ * Returns 'open' | 'closed' | 'unknown'. A branch with no stamp at all (made
+ * by hand, or predating this feature) is 'unknown' too — never touched by
+ * the closed-task cleanup path.
+ */
+function isTaskOpen(taskId) {
+  if (!taskId) return 'unknown';
+  try {
+    execFileSync('npm', ['run', 'clickup', '--', 'task-open', '--task', taskId], {
+      cwd: root,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return 'open';
+  } catch (err) {
+    // npm's own exit code mirrors the script's when it fails via `npm run`,
+    // but confirm rather than assume: anything other than exactly 1 is
+    // "could not tell", not "closed".
+    return err.status === 1 ? 'closed' : 'unknown';
+  }
+}
+
 module.exports = {
   MAIN,
   root,
@@ -140,4 +174,5 @@ module.exports = {
   classifyBranch,
   worktreeInventory,
   mainWorktree,
+  isTaskOpen,
 };

@@ -14,6 +14,19 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Closing a task now cleans up its thread too (#344)
+
+Starting a new piece of work (`npm run thread`) creates its own folder and
+branch; finishing it normally cleans both up automatically once the work
+ships. But if a piece of work gets abandoned or redirected instead of
+shipped — the ClickUp task closed without ever merging — nothing ever
+noticed, and the folder sat there forever. `npm run thread` now requires the
+ClickUp task it's for, and stamps that onto the branch; closing that task
+(even with unfinished work on it) now lets the next cleanup remove the folder
+and branch the same way finished work already gets removed, with the same
+restore-log safety net. Starting a thread without an open task to point at no
+longer works.
+
 ## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai
