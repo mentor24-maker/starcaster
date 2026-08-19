@@ -32,6 +32,10 @@ export type BuilderPageRevision = {
   /** What the save that replaced this version did to it. "" = recorded before
    *  the change_summary column existed; the counts stand in for it. */
   changeSummary?: string;
+  /** Shared across every revision one canonical-section push created. Present
+   *  only on `reason: 'propagate'` rows recorded after that column shipped —
+   *  its absence just means "restore this page alone" is the only option. */
+  propagationRunId?: string;
   createdAt: string;
 };
 
@@ -119,6 +123,7 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState("");
+  const [undoingRunId, setUndoingRunId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
   const loadRevisions = useCallback(async () => {
@@ -184,6 +189,72 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
       setError(e instanceof Error ? e.message : "Could not restore that version.");
     } finally {
       setRestoringId("");
+    }
+  }
+
+  /**
+   * A `propagate` row banks only THIS page's pre-update state, so Restore
+   * (above) already undoes the update for this page alone. This is the wider
+   * action: every page the same push touched, restored the same way each
+   * page's own restore already works — this page's current version is
+   * banked to its own history first, so this can itself be undone.
+   *
+   * This is the durable path to that undo. The save-time banner
+   * (admin-builder-editor.tsx) offers the same action but only in the
+   * session that made the save; once it is dismissed or the page reloads,
+   * this row — reachable any time from Page History — is what is left.
+   */
+  async function undoPropagationRun(revision: BuilderPageRevision) {
+    const runId = revision.propagationRunId;
+    if (!runId) return;
+    const confirmed = window.confirm(
+      "Undo this shared-section update?\n\n" +
+        "Every page it touched goes back to how it looked right before that " +
+        "update — the whole page, not just the shared part. So anything edited " +
+        "on those pages since then is rolled back too.\n\n" +
+        "Each page's current version is saved to its own history first, so " +
+        "nothing is lost and this can itself be undone."
+    );
+    if (!confirmed) return;
+
+    setUndoingRunId(runId);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await builderAdminFetch(`/api/admin/propagation-runs/${runId}/undo`, {
+        method: "POST",
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        restored?: Array<{ name?: string }>;
+        failed?: Array<{ name?: string }>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? "Could not undo that update.");
+
+      const restored = body.restored?.length ?? 0;
+      const failed = body.failed ?? [];
+
+      // loadRevisions() resets error/message to null as soon as it starts, so
+      // it must run BEFORE the summary below is set, not after — otherwise
+      // the summary is wiped the instant it's shown.
+      await loadRevisions();
+
+      if (failed.length) {
+        // NAMES them, same as the save-time banner: a partial undo that
+        // reports plain success is the failure this feature exists to stop.
+        setError(
+          `Put back ${restored} ${restored === 1 ? "page" : "pages"}, but ${failed.length} could not be restored: ` +
+            `${failed.map((f) => f.name || "(unnamed)").join(", ")}. Their history still holds the old version — ` +
+            "restore those from the page itself."
+        );
+      } else {
+        setMessage(`Undone. ${restored} ${restored === 1 ? "page is" : "pages are"} back to how they were.`);
+      }
+      onRestored();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not undo that update.");
+    } finally {
+      setUndoingRunId("");
     }
   }
 
@@ -265,14 +336,27 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
                     ) : null}
                     <span className="builder-page-history-size">{describeSize(revision)}</span>
                   </span>
-                  <button
-                    className="btn btn-ghost builder-page-history-restore"
-                    disabled={Boolean(restoringId)}
-                    onClick={() => void restoreRevision(revision)}
-                    type="button"
-                  >
-                    {restoringId === revision.id ? "Restoring..." : "Restore"}
-                  </button>
+                  <div className="builder-page-history-actions">
+                    <button
+                      className="btn btn-ghost builder-page-history-restore"
+                      disabled={Boolean(restoringId) || Boolean(undoingRunId)}
+                      onClick={() => void restoreRevision(revision)}
+                      type="button"
+                    >
+                      {restoringId === revision.id ? "Restoring..." : "Restore"}
+                    </button>
+                    {revision.propagationRunId ? (
+                      <button
+                        className="btn btn-ghost builder-page-history-undo-run"
+                        disabled={Boolean(restoringId) || Boolean(undoingRunId)}
+                        onClick={() => void undoPropagationRun(revision)}
+                        title="Undoes this update on every page it touched, not just this one"
+                        type="button"
+                      >
+                        {undoingRunId === revision.propagationRunId ? "Undoing..." : "Undo this update"}
+                      </button>
+                    ) : null}
+                  </div>
                 </li>
               ))}
             </ul>
