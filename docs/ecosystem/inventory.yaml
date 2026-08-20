@@ -57,6 +57,8 @@ objects:
     kind: machine
     layer: workstations
     summary: Dane's portable machine — where he works interactively, and closes at the end of the day.
+    links:
+      doc: doctrine/NODES.md
     detail:
       user: mentor
       home: /Users/mentor
@@ -69,6 +71,9 @@ objects:
     kind: machine
     layer: workstations
     summary: The always-on machine — never sleeps, logs itself back in after a power cut, and codes while Dane is elsewhere.
+    links:
+      doc: doctrine/NODES.md
+      url: https://app.clickup.com/90141423066/v/dc/2kydhxeu-754
     detail:
       user: daneofearth
       home: /Users/daneofearth
@@ -88,6 +93,8 @@ objects:
     kind: repo
     layer: workstations
     summary: The platform — multi-tenant admin app plus the visual site Builder that publishes tenant public sites.
+    links:
+      url: https://github.com/mentor24-maker/starcaster
     detail:
       remote: https://github.com/mentor24-maker/starcaster.git
       path: ~/WebApps/starcaster
@@ -99,6 +106,8 @@ objects:
     kind: repo
     layer: workstations
     summary: Sibling codebase — the DEO polling game; shares the Builder schema with Starcaster.
+    links:
+      url: https://github.com/mentor24-maker/normie
     detail:
       remote: https://github.com/mentor24-maker/normie.git
       path: ~/WebApps/normie
@@ -109,6 +118,9 @@ objects:
     kind: repo
     layer: workstations
     summary: The scheduled-pipeline runner behind channel-steward and librarian-sweep.
+    links:
+      doc: wiki/pulse.md
+      url: https://github.com/mentor24-maker/pulse
     detail:
       remote: https://github.com/mentor24-maker/pulse.git
       path: ~/pulse
@@ -119,6 +131,9 @@ objects:
     kind: repo
     layer: workstations
     summary: Dane's second brain — doctrine, wiki and raw source material, and the home of every generated page this diagram links to.
+    links:
+      doc: doctrine/SECOND-BRAIN.md
+      url: https://github.com/mentor24-maker/daneofearth-vault
     detail:
       remote: https://github.com/mentor24-maker/daneofearth-vault.git
       path: ~/vault
@@ -132,6 +147,8 @@ objects:
     kind: runtime
     layer: local-dev
     summary: Runs the hidden Linux machine that containers need on a Mac — CLI-only, so it starts from a background job with no desktop.
+    links:
+      url: https://github.com/abiosoft/colima
     host: mac-mini
     detail:
       why_not_docker_desktop: Docker Desktop is an app that wants a logged-in desktop; wrong shape for a headless box
@@ -144,6 +161,8 @@ objects:
     kind: runtime
     layer: local-dev
     summary: Runs the containers. Provided by Colima on the Mini and by Docker Desktop on the MacBook.
+    links:
+      url: https://docs.docker.com/
     detail:
       note: the two machines differ here — first thing to check if something is container-related and machine-specific
     probe: docker-info
@@ -153,6 +172,8 @@ objects:
     kind: datastore
     layer: local-dev
     summary: A throwaway copy of production in twelve containers — the only thing that lets the visual checks run at all.
+    links:
+      url: https://github.com/mentor24-maker/starcaster/blob/main/docs/LOCAL_DEVELOPMENT.md
     host: docker
     detail:
       postgres: '17.6'
@@ -181,6 +202,8 @@ objects:
     kind: service
     layer: production
     summary: Hosts the live platform. Merging to main deploys it — there is no separate deploy step.
+    links:
+      url: https://vercel.com/dashboard
     detail:
       gotcha: env vars are baked in at BUILD time; changing one in the dashboard does NOT reach the running deployment until a redeploy
     probe: none
@@ -190,6 +213,8 @@ objects:
     kind: datastore
     layer: production
     summary: The real database. Every tenant's content lives here, and its disk-IO budget is the one physical limit that actually binds.
+    links:
+      url: https://supabase.com/dashboard
     detail:
       rls: all 136 tables have row-level security on since 2026-08-18
       constraint: disk IO — exhausted on 2026-08-17 by repeated production dumps, not by page reads
@@ -200,6 +225,8 @@ objects:
     kind: service
     layer: production
     summary: Client websites served from Builder pages on their own custom domains.
+    links:
+      url: https://brandonmarinoff.com
     detail:
       live: brandonmarinoff.com
       platform_domain: starcaster.pro
@@ -211,6 +238,8 @@ objects:
     kind: job
     layer: coordination
     summary: Every hour, relays Dane's new ClickUp task comments onto the party line so agents see what he said.
+    links:
+      url: https://github.com/mentor24-maker/starcaster/blob/main/scripts/builder/busRelayPlan.js
     host: macbook-pro
     detail:
       label: com.starcaster.bus-relay
@@ -224,6 +253,8 @@ objects:
     kind: job
     layer: coordination
     summary: Runs every fifteen minutes to keep the Pulse channels tended.
+    links:
+      url: https://github.com/mentor24-maker/pulse/blob/main/pipelines/channel-steward/prompt.md
     host: macbook-pro
     detail:
       label: com.danechristensen.pulse.channel-steward
@@ -236,6 +267,8 @@ objects:
     kind: job
     layer: coordination
     summary: Daily pass over the vault, checking doctrine status headers and reporting what drifted.
+    links:
+      url: https://github.com/mentor24-maker/pulse/blob/main/pipelines/librarian-sweep/prompt.md
     host: macbook-pro
     detail:
       label: com.danechristensen.pulse.librarian-sweep
@@ -248,6 +281,8 @@ objects:
     kind: job
     layer: local-dev
     summary: Brings the container runtime up after a reboot, so the Mini's database is there without anyone touching a screen.
+    links:
+      doc: doctrine/NODES.md
     host: mac-mini
     detail:
       label: com.starcaster.colima
@@ -260,6 +295,9 @@ objects:
     kind: surface
     layer: coordination
     summary: The shared ClickUp chat where every agent and Dane post decisions — the record that outlives any one session.
+    links:
+      doc: doctrine/BUS-WATCH.md
+      url: https://app.clickup.com/90141423066/v/ch/2kydhxeu-474
     detail:
       channel_id: 2kydhxeu-474
       convention: sign every post with the agent's name, e.g. [CC-starcaster]
@@ -270,6 +308,9 @@ objects:
     kind: surface
     layer: coordination
     summary: The work queue the build and review loops drain, one pull request at a time.
+    links:
+      doc: doctrine/LOOPS.md
+      url: https://app.clickup.com/90141423066/v/li/901418546619
     detail:
       list_id: '901418546619'
       statuses: Queued -> Building -> In review -> Needs your input / Ready to launch -> Live
@@ -281,6 +322,9 @@ objects:
     kind: agent
     layer: coordination
     summary: Turns a rough idea from Dane into small, independently-shippable tasks. The only manual step of the loop.
+    links:
+      doc: doctrine/LOOPS.md
+      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-spec/SKILL.md
     probe: skill-file
 
   - id: loop-build
@@ -288,6 +332,9 @@ objects:
     kind: agent
     layer: coordination
     summary: Claims a queued task and builds it into a pull request in its own worktree. Never edits main, never merges.
+    links:
+      doc: doctrine/LOOPS.md
+      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-build/SKILL.md
     probe: skill-file
 
   - id: loop-review
@@ -295,6 +342,9 @@ objects:
     kind: agent
     layer: coordination
     summary: Independently verifies a built pull request, then either readies it for Dane's merge or sends it back with notes.
+    links:
+      doc: doctrine/LOOPS.md
+      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-review/SKILL.md
     probe: skill-file
 
   # ---------------------------------------------------------------- secrets
@@ -303,6 +353,8 @@ objects:
     kind: secrets
     layer: coordination
     summary: Holds every credential. Nothing is copied between machines — each one fetches what it needs at run time.
+    links:
+      url: https://dashboard.doppler.com/
     detail:
       configs: starcaster/dev, starcaster/prd
       mac_mini_auth: service token, scoped to the repo folder, no expiry
@@ -316,6 +368,8 @@ objects:
     kind: external
     layer: external
     summary: Where the four repos live and where CI runs on every pull request.
+    links:
+      url: https://github.com/mentor24-maker
     detail:
       account: mentor24-maker
     probe: gh-auth
@@ -325,6 +379,8 @@ objects:
     kind: external
     layer: external
     summary: Supplies the model attention every agent runs on — one subscription, shared across every session on every machine.
+    links:
+      url: https://console.anthropic.com/
     detail:
       constraint: >
         THE binding throttle. An unattended machine that burns the rolling window
@@ -336,6 +392,8 @@ objects:
     kind: external
     layer: external
     summary: The write path behind every task, comment and bus post the agents make.
+    links:
+      url: https://developer.clickup.com/
     detail:
       route: npm run clickup (direct, token from Doppler) — not the claude.ai connector, which has a small rolling write quota
     probe: none
