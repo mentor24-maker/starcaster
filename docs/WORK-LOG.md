@@ -14,6 +14,18 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Urgent is now yours alone to hand out (#347)
+
+The task queue is sorted so the most urgent, oldest work is always done
+first — which only works as a way for you to jump the line if nothing else
+can also mark something Urgent. Loop tasks now file at High or below by
+default, and an agent trying to set something to Urgent gets refused with a
+plain explanation, unless it can point to you having actually asked for it.
+Nothing about how the queue itself sorts or how tasks get claimed changed —
+this only closes off who is allowed to reach for the top priority.
+
+---
+
 ## 2026-08-18 — Test coverage for the "no more polls" message picker (#348)
 
 The small piece of code that decides what message a player sees when
