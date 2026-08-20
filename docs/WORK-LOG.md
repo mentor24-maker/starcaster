@@ -28,6 +28,21 @@ that check can only cover folders started after this same session's earlier
 piece (Task-closes-thread, PR #344) began tagging them. It's not on a
 schedule yet; that's its own upcoming piece of work (the Mac Mini setup).
 
+---
+
+## 2026-08-18 — Test coverage for the gallery badge helpers (#351)
+
+The Media Gallery module marks certain images as "badges" — reward symbols —
+either through an explicit flag on the item or through a media type label
+(current or an older, legacy spelling). This adds tests locking in that
+detection: the canonical and legacy labels are both recognized (whitespace
+and all), an empty or blank type resolves to "no opinion" rather than false,
+and an item counts as a badge if *either* its flag or its media type says so.
+No production code changed — this is test coverage only, written against the
+existing helper functions in `lib/builder-client/gallery-media-badge-type.ts`.
+
+---
+
 ## 2026-08-18 — The loops get their own door into ClickUp
 
 The build and review loops used to reach ClickUp through the claude.ai
