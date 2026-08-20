@@ -105,9 +105,18 @@ Two rules keep it honest:
 - **No loop ever puts a ticket into `Live`.** Only a merge does, and only you
   authorize a merge.
 - **No loop ever takes a ticket *out* of `Needs your input` or
-  `Ready to launch`.** Once a ticket is handed to you it stays handed to you
-  until you move it. A loop that could quietly reclaim its own escalation
-  would defeat the whole checkpoint.
+  `Ready to launch` on its own.** Once a ticket is handed to you it stays
+  handed to you until you act. A loop that could quietly reclaim its own
+  escalation would defeat the whole checkpoint.
+
+  "Until you act" includes acting by comment (2026-08-19, task 86bbh9g7k):
+  when you REPLY on a `Needs your input` ticket, bus-relay posts your answer
+  to the bus and moves the ticket back to `Queued`, where a build loop picks
+  it up with your answer sitting in the comments. That is not a loop
+  reclaiming its escalation — it is you releasing the ticket, with the relay
+  as your hands. No fresh comment from you, no move, ever. And a comment on
+  a `Ready to launch` ticket moves nothing: that status waits on the merge
+  you alone authorize, so the relay only carries your words to the bus.
 
 `Live` is configured as a **closed**-type status in ClickUp, not merely the
 last active one. That is what makes finished work disappear from the open
@@ -136,6 +145,12 @@ Your day:
    `Ready to launch` PR with a preview link and test steps.
 3. **When you're ready:** tell CC "merge PR #NN" and it merges (only with all
    checks green). Merging stays manual on purpose — see Safety.
+4. **When a ticket asks you a question** (`Needs your input`): answer it as a
+   comment on the ticket. Within one bus-relay cycle (hourly) your answer is
+   posted to the bus and the ticket goes back to `Queued` for a build loop to
+   pick up — the comment alone is enough, no status clicking. This does NOT
+   apply to `Ready to launch`: a comment there is relayed but the ticket
+   waits for your merge.
 
 ### The one place to check: Assigned to me
 
