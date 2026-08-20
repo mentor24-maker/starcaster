@@ -63,8 +63,13 @@ function renderObjectHead(obj, objects, relationships) {
 /** The prose skeleton a brand-new note starts with. Never re-applied. */
 const OBJECT_TAIL_TEMPLATE = '\n\n## What it is\n\n## How it works\n\n## Gotchas\n';
 
-/** The generated region of the map note. */
-function renderMapHead(objects, layerOrder) {
+/**
+ * The generated region of the map note. When svgMarkup is given it is
+ * inlined into the note, because Obsidian renders an EMBEDDED svg
+ * (![[ecosystem.svg]]) as a flat image whose links are dead — only inline
+ * markup keeps the boxes clickable.
+ */
+function renderMapHead(objects, layerOrder, svgMarkup) {
   const lines = [];
   lines.push('---');
   lines.push('name: Development Ecosystem');
@@ -75,7 +80,11 @@ function renderMapHead(objects, layerOrder) {
   lines.push(BEGIN_MARK);
   lines.push('> The machines, codebases, services, jobs, and agents that build and run StarCaster — drawn from `docs/ecosystem/inventory.yaml` in the starcaster repo. Not to be confused with the business ecosystem (`doctrine/ECOSYSTEM.md`).');
   lines.push('');
-  lines.push('![[ecosystem.svg]]');
+  if (svgMarkup) {
+    lines.push(svgMarkup.trim());
+  } else {
+    lines.push('![[ecosystem.svg]]');
+  }
   lines.push('');
   for (const layer of layerOrder) {
     const objs = objects.filter((o) => o.layer === layer.id);

@@ -71,6 +71,13 @@ test('map head embeds the svg and links every object under its layer', () => {
   assert.ok(head.endsWith(END_MARK));
 });
 
+test('map head inlines svg markup when given, instead of the flat embed', () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><a href="obsidian://x"><g id="node-mac-mini"></g></a></svg>\n';
+  const head = renderMapHead(objects, layers, svg);
+  assert.ok(head.includes('<g id="node-mac-mini">'), 'svg markup must be inlined');
+  assert.ok(!head.includes('![[ecosystem.svg]]'), 'flat embed must be replaced');
+});
+
 test('rendering is deterministic', () => {
   const a = renderObjectHead(objects[0], objects, relationships) + renderMapHead(objects, layers);
   const b = renderObjectHead(objects[0], objects, relationships) + renderMapHead(objects, layers);

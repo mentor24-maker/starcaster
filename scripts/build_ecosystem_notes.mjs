@@ -66,7 +66,14 @@ function writeNote(filePath, head, tailTemplate) {
 for (const obj of objects) {
   writeNote(path.join(OBJECTS_DIR, `${obj.id}.md`), renderObjectHead(obj, objects, relationships), OBJECT_TAIL_TEMPLATE);
 }
-writeNote(path.join(OUT_DIR, 'Development Ecosystem.md'), renderMapHead(objects, LAYERS), '\n');
+
+// Inline the diagram markup so its boxes stay clickable in Obsidian — an
+// embedded image's links are dead. Run build:ecosystem first; without the
+// svg on disk the note falls back to the flat embed.
+const svgPath = path.join(OUT_DIR, 'ecosystem.svg');
+const svgMarkup = fs.existsSync(svgPath) ? fs.readFileSync(svgPath, 'utf8') : null;
+if (!svgMarkup) console.error('[ecosystem-notes] ecosystem.svg not found in --out — the map note will embed a flat image; run build:ecosystem first for clickable boxes');
+writeNote(path.join(OUT_DIR, 'Development Ecosystem.md'), renderMapHead(objects, LAYERS, svgMarkup), '\n');
 
 // A note for an object the inventory no longer knows is a question for a
 // human, not a deletion — prose may live there. Name them; never remove them.
