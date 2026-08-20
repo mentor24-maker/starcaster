@@ -2,7 +2,15 @@
 /**
  * Draws the Development Ecosystem diagram from docs/ecosystem/inventory.yaml.
  *
- *   node scripts/build_ecosystem_diagram.mjs [--out <dir>]
+ *   node scripts/build_ecosystem_diagram.mjs [--out <dir>] [--links obsidian|web|none]
+ *
+ * Each object may carry `links:` in the inventory — `doc:` (a note in the
+ * vault, e.g. doctrine/NODES.md) and/or `url:` (an ordinary web address).
+ * --links picks which to prefer: `obsidian` (default — the copy that lives in
+ * the vault) favours the note via an obsidian:// link; `web` favours the URL,
+ * falling back to the obsidian:// note; `none` renders no links at all.
+ * An object with NO link renders with a dashed outline — a missing page
+ * should look missing, never present as a working link.
  *
  * Nobody positions a box by hand. Edit the inventory, re-run this, and the
  * picture follows. That is the whole reason the inventory exists — a drawing
@@ -49,6 +57,26 @@ const HEADER_H = 46;
 const args = process.argv.slice(2);
 const outArg = args.indexOf('--out');
 const OUT_DIR = outArg !== -1 ? path.resolve(args[outArg + 1]) : DEFAULT_OUT;
+const linksArg = args.indexOf('--links');
+const LINK_MODE = linksArg !== -1 ? args[linksArg + 1] : 'obsidian';
+if (!['obsidian', 'web', 'none'].includes(LINK_MODE)) {
+  console.error(`[ecosystem] Unknown --links mode "${LINK_MODE}" — use obsidian, web or none.`);
+  process.exit(1);
+}
+
+const VAULT_NAME = 'vault'; // the Obsidian vault is the ~/vault folder, and Obsidian names a vault after its folder
+
+/** Obsidian deep link to a note, from a vault-relative path like doctrine/NODES.md. */
+const obsidianUri = (docPath) =>
+  `obsidian://open?vault=${encodeURIComponent(VAULT_NAME)}&file=${encodeURIComponent(String(docPath).replace(/\.md$/, ''))}`;
+
+/** The href an object's box should carry under the active link mode, or null. */
+function resolveLink(obj) {
+  if (LINK_MODE === 'none') return null;
+  const doc = obj.links?.doc ? obsidianUri(obj.links.doc) : null;
+  const url = obj.links?.url ?? null;
+  return LINK_MODE === 'web' ? (url ?? doc) : (doc ?? url);
+}
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const round = (n) => Math.round(n * 100) / 100;
@@ -219,6 +247,9 @@ parts.push(`<style>
   .edge-back{stroke:var(--edge-back);stroke-dasharray:5 4}
   .edge-label{fill:var(--muted);font:400 9.5px ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif}
   .edge-label-bg{fill:var(--bg)}
+  a{cursor:pointer}
+  a:hover .node-box, a:focus .node-box{stroke:var(--fg)}
+  .node-unlinked .node-box{stroke-dasharray:6 4}
 </style>`);
 
 parts.push(`<rect class="bg" x="0" y="0" width="${WIDTH}" height="${HEIGHT}"/>`);
@@ -254,7 +285,11 @@ for (const layer of LAYERS) {
     const p = pos.get(obj.id);
     const lines = wrap(obj.name, NODE_W - 24);
     const startY = p.y + (lines.length === 1 ? 27 : 21);
-    parts.push(`<g id="node-${esc(obj.id)}" class="node node-${esc(obj.kind)}">`);
+    const href = resolveLink(obj);
+    // The link wraps the whole group, so the entire box is the click target.
+    // http(s) links open a new tab; obsidian:// hands off to Obsidian in place.
+    if (href) parts.push(`<a href="${esc(href)}"${href.startsWith('http') ? ' target="_blank" rel="noopener"' : ''}>`);
+    parts.push(`<g id="node-${esc(obj.id)}" class="node node-${esc(obj.kind)}${href || LINK_MODE === 'none' ? '' : ' node-unlinked'}">`);
     parts.push(`<title>${esc(obj.summary)}</title>`);
     parts.push(`<rect class="node-box" x="${p.x}" y="${p.y}" width="${NODE_W}" height="${NODE_H}" rx="8"/>`);
     parts.push(`<rect x="${p.x}" y="${p.y}" width="4" height="${NODE_H}" rx="2" fill="var(--${esc(obj.kind)})"/>`);
@@ -263,6 +298,7 @@ for (const layer of LAYERS) {
     });
     parts.push(`<text class="node-kind" x="${p.x + 14}" y="${p.y + NODE_H - 11}" fill="var(--${esc(obj.kind)})">${esc(obj.kind)}</text>`);
     parts.push('</g>');
+    if (href) parts.push('</a>');
   }
 }
 parts.push('</g>');
@@ -274,6 +310,10 @@ fs.writeFileSync(outFile, parts.join('\n') + '\n');
 
 console.log(`[ecosystem] Wrote ${outFile}`);
 console.log(`[ecosystem] ${objects.length} object(s), ${edges.length} edge(s), ${WIDTH}×${HEIGHT}`);
+if (LINK_MODE !== 'none') {
+  const unlinked = objects.filter((o) => !resolveLink(o)).map((o) => o.id);
+  console.log(`[ecosystem] links: ${LINK_MODE} — ${objects.length - unlinked.length} linked, ${unlinked.length} without a link${unlinked.length ? ` (dashed): ${unlinked.join(', ')}` : ''}`);
+}
 if (dropped) {
   console.log(`[ecosystem] ${dropped} edge label(s) had no free space and were not drawn — they remain readable as tooltips.`);
 }

@@ -61,6 +61,21 @@ for (const [i, obj] of objects.entries()) {
   if (obj?.layer && !LAYERS.includes(obj.layer)) fail(`${where}: unknown layer "${obj.layer}" — expected one of ${LAYERS.join(', ')}`);
   if (obj?.summary && String(obj.summary).includes('\n')) fail(`${where}: summary must be ONE line — it is the tooltip and the diagram caption`);
   if (obj?.host && !objects.some((o) => o?.id === obj.host)) fail(`${where}: host "${obj.host}" is not an object in this file`);
+  if (obj?.links != null) {
+    if (typeof obj.links !== 'object' || Array.isArray(obj.links)) {
+      fail(`${where}: "links" must be a map with "doc" and/or "url"`);
+    } else {
+      for (const key of Object.keys(obj.links)) {
+        if (!['doc', 'url'].includes(key)) fail(`${where}: links.${key} is not a thing — only "doc" (vault note) and "url" (web address) exist`);
+      }
+      if (obj.links.doc != null && !/^(doctrine|wiki|raw|inbox)\/[^\s]+\.md$/.test(String(obj.links.doc))) {
+        fail(`${where}: links.doc "${obj.links.doc}" must be a vault-relative note path like doctrine/NODES.md`);
+      }
+      if (obj.links.url != null && !/^https:\/\/[^\s]+$/.test(String(obj.links.url))) {
+        fail(`${where}: links.url "${obj.links.url}" must be a full https:// address`);
+      }
+    }
+  }
 }
 
 for (const [i, rel] of relationships.entries()) {
