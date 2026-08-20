@@ -14,6 +14,17 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Test coverage for the Media Gallery's Topic filter (#349)
+
+The small piece of code that builds the list of "Topic" filter choices in
+the Media Gallery — cleaning up entries, dropping blanks, treating
+"Cats" and "cats" as the same topic, and sorting the result — had no test
+coverage. Added tests locking in that cleanup, de-duplication, and sort
+order all keep working. No behavior changed — this only makes sure the
+existing behavior can't quietly break later.
+
+---
+
 ## 2026-08-18 — Test coverage for the gallery badge helpers (#351)
 
 The Media Gallery module marks certain images as "badges" — reward symbols —
