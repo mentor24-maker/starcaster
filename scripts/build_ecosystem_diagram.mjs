@@ -6,11 +6,12 @@
  *
  * Each object may carry `links:` in the inventory — `doc:` (a note in the
  * vault, e.g. doctrine/NODES.md) and/or `url:` (an ordinary web address).
- * --links picks which to prefer: `obsidian` (default — the copy that lives in
- * the vault) favours the note via an obsidian:// link; `web` favours the URL,
- * falling back to the obsidian:// note; `none` renders no links at all.
- * An object with NO link renders with a dashed outline — a missing page
- * should look missing, never present as a working link.
+ * --links picks the target: `obsidian` (default — the copy that lives in the
+ * vault) opens the object's generated note (wiki/ecosystem/objects/<id>);
+ * `web` prefers the inventory's url, falling back to its doc as an
+ * obsidian:// link; `none` renders no links at all. In web mode an object
+ * with NO link renders with a dashed outline — a missing page should look
+ * missing, never present as a working link.
  *
  * Nobody positions a box by hand. Edit the inventory, re-run this, and the
  * picture follows. That is the whole reason the inventory exists — a drawing
@@ -73,9 +74,13 @@ const obsidianUri = (docPath) =>
 /** The href an object's box should carry under the active link mode, or null. */
 function resolveLink(obj) {
   if (LINK_MODE === 'none') return null;
+  if (LINK_MODE === 'obsidian') {
+    // Every object has a generated note (build_ecosystem_notes.mjs writes one
+    // per inventory entry), so the vault copy's boxes always open the note.
+    return obsidianUri(`wiki/ecosystem/objects/${obj.id}.md`);
+  }
   const doc = obj.links?.doc ? obsidianUri(obj.links.doc) : null;
-  const url = obj.links?.url ?? null;
-  return LINK_MODE === 'web' ? (url ?? doc) : (doc ?? url);
+  return obj.links?.url ?? doc;
 }
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
