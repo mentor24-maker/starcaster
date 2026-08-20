@@ -122,6 +122,23 @@ Two rules keep it honest:
 last active one. That is what makes finished work disappear from the open
 view instead of piling up forever.
 
+### Killing a ticket ("we are not doing this")
+
+There is no `Won't do` status — adding one is currently impossible because
+ClickUp's Edit Statuses dialog opens **empty** for this list (observed
+2026-08-19, from three different doors, surviving a hard refresh; the API
+reads the statuses fine, so it is display-only breakage — but do NOT press
+Apply changes on that empty dialog, which could strip the list's statuses).
+
+Until that heals, the convention is: close the ticket as `Live` **plus the
+`wont-do` tag**, with a comment saying what was decided and that nothing
+shipped. `Live` is what hides it; the tag is what keeps the record honest.
+Two of the three ClickUp surfaces for statuses are worth knowing anyway:
+the status *pill* at the head of each group in List view grows a `⋯` menu
+on mouse-over (`+ New status` there creates inline, skipping the broken
+dialog), and statuses live on the **list**, not the space — the space
+settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
+
 ## How to run it
 
 Two commands, each in **its own worktree** (a separate folder + branch so the
