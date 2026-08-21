@@ -17,6 +17,7 @@ const {
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
+const { forwardBugReport } = require('../lib/bugReportForward');
 
 const manifest = {
   id: 'public-site',
@@ -243,15 +244,24 @@ async function handle(req, res, pathname, method) {
       }
     }
 
+    const scope = { projectId: scopedProjectId, userId: ownerUserId };
     const result = await createBugReport({
       description,
       pageUrl: body.pageUrl,
       userAgent: body.userAgent || req.headers['user-agent'] || '',
       viewerTier,
-    }, { projectId: scopedProjectId, userId: ownerUserId });
+    }, scope);
 
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to save bug report'), true;
-    return respondJson(res, req, 201, { ok: true, data: result.data }), true;
+
+    // AFTER the write, never before: the row is the record. Forwarding to
+    // ClickUp (held for the operator) can fail without the reporter ever
+    // knowing — the row is marked failed_forward and the failure is logged
+    // loudly (lib/bugReportForward.js). Awaited on purpose: serverless freezes
+    // the function once the response goes out.
+    const forward = await forwardBugReport(result.data, scope);
+    const data = { ...result.data, status: forward.ok ? 'forwarded' : 'failed_forward' };
+    return respondJson(res, req, 201, { ok: true, data }), true;
   }
 
   return false;
