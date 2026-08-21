@@ -13,8 +13,15 @@
  * rendering an empty list that reads as "nothing has ever happened here".
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import {
+  ALREADY_UNDONE_MESSAGE,
+  confirmUndoMessage,
+  describeUndoOutcome,
+  fetchPropagationRunScope,
+  performPropagationUndo,
+} from "@/lib/propagation-undo";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 
 export type BuilderPageRevision = {
@@ -125,9 +132,26 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
   const [restoringId, setRestoringId] = useState("");
   const [undoingRunId, setUndoingRunId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  /** Runs the server says were already undone — keyed by runId, render-only. */
+  const [undoneRuns, setUndoneRuns] = useState<Record<string, boolean>>({});
 
-  const loadRevisions = useCallback(async () => {
-    if (!pageId) { setRevisions([]); return; }
+  // The page the panel is CURRENTLY for. A multi-page undo takes seconds, so
+  // every async flow re-checks this ref after each await and bails if the
+  // operator has moved on — otherwise page A's slow response repaints its
+  // rows under page B's heading.
+  const pageIdRef = useRef(pageId);
+
+  /**
+   * Load the page's history. Returns true when the list on screen is fresh,
+   * false when it could not be refreshed (or the operator switched pages
+   * mid-flight) — callers use that to word their summary honestly instead of
+   * pointing at a stale list.
+   *
+   * Clears `error` (it may set its own) but never `message`: restore and undo
+   * set their summary AFTER awaiting this, and it must not wipe them.
+   */
+  const loadRevisions = useCallback(async (): Promise<boolean> => {
+    if (!pageId) { setRevisions([]); return true; }
     setIsLoading(true);
     setError(null);
     try {
@@ -136,15 +160,49 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
         revisions?: BuilderPageRevision[];
         error?: string;
       };
+      if (pageIdRef.current !== pageId) return false;
       if (!response.ok) {
         throw new Error(body.error ?? "Could not load this page's history.");
       }
-      setRevisions(Array.isArray(body.revisions) ? body.revisions : []);
+      const list = Array.isArray(body.revisions) ? body.revisions : [];
+      setRevisions(list);
+
+      // Ask the server which of the visible runs were already undone, so the
+      // button can say "Undone" up front rather than only after a click. A
+      // page rarely shows more than a run or two; failures here just leave
+      // the button active — the click-time check below still guards the replay.
+      const runIds = Array.from(
+        new Set(list.map((revision) => revision.propagationRunId).filter(Boolean))
+      ) as string[];
+      if (runIds.length) {
+        const entries = await Promise.all(
+          runIds.map(async (runId) => {
+            try {
+              const scope = await fetchPropagationRunScope(runId);
+              return [runId, scope.undone] as const;
+            } catch {
+              return [runId, false] as const;
+            }
+          })
+        );
+        if (pageIdRef.current !== pageId) return false;
+        // Merge, never replace: a run this session just undid stays marked
+        // even if its scope lookup fails here — un-marking it would revive a
+        // live Undo button on an undone run, the replay this state exists to
+        // prevent. (Page switches clear the map wholesale.)
+        setUndoneRuns((current) => ({
+          ...current,
+          ...Object.fromEntries(entries.filter(([, undone]) => undone).map(([runId]) => [runId, true])),
+        }));
+      }
+      return true;
     } catch (e) {
+      if (pageIdRef.current !== pageId) return false;
       setRevisions([]);
       setError(e instanceof Error ? e.message : "Could not load this page's history.");
+      return false;
     } finally {
-      setIsLoading(false);
+      if (pageIdRef.current === pageId) setIsLoading(false);
     }
   }, [pageId]);
 
@@ -156,11 +214,17 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
   }, [collapsed, loadRevisions]);
 
   // A different page was selected: drop what we are showing so the previous
-  // page's history can never be restored onto this one.
+  // page's history can never be restored onto this one — and release the busy
+  // flags, or a still-running undo on the OLD page keeps the new page's
+  // buttons disabled until it returns.
   useEffect(() => {
+    pageIdRef.current = pageId;
     setRevisions([]);
     setMessage(null);
     setError(null);
+    setRestoringId("");
+    setUndoingRunId("");
+    setUndoneRuns({});
   }, [pageId]);
 
   async function restoreRevision(revision: BuilderPageRevision) {
@@ -182,13 +246,15 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
       if (!response.ok) {
         throw new Error(body.error ?? "Could not restore that version.");
       }
-      setMessage(`Restored to the version from ${formatWhen(revision.createdAt)}.`);
       await loadRevisions();
+      if (pageIdRef.current !== pageId) return;
+      setMessage(`Restored to the version from ${formatWhen(revision.createdAt)}.`);
       onRestored();
     } catch (e) {
+      if (pageIdRef.current !== pageId) return;
       setError(e instanceof Error ? e.message : "Could not restore that version.");
     } finally {
-      setRestoringId("");
+      if (pageIdRef.current === pageId) setRestoringId("");
     }
   }
 
@@ -207,54 +273,57 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
   async function undoPropagationRun(revision: BuilderPageRevision) {
     const runId = revision.propagationRunId;
     if (!runId) return;
-    const confirmed = window.confirm(
-      "Undo this shared-section update?\n\n" +
-        "Every page it touched goes back to how it looked right before that " +
-        "update — the whole page, not just the shared part. So anything edited " +
-        "on those pages since then is rolled back too.\n\n" +
-        "Each page's current version is saved to its own history first, so " +
-        "nothing is lost and this can itself be undone."
-    );
-    if (!confirmed) return;
 
     setUndoingRunId(runId);
     setError(null);
     setMessage(null);
     try {
-      const response = await builderAdminFetch(`/api/admin/propagation-runs/${runId}/undo`, {
-        method: "POST",
-      });
-      const body = (await response.json().catch(() => ({}))) as {
-        restored?: Array<{ name?: string }>;
-        failed?: Array<{ name?: string }>;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(body.error ?? "Could not undo that update.");
+      // Fresh truth before the confirm: which pages still hold restore points
+      // (retention pruning may have eaten some), and whether this run was
+      // already undone — a second undo would replay old snapshots over
+      // everything edited since, which costs one page of recovery per page.
+      const scope = await fetchPropagationRunScope(runId);
+      if (pageIdRef.current !== pageId) return;
 
-      const restored = body.restored?.length ?? 0;
-      const failed = body.failed ?? [];
+      if (scope.undone) {
+        setUndoneRuns((current) => ({ ...current, [runId]: true }));
+        setMessage(ALREADY_UNDONE_MESSAGE);
+        return;
+      }
+      if (!scope.pages.length) {
+        setError("That update has no restore points left to undo.");
+        return;
+      }
 
-      // loadRevisions() resets error/message to null as soon as it starts, so
-      // it must run BEFORE the summary below is set, not after — otherwise
-      // the summary is wiped the instant it's shown.
-      await loadRevisions();
+      if (!window.confirm(confirmUndoMessage(scope))) return;
 
-      if (failed.length) {
-        // NAMES them, same as the save-time banner: a partial undo that
-        // reports plain success is the failure this feature exists to stop.
-        setError(
-          `Put back ${restored} ${restored === 1 ? "page" : "pages"}, but ${failed.length} could not be restored: ` +
-            `${failed.map((f) => f.name || "(unnamed)").join(", ")}. Their history still holds the old version — ` +
-            "restore those from the page itself."
-        );
+      const outcome = await performPropagationUndo(runId);
+      if (pageIdRef.current !== pageId) return;
+
+      // Even a partial undo banked revert revisions, so the run now reads as
+      // undone — the failures are handled per page, not by pressing Undo again.
+      setUndoneRuns((current) => ({ ...current, [runId]: true }));
+
+      const refreshed = await loadRevisions();
+      if (pageIdRef.current !== pageId) return;
+
+      // ONE summary wins — never a green "Undone" beside a red load error.
+      // If the refresh failed, the outcome is folded into a single honest
+      // sentence instead of pointing the operator at a silently stale list.
+      const summary = describeUndoOutcome(outcome);
+      if (summary.kind === "partial") {
+        setError(refreshed ? summary.text : `${summary.text} This list also could not refresh — press Refresh.`);
+      } else if (refreshed) {
+        setMessage(summary.text);
       } else {
-        setMessage(`Undone. ${restored} ${restored === 1 ? "page is" : "pages are"} back to how they were.`);
+        setError(`${summary.text} But this list could not refresh — press Refresh to see it.`);
       }
       onRestored();
     } catch (e) {
+      if (pageIdRef.current !== pageId) return;
       setError(e instanceof Error ? e.message : "Could not undo that update.");
     } finally {
-      setUndoingRunId("");
+      if (pageIdRef.current === pageId) setUndoingRunId("");
     }
   }
 
@@ -318,8 +387,12 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
           ) : null}
 
           {revisions.length ? (
-            groupByDay(revisions).map((group) => (
-            <div className="builder-page-history-day" key={group.day}>
+            // Key by position AND label: groupByDay only merges CONSECUTIVE
+            // rows, so Today / Earlier / Today is legal and two groups may
+            // share a label — a bare label key makes React fold them together
+            // and drop rows from the one panel whose job is a complete trail.
+            groupByDay(revisions).map((group, groupIndex) => (
+            <div className="builder-page-history-day" key={`${groupIndex}-${group.day}`}>
               <h4 className="builder-page-history-day-heading">{group.day}</h4>
             <ul className="builder-page-history-list">
               {group.rows.map((revision) => (
@@ -346,15 +419,30 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
                       {restoringId === revision.id ? "Restoring..." : "Restore"}
                     </button>
                     {revision.propagationRunId ? (
-                      <button
-                        className="btn btn-ghost builder-page-history-undo-run"
-                        disabled={Boolean(restoringId) || Boolean(undoingRunId)}
-                        onClick={() => void undoPropagationRun(revision)}
-                        title="Undoes this update on every page it touched, not just this one"
-                        type="button"
-                      >
-                        {undoingRunId === revision.propagationRunId ? "Undoing..." : "Undo this update"}
-                      </button>
+                      undoneRuns[revision.propagationRunId] ? (
+                        // "Not undone" and "already undone" must be
+                        // distinguishable at the button: a live button on an
+                        // undone run replays old snapshots over everything
+                        // edited since.
+                        <button
+                          className="btn btn-ghost builder-page-history-undo-run"
+                          disabled
+                          title="This update was already undone. To redo it, restore pages from their own history."
+                          type="button"
+                        >
+                          Undone
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-ghost builder-page-history-undo-run"
+                          disabled={Boolean(restoringId) || Boolean(undoingRunId)}
+                          onClick={() => void undoPropagationRun(revision)}
+                          title="Undoes this update on every page it touched, not just this one"
+                          type="button"
+                        >
+                          {undoingRunId === revision.propagationRunId ? "Undoing..." : "Undo This Update"}
+                        </button>
+                      )
                     ) : null}
                   </div>
                 </li>

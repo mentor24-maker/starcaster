@@ -8,11 +8,11 @@ import { BuilderPageHistory, type BuilderPageRevision } from "./builder-page-his
  * Sync 4/7: undoing a whole shared-section push as one action.
  *
  * The backend (propagation_run_id, POST /api/builder/propagation-runs/:id/undo)
- * shipped in #254/#267. What was missing was a durable place to TRIGGER that
- * undo — the only existing entry point was a save-time banner that vanishes
- * once dismissed or the page reloads. This tests the durable one: a
- * `propagate` row in Page History offers "Undo this update" alongside the
- * ordinary per-page "Restore", any time, in any later session.
+ * shipped in #254/#267. This is the durable entry point: a `propagate` row in
+ * Page History offers "Undo This Update" alongside per-page "Restore", any
+ * time, in any later session — which is exactly why it must be honest about
+ * scope (the confirm names what still HAS restore points) and about state
+ * (an already-undone run must never silently replay old snapshots).
  */
 
 const mockFetch = vi.fn();
@@ -98,63 +98,104 @@ const PROPAGATE_ROW: BuilderPageRevision = {
   createdAt: NOW,
 };
 
-async function openWith(revisions: BuilderPageRevision[], onRestored: () => void = () => {}) {
-  mockFetch.mockImplementation(async () => jsonResponse({ revisions }));
+type MockOptions = {
+  revisions?: BuilderPageRevision[];
+  scope?: { pages?: Array<{ pageId: string; name: string }>; undone?: boolean };
+  undo?: { restored?: Array<{ name?: string }>; failed?: Array<{ name?: string }>; error?: string; ok?: boolean };
+  onUndoUrl?: (url: string) => void;
+};
+
+/** Routes the three endpoints the panel now talks to. */
+function mockEndpoints({ revisions = [], scope, undo, onUndoUrl }: MockOptions) {
+  mockFetch.mockImplementation(async (url: string) => {
+    const path = String(url);
+    if (path.includes("/undo")) {
+      onUndoUrl?.(path);
+      const ok = undo?.ok ?? !undo?.error;
+      return jsonResponse(
+        undo?.error ? { error: undo.error } : { restored: undo?.restored ?? [], failed: undo?.failed ?? [] },
+        ok
+      );
+    }
+    if (path.includes("/propagation-runs/")) {
+      return jsonResponse({ pages: scope?.pages ?? [{ pageId: "page-1", name: "Home" }], undone: scope?.undone ?? false });
+    }
+    return jsonResponse({ revisions });
+  });
+}
+
+async function openWith(options: MockOptions, onRestored: () => void = () => {}) {
+  mockEndpoints(options);
   render(<BuilderPageHistory pageId="page-1" pageName="Home" onRestored={onRestored} />);
   act(() => {
     expandPanel();
   });
   await flush();
+  await flush();
 }
 
 describe("BuilderPageHistory — propagation-run undo", () => {
   it("an ordinary save row offers Restore only", async () => {
-    await openWith([SAVE_ROW]);
+    await openWith({ revisions: [SAVE_ROW] });
     expect(buttonLabelled("Restore")).toBeTruthy();
-    expect(findButtonLabelled("Undo this update")).toBeUndefined();
+    expect(findButtonLabelled("Undo This Update")).toBeUndefined();
   });
 
-  it("a propagate row with a run id offers both Restore and Undo this update", async () => {
-    await openWith([PROPAGATE_ROW]);
+  it("a propagate row with a run id offers both Restore and Undo This Update", async () => {
+    await openWith({ revisions: [PROPAGATE_ROW] });
     expect(buttonLabelled("Restore")).toBeTruthy();
-    expect(buttonLabelled("Undo this update")).toBeTruthy();
+    expect(buttonLabelled("Undo This Update")).toBeTruthy();
   });
 
   it("a propagate row with no run id (recorded before the migration) offers Restore only", async () => {
-    await openWith([{ ...PROPAGATE_ROW, propagationRunId: undefined }]);
+    await openWith({ revisions: [{ ...PROPAGATE_ROW, propagationRunId: undefined }] });
     expect(buttonLabelled("Restore")).toBeTruthy();
-    expect(findButtonLabelled("Undo this update")).toBeUndefined();
+    expect(findButtonLabelled("Undo This Update")).toBeUndefined();
   });
 
-  it("declining the confirm dialog issues no request", async () => {
+  it("declining the confirm dialog issues no undo request", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
-    await openWith([PROPAGATE_ROW]);
-    mockFetch.mockClear();
+    const undoCalls: string[] = [];
+    await openWith({ revisions: [PROPAGATE_ROW], onUndoUrl: (url) => undoCalls.push(url) });
 
     act(() => {
-      buttonLabelled("Undo this update").click();
+      buttonLabelled("Undo This Update").click();
     });
     await flush();
 
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(undoCalls).toEqual([]);
+  });
+
+  it("the confirm names the pages that still have restore points, from the server, not from memory", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await openWith({
+      revisions: [PROPAGATE_ROW],
+      scope: { pages: [{ pageId: "1", name: "Home" }, { pageId: "2", name: "About" }] },
+    });
+
+    act(() => buttonLabelled("Undo This Update").click());
+    await flush();
+
+    const confirmText = String(confirmSpy.mock.calls.at(-1)?.[0] ?? "");
+    expect(confirmText).toContain("2 pages still have restore points");
+    expect(confirmText).toContain("Home, About");
   });
 
   it("confirming posts to THIS run's undo endpoint and reports how many pages came back", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const onRestored = vi.fn();
     let undoUrl = "";
-    mockFetch.mockImplementation(async (url: string) => {
-      if (String(url).includes("/undo")) {
-        undoUrl = String(url);
-        return jsonResponse({ restored: [{ name: "Home" }, { name: "About" }], failed: [] });
-      }
-      return jsonResponse({ revisions: [PROPAGATE_ROW] });
-    });
-    render(<BuilderPageHistory pageId="page-1" pageName="Home" onRestored={onRestored} />);
-    act(() => expandPanel());
-    await flush();
+    await openWith(
+      {
+        revisions: [PROPAGATE_ROW],
+        undo: { restored: [{ name: "Home" }, { name: "About" }], failed: [] },
+        onUndoUrl: (url) => { undoUrl = url; },
+      },
+      onRestored
+    );
 
-    act(() => buttonLabelled("Undo this update").click());
+    act(() => buttonLabelled("Undo This Update").click());
+    await flush();
     await flush();
 
     expect(undoUrl).toBe("/api/admin/propagation-runs/run-abc/undo");
@@ -164,17 +205,13 @@ describe("BuilderPageHistory — propagation-run undo", () => {
 
   it("a partial undo names the pages it could not restore, not just a failure count", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    mockFetch.mockImplementation(async (url: string) => {
-      if (String(url).includes("/undo")) {
-        return jsonResponse({ restored: [{ name: "Home" }], failed: [{ name: "About" }] });
-      }
-      return jsonResponse({ revisions: [PROPAGATE_ROW] });
+    await openWith({
+      revisions: [PROPAGATE_ROW],
+      undo: { restored: [{ name: "Home" }], failed: [{ name: "About" }] },
     });
-    render(<BuilderPageHistory pageId="page-1" pageName="Home" onRestored={() => {}} />);
-    act(() => expandPanel());
-    await flush();
 
-    act(() => buttonLabelled("Undo this update").click());
+    act(() => buttonLabelled("Undo This Update").click());
+    await flush();
     await flush();
 
     const text = document.body.textContent ?? "";
@@ -184,19 +221,105 @@ describe("BuilderPageHistory — propagation-run undo", () => {
 
   it("a failed request surfaces its message rather than silently doing nothing", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
+    await openWith({
+      revisions: [PROPAGATE_ROW],
+      undo: { error: "That update has no restore points left to undo." },
+    });
+
+    act(() => buttonLabelled("Undo This Update").click());
+    await flush();
+
+    expect(document.body.textContent).toContain("no restore points left to undo");
+  });
+
+  it("a run the server reports as already undone renders a disabled Undone button, not a live one", async () => {
+    await openWith({ revisions: [PROPAGATE_ROW], scope: { undone: true } });
+
+    const button = buttonLabelled("Undone");
+    expect(button.disabled).toBe(true);
+    expect(findButtonLabelled("Undo This Update")).toBeUndefined();
+  });
+
+  it("an undo discovered stale at click time is refused: no POST, the button flips to Undone", async () => {
+    // Load-time says "not undone"; by click time another session undid it.
+    // A second undo would replay old snapshots over everything edited since —
+    // the exact operator disaster from review finding 4.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const undoCalls: string[] = [];
+    let scopeCalls = 0;
     mockFetch.mockImplementation(async (url: string) => {
-      if (String(url).includes("/undo")) {
-        return jsonResponse({ error: "That update has no restore points left to undo." }, false);
+      const path = String(url);
+      if (path.includes("/undo")) {
+        undoCalls.push(path);
+        return jsonResponse({ restored: [], failed: [] });
+      }
+      if (path.includes("/propagation-runs/")) {
+        scopeCalls += 1;
+        return jsonResponse({ pages: [{ pageId: "page-1", name: "Home" }], undone: scopeCalls > 1 });
       }
       return jsonResponse({ revisions: [PROPAGATE_ROW] });
     });
     render(<BuilderPageHistory pageId="page-1" pageName="Home" onRestored={() => {}} />);
     act(() => expandPanel());
     await flush();
-
-    act(() => buttonLabelled("Undo this update").click());
     await flush();
 
-    expect(document.body.textContent).toContain("no restore points left to undo");
+    act(() => buttonLabelled("Undo This Update").click());
+    await flush();
+    await flush();
+
+    expect(undoCalls).toEqual([]);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("already undone");
+    expect(buttonLabelled("Undone").disabled).toBe(true);
+  });
+
+  it("after a successful undo the run's button reads Undone and cannot replay", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const undoCalls: string[] = [];
+    await openWith({
+      revisions: [PROPAGATE_ROW],
+      undo: { restored: [{ name: "Home" }], failed: [] },
+      onUndoUrl: (url) => undoCalls.push(url),
+    });
+
+    act(() => buttonLabelled("Undo This Update").click());
+    await flush();
+    await flush();
+
+    expect(undoCalls).toHaveLength(1);
+    expect(buttonLabelled("Undone").disabled).toBe(true);
+    expect(findButtonLabelled("Undo This Update")).toBeUndefined();
+  });
+});
+
+describe("BuilderPageHistory — day grouping", () => {
+  it("non-consecutive groups sharing a label all render their rows (no duplicate React keys)", async () => {
+    // Today / Earlier / Today is legal: groupByDay only merges CONSECUTIVE
+    // rows and an unparseable date labels its group "Earlier". A bare label
+    // key made React fold the two Today groups together and drop rows — in
+    // the one panel whose whole job is a complete trail.
+    // React tolerates duplicate keys on MOUNT (it only warns) and corrupts
+    // the tree on UPDATE — so counting rows after one render is an assertion
+    // that cannot fail. The warning is the reliable, immediate signal.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rows: BuilderPageRevision[] = [
+      { ...SAVE_ROW, id: "rev-a", createdAt: NOW },
+      { ...SAVE_ROW, id: "rev-b", createdAt: "not-a-date" },
+      { ...SAVE_ROW, id: "rev-c", createdAt: NOW },
+    ];
+    await openWith({ revisions: rows });
+
+    const renderedRows = document.querySelectorAll(".builder-page-history-row");
+    expect(renderedRows).toHaveLength(3);
+    const headings = Array.from(document.querySelectorAll(".builder-page-history-day-heading")).map(
+      (h) => h.textContent
+    );
+    expect(headings).toEqual(["Today", "Earlier", "Today"]);
+
+    const keyWarnings = consoleError.mock.calls.filter((call) =>
+      call.some((arg) => String(arg).includes("same key"))
+    );
+    expect(keyWarnings).toEqual([]);
   });
 });

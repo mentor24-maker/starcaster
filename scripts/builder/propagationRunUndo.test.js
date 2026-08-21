@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const {
   rejectedOptionalColumns,
   stripColumns,
+  undoRunIdFor,
 } = require('../../lib/builderPageRevisionsStore');
 const pagesStore = require('../../lib/builderPagesStore');
 const routeBuilder = require('../../routes/builder');
@@ -86,6 +87,39 @@ test('the undo endpoint is declared on the builder route module', () => {
     source.includes('failedCount'),
     'the undo must report how many pages it could NOT restore — a partial run ' +
       'that claims success is the PR #21 failure repeating'
+  );
+});
+
+// ── The undo is itself a grouped, detectable event ──────────────────────────
+//
+// The undo stamps the revert revisions it banks with a DERIVED run id:
+//  - an interrupted 46-page undo (the 2026-07-22 serverless-timeout class)
+//    leaves a grouped handle instead of 20 reverted pages and no thread;
+//  - "was this run already undone?" is answered by listing the derived id,
+//    which is what lets the history button say "Undone" instead of silently
+//    replaying old snapshots over newer work.
+
+test('undoRunIdFor is deterministic, prefixed, and capped to the column width', () => {
+  const runId = 'f1e2d3c4-b5a6-4789-9abc-def012345678';
+  assert.equal(undoRunIdFor(runId), `undo-${runId}`);
+  assert.equal(undoRunIdFor(runId), undoRunIdFor(runId), 'same run must derive the same id');
+  assert.ok(undoRunIdFor('x'.repeat(200)).length <= 64, 'must respect the 64-char column cap');
+  assert.notEqual(undoRunIdFor(runId), runId, 'the derived id must never collide with the run itself');
+});
+
+test('the undo route stamps its reverts with the derived run id, and the GET reads it back', () => {
+  const source = require('node:fs').readFileSync(
+    require.resolve('../../routes/builder.js'),
+    'utf8'
+  );
+  assert.ok(
+    source.match(/reason:\s*'revert'[^}]*propagationRunId:\s*undoRunIdFor\(runId\)/s),
+    "the undo's updatePage call must pass propagationRunId: undoRunIdFor(runId) — " +
+      'without it an interrupted undo has no grouping and "already undone" is undetectable'
+  );
+  assert.ok(
+    source.includes('propagationRunMatch') && source.includes('undone'),
+    'GET /api/builder/propagation-runs/:runId must exist and report the undone flag'
   );
 });
 
