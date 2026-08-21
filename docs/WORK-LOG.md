@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-18 — Bug Report 2/5: screenshots for bug reports (#TBD)
+## 2026-08-18 — Bug Report 2/5: screenshots for bug reports (#362)
 
 Second of five pieces of the in-app Bug Report tool. A visitor filing a bug
 can now attach pictures: each screenshot is sent on its own (the hosting
