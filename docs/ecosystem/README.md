@@ -28,8 +28,20 @@ scheduled jobs, wires. Different subject, no overlap. Call this one the
 
 ## Where the generated output goes
 
-Into the vault, at `~/vault/wiki/ecosystem/` — the diagram, the map note and
-one page per object.
+Into the vault, at `~/vault/wiki/ecosystem/` — the diagram, the map note,
+one page per object, and `ecosystem.html`: a standalone, self-contained copy
+of the map for anyone without the vault (a teammate, or Dane on his phone).
+It opens with no network at all, works in light and dark, and clicking a box
+shows that object's story in a side panel instead of opening Obsidian.
+
+```
+npm run build:ecosystem          # the diagram (ecosystem.svg)
+npm run build:ecosystem-notes    # the map note + one note per object
+npm run build:ecosystem-html     # the standalone page (ecosystem.html)
+```
+
+None of them publishes anything. After regenerating, commit and push the
+vault yourself; the generators only write files.
 
 The machinery lives here rather than in the vault because the vault's own
 rulebook (`~/vault/CLAUDE.md`) says folders are layers rather than topics, and
