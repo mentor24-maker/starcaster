@@ -14,6 +14,22 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Bug Report 2/5: screenshots for bug reports (#TBD)
+
+Second of five pieces of the in-app Bug Report tool. A visitor filing a bug
+can now attach pictures: each screenshot is sent on its own (the hosting
+platform caps a single request at a few megabytes, so five big images can
+never travel together), checked by its actual contents rather than its file
+name — so a program renamed to look like a picture is refused — capped at
+8 MB each and five per report, and stored through the same image pipeline
+the rest of the site uses, tagged to the site that uploaded it. The report
+then lists its pictures by id and links to each one. Pictures uploaded for a
+report that never gets sent are marked as pending and can be swept after a
+day by a one-line query written down next to the code. Still no button
+anyone can click — that is piece four.
+
+---
+
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
 
 First of five pieces building the in-app Bug Report tool. This one is
