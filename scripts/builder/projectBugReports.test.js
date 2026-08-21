@@ -12,7 +12,13 @@ const assert = require('node:assert/strict');
 const supabasePath = require.resolve('../../lib/supabase.js');
 const adminStorePath = require.resolve('../../lib/projectAdminStore.js');
 const storePath = require.resolve('../../lib/projectBugReportsStore.js');
+const projectsStorePath = require.resolve('../../lib/projectsStore.js');
 const publicSitePath = require.resolve('../../routes/publicSite.js');
+
+// The one project the fake database knows. System-host requests must resolve
+// their claimed projectId against it; tenant-host requests reach it by domain.
+const KNOWN_PROJECT_ID = 'proj_1';
+const KNOWN_PROJECT_DOMAIN = 'tenant.example.com';
 
 /** Swap lib/supabase for a recorder so the store's wire format is pinned. */
 function withMocks({ rows = [{}], adminSession = null } = {}) {
@@ -22,6 +28,25 @@ function withMocks({ rows = [{}], adminSession = null } = {}) {
     tableConfig: () => ({ projectBugReports: 'project_bug_reports' }),
     sbQuery: async (options) => {
       calls.push(options);
+      if (options.table !== 'project_bug_reports') {
+        // Projects lookups (getPublicProjectById / findProjectByDomain):
+        // answer only for the one known project, [] for anything else.
+        const idMatch = /(?:^|&)id=eq\.([^&]*)/.exec(options.query || '');
+        if (idMatch) {
+          const id = decodeURIComponent(idMatch[1]);
+          return { ok: true, status: 200, data: id === KNOWN_PROJECT_ID ? [{ id }] : [] };
+        }
+        const domainMatch = /(?:^|&)domain=eq\.([^&]*)/.exec(options.query || '');
+        if (domainMatch) {
+          const domain = decodeURIComponent(domainMatch[1]);
+          return {
+            ok: true,
+            status: 200,
+            data: domain === KNOWN_PROJECT_DOMAIN ? [{ id: KNOWN_PROJECT_ID, domain }] : [],
+          };
+        }
+        return { ok: true, status: 200, data: [] };
+      }
       return { ok: true, status: 200, data: rows };
     },
   };
@@ -34,6 +59,9 @@ function withMocks({ rows = [{}], adminSession = null } = {}) {
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
   require.cache[adminStorePath] = { id: adminStorePath, filename: adminStorePath, loaded: true, exports: fakeAdminStore };
   delete require.cache[storePath];
+  // projectsStore destructures sbQuery at load time, so it must be re-required
+  // per mock or it keeps recording into a previous test's calls array.
+  delete require.cache[projectsStorePath];
   delete require.cache[publicSitePath];
 
   const store = require(storePath);
@@ -43,6 +71,7 @@ function withMocks({ rows = [{}], adminSession = null } = {}) {
     if (realSupabase) require.cache[supabasePath] = realSupabase; else delete require.cache[supabasePath];
     if (realAdminStore) require.cache[adminStorePath] = realAdminStore; else delete require.cache[adminStorePath];
     delete require.cache[storePath];
+    delete require.cache[projectsStorePath];
     delete require.cache[publicSitePath];
   }
 
@@ -56,7 +85,12 @@ function fakeRes() {
   return res;
 }
 
-function fakeReq({ body = {}, ip = '10.0.0.1', headers = {} } = {}) {
+// Every request gets its own IP unless a test passes one — the real in-memory
+// rate limiter (8/10min) is shared across the whole file, so tests that reuse
+// an address spend each other's budget and start 429ing as the file grows.
+let nextTestIp = 1;
+
+function fakeReq({ body = {}, ip = `192.0.2.${nextTestIp++}`, headers = {} } = {}) {
   return {
     method: 'POST',
     url: '/api/public/bug-report',
@@ -166,7 +200,7 @@ test('the route is registered under /api/public', () => {
 });
 
 test('a valid submission is stored and answers 201 with an envelope', async () => {
-  const { publicSite, calls, restore } = withMocks();
+  const { publicSite, calls, restore } = withMocks({ rows: [{ id: 'bug_1', project_id: 'proj_1' }] });
   try {
     const { handled, status, payload } = await post(publicSite, {
       body: { projectId: 'proj_1', description: 'The submit button does nothing', pageUrl: '/contact' },
@@ -174,8 +208,42 @@ test('a valid submission is stored and answers 201 with an envelope', async () =
     assert.equal(handled, true, 'the route must claim the path');
     assert.equal(status, 201, 'must write a status — 0 means the guard swallowed it (CLAUDE.md #11)');
     assert.equal(payload.ok, true);
-    assert.ok(payload.data.id !== undefined || true); // shape comes from the (mocked) DB row
+    assert.equal(payload.data.id, 'bug_1', 'the created row must come back through the envelope');
     assert.equal(calls.find((c) => c.method === 'POST').body[0].project_id, 'proj_1');
+  } finally {
+    restore();
+  }
+});
+
+test('a system-host request claiming a nonexistent project is rejected, nothing written', async () => {
+  // The review finding: on a system host (localhost, starcaster.pro, previews)
+  // the host names no tenant, so the body's projectId used to be trusted as-is
+  // — any garbage string became a tenant. It must now resolve to a real
+  // project or be refused before anything is stored.
+  const { publicSite, calls, restore } = withMocks();
+  try {
+    const { status, payload } = await post(publicSite, {
+      body: { projectId: 'proj_i_made_this_up', description: 'spam for a fake tenant' },
+    });
+    assert.equal(status, 404);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'PROJECT_NOT_FOUND');
+    assert.equal(calls.find((c) => c.method === 'POST'), undefined, 'nothing may be written');
+  } finally {
+    restore();
+  }
+});
+
+test('a tenant-host request with its own projectId is accepted and stamped from the host binding', async () => {
+  const { publicSite, calls, restore } = withMocks();
+  try {
+    const { status, payload } = await post(publicSite, {
+      body: { projectId: KNOWN_PROJECT_ID, description: 'Broken on my own site' },
+      headers: { host: KNOWN_PROJECT_DOMAIN },
+    });
+    assert.equal(status, 201);
+    assert.equal(payload.ok, true);
+    assert.equal(calls.find((c) => c.method === 'POST').body[0].project_id, KNOWN_PROJECT_ID);
   } finally {
     restore();
   }

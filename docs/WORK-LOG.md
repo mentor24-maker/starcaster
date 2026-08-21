@@ -24,6 +24,11 @@ checks the report isn't spam, isn't absurdly long, and isn't falsely claiming
 to come from a signed-in staff member before saving it. Each report is kept
 strictly to the site that reported it, matching the rule every other table
 in this database follows. Nothing changes yet for anyone using the app.
+After review, one hole was closed before launch: a request arriving through
+the platform's own address (rather than a tenant's domain) could name any
+project it liked — even a made-up one — and have its report filed under that
+name. The endpoint now checks the named project really exists before saving,
+and refuses otherwise.
 
 ---
 
