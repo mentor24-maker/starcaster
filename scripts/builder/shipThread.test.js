@@ -71,6 +71,53 @@ test('the checks it runs include the gates CI runs', () => {
   }
 });
 
+test('a successful merge from a worktree does not attempt gh\'s own local branch-delete', () => {
+  // gh pr merge --delete-branch tries to `git checkout main` locally to move
+  // off the branch it is about to delete. Every `ship` run happens from a
+  // worktree, where main is always checked out somewhere else, so that
+  // checkout fails on every single run — printing a red `fatal: 'main' is
+  // already used by worktree ...` and (per `gh help exit-codes`, "if a
+  // command fails for any reason, the exit code will be 1") making gh's OWN
+  // exit code non-zero even though the merge on GitHub genuinely succeeded.
+  // The remote branch does not need the flag to be deleted — this repo has
+  // GitHub's own "Automatically delete head branches" (delete_branch_on_merge)
+  // on — and the local branch is `post-merge`'s and `npm run tidy`'s job
+  // (via git cherry, not a plain checkout), so the flag was both redundant
+  // and the actual source of the problem.
+  const mergeCallMatch = code.match(/'gh',\s*\[\s*'pr',\s*'merge',\s*prNumber,([^\]]*)\]/);
+  assert.ok(mergeCallMatch, 'must find the gh pr merge call');
+  assert.doesNotMatch(mergeCallMatch[1], /delete-branch/, '--delete-branch must not be passed');
+  assert.match(mergeCallMatch[1], /'--squash'/, 'the merge strategy itself must still be squash');
+});
+
+test('the merge call is still allowed to fail without stopping the script — the REAL check is what follows', () => {
+  // gh's own exit code is not the source of truth for "did the merge work"
+  // (see the test above — it can be non-zero on a real success). The
+  // authoritative check is the separate `gh pr view ... --json state` read
+  // immediately after, which must still exist and must still fail() the
+  // script when the state is not MERGED — that is what keeps criterion 3
+  // (a genuine failure still exits non-zero) true.
+  const mergeCallMatch = code.match(/'gh',\s*\[\s*'pr',\s*'merge',[^)]*\)/);
+  assert.ok(mergeCallMatch, 'must find the gh pr merge call');
+  assert.match(mergeCallMatch[0], /allowFail:\s*true/, 'gh\'s own cosmetic exit code must not stop the script');
+
+  const afterMerge = code.slice(code.indexOf(mergeCallMatch[0]));
+  assert.match(afterMerge, /json',\s*'state'/, 'must independently re-read the PR state after merging');
+  assert.match(afterMerge, /merged\.out\s*!==\s*'MERGED'/, 'must compare against MERGED specifically');
+  assert.match(afterMerge.slice(0, afterMerge.indexOf("merged.out !== 'MERGED'") + 200), /fail\(/, 'a state other than MERGED must still call fail()');
+});
+
+test('nothing overrides the exit code at the very end — a clean run relies on Node\'s own 0, not a forced one', () => {
+  // Forcing `process.exit(0)` unconditionally at the end would be the
+  // over-correction the ticket itself warns against: it would hide a REAL
+  // late failure (e.g. in the tidy step) behind a fake success. The fix here
+  // is removing the thing that was falsely non-zero, not adding a thing that
+  // is falsely zero.
+  const doneIndex = code.indexOf('is merged and main is up to date');
+  assert.ok(doneIndex > -1, 'must find the final success message');
+  assert.doesNotMatch(code.slice(doneIndex), /process\.exit\(0\)/, 'must not force success after the final message');
+});
+
 test('--dry-run and --no-merge exist, so it can be inspected before it acts', () => {
   assert.match(code, /dry-run/);
   assert.match(code, /no-merge/);
