@@ -80,6 +80,7 @@
     "schema:snapshot": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs snapshot",
     "schema:check": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs check",
     "check:ecosystem": "node scripts/check_ecosystem_inventory.mjs",
+    "check:ecosystem-drift": "node scripts/check_ecosystem_drift.cjs",
     "build:ecosystem": "node scripts/build_ecosystem_diagram.mjs",
     "build:ecosystem-notes": "node scripts/build_ecosystem_notes.mjs"
   },
