@@ -14,6 +14,24 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — A place for visitors to report a broken page (#341)
+
+First of five pieces building the in-app Bug Report tool. This one is
+plumbing only — no button anyone can click yet (that's a later piece) — but
+it lays a safe place to send reports to. Any tenant site can now POST a bug
+report (what's wrong, what page, who reported it) to a new endpoint, which
+checks the report isn't spam, isn't absurdly long, and isn't falsely claiming
+to come from a signed-in staff member before saving it. Each report is kept
+strictly to the site that reported it, matching the rule every other table
+in this database follows. Nothing changes yet for anyone using the app.
+After review, one hole was closed before launch: a request arriving through
+the platform's own address (rather than a tenant's domain) could name any
+project it liked — even a made-up one — and have its report filed under that
+name. The endpoint now checks the named project really exists before saving,
+and refuses otherwise.
+
+---
+
 ## 2026-08-18 — Urgent is now yours alone to hand out (#347)
 
 The task queue is sorted so the most urgent, oldest work is always done
