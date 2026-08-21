@@ -22,6 +22,13 @@ write any code here. You produce well-formed tasks.
   `npm run clickup -- task --list 901418546619 --name "..." --status Queued --priority high --tags "epic-name" --body-file -`
   (body on stdin). The connector works too when its budget allows, but the
   direct route is the one that cannot be starved by other sessions.
+  **File at High or below.** Urgent is the operator's own lane (ratified
+  2026-08-18) — the queue sorts priority-then-age, so an Urgent flag is a
+  human override that outranks everything the loop decided, and that only
+  works if agents never set it themselves. `task --priority urgent` refuses
+  outright unless `--operator-asked` is also passed, and that flag is a
+  claim, not a permission check — only add it when the operator explicitly
+  asked for Urgent, by voice or in writing.
 
 ## Workflow
 

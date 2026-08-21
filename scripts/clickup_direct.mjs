@@ -140,6 +140,11 @@ function usage(code = 2) {
   console.error('Usage: node scripts/clickup_direct.mjs <command> [options]   (run via `npm run clickup -- <command> ...`)');
   console.error('  whoami');
   console.error('  task --list <id> --name "<name>" --body-file <file|-> [--status S] [--priority urgent|high|normal|low] [--tags a,b] [--id-out <file>]');
+  console.error('                                             --priority urgent needs --operator-asked too — Urgent is the');
+  console.error('                                             operator\'s lane, agents file at High or below by default');
+  console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
+  console.error('                                             change an existing task\'s priority, verified by read-back;');
+  console.error('                                             same --operator-asked rule as `task` for urgent');
   console.error('  chat --channel <id> --body-file <file|->');
   console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
   console.error('                                             id <TAB> status <TAB> priority <TAB> created <TAB> name');
@@ -203,6 +208,22 @@ if (cmd === 'whoami') {
 } else if (cmd === 'task') {
   const list = arg('list'), name = arg('name'), bodyFile = arg('body-file');
   if (!list || !name || !bodyFile) usage();
+
+  // Urgent is the human lane (ratified 2026-08-18): the queue sorts
+  // priority-then-age, so an Urgent flag is a human override that outranks
+  // everything the machine decided — with no other machinery needed. An
+  // agent filing Urgent on its own defeats that outright. --operator-asked
+  // is not a real permission check (nothing here CAN check who typed the
+  // command) — it is the agent's own written claim that the operator said
+  // so, sitting in shell history and the transcript where it can be
+  // checked later, same shape as every other "say why" guard in this file.
+  if (String(arg('priority', '')).toLowerCase() === 'urgent' && !flag('operator-asked')) {
+    console.error('\nUrgent is reserved for the operator, not something an agent sets on its own.');
+    console.error('File at High or below by default.');
+    console.error('If the operator explicitly asked for Urgent, add --operator-asked to confirm that —');
+    console.error('it is your written claim that this is what happened, visible in the transcript.\n');
+    process.exit(1);
+  }
 
   const tags = arg('tags') ? arg('tags').split(',').map((s) => s.trim()).filter(Boolean) : undefined;
   const out = await call('POST', `/api/v2/list/${list}/task`, {
@@ -380,6 +401,41 @@ if (cmd === 'whoami') {
     }
   }
   console.log(`Task ${task}: "${was}" -> "${now}", assigned: ${assigneeNames(t)} (verified from the write response).`);
+  reportLimits(out.res);
+
+} else if (cmd === 'priority') {
+  const task = arg('task'), priorityArg = arg('priority');
+  if (!task || !priorityArg) usage();
+  const wanted = priorityArg.toLowerCase();
+  if (!(wanted in PRIORITY)) {
+    console.error(`"${priorityArg}" is not a priority. Use one of: ${Object.keys(PRIORITY).join(', ')}.`);
+    process.exit(2);
+  }
+
+  // Same guard as `task`, same reasoning: Urgent is the operator's lane.
+  if (wanted === 'urgent' && !flag('operator-asked')) {
+    console.error('\nUrgent is reserved for the operator, not something an agent sets on its own.');
+    console.error('If the operator explicitly asked for Urgent, add --operator-asked to confirm that —');
+    console.error('it is your written claim that this is what happened, visible in the transcript.\n');
+    process.exit(1);
+  }
+
+  const before = await call('GET', `/api/v2/task/${task}`);
+  if (!before.res.ok) die('read task before update', before);
+  const was = before.json.priority?.priority ?? '(none)';
+
+  const out = await call('PUT', `/api/v2/task/${task}`, { priority: PRIORITY[wanted] });
+  if (!out.res.ok) die('set priority', out);
+
+  // Verify from the write's OWN response — same discipline as `status`: a
+  // 200 proves a request landed, not that ClickUp actually changed the
+  // value (a priority name only valid in some lists, a stale id, etc.).
+  const now = out.json.priority?.priority ?? '(none)';
+  if (now !== wanted) {
+    console.error(`Priority did NOT stick: asked for "${wanted}", the write came back "${now}".`);
+    process.exit(1);
+  }
+  console.log(`Task ${task}: priority "${was}" -> "${now}" (verified from the write response).`);
   reportLimits(out.res);
 
 } else if (cmd === 'comment') {
