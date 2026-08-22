@@ -87,6 +87,29 @@ exists), the pictures are kept out of the site's normal image library, an
 upload that fails to record deletes its own leftover file, and a truly
 abandoned upload is left for a scheduled clean-up filed as its own task.
 
+## 2026-08-18 — Bug Report 3/5: every report lands on Dane's desk in ClickUp (#364)
+
+After review, the fail-safe was hardened: when a forwarded task lands in the
+wrong status the code deletes it — and now it CHECKS that the delete actually
+worked. If the delete fails, it says so loudly and names the task still
+sitting in the queue, instead of falsely reporting it was removed. Every
+ClickUp call now times out rather than hanging the person filing the report,
+an empty-bodied task is caught, and a task that was created but couldn't be
+verified is named in the log so it can be found.
+
+Third of five pieces of the in-app Bug Report tool. Until now a submitted
+bug sat in the database where nobody looks. Now each one is also filed as a
+ClickUp task in the Loop Queue — in "Needs your input", assigned to Dane's
+own account, tagged with the site it came from — with the description, the
+page, who reported it and links to any screenshots. Two things are built in
+as guarantees rather than settings: the task can only ever land in that
+held status (if ClickUp puts it anywhere else, the code moves it once and
+otherwise deletes it, so public text can never reach the automated build
+loop), and ClickUp being down or misconfigured never costs the reporter —
+the report is saved first, the row is marked as "could not forward", the
+failure is logged loudly, and the visitor still gets their thank-you. Needs
+one server setting (CLICKUP_API_TOKEN) and a redeploy before it works live.
+
 ---
 
 ## 2026-08-18 — A place for visitors to report a broken page (#341)

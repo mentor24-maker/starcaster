@@ -17,6 +17,7 @@ const {
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
+const { forwardBugReport } = require('../lib/bugReportForward');
 const {
   storeBugReportScreenshot,
   verifyBugReportScreenshots,
@@ -327,9 +328,20 @@ async function handle(req, res, pathname, method) {
     // orphan-sweep bookkeeping, best-effort by design (see the library header).
     if (screenshots.data.assetIds.length) await markScreenshotsAttached(screenshots.data.assetIds, { projectId: scopedProjectId });
 
+    // AFTER the write, never before: the row is the record. Forwarding to
+    // ClickUp (held for the operator) can fail without the reporter ever
+    // knowing — the row is marked failed_forward and the failure is logged
+    // loudly (lib/bugReportForward.js). Awaited on purpose: serverless freezes
+    // the function once the response goes out.
+    const forward = await forwardBugReport(result.data, scope);
+
     return respondJson(res, req, 201, {
       ok: true,
-      data: { ...result.data, screenshots: screenshots.data.assets },
+      data: {
+        ...result.data,
+        status: forward.ok ? 'forwarded' : 'failed_forward',
+        screenshots: screenshots.data.assets,
+      },
     }), true;
   }
 
