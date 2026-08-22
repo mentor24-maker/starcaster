@@ -78,7 +78,12 @@
     "db:refresh": "doppler run --project starcaster --config dev --no-check-version -- node scripts/db_refresh.mjs",
     "db:use": "node scripts/db_use.mjs",
     "schema:snapshot": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs snapshot",
-    "schema:check": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs check"
+    "schema:check": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs check",
+    "check:ecosystem": "node scripts/check_ecosystem_inventory.mjs",
+    "check:ecosystem-drift": "node scripts/check_ecosystem_drift.cjs",
+    "build:ecosystem": "node scripts/build_ecosystem_diagram.mjs",
+    "build:ecosystem-notes": "node scripts/build_ecosystem_notes.mjs",
+    "build:ecosystem-html": "node scripts/build_ecosystem_html.mjs"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
@@ -90,6 +95,7 @@
     "flag-icons": "^7.5.0",
     "heroicons": "^2.2.0",
     "imap-simple": "^5.1.0",
+    "js-yaml": "^5.3.0",
     "mailparser": "^3.9.8",
     "playwright": "^1.59.1",
     "typescript": "^5.9.3",
