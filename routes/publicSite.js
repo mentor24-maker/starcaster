@@ -1,6 +1,6 @@
 'use strict';
 
-const { sendJson, sendErr, sendStatus, isHeadRequest, getUrlObj, getPublicSiteDomainParam } = require('./http');
+const { sendJson, sendErr, sendStatus, isHeadRequest, getUrlObj, getPublicSiteDomainParam, parseJsonBody } = require('./http');
 const { findProjectByDomain, getPublicProjectById } = require('../lib/projectsStore');
 const {
   listPublishedPagesForProject,
@@ -15,6 +15,8 @@ const {
   resolveTenantProjectFromHost,
 } = require('../lib/publicSiteHostBinding');
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
+const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
 
 const manifest = {
   id: 'public-site',
@@ -196,6 +198,60 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to load pages'), true;
 
     return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
+  }
+
+  // POST /api/public/bug-report — bug-report intake, no auth required (any
+  // tenant site visitor can hit this). See docs/SQL/project_bug_reports_setup.sql.
+  if (pathname === '/api/public/bug-report' && readMethod === 'POST') {
+    if (checkEndpointLimit(req, res, 'public.bugReport')) return true;
+
+    const body = await parseJsonBody(req);
+    const projectId = String(body.projectId || '').trim();
+    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+    const description = String(body.description || '').trim();
+    if (!description) return respondErr(res, req, 400, 'A description is required'), true;
+    if (description.length > MAX_BUG_REPORT_DESCRIPTION_LENGTH) {
+      return respondErr(res, req, 400, `Description must be ${MAX_BUG_REPORT_DESCRIPTION_LENGTH} characters or fewer`), true;
+    }
+
+    let scopedProjectId = bind.projectId || '';
+    if (!scopedProjectId) {
+      // System host (starcaster.pro, localhost, previews): the host names no
+      // tenant, so the body's projectId is an unverified claim — resolve it
+      // against real projects before writing, or any string becomes a tenant.
+      if (!projectId) return respondErr(res, req, 400, 'projectId is required'), true;
+      const project = await getPublicProjectById(projectId);
+      if (!project.ok || !project.data) {
+        return respondErr(res, req, 404, 'Unknown project', { code: 'PROJECT_NOT_FOUND' }), true;
+      }
+      scopedProjectId = String(project.data.id);
+    }
+
+    // A report claiming a client/staff viewer tier is only trusted if the
+    // request carries a real tenant admin session for THIS project —
+    // hiding an icon in the UI is not a security boundary.
+    let viewerTier = String(body.viewerTier || '').trim().toLowerCase();
+    let ownerUserId = '';
+    if (viewerTier === 'client' || viewerTier === 'staff') {
+      const token = projectAdmin.readAdminSessionToken(req);
+      const session = await getAdminSession(token);
+      if (session && String(session.projectId) === String(scopedProjectId)) {
+        ownerUserId = session.adminUserId;
+      } else {
+        viewerTier = 'public';
+      }
+    }
+
+    const result = await createBugReport({
+      description,
+      pageUrl: body.pageUrl,
+      userAgent: body.userAgent || req.headers['user-agent'] || '',
+      viewerTier,
+    }, { projectId: scopedProjectId, userId: ownerUserId });
+
+    if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to save bug report'), true;
+    return respondJson(res, req, 201, { ok: true, data: result.data }), true;
   }
 
   return false;
