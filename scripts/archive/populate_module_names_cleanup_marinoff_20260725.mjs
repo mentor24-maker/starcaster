@@ -26,8 +26,9 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { mainCheckoutDir } from '../lib/main_checkout.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
 const { createClient } = require('@supabase/supabase-js');
 const { htmlToPlainText } = require(path.join(ROOT, 'lib/builderPageContentExtract.js'));
@@ -37,7 +38,8 @@ const PAGES_TABLE = 'builder_landing_page';
 const IMAGE_TYPES = new Set(['image', 'floating-image']);
 const APPLY = process.argv.includes('--apply');
 const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
-const ENV_FILE = process.env.STARCASTER_ENV_FILE || '/Users/mentor/WebApps/starcaster/.env.local';
+const ENV_FILE = process.env.STARCASTER_ENV_FILE
+  || path.join(mainCheckoutDir(ROOT), '.env.local');
 
 function loadEnv() {
   const env = {};
