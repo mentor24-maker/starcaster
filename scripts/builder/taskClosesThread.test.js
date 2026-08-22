@@ -146,10 +146,11 @@ test('isTaskOpen is exported and reads a real git config value end to end', () =
 
 /** A fake `npm` on PATH, so isTaskOpen's exit-code handling is driven for
  *  real without touching the network or a real ClickUp task. */
-function withFakeNpmExitCode(code, fn) {
+function withFakeNpmExitCode(code, fn, stdout = '') {
   const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fake-npm-'));
   const fakeNpm = path.join(dir, 'npm');
-  fs.writeFileSync(fakeNpm, `#!/bin/sh\nexit ${code}\n`, { mode: 0o755 });
+  const emit = stdout ? `printf '%s' ${JSON.stringify(stdout)}\n` : '';
+  fs.writeFileSync(fakeNpm, `#!/bin/sh\n${emit}exit ${code}\n`, { mode: 0o755 });
   const previousPath = process.env.PATH;
   process.env.PATH = `${dir}:${previousPath}`;
   try {
@@ -168,12 +169,32 @@ test('isTaskOpen: exit 0 (confirmed open) reads as open', () => {
   });
 });
 
-test('isTaskOpen: exit 1 (confirmed closed) reads as closed — the ONLY code that authorizes a delete', () => {
+test('isTaskOpen: exit 1 WITH the "open: false" marker reads as closed — the ONLY thing that authorizes a delete', () => {
   delete require.cache[REPO_STATE];
   const { isTaskOpen } = require(REPO_STATE);
   withFakeNpmExitCode(1, () => {
     assert.equal(isTaskOpen('some-task'), 'closed');
-  });
+  }, 'task:   x\nstatus: Live\ntype:   closed\nopen:   false\n');
+});
+
+test('BLOCKER: exit 1 WITHOUT the marker (npm/doppler own failure, offline) reads as UNKNOWN, never closed', () => {
+  // The hazard: `npm run`, `doppler`, or a rejected fetch all exit 1 on their
+  // OWN failure before the check confirms anything. Collapsing that into
+  // "closed" would let `npm run tidy` on an offline machine delete every
+  // stamped unshipped branch. Only the command's positive marker means closed.
+  delete require.cache[REPO_STATE];
+  const { isTaskOpen } = require(REPO_STATE);
+  withFakeNpmExitCode(1, () => {
+    assert.equal(isTaskOpen('some-task'), 'unknown');
+  }); // no stdout — a bare exit 1
+});
+
+test('isTaskOpen: exit 1 with UNRELATED stdout (no marker) is still unknown', () => {
+  delete require.cache[REPO_STATE];
+  const { isTaskOpen } = require(REPO_STATE);
+  withFakeNpmExitCode(1, () => {
+    assert.equal(isTaskOpen('some-task'), 'unknown');
+  }, 'npm ERR! something unrelated failed\n');
 });
 
 test('isTaskOpen: exit 3 (could not tell — network/auth/rate-limit) reads as unknown, NEVER closed', () => {
@@ -219,4 +240,15 @@ test('a 404 (task gone) is treated as closed (1), not as could-not-tell (3)', ()
 
 test('closed detection reads status.type, not a status-NAME allowlist — thread is used against any ClickUp list', () => {
   assert.match(clickupDirectCode, /type\s*!==\s*'closed'\s*&&\s*type\s*!==\s*'done'/);
+});
+
+test('BLOCKER: a REJECTED fetch in task-open routes to exit 3, never falls through to exit 1', () => {
+  // A network/DNS/TLS failure rejects the fetch; without a catch the script
+  // dies on an unhandled rejection and node exits 1 — indistinguishable from
+  // "confirmed closed". The task-open block must try/catch call() and exit 3.
+  const blockStart = clickupDirectCode.indexOf("cmd === 'task-open'");
+  const blockEnd = clickupDirectCode.indexOf('const t = out.json;', blockStart);
+  const block = clickupDirectCode.slice(blockStart, blockEnd);
+  assert.match(block, /try\s*{[\s\S]*await call\('GET'/, 'the task fetch must be inside a try');
+  assert.match(block, /catch[\s\S]*process\.exit\(3\)/, 'a thrown fetch must exit 3 (could-not-tell), never 1');
 });

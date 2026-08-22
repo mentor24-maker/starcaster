@@ -612,7 +612,18 @@ if (cmd === 'whoami') {
   //   3 = could not tell (network, auth, rate limit — NOT a "safe to delete")
   const task = arg('task');
   if (!task) usage();
-  const out = await call('GET', `/api/v2/task/${task}`);
+  // A REJECTED fetch (offline, DNS, TLS) would otherwise throw out of here and
+  // node would exit 1 — indistinguishable from "confirmed closed", which is
+  // the one thing this contract must never let happen (a caller deletes on 1).
+  // Catch it and route to the exit-3 "cannot tell" path with the reason.
+  let out;
+  try {
+    out = await call('GET', `/api/v2/task/${task}`);
+  } catch (err) {
+    console.error(`\ncheck task ${task}: could not reach ClickUp — ${err.message}`);
+    console.error('This is NOT a "closed" result — treat it as "unknown", never "safe to delete".');
+    process.exit(3);
+  }
   if (out.res.status === 404) {
     console.log(`task:   ${task}`);
     console.log('status: (not found)');

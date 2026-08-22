@@ -153,14 +153,21 @@ function isTaskOpen(taskId) {
   try {
     execFileSync('npm', ['run', 'clickup', '--', 'task-open', '--task', taskId], {
       cwd: root,
-      stdio: ['ignore', 'ignore', 'ignore'],
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
     });
     return 'open';
   } catch (err) {
-    // npm's own exit code mirrors the script's when it fails via `npm run`,
-    // but confirm rather than assume: anything other than exactly 1 is
-    // "could not tell", not "closed".
-    return err.status === 1 ? 'closed' : 'unknown';
+    // Exit 1 alone is NOT enough to believe "closed". `npm run` and `doppler`
+    // both exit 1 on their OWN failures (not logged in, secrets unreachable)
+    // before the script even runs, and that must never authorize a delete.
+    // Require the command's positive marker — it prints `open:   false` only
+    // when it actually confirmed the task is closed/gone. Exit 1 without that
+    // marker is an unknown, not a closed. (The command itself now exits 3, not
+    // 1, on a network/auth failure — this is belt-and-braces behind it.)
+    const printed = `${err.stdout || ''}`;
+    if (err.status === 1 && /open:\s*false/.test(printed)) return 'closed';
+    return 'unknown';
   }
 }
 
