@@ -34,6 +34,29 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — A tool that notices when ClickUp and GitHub disagree (#345)
+
+A task can end up saying "in review" or "building" days after the work
+actually shipped and merged — nobody moved it, so it just sits there looking
+unfinished. A new command, `npm run reconcile`, checks every in-progress
+Loop Queue task against the GitHub pull request it's linked to: if that pull
+request already merged, the task gets moved to Live automatically. It
+defaults to a dry run that only prints what it would do; nothing changes
+unless you ask it to. It also checks for the reverse problem — a work folder
+still sitting on the machine after its task closed without shipping — though
+that check can only cover folders started after this same session's earlier
+piece (Task-closes-thread, PR #344) began tagging them. It's not on a
+schedule yet; that's its own upcoming piece of work (the Mac Mini setup).
+
+After review, several ways it could quietly give the wrong answer were closed:
+it now trusts the NEWEST pull request a task links (a reworked task carries an
+old, dead link too), treats a pull request that was closed WITHOUT merging as
+drift to flag rather than "fine", reads a task's whole comment history rather
+than only the newest page, and never moves a task out of one of your own
+statuses ("Needs your input" / "Ready to launch") on its own — it flags those
+for you instead. Status moves now go through the same verified path everything
+else uses, and a flagged problem is posted to the bus once, not on every run.
+
 ---
 
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
