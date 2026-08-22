@@ -3,6 +3,7 @@ import {
   buildSavedSectionUsageIndex,
   describeCanonicalOverwrite,
   describePropagationOutcome,
+  readPropagationTally,
   describePushImpact,
   describeUsage,
   driftedFollowingPages,
@@ -130,6 +131,24 @@ describe('what the operator reads', () => {
     // The case that used to be invisible: a fan-out that half worked.
     expect(describePropagationOutcome('Menu', { updated: 30, failed: 5 }))
       .toContain('5 pages could not be updated');
+  });
+
+  it('reads the tally from the REAL response envelope (meta.propagation), not a flat key that is never there', () => {
+    // The force-overwrite client read `body.propagation` and reported
+    // "Overwrote 0 pages" forever; its test had used a flattened mock, so it
+    // could not notice. This is the actual shape routes/http.js sendOk emits.
+    const real = { ok: true, data: {}, meta: { propagation: { updated: 2, failed: 0, runId: 'run-1', skipped: [] } } };
+    expect(readPropagationTally(real)).toMatchObject({ updated: 2, runId: 'run-1' });
+    expect(readPropagationTally({ ok: true, data: {} })).toBeNull();
+    expect(readPropagationTally({ propagation: { updated: 1 } })).toMatchObject({ updated: 1 });
+    expect(readPropagationTally(null)).toBeNull();
+  });
+
+  it('an overwrite is described as an overwrite, never as a skip', () => {
+    expect(describePropagationOutcome('Menu', { updated: 2, failed: 0, overwritten: [{ name: 'Rates' }, { name: 'FAQ' }] }))
+      .toBe('Saved "Menu" and updated 2 pages. 2 pages with local changes were overwritten.');
+    expect(describePropagationOutcome('Menu', { updated: 1, failed: 0, overwritten: [{ name: 'Rates' }] }))
+      .toBe('Saved "Menu" and updated 1 page. 1 page with local changes was overwritten.');
   });
 
   it('names the pages a fan-out skipped for having local changes', () => {

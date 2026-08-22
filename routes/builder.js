@@ -2176,8 +2176,20 @@ async function handle(req, res, pathname, method) {
   // Re-reads the section's CURRENT (already-saved) content and re-runs the
   // push with the drift check off, rather than asking the client to resend
   // the whole section body a second time.
+  //
+  // The body names the pages: `{ pageIds: [...] }` — exactly the ones the
+  // push reported as skipped. Required, not optional: without it this route
+  // rewrote EVERY follower to overwrite two drifted copies (review finding,
+  // 2026-08-20), and drift cannot be recomputed here because the master has
+  // already been saved. The tally rides `meta.propagation`, same as the
+  // ordinary save route — clients read it from there.
   const forcePropagateMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)\/force-propagate$/);
   if (forcePropagateMatch && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const pageIds = Array.isArray(body.pageIds) ? body.pageIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+    if (!pageIds.length) {
+      return sendErr(res, 400, 'pageIds is required — name the pages to overwrite (the ones the push skipped).', { code: 'VALIDATION_ERROR' }), true;
+    }
     const currentResult = await getSavedSection(forcePropagateMatch[1], scope);
     if (!currentResult.ok) {
       return sendErr(res, currentResult.status || 404, currentResult.error || 'Saved section not found'), true;
@@ -2186,7 +2198,7 @@ async function handle(req, res, pathname, method) {
       forcePropagateMatch[1],
       currentResult.data.section,
       scope,
-      { actor: actorFrom(req), overwriteDrifted: true },
+      { actor: actorFrom(req), overwriteDrifted: true, onlyPageIds: pageIds },
     );
     return sendOk(res, 200, {}, {}, { propagation }), true;
   }

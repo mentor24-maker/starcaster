@@ -63,6 +63,7 @@ import {
   buildSavedSectionUsageIndex,
   describeCanonicalOverwrite,
   describePropagationOutcome,
+  readPropagationTally,
   describePushImpact,
   driftedFollowingPages,
   type BlockUsage
@@ -185,7 +186,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // opt-in to overwrite them anyway lives here, right where the skip was
   // reported — not buried behind a checkbox nobody would find before saving.
   const [driftedSkip, setDriftedSkip] =
-    useState<{ savedSectionId: string; name: string; pageLabels: string[] } | null>(null);
+    useState<{ savedSectionId: string; name: string; pageLabels: string[]; pageIds: string[] } | null>(null);
   const [isForcingDrifted, setIsForcingDrifted] = useState(false);
   const pageThemeDirtyRef = useRef(false);
   // Template and theme are only written back when the operator actually picked
@@ -1454,7 +1455,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const skippedForDrift = data.meta?.propagation?.skipped ?? [];
       setDriftedSkip(
         skippedForDrift.length
-          ? { savedSectionId: sectionId, name: data.savedSection.name, pageLabels: skippedForDrift.map((p) => p.name || "Untitled page") }
+          ? {
+              savedSectionId: sectionId,
+              name: data.savedSection.name,
+              pageLabels: skippedForDrift.map((p) => p.name || "Untitled page"),
+              // The ids travel with the banner: the explicit overwrite names
+              // exactly these pages, so a force run touches nothing else.
+              pageIds: skippedForDrift.map((p) => String(p.pageId ?? "")).filter(Boolean),
+            }
           : null
       );
       setMessage(options.note ? `${outcome} ${options.note}` : outcome);
@@ -2208,7 +2216,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
    */
   async function forceOverwriteDrifted() {
     if (!driftedSkip) return;
-    const { savedSectionId, name, pageLabels } = driftedSkip;
+    const { savedSectionId, name, pageLabels, pageIds } = driftedSkip;
     const confirmed = window.confirm(
       `Overwrite the local changes on ${pageLabels.length === 1 ? "this page" : `these ${pageLabels.length} pages`}?\n\n` +
         pageLabels.map((label) => `  • ${label}`).join("\n") +
@@ -2219,18 +2227,27 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setIsForcingDrifted(true);
     setError(null);
     try {
+      // Only the pages the push skipped — the route refuses a bodiless call,
+      // because without ids a force run rewrote every follower (46 writes to
+      // overwrite 2) and inflated the undo run to match.
       const response = await builderAdminFetch(`/api/admin/saved-sections/${savedSectionId}/force-propagate`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageIds }),
       });
-      const body = (await response.json().catch(() => ({}))) as {
-        propagation?: { updated?: number; failed?: number; runId?: string };
-        error?: string;
-      };
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "Could not overwrite those pages.");
 
-      const updated = body.propagation?.updated ?? 0;
-      setMessage(`Overwrote ${updated} ${updated === 1 ? "page" : "pages"} with "${name}".`);
-      const runId = String(body.propagation?.runId ?? "");
+      // The tally rides `meta.propagation` (same as the save route); the first
+      // version read a flat key that was never there and reported 0 forever.
+      const tally = readPropagationTally(body);
+      const updated = Number(tally?.updated ?? 0) || 0;
+      const failed = Number(tally?.failed ?? 0) || 0;
+      setMessage(
+        `Overwrote ${updated} ${updated === 1 ? "page" : "pages"} with "${name}".` +
+          (failed ? ` ${failed} could not be written — reload and try again.` : "")
+      );
+      const runId = String(tally?.runId ?? "");
       if (runId && updated) setPropagationUndo({ runId, pages: updated, name });
       setDriftedSkip(null);
       await loadPages();

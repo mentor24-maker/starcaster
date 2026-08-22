@@ -138,7 +138,7 @@ test('a page whose copy was hand-edited (drifted from the previous master) is sk
   }
 });
 
-test('overwriteDrifted:true forces the push through anyway, and nothing is reported skipped', async () => {
+test('overwriteDrifted:true forces the push through anyway — reported as OVERWRITTEN, never as skipped', async () => {
   const pages = [pageRow(1, 'Rates', section('HAND-EDITED HERE'))];
   const { mod, patchCalls, restore } = withMockedPagesStore(pages);
   try {
@@ -147,11 +147,63 @@ test('overwriteDrifted:true forces the push through anyway, and nothing is repor
       overwriteDrifted: true,
     });
     assert.equal(result.updated, 1);
-    assert.deepEqual(result.skipped, []);
+    assert.deepEqual(result.skipped, [], 'a page that was written was not skipped');
+    assert.deepEqual(result.overwritten, [{ pageId: '1', name: 'Rates' }], 'the overwrite is named in its own bucket');
     assert.equal(patchCalls.length, 1, 'the explicit opt-in must actually write the page');
   } finally {
     restore();
   }
+});
+
+test('onlyPageIds narrows a force run to the named pages — the other followers are not touched', async () => {
+  // The review finding: a force run rewrote EVERY follower to overwrite two
+  // drifted copies. The banner knows which pages were skipped; it names them.
+  const pages = [
+    pageRow(1, 'Home', section('old copy')),          // untouched follower
+    pageRow(2, 'Rates', section('HAND-EDITED HERE')),  // drifted — the one to overwrite
+    pageRow(3, 'FAQ', section('old copy')),           // untouched follower
+  ];
+  const { mod, patchCalls, revisionCalls, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      overwriteDrifted: true,
+      onlyPageIds: ['2'],
+    });
+    assert.equal(result.total, 1, 'only the named page is a target');
+    assert.equal(result.updated, 1);
+    assert.equal(patchCalls.length, 1, 'exactly one write');
+    assert.ok(patchCalls[0].query.includes('id=eq.2'), 'and it is the named page');
+    assert.equal(revisionCalls.length, 1, 'one restore point, so the undo run covers exactly what was written');
+    assert.ok(result.runId, 'a real run id for the undo banner');
+  } finally {
+    restore();
+  }
+});
+
+test('onlyPageIds with an id that carries no copy of the section writes nothing', async () => {
+  const pages = [pageRow(1, 'Home', section('old copy'))];
+  const { mod, patchCalls, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      overwriteDrifted: true,
+      onlyPageIds: ['999'],
+    });
+    assert.equal(result.total, 0);
+    assert.equal(result.updated, 0);
+    assert.equal(patchCalls.length, 0);
+    assert.equal(result.runId, '', 'nothing written, nothing to undo');
+  } finally {
+    restore();
+  }
+});
+
+test('the force-propagate route requires pageIds and passes them as onlyPageIds', () => {
+  const source = require('node:fs').readFileSync(require.resolve('../../routes/builder.js'), 'utf8');
+  const start = source.indexOf('force-propagate$/');
+  const block = source.slice(start, start + 2000);
+  assert.match(block, /pageIds is required/, 'a bodiless force call must be refused, or it rewrites every follower');
+  assert.match(block, /onlyPageIds:\s*pageIds/, 'the named pages must reach propagateCanonicalSection');
+  assert.match(block, /sendOk\(res, 200, \{\}, \{\}, \{ propagation \}\)/, 'the tally rides meta.propagation — clients read it there');
 });
 
 test('omitting previousSection disables the drift check entirely — the pre-Sync-5/7 behavior', async () => {

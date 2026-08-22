@@ -259,8 +259,34 @@ export type PropagationTally = {
   total?: number;
   updated?: number;
   failed?: number;
+  runId?: string;
+  /** Drifted copies LEFT ALONE by this push. */
   skipped?: ReadonlyArray<{ pageId?: string; name?: string }>;
+  /** Drifted copies written anyway because the caller opted in — never described as skipped. */
+  overwritten?: ReadonlyArray<{ pageId?: string; name?: string }>;
 };
+
+/**
+ * The tally out of a route response, wherever the route put it.
+ *
+ * Both the save route and force-propagate return it under `meta.propagation`
+ * (routes/http.js attaches the fifth sendOk argument as `body.meta`). The
+ * first force-overwrite client read `body.propagation` — always undefined —
+ * and so reported "Overwrote 0 pages" and never armed the undo banner, on
+ * every force run (review finding, 2026-08-20). Reading through ONE helper
+ * that understands the real envelope is how that cannot recur; the legacy
+ * flat key is tolerated for any older caller.
+ */
+export function readPropagationTally(body: unknown): PropagationTally | null {
+  const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+  if (!record) return null;
+  const meta = record.meta && typeof record.meta === 'object' ? (record.meta as Record<string, unknown>) : null;
+  const fromMeta = meta?.propagation;
+  if (fromMeta && typeof fromMeta === 'object') return fromMeta as PropagationTally;
+  const flat = record.propagation;
+  if (flat && typeof flat === 'object') return flat as PropagationTally;
+  return null;
+}
 
 /**
  * The sentence shown AFTER the write. The route has always returned this tally;
@@ -274,9 +300,12 @@ export function describePropagationOutcome(
   const updated = Number(propagation?.updated ?? 0) || 0;
   const failed = Number(propagation?.failed ?? 0) || 0;
   const skipped = Array.isArray(propagation?.skipped) ? propagation!.skipped!.length : 0;
-  const skippedClause = skipped > 0
+  const overwritten = Array.isArray(propagation?.overwritten) ? propagation!.overwritten!.length : 0;
+  const skippedClause = (skipped > 0
     ? ` ${skipped === 1 ? '1 page has' : `${skipped} pages have`} local changes and were skipped.`
-    : '';
+    : '') + (overwritten > 0
+    ? ` ${overwritten === 1 ? '1 page with local changes was' : `${overwritten} pages with local changes were`} overwritten.`
+    : '');
 
   if (failed > 0) {
     return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}, but ${failed} ${failed === 1 ? 'page' : 'pages'} could not be updated. Reload and save again to finish.${skippedClause}`;

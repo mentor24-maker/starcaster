@@ -26,7 +26,11 @@ master shows a "Changed" badge, a master save skips those pages by default
 and says so before you click ("34 pages will update, 2 have local changes and
 will be skipped"), and after saving there's a one-click way to overwrite them
 anyway if that's really what you wanted. Nothing about an ordinary push
-changed for the 34 pages that hadn't drifted.
+changed for the 34 pages that hadn't drifted. After review, the "overwrite
+anyway" button was tightened: it now rewrites only the pages that were
+skipped (it had been re-pushing every linked page to overwrite two), it
+reports the true count and offers the undo it had been forgetting to offer,
+and an overwritten page is described as overwritten rather than "skipped".
 
 ---
 
