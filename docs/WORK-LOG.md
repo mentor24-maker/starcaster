@@ -48,6 +48,24 @@ button on any row that came from a shared-section push, so that undo is
 reachable any time, not just in the moment right after saving. Nothing about
 the existing per-page Restore button changed.
 
+## 2026-08-18 — A shared section can no longer silently swallow a local edit (#343)
+
+Shared sections (the same header, footer or banner reused on many pages) work
+by staying linked to a master copy — save the master, every linked page
+follows. Until now, a page that had been hand-edited directly while still
+linked looked completely identical to an ordinary linked page, so a routine
+master edit would silently flatten it along with everything else. Now the
+Builder can tell the difference: a page whose copy has drifted from the
+master shows a "Changed" badge, a master save skips those pages by default
+and says so before you click ("34 pages will update, 2 have local changes and
+will be skipped"), and after saving there's a one-click way to overwrite them
+anyway if that's really what you wanted. Nothing about an ordinary push
+changed for the 34 pages that hadn't drifted. After review, the "overwrite
+anyway" button was tightened: it now rewrites only the pages that were
+skipped (it had been re-pushing every linked page to overwrite two), it
+reports the true count and offers the undo it had been forgetting to offer,
+and an overwritten page is described as overwritten rather than "skipped".
+
 ---
 
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
