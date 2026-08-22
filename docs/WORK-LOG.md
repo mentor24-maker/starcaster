@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — You now see what a change looks like, without checking anything out (#PR)
+## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
 
 Until today, if a piece of work changed how a page *looks*, the only way to
 judge it was to check out the branch, start a server and open a browser. That
