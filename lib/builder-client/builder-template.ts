@@ -127,7 +127,8 @@ export const BUILDER_MODULE_TYPES = [
   "admin-login",
   "admin-nav-link",
   "admin-site-settings",
-  "admin-support-form"
+  "admin-support-form",
+  "bug-report"
 ] as const;
 
 export type BuilderTemplateModuleType = (typeof BUILDER_MODULE_TYPES)[number];
@@ -1811,7 +1812,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-login" ||
     type === "admin-nav-link" ||
     type === "admin-site-settings" ||
-    type === "admin-support-form"
+    type === "admin-support-form" ||
+    type === "bug-report"
   ) {
     return type;
   }
@@ -3457,6 +3459,23 @@ export function createEmptyModule(
                             showContact: "true",
                             contactHeading: "Need a hand with your website?",
                             contactIntro: "Use the form below and it comes straight to us, along with anything you attach. For anything urgent, reach out directly:"
+                          }
+                      : type === "bug-report"
+                        ? {
+                            // Floating bug-report trigger (task 4/5). Keys are
+                            // read by BugReportModule (builder-bug-report-module.tsx)
+                            // and edited by builder-bug-report-module-settings.tsx.
+                            visibility: "public",
+                            icon: "bug",
+                            corner: "bottom-right",
+                            iconSize: "40",
+                            iconBlock: "true",
+                            blockColor: "#0f4f8f",
+                            iconColor: "#ffffff",
+                            labelText: "",
+                            popupTitle: "Report a problem",
+                            promptPlaceholder: "What went wrong? What did you expect to happen?",
+                            thankYouMessage: "Thanks — we got it."
                           }
           : {};
 

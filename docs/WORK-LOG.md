@@ -14,6 +14,24 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-18 — Bug Report 4/5: the button visitors actually click (#TBD)
+
+Fourth of five pieces of the in-app Bug Report tool, and the first one
+anyone can see: a "Bug Report" module in the Builder. Drop it on a page and
+a small bug icon floats in a corner of every visitor's screen; clicking it
+opens a popup where they describe the problem, attach screenshots (when that
+piece is live), and send — then a short thank-you and the popup closes. The
+module's settings choose who can see the icon (everyone, signed-in clients,
+or staff only), which icon and how big, which corner, its colours, an
+optional label, and the popup's words. Behind the scenes the icon floats
+from the very top of the page rather than from inside its column, because
+a column's styling can quietly pin a "fixed" element to the wrong spot — a
+trap this site has already fallen into once. Hiding the icon is a
+convenience, not security: the server re-checks who is signed in before it
+trusts any claim.
+
+---
+
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
 
 First of five pieces building the in-app Bug Report tool. This one is

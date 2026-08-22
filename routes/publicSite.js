@@ -34,6 +34,31 @@ function respondErr(res, req, status, message, opts = {}) {
   return sendErr(res, status, message, opts);
 }
 
+/**
+ * Which project a public bug-report request belongs to.
+ *
+ * On a tenant's own domain the host decides and the body's projectId may
+ * only agree with it. On a system host (starcaster.pro, localhost, previews)
+ * the host names no tenant, so the body's projectId is an unverified claim —
+ * it is resolved against real projects first, or any string becomes a
+ * tenant (the 1/5 review finding). Shared by the bug-report endpoints so they
+ * can never disagree about who owns a report. (Task 2/5 introduces the same
+ * helper for the submit + screenshot endpoints; whichever branch merges
+ * second keeps one copy.)
+ */
+async function resolveBugReportProject(req, projectIdInput) {
+  const projectId = String(projectIdInput || '').trim();
+  const bind = await assertProjectIdAllowedOnHost(req, projectId);
+  if (!bind.ok) return { ok: false, status: bind.status || 403, error: bind.error, code: bind.code };
+  if (bind.projectId) return { ok: true, projectId: String(bind.projectId) };
+  if (!projectId) return { ok: false, status: 400, error: 'projectId is required', code: 'VALIDATION_ERROR' };
+  const project = await getPublicProjectById(projectId);
+  if (!project.ok || !project.data) {
+    return { ok: false, status: 404, error: 'Unknown project', code: 'PROJECT_NOT_FOUND' };
+  }
+  return { ok: true, projectId: String(project.data.id) };
+}
+
 async function handle(req, res, pathname, method) {
   if (!pathname.startsWith('/api/public/')) return false;
 
@@ -198,6 +223,25 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to load pages'), true;
 
     return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
+  }
+
+  // GET /api/public/bug-report/viewer?projectId=… — which visibility tier the
+  // current browser is, for the Bug Report module's RENDER-side gating:
+  // public (no tenant admin session), client (a signed-in tenant admin,
+  // editor role), staff (admin role). This is UX, not security — the submit
+  // endpoint below re-verifies the session before trusting a tier claim.
+  if (pathname === '/api/public/bug-report/viewer' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    const { searchParams } = getUrlObj(req);
+    const resolved = await resolveBugReportProject(req, searchParams.get('projectId'));
+    if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
+    let tier = 'public';
+    const token = projectAdmin.readAdminSessionToken(req);
+    const session = token ? await getAdminSession(token) : null;
+    if (session && String(session.projectId) === String(resolved.projectId)) {
+      tier = session.adminUser?.isStaff || session.adminUser?.role === 'admin' ? 'staff' : 'client';
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    return respondJson(res, req, 200, { ok: true, data: { tier } }), true;
   }
 
   // POST /api/public/bug-report — bug-report intake, no auth required (any

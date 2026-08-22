@@ -44,6 +44,7 @@ import {
   publicFormFields
 } from "../lib/crmFormStyles.js";
 import { resolveCrmFormStyleSnapshot } from "./builder/builder-crm-form-module-settings";
+import { BugReportModule } from "./builder/builder-bug-report-module";
 import {
   ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
@@ -2156,6 +2157,10 @@ function BuilderModulePreview({
 
   if (module.type === "admin-nav-link") {
     return <AdminNavLinkPreview settings={module.settings} />;
+  }
+
+  if (module.type === "bug-report") {
+    return <BugReportModule settings={module.settings} previewMode={previewMode} projectId={projectId} />;
   }
 
   return null;
