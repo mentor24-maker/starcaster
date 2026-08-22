@@ -72,15 +72,16 @@ export const IMAGE_EFFECT_ROTATION_RATE_OPTIONS: { value: string; label: string 
 
 /**
  * Frequency — how many times the object leaves the midline and comes back to
- * it while crossing the page (operator, 2026-08-17). Counted per crossing
- * rather than per second so it stays a shape you can picture: "4" is four
- * hops from one edge to the other, however long that takes.
+ * it (operator, 2026-08-17). Counted rather than timed per second so it stays a
+ * shape you can picture: "4" is four hops.
+ *
+ * The labels are BARE COUNTS, not "N per crossing", because the unit the count
+ * is measured against depends on the effect: per-CROSSING for the travelling
+ * hoppers (Tumbleweed — four hops edge to edge, however long that takes) but
+ * per-TURN for the in-place ones (Flips counts hops per turn, its hop speed
+ * riding Rotation Rate). One label set that is honest for both — the field is
+ * "Frequency (hops)" and the effect decides what a hop is timed against.
  */
-// Bare counts, not "N per crossing": the count means per-CROSSING for the
-// travelling hoppers (Tumbleweed) but per-TURN for the in-place ones (Flips
-// counts hops per turn, and its hop speed rides Rotation Rate). One label set
-// that is honest for both — the field is "Frequency (hops)" and the effect
-// decides what a hop is timed against.
 export const IMAGE_EFFECT_FREQUENCY_OPTIONS: { value: string; label: string }[] = [
   { value: "1", label: "1" },
   { value: "2", label: "2" },
@@ -205,7 +206,13 @@ export function getImageEffectClassName(effect: string | undefined) {
   if (effect === "spin") return " starcaster-effect-spin";
   if (effect === "cruise") return " starcaster-effect-cruise";
   if (effect === "tumbleweed") return " starcaster-effect-tumbleweed";
-  if (effect === "slide") return " starcaster-effect-slide";
+  // NOT `starcaster-effect-slide`: `_builder-react.css` (regenerated, never
+  // hand-edited) still carries the buried effect's OLD `!important` overlay
+  // LAYOUT rules keyed on `:has(.starcaster-effect-slide)`, which collapse a
+  // floating image to 0px. Cruise/tumbleweed had no such legacy rules, so
+  // their class could keep its plain name; slide's must dodge the dead
+  // selectors, so it emits a name they do not match (loop-review round 4).
+  if (effect === "slide") return " starcaster-effect-slide-motion";
   if (effect === "axis-rotate") return " starcaster-effect-axis-rotate";
   if (effect === "flips") return " starcaster-effect-flips";
   return "";

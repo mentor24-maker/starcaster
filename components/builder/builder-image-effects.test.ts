@@ -281,7 +281,10 @@ describe("image effects", () => {
   });
 
   it("both travelling effects declare a direction in the stylesheet", () => {
-    for (const cls of ["starcaster-effect-cruise", "starcaster-effect-tumbleweed", "starcaster-effect-slide"]) {
+    // Slide's class is not `starcaster-effect-slide` — it dodges the buried
+    // effect's dead legacy selectors — so derive it rather than hardcode it.
+    const travellers = ["cruise", "tumbleweed", "slide"].map((e) => getImageEffectClassName(e).trim());
+    for (const cls of travellers) {
       const rule = winningRule(cls);
       expect(rule, cls).toBeDefined();
       expect(rule, cls).toContain("animation-direction: var(--sc-effect-direction");
@@ -312,7 +315,10 @@ describe("image effects", () => {
   });
 
   it("names a class for each of the three", () => {
-    expect(getImageEffectClassName("slide")).toBe(" starcaster-effect-slide");
+    // Slide emits `-slide-motion`, not `-slide`: the generated stylesheet's
+    // dead `:has(.starcaster-effect-slide)` layout rules collapse a floating
+    // image to 0px, so the live class must not match them (loop-review round 4).
+    expect(getImageEffectClassName("slide")).toBe(" starcaster-effect-slide-motion");
     expect(getImageEffectClassName("axis-rotate")).toBe(" starcaster-effect-axis-rotate");
     expect(getImageEffectClassName("flips")).toBe(" starcaster-effect-flips");
   });
@@ -404,8 +410,12 @@ describe("image effects", () => {
     // silencer line still passed. Caught by breaking it on purpose, which is
     // the only reason anyone would ever have noticed.
     expect(reducedMotionEffectSelectors, "the reduced-motion silencer block").toBeDefined();
-    for (const cls of ["slide", "axis-rotate", "flips"]) {
-      expect(reducedMotionEffectSelectors, cls).toContain(`.starcaster-effect-${cls}`);
+    for (const effect of ["slide", "axis-rotate", "flips"]) {
+      // Derive the class (slide's is `-slide-motion`) rather than assume it
+      // equals the option value — a substring check on `-slide` would pass
+      // against `-slide-motion` by accident and hide a missing silencer line.
+      const cls = getImageEffectClassName(effect).trim();
+      expect(reducedMotionEffectSelectors, effect).toContain(`.${cls}`);
     }
   });
 

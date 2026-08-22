@@ -5997,12 +5997,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    apart, and the operator asked for the picker entry when he surfaced the
    buried effects. Written out in full rather than grouped with Cruise's
    selector because the tests in builder-image-effects.test.ts look for a
-   `.starcaster-effect-<name> {` rule per offered effect, which is the guard
-   that catches an effect shipping with no stylesheet at all.
+   `.<class> {` rule per offered effect (via getImageEffectClassName), which is
+   the guard that catches an effect shipping with no stylesheet at all.
+
+   The class is `starcaster-effect-slide-MOTION`, not `-slide`: the generated
+   `_builder-react.css` still carries the buried effect's OLD `!important`
+   overlay-layout rules keyed on `:has(.starcaster-effect-slide)`, and on a
+   FLOATING image those collapse the shell to 0px — the picture disappears.
+   Fighting them with `revert !important` was the round-3 attempt and it made
+   the shell 0px too; dodging the selector name is what actually works
+   (verified in-browser, loop-review round 4). getImageEffectClassName carries
+   the matching note.
 
    Worth a second look before this reaches a customer: it is the same
    duplicate-under-two-names shape the operator rejected cartwheels for. */
-.builder-react-root .starcaster-effect-slide {
+.builder-react-root .starcaster-effect-slide-motion {
   animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
   animation-direction: var(--sc-effect-direction, normal);
   animation-delay: var(--sc-effect-delay, 0s);
@@ -6067,7 +6076,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .starcaster-effect-tumbleweed,
   .builder-react-root .starcaster-effect-hop-stage,
   .builder-react-root .starcaster-effect-spin,
-  .builder-react-root .starcaster-effect-slide,
+  .builder-react-root .starcaster-effect-slide-motion,
   .builder-react-root .starcaster-effect-axis-rotate,
   .builder-react-root .starcaster-effect-flips {
     animation: none;
@@ -6164,43 +6173,4 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-canonical-badge-changed {
   background: var(--warn-notice-bg, #fdf0d5);
   color: var(--warn-notice-text, #8a5a00);
-}
-
-/* ── Slide on a FLOATING image: neutralise the dead legacy overlay-layout ────
-   rules (Blocker 1, loop-review round 3). `_builder-react.css` (regenerated,
-   never hand-edited — R2) carries OLD `:has(.starcaster-effect-slide)` LAYOUT
-   rules with `!important` that force the overlay shell to left:0 / width:100% /
-   transform:none and add padding/min-height to the motion clip. They target a
-   MORE specific selector than the figure, so importing the new effect later
-   cannot beat them by cascade order (cruise/tumbleweed had NO legacy rules, so
-   nothing to beat — the PR's "cascade wins" reasoning did not hold for slide).
-   The result: a floating image set to Slide jumps to the far left, stretches
-   full-width, and shifts up 96px, ignoring its Position/Size — while Cruise on
-   the same module obeys them.
-
-   This resets those forced properties so Slide inherits the ordinary overlay
-   behaviour (what Cruise gets). Same selectors + `!important`, later in source,
-   so they win at equal specificity. Parkour and cartwheels keep THEIR copies —
-   neither is offered. NOTE: verify on the local stack with a real floating
-   image (the check:render harness does not render the floating-overlay shell,
-   which is why 8/8 green missed this and why no contract is added here). */
-.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-slide) {
-  min-height: revert !important;
-}
-.builder-react-root .builder-preview-module-overlay-slot:has(.starcaster-effect-slide) > .builder-preview-image-shell-overlay {
-  inset: revert !important;
-  top: revert !important;
-  right: revert !important;
-  bottom: revert !important;
-  left: revert !important;
-  width: revert !important;
-  max-width: revert !important;
-  min-height: revert !important;
-  transform: revert !important;
-}
-.builder-react-root .builder-preview-column > .builder-preview-module-overlay-slot:has(.starcaster-effect-slide) .starcaster-effect-motion-clip,
-.builder-react-root .builder-preview-section-overlay-slot:has(.starcaster-effect-slide) .starcaster-effect-motion-clip {
-  padding-top: revert !important;
-  margin-top: revert !important;
-  min-height: revert !important;
 }

@@ -80,9 +80,42 @@ export function effectClassesInCss(text) {
   return found;
 }
 
+/**
+ * classSuffix → effect value, read from getImageEffectClassName in the source.
+ *
+ * Most effects emit `starcaster-effect-<value>`, but Slide deliberately does
+ * not: its class is `starcaster-effect-slide-motion`, to dodge the buried
+ * effect's dead `:has(.starcaster-effect-slide)` layout rules. So the orphan
+ * sweep must compare the stylesheet against the CLASSES effects emit, not their
+ * raw values — otherwise a renamed-but-offered effect reads as an unstyled
+ * orphan. Parsed from the same source file as the option list so the two can
+ * never drift.
+ */
+export function imageEffectClassMapFromSource(text) {
+  const fn = text.match(/getImageEffectClassName[\s\S]*?\n\}/);
+  const body = fn ? fn[0] : text;
+  const map = new Map();
+  for (const m of body.matchAll(/effect === ["']([^"']+)["']\s*\)\s*return\s*["']\s*starcaster-effect-([a-z0-9-]+)["']/g)) {
+    map.set(m[2], m[1]); // classSuffix -> effect value
+  }
+  return map;
+}
+
 /** One image module carrying the effect under test. */
 export function effectSweepModule(effect) {
   return { type: 'image', settings: { ...PICTURE, effect, effectSpeed: '8', effectRotationRate: '30' } };
+}
+
+/**
+ * A FLOATING image carrying an effect — the one place the buried effects' dead
+ * `!important` overlay-layout rules can bite. A `floating-image` renders as
+ * section-scoped overlay decor: normalizeModuleTrigger defaults its trigger to
+ * `button`, which isSectionScopedOverlayDecor looks for, so the
+ * `.builder-preview-image-shell-overlay` shell appears with no trigger set.
+ * Used by the Slide-shell comparison in check_render.mjs.
+ */
+export function floatingImageModule(effect) {
+  return { type: 'floating-image', settings: { ...PICTURE, effect } };
 }
 
 /**
