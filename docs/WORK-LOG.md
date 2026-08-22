@@ -14,6 +14,22 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Editing on main is now blocked whichever way you do it (#372)
+
+The rule "don't work directly on the main branch (it deploys straight to the
+live site)" was only enforced for the Edit tool — files written through the
+terminal (heredocs, small scripts) slipped straight past it, which is exactly
+how a whole feature landed in the main folder by accident on 2026-08-20. Now
+three things cover every path: committing on main is refused outright with
+plain instructions for moving the work to a worktree (the real backstop —
+everything ends in a commit); `npm run doctor` reports when the main folder
+has stray uncommitted changes; and the terminal is watched for commands that
+write source files while on main, blocking them early (best-effort, and it
+stays out of the way when you're properly in a worktree). All three respect
+the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: the terminal check now judges the folder the command actually runs in, so it never trips on legitimate work inside a worktree.)
+
+---
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
