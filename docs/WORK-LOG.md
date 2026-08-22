@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — Three picture animations that were built but hidden are now on the menu (#PR)
+## 2026-08-22 — Three picture animations that were built but hidden are now on the menu (#369)
 
 The Image module has a dropdown of movements a picture can make — Bounce,
 Spin, Cruise, Tumbleweed. Behind the scenes there were five more that had been
