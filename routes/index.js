@@ -46,6 +46,7 @@ const acquire     = require('./acquire');
 const promoLeads  = require('./promoLeads');
 const assets      = require('./assets');
 const assetRenditions = require('./assetRenditions');
+const bugReportSweep = require('./bugReportSweep');
 const channels    = require('./channels');
 const contacts    = require('./contacts');
 const activityLog = require('./activityLog');
@@ -87,6 +88,7 @@ const ROUTE_MODULES = [
   assetRenditions,
   assets,
   associations,
+  bugReportSweep,
   channels,
   contacts,
   engage,
@@ -140,6 +142,9 @@ const CRON_PATHS = new Set([
   '/api/engage/youtube-comment-agents/run-due',
   '/api/promote/social/posts/publish-due',
   '/api/engage/social/posts/publish-due',
+  // Runs across every project with no session, so it can only ever be reached
+  // by Vercel Cron or a Bearer CRON_SECRET call (routes/bugReportSweep.js).
+  '/api/maintenance/bug-report-screenshots/sweep',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {

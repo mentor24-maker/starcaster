@@ -14,6 +14,41 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Abandoned bug-report screenshots now get cleaned up on their own (#PR)
+
+When somebody reports a bug on one of the sites, they can attach a screenshot.
+The picture has to be uploaded the moment they choose it — before they press
+Send — so that the report and its pictures arrive together. That leaves an
+obvious gap: if they change their mind and close the tab, the picture has
+already been uploaded and nothing ever comes back for it. It sat on our storage
+bill forever, and because these files have to be publicly readable for the
+report to show them, anyone with the link could still see it.
+
+This adds the nightly clean-up that collects them. Once a day it looks for
+screenshots that were uploaded more than a day ago and that no actual report
+points at, and removes the file and its database record together.
+
+Three things were worth being careful about, and each has a test that fails if
+someone later breaks it:
+
+- **A picture a report is using is never touched**, even if something went
+  wrong earlier and it was left looking abandoned. The clean-up asks the
+  reports first, every time.
+- **If it cannot get an answer, it does nothing.** When the question "is
+  anything using this?" fails, those pictures are reported as *could not
+  check* — never quietly counted as clean. A sweep that skipped what it
+  could not read once told us ninety-five things were fine when they were not.
+- **The file goes before the record.** The other order would leave a file on
+  the internet that nothing in our database knows about, which no later
+  clean-up could ever find again. If a file refuses to delete, its record is
+  deliberately kept so tomorrow's run tries again, and the failure is written
+  to the log rather than swallowed.
+
+It also runs as a preview by default: asked plainly, it reports what it *would*
+remove and deletes nothing. Only the scheduled job asks it to actually delete.
+
+---
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
