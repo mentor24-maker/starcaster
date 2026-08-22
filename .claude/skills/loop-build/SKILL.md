@@ -66,12 +66,22 @@ the run report.
 2. **Get an isolated workspace — MANDATORY.** Create a dedicated worktree and
    branch off the latest main. Never build in a shared folder; never edit main.
 
+   Run this as ONE command — shell variables do not survive between tool
+   calls, and `REPO` has to still be set when the later lines use it:
+
    ```bash
-   git -C /Users/mentor/WebApps/starcaster fetch origin --quiet
-   git -C /Users/mentor/WebApps/starcaster worktree add \
-     .claude/worktrees/<task-slug> -b <task-slug> origin/main
-   cd /Users/mentor/WebApps/starcaster/.claude/worktrees/<task-slug> && npm ci
+   REPO="$(git rev-parse --show-toplevel)" && \
+     git -C "$REPO" fetch origin --quiet && \
+     git -C "$REPO" worktree add "$REPO/.claude/worktrees/<task-slug>" \
+       -b <task-slug> origin/main && \
+     cd "$REPO/.claude/worktrees/<task-slug>" && npm ci
    ```
+
+   The checkout is **derived, never written down**: this skill runs on more
+   than one machine, and a literal path is an assumption that fails silently
+   on every machine but the one it was typed on (vault `doctrine/NODES.md`,
+   principle P1). Start the loop session in the main checkout, not inside an
+   existing worktree — `--show-toplevel` answers "the folder I am in".
 
    `<task-slug>` = short kebab-case name from the task. Do ALL work for this
    task inside that worktree.
