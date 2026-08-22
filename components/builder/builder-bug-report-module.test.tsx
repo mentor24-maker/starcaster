@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useLayoutEffect, type ReactNode } from "react";
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +18,9 @@ afterEach(() => {
   container?.remove();
   container = null;
   root = null;
-  document.querySelector(".builder-public-site-layout")?.remove();
+  // No stray-layout-div cleanup: the live-site class now exists ONLY as a React
+  // ancestor (LiveSiteTree), so unmounting the tree is what removes it. A leak
+  // here would mean a test built the production shape by hand again.
   vi.useRealTimers();
 });
 
@@ -88,10 +91,36 @@ function fakeFetch({ tier = "public", screenshotRoute = 404, submitStatus = 201,
   return { impl, calls, releaseUpload: () => releaseUpload() };
 }
 
-function markLiveSite() {
-  const layout = document.createElement("div");
-  layout.className = "builder-public-site-layout";
-  document.body.appendChild(layout);
+/**
+ * The production tree shape, and the ONLY way these tests may create it.
+ *
+ * WHY THIS REPLACED the old `markLiveSite` helper: that one appended the layout
+ * div to <body> as a SIBLING of the container before rendering, so the class
+ * really was in the DOM when the module went looking for it — a tree production
+ * never has. Every gating test passed on that fiction while the real page
+ * painted a staff-only button to public visitors for a frame (review rounds
+ * 2-4). On a real page the layout div and the module land in the SAME React
+ * commit, which is why the module is now TOLD it is live (the `liveSite` prop)
+ * instead of asking the DOM. Keeping the class strictly as a React ancestor
+ * here means a future attempt to go back to sniffing the DOM fails these tests
+ * instead of passing them.
+ */
+function LiveSiteTree({ children }: { children: ReactNode }) {
+  return <div className="builder-public-site-layout">{children}</div>;
+}
+
+/**
+ * Snapshots the DOM from a layout effect. React runs layout effects after the
+ * commit and BEFORE the browser paints, so what this captures IS the first
+ * painted frame — the frame the flash used to live in. Rendered as the LAST
+ * child so everything above it is already committed when it fires.
+ */
+function FirstPaintProbe({ onFrame }: { onFrame: (frame: { trigger: boolean; className: string }) => void }) {
+  useLayoutEffect(() => {
+    const el = document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger");
+    onFrame({ trigger: Boolean(el), className: el?.className || "" });
+  });
+  return null;
 }
 
 describe("readBugReportSettings / bugReportVisibleFor (pure)", () => {
@@ -382,9 +411,8 @@ describe("BugReportModule — popup and submit", () => {
 
 describe("BugReportModule — visibility on the live site", () => {
   it("public visibility: floats via a portal on the live site, no viewer lookup", async () => {
-    markLiveSite();
     const { impl, calls } = fakeFetch();
-    render(<BugReportModule settings={{ visibility: "public", corner: "bottom-left" }} projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{ visibility: "public", corner: "bottom-left" }} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     const trigger = document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!;
     expect(trigger.classList.contains("is-floating")).toBe(true);
@@ -393,41 +421,69 @@ describe("BugReportModule — visibility on the live site", () => {
     expect(calls.filter((c) => c.url.includes("/viewer"))).toHaveLength(0);
   });
 
-  // NOTE ON THE FIRST-PAINT FLASH (review finding #2): the fix resolves `live`
-  // in the initial useState rather than a post-mount effect, so a gated button
-  // never paints for a frame before the tier resolves. There is deliberately NO
-  // jsdom test for it: act() flushes the mount effect inside render(), so the
-  // pre-effect frame — the exact thing that used to flash — is never observable
-  // here, and a test asserting the post-act DOM would pass either way (a test
-  // that cannot fail is worse than none, DOCTRINE §3.2/§5.14). The reviewer's
-  // own note said this needs a real published page to watch; the fix is their
-  // exact prescription (lazy initial state).
+  // THE FIRST-PAINT FLASH (review findings, rounds 2-4). The two tests below
+  // are the guard. Both read the FIRST PAINTED FRAME via FirstPaintProbe, in
+  // the production tree shape, so they fail against any version that goes back
+  // to asking the DOM whether it is on a live site.
+
+  it("a staff-only trigger is absent from the FIRST PAINTED FRAME, not just after it settles", async () => {
+    const frames: Array<{ trigger: boolean; className: string }> = [];
+    const staff = fakeFetch({ tier: "staff" });
+    render(
+      <LiveSiteTree>
+        <BugReportModule settings={{ visibility: "staff" }} liveSite projectId="proj_1" fetchImpl={staff.impl} />
+        <FirstPaintProbe onFrame={(f) => frames.push(f)} />
+      </LiveSiteTree>,
+    );
+    // The frame the browser would paint first: the tier is still unresolved, so
+    // a gated control must not be on screen at all. Under the old DOM-sniffing
+    // code `live` was false here, which rendered the trigger INLINE to whoever
+    // was looking — public visitor included — and then removed it.
+    expect(frames[0]).toEqual({ trigger: false, className: "" });
+
+    // ...and it does appear once the server confirms this browser is staff.
+    await flush();
+    expect(document.querySelector(".builder-bug-report-trigger")).toBeTruthy();
+  });
+
+  it("a public trigger is already floating in the FIRST PAINTED FRAME — no inline-to-fixed shift", async () => {
+    const frames: Array<{ trigger: boolean; className: string }> = [];
+    const { impl } = fakeFetch();
+    render(
+      <LiveSiteTree>
+        <BugReportModule settings={{ visibility: "public" }} liveSite projectId="proj_1" fetchImpl={impl} />
+        <FirstPaintProbe onFrame={(f) => frames.push(f)} />
+      </LiveSiteTree>,
+    );
+    expect(frames[0].trigger).toBe(true);
+    expect(frames[0].className).toContain("is-floating");
+    expect(frames[0].className).not.toContain("is-inline");
+    await flush();
+  });
 
   it("clients visibility hides the icon from a public viewer and shows it to a signed-in client", async () => {
-    markLiveSite();
     const publicViewer = fakeFetch({ tier: "public" });
-    render(<BugReportModule settings={{ visibility: "clients" }} projectId="proj_1" fetchImpl={publicViewer.impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{ visibility: "clients" }} liveSite projectId="proj_1" fetchImpl={publicViewer.impl} /></LiveSiteTree>);
     await flush();
     expect(document.querySelector(".builder-bug-report-trigger")).toBeNull();
     act(() => root?.unmount());
 
     const clientViewer = fakeFetch({ tier: "client" });
-    render(<BugReportModule settings={{ visibility: "clients" }} projectId="proj_1" fetchImpl={clientViewer.impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{ visibility: "clients" }} liveSite projectId="proj_1" fetchImpl={clientViewer.impl} /></LiveSiteTree>);
     await flush();
     expect(document.querySelector(".builder-bug-report-trigger")).toBeTruthy();
     expect(clientViewer.calls.some((c) => c.url.includes("/viewer?projectId=proj_1"))).toBe(true);
   });
 
   it("staff visibility hides the icon from a client and shows it to staff; the submit carries the tier", async () => {
-    markLiveSite();
     const client = fakeFetch({ tier: "client" });
-    render(<BugReportModule settings={{ visibility: "staff" }} projectId="proj_1" fetchImpl={client.impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{ visibility: "staff" }} liveSite projectId="proj_1" fetchImpl={client.impl} /></LiveSiteTree>);
     await flush();
     expect(document.querySelector(".builder-bug-report-trigger")).toBeNull();
     act(() => root?.unmount());
 
     const staff = fakeFetch({ tier: "staff" });
-    render(<BugReportModule settings={{ visibility: "staff" }} projectId="proj_1" fetchImpl={staff.impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{ visibility: "staff" }} liveSite projectId="proj_1" fetchImpl={staff.impl} /></LiveSiteTree>);
     await flush();
     expect(document.querySelector(".builder-bug-report-trigger")).toBeTruthy();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());

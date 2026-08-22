@@ -236,6 +236,12 @@ async function handle(req, res, pathname, method) {
   // editor role), staff (admin role). This is UX, not security — the submit
   // endpoint below re-verifies the session before trusting a tier claim.
   if (pathname === '/api/public/bug-report/viewer' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    // Same treatment as both neighbours below: unauthenticated, uncached, two
+    // lookups per call (project resolve + admin session), and a gated module
+    // fires it on every page load. checkEndpointLimit returns true when it has
+    // ALREADY sent the 429 (CLAUDE.md landmine 11) — bail out, do not invert.
+    if (checkEndpointLimit(req, res, 'public.bugReportViewer')) return true;
+
     const { searchParams } = getUrlObj(req);
     const resolved = await resolveBugReportProject(req, searchParams.get('projectId'));
     if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;

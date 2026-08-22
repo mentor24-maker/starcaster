@@ -128,6 +128,21 @@ trap this site has already fallen into once. Hiding the icon is a
 convenience, not security: the server re-checks who is signed in before it
 trusts any claim.
 
+Review caught one real problem before this shipped, and it took four rounds
+to kill properly. The module worked out whether it was on a real published
+page by looking around at the page it had landed in — but at the instant it
+asks, the page around it does not exist yet, because the browser builds the
+whole page in memory and only puts it on screen afterwards. So the answer was
+always "no", and for a single frame every visitor — including one who should
+never see it — got a flash of a staff-only "Report a problem" button sitting
+in the middle of the text, which then vanished and jumped to the corner. The
+fix stops it guessing: the page now simply tells the module where it is. The
+tests were part of why this survived three rounds — they had been building a
+fake page shape the real site never has, so they cheerfully passed on the
+broken code. They now build the real shape and check the very first frame a
+visitor would see. One small extra: the "who is looking at this?" request now
+has the same rate limit as its two neighbours, so nobody can hammer it.
+
 ---
 
 ## 2026-08-18 — A place for visitors to report a broken page (#341)

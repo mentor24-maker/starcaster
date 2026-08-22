@@ -133,21 +133,32 @@ function BugGlyph({ icon }: { icon: string }): ReactNode {
   }
 }
 
-/** Live tenant pages carry this layout class (BuilderPublicSitePage); nothing else does. */
-function onLiveTenantPage(): boolean {
-  if (typeof document === "undefined") return false;
-  return Boolean(document.querySelector(".builder-public-site-layout"));
-}
-
 type Props = {
   settings: Record<string, string>;
   previewMode?: boolean;
+  /**
+   * True only on a real published tenant page. Threaded down explicitly from
+   * BuilderPublicSitePage (which knows the answer by construction) rather than
+   * sniffed from the DOM.
+   *
+   * WHY A PROP AND NOT A querySelector: this module and its `.builder-public-
+   * site-layout` ancestor land in the SAME React commit — the public page
+   * renders "Loading…" until its fetch resolves, so the layout div is never in
+   * the DOM from an earlier commit. React builds children in memory and commits
+   * afterwards, so a child asking the document for its own not-yet-committed
+   * ancestor always gets null, in an effect OR in a lazy initial state. That
+   * null painted a staff-only trigger to public visitors for one frame, inline,
+   * before it vanished — a gated control shown to the wrong audience plus a
+   * content shift on every load. There is no ordering in which the query works;
+   * the answer has to come from above. (Review rounds 2-4 of task 4/5.)
+   */
+  liveSite?: boolean;
   projectId?: string;
   /** Test seam; defaults to window.fetch. */
   fetchImpl?: typeof fetch;
 };
 
-export function BugReportModule({ settings, previewMode = false, projectId = "", fetchImpl }: Props) {
+export function BugReportModule({ settings, previewMode = false, liveSite = false, projectId = "", fetchImpl }: Props) {
   const s = readBugReportSettings(settings);
   // Stable across renders so the dialog's probe effect (which depends on it)
   // does not re-POST to the rate-limited screenshot endpoint on every parent
@@ -157,20 +168,12 @@ export function BugReportModule({ settings, previewMode = false, projectId = "",
     [fetchImpl],
   );
 
-  // Live-site detection runs in the INITIAL state, before first paint: the
-  // module always renders inside its page's DOM, so the layout class is already
-  // present. Resolving `live` lazily rather than in a post-mount effect stops a
-  // gated button painting inline-then-fixed (a content shift on every load) and,
-  // worse, a clients/staff-only button flashing to a public visitor for a frame.
-  // SSR-safe: onLiveTenantPage returns false with no document, and the effect
-  // below re-resolves it should previewMode ever change.
-  const [live, setLive] = useState(() => !previewMode && onLiveTenantPage());
+  // Correct at render time, first frame included: no query, no timing, no
+  // state. `previewMode` wins over `liveSite` so the builder's own preview of a
+  // published page still renders inline rather than floating over the editor.
+  const live = liveSite && !previewMode;
   const [tier, setTier] = useState<BugReportViewerTier | null>(null);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    setLive(!previewMode && onLiveTenantPage());
-  }, [previewMode]);
 
   // Ask the server which tier this browser is — only on the live site, and
   // only when the setting actually gates anything.
