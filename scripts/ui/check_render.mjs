@@ -39,6 +39,8 @@ import {
   RENDER_DIFFERENTIALS,
   effectClassesInCss,
   effectSweepModule,
+  floatingImageModule,
+  imageEffectClassMapFromSource,
   imageEffectOptionsFromSource,
 } from './render-contracts.mjs';
 
@@ -472,6 +474,58 @@ try {
     }
   }
   /*
+   * SLIDE ON A FLOATING IMAGE LANDS WHERE CRUISE DOES.
+   *
+   * Slide collapsed a floating image's overlay shell to 0px wide — the picture
+   * vanished — because its class matched the buried effect's dead `!important`
+   * overlay-LAYOUT rules still carried in the regenerated base stylesheet
+   * (`:has(.starcaster-effect-slide)`). Cruise never had such legacy rules, so
+   * it is the reference for "correct": Slide is mechanically identical to it, so
+   * its shell must land in the same box.
+   *
+   * Every OTHER image contract uses an inline `image`, whose shell is a
+   * different element the dead rules do not touch — which is exactly why 8/8
+   * green missed this twice. A FLOATING image is the only place it shows.
+   *
+   * BREAK-ON-PURPOSE: point getImageEffectClassName('slide') back at
+   * `starcaster-effect-slide`, rebuild CSS — Slide's shell measures 0-wide and
+   * the assertion below fails. (Round-4 fix, task 86bbh8zc5.)
+   */
+  const SHELL = '.builder-preview-image-shell-overlay';
+  await render(page, documentFor(floatingImageModule('cruise')));
+  const cruiseShell = await sample(page, SHELL, [], SETTLE_MS);
+  await render(page, documentFor(floatingImageModule('slide')));
+  const slideShell = await sample(page, SHELL, [], SETTLE_MS);
+
+  if (!cruiseShell.found || !cruiseShell.box.width || !cruiseShell.box.height) {
+    // The harness could not render a floating overlay shell at all. Do NOT let
+    // that pass as if Slide were fine — report it loudly (DOCTRINE §3.11) so a
+    // harness gap can never masquerade as a verified Slide.
+    notices.push(
+      'floating-image-slide-shell: could not measure a floating overlay shell for Cruise ' +
+      `(found=${cruiseShell.found}, box=${cruiseShell.box ? `${cruiseShell.box.width}x${cruiseShell.box.height}` : 'n/a'}). ` +
+      'The Slide-vs-Cruise shell comparison DID NOT RUN — treat Slide on a floating image as unverified here.'
+    );
+  } else {
+    sweepsRun += 2;
+    if (!slideShell.found || !slideShell.box.width || !slideShell.box.height) {
+      failures.push(
+        `floating-image-slide-shell: Slide's overlay shell measured ` +
+        `${slideShell.box ? `${slideShell.box.width}x${slideShell.box.height}` : 'nothing'} — it collapsed ` +
+        `instead of landing where Cruise's (${cruiseShell.box.width}x${cruiseShell.box.height}) does. ` +
+        'The live class is matching the buried effect\'s dead `!important` layout rules again.'
+      );
+    } else if (Math.abs(slideShell.box.width - cruiseShell.box.width) > 2 ||
+               Math.abs(slideShell.box.height - cruiseShell.box.height) > 2) {
+      failures.push(
+        `floating-image-slide-shell: Slide's shell is ${slideShell.box.width}x${slideShell.box.height} but ` +
+        `Cruise's is ${cruiseShell.box.width}x${cruiseShell.box.height} — Slide is mechanically identical to ` +
+        'Cruise, so its floating shell must land in the same place.'
+      );
+    }
+  }
+
+  /*
    * THE OPPOSITE GAP, REPORTED RATHER THAN FAILED.
    *
    * The dead Tumbleweed was a panel option with no stylesheet rule. The mirror
@@ -487,7 +541,11 @@ try {
     await readFile(path.join(ROOT, 'src/css/_builder-react-overrides.css'), 'utf8'),
   ].join('\n');
   const styled = effectClassesInCss(cssText);
-  const orphans = [...styled].filter((name) => !offered.includes(name)).sort();
+  // Compare against the class each effect EMITS, not its raw value: Slide's
+  // class is `slide-motion`, so `offered.includes('slide-motion')` is false and
+  // the rename would otherwise read as an unstyled orphan.
+  const classToEffect = imageEffectClassMapFromSource(effectsSource);
+  const orphans = [...styled].filter((name) => !offered.includes(classToEffect.get(name) || name)).sort();
   if (orphans.length) {
     notices.push(
       `${orphans.length} effect(s) have keyframes in the stylesheet and appear in NO panel: ` +

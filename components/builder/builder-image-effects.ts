@@ -14,10 +14,16 @@ import type { CSSProperties } from "react";
  * that had nothing to say about it. Reported 2026-08-16.
  *
  * The five effects that DO have keyframes but no option — flips, slide,
- * cartwheels, parkour, axis-rotate — are the other half of the same drift.
- * They are left as they are: reachable only by hand-editing a setting, which
- * is where they already were, and adding them is a design question for the
- * operator rather than a bug fix.
+ * cartwheels, parkour, axis-rotate — were the other half of the same drift:
+ * reachable only by hand-editing a setting, because surfacing them was a
+ * design question for the operator rather than a bug fix.
+ *
+ * He answered it on 2026-08-19 (ClickUp 86bbfrpbb). Slide, axis-rotate and
+ * flips are offered here from 2026-08-22. CARTWHEELS IS DELIBERATELY NOT —
+ * his words, "which is the same as tumbleweed, let's stick with tumbleweed" —
+ * and parkour is a harder piece of work of its own. Both keep their dead
+ * keyframes in `_builder-react.css`; `check:render` reports them as orphans
+ * every run, which is the intended state, not an oversight to tidy away.
  *
  * THREE MOTIONS, THREE PROPERTIES (2026-08-17). Travel, spin and hop each
  * needed its own rate, and three rates cannot share one `transform` — the
@@ -36,7 +42,14 @@ export const IMAGE_EFFECT_OPTIONS: { value: string; label: string }[] = [
   { value: "big-bounce", label: "Big Bounce" },
   { value: "spin", label: "Spin" },
   { value: "cruise", label: "Cruise" },
-  { value: "tumbleweed", label: "Tumbleweed" }
+  { value: "tumbleweed", label: "Tumbleweed" },
+  // Surfaced 2026-08-22 on the operator's decision (ClickUp 86bbfrpbb): three
+  // of the five effects that had keyframes but no way to pick them. Cartwheels
+  // stays unsurfaced — it is Tumbleweed under another name — and Parkour is a
+  // separate piece of work.
+  { value: "slide", label: "Slide" },
+  { value: "axis-rotate", label: "Axis Rotate" },
+  { value: "flips", label: "Flips" }
 ];
 
 /**
@@ -59,19 +72,25 @@ export const IMAGE_EFFECT_ROTATION_RATE_OPTIONS: { value: string; label: string 
 
 /**
  * Frequency — how many times the object leaves the midline and comes back to
- * it while crossing the page (operator, 2026-08-17). Counted per crossing
- * rather than per second so it stays a shape you can picture: "4" is four
- * hops from one edge to the other, however long that takes.
+ * it (operator, 2026-08-17). Counted rather than timed per second so it stays a
+ * shape you can picture: "4" is four hops.
+ *
+ * The labels are BARE COUNTS, not "N per crossing", because the unit the count
+ * is measured against depends on the effect: per-CROSSING for the travelling
+ * hoppers (Tumbleweed — four hops edge to edge, however long that takes) but
+ * per-TURN for the in-place ones (Flips counts hops per turn, its hop speed
+ * riding Rotation Rate). One label set that is honest for both — the field is
+ * "Frequency (hops)" and the effect decides what a hop is timed against.
  */
 export const IMAGE_EFFECT_FREQUENCY_OPTIONS: { value: string; label: string }[] = [
-  { value: "1", label: "1 per crossing" },
-  { value: "2", label: "2 per crossing" },
-  { value: "3", label: "3 per crossing" },
-  { value: "4", label: "4 per crossing" },
-  { value: "6", label: "6 per crossing" },
-  { value: "8", label: "8 per crossing" },
-  { value: "12", label: "12 per crossing" },
-  { value: "16", label: "16 per crossing" }
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
+  { value: "6", label: "6" },
+  { value: "8", label: "8" },
+  { value: "12", label: "12" },
+  { value: "16", label: "16" }
 ];
 
 /**
@@ -187,6 +206,15 @@ export function getImageEffectClassName(effect: string | undefined) {
   if (effect === "spin") return " starcaster-effect-spin";
   if (effect === "cruise") return " starcaster-effect-cruise";
   if (effect === "tumbleweed") return " starcaster-effect-tumbleweed";
+  // NOT `starcaster-effect-slide`: `_builder-react.css` (regenerated, never
+  // hand-edited) still carries the buried effect's OLD `!important` overlay
+  // LAYOUT rules keyed on `:has(.starcaster-effect-slide)`, which collapse a
+  // floating image to 0px. Cruise/tumbleweed had no such legacy rules, so
+  // their class could keep its plain name; slide's must dodge the dead
+  // selectors, so it emits a name they do not match (loop-review round 4).
+  if (effect === "slide") return " starcaster-effect-slide-motion";
+  if (effect === "axis-rotate") return " starcaster-effect-axis-rotate";
+  if (effect === "flips") return " starcaster-effect-flips";
   return "";
 }
 
@@ -196,22 +224,43 @@ export function getImageEffectClassName(effect: string | undefined) {
  * 2026-08-17, to break the corridor out of whatever column contains it.
  */
 export function usesHorizontalMotionClip(effect: string | undefined): boolean {
-  return effect === "cruise" || effect === "tumbleweed";
+  return imageEffectTravels(effect);
 }
 
 /** The effects that cross the page — Direction applies to these. */
 export function imageEffectTravels(effect: string | undefined): boolean {
-  return effect === "cruise" || effect === "tumbleweed";
+  return effect === "cruise" || effect === "tumbleweed" || effect === "slide";
 }
 
 /** The effects Rotation Rate applies to — nothing else shows the control. */
 export function imageEffectRotates(effect: string | undefined): boolean {
-  return effect === "spin" || effect === "tumbleweed";
+  return (
+    effect === "spin" ||
+    effect === "tumbleweed" ||
+    effect === "axis-rotate" ||
+    effect === "flips"
+  );
 }
 
 /** The effects Frequency applies to. */
 export function imageEffectBounces(effect: string | undefined): boolean {
-  return effect === "tumbleweed";
+  return effect === "tumbleweed" || effect === "flips";
+}
+
+/**
+ * Hops WITHOUT crossing the page — today that is Flips alone, and it is the
+ * reason the hop does not always need the wrapper element.
+ *
+ * Tumbleweed needs one because its figure is already animating `translate`
+ * for the travel, and one element cannot animate one property twice. Flips
+ * does not travel, so `translate` is free on the figure itself: the spin
+ * rides `rotate` and the hop rides `translate`, both on the same box, and no
+ * stage element has to exist at all. Confirmed rather than assumed — the
+ * renderer only ever mounts the hop stage inside the travel corridor, so a
+ * stationary bouncer would have silently got no stage and no hop.
+ */
+export function imageEffectBouncesInPlace(effect: string | undefined): boolean {
+  return imageEffectBounces(effect) && !imageEffectTravels(effect);
 }
 
 export function normalizeImageEffectRotationRate(value: string | undefined): number {
@@ -256,7 +305,8 @@ const seconds = (value: number) => `${Math.round(value * 1000) / 1000}s`;
 export function getImageEffectStyle(settings: Record<string, string>): CSSProperties | undefined {
   const rotates = imageEffectRotates(settings.effect);
   const travels = imageEffectTravels(settings.effect);
-  if (!rotates && !travels) return undefined;
+  const hopsInPlace = imageEffectBouncesInPlace(settings.effect);
+  if (!rotates && !travels && !hopsInPlace) return undefined;
 
   const rate = normalizeImageEffectRotationRate(settings.effectRotationRate);
   const turnSeconds = 60 / rate;
@@ -267,6 +317,18 @@ export function getImageEffectStyle(settings: Record<string, string>): CSSProper
   return {
     ...(rotates ? { "--sc-effect-rotation-duration": seconds(turnSeconds) } : {}),
     ...(travels ? { "--sc-effect-travel-duration": seconds(travelSeconds) } : {}),
+    // A stationary hopper carries its own hop variables, because it has no
+    // stage element to hang them on. Frequency counts hops PER TURN here
+    // rather than per crossing — there is no crossing to count against, and
+    // tying it to the turn is what makes one flip read as one flip.
+    ...(hopsInPlace
+      ? {
+          "--sc-effect-bounce-duration": seconds(
+            turnSeconds / normalizeImageEffectFrequency(settings.effectFrequency)
+          ),
+          "--sc-effect-bounce": `${normalizeImageEffectBounceHeight(settings.effectBounceHeight)}%`
+        }
+      : {}),
     // ONE keyword drives both the travel and the spin, which is the point:
     // `reverse` runs every animation on the figure backwards, so a ball
     // heading left also turns the way a ball heading left turns. Reversing the
@@ -294,7 +356,11 @@ export function getImageEffectStyle(settings: Record<string, string>): CSSProper
  * rather than in a `calc()` that would have to know the travel time twice.
  */
 export function getImageEffectStageStyle(settings: Record<string, string>): CSSProperties | undefined {
-  if (!imageEffectBounces(settings.effect)) return undefined;
+  // Only the effects that hop WHILE TRAVELLING need the stage. A stationary
+  // hopper gets the same variables on the figure via getImageEffectStyle,
+  // and returning them here too would put a hop on an element that never
+  // renders for it.
+  if (!imageEffectBounces(settings.effect) || imageEffectBouncesInPlace(settings.effect)) return undefined;
 
   const frequency = normalizeImageEffectFrequency(settings.effectFrequency);
   const height = normalizeImageEffectBounceHeight(settings.effectBounceHeight);
