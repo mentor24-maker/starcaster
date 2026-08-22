@@ -29,8 +29,9 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { mainCheckoutDir } from '../lib/main_checkout.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
 const { createClient } = require('@supabase/supabase-js');
 const { htmlToPlainText } = require(path.join(ROOT, 'lib/builderPageContentExtract.js'));
@@ -43,7 +44,8 @@ const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
 // .env.local is gitignored and only exists in the primary checkout, not in
 // worktrees — read it from the main repo.
-const ENV_FILE = process.env.STARCASTER_ENV_FILE || '/Users/mentor/WebApps/starcaster/.env.local';
+const ENV_FILE = process.env.STARCASTER_ENV_FILE
+  || path.join(mainCheckoutDir(ROOT), '.env.local');
 function loadEnv() {
   const env = {};
   for (const line of readFileSync(ENV_FILE, 'utf8').split('\n')) {
