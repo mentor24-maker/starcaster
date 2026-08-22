@@ -3,51 +3,65 @@
 
 /**
  * The reconciler — Charter Q2 (2026-08-18): keeps the Loop Queue and GitHub
- * reality from silently drifting apart.
+ * reality from silently drifting apart. Meant to run on a schedule (the Mac
+ * Mini engine room).
  *
- * What it checks:
- *   1. Every IN-FLIGHT task (Building / In review / Needs your input / Ready
- *      to launch) whose comments link a GitHub PR: if that PR has merged,
- *      the task is moved to Live. This is the case the acceptance test
- *      seeds and repairs.
- *   2. Every local branch stamped with a ClickUp task (`branch.<name>.
- *      clickup-task`, Task-closes-thread / PR #344) whose stamped task has
- *      already reached a terminal status: flagged to the bus as a
- *      contradiction — the branch should have been cleaned up by
- *      `npm run tidy`'s own closed-task path and was not.
+ *   npm run reconcile              # dry run — prints every proposed action
+ *   npm run reconcile -- --live    # moves tasks / posts to the bus
  *
- * What it deliberately does NOT do: file new ClickUp tasks for branches with
- * no stamp at all. Every branch that predates PR #344 has no stamp — filing
- * "no task tracks this branch" for every one of them would be noisy and
- * frequently wrong (many already have Loop Queue tasks tracked by name/title
- * only, which this script has no reliable way to match). Once threads are
- * routinely started via `npm run thread <topic> <task-id>`, an unstamped
- * branch becomes a much stronger signal and that action can be added; today
- * it would mostly manufacture false positives. This gap is reported, not
- * silently skipped (DOCTRINE 3.11) — see the "could not check" bucket below.
+ * WHAT IT CHECKS
+ *   1. Every in-flight task whose comments link a GitHub PR. The NEWEST
+ *      distinct PR is authoritative (a task sent back and rebuilt carries two
+ *      links; the superseded one must not win forever). Then:
+ *        - PR merged, task in an auto-repair status (Building / In review) →
+ *          move to Live.
+ *        - PR merged, task in an OPERATOR status (Needs your input / Ready to
+ *          launch) → FLAG, never move: only the operator moves a task out of
+ *          those two, and auto-moving a Needs-your-input task would bury the
+ *          question waiting for him (two-account model).
+ *        - PR CLOSED-unmerged while the task is in-flight → FLAG: the
+ *          stuck-ticket case, drift this tool exists to surface.
+ *        - PR open → clean.
+ *   2. Every local branch stamped with a ClickUp task (Task-closes-thread /
+ *      PR #344) whose stamped task has reached a terminal status → FLAG: the
+ *      closed-task cleanup should have removed the branch and did not.
  *
  * Every task and branch lands in exactly ONE of three buckets — clean,
- * repaired, or COULD NOT CHECK — and the third is never folded into the
- * first. That is the whole discipline DOCTRINE 3.11 exists to enforce: a
- * sweep that silently skips what it cannot read has not surveyed anything.
+ * repaired (a write, or in dry-run a "would"), or COULD NOT CHECK. The third
+ * is never folded into the first (DOCTRINE 3.11): a sweep that silently skips
+ * what it could not read has surveyed nothing.
  *
- * Dry-run by default — prints every proposed action, changes nothing.
- * Meant to run on a schedule (the Mac Mini engine room task).
+ * What it deliberately does NOT do: auto-file tasks for unstamped branches.
+ * Every branch predating PR #344 is unstamped, so that would manufacture
+ * false positives on day one. Reported as "could not check", not skipped.
  *
- *   npm run reconcile              # dry run
- *   npm run reconcile -- --live    # actually moves tasks / posts to the bus
+ * Writes go through scripts/clickup_direct.mjs (lib/clickup.cjs shells out),
+ * so a status move is verified and clears assignees, and the bus post reports
+ * quota — one implementation of those rules, not a weaker second copy.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { execFileSync } = require('child_process');
-const { listTasks, getTaskComments, setTaskStatus, postBusMessage } = require('./lib/clickup.cjs');
-const { branchInventory } = require('./lib/repo_state.cjs');
+const { listTasks, getTaskComments, moveTaskStatus, postBusMessage } = require('./lib/clickup.cjs');
+const { branchInventory, stampedTaskId, root } = require('./lib/repo_state.cjs');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
-const IN_FLIGHT_STATUSES = new Set(['building', 'in review', 'needs your input', 'ready to launch']);
-const TERMINAL_STATUSES = new Set(['live']);
+
+// The status ladder, by ROLE — not a hand-copied name list per concern.
+// Auto-repair: the machine may move these on its own. Operator: only Dane
+// moves a task out of these (two-account model), so the tool flags, never
+// moves. A merged PR is meaningful against BOTH; the difference is the action.
+const AUTO_REPAIR_STATUSES = new Set(['building', 'in review']);
+const OPERATOR_STATUSES = new Set(['needs your input', 'ready to launch']);
 const TERMINAL_STATUS_TO_SET = 'Live';
 const PR_URL_RE = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/;
+
+// Where flagged contradictions are remembered between scheduled runs, so an
+// unchanged drift is posted to the bus ONCE, not every run (channel spam +
+// the rolling ClickUp write quota). Machine-local, never committed.
+const FLAG_STATE_FILE = path.join(root, '.git', 'reconciler-flags.json');
 
 const live = process.argv.includes('--live');
 const quiet = process.argv.includes('--quiet');
@@ -56,8 +70,22 @@ function say(line) {
   if (!quiet) console.log(line);
 }
 
-/** null means "could not tell" — network, gh not authed, PR deleted, wrong
- *  repo — never treated the same as a real answer. */
+/** In-flight for the PURPOSE of the merged-PR check (either action path). */
+function isInFlight(task) {
+  const s = (task.status?.status || '').toLowerCase();
+  return AUTO_REPAIR_STATUSES.has(s) || OPERATOR_STATUSES.has(s);
+}
+
+/** Terminal from ClickUp's own status.type where present (so a future
+ *  "Won't do" done-type status is terminal without being name-listed), with a
+ *  name fallback for callers/tests that carry no type. */
+function isTerminal(task) {
+  const type = (task.status?.type || '').toLowerCase();
+  if (type === 'closed' || type === 'done') return true;
+  return (task.status?.status || '').toLowerCase() === 'live';
+}
+
+/** null means "could not tell" — never treated as a real answer. */
 function ghPrState(owner, repoName, number) {
   try {
     const out = execFileSync(
@@ -70,78 +98,158 @@ function ghPrState(owner, repoName, number) {
   }
 }
 
-function stampedTaskId(branchName) {
+/** Distinct PR URLs in a comment list, in order (comments arrive oldest-first,
+ *  so the LAST entry is the newest — the authoritative one). */
+function distinctPrs(comments) {
+  const seen = new Set();
+  const prs = [];
+  for (const text of comments) {
+    const m = String(text || '').match(PR_URL_RE);
+    if (!m) continue;
+    const key = `${m[1]}/${m[2]}#${m[3]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    prs.push({ owner: m[1], repoName: m[2], number: m[3] });
+  }
+  return prs;
+}
+
+function loadFlagState() {
   try {
-    return execFileSync('git', ['config', '--get', `branch.${branchName}.clickup-task`], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    return new Set(JSON.parse(fs.readFileSync(FLAG_STATE_FILE, 'utf8')));
   } catch {
-    return '';
+    return new Set();
+  }
+}
+
+function saveFlagState(set) {
+  try {
+    fs.writeFileSync(FLAG_STATE_FILE, JSON.stringify([...set], null, 2));
+  } catch (err) {
+    // Best-effort: a missing state file only costs one duplicate post, never
+    // a wrong action — but say so rather than pretend it saved.
+    console.error(`[reconcile] could not save flag state (${err.message}) — a flag may repost next run`);
   }
 }
 
 /**
- * @param {object} deps injectable so a test can drive this with fake data
- *   instead of the network — every one defaults to the real implementation.
+ * @param {object} deps injectable so a test drives this with fake data instead
+ *   of the network — every one defaults to the real implementation.
  */
 async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
   const {
     getComments = getTaskComments,
     prState = ghPrState,
-    updateStatus = setTaskStatus,
+    updateStatus = moveTaskStatus,
+    postBus = postBusMessage,
+    alreadyFlagged = null,
+    recordFlagged = () => {},
     isLive = live,
     log = say,
   } = deps;
 
-  const inFlight = tasks.filter((t) => IN_FLIGHT_STATUSES.has((t.status?.status || '').toLowerCase()));
+  const inFlight = tasks.filter(isInFlight);
   log(`[reconcile] ${inFlight.length} in-flight task(s) of ${tasks.length} total in the Loop Queue`);
 
   for (const task of inFlight) {
+    const status = (task.status?.status || '').toLowerCase();
+    const label = `task ${task.id} "${task.name}"`;
+
     let comments;
     try {
       comments = await getComments(task.id);
     } catch (err) {
-      unchecked.push(`task ${task.id} "${task.name}": could not read comments — ${err.message}`);
+      unchecked.push(`${label}: could not read comments — ${err.message}`);
       continue;
     }
 
-    const prMatch = comments.map((c) => c.match(PR_URL_RE)).find(Boolean);
-    if (!prMatch) {
-      clean.push(`task ${task.id} "${task.name}": no PR linked yet — nothing to compare`);
+    const prs = distinctPrs(comments);
+    if (prs.length === 0) {
+      // Not clean: an in-flight task with no PR link cannot be confirmed
+      // shipped-or-not, so it is unverified, not fine (DOCTRINE 3.11).
+      unchecked.push(`${label}: in-flight but no PR linked in its comments — cannot confirm whether it shipped`);
       continue;
     }
 
-    const [, owner, repoName, number] = prMatch;
-    const pr = prState(owner, repoName, number);
+    // Newest distinct PR is authoritative; a superseded older link never wins.
+    const authoritative = prs[prs.length - 1];
+    const pr = prState(authoritative.owner, authoritative.repoName, authoritative.number);
+    const prName = `PR #${authoritative.number}`;
     if (!pr) {
-      unchecked.push(`task ${task.id} "${task.name}": could not read PR #${number} (${owner}/${repoName}) from GitHub`);
+      unchecked.push(`${label}: could not read ${prName} (${authoritative.owner}/${authoritative.repoName}) from GitHub`);
+      continue;
+    }
+    const multi = prs.length > 1 ? ` (newest of ${prs.length} linked PRs)` : '';
+
+    if (pr.state === 'OPEN') {
+      clean.push(`${label}: ${prName} is open${multi}, matches ClickUp`);
       continue;
     }
 
     if (pr.state === 'MERGED') {
-      if (isLive) {
-        try {
-          await updateStatus(task.id, TERMINAL_STATUS_TO_SET);
-          repaired.push(`task ${task.id} "${task.name}": PR #${number} merged — moved to ${TERMINAL_STATUS_TO_SET}`);
-        } catch (err) {
-          unchecked.push(`task ${task.id} "${task.name}": PR #${number} merged, but could not move the task — ${err.message}`);
+      if (AUTO_REPAIR_STATUSES.has(status)) {
+        if (isLive) {
+          try {
+            updateStatus(task.id, TERMINAL_STATUS_TO_SET);
+            repaired.push(`${label}: ${prName} merged${multi} — moved to ${TERMINAL_STATUS_TO_SET}`);
+          } catch (err) {
+            unchecked.push(`${label}: ${prName} merged, but could not move the task — ${err.message}`);
+          }
+        } else {
+          repaired.push(`[DRY RUN] ${label}: ${prName} merged${multi} — would move to ${TERMINAL_STATUS_TO_SET}`);
         }
       } else {
-        repaired.push(`[DRY RUN] task ${task.id} "${task.name}": PR #${number} merged — would move to ${TERMINAL_STATUS_TO_SET}`);
+        // Operator status: flag, never move — the operator owns the exit.
+        await flag(
+          `contradiction:merged-operator:${task.id}:${authoritative.number}`,
+          `${label} sits in "${task.status?.status}" but ${prName} is already MERGED. ` +
+            `Only you move a task out of that status — moving it automatically would bury the handoff. Worth a look.`,
+          { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: merged PR under an operator status` }
+        );
       }
-    } else {
-      clean.push(`task ${task.id} "${task.name}": PR #${number} is ${pr.state.toLowerCase()}, matches ClickUp`);
+      continue;
     }
+
+    // CLOSED (unmerged) while still in-flight — the stuck-ticket case.
+    await flag(
+      `contradiction:closed-pr:${task.id}:${authoritative.number}`,
+      `${label} is in-flight ("${task.status?.status}") but its newest PR ${prName} is CLOSED without merging` +
+        `${multi}. The work is not shipping under that PR — reopen it, link a new one, or park the task.`,
+      { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: in-flight over a closed, unmerged PR` }
+    );
   }
 }
 
-/** Same injection shape as checkMergedTasks — see its doc comment. */
+/** Post a contradiction to the bus once per unchanged state; dry-run proposes. */
+async function flag(key, message, ctx) {
+  const { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what } = ctx;
+  if (!isLive) {
+    repaired.push(`[DRY RUN] ${what} — would flag to the bus: ${message}`);
+    return;
+  }
+  if (alreadyFlagged && alreadyFlagged.has(key)) {
+    // Already posted on an earlier run and nothing changed — not re-posted,
+    // and not silently dropped from the report either.
+    repaired.push(`${what} — already flagged on an earlier run (not re-posted)`);
+    return;
+  }
+  try {
+    await postBus(BUS_CHANNEL, `[reconciler] ${message}`);
+    recordFlagged(key);
+    repaired.push(`${what} — flagged to the bus`);
+  } catch (err) {
+    unchecked.push(`${what}: contradiction found but could not post to the bus — ${err.message}`);
+  }
+}
+
+/** Same injection shape as checkMergedTasks. */
 async function checkStampedBranches(tasks, clean, repaired, unchecked, deps = {}) {
   const {
     branches: branchesOverride = null,
     getStampedTaskId = stampedTaskId,
     postBus = postBusMessage,
+    alreadyFlagged = null,
+    recordFlagged = () => {},
     isLive = live,
   } = deps;
 
@@ -164,27 +272,17 @@ async function checkStampedBranches(tasks, clean, repaired, unchecked, deps = {}
       continue;
     }
 
-    const status = (task.status?.status || '').toLowerCase();
-    if (!TERMINAL_STATUSES.has(status)) {
-      clean.push(`branch ${branch.name}: tracked by task ${taskId} (${status})`);
+    if (!isTerminal(task)) {
+      clean.push(`branch ${branch.name}: tracked by task ${taskId} (${task.status?.status})`);
       continue;
     }
 
-    // The stamped task is already Live, but the branch is still here — the
-    // closed-task cleanup (PR #344) should have removed it and did not.
-    const message = `branch \`${branch.name}\` is still on this Mac, but its stamped task ` +
-      `${taskId} ("${task.name}") is already ${task.status?.status}. \`npm run tidy\` should ` +
-      `have cleaned this up — worth a look.`;
-    if (isLive) {
-      try {
-        await postBus(BUS_CHANNEL, `[reconciler] ${message}`);
-        repaired.push(`branch ${branch.name}: flagged to the bus (task ${taskId} already ${task.status?.status})`);
-      } catch (err) {
-        unchecked.push(`branch ${branch.name}: contradiction found but could not post to the bus — ${err.message}`);
-      }
-    } else {
-      repaired.push(`[DRY RUN] branch ${branch.name}: would flag to the bus — ${message}`);
-    }
+    await flag(
+      `contradiction:stale-branch:${branch.name}:${taskId}`,
+      `branch \`${branch.name}\` is still on this Mac, but its stamped task ${taskId} ("${task.name}") ` +
+        `is already ${task.status?.status}. \`npm run tidy\` should have cleaned this up — worth a look.`,
+      { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `branch ${branch.name}: stamped task already terminal` }
+    );
   }
 }
 
@@ -201,13 +299,20 @@ async function main() {
     process.exit(1);
   }
 
-  await checkMergedTasks(tasks, clean, repaired, unchecked);
-  await checkStampedBranches(tasks, clean, repaired, unchecked);
+  // Flag state is only touched on a live run; dry-run must change nothing.
+  const alreadyFlagged = live ? loadFlagState() : new Set();
+  const recordFlagged = (key) => alreadyFlagged.add(key);
+  const deps = { alreadyFlagged, recordFlagged };
+
+  await checkMergedTasks(tasks, clean, repaired, unchecked, deps);
+  await checkStampedBranches(tasks, clean, repaired, unchecked, deps);
+
+  if (live) saveFlagState(alreadyFlagged);
 
   say('');
-  say(`[reconcile] ${clean.length} checked clean, ${repaired.length} ${live ? 'repaired' : 'would repair'}, ${unchecked.length} could not check.`);
+  say(`[reconcile] ${clean.length} checked clean, ${repaired.length} ${live ? 'repaired/flagged' : 'would repair/flag'}, ${unchecked.length} could not check.`);
   if (repaired.length) {
-    say(live ? '\nRepaired:' : '\nWould repair:');
+    say(live ? '\nRepaired / flagged:' : '\nWould repair / flag:');
     repaired.forEach((line) => say(`  ✓ ${line}`));
   }
   if (unchecked.length) {
@@ -230,10 +335,12 @@ if (require.main === module) {
 module.exports = {
   checkMergedTasks,
   checkStampedBranches,
+  isInFlight,
+  isTerminal,
+  distinctPrs,
   ghPrState,
-  stampedTaskId,
   PR_URL_RE,
-  IN_FLIGHT_STATUSES,
-  TERMINAL_STATUSES,
+  AUTO_REPAIR_STATUSES,
+  OPERATOR_STATUSES,
   TERMINAL_STATUS_TO_SET,
 };
