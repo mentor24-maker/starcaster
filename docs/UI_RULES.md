@@ -165,6 +165,16 @@ as a rule first, then gets a checker where one is possible.
   block. Until something measures the outline, this one is **[eye]** — the
   operator's, usually, which is exactly the cost it is meant to remove.
 
+  **A related blind spot, closed 2026-08-16.** "Rows against each other" was
+  also why a whole column shifted one grid cell to the left could pass: every
+  label still lined up with every other label, and every control with every
+  other control — the column agreed with itself perfectly while rendering
+  each swatch in the label track and each label in the control track. Social
+  did exactly that when its second settings column's heading took one cell
+  instead of spanning the tracks. `check_panels` now also asserts that each
+  control renders to the RIGHT of its own label, which fails a slipped pair
+  without needing anything to measure the outline.
+
 ## D — Density and layout of panels
 
 *Umbrella: compact forms — no wasted screen, no scrolling that a better
@@ -484,6 +494,18 @@ deliberately, and says so.*
   too many controls, or a missing axis — and a design question for the
   operator. It is not a reason to reintroduce a hiding place (the old A4,
   which survives as A0's own guard).
+
+  **A mode toggle on a row is not a hiding place (8/15).** The matched
+  spacing rows — `V Margin` in place of Top + Bottom, with a chain-link
+  icon that splits it — are doctrine E4b, and they are the shape the
+  operator asked for when he raised this: *"Since we previously abandoned
+  the idea of an 'Advanced' section, I'm thinking inline icons that can
+  toggle between the default 'assumed match' form and the optional
+  'separate values' mode."* What A0 deleted was a **collapse**: a section
+  that took a control off the screen and made you know it was there. A
+  matched row is on the screen, showing the value it is applying, with the
+  split one click away on the row itself. The test: after the click, is the
+  control where you were already looking? Collapse fails it; this passes.
 
 - ~~**A1.** A setting that overrides a theme value lives in Advanced.~~
   **WITHDRAWN 8/13 — see A0.** Theme-backed settings keep the

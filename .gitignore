@@ -31,6 +31,7 @@ public/builder-bundle.js
 public/js/richtext-vendor.js
 lib/builder/template.js
 lib/builder/email-template.js
+lib/builder/template-frame.js
 lib/builder/email-render.js
 lib/build-stamp.json
 lib/site-import/dist/
@@ -47,3 +48,9 @@ supabase/.temp/
 
 # Screenshots from `npm run check:screens` — local artifacts, never committed
 .ui-check/
+
+# Playwright scratch profile written by scripts/capture_platform_screenshots.js
+.playwright/
+
+# Records when this laptop last ran `npm run db:refresh` (see scripts/doctor.mjs)
+.local-db-refreshed

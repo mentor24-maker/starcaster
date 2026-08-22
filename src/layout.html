@@ -29,6 +29,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Builder heading fonts (keep in sync with BUILDER_GOOGLE_FONTS_HREF in components/builder/builder-utils.ts) -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@400;700;900&family=Lora:wght@400;500;600;700&display=swap" />
+  <!-- The "Explore" link on the login screen is set in Poppins, which the list
+       above already loads for the Builder — so it needs no font link of its
+       own. (It briefly had one for Orbitron; that was dropped when the link
+       was restyled to match the logo's letterforms.) -->
   <link rel="stylesheet" href="/styles.css?v=b254954b" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -57,6 +61,10 @@
             </p>
           </div>
           <p class="auth-intro-closer">Less broadcasting. More real connection.</p>
+          <!-- The inner span is what the halo is drawn on. The <a> stays a
+               full-width block because that is what centres the word under the
+               body copy; a glow hung on it would be 700px wide. -->
+          <a class="auth-intro-explore" href="/explore"><span class="auth-intro-explore-word">Explore</span></a>
         </div>
         <div class="auth-card">
         <h2 id="authModeLabel">Sign in</h2>
@@ -297,18 +305,6 @@
             <a href="#" class="menu-link submenu-link" onclick="App.admin.openAddUserPage(); return false;" data-page="adminAddUserPage">Add User</a>
           </div>
         </li>
-        <li class="menu-item menu-item-right has-submenu">
-          <a href="#" class="menu-link" data-page="devDashboardPage">Dev</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="devDashboardPage">Dashboard</a>
-            <a href="#" class="menu-link submenu-link" data-page="devProjectsPage">Projects</a>
-            <a href="#" class="menu-link submenu-link" data-page="devTasksPage">Tasks</a>
-            <a href="#" class="menu-link submenu-link" data-page="devForumPage">Forum</a>
-            <a href="#" class="menu-link submenu-link" data-page="devTeamPage">Team</a>
-            <a href="#" class="menu-link submenu-link" data-page="devRolesPage">Roles</a>
-            <a href="#" class="menu-link submenu-link" data-page="devFrictionPage">Friction Logs</a>
-          </div>
-        </li>
       </ul>
     </nav>
 
@@ -407,6 +403,11 @@
   <!-- Module order matters: core first, then features, then app (orchestrator) last -->
 
   <script src="/shared/composeXPost.js?v=b63ab285"></script>
+  <!-- Proximity halo + ignition for the login screen's "Explore" link.
+       Self-contained and optional: the anchor keeps a real href and the CSS
+       carries a resting halo, so the link still glows, still lights on hover,
+       and still navigates if this never loads. -->
+  <script src="/shared/exploreLink.js?v=f4449aa3"></script>
   <script src="/js/core.js?v=ac73db13"></script>
   <script src="/js/estimatedProgress.js?v=54666829"></script>
   <script src="/js/projectContext.js?v=065576d8"></script>
@@ -438,7 +439,6 @@
   <script src="/js/polls.js?v=2b8387ed"></script>
   <script src="/js/activityLog.js?v=d971b9cc"></script>
   <script src="/js/observe.js?v=ef4fd429"></script>
-  <script src="/js/devAgent.js?v=9547f859"></script>
   <script src="/js/assetAssociations.js?v=d8193c51"></script>
   <script src="/js/assetFieldImport.js?v=d6664ab6"></script>
   <script src="/js/pageHeadingNav.js?v=60d32536"></script>

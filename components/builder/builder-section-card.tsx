@@ -33,6 +33,9 @@ type BuilderSectionCardProps = {
   expandedModuleIds: string[];
   /** Name of the saved section this instance is linked to, if any. */
   canonicalSourceName?: string;
+  /** True when this canonical instance's content no longer matches its
+   *  master — hand-edited here directly rather than through a push. */
+  hasDrifted?: boolean;
   /** Called when the user toggles canonical on/off for this section. */
   onToggleCanonical?: (checked: boolean) => void;
   onToggleCollapsed: () => void;
@@ -104,6 +107,7 @@ export function BuilderSectionCard({
   isCollapsed,
   expandedModuleIds,
   canonicalSourceName,
+  hasDrifted = false,
   onToggleCanonical,
   onToggleCollapsed,
   onMoveUp,
@@ -163,6 +167,11 @@ export function BuilderSectionCard({
     return moduleClass ? `${moduleClass} - ${cellModule.name}` : cellModule.name;
   };
   const [collapsedCellPanels, setCollapsedCellPanels] = useState<Record<string, { styles: boolean; content: boolean }>>({});
+  // The row's own settings start folded away, same as a cell's Styles panel.
+  // Fifteen-odd controls sat between the row header and the cells, so opening a
+  // row to reach its content meant scrolling past every one of them. Now the
+  // bar is all you see until you want them.
+  const [isSectionSettingsCollapsed, setIsSectionSettingsCollapsed] = useState(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
@@ -420,6 +429,14 @@ export function BuilderSectionCard({
             <span className="builder-section-title-label">
               <strong>{displayTitle}</strong>
               <span className="builder-canonical-badge" title={canonicalSourceName ? `Canonical — linked to "${canonicalSourceName}"` : "Canonical"}>(canonical)</span>
+              {hasDrifted ? (
+                <span
+                  className="builder-canonical-badge builder-canonical-badge-changed"
+                  title="This copy was edited directly and no longer matches its master — the next push skips it unless you overwrite it explicitly"
+                >
+                  Changed
+                </span>
+              ) : null}
             </span>
           ) : isEditingTitle ? (
             <input
@@ -510,17 +527,28 @@ export function BuilderSectionCard({
 
       {!isCollapsed && !isCanonical ? (
         <>
-          <BuilderSectionControls
-            section={section}
-            canJoinPrevious={sectionIndex > 0}
-            editorDevice={editorDevice}
-            onUpdateSection={onUpdateSection}
-            onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
-            onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}
-            themeBackgroundColor={themeBackgroundColor}
-            themeColors={themeColors}
-            themePrimaryColor={themePrimaryColor}
-          />
+          <div className="builder-cell-panel builder-section-settings-panel">
+            <BuilderCellPanelHeader
+              isCollapsed={isSectionSettingsCollapsed}
+              onToggle={() => setIsSectionSettingsCollapsed((current) => !current)}
+              panelName="Section Settings and Styles"
+              title="Section Settings and Styles"
+            />
+
+            {!isSectionSettingsCollapsed ? (
+              <BuilderSectionControls
+                section={section}
+                canJoinPrevious={sectionIndex > 0}
+                editorDevice={editorDevice}
+                onUpdateSection={onUpdateSection}
+                onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
+                onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+            ) : null}
+          </div>
 
           <div
             className={`builder-columns builder-columns-${columns.length} ${getAlignmentClass(section.alignment)}`}

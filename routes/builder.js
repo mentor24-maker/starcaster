@@ -1,6 +1,6 @@
 'use strict';
 
-const { sendOk, sendErr, parseJsonBody } = require('./http');
+const { sendOk, sendErr, sendJson, parseJsonBody } = require('./http');
 
 /**
  * Builder records created from the React editor have no explicit templateId;
@@ -13,6 +13,21 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
   const source = String(body.slug || body.emailSlug || name || '').trim();
   const base = source.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'builder';
   return unique ? `${base}-${Date.now().toString(36)}` : base;
+}
+
+/**
+ * Who is making this request, for the page-revision audit trail.
+ *
+ * The dispatcher puts a platform session on req.authUser, and a tenant
+ * project-admin session in the same place (routes/index.js) -- the latter
+ * carries no display name, so the store falls back to the email. Returns null
+ * for anything unauthenticated, which records a revision with no author rather
+ * than inventing one.
+ */
+function actorFrom(req) {
+  const user = req && req.authUser;
+  if (!user || !user.id) return null;
+  return { id: String(user.id), name: String(user.name || ''), email: String(user.email || '') };
 }
 
 function hasBodyField(body, ...keys) {
@@ -120,6 +135,8 @@ const {
 } = require('../lib/builderPageSnapshotsStore');
 const {
   listPageRevisions,
+  listRunRevisions,
+  undoRunIdFor,
   getPageRevision,
 } = require('../lib/builderPageRevisionsStore');
 const {
@@ -175,6 +192,7 @@ const { listContacts, createContact, updateContact, rowToContact } = require('..
 const { savePollSubmission, getPollResults } = require('../lib/pollSubmissionsStore');
 const {
   listSavedSections,
+  getSavedSection,
   createSavedSection,
   updateSavedSection,
   deleteSavedSection,
@@ -192,6 +210,10 @@ const {
   deleteLevelEvent,
 } = require('../lib/gameLevelEventsStore');
 const { normalizeBuilderDocument, serializeBuilderDocument } = require('../lib/builder');
+// Generated from lib/builder-client/builder-template-frame.ts by
+// `npm run build:builder-template`, so Bulk Create and the interactive editor
+// resolve shared sections by the same rules.
+const { resolveTemplateSections } = require('../lib/builder/template-frame');
 
 let playwrightChromium = null;
 function getChromium() {
@@ -207,21 +229,28 @@ function nextId(prefix) {
 
 // Propagate typography from a saved theme to all landing pages and templates so
 // the change takes effect site-wide without requiring each page to be re-saved.
-async function propagateTypographyToAllPages(typography, scope) {
-  if (!typography || typeof typography !== 'object') return;
-  const pagesResult = await listPages(undefined, scope);
-  if (!pagesResult.ok) return;
-  const pages = Array.isArray(pagesResult.data) ? pagesResult.data : [];
-  await Promise.allSettled(pages.map(async (page) => {
-    const existingTheme = page.theme && typeof page.theme === 'object' ? page.theme : {};
-    const mergedTheme = { ...existingTheme, typography };
-    await updatePage(String(page.id), {
-      layoutSections: page.layoutSections,
-      pageBackground: page.pageBackground,
-      theme: mergedTheme,
-    }, scope);
-  }));
-}
+// SAVING A THEME WRITES TO NO PAGE. Removed 2026-08-15; here is what it did.
+//
+// `propagateTypographyToAllPages` used to rewrite EVERY page in the project on
+// every theme create and update, stamping the saved theme's typography into
+// each page's own document. Three things were wrong with it:
+//
+//   1. It ignored which theme a page uses. Saving theme A restyled the pages
+//      following theme B — the operator's "you can change a theme without
+//      affecting anything else on the site", failed exactly.
+//   2. It was a full page write (layoutSections + pageBackground + theme) per
+//      page, awaited inline in the request — 101 page writes on one theme save
+//      for the Delray project. The same shape as the canonical propagation
+//      that a serverless freeze truncated on 2026-07-22, leaving 30 of 50
+//      pages updated and the rest stale, with the failure swallowed by a bare
+//      `.catch(() => {})` exactly like this one had.
+//   3. It made the page the source of truth for something the theme owns, so a
+//      page that missed a push was silently wrong forever.
+//
+// `resolveRenderTheme` (lib/builder-client/builder-template.ts) replaces all of
+// it by reading the live theme record at render, the same way the page template
+// frame resolves against the current masters. A theme edit is now one row
+// written and nothing else touched.
 
 // Push a canonical saved module's content to every page/template instance that
 // was stamped with savedModuleId === canonicalId and has not been locked.
@@ -363,9 +392,10 @@ async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
 
-  // Legacy /api/develop/* paths (pre-migration) — alias to /api/builder/*
-  // Excludes /api/develop/devAgent which has its own route module.
-  if (pathname.startsWith('/api/develop/') && !pathname.startsWith('/api/develop/devAgent')) {
+  // Legacy /api/develop/* paths (pre-migration) — alias to /api/builder/*.
+  // The devAgent exclusion that used to sit here went with the Dev Agent
+  // (retired 2026-08-17); no route module claims that prefix any more.
+  if (pathname.startsWith('/api/develop/')) {
     pathname = pathname.replace('/api/develop/', '/api/builder/');
   }
 
@@ -645,7 +675,6 @@ async function handle(req, res, pathname, method) {
       heroBanners: Array.isArray(body.heroBanners) ? body.heroBanners : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create theme'), true;
-    if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
     return sendOk(res, 201, result.data, { theme: result.data }), true;
   }
 
@@ -746,7 +775,6 @@ async function handle(req, res, pathname, method) {
       heroBanners: Array.isArray(body.heroBanners) ? body.heroBanners : null,
     }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update theme'), true;
-    if (typography) await propagateTypographyToAllPages(typography, scope).catch(() => {});
     return sendOk(res, 200, result.data, { theme: result.data }), true;
   }
 
@@ -1508,7 +1536,22 @@ async function handle(req, res, pathname, method) {
       .then((all) => (Array.isArray(all.data) ? all.data.find((t) => t.id === templateId) : null))
       .catch(() => null);
 
-    const templateLayoutSections = Array.isArray(tplResult?.layoutSections) ? tplResult.layoutSections : [];
+    // Resolve the template's shared sections (header, menu, footer) against
+    // their LIVE masters before cloning. A template keeps its own copy of those
+    // sections and never receives canonical propagation, so cloning it raw
+    // seeds every generated page with whatever the header looked like the day
+    // the template was saved — on 2026-08-15 that shipped 34 pages with a menu
+    // 41 minutes out of date. Newer templates store the shared sections as bare
+    // references with no modules at all, which cloned raw would have produced
+    // empty header and footer bands.
+    const savedSectionsResult = await listSavedSections(undefined, scope).catch(() => null);
+    const savedSectionRecords = Array.isArray(savedSectionsResult?.data) ? savedSectionsResult.data : [];
+    let frameCounter = 0;
+    const templateLayoutSections = resolveTemplateSections(
+      Array.isArray(tplResult?.layoutSections) ? tplResult.layoutSections : [],
+      savedSectionRecords,
+      () => `frame-${Date.now()}-${frameCounter++}`
+    );
     const templateBackground     = tplResult?.pageBackground || {};
     const templateTheme          = tplResult?.theme || {};
 
@@ -1619,6 +1662,116 @@ async function handle(req, res, pathname, method) {
   const pageRevisionsMatch = String(pathname || '').match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/?$/);
   const pageRevisionRestoreMatch = String(pathname || '')
     .match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/([^/]+)\/restore\/?$/);
+  const propagationUndoMatch = String(pathname || '')
+    .match(/^\/api\/builder\/propagation-runs\/([^/]+)\/undo\/?$/);
+  const propagationRunMatch = String(pathname || '')
+    .match(/^\/api\/builder\/propagation-runs\/([^/]+)\/?$/);
+
+  // GET /api/builder/propagation-runs/:runId — what an undo would touch NOW.
+  //
+  // The undo confirm is built from this rather than from remembered counts:
+  // retention pruning deletes old restore points, so months after a push the
+  // honest statement is "N pages still have restore points", never the
+  // original run size (unrecoverable once pruned). A confirm that promises
+  // more than the data can deliver is the PR #21 failure with a dialog on it.
+  //
+  // Also answers "was this run already undone?" — the undo stamps its revert
+  // revisions with a derived run id (undoRunIdFor), so one row under that id
+  // means yes, and the button can say so instead of silently replaying old
+  // snapshots over newer work.
+  if (propagationRunMatch && requestMethod === 'GET') {
+    const runId = decodeURIComponent(propagationRunMatch[1] || '').trim();
+    if (!runId) return sendErr(res, 400, 'propagation run id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const runResult = await listRunRevisions(runId, scope);
+    if (!runResult.ok) {
+      return sendErr(res, runResult.status || 500, runResult.error || 'Could not load that update', {
+        code: runResult.code || null,
+      }), true;
+    }
+    const pages = (Array.isArray(runResult.data) ? runResult.data : []).map((entry) => ({
+      pageId: entry.pageId,
+      name: entry.name,
+      createdAt: entry.createdAt,
+    }));
+
+    const undoneResult = await listRunRevisions(undoRunIdFor(runId), scope);
+    if (!undoneResult.ok) {
+      return sendErr(res, undoneResult.status || 500, undoneResult.error || 'Could not load that update', {
+        code: undoneResult.code || null,
+      }), true;
+    }
+    const undone = (Array.isArray(undoneResult.data) ? undoneResult.data : []).length > 0;
+
+    return sendOk(res, 200, { pages, undone }, { pages, undone }, { total: pages.length }), true;
+  }
+
+  // POST /api/builder/propagation-runs/:runId/undo
+  //
+  // Saving a shared section rewrites it on every page that uses it. Each of
+  // those rewrites already banks a restore point; this puts them all back in
+  // one action, because doing it by hand meant finding and restoring 46 pages
+  // one at a time (2026-07-21, Marinoff) or 35 (2026-08-15, Delray).
+  //
+  // Restoring a run is just the single-page restore repeated, deliberately:
+  // one code path, so "undo a push" and "undo a page" can never drift apart.
+  // Each page banks its CURRENT state first, so the undo is itself undoable.
+  if (propagationUndoMatch && requestMethod === 'POST') {
+    const runId = decodeURIComponent(propagationUndoMatch[1] || '').trim();
+    if (!runId) return sendErr(res, 400, 'propagation run id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const runResult = await listRunRevisions(runId, scope);
+    if (!runResult.ok) {
+      return sendErr(res, runResult.status || 500, runResult.error || 'Could not load that update', {
+        code: runResult.code || null,
+      }), true;
+    }
+    const entries = Array.isArray(runResult.data) ? runResult.data : [];
+    if (!entries.length) {
+      return sendErr(res, 404, 'That update has no restore points left to undo.', { code: 'NOT_FOUND' }), true;
+    }
+
+    // Sequential, not Promise.all. A run can span 46 pages and each restore is
+    // a full layout write; firing them all at once is how the 2026-07-22
+    // propagation got itself killed partway down the list.
+    const restored = [];
+    const failed = [];
+    for (const entry of entries) {
+      const revisionResult = await getPageRevision(entry.id, scope);
+      if (!revisionResult.ok) {
+        failed.push({ pageId: entry.pageId, name: entry.name, error: 'restore point could not be read' });
+        continue;
+      }
+      const revision = revisionResult.data;
+      const result = await updatePage(
+        entry.pageId,
+        {
+          layoutSections: revision.layoutSections,
+          ...(revision.pageBackground ? { pageBackground: revision.pageBackground } : {}),
+          ...(revision.theme ? { theme: revision.theme } : {}),
+        },
+        scope,
+        // The revert revisions carry their OWN (derived) run id, so an undo
+        // that dies partway is itself a grouped, resumable event — and its
+        // existence is how the GET above reports "already undone".
+        { reason: 'revert', actor: actorFrom(req), propagationRunId: undoRunIdFor(runId) }
+      );
+      if (result.ok) restored.push({ pageId: entry.pageId, name: entry.name });
+      else failed.push({ pageId: entry.pageId, name: entry.name, error: result.error || 'save failed' });
+    }
+
+    // NAMES the pages that did not make it. A partial run that reports success
+    // is the exact failure of PR #21, where a propagation died at 30 of 50
+    // pages and said nothing at all -- and the operator spent a day on
+    // "the Footer will not save".
+    return sendOk(
+      res,
+      200,
+      { restored, failed },
+      { restored, failed },
+      { total: entries.length, restoredCount: restored.length, failedCount: failed.length }
+    ), true;
+  }
 
   // GET /api/builder/landing-pages/:id/revisions — history for one page
   if (pageRevisionsMatch && requestMethod === 'GET') {
@@ -1754,8 +1907,26 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'No fields to update', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const result = await updatePage(landingPageId, built.patch, scope);
+    // The editor sends the updated_at it last saw. Absent (scripts, older
+    // clients, the propagation path) means no opinion and the save proceeds.
+    const expectedUpdatedAt = String(body?.expectedUpdatedAt || body?.expected_updated_at || '').trim();
+
+    const result = await updatePage(landingPageId, built.patch, scope, {
+      expectedUpdatedAt,
+      actor: actorFrom(req),
+    });
     if (!result.ok) {
+      // A stale-editor refusal carries the live updated_at back, so the UI can
+      // say how long ago the other save landed and offer to overwrite THAT
+      // version rather than blindly re-sending. sendErr cannot carry a payload
+      // beyond the message, so this one writes the envelope itself.
+      if (result.status === 409 && result.code === 'STALE_EDITOR') {
+        return sendJson(res, 409, {
+          ok: false,
+          error: { message: result.error, code: 'STALE_EDITOR' },
+          conflict: result.conflict || {},
+        }), true;
+      }
       return sendErr(
         res,
         result.status || 500,
@@ -2015,6 +2186,14 @@ async function handle(req, res, pathname, method) {
   const savedSectionMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)$/);
   if (savedSectionMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
+    // Read BEFORE the patch overwrites it — this is the "before" a following
+    // page's drift is measured against, not the new content about to land.
+    // Best-effort: a missing/unreadable previous row just disables the drift
+    // check for this push (propagateCanonicalSection fails open on it), it
+    // must never block the save itself.
+    const beforeResult = await getSavedSection(savedSectionMatch[1], scope).catch(() => null);
+    const previousSection = beforeResult && beforeResult.ok ? beforeResult.data.section : null;
+
     const result = await updateSavedSection(savedSectionMatch[1], {
       name: body.name,
       section: body.section,
@@ -2023,13 +2202,50 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update saved section'), true;
     // Awaited, not fire-and-forget: serverless freezes the function once the
     // response is sent, which would cut propagation off partway down the pages.
-    const propagation = await propagateCanonicalSection(savedSectionMatch[1], result.data.section, scope);
+    const propagation = await propagateCanonicalSection(
+      savedSectionMatch[1],
+      result.data.section,
+      scope,
+      { actor: actorFrom(req), previousSection, overwriteDrifted: body.overwriteDrifted === true },
+    );
     return sendOk(res, 200, result.data, { savedSection: result.data }, { propagation }), true;
   }
   if (savedSectionMatch && requestMethod === 'DELETE') {
     const result = await deleteSavedSection(savedSectionMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete saved section'), true;
     return sendOk(res, 200, result.data, { savedSection: result.data }), true;
+  }
+
+  // POST /api/builder/saved-sections/:id/force-propagate — the explicit
+  // opt-in to overwrite pages a normal push skipped for having local changes.
+  // Re-reads the section's CURRENT (already-saved) content and re-runs the
+  // push with the drift check off, rather than asking the client to resend
+  // the whole section body a second time.
+  //
+  // The body names the pages: `{ pageIds: [...] }` — exactly the ones the
+  // push reported as skipped. Required, not optional: without it this route
+  // rewrote EVERY follower to overwrite two drifted copies (review finding,
+  // 2026-08-20), and drift cannot be recomputed here because the master has
+  // already been saved. The tally rides `meta.propagation`, same as the
+  // ordinary save route — clients read it from there.
+  const forcePropagateMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)\/force-propagate$/);
+  if (forcePropagateMatch && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const pageIds = Array.isArray(body.pageIds) ? body.pageIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+    if (!pageIds.length) {
+      return sendErr(res, 400, 'pageIds is required — name the pages to overwrite (the ones the push skipped).', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const currentResult = await getSavedSection(forcePropagateMatch[1], scope);
+    if (!currentResult.ok) {
+      return sendErr(res, currentResult.status || 404, currentResult.error || 'Saved section not found'), true;
+    }
+    const propagation = await propagateCanonicalSection(
+      forcePropagateMatch[1],
+      currentResult.data.section,
+      scope,
+      { actor: actorFrom(req), overwriteDrifted: true, onlyPageIds: pageIds },
+    );
+    return sendOk(res, 200, {}, {}, { propagation }), true;
   }
 
   if (pathname === '/api/builder/products' && requestMethod === 'GET') {

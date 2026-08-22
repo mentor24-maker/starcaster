@@ -35,12 +35,13 @@
 import path from 'node:path';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { mainCheckoutDir } from './lib/main_checkout.mjs';
 import { createRequire } from 'node:module';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
 
-const MAIN_CHECKOUT = '/Users/mentor/WebApps/starcaster';
+const MAIN_CHECKOUT = mainCheckoutDir(ROOT);
 const ENV_CANDIDATES = [
   process.env.STARCASTER_ENV_FILE,
   path.join(ROOT, '.env.local.cloud-backup'),
@@ -115,7 +116,11 @@ async function main() {
   const targets = [];
   for (const section of sections) {
     for (const module of section.modules || []) {
-      if (module.type !== 'slideshow') continue;
+      // `slideshow` was its own module type until the 2026-08-16 merge;
+      // it is now the carousel's slideshow format. A card slider is not what
+      // the importer builds and is not what this reverts.
+      if (module.type !== 'carousel') continue;
+      if ((module.settings?.format || 'slideshow') !== 'slideshow') continue;
       if (MODULE_ID && module.id !== MODULE_ID) continue;
       targets.push({ section, module });
     }
@@ -135,17 +140,17 @@ async function main() {
   const { section, module } = targets[0];
   let slides = [];
   try {
-    slides = JSON.parse(module.settings?.slides || '[]');
+    slides = JSON.parse(module.settings?.items || '[]');
   } catch {
     throw new Error(`Slideshow ${module.id} has unreadable slides JSON — cannot safely revert.`);
   }
-  slides = slides.filter((s) => s && String(s.url || '').trim());
+  slides = slides.filter((s) => s && String(s.imageUrl || '').trim());
   if (!slides.length) throw new Error(`Slideshow ${module.id} has no slides to restore.`);
 
   console.log(`Target:  slideshow ${module.id} in section "${section.title || section.id}"`);
   console.log(`Restoring ${slides.length} image module(s) in slide order:`);
   for (const [i, s] of slides.entries()) {
-    console.log(`  ${String(i + 1).padStart(2)}. ${String(s.url).split('/').pop()}`);
+    console.log(`  ${String(i + 1).padStart(2)}. ${String(s.imageUrl).split('/').pop()}`);
   }
   console.log('(Deduped duplicate copies are not restored — they were repeats of these same photos.)');
 
@@ -167,8 +172,8 @@ async function main() {
     name: 'Imported image',
     text: '',
     settings: {
-      url: String(slide.url),
-      alt: String(slide.alt || ''),
+      url: String(slide.imageUrl),
+      alt: String(slide.imageAlt || ''),
       // Provenance is preserved so a later re-map can still recognise
       // these as import-owned content.
       ...(module.settings?.importSourceIds ? { importSourceIds: module.settings.importSourceIds } : {}),

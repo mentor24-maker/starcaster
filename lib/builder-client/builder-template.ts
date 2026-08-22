@@ -20,6 +20,7 @@ import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
+import { normalizeProximityEffectSettings } from "./proximity-effects";
 
 /**
  * Section (row) column structures. Values are named for their `fr` ratio;
@@ -88,8 +89,7 @@ export const BUILDER_MODULE_TYPES = [
   "contact-form",
   "player-portal",
   "table",
-  "slider",
-  "slideshow",
+  "carousel",
   "feature-cards",
   "program-list",
   "social",
@@ -1433,6 +1433,53 @@ export function normalizeTheme(value: unknown): BuilderTheme {
   };
 }
 
+/**
+ * THE THEME A PAGE ACTUALLY RENDERS WITH — the live theme record when the page
+ * names one, not the copy taken at the moment the theme was assigned.
+ *
+ * Assigning a theme to a page copies its typography into the page's own
+ * document (`applyThemeToPage`), and until 2026-08-15 every renderer read that
+ * copy. Colours, margins and backgrounds already resolved live — the server
+ * sends the theme record alongside each page — so a theme edit reached a
+ * published page's colour and not its type, which is indistinguishable from
+ * "the setting is broken". The operator changed a theme's global line height,
+ * saw nothing move, and reasonably concluded the control did not work.
+ *
+ * This is the same contract the page TEMPLATE frame already keeps: the page
+ * stores a REFERENCE and the reference resolves against the current master at
+ * render. Nothing is written to any page, which is the point — the canonical
+ * saved-section propagation had to rewrite every linked page to push a change
+ * out, and that is what lost 35 sections off the Delray home page on
+ * 2026-08-14. A theme edit here touches no page row at all.
+ *
+ * The stored copy stays as the fallback, and is what a page keeps if its theme
+ * is later deleted, or if the theme record carries no typography at all.
+ *
+ * Callers decide what counts as "linked" — the public site passes the theme
+ * shell only when the page carries a themeId, the editor passes the theme the
+ * Theme dropdown currently names. A page with no theme keeps its own stored
+ * values and must never inherit some other theme's type.
+ */
+export function resolveRenderTheme(
+  storedTheme: unknown,
+  liveTheme: { typography?: unknown } | null | undefined
+): BuilderTheme {
+  const liveTypography =
+    liveTheme && typeof liveTheme === "object" && !Array.isArray(liveTheme)
+      ? liveTheme.typography
+      : null;
+
+  const hasLiveTypography =
+    Boolean(liveTypography) &&
+    typeof liveTypography === "object" &&
+    !Array.isArray(liveTypography) &&
+    Object.keys(liveTypography as Record<string, unknown>).length > 0;
+
+  return hasLiveTypography
+    ? normalizeTheme({ typography: liveTypography })
+    : normalizeTheme(storedTheme);
+}
+
 export function getBuilderBackgroundStyle(background: BackgroundSettings | undefined): CSSProperties | undefined {
   if (!background || background.mode === "none") {
     return undefined;
@@ -1683,8 +1730,32 @@ function normalizeCellColor(
   );
 }
 
+/**
+ * Type names that no longer exist, and what they became.
+ *
+ * `slideshow` and `slider` merged into `carousel` on 2026-08-16: they were
+ * one machine with two settings locked to opposite extremes — one item
+ * visible and moving by itself, versus many items visible and moved by
+ * hand — so neither could ever borrow the other's behaviour. `format`
+ * carries that distinction now (see `migrateCarouselSettings`).
+ *
+ * These entries are PERMANENT. An unrecognized type falls through to
+ * "text" at the bottom of this function, which silently replaces a page's
+ * module with an empty text block on the next load — no error, no undo
+ * (CLAUDE.md landmine 1). Old documents keep arriving from page revisions,
+ * saved sections, imports and backups long after a rename, so a retired
+ * name is never removed from this map, only added to.
+ */
+const RETIRED_MODULE_TYPES: Record<string, BuilderTemplateModuleType> = {
+  slideshow: "carousel",
+  slider: "carousel"
+};
+
 export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
   const type = safeText(value, 40).toLowerCase();
+
+  const retired = RETIRED_MODULE_TYPES[type];
+  if (retired) return retired;
 
   if (
     type === "navigation" ||
@@ -1702,8 +1773,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "contact-form" ||
     type === "player-portal" ||
     type === "table" ||
-    type === "slider" ||
-    type === "slideshow" ||
+    type === "carousel" ||
     type === "feature-cards" ||
     type === "program-list" ||
     type === "social" ||
@@ -1773,6 +1843,10 @@ export function normalizeModuleSettings(value: unknown) {
             // Slider had been capped at 10k since it shipped.
             : normalizedKey === "cards" ||
                 normalizedKey === "sliderItems" ||
+                // The carousel's unified collection. Exempted from the day it
+                // was named rather than a month later, which is the mistake
+                // `sliderItems` records directly above.
+                normalizedKey === "items" ||
                 // `programs` holds every class a club runs, each with its own
                 // sessions, price bands and bullets — fifteen programs is
                 // ordinary for one tennis centre, and the whole collection is
@@ -1807,6 +1881,48 @@ const OVERLAY_ONLY_IMAGE_SETTINGS = [
 function stripOverlayOnlyImageSettings(settings: Record<string, string>) {
   for (const key of OVERLAY_ONLY_IMAGE_SETTINGS) {
     delete settings[key];
+  }
+}
+
+/**
+ * Rotation Rate, in turns per minute, for the two effects that rotate
+ * (added 2026-08-16). Only stamped when the effect actually uses it, so a
+ * page whose image has no effect does not gain a setting it will never read —
+ * and 25 is the speed Spin has always run at, so an existing page is
+ * unchanged either way.
+ */
+function normalizeImageEffectSettings(settings: Record<string, string>) {
+  // Direction belongs to the two travelling effects, and is stored only when
+  // it is not the default — a page that never chose one carries no key.
+  if (settings.effect === "cruise" || settings.effect === "tumbleweed") {
+    if (settings.effectDirection !== "rtl") delete settings.effectDirection;
+    if (settings.effectRepeat !== "once") delete settings.effectRepeat;
+    settings.effectSpeed = normalizeSpacingValue(settings.effectSpeed, "8", 1, 600);
+    settings.effectDelay = normalizeSpacingValue(settings.effectDelay, "0", 0, 120);
+  } else {
+    delete settings.effectDirection;
+    delete settings.effectRepeat;
+    delete settings.effectSpeed;
+    delete settings.effectDelay;
+  }
+
+  if (settings.effect !== "spin" && settings.effect !== "tumbleweed") {
+    delete settings.effectRotationRate;
+    delete settings.effectFrequency;
+    delete settings.effectBounceHeight;
+    return;
+  }
+
+  settings.effectRotationRate = normalizeSpacingValue(settings.effectRotationRate, "25", 1, 600);
+
+  // Frequency — hops per crossing — belongs to Tumbleweed alone; Spin turns in
+  // place and never leaves the midline.
+  if (settings.effect === "tumbleweed") {
+    settings.effectFrequency = normalizeSpacingValue(settings.effectFrequency, "4", 1, 60);
+    settings.effectBounceHeight = normalizeSpacingValue(settings.effectBounceHeight, "50", 0, 1000);
+  } else {
+    delete settings.effectFrequency;
+    delete settings.effectBounceHeight;
   }
 }
 
@@ -1875,6 +1991,102 @@ function migrateSpacingPairToSides(
   delete settings[legacyHorizontalKey];
 }
 
+const CAROUSEL_CAPTION_POSITIONS = new Set([
+  "bottom-left",
+  "bottom-center",
+  "top-left",
+  "top-center",
+  "center"
+]);
+
+/**
+ * Fold the two retired collections into the carousel's one.
+ *
+ * The old shapes were a strict subset relationship, which is why the merge
+ * could be automatic and lossless in the first place:
+ *
+ *   slideshow  slides      [{ id, url, alt }]
+ *   slider     sliderItems [{ id, title, body, imageUrl, imageAlt, linkUrl,
+ *                            linkLabel, icon, iconImageUrl }]
+ *
+ * A slide is a card with only its picture filled in, so `url` → `imageUrl`
+ * and `alt` → `imageAlt` and the rest arrive empty. Nothing is discarded in
+ * either direction, and the surviving shape is the card — deliberately the
+ * SAME field names `feature-cards` uses (`builder-card-items.ts`), so content
+ * still moves between the two without retyping.
+ *
+ * Which key a document arrives with is also the only honest evidence of what
+ * the operator built, so it seeds `format` — a document that never named a
+ * format still renders as the module it was authored as.
+ *
+ * Deliberately hand-rolled rather than reusing `parseBuilderCardItems`:
+ * that module resolves asset URLs through browser-only code and is
+ * explicitly NOT importable here (see its header note) — this file bundles
+ * for the server too. This transform only renames keys.
+ */
+function migrateCarouselSettings(settings: Record<string, string>) {
+  const readArray = (raw: string | undefined): Record<string, unknown>[] => {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const str = (value: unknown) => (typeof value === "string" ? value : value == null ? "" : String(value));
+
+  const toItem = (entry: Record<string, unknown>, index: number) => ({
+    id: str(entry?.id) || `item-${index + 1}`,
+    title: str(entry?.title),
+    body: str(entry?.body),
+    // `url` is the slideshow spelling, `imageUrl` the slider's.
+    imageUrl: str(entry?.imageUrl ?? entry?.url),
+    imageAlt: str(entry?.imageAlt ?? entry?.alt),
+    linkUrl: str(entry?.linkUrl),
+    linkLabel: str(entry?.linkLabel),
+    icon: str(entry?.icon),
+    iconImageUrl: str(entry?.iconImageUrl)
+  });
+
+  const hasItems = typeof settings.items === "string" && settings.items !== "";
+  const legacySlides = readArray(settings.slides);
+  const legacyCards = readArray(settings.sliderItems);
+
+  if (!hasItems) {
+    // Both keys present at once has never been written by any code path, but a
+    // hand-edited or merged document could carry it. Concatenating is the only
+    // choice that cannot silently drop content.
+    const merged = [...legacySlides, ...legacyCards];
+    settings.items = JSON.stringify(merged.map(toItem));
+  } else {
+    settings.items = JSON.stringify(readArray(settings.items).map(toItem));
+  }
+
+  if (!settings.format) {
+    settings.format = legacyCards.length || (settings.sliderItems !== undefined && !legacySlides.length)
+      ? "cards"
+      : "slideshow";
+  }
+
+  // The old spellings, carried over before the keys are dropped. `sliderHeight`
+  // is not among them: it was written onto every Card Slider ever created and
+  // read by absolutely nothing, so there is no value in it to preserve.
+  if (settings.cardWidth === undefined && settings.sliderCardWidth !== undefined) {
+    settings.cardWidth = settings.sliderCardWidth;
+  }
+  if (settings.gap === undefined && settings.sliderGap !== undefined) {
+    settings.gap = settings.sliderGap;
+  }
+
+  delete settings.slides;
+  delete settings.sliderItems;
+  delete settings.sliderCardWidth;
+  delete settings.sliderGap;
+  delete settings.sliderHeight;
+}
+
 export function normalizeBuilderModuleSettingsForType(
   type: BuilderTemplateModuleType,
   value: unknown,
@@ -1888,6 +2100,13 @@ export function normalizeBuilderModuleSettingsForType(
   migrateSpacingPairToSides(settings, "margin", "verticalMargin", "horizontalMargin");
 
   if (type === "tractor-nav") {
+    /* The module draws one of several proximity effects; "rings" is the
+       original and stays the default, so every page that predates the picker
+       keeps rendering what it already rendered. normalizeProximityEffectSettings
+       deliberately does NOT delete the keys the chosen preset ignores — see the
+       note on it; a ring layout somebody tuned by hand must survive a flick to
+       Glow and back. */
+    normalizeProximityEffectSettings(settings);
     if (!settings.color)        settings.color        = "#0000ff";
     if (!settings.dotSize)      settings.dotSize      = "10";
     if (!settings.dotHoverColor) settings.dotHoverColor = "#ffffff";
@@ -2019,6 +2238,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
+    normalizeImageEffectSettings(settings);
   }
 
   if (type === "floating-image") {
@@ -2031,6 +2251,7 @@ export function normalizeBuilderModuleSettingsForType(
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
     settings.zIndex = normalizeSpacingValue(settings.zIndex, "20", -999, 999999);
+    normalizeImageEffectSettings(settings);
 
     const trigger = normalizeModuleTrigger(settings[MODULE_TRIGGER_SETTING_KEY]);
     const anchor = safeText(settings.overlayAnchor, 24) || "center";
@@ -2044,7 +2265,47 @@ export function normalizeBuilderModuleSettingsForType(
     }
   }
 
-  if (type === "slideshow") {
+  if (type === "carousel") {
+    migrateCarouselSettings(settings);
+
+    settings.format = settings.format === "cards" ? "cards" : "slideshow";
+    const isCards = settings.format === "cards";
+
+    // Fade means nothing when several items share the frame — there is no
+    // single item to fade between — so the cards format is always "slide".
+    settings.transition = !isCards && settings.transition === "fade" ? "fade" : "slide";
+
+    // Autoplay is what a slideshow IS and what a card shelf is not, so the
+    // default follows the format. A stored value always wins: an operator who
+    // switches format keeps the playback they chose.
+    settings.autoplay = settings.autoplay === "" || settings.autoplay === undefined
+      ? String(!isCards)
+      : String(settings.autoplay !== "false");
+    settings.intervalMs = normalizeSpacingValue(settings.intervalMs, "5000", 1000, 20000);
+    settings.pauseOnHover = String(settings.pauseOnHover !== "false");
+    settings.loop = String(settings.loop !== "false");
+
+    // Manual controls. Neither module had both: the slideshow had no way for a
+    // visitor to move it at all, and the slider had arrows but no dots.
+    settings.showArrows = settings.showArrows === "" || settings.showArrows === undefined
+      ? "true"
+      : String(settings.showArrows !== "false");
+    settings.showDots = settings.showDots === "" || settings.showDots === undefined
+      ? String(!isCards)
+      : String(settings.showDots !== "false");
+
+    settings.heightPx = normalizeSpacingValue(settings.heightPx, "0", 0, 900);
+    settings.gap = normalizeSpacingValue(settings.gap, isCards ? "16" : "0", 0, 40);
+    settings.cardWidth = normalizeSpacingValue(settings.cardWidth, "280", 180, 420);
+
+    // Captions ride on the same title/body/link every item already carries, so
+    // turning them on never asks for content to be retyped — and they default
+    // OFF so no existing slideshow gains text it never had.
+    settings.showCaptions = String(settings.showCaptions === "true");
+    settings.captionPosition = CAROUSEL_CAPTION_POSITIONS.has(settings.captionPosition ?? "")
+      ? settings.captionPosition
+      : "bottom-left";
+
     // The nudge, added 2026-08-12. Clamped here rather than trusted from the
     // document, the same as every other module that offers it — an imported
     // page can carry anything in these keys.
@@ -2068,6 +2329,20 @@ export function normalizeBuilderModuleSettingsForType(
       settings.cardBorderColor = "";
       settings.iconColor = "";
       settings.iconAltColor = "";
+    }
+  }
+
+  if (type === "text") {
+    // The block's vertical rhythm, both of which mean "follow the theme" when
+    // empty (A2). Only a key that is actually present is touched: writing a
+    // normalized "" onto every text module would put the key on every text
+    // block on every page, and a fallback-on-blank would put a real line
+    // height on all of them.
+    if (settings.lineHeight) {
+      settings.lineHeight = normalizeDecimalValue(settings.lineHeight, "1.6", 0.8, 3);
+    }
+    if (settings.paragraphGap) {
+      settings.paragraphGap = normalizeSpacingValue(settings.paragraphGap, "14", 0, 120);
     }
   }
 
@@ -2671,12 +2946,17 @@ export function createEmptyModule(
           imageUrl: "",
           buttonLabel: "Buy on Redbubble"
         }
-      : type === "slideshow"
+      : type === "carousel"
       ? {
-          slides: "[]",
+          // Seeded as a slideshow because that is what the bare type means
+          // with nothing else said. The palette's Card Slider tile overrides
+          // `format` at creation, and `normalizeBuilderModuleSettingsForType`
+          // supplies every format-dependent default from there.
+          format: "slideshow",
+          items: "[]",
           intervalMs: "5000",
           transition: "slide",
-          heightPx: ""
+          heightPx: "0"
         }
       : type === "feature-cards"
       ? {
@@ -2806,14 +3086,7 @@ export function createEmptyModule(
                 rowCount: 2
               })
             }
-        : type === "slider"
-            ? {
-                sliderGap: "16",
-                sliderCardWidth: "280",
-                sliderHeight: "auto",
-                sliderItems: JSON.stringify([])
-              }
-            : type === "social"
+        : type === "social"
               ? {
                   socialIconSize: "44",
                   socialGap: "14",

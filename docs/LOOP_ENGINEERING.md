@@ -19,6 +19,84 @@ cannot be invoked by name and `/loop 30m loop-build` fails to find it.
 | 2. Build | `loop-build` | Picks the next task, builds it in its own worktree, passes all build gates, opens a PR | Agent, on a loop |
 | 3. Review | `loop-review` | Independently verifies each PR, then pings you to merge — or sends it back with notes | Agent, on a loop |
 
+## ClickUp access — the single source of truth for ids and commands
+
+Every ClickUp touch by a loop goes through **`npm run clickup -- <command>`**
+(`scripts/clickup_direct.mjs`, wrapped in Doppler by package.json so the token
+is supplied without any agent or human handling it — DOCTRINE 4.1). The
+claude.ai connector's shared rolling budget starves under loop traffic and
+fails with junk wait times; ClickUp's own API allows ~100 requests/minute,
+which the loops cannot exhaust. Use the connector only when the direct script
+itself is broken, and say so in the run report.
+
+The ids, written down exactly once, here:
+
+| Thing | Id |
+|---|---|
+| Workspace ("Alphire AI Agency") | `90141423066` |
+| Starcaster **space** | `90146476303` |
+| **Loop Queue list** | `901418546619` |
+| The operator's inbox (Dane's **developer** account, dane@alphire.agency) | `48012725` |
+| The machine (**Pulse** / mentor24 — the service account; do NOT assign it) | `54254347` |
+| The bus (party-line chat) | `2kydhxeu-474` |
+
+**The two-account model (ratified 2026-08-18, after one same-day reversal —
+read this before "fixing" either id):** Dane is TWO members of this workspace,
+by design:
+
+- **Pulse / mentor24 (`54254347`) is the machine.** It is the Administrator,
+  it holds the API token, and every write the loops and scripts make appears
+  as Pulse. It is a service account. **Never assign tasks to it** — ClickUp
+  does not notify a user about their own actions, so Pulse assigning Pulse is
+  a handoff with no ping, and an inbox mixed with automation is not an inbox.
+- **Dane / dane@alphire.agency (`48012725`) is the human.** His daily login,
+  his developer seat, his My Work. All operator handoffs assign this id, so
+  every assignment is Pulse→Dane: a real notification, and an activity trail
+  where "Pulse did it" always means the machine and "Dane did it" always
+  means him.
+
+**Id trap (cost an hour on 2026-08-18):** a space id where a list id belongs
+earns ClickUp's misleading "Team not authorized" 401. When in doubt,
+`npm run clickup -- lists --space 90146476303` resolves list ids by name.
+
+The everyday commands (run `npm run clickup` bare for the full list):
+
+```bash
+npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
+npm run clickup -- get --task <id>                             # header + body
+npm run clickup -- comments --task <id>                        # where the PR URL lives
+npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
+npm run clickup -- status --task <id> --status "Needs your input"            # auto-assigns Dane
+npm run clickup -- comment --task <id> --body-file -           # body on stdin
+npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
+```
+
+`status` enforces the handoff rule by itself: moving into `Needs your input`
+or `Ready to launch` assigns Dane automatically, moving into any machine
+status clears assignees, and both halves of the write are verified from the
+response. `--if-status` makes a claim safe against a parallel loop: it exits
+code 3 without writing if the task has already moved.
+
+**Urgent is the human lane (ratified 2026-08-18).** The queue sorts
+priority-then-age, so an Urgent flag is a human override that outranks
+everything the loop decided — with no other machinery needed, as long as
+agents cannot set it themselves. `task --priority urgent` and
+`priority --task <id> --priority urgent` both refuse outright unless
+`--operator-asked` is also passed:
+
+```bash
+npm run clickup -- task --list 901418546619 --name "..." --priority urgent --body-file -    # REFUSED
+npm run clickup -- task --list 901418546619 --name "..." --priority urgent --operator-asked --body-file -   # OK — the operator asked for this
+npm run clickup -- priority --task <id> --priority high      # lowering never needs the flag
+npm run clickup -- priority --task <id> --priority urgent --operator-asked   # raising to urgent does
+```
+
+`--operator-asked` is not a permission check — nothing here can verify who
+actually typed the command. It is the agent's own written claim that the
+operator asked for Urgent, sitting in shell history and the session
+transcript where it can be checked later. Loop-filed tasks (`loop-spec`) are
+High or below by default; Urgent only on the operator's explicit word.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
@@ -47,13 +125,39 @@ Two rules keep it honest:
 - **No loop ever puts a ticket into `Live`.** Only a merge does, and only you
   authorize a merge.
 - **No loop ever takes a ticket *out* of `Needs your input` or
-  `Ready to launch`.** Once a ticket is handed to you it stays handed to you
-  until you move it. A loop that could quietly reclaim its own escalation
-  would defeat the whole checkpoint.
+  `Ready to launch` on its own.** Once a ticket is handed to you it stays
+  handed to you until you act. A loop that could quietly reclaim its own
+  escalation would defeat the whole checkpoint.
+
+  "Until you act" includes acting by comment (2026-08-19, task 86bbh9g7k):
+  when you REPLY on a `Needs your input` ticket, bus-relay posts your answer
+  to the bus and moves the ticket back to `Queued`, where a build loop picks
+  it up with your answer sitting in the comments. That is not a loop
+  reclaiming its escalation — it is you releasing the ticket, with the relay
+  as your hands. No fresh comment from you, no move, ever. And a comment on
+  a `Ready to launch` ticket moves nothing: that status waits on the merge
+  you alone authorize, so the relay only carries your words to the bus.
 
 `Live` is configured as a **closed**-type status in ClickUp, not merely the
 last active one. That is what makes finished work disappear from the open
 view instead of piling up forever.
+
+### Killing a ticket ("we are not doing this")
+
+There is no `Won't do` status — adding one is currently impossible because
+ClickUp's Edit Statuses dialog opens **empty** for this list (observed
+2026-08-19, from three different doors, surviving a hard refresh; the API
+reads the statuses fine, so it is display-only breakage — but do NOT press
+Apply changes on that empty dialog, which could strip the list's statuses).
+
+Until that heals, the convention is: close the ticket as `Live` **plus the
+`wont-do` tag**, with a comment saying what was decided and that nothing
+shipped. `Live` is what hides it; the tag is what keeps the record honest.
+Two of the three ClickUp surfaces for statuses are worth knowing anyway:
+the status *pill* at the head of each group in List view grows a `⋯` menu
+on mouse-over (`+ New status` there creates inline, skipping the broken
+dialog), and statuses live on the **list**, not the space — the space
+settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
 
 ## How to run it
 
@@ -78,6 +182,12 @@ Your day:
    `Ready to launch` PR with a preview link and test steps.
 3. **When you're ready:** tell CC "merge PR #NN" and it merges (only with all
    checks green). Merging stays manual on purpose — see Safety.
+4. **When a ticket asks you a question** (`Needs your input`): answer it as a
+   comment on the ticket. Within one bus-relay cycle (hourly) your answer is
+   posted to the bus and the ticket goes back to `Queued` for a build loop to
+   pick up — the comment alone is enough, no status clicking. This does NOT
+   apply to `Ready to launch`: a comment there is relayed but the ticket
+   waits for your merge.
 
 ### The one place to check: Assigned to me
 
@@ -142,7 +252,12 @@ day one.
    `docs/CLICKUP_VIEWS.md` for why a saved view was tried and dropped.
 4. Confirm the skills live in `.claude/skills/` — Claude Code discovers skills
    nowhere else, so a skill parked in another folder cannot be invoked by name.
-5. Do a **dry run:** spec 1–2 tiny test-coverage tasks, run one `loop-build`
+5. Confirm Doppler holds the ClickUp token in the config this machine uses:
+   `npm run clickup -- whoami` must print "Token valid. Acting as: ...". If it
+   does not, the OPERATOR (never an agent) adds it once:
+   `pbpaste | tr -d '[:space:]' | doppler secrets set CLICKUP_API_TOKEN --project starcaster --config dev`
+   with the token on the clipboard.
+6. Do a **dry run:** spec 1–2 tiny test-coverage tasks, run one `loop-build`
    pass, watch it produce a clean PR, then run one `loop-review` pass. Only
    after that cycle works should you trust it with real feature work.
 

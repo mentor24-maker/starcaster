@@ -9,9 +9,11 @@ import { BuilderFeatureCardsModuleSettings } from "./builder-feature-cards-modul
 import { BuilderProgramListModuleSettings } from "./builder-program-list-module-settings";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
-  BuilderSlideshowModuleSettings,
-  parseBuilderSlideshowSlides
-} from "./builder-slideshow-module-settings";
+  BuilderCarouselModuleSettings,
+  parseBuilderCarouselItems,
+  resolveCarouselFormat
+} from "./builder-carousel-module-settings";
+import { getCarouselImageFrameStyle } from "@/lib/builder-carousel-image-frame";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -109,7 +111,6 @@ import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-set
 import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
-import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import { BuilderImagePreview } from "./builder-image-preview";
 import {
   getAlignmentClass,
@@ -120,15 +121,18 @@ import {
   getModuleOuterSpacingStyle,
   getTableWrapStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
+  getTextModuleRhythmStyle,
   getTextModuleWidthStyle,
   getButtonModuleStyle,
   getVideoEmbedSource,
   isVideoMedia
 } from "./builder-utils";
-import { MODULE_MARGIN_SIDES } from "./builder-settings-schema";
+import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
 import { BuilderHeadingModuleSettings } from "./builder-heading-module-settings";
 import { BuilderSimpleTextModuleSettings } from "./builder-simple-text-module-settings";
+import { BuilderTextModuleSettings } from "./builder-text-module-settings";
 import {
   BuilderThemeColorField,
   BuilderThemeColorFieldWithDefault,
@@ -150,8 +154,7 @@ import {
 } from "@/lib/poll-category-list";
 import {
   BuilderInlineNumberSelect,
-  BuilderInlineNumberSelectRow,
-  BuilderNumberSelectControl
+  BuilderInlineNumberSelectRow
 } from "./builder-inline-number-select";
 import { imageProps } from "@/lib/image-renditions";
 
@@ -173,7 +176,7 @@ const CARD_SIZES = "(max-width: 700px) 100vw, 400px";
  * Adding a module to the shape means adding it here and to the matching CSS
  * selector list in `_builder-react-overrides.css`.
  */
-const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "slideshow", "program-list"]);
+const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "carousel", "program-list", "social"]);
 
 /**
  * The two nudge controls, named and ordered like `MODULE_MARGIN_SIDES` so a
@@ -672,18 +675,64 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
-  if (module.type === "slideshow") {
-    const slides = parseBuilderSlideshowSlides(module.settings);
-    const first = slides[0];
+  if (module.type === "carousel") {
+    // The canvas card is a glance, not the page: one format shows its first
+    // picture with a count, the other shows the shelf. Both read from the same
+    // `items`, which is the point of the merge.
+    const items = parseBuilderCarouselItems(module.settings);
+    const isCards = resolveCarouselFormat(module.settings) === "cards";
+    // The same frame the page draws, so the glance does not quietly disagree
+    // with what the operator just set two feet to the right of it.
+    const imageFrame = getCarouselImageFrameStyle(module.settings);
+
+    if (items.length === 0) {
+      return (
+        <span className="builder-module-preview-empty">
+          {isCards ? "Add cards in the editor" : "Add slides in the editor"}
+        </span>
+      );
+    }
+
+    if (isCards) {
+      const gap = Number.parseInt(module.settings.gap || "16", 10);
+      const cardWidth = Number.parseInt(module.settings.cardWidth || "280", 10);
+      return (
+        <div className="builder-module-preview-carousel-cards" style={{ gap: `${gap}px` }}>
+          {items.map((item) => (
+            <article
+              key={item.id}
+              className="builder-module-preview-carousel-card"
+              style={{ minWidth: `${cardWidth}px` }}
+            >
+              {item.imageUrl ? (
+                <img
+                  {...imageProps(item.imageUrl, { sizes: "220px" })}
+                  alt={item.imageAlt || item.title || ""}
+                  loading="lazy"
+                  style={imageFrame}
+                />
+              ) : null}
+              <div className="builder-module-preview-carousel-card-copy">
+                <strong>{item.title || "Card title"}</strong>
+                <p>{item.body || "Card body"}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      );
+    }
+
+    const first = items[0];
     return (
-      <div className="builder-module-preview-slideshow">
-        {first ? (
-          <img {...imageProps(first.url)} alt={first.alt || ""} loading="lazy" />
-        ) : (
-          <span className="builder-module-preview-slideshow-empty">Add slides in the editor</span>
-        )}
-        {slides.length > 1 ? (
-          <span className="builder-module-preview-slideshow-count">{slides.length} slides</span>
+      <div className="builder-module-preview-carousel">
+        <img
+          {...imageProps(first.imageUrl)}
+          alt={first.imageAlt || ""}
+          loading="lazy"
+          style={imageFrame}
+        />
+        {items.length > 1 ? (
+          <span className="builder-module-preview-carousel-count">{items.length} slides</span>
         ) : null}
       </div>
     );
@@ -741,44 +790,6 @@ function renderModulePreview(module: BuilderTemplateModule) {
             <strong>{card.title || "Untitled card"}</strong>
           </article>
         ))}
-      </div>
-    );
-  }
-
-  if (module.type === "slider") {
-    const items = parseSliderItems(module.settings);
-    const gap = Number.parseInt(module.settings.sliderGap || "16", 10);
-    const cardWidth = Number.parseInt(module.settings.sliderCardWidth || "280", 10);
-
-    return (
-      <div className="builder-module-preview-slider" style={{ gap: `${gap}px` }}>
-        {items.length > 0 ? (
-          items.map((item) => (
-            <article
-              key={item.id}
-              className="builder-module-preview-slider-card"
-              style={{ minWidth: `${cardWidth}px` }}
-            >
-              {item.imageUrl ? (
-                <div className="builder-module-preview-slider-image">
-                  <Image
-                    alt={item.title || "Slider item"}
-                    fill
-                    sizes="220px"
-                    src={item.imageUrl}
-                    unoptimized
-                  />
-                </div>
-              ) : null}
-              <div className="builder-module-preview-slider-copy">
-                <strong>{item.title || "Slide title"}</strong>
-                <p>{item.body || "Slide body"}</p>
-              </div>
-            </article>
-          ))
-        ) : (
-          <div className="builder-module-preview-placeholder">Add slider items</div>
-        )}
       </div>
     );
   }
@@ -2297,7 +2308,9 @@ function renderModulePreview(module: BuilderTemplateModule) {
       className={`builder-module-preview-paragraph builder-module-preview-text-${variant || "default"}`}
       style={{
         ...getTextModuleWidthStyle(module.settings),
-        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+        ...getTextModuleRhythmStyle(module.settings),
+        ...getTextModuleFrameStyle(module.settings)
       }}
       dangerouslySetInnerHTML={{
         __html: isPlainText
@@ -2309,8 +2322,6 @@ function renderModulePreview(module: BuilderTemplateModule) {
 }
 
 /** Shared with the Feature Cards module — see lib/builder-client/builder-card-items.ts */
-type SliderItem = BuilderCardItem;
-
 type SocialItem = {
   id: string;
   label: string;
@@ -2327,14 +2338,6 @@ function parseHeadlineItems(settings: Record<string, string>): HeadlineItem[] {
 
 function serializeHeadlineItems(items: HeadlineItem[]) {
   return serializeHeadlineRotatorEntries(items);
-}
-
-function parseSliderItems(settings: Record<string, string>): SliderItem[] {
-  return parseBuilderCardItems(settings.sliderItems, "slide", "storage");
-}
-
-function serializeSliderItems(items: SliderItem[]) {
-  return serializeBuilderCardItems(items);
 }
 
 function parseSocialItems(settings: Record<string, string>): SocialItem[] {
@@ -2354,92 +2357,6 @@ function parseSocialItems(settings: Record<string, string>): SocialItem[] {
   } catch {
     return [];
   }
-}
-
-function SliderModuleEditor({
-  module,
-  onUpdateModule
-}: {
-  module: BuilderTemplateModule;
-  onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
-}) {
-  const items = parseSliderItems(module.settings);
-
-  function persist(nextItems: SliderItem[]) {
-    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, sliderItems: serializeSliderItems(nextItems) } }));
-  }
-
-  function updateItem(id: string, updates: Partial<SliderItem>) {
-    persist(items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
-  }
-
-  function moveItem(id: string, direction: -1 | 1) {
-    const index = items.findIndex((item) => item.id === id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= items.length) return;
-    const nextItems = [...items];
-    const [moved] = nextItems.splice(index, 1);
-    nextItems.splice(target, 0, moved);
-    persist(nextItems);
-  }
-
-  function removeItem(id: string) { persist(items.filter((item) => item.id !== id)); }
-
-  function addItem() {
-    persist([...items, createBuilderCardItem(items.length + 1, "slide")]);
-  }
-
-  return (
-    <>
-      <div className="builder-slider-design-grid">
-        <BuilderInlineNumberSelectRow>
-          <BuilderInlineNumberSelect
-            label="Card width"
-            value={module.settings.sliderCardWidth ?? "280"}
-            min={180}
-            max={420}
-            step={10}
-            fallback="280"
-            onChange={(value) =>
-              onUpdateModule((current) => ({ ...current, settings: { ...current.settings, sliderCardWidth: value } }))
-            }
-          />
-          <BuilderInlineNumberSelect
-            label="Gap"
-            value={module.settings.sliderGap ?? "16"}
-            min={8}
-            max={40}
-            step={2}
-            fallback="16"
-            onChange={(value) =>
-              onUpdateModule((current) => ({ ...current, settings: { ...current.settings, sliderGap: value } }))
-            }
-          />
-        </BuilderInlineNumberSelectRow>
-      </div>
-      <div className="builder-slider-items">
-        {items.map((item, index) => (
-          <div key={item.id} className="builder-slider-item-card">
-            <div className="builder-slider-item-header">
-              <strong>{item.title || `Slide ${index + 1}`}</strong>
-              <div className="builder-section-actions">
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} title="Move up">↑</button>
-                <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} title="Move down">↓</button>
-                <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeItem(item.id)} title="Delete slide">✕</button>
-              </div>
-            </div>
-            <div className="builder-slider-item-grid">
-              <label className="field"><span>Title</span><input type="text" value={item.title} onChange={(e) => updateItem(item.id, { title: e.target.value })} /></label>
-              <label className="field"><span>Link</span><input type="text" value={item.linkUrl} onChange={(e) => updateItem(item.id, { linkUrl: e.target.value })} placeholder="/path-or-url" /></label>
-              <label className="field builder-slider-item-grid-full"><span>Image URL</span><BuilderImagePickerField value={item.imageUrl} onChange={(url) => updateItem(item.id, { imageUrl: url })} /></label>
-              <label className="field builder-slider-item-grid-full"><span>Description</span><textarea className="builder-textarea" rows={3} value={item.body} onChange={(e) => updateItem(item.id, { body: e.target.value })} placeholder="Add copy for this slide" /></label>
-            </div>
-          </div>
-        ))}
-      </div>
-      <button type="button" className="secondary-button" onClick={addItem}>Add Slide</button>
-    </>
-  );
 }
 
 function SocialShareModuleEditor({
@@ -3050,7 +2967,7 @@ export function BuilderModuleCard({
     const mobileAlignment = module.settings.mobileAlignment ?? "";
     const isVideoModule = module.type === "video" || (module.type === "image" && module.settings.variant === "video");
     const isStandardImage = module.type === "image" && !isVideoModule;
-    const isSlideshowModule = module.type === "slideshow";
+    const isCarouselModule = module.type === "carousel";
     const isFloatingImage = module.type === "floating-image";
     const isReminderModule = module.type === "reminder";
     const isTableModule = module.type === "table";
@@ -3091,6 +3008,11 @@ export function BuilderModuleCard({
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
+    // The rich-text editor left the shared chrome on 2026-08-15: its
+    // Background / Alignment / margins / Width now live on the D8 axes in
+    // BuilderTextModuleSettings (E6 — never a second copy). The Simple Text
+    // variant stays on the chrome, so this flag is variant-aware on purpose.
+    const isRichTextModule = module.type === "text" && !isPlainTextVariant(module.settings);
     const showModuleTriggerSettings = builderModuleShowsTriggerSettings(module, moduleClassOverride);
 
     /**
@@ -3174,28 +3096,24 @@ export function BuilderModuleCard({
               }
             />
           </BuilderModuleField>
-          {/* W7: the four sides, in the same order `marginFields()` emits them,
-              so the set reads identically on hand-written and generated
-              panels. Each side reads the legacy vertical/horizontal pair when
-              its own key is unset, which is what keeps a page that has not
-              been re-saved showing the numbers it is actually rendering. */}
-          {MODULE_MARGIN_SIDES.map(({ key, label, legacy }) => (
-            <BuilderModuleField key={key} label={label} width="num">
-              <BuilderNumberSelectControl
-                fallback="0"
-                max={160}
-                step={5}
-                min={0}
-                value={module.settings[key] ?? module.settings[legacy] ?? "0"}
-                onChange={(next) =>
-                  onUpdateModule((current) => ({
-                    ...current,
-                    settings: { ...current.settings, [key]: next }
-                  }))
-                }
-              />
-            </BuilderModuleField>
-          ))}
+          {/* One row per axis, splitting into its two sides on the row's own
+              toggle (E4b) — the same component `marginFields()` gives the
+              generated panels, so the set reads identically on hand-written
+              and generated ones. Each side reads the legacy
+              vertical/horizontal pair when its own key is unset, which is
+              what keeps a page that has not been re-saved showing the numbers
+              it is actually rendering. */}
+          <BuilderModuleSpacingFields
+            box="margin"
+            max={160}
+            onChange={(values) =>
+              onUpdateModule((current) => ({
+                ...current,
+                settings: { ...current.settings, ...values }
+              }))
+            }
+            settings={module.settings}
+          />
           {/* The nudge, in the strip rather than beside it (operator,
               2026-08-12: "Add Vertical and Horizontal Offset to the left
               column"). `BuilderModuleOffsetFields` — what the image module
@@ -3207,8 +3125,16 @@ export function BuilderModuleCard({
               field, so they share the one label track by construction.
 
               Last on the strip by D9: a nudge is the finest adjustment here,
-              after the margins that move the whole module. */}
-          {isSlideshowModule
+              after the margins that move the whole module.
+
+              The image module joined the Carousel here on 2026-08-16. It had
+              kept the standalone `BuilderModuleOffsetFields` block on the
+              grounds that its editor was "one full-width column, where a
+              captioned row costs nothing" — but the editor has been three axis
+              columns since D8, so the block was two rows measuring their own
+              label track above three that measured another, which is the
+              stagger the operator saw. */}
+          {isCarouselModule || isStandardImage
             ? MODULE_NUDGE_SIDES.map(({ key, label, hint }) => (
                 <BuilderModuleField key={key} label={label} width="num">
                   <input
@@ -3259,7 +3185,15 @@ export function BuilderModuleCard({
     <div
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
       style={{
-        ...(module.type !== "button" && !isPollCategoryListModule
+        /*
+         * Text is excluded with Button because its fill now belongs to the
+         * frame INSIDE the card (getTextModuleFrameStyle, 2026-08-15).
+         * Tinting the card as well would paint the same colour twice at two
+         * different sizes and tell the operator the fill spans the card when
+         * on the page it stops at the border. The card keeps the neutral
+         * surface; the preview inside shows what the page will show.
+         */
+        ...(module.type !== "button" && module.type !== "text" && !isPollCategoryListModule
           ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
           : {}),
         // One reader for every type (W7). A floating image and a reminder are
@@ -3280,6 +3214,26 @@ export function BuilderModuleCard({
       ) : null}
       <div aria-expanded={isExpanded} className="builder-module-header" ref={moduleHeaderRef}>
         <div className="builder-module-title">
+          {/*
+            The pop-out sits on the LEFT, with the drag handle and the name,
+            rather than at the end of the action cluster (operator,
+            2026-08-15, with a screenshot of six side-by-side cells to show
+            why). A module in a narrow cell is clipped at its right edge, and
+            the action cluster goes with it — so the one control that ESCAPES
+            the narrow cell was the one the narrow cell hid. The left edge is
+            the only part of a module card that is always on screen.
+          */}
+          {hideHeaderActions ? null : (
+            <button
+              aria-label="Open editor in popup"
+              className={`builder-icon-button builder-module-popout${isPopped ? " builder-icon-button-active" : ""}`}
+              onClick={() => setIsPopped((p) => !p)}
+              title="Open editor in popup"
+              type="button"
+            >
+              ⤢
+            </button>
+          )}
           <div className="builder-module-title-text">
             <strong>{module.name || module.type}</strong>
             <span>{module.type}</span>
@@ -3306,7 +3260,6 @@ export function BuilderModuleCard({
         ) : (
           <div className="builder-section-actions">
             <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
-            <button aria-label="Open editor in popup" className={`builder-icon-button${isPopped ? " builder-icon-button-active" : ""}`} onClick={() => setIsPopped((p) => !p)} title="Open editor in popup" type="button">⤢</button>
             <button aria-label="Move module up" className="builder-icon-button" onClick={onMoveUp} title="Move module up" type="button">↑</button>
             <button aria-label="Move module down" className="builder-icon-button" onClick={onMoveDown} title="Move module down" type="button">↓</button>
             <button
@@ -3563,6 +3516,15 @@ export function BuilderModuleCard({
                   />
                 </BuilderSettingRow>
               </div>
+            ) : isRichTextModule ? (
+              <BuilderTextModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
             ) : isNavigationModule ? null : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
               <div className="builder-floating-image-module-chrome">
                 <BuilderBackgroundControls
@@ -3585,32 +3547,14 @@ export function BuilderModuleCard({
               margins but whose own editor never offered them. */}
           {needsRestoredChrome ? sharedModuleChrome : null}
 
-          {/* Image keeps the standalone block — its editor is one full-width
-              column, where a captioned row costs nothing. Slideshow's two
-              nudge fields live in the chrome strip instead; see
-              MODULE_NUDGE_SIDES. */}
-          {isStandardImage ? (
-            <BuilderModuleOffsetFields
-              horizontalOffset={module.settings.horizontalOffset ?? "0"}
-              verticalOffset={module.settings.verticalOffset ?? "0"}
-              onHorizontalOffsetChange={(horizontalOffset) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, horizontalOffset }
-                }))
-              }
-              onVerticalOffsetChange={(verticalOffset) =>
-                onUpdateModule((current) => ({
-                  ...current,
-                  settings: { ...current.settings, verticalOffset }
-                }))
-              }
-            />
-          ) : null}
-
-          {(isStandardImage || isVideoModule) && (
+          {/* The image module's offsets moved into the chrome strip above (see
+              MODULE_NUDGE_SIDES); its URL, Link, New Tab and gallery buttons
+              moved into its own schema panel, where they share the Content
+              column's label track instead of each hand-rolled block measuring
+              its own. What is left below belongs to the video module. */}
+          {isVideoModule && (
             <label className="field">
-              <span>{isVideoModule ? "Video embed URL" : "URL"}</span>
+              <span>Video embed URL</span>
               <input
                 type="text"
                 value={module.settings.url ?? ""}
@@ -3623,38 +3567,17 @@ export function BuilderModuleCard({
                     }
                   }))
                 }
-                placeholder={
-                  isVideoModule
-                    ? "YouTube, Vimeo, embed URL, or uploaded video"
-                    : "https://..."
-                }
+                placeholder="YouTube, Vimeo, embed URL, or uploaded video"
               />
             </label>
           )}
 
-          {isStandardImage ? (
-            <label className="field">
-              <span>Link</span>
-              <input
-                type="text"
-                value={module.settings.linkUrl ?? ""}
-                onChange={(event) =>
-                  onUpdateModule((current) => ({
-                    ...current,
-                    settings: { ...current.settings, linkUrl: normalizeBuilderAssetUrl(event.target.value) }
-                  }))
-                }
-                placeholder="/path-or-url"
-              />
-            </label>
-          ) : null}
-
-          {(isVideoModule || isStandardImage) ? (
+          {isVideoModule ? (
             <label className="field builder-checkbox-field">
               <span>New Tab</span>
               <input
                 type="checkbox"
-                checked={isVideoModule ? module.settings.newTab !== "false" : module.settings.newTab === "true"}
+                checked={module.settings.newTab !== "false"}
                 onChange={(event) =>
                   onUpdateModule((current) => ({
                     ...current,
@@ -3730,7 +3653,7 @@ export function BuilderModuleCard({
             </div>
           ) : null}
 
-          {(isStandardImage || isVideoModule) ? (
+          {isVideoModule ? (
             <div className="builder-media-actions">
               <button className="secondary-button builder-gallery-button" onClick={onOpenGallery} type="button">Choose From Gallery</button>
               <label className="secondary-button builder-gallery-button builder-upload-button">
@@ -3769,7 +3692,14 @@ export function BuilderModuleCard({
           ) : null}
 
           {isStandardImage ? (
-            <BuilderImageModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            <BuilderImageModuleSettings
+              includeMedia
+              module={module}
+              themeColors={themeColors}
+              onOpenGallery={onOpenGallery}
+              onUpdateModule={onUpdateModule}
+              onUploadMedia={onUploadMedia}
+            />
           ) : null}
 
           {module.type === "heading" ? (
@@ -3792,9 +3722,12 @@ export function BuilderModuleCard({
               themePrimaryColor={themePrimaryColor}
             />
           )}
-          {module.type === "slider" && <SliderModuleEditor module={module} onUpdateModule={onUpdateModule} />}
-          {module.type === "slideshow" && (
-            <BuilderSlideshowModuleSettings module={module} onUpdateModule={onUpdateModule} />
+          {module.type === "carousel" && (
+            <BuilderCarouselModuleSettings
+              module={module}
+              themeColors={themeColors}
+              onUpdateModule={onUpdateModule}
+            />
           )}
           {module.type === "feature-cards" && (
             <BuilderFeatureCardsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
@@ -3924,7 +3857,6 @@ export function BuilderModuleCard({
           module.type !== "crm-form" &&
           module.type !== "player-portal" &&
           module.type !== "table" &&
-          module.type !== "slider" &&
           module.type !== "social" &&
           module.type !== "navigation" &&
           module.type !== "headline-rotator" &&
@@ -3940,12 +3872,12 @@ export function BuilderModuleCard({
           module.type !== "button" &&
           module.type !== "heading" &&
           module.type !== "blog-post-list" &&
-          /* Nothing reads `module.text` on a slideshow — `SlideshowPreview`
-             renders from `settings.slides` alone — so this was an empty box
+          /* Nothing reads `module.text` on a carousel — `CarouselPreview`
+             renders from `settings.items` alone — so this was an empty box
              sitting under the Settings column with no effect on anything
              (doctrine E7). Excluding it does not touch stored text; it just
              stops offering a control that never did anything. */
-          module.type !== "slideshow" &&
+          module.type !== "carousel" &&
           module.type !== "admin-nav-link" ? (
             <label className="field">
               <span>Content</span>

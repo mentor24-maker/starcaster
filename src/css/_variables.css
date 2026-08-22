@@ -17,12 +17,45 @@
   --btn-text: #ffffff;
 
   /*
+   * Type that sits on top of a photograph, and the scrim under it.
+   *
+   * Deliberately NOT theme-following, which is the one exception R3 allows
+   * for: a caption over an image nobody has seen has no known background to
+   * contrast against, so a tenant theme that resolved pale-on-pale would make
+   * it unreadable. Fixed white on a dark scrim is a readability floor, not a
+   * styling choice. Introduced 2026-08-16 with the carousel's slide captions;
+   * any module that later draws text over arbitrary media uses these two
+   * rather than reaching for a literal.
+   */
+  --on-media-ink: #ffffff;
+  --on-media-scrim: rgba(17, 24, 39, 0.62);
+
+  /*
    * The run of text a search matched, marked inside a result snippet. A
    * highlight has to stay legible against --ink-primary on --bg-surface AND
    * survive a tenant theme repainting the page around it, so it is a warm
    * near-white rather than a tint of any brand colour.
    */
   --mark-bg: #fff3b0;
+
+  /* Marketing chrome — the login screen and the /explore product tour.
+     These are StarCaster's own brand surfaces, not tenant-themed UI, so they
+     do not follow a project theme. Named here so the pages can reference
+     tokens rather than repeating hex literals. */
+  --brand-accent: #17b7ee;
+  --brand-accent-bright: #6fd8ff;
+  --brand-accent-ink: #0b8dc0;
+  /* The login screen's "Explore" invitation: royal blue letters inside a halo
+     whose volume answers to how close the cursor is.
+     The halo layers are bare "r, g, b" triplets rather than finished rgba()
+     values because their alpha is computed — rgba(var(--triplet), calc(...)) —
+     so the glow can swell continuously instead of switching between two
+     fixed states. */
+  --brand-explore-ink: #030382;
+  --brand-halo-rgb: 255, 255, 255;
+  --surface-night: #0f172a;
+  --surface-night-deep: #020817;
+  --surface-night-soft: #1e293b;
   
   /* Sizing */
   --radius-btn: 10px;
@@ -104,6 +137,18 @@
    * check:panels` fails on any control that renders wider than this.
    */
   --builder-field-long-max: 560px;
+
+  /*
+   * The module editor's popped-out dialog: its border, and the background of
+   * the banner across its top (operator, 2026-08-15 — "a bright blue 2px
+   * border… put the About and Done button in a banner with a background
+   * color matching the border color and reverse font color").
+   *
+   * The operator picked the value on 2026-08-15, after seeing it on screen.
+   * White type on it clears 7:1, so the reversed banner is comfortable.
+   */
+  --builder-modal-accent: #004CA6;
+  --builder-modal-accent-ink: #ffffff;
 
   /*
    * L8 (operator, 2026-08-13): the block has one right edge, and two buttons

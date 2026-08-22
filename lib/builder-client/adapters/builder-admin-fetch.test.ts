@@ -26,6 +26,21 @@ describe('builderAdminFetch', () => {
     expect(body.pages).toEqual([{ id: 7, name: 'Home' }]);
   });
 
+  it('rewrites the propagation-undo path, with scope headers', async () => {
+    // Unmapped, this falls through to a plain fetch: no /api/builder prefix and
+    // no project-scope headers, which surfaces as a 404 that reads like the
+    // feature was never built.
+    const fetchMock = vi.fn(async () => envelopeResponse({ ok: true, restored: [], failed: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await builderAdminFetch('/api/admin/propagation-runs/run-123/undo', { method: 'POST' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/builder/propagation-runs/run-123/undo',
+      expect.objectContaining({ credentials: 'include', method: 'POST' })
+    );
+  });
+
   it('re-keys single records for cell modules', async () => {
     const fetchMock = vi.fn(async () =>
       envelopeResponse({ ok: true, data: {}, module: { id: 'm1', name: 'Saved' } }, 201)

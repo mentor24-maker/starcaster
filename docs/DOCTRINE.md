@@ -77,6 +77,103 @@ also return 400 for a value they refuse — YouTube answers an invalid API key
 that way. Translating centrally sent the operator hunting for a value that was
 already set. See the comment in `codeFromHttpStatus()`.
 
+### 1.5 A whole site failing uniformly is capacity, not code
+
+**Incident (2026-08-16).** Both client sites started answering 404. Nothing had
+deployed. The shape of the failure was the diagnosis: **every** request failed,
+**identically**, after **the same ~10 seconds** — which is `lib/supabase.js`'s
+own timeout expiring, not a route being wrong. A code defect produces variety;
+a capacity limit produces uniformity.
+
+Two separate throttles were involved, and they are easy to confuse:
+
+1. **Organization quota + spend cap.** The org had exceeded its included quota
+   on one meter (Storage Image Transformations, 131 of 100). With a spend cap
+   enabled, Supabase does not bill the overage — it makes projects
+   **unresponsive**. Removing the cap starts a restore.
+2. **Project Disk IO budget.** Small compute sizes get a daily burst budget over
+   a low baseline. Spend it and the instance throttles to baseline, which reads
+   as unresponsive too. Supabase emails about this one; the email arrived at
+   8pm, two hours after the outage began, and was the first thing that named
+   the real cause.
+
+Removing the spend cap did not fix it, because the second limit was also hit.
+The project needed a restart, and the restore took far longer than the
+dashboard's "up to 5 minutes".
+
+**Do this:** when everything fails the same way at the same latency, check the
+platform's own meters and email before reading any code. The distinguishing
+observation is the *timing*: identical failures at exactly your client
+timeout mean the dependency never answered.
+
+**Careful:** `000` (nothing answered) and `522` (edge answered, origin did not)
+are different states, and the change from one to the other is evidence that
+something you did is taking effect. Do not read them as the same outage.
+
+### 1.6 Rank queries by disk reads before optimizing anything for IO
+
+**Incident (2026-08-16).** Chasing the disk IO above, code reading produced a
+confident and wrong answer. Every public page view really does read *all* of a
+project's pages with their full layout JSON and discard all but one — measured
+at 2.83 MB across 95 pages on Delray. It looked like the leak. It was named as
+the leak, with a recommendation to change how publishing works on two live
+client sites.
+
+`pg_stat_statements` disproved it in one query. That statement sat 14th, with a
+**99.9% cache-hit rate and 2 MB** read from disk across 626 calls: it lives in
+RAM and barely touches the disk. The actual top consumers were
+`COPY "public"."<table>" TO stdout` — `pg_dump` — from six runs of
+`npm run db:refresh` against production while that command was being debugged.
+Roughly 85% of the window's disk reads, and the `assets` copy alone held IO for
+50 seconds a call.
+
+**Do this:** before optimizing for IO, rank by `shared_blks_read` in
+`pg_stat_statements` and read the cache-hit column beside it. A query with a
+99.9% hit rate is not your disk problem, however wasteful it looks on paper —
+and the real answer may not be product traffic at all. See
+`docs/runbook-supabase-capacity.md` for the query.
+
+**Corollary:** a payload measurement is not an IO measurement. Bytes on the
+wire and blocks off the disk are different numbers with different causes, and
+2.83 MB of JSON crossing the network says nothing about whether it came from
+cache.
+
+### 1.7 A quota that blocks writes but not reads looks exactly like an outage
+
+**Incident (2026-08-17).** Five ClickUp writes failed in a row with "Rate limit
+exceeded. Please wait 1171 minutes" — nearly twenty hours. It read as the whole
+integration being down account-wide, and the work (a task and a wrap-up post)
+was parked in a file on the Desktop to wait it out.
+
+Two things made it look worse than it was. Plain reads (`search`,
+`get_workspace_hierarchy`) kept answering normally throughout, so the failures
+looked arbitrary rather than budgeted. And the chat endpoints reported **"wait
+NaN minutes"** — a JavaScript not-a-number leaking into operator-facing text,
+which reads as a broken connector rather than a spent allowance.
+
+The countdown itself was honest: four readings taken across three hours (1171,
+1023, 998, 992 minutes) all resolved to a single fixed reset, matching the raw
+`retryAfter` to within eleven seconds. It was a real rolling ~24h window.
+
+**The part that mattered: there were two limits, not one.** The *connector*
+(claude.ai's ClickUp bridge) budgets writes over ~24 hours. ClickUp's own API
+limits by the MINUTE — about 100 requests, reset in 60 seconds — and was
+nowhere near its ceiling. A personal API token talking straight to
+`api.clickup.com` was never blocked at all. Nothing had to wait.
+
+**Do this:** when a hosted integration reports a limit measured in *hours*, it
+is the integration's quota, not the upstream provider's — provider limits are
+almost always per-minute. Check whether a direct path exists before waiting.
+`scripts/clickup_direct.mjs` is that path here — run as `npm run clickup --
+<command>`, it covers the full loop surface (queue/get/comments/status/
+comment/task/chat/lists; bare `npm run clickup` prints the list). It prints
+the provider's true `x-ratelimit-*` headers so the two buckets can be told
+apart, and verifies every write by reading the result back.
+
+**Corollary:** a retry-after rendered as `NaN`, `undefined` or `Infinity` is not
+evidence about the wait. It means the value was missing — go and find the real
+one before planning around the number on the screen.
+
 ---
 
 ## 2. Error messages
@@ -115,6 +212,29 @@ holding the problem.
 *"If you changed it recently, redeploy"* invites a guess. *"This deployment was
 built 2026-07-29T21:14:02Z (3 days ago), commit 0a83d71"* can be checked against
 what you actually did.
+
+### 2.4 One button, two possible meanings — ask, never pick
+
+The 💾 on a Builder section could only do one thing: file a **new** saved
+section. Its prompt asked for a name and nothing else. So the operator, who had
+unlocked a shared section, edited it, and wanted the original updated, typed the
+original's name — and got a second saved section carrying the same name while
+the original sat untouched (2026-08-16). Both then appeared in the dropdown.
+
+Nothing failed. No error was possible, because the code never knew there was a
+second reading. That is the shape of it: the ambiguity is invisible from inside
+the implementation, and obvious to the person holding the mouse.
+
+**Do this:** when an action has two defensible readings, name both and make the
+operator choose. Not a `window.confirm` with the second reading hidden behind
+Cancel — both spelled out, with what each one touches. Where one branch reaches
+beyond what is on screen, say how far **before** the click, not in the receipt
+afterwards (`describeCanonicalOverwrite`, and the page list in
+`BuilderSectionSaveModal`).
+
+And when you find one of these, look for the destructive twin: the same dialog
+that stops a duplicate is what stops an accidental overwrite of a section 40
+pages depend on.
 
 ---
 
@@ -209,6 +329,61 @@ and "contains a space" for one problem. A quoted key also fails the prefix check
 *because* of the quotes. Both send the operator after a second, non-existent
 problem — so errors suppress warnings for the same value, and the space rule
 matches spaces and tabs only.
+
+### 3.11 A survey that skips what it cannot read has not surveyed anything
+
+Asked whether deleting a project would harm a sibling, a sweep of all 95
+project-scoped tables reported "nothing anywhere is owned by the old
+project" — and the delete then failed outright. The sweep was written as
+`if (error) continue`, so nineteen tables were never actually checked, and
+one of them was `dev_sessions`, whose `project_id` is the wrong TYPE. That
+table was both the answer to the question and the reason the operation
+broke, and it had been silently discarded.
+
+The re-probe was nearly as misleading: a `HEAD`-style count request returns
+no response body, so every one of those errors came back with an empty
+message. "Error, but blank" reads as noise rather than a finding.
+
+**Do this:** a sweep reports three numbers — checked, empty, and **could not
+check** — and the third is never folded into the second (§3.2). When a
+probe errors, print the code and the message before deciding it is
+uninteresting, and re-issue it in a form that actually returns an error body.
+An advisory given from a partial sweep should say which parts were partial.
+
+### 3.9 The second run is a different program — run it before you believe the first
+
+Reconciling the delraytennis import shipped three defects in one afternoon,
+all invisible on the first run and all obvious on the second:
+
+- The decisions file was rebuilt from the "still outstanding" list. A
+  decision that WORKED moved its page off that list, so the file silently
+  erased every call that succeeded — three operator decisions became zero
+  between two identical commands.
+- `createAsset` always inserts, and the blob copy it follows overwrites in
+  place. Applying twice registered all 73 images a second time; nothing
+  looked wrong anywhere except a library that had quietly doubled.
+- The image step asked "is this photo already on the page?" while counting
+  its own output, so a re-run would place nothing at all — freezing the page
+  on whatever shape the first run happened to write.
+
+**Do this:** anything that looks idempotent gets run twice and diffed
+before it is believed. A record rebuilt from what is *outstanding* loses
+what *succeeded* — rebuild from what is known and only ever add. An
+"already present" test must exclude the thing you are about to write.
+
+### 3.10 A write that normalizes to nothing looks exactly like a success
+
+The reconcile runner passed the section list in the shape the database
+COLUMN uses rather than the shape the serializer takes. The serializer does
+not reject it: it reads no sections and writes an empty page. Fourteen
+pages were emptied in one run, each one reporting "wrote 1 section", and
+the only reason it was caught is that the database was checked instead of
+the script's own output.
+
+**Do this:** read the record back immediately after writing it and compare
+it against what you sent — count and identity, not just "no error". Stop on
+the first mismatch, before the next record is touched, and print the
+restore command. A tool's own log is not evidence about the database.
 
 ---
 
@@ -377,6 +552,237 @@ site's menu. The smoke test asserts both halves: sr-only text goes, a
 **Do this:** when filtering out what a visitor "cannot see", enumerate why
 each thing is hidden. Hidden-forever and hidden-until-interaction are
 opposite cases wearing the same costume.
+
+### 5.10 The stores take arguments in an order that silently crosses tenants
+
+Three separate ways to read the wrong thing, all of which return data
+rather than erroring:
+
+- `listPages(limit, scope)` takes the LIMIT first. `listPages(scope)` reads
+  the scope as a limit and returns **every project's pages** — a survey of
+  one tenant reported 185 pages for a project that has none.
+- The stores return `{ ok, status, data }` envelopes, never the row. Reading
+  `job.status` off the envelope yields `200`, so a complete job reads as
+  status "200". Use a `must(res, what)` helper, as the other runners do.
+- The page-document input is NOT the column's shape. `layoutSections` must
+  be the ARRAY of sections; `{ sections: [...] }` is accepted and produces
+  an empty page (§3.10). Spread the whole page — passing `layoutSections`
+  alone silently resets `pageBackground` and `theme` to defaults.
+
+**Do this:** check the signature before calling a store, unwrap through
+`must()`, and for any multi-tenant read assert that what came back belongs
+to the project you asked for.
+
+### 5.11 A retired module name still works, which is why writing one is a bug
+
+`slideshow` and `slider` merged into `carousel`; the old names stay in
+`RETIRED_MODULE_TYPES` permanently so old documents keep loading. So a tool
+that emits `slideshow` is accepted, renders correctly, and leaves the
+document in a shape no current code writes — migrated on every single load
+until someone happens to save the page. Nothing reports anything.
+
+Worse, the folder's generated `lib/builder/template.js` predated the rename,
+so the test passed locally and failed only in CI, which builds fresh.
+
+**Do this:** assert that the type you emit survives the real serializer
+UNCHANGED, rather than asserting a hardcoded name — that way the next rename
+fails loudly instead of falling through the compatibility shim. And when a
+test disagrees between here and CI, rebuild the generated artifacts first
+(CLAUDE.md landmine 1); CI is the one with the honest copy.
+
+### 5.12 A list endpoint with a hard cap and no offset cannot report the truth
+
+`listAssets` capped at 2,000 rows with no way to page. The delraytennis job
+recorded 2,067, so a caller reading the first page could not distinguish a
+complete list from a truncated one — and would have quietly planned against
+67 missing assets.
+
+**Do this:** a capped list takes `{ limit, offset }` and callers page to
+exhaustion. If a cap must stay, return enough for the caller to detect it.
+
+### 5.13 Project ids are TEXT — a table that picks its own type breaks far more than itself
+
+`dev_sessions_setup.sql` declared `project_id BIGINT` while every project id
+on this platform is text (`proj_1780601126203_f3v0m1`). Postgres does not
+return zero rows for that, it refuses the query — so the column broke two
+unrelated things and neither pointed at it. Deleting **any** project failed,
+because the purge walks every project-scoped table and returns the first
+error; and scoping Ask Roger sessions to a project had never worked at all,
+which nobody noticed because every row had a NULL project. The operator's
+error message named a type, not a table.
+
+**Do this:** new project-scoped tables use `project_id TEXT`, matching
+`app_projects.id`. A routine that sweeps every table must survive one bad
+table and say which one — dying on the weakest member makes the whole
+operation impossible and names the wrong culprit. Report the defect rather
+than skipping it silently, or the schema stays broken forever (§3.2).
+
+### 5.14 A green suite still says nothing about appearance — but CSS is no longer untested
+
+Two defects reached the operator on 2026-08-16, hours apart, both in the same
+carousel work, both pure CSS, and every gate was green for both:
+
+- the card picture was pinned at a hard `height: 180px`, so `object-fit:
+  cover` cropped every poster and the Height control looked dead;
+- the card row still carried its scrollbar.
+
+Four tests were written alongside the first fix. **Three of them passed
+against the broken build**, because they read rendered markup and the fault
+was a declaration in a stylesheet. That is not a gap in those tests; it is
+the shape of every test in this repo. `check:ui` parses the CSS corpus but
+only for doctrine rules (breakpoint-only layout, tokens), and `check:panels`
+measures panel geometry, not module rendering.
+
+**Do this:** when a change is visual, the verification is a browser
+measurement or the operator's eye — say which one you did, and never let
+"947 tests passed" stand in for either. That has not changed and is the
+part of this rule that never expires.
+
+#### What now exists (2026-08-17), and exactly what it does not cover
+
+Three defects in the image-effects work were invisible to every gate — an
+effect offered for months with no stylesheet rule behind it, a `max-width`
+the browser silently threw away, and an iteration count that would have
+stopped the spin with the crossing. All three were caught by hand, driving a
+browser and reading computed styles, which is a harness rather than a habit.
+So it was built (#315, #318, #320, #322):
+
+| Check | Asks | Runs |
+|---|---|---|
+| `npm run check:css` | Which declarations did the browser actually KEEP? Plus: an `animation-name` with no keyframes, a `var(--x)` defined nowhere and given no fallback, a class the code emits that no stylesheet defines. | **CI, every PR**, ~1s |
+| `npm run check:render` | Does the rendered module animate, cap its size, and count its animations separately? Contracts in `scripts/ui/render-contracts.mjs`. | by hand, ~30s |
+| the differential (inside `check:render`) | Does changing a setting change ANYTHING a person could see? Every effect the panels offer must produce a live animation. | with the above |
+
+**What they do NOT cover, and this is the important half:**
+
+- **Nothing here can tell you a page looks good.** The differential proves
+  something changed, never that it changed *correctly* — it cannot tell a
+  bounce from a wobble. It is a dead-control detector, not a design reviewer.
+- `check:render` sees only what its contracts and registry name. A module
+  with no contract has no coverage.
+- Horizontal-overflow on a rendered page is **not** asserted anywhere: the
+  Builder preview shell clips it, so the assertion was written, tried, and
+  deleted when it could not be made to fail.
+- Only the `image` module family has real contracts today.
+
+So the first paragraph stands: **the verification for a visual change is
+still a browser measurement or the operator's eye.** These checks widen what
+a machine can notice; they do not replace looking.
+
+Three things learned building them, each of which turned a check that looked
+like it worked into one that did:
+
+1. `getComputedStyle().animationName` **reports animations the engine cannot
+   run** — with `animation: real 5s, ghost 5s` and no `ghost` keyframes it
+   returns `"real, ghost"`. Motion assertions use `getAnimations()`, which
+   lists only what is really running.
+2. `getComputedStyle` **enumerates custom properties**. Every effect setting
+   reaches the page as a `--sc-effect-*` variable, so a diff of computed
+   styles was comparing the SETTING to itself and passing on a control that
+   had been frozen dead. A variable nobody reads is the same species as a
+   class nobody styles.
+3. Reading a validity test off a shorthand is wrong: `border: none` sets
+   seventeen longhands and still reads back as an empty string. Count what
+   the declaration set, do not read the value back.
+
+For a specific declaration worth guarding, reading the stylesheet in a test
+still works and is still cheap (`builder-carousel-loop.test.ts` for the
+hidden scrollbar, `builder-template-preview-carousel.test.tsx` for the
+unpinned picture height). Treat each as a scar, not as coverage.
+
+### 5.15 Browser-only behaviour is only real in a browser
+
+The carousel's loop clones the card set, parks on the middle copy, and
+recentres once scrolling settles. Under SSR the container measures zero, so
+`overflows` is false, no clones render, and a markup test sees a plain row —
+it cannot fail. Driving a real browser found two defects nothing else would
+have: presses read off a half-finished scroll position were thrown away
+(eight clicks moved one card), and assigning `scrollLeft` at the seam
+cancelled the smooth scroll in flight, losing a step.
+
+**Do this:** drive the app for anything whose truth is a scroll position, a
+measured size, or a computed style (§5.9). Then pull the arithmetic out into
+pure functions and unit-test *those* — `builder-carousel-loop.ts` exists
+because the seam shift and the shorter-way-round step were the parts that
+were wrong twice, and the only parts that could be tested at all.
+
+### 5.16 A public page view still reads the whole project — measured, and cleared
+
+`getPublishedPageForProject` answers one page by calling
+`listPublishedPagesForProject`, which selects every public page of the project
+with its full `layout_sections`, resolves each canonical section against its
+master, enriches all of them with theme data, and then returns one. Its own
+comment says so on purpose: *"the payload win is in what crosses the WIRE, not
+in the query."*
+
+That is only reached when a project has never published — and as of 2026-08-17
+`builder_published_pages` is empty for every project, so it is the path every
+public page view takes. Publishing materialises each page and
+`lib/publishedPageRead.js` then answers with a single row.
+
+**This was investigated as the cause of the 2026-08-16 IO outage and ruled out**
+(§1.6): 626 calls, 99.9% cache-hit, 2 MB off disk. It is a latency and CPU cost
+— about 121 ms a call, growing with the page count — not a disk one.
+
+**Do this:** if you arrive here hunting IO, stop; it has been measured. If you
+arrive hunting latency, it is real, and there are two fixes: publish (free, no
+code, but it changes the operator's workflow from "edits are live" to "edits go
+live on Publish", which is a decision, not a cleanup), or select one row in SQL
+and accept that the publish/private filters and the frame resolution then exist
+twice.
+
+### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed`
+
+`position: fixed` means "fixed to the browser window" only while **no ancestor
+has a `transform`, `filter`, `perspective`, `backdrop-filter`, `will-change`
+naming one of those, or a paint/layout `contain`**. Any of them makes that
+ancestor the containing block instead, and every percentage, `vw`/`vh` and
+`inset` on the fixed element silently starts measuring from it.
+
+The trap is that **the value can be a no-op and the capture still happens**.
+`blur(0px)`, `scale(1)` and `translate(0)` change nothing you can see, and
+change everything about where a fixed child lands.
+
+Every themed builder column carried:
+
+```css
+backdrop-filter: blur(var(--lp-blur, 0));
+```
+
+and Container Blur defaults to 0. So every column on every themed page ran
+`backdrop-filter: blur(0px)` — invisible, and a containing block for anything
+fixed inside it. The proximity-effect module asked for the centre of the
+browser window and landed at the centre of whichever **cell** it had been
+dropped in; measured on the live site at 1600×900 it sat 232px right and 16px
+down of where it asked to be, and the offset was exactly the column's origin.
+Moving the module to a different cell moved the effect, which is the opposite
+of what `fixed` promises. Fixed 2026-08-18 (#327): `getBuilderThemeStyleVars`
+emits `--lp-backdrop` as the whole filter — the keyword `none` at zero — and
+`_builder-theme.css` reads that.
+
+**It was never about that module.** Any modal, dropdown, toast or overlay
+rendered with `position: fixed` inside a builder column had the same fate for
+as long as the rule existed. Nothing looked wrong in the stylesheet, and a
+zero-radius blur does not stand out in devtools unless you already suspect it.
+
+**No check covers this and none easily could.** `check:css` asks which
+declarations the browser KEPT — and it kept this one; the declaration is
+valid, applied, and doing exactly what it says. The fault is a side effect of
+a valid value, which is a different question from the one that harness asks.
+
+**Do this:**
+
+- Never emit a filter, transform or backdrop-filter for a zero setting. Emit
+  the keyword `none`. Build the whole property in the variable
+  (`--lp-backdrop: none`), never a bare number the stylesheet wraps in a
+  function it cannot opt out of.
+- When a fixed element lands somewhere unexplainable, walk its ancestors for
+  those six properties before doubting your own arithmetic. If the offset
+  equals some ancestor's origin, that ancestor is the containing block.
+- Positioning bugs are measured, not eyeballed: read
+  `getBoundingClientRect()` against the window centre and compare numbers.
+  Both halves of this one were found that way and neither was obvious on
+  screen.
 
 ---
 
@@ -578,6 +984,9 @@ Worth knowing before they cost an hour.
 | Google API key: `Requests from referer <empty> are blocked` | HTTP-referrer restriction on a key used **server-side** — a server sends no `Referer` | Application restrictions → None; restrict by **API** instead. Allow ~5 min to propagate; no redeploy needed |
 | `supabase start` prints no keys | Postgres was SIGKILLed (unclean Docker shutdown) | `docker start supabase_db_starcaster`, let it recover, then `supabase stop` && `supabase start`. Run `supabase stop` before shutting down the Mac |
 | X: "API key expired" / 401 after months of working | X invalidates tokens on password change, permission edits without regenerating, or key regeneration | Regenerate the Access Token **and** Secret; permissions must be Read and Write *before* generating |
+| Every tenant site 404s at once, each after ~10s, nothing deployed | Supabase unreachable — a quota or Disk IO limit, not code (§1.5) | `docs/runbook-supabase-capacity.md` |
+| Supabase project "unresponsive" while usage shows one meter over quota | **Spend cap on**: Supabase withholds service instead of billing the overage | Billing → Change spend cap → disable. Operator's decision; it costs money. **Standing decision (2026-08-17): the cap stays OFF** — if you find it on, it flipped back; see the standing-decision block in `docs/runbook-supabase-capacity.md` |
+| Restore stuck "Unhealthy" well past the promised 5 minutes | Disk IO budget also exhausted, so the restore itself is throttled | Restart the project (Settings → General → Restart) |
 
 **Local database:** `supabase/migrations/` is **not** the schema source of truth
 — it holds three files. `docs/SQL/*.sql`, applied by hand, is. Never run

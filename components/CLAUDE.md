@@ -24,12 +24,16 @@ Tests: `npm run test:builder-ui`.
 - **Width tokens:** `label` (230px), `select-sm` / `select-md` (ch-based),
   `num` (digit-sized via `BuilderNumberSelectControl`), `align`, `color`,
   `check`, `text-md`, `full` (own line).
-- **Spacing is four sides:** `marginTop/Bottom/Left/Right` and
-  `paddingTop/Bottom/Left/Right`, in that order, adjacent in the same
-  strip — never a lone "Margin", never a vertical/horizontal pair. Build
-  them from `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES` (or the
-  `marginFields()` / `paddingFields()` helpers) so the names and the
-  order cannot drift.
+- **Spacing is four sides, shown as two rows:** the keys are still
+  `marginTop/Bottom/Left/Right` and `paddingTop/Bottom/Left/Right` in that
+  order (E4) — never a lone "Margin", never a vertical/horizontal
+  *setting*. What renders is one row per axis, `V Margin` / `H Margin`,
+  each with a chain-link toggle that splits it into its two sides in place,
+  and each splitting on its own when the two sides already differ (E4b,
+  8/15). Never build these by hand: `marginFields()` / `paddingFields()` /
+  `spacingFields()` in a schema panel, `BuilderModuleSpacingFields` in a
+  hand-written strip — all from `builder-spacing-fields.tsx`, which owns
+  the labels, the side order, the legacy fallbacks and the toggle.
 - **Labels never wrap** (`white-space: nowrap`); shorten text instead.
 - **No Advanced section** (master rule A0, 8/13). There is no
   `<details class="hanging-details">` in a module panel and no `advanced:`
@@ -72,8 +76,75 @@ container to `scripts/ui/check_panels.mjs`, seed real content into
 `scripts/ui/seed_fixture.mjs` (an empty manager measures nothing and
 passes), and then **prove the check fails** by breaking the layout on
 purpose before you trust the pass.
-- Styles live in `src/css/_builder-react-overrides.css` and
-  `src/css/_builder-react.css` — see `src/css/CLAUDE.md`.
+- **New styles go in `src/css/_builder-react-overrides.css`.** Existing rules
+  also live in `src/css/_builder-react.css`, but that file is regenerated
+  wholesale and a hand edit there disappears at the next regeneration — read
+  it, never write it. See `src/css/CLAUDE.md`, first section.
+
+### Changing what a module RENDERS: `npm run check:render`
+
+`check:panels` measures the **editor**. What the visitor sees is measured by
+`check:render`, which drives a real browser over `builder-preview.html` and
+needs no database, no login and no fixture:
+
+```
+PORT=3058 node server.js
+UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:render
+```
+
+New rendering behaviour — markup, animation, or the CSS behind either — means
+a contract in `scripts/ui/render-contracts.mjs`. A CSS-only setting also wants
+a line in the differential registry in that file, which fails when a setting
+changes nothing a person could see.
+
+**Then break it on purpose and watch it fail before you believe the pass.**
+This caught two assertions here that could not fail: one that compared a
+setting to itself (the browser lists custom properties among computed styles,
+so `--sc-effect-*` changing WAS the "difference"), and one that measured
+animations parked at time zero, where a small hop and a huge hop sit in the
+same place.
+
+And a green run is not proof the page looks right. `docs/DOCTRINE.md` §5.14
+says exactly what these checks do and do not cover — the differential proves
+something changed, never that it changed correctly.
+
+## Image effects — read `docs/IMAGE_EFFECTS.md` first
+
+The `image` / `floating-image` motion settings (Cruise, Tumbleweed, Spin and
+the eight controls behind them). The doc carries the unit decisions, the
+two-element/three-property structure the motions need, and the four traps —
+including the one that started it: **a class name is not a rendering**. Two of
+these effects were offered for months with no stylesheet rule behind them, and
+an E7 audit walked straight past it because the setting DID reach a renderer.
+
+## Proximity effects — read `docs/PROXIMITY_EFFECTS.md` first
+
+The `tractor-nav` module (UI: TractorNav, filed under Special Effects) and the
+shared cursor-distance driver in `lib/builder-client/proximity-effects.ts`. The
+geometry is pure arithmetic and unit-tested there on purpose — it is the only
+part of an effect a test in this repo can hold still.
+
+Six traps, and none of them announced itself:
+
+- the rings rendered in a ROW, not concentrically, for two months on live
+  tenant sites, while the card preview in the same file drew them correctly;
+- an inline `transform` beat the animated one, so Spotlight rendered
+  pixel-identical to Glow and Glow only *appeared* to grow;
+- `mousemove` bound to an element at `z-index: -9999`, so the handler never
+  fired on a real page;
+- `check:panels` passed while measuring the panel two `visibleWhen`-gated
+  fields short;
+- and `backdrop-filter: blur(0px)` on every themed column captured the
+  module's `position: fixed` — see DOCTRINE §5.17, which is a platform trap,
+  not a module one.
+
+## Saved sections — read `docs/SAVED_SECTIONS.md` first
+
+`savedSectionId` and `canonical` are two different questions ("where did this
+come from" vs "does it still follow"), normalization strips both and
+`lib/builder/document.js` re-attaches them by hand, and saving one can rewrite
+40 other pages. The doc has the model, the fan-out, and the four ways this has
+already gone wrong.
 
 ## Adding a builder module type
 
@@ -92,7 +163,8 @@ raw user content.
 
 - Layout/style settings persist on the form record's `styles` JSON
   (`lib/crmFormStyles.js`)
-- Public rendering styles live in `src/css/_builder-react.css` — not
-  `_crm.css` (that's the admin preview)
+- Public rendering styles belong to the builder layer, not `_crm.css` (that's
+  the admin preview). Existing ones sit in `src/css/_builder-react.css`; add
+  new ones to `_builder-react-overrides.css` (that file is regenerated)
 - Module center/right alignment must not override the form's internal
   alignment

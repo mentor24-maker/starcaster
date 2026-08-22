@@ -34,6 +34,7 @@ const fs   = require('fs');
 const { handleRequest, logRegistry } = require('./routes/index');
 const { sendErr } = require('./routes/http');
 const { initTimerDaemon } = require('./lib/taskTimerDaemon');
+const { injectBanner } = require('./lib/environmentBanner');
 
 const PORT = Number(config.get('port')) || 3000;
 
@@ -58,6 +59,27 @@ function sendStaticFile(res, fullPath) {
       return res.end('Not found');
     }
     const ext = path.extname(fullPath);
+
+    // Stamp which database this copy is talking to across the top of the admin
+    // app. Done here rather than in the built HTML because the answer depends
+    // on the environment at REQUEST time, not at build time: switching
+    // databases must not require a rebuild to be visible, or the banner
+    // becomes a thing that lies (CLAUDE.md landmine 10 — the same shape as
+    // Vercel baking env vars in at build time).
+    //
+    // Only this file, which is the laptop dev server. The Vercel path in
+    // routes/publicSitePages.js is untouched, so nothing here runs on the
+    // request path that serves real tenant sites.
+    if (ext === '.html' && fullPath.endsWith('app-shell.html')) {
+      const stamped = Buffer.from(injectBanner(data.toString('utf8'), process.env.SUPABASE_URL), 'utf8');
+      res.writeHead(200, {
+        'Content-Type': MIME[ext],
+        'Content-Length': stamped.length,
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+      });
+      return res.end(stamped);
+    }
+
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'

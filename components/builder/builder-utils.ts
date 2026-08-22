@@ -404,9 +404,19 @@ export function getSectionBackgroundStyle(section: BuilderTemplateSection): CSSP
   return getBuilderBackgroundStyle(section.background);
 }
 
+/**
+ * The floor was 10 until 2026-08-17, and 10% of a column is not small.
+ * The operator's tennis ball sat in a 1120px column, so its smallest
+ * reachable size was 112px — and on a full-bleed section it would have been
+ * 192px. A decorative graphic had no way to be decorative.
+ *
+ * Lowering the floor cannot move an existing page: a value below 10 was
+ * clamped UP to 10 before, so no module has one stored, and no panel offered
+ * one. It only opens room underneath.
+ */
 export function getModuleWidthPercent(settings: Record<string, string>) {
   const size = Number.parseInt(settings.size ?? "100", 10);
-  return Math.min(Math.max(Number.isFinite(size) ? size : 100, 10), 100);
+  return Math.min(Math.max(Number.isFinite(size) ? size : 100, 5), 100);
 }
 
 export function getModuleWidthStyle(settings: Record<string, string>): CSSProperties {
@@ -487,12 +497,123 @@ export function getPlainTextModuleStyle(settings: Record<string, string>): CSSPr
   return Object.keys(style).length > 0 ? style : undefined;
 }
 
+const TEXT_BORDER_STYLES = new Set(["none", "solid", "dashed", "dotted"]);
+
+/**
+ * Frame + inner spacing for a text block: border, corner radius, the four
+ * padding sides, and the offset nudge. One reader shared by the editor
+ * canvas, the module thumbnail, and the live site, so the three surfaces
+ * cannot drift — same contract as `getImageModuleStyle`.
+ *
+ * Border and padding land on the same div `getTextModuleWidthStyle` sizes,
+ * so the frame wraps the text at its chosen Width rather than spanning the
+ * whole column. `box-sizing: border-box` keeps that Width honest once a
+ * border or padding exists — otherwise a 50%-wide padded block overflows
+ * its column by the padding.
+ */
+export function getTextModuleFrameStyle(settings: Record<string, string>): CSSProperties {
+  const borderWidth = Math.max(Number.parseInt(settings.borderWidth ?? "0", 10) || 0, 0);
+  const borderRadius = Math.max(Number.parseInt(settings.borderRadius ?? "0", 10) || 0, 0);
+  const borderStyle = TEXT_BORDER_STYLES.has(settings.borderStyle ?? "") ? settings.borderStyle : "solid";
+  const hasBorder = borderWidth > 0 && borderStyle !== "none";
+  const padding = getModuleInnerSpacingStyle(settings);
+  const hasPadding = Object.values(padding).some((value) => value !== "0px");
+  const nudgeTransform = getModuleNudgeTransform(settings);
+
+  return {
+    /*
+     * THE FILL IS PART OF THE FRAME (operator, 2026-08-15: "I want the
+     * background color constrained by the boundary").
+     *
+     * It used to be painted by the module WRAPPER in
+     * builder-template-preview.tsx, one box out — which is a different box
+     * in three ways: the wrapper spans the whole column while this div is
+     * as wide as the Width setting says, the wrapper has square corners
+     * while this one has the Radius, and the padding that holds the words
+     * off the border is inside here. So a 66%-wide green text block with a
+     * 20px radius rendered as a full-width green rectangle with square
+     * corners and a rounded border floating inside it.
+     *
+     * Painting it here puts the fill in the same box as the border, the
+     * radius and the padding, which is what "constrained by the boundary"
+     * means. The wrapper skips `text` now (same exclusion navigation, table
+     * and button already had, and for the same reason).
+     */
+    ...(getBuilderBackgroundStyle(getModuleBackgroundSettings(settings)) ?? {}),
+    ...(hasPadding ? padding : {}),
+    ...(hasBorder
+      ? { border: `${borderWidth}px ${borderStyle} ${settings.borderColor || "#214c71"}` }
+      : {}),
+    ...(borderRadius > 0 ? { borderRadius: `${borderRadius}px` } : {}),
+    ...(hasBorder || hasPadding ? { boxSizing: "border-box" as const } : {}),
+    ...(nudgeTransform ? { transform: nudgeTransform } : {})
+  };
+}
+
+/**
+ * A text block's vertical rhythm: how tall each line is, and how far apart the
+ * paragraphs sit. Two different quantities that look like one until the
+ * content is a stack of one-line paragraphs — a footer link column — where the
+ * line height has nothing to act on and the paragraph gap is the whole of the
+ * spacing. The operator hit exactly that on 2026-08-15 and had no control over
+ * either one.
+ *
+ * Both are omitted unless set, so an untouched block keeps inheriting the
+ * theme's `--bx-line-base` and the 0.9rem paragraph gap it shipped with.
+ * Line height is a plain inherited property, so a `line-height` still written
+ * on a `<span>` inside (imported content carries them) out-ranks this — which
+ * is why the editor's LH control clears those as it sets the paragraph.
+ */
+export function getTextModuleRhythmStyle(
+  settings: Record<string, string>
+): CSSProperties | undefined {
+  const style: Record<string, string> = {};
+
+  const lineHeight = Number.parseFloat(settings.lineHeight ?? "");
+  if (Number.isFinite(lineHeight) && lineHeight > 0) {
+    style.lineHeight = String(lineHeight);
+  }
+
+  // 0 is a real value here — paragraphs sitting flush is a legitimate look —
+  // so this checks only that the number parsed.
+  const paragraphGap = Number.parseFloat(settings.paragraphGap ?? "");
+  if (Number.isFinite(paragraphGap) && paragraphGap >= 0) {
+    style["--bx-para-gap"] = `${paragraphGap}px`;
+  }
+
+  return Object.keys(style).length > 0 ? (style as CSSProperties) : undefined;
+}
+
 export function getImageModuleStyle(settings: Record<string, string>): CSSProperties {
   const borderThickness = Number.parseInt(settings.borderThickness ?? "0", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "18", 10);
 
   return {
     ...getModuleWidthStyle(settings),
+    // A PICTURE NEVER RENDERS BIGGER THAN THE FILE IT CAME FROM (2026-08-17).
+    // Width is a share of the column, which says nothing about how many pixels
+    // the file actually has: the operator's 400px tennis ball at 25% of a
+    // full-bleed section was being blown up to ~480px, which is both larger
+    // than he wanted and softer than the file he uploaded. `max-content` on a
+    // figure whose image is `width: 100%` resolves to that image's own pixel
+    // width, so the frame stops there and the picture stays sharp.
+    //
+    // Only applied when there IS a picture. An empty module renders a text
+    // placeholder instead, and capping THAT at its max-content would shrink
+    // the drop target to the width of the words "Choose an image".
+    //
+    // Checked before shipping rather than reasoned about: 54 images across 12
+    // live pages on both tenant sites, none rendering more than 5% above its
+    // natural width, so no live page moves. (Nothing in this repo tests CSS —
+    // doctrine 5.13 — so the survey IS the evidence.)
+    // `max-content` on its own, NOT `min(100%, max-content)` — the tidier
+    // looking version is invalid CSS and the browser drops the whole
+    // declaration, which is how the first cut of this shipped a cap that
+    // computed to `none`. Intrinsic keywords are not allowed inside `min()`.
+    // Nothing is lost: `max-width` can only ever shrink a box, so the 100%
+    // guard it replaces was already unreachable — `width` here is a
+    // percentage of the container and cannot exceed it.
+    ...(settings.url ? { maxWidth: "max-content" } : {}),
     // Padding sits INSIDE the frame — between the border and the picture —
     // which is the half of "all margin and padding" the image module never
     // had (operator, 2026-08-11). Margin, the space outside the frame, comes
@@ -1501,6 +1622,21 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   vars["--lp-border-thickness"] = `${borderThickness}px`;
   vars["--lp-radius"] = `${borderRadius}px`;
   vars["--lp-blur"] = `${containerBlur}px`;
+  /*
+   * The backdrop-filter as a WHOLE, so it can be the keyword `none` rather
+   * than a zero-radius blur.
+   *
+   * `backdrop-filter: blur(0px)` is visually nothing and structurally
+   * enormous: any value other than `none` makes the element a containing
+   * block for `position: fixed` descendants. Container Blur defaults to 0, so
+   * every themed column on every page was quietly capturing anything fixed
+   * inside it — the proximity module asked to sit at the centre of the window
+   * and landed at the centre of whichever cell it happened to be in, and any
+   * modal or overlay rendered inside a column had the same fate.
+   *
+   * --lp-blur is left in place because legacy.css still reads it.
+   */
+  vars["--lp-backdrop"] = containerBlur > 0 ? `blur(${containerBlur}px)` : "none";
   vars["--lp-filter"] = contrastLevel > 0 ? `contrast(${1 + contrastLevel / 100})` : "none";
   vars["--bx-theme-padding-top"] = `${topMargin}px`;
   vars["--bx-theme-padding-bottom"] = `${bottomMargin}px`;

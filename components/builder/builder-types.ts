@@ -140,8 +140,12 @@ export const modulePaletteGroups: Array<{
   { value: "social-share", label: "Social Share", icon: "↗", description: "Share buttons with dynamic post text from the current poll." },
   { value: "social", label: "Social", icon: "@", description: "Linked rows of social icons and profile badges." },
   { value: "table", label: "Tables", icon: "⊞", description: "Data tables with configurable columns and rows." },
-  { value: "slider", label: "Sliders", icon: "⇆", description: "Horizontally scrollable bars of managed cards." },
-  { value: "slideshow", label: "Slideshow", icon: "🖼", description: "Full-width auto-rotating image slideshow." },
+  {
+    value: "carousel",
+    label: "Carousel",
+    icon: "⇆",
+    description: "An ordered row of images or cards, shown one at a time or several at once."
+  },
   {
     value: "feature-cards",
     label: "Feature Cards",
@@ -166,7 +170,7 @@ export const modulePaletteGroups: Array<{
     value: "special-effects",
     label: "Special Effects",
     icon: "🪄",
-    description: "Confetti bursts and saved celebration effects for buttons, page load, and the game layer."
+    description: "Confetti bursts, proximity effects that answer the cursor, and saved celebration effects for buttons, page load, and the game layer."
   },
   {
     value: "admin",
@@ -189,15 +193,31 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { variant: "site-nav" }
   },
   {
+    // Filed under Special Effects, not Navigation (2026-08-17). It is a
+    // decorative cursor effect that happens to be able to carry a link, and
+    // the operator looked for it under Special Effects and Images before
+    // asking where it was. The id keeps its "navigation-" prefix because it is
+    // persisted on saved modules; only the browsing group moved.
     id: "navigation-tractor-nav",
     type: "tractor-nav",
-    group: "navigation",
+    group: "special-effects",
     label: "TractorNav",
     icon: "⊙",
-    description: "Proximity-aware overlay: concentric hover rings that pulse as the cursor approaches a center link.",
+    // The label stays TractorNav — it is the name in the docs, the tickets and
+    // the operator's head. The words people would actually SEARCH for live
+    // here instead, because scoreModuleMatch reads the description too.
+    description: "Proximity effect: a dot that answers the cursor. Rings (concentric circles), Glow, Spotlight or Swell, and it can carry a link.",
     name: "",
     text: "",
     settings: {
+      // "rings" is the original effect and stays the default, so a module
+      // added before the Effect picker existed keeps drawing what it drew.
+      effect: "rings",
+      // "window" is what the module has always done; changing the default
+      // would move every effect already on a page.
+      placement: "window",
+      reach: "460",
+      falloff: "2",
       color: "#0000ff",
       dotSize: "10",
       dotHoverColor: "#ffffff",
@@ -660,27 +680,34 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     text: "",
     settings: { variant: "standard" }
   },
+  /* Two tiles, one module type (operator, 2026-08-16: "keep both tiles").
+     `slideshow` and `slider` merged into `carousel`; the tiles survive as
+     PRESETS because they are how an operator thinks about the choice — you
+     know whether you want one big picture or a shelf of cards before you
+     place anything. All either tile does is preset `format`, and the Format
+     dropdown in the panel flips between them afterwards without rebuilding
+     the module or retyping its content. */
   {
-    id: "slider-standard",
-    type: "slider",
-    group: "slider",
-    label: "Card Slider",
-    icon: "⇆",
-    description: "A horizontal scroller of cards that can hold linked visual highlights.",
-    name: "",
-    text: "",
-    settings: { variant: "standard" }
-  },
-  {
-    id: "slideshow-standard",
-    type: "slideshow",
-    group: "slideshow",
+    id: "carousel-slideshow",
+    type: "carousel",
+    group: "carousel",
     label: "Slideshow",
     icon: "🖼",
-    description: "A full-width auto-rotating slideshow of images.",
+    description: "One image at a time, full width, advancing on its own.",
     name: "",
     text: "",
-    settings: {}
+    settings: { format: "slideshow" }
+  },
+  {
+    id: "carousel-cards",
+    type: "carousel",
+    group: "carousel",
+    label: "Card Slider",
+    icon: "⇆",
+    description: "A horizontal shelf of linked cards with images and copy.",
+    name: "",
+    text: "",
+    settings: { format: "cards" }
   },
   {
     id: "feature-cards-standard",

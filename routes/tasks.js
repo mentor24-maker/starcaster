@@ -223,14 +223,13 @@ async function notifyAssignee(task, action) {
           parent_id: chatRes.data.id
         });
 
-        if (agentProcessingRes.ok && agentProcessingRes.data && typeof fetch === 'function') {
-           // We do a "fire and forget" local trigger for the agent to wake up immediately.
-           fetch('http://127.0.0.1:3000/api/develop/devAgent/worker', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ sessionId: task.session_id, chatId: agentProcessingRes.data.id, respondingAgent: task.assignee })
-           }).catch((e) => console.error('[Task API] fetch error triggering worker:', e));
-        }
+        // The Dev Agent worker this used to wake no longer exists (retired
+        // 2026-08-17). The trigger is not removed only because the route went:
+        // it had never worked. It posted to 127.0.0.1:3000 — the local dev
+        // server listens on 3001, and on Vercel localhost reaches nothing at
+        // all — with the failure swallowed by .catch(), so it logged and
+        // carried on from the day it shipped.
+        void agentProcessingRes;
       }
     } catch (err) {
       console.error('[Task API] Failed to notify assignee:', err);

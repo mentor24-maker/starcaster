@@ -114,6 +114,228 @@
   color: #e5e7eb;
 }
 
+/* "Explore" — the way into the product tour at /explore, and the one
+   invitation on this screen.
+
+   Centred under the BODY COPY, not under the whole column: the column is
+   52.5rem wide while the copy caps at 43.75rem, so centring in the column
+   would drift the word right of the text it belongs to. Matching the copy's
+   own width expression keeps the two locked together at every size. */
+.auth-intro-explore {
+  display: block;
+  align-self: flex-start;
+  width: min(43.75rem, 100cqw);
+  /* The copy column itself overflows the viewport on a phone (a pre-existing
+     landing-page bug — the sign-in card's form will not shrink below ~443px
+     and it sets the single-column grid track). Centring inside an overflowing
+     box pushed the word off the right edge, so cap this element at the width
+     actually on screen: it then centres in what the reader can see. On any
+     screen wide enough for the copy to fit, this cap never applies. */
+  max-width: calc(100vw - 2.5rem);
+  margin: 0;
+  padding: 0.25rem 0;
+  text-align: center;
+  /* Poppins matches the logo's letterforms — geometric, single-storey 'a',
+     circular bowls — and italic caps echo the slant of the Starcaster
+     wordmark itself. Already loaded for the Builder, so it costs no request.
+     (Century Gothic is the closer match but is a system font many machines
+     lack; Questrial and Didact Gothic match too but ship at weight 400 only,
+     so neither can carry "bolder".) */
+  font-family: 'Poppins', 'Century Gothic', system-ui, sans-serif;
+  font-size: clamp(2.52rem, 4.32vw, 3.9rem);
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  /* letter-spacing also trails the final letter, which drags the word half a
+     space left of true centre. Indenting by the same amount puts it back. */
+  text-indent: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: var(--brand-explore-ink, #030382);
+  text-decoration: none;
+
+  /* --halo is the volume dial, 0 (far away) to 1 (cursor on the L at the
+     centre of the word). public/shared/exploreLink.js writes it from the
+     cursor's distance — the same idea the tractor-nav module uses, except
+     continuous rather than in discrete rings. The value here is the resting
+     one, so the halo still burns with JS off, on a phone, or before the
+     script has seen its first mouse move. */
+  --halo: 0.42;
+
+  /* A white outline on the LETTERS, fixed at every distance — this is what
+     stands alone at rest once the pill has faded out from under it.
+
+     text-shadow has no spread, so stacking centred copies only ever piles up
+     density against the glyph; it cannot push a shape outward. Offsetting
+     copies around a circle can — but a wide ring of near-opaque copies reads
+     as a balloon, an inflated collar with its own edge, which is what the
+     first version was. A glow instead wants the brightness packed AGAINST
+     the letters and falling away: a tight 5px ring, blurred wider than its
+     own radius, at half alpha so the overlaps build intensity rather than
+     opacity — then two centred layers to carry the falloff out.
+
+     Applied here rather than on the word span so it lands on the text only —
+     ::before carries no text, so it is untouched by this. */
+  text-shadow:
+    5px 0 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    3.5px 3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    0 5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    -3.5px 3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    -5px 0 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    -3.5px -3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    0 -5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    3.5px -3.5px 9px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5),
+    0 0 16px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.55),
+    0 0 28px rgba(var(--brand-halo-rgb, 255, 255, 255), 0.35);
+}
+
+/* The halo is drawn on this inner span, which is only as wide as the word.
+   isolation + a negative z-index put it behind the letters without escaping
+   into the page: inline text always paints above a negative-z-index child of
+   the same stacking context. */
+.auth-intro-explore-word {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+
+/* text-shadow cannot do this: it has blur but no SPREAD, so it can only ever
+   feather outward from the letterforms and never lay down a solid body of
+   light behind them. A box-shadow can, so the halo is a white plate sized to
+   the word plus three spreading blurs — the plate makes the word sit ON white,
+   the blurs carry the fade out from there.
+
+   The plate is absent at rest and GROWS out of nothing as the cursor closes:
+   it scales from zero while it fades in, so approaching opens the light up
+   rather than switching a fixed shape on. Every radius, spread and alpha is
+   driven off --halo as well, so the growth compounds. */
+.auth-intro-explore-word::before {
+  content: '';
+  position: absolute;
+
+  /* --halo rests at 0.42 rather than 0, so driving anything off it directly
+     would leave the plate half-present at rest. --swell re-bases it: 0 when the
+     cursor is away, 1 on the centre letter. max() floors it, because a
+     negative blur radius is invalid and CSS drops the whole declaration
+     silently when it sees one. */
+  --swell: max(0, (var(--halo) - 0.42) / 0.58);
+
+  /* How far the oval's edge is feathered. In em so it tracks the responsive
+     font size, and read by both the blur and the inset below. */
+  --fuzz: 0.28em;
+
+  /* An OVAL, not a pill. The difference matters for sizing: a pill's straight
+     flanks sit flush against the text, but an ellipse curves away from its own
+     corners, so a box merely wrapping the word would let the E and the final E
+     poke out through the curve. An ellipse with semi-axes a and b contains a
+     half-width w and half-height h only while (w/a)² + (h/b)² ≤ 1; these
+     insets put the word's corners at ~0.90 of that limit, leaving margin for
+     the wider letterforms other sizes produce.
+
+     Then grown by --fuzz on every side to pay for the blur. A Gaussian blur of
+     radius r leaves the half-opacity contour on the original edge and eats r
+     inward from full opacity, so an unpadded box would hand back a plate whose
+     solid centre no longer reaches under the letters. Growing by exactly r
+     puts the solid core back where the hard-edged version had its edge. */
+  inset: calc(-0.32em - var(--fuzz)) calc(-1.15em - var(--fuzz));
+  z-index: -1;
+  border-radius: 50%;
+
+  /* The fuzzy edge. border-radius gives a mathematically exact ellipse — a
+     visible hard line where white meets galaxy, which reads as a plate laid on
+     the page rather than as light. Blurring the whole pseudo-element dissolves
+     that line and softens the box-shadow layers with it, so plate and glow
+     become one continuous falloff.
+
+     filter is applied in the element's own coordinate space and transform maps
+     the result, so the scale below shrinks the blur along with everything
+     else — a half-size oval gets half the feather, which is what keeps the
+     small early stages from looking like fog. */
+  filter: blur(var(--fuzz));
+
+  /* Grows out of nothing. transform-origin is the default centre, so it opens
+     from the middle of the word in both directions at once. */
+  transform: scale(var(--swell));
+
+  /* The plate is PURE white and fades in as a whole, rather than sitting there
+     permanently at partial alpha. That distinction is what makes it read as
+     white rather than off-white: a 0.88-alpha white over a dark galaxy
+     composites to grey, however white the colour value says it is. Fading the
+     element's opacity instead means the plate is either absent or genuinely
+     full white, never a muddy blend of the two. */
+  opacity: var(--swell);
+  background: rgb(var(--brand-halo-rgb, 255, 255, 255));
+  box-shadow:
+    0 0 calc(6px + var(--swell) * 20px) calc(1px + var(--swell) * 6px)
+      rgba(var(--brand-halo-rgb, 255, 255, 255), 0.9),
+    0 0 calc(14px + var(--swell) * 54px) calc(2px + var(--swell) * 14px)
+      rgba(var(--brand-halo-rgb, 255, 255, 255), 0.72),
+    0 0 calc(24px + var(--swell) * 74px) calc(5px + var(--swell) * 17px)
+      rgba(var(--brand-halo-rgb, 255, 255, 255), 0.5);
+  /* Short, so following the cursor still feels immediate, but long enough to
+     smooth the jump back to resting when the pointer leaves. */
+  transition: opacity 0.12s linear, transform 0.12s linear,
+    box-shadow 0.12s linear;
+}
+
+/* Pointer on the word, and the keyboard equivalent. Also the whole effect's
+   fallback: with no JS, --halo never moves, so hover alone still takes the
+   halo to full. */
+.auth-intro-explore:hover,
+.auth-intro-explore:focus-visible {
+  --halo: 1;
+}
+
+/* Clicked: the halo snaps shut first, so the flash that follows reads as the
+   word igniting rather than as a glow that merely got bigger. */
+.auth-intro-explore.is-igniting,
+.auth-intro-explore.is-igniting:hover {
+  text-shadow: none;
+  transition: text-shadow 0.14s ease-in, color 0.14s ease-in;
+}
+
+/* The bloom: a white circle from the centre of the word, solid to 60% of its
+   radius and feathered from there, scaled until the solid part clears the
+   furthest corner. Sizing and origin are set in public/shared/exploreFlash.js,
+   which also holds navigation back until this finishes. */
+.explore-flash {
+  position: fixed;
+  z-index: 9999;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+  transform: translateZ(0) scale(0);
+  transition-property: transform;
+  /* Bursts, then eases out. The curve leaves the origin at a steep slope and
+     flattens hard toward the end (an "ease-out-expo"), so the circle throws
+     itself open and then drifts the last of the way — the previous curve was
+     the mirror of this and crept before it rushed. */
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  background: radial-gradient(
+    circle closest-side,
+    var(--on-media-ink, #fff) 0%,
+    var(--on-media-ink, #fff) 60%,
+    rgba(255, 255, 255, 0.85) 78%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+/* Keyboard users get the glow too, plus a ring — a glow alone is a colour
+   change, and colour alone is not a focus indicator. */
+.auth-intro-explore:focus-visible {
+  outline: 2px solid var(--brand-electric-bright, #7df9ff);
+  outline-offset: 8px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-intro-explore { transition: none; }
+  /* The plate now scales as well as fades, which is motion in its own right.
+     Killing the transition leaves the effect intact — the cursor still opens
+     the light — but it snaps to each size rather than sliding between them. */
+  .auth-intro-explore-word::before { transition: none; }
+}
+
 .auth-logo {
   width: min(100%, 840px);
   height: auto;

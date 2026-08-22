@@ -62,7 +62,11 @@
 .builder-react-root .builder-meta-grid,
 .builder-react-root .builder-gallery-grid,
 .builder-react-root .builder-gallery-card,
-.builder-react-root .builder-gallery-modal,
+/* The popped-out module editor is deliberately rounder (40px, operator
+   2026-08-15) and this blanket rule carries an `!important`, so it won a
+   40px it was never asked about. Excluded by name rather than answered with
+   a second `!important`: one of those is a conflict, two is an arms race. */
+.builder-react-root .builder-gallery-modal:not(.builder-centered-modal),
 .builder-react-root .builder-gallery-empty,
 .builder-react-root .builder-workspace-empty,
 .builder-react-root .builder-editor-popup,
@@ -1066,52 +1070,196 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-decoration: none;
 }
 
-/* --- Card Slider: desktop layout ------------------------------------------
-   The slider module's layout rules (flex row, card sizing, positioned image
-   frame) existed ONLY inside @media (max-width: 900px) in
-   _builder-react.css, so above 900px the cards had no styling and each
-   `fill` image escaped its card to span the page — the module effectively
-   showed one giant photo instead of a scrollable row. Found 2026-08-06
-   comparing the imported Delray slider against the new slideshow module.
-   Card width/gap still come from the module's inline settings; these rules
-   only supply the structure the mobile block always assumed. -------------- */
+/* --- Carousel module (type: carousel) -------------------------------------
+   One module, two formats. `slideshow` and `slider` were separate module
+   types until 2026-08-16; they held the same thing (an ordered row of items
+   you move through) with two settings hard-coded at opposite extremes, so
+   neither could borrow the other's behaviour. `format` is that choice now.
 
-.builder-react-root .builder-preview-slider-wrap {
+   Structure is shared and the format modifiers change only what has to
+   change — the frame's overflow behaviour and how an item is sized. Arrows,
+   dots and captions belong to the wrap, so they sit identically over both.
+
+   Standard 3: every structural rule lives here at full strength, NOT inside
+   a breakpoint. The Card Slider shipped with its entire desktop layout
+   trapped in `@media (max-width: 900px)` and rendered as one giant photo
+   above that width for its whole life (found 2026-08-06). The breakpoint
+   block at the bottom only ADJUSTS what is already set here.
+   ------------------------------------------------------------------------ */
+
+/* `display: block` is load-bearing, not decoration. The module shell is a
+   flex container and its children inherit rules that make them flex too; as a
+   flex item inside a flex wrap the frame's `height` stopped taking effect and
+   a 420px slideshow rendered at its first image's natural height instead.
+   Neither retired module had a wrapper element, so neither ever hit this. */
+.builder-react-root .builder-preview-carousel-wrap {
+  display: block;
   position: relative;
+  width: 100%;
   max-width: 100%;
 }
 
-.builder-react-root .builder-preview-slider {
-  display: flex;
+/* The same rule again at the specificity it takes to hold it.
+   A section containing any poll module gets `builder-preview-section-poll-row`,
+   whose `.builder-preview-module > *` turns EVERY module in that row into a
+   column flex box with `flex: 1; min-height: 0` — which shrinks a carousel
+   below the Height the operator set. That rule is (0,3,0) with a child
+   combinator and beats the (0,2,0) above, so this one matches it and wins on
+   order (_builder-react-overrides.css is imported after _builder-react.css).
+   Both retired modules had this same collision and neither ever fixed it. */
+.builder-react-root .builder-preview-module > .builder-preview-carousel-wrap {
+  display: block;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.builder-react-root .builder-preview-carousel {
+  position: relative;
+  width: 100%;
   max-width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.builder-react-root .builder-preview-carousel-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--ink-secondary);
+  background: var(--bg-page);
+  border-radius: 8px;
+}
+
+/* --- Slideshow format: one item fills the frame --- */
+
+/* `height: 100%` on both, so a Height setting on the frame actually reaches
+   the picture. With Height on auto it resolves to auto and the image keeps
+   its own proportions — the default the retired slideshow shipped with. */
+.builder-react-root .builder-preview-carousel-track {
+  display: flex;
+  height: 100%;
+  transition: transform 600ms ease;
+}
+
+.builder-react-root .builder-preview-carousel-slide {
+  position: relative;
+  flex: 0 0 100%;
+  min-width: 100%;
+  height: 100%;
+}
+
+.builder-react-root .builder-preview-carousel-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.builder-react-root .builder-preview-carousel-anim-fade {
+  min-height: 200px;
+}
+
+.builder-react-root .builder-preview-carousel-anim-fade .builder-preview-carousel-fade-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 600ms ease;
+}
+
+/* The first frame stays in flow so the container can still take its height
+   from the image when Height is left on auto — absolutely positioning every
+   frame would collapse the box to nothing. */
+.builder-react-root .builder-preview-carousel-anim-fade .builder-preview-carousel-fade-frame:first-child {
+  position: relative;
+}
+
+/* --- Card slider format: several items share the frame --- */
+
+/* The row still SCROLLS — a visitor can swipe or drag it, and the arrows and
+   the timer both move it by scrolling — but the scrollbar itself is gone
+   (operator, 2026-08-16). A shelf of cards is not a document; the bar under
+   it read as page furniture and gave away that the loop had ends.
+
+   All three properties are needed for the one effect: Firefox honours
+   `scrollbar-width`, older Edge `-ms-overflow-style`, and everything
+   WebKit/Blink needs the pseudo-element. The `padding-bottom: 4px` that used
+   to reserve room for the bar goes with it. */
+.builder-react-root .builder-preview-carousel-cards {
+  display: flex;
   overflow-x: auto;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.builder-react-root .builder-preview-slider-card {
+.builder-react-root .builder-preview-carousel-cards::-webkit-scrollbar {
+  display: none;
+}
+
+.builder-react-root .builder-preview-carousel-card {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   scroll-snap-align: start;
 }
 
-.builder-react-root .builder-preview-slider-image {
+/* NO height here — it comes from the Height setting as an inline style, or
+   not at all.
+
+   This rule carried a hard `height: 180px` for one day. It was put there to
+   stop a card taking its photo's full 1920px height, which the retired Card
+   Slider avoided only because it rendered through next/image `fill`. But a
+   fixed box plus `object-fit: cover` crops every picture to that box, so a
+   poster lost its top and bottom and the Height control could not give them
+   back (operator, 2026-08-16). The card's WIDTH already bounds the picture;
+   its height should follow the picture unless the operator says otherwise. */
+.builder-react-root .builder-preview-carousel-card-image {
   position: relative;
   width: 100%;
-  min-height: 180px;
   overflow: hidden;
   border-radius: 8px;
 }
 
-.builder-react-root .builder-preview-slider-image img {
+/* `height: 100%` resolves against the box: to the Height setting when there
+   is one (so `object-fit: cover` crops to it, deliberately), and to auto when
+   there is not (so the picture keeps its own proportions and nothing is cut
+   off). One rule, both behaviours, no branch. */
+.builder-react-root .builder-preview-carousel-card-image img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  display: block;
 }
 
-/* The scroll arrows had no styling at all — they rendered as bare buttons
-   in the text flow instead of overlaying the strip. */
-.builder-react-root .builder-preview-slider-arrow {
+.builder-react-root .builder-preview-carousel-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 2px 0;
+}
+
+.builder-react-root .builder-preview-carousel-card-copy p {
+  margin: 0;
+}
+
+/* An item's link wraps the whole item, so it must not restyle it — and it
+   must not interrupt the height chain either. The picture sizes itself with
+   `height: 100%`, which resolves against its PARENT; with the link in between
+   at auto height, a linked slide ignored the frame's Height and rendered at
+   its photo's natural size. An unlinked slide beside it obeyed. */
+.builder-react-root .builder-preview-carousel-link {
+  display: block;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* --- Manual controls, shared by both formats ---
+   Neither module had both: the slideshow could not be moved by a visitor at
+   all, and the card slider had arrows but no dots. */
+
+.builder-react-root .builder-preview-carousel-arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
@@ -1119,10 +1267,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--border-light, #d1d5db);
+  border: 1px solid var(--border-light);
   background: rgba(255, 255, 255, 0.92);
-  color: var(--ink-primary, #18324a);
-  font-size: 20px;
+  color: var(--ink-primary);
+  font-size: var(--text-xl);
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -1131,8 +1279,237 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
 
-.builder-react-root .builder-preview-slider-arrow-left { left: 6px; }
-.builder-react-root .builder-preview-slider-arrow-right { right: 6px; }
+.builder-react-root .builder-preview-carousel-arrow[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.builder-react-root .builder-preview-carousel-arrow-left { left: 6px; }
+.builder-react-root .builder-preview-carousel-arrow-right { right: 6px; }
+
+.builder-react-root .builder-preview-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.builder-react-root .builder-preview-carousel-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-preview-carousel-dot.is-current {
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
+}
+
+/* --- Captions (slideshow format) ---
+   The card formats shows title/copy BESIDE the picture; a slideshow item
+   fills the frame, so the same fields appear over it. Off by default, so no
+   slideshow that predates the merge gains text it never had.
+
+   The gradient is on the caption rather than the frame: a photo can be light
+   or dark anywhere, and text over an unknown image is the one place a
+   readability floor cannot be left to the theme. */
+.builder-react-root .builder-preview-carousel-caption {
+  position: absolute;
+  z-index: 1;
+  max-width: min(560px, 80%);
+  padding: 12px 16px;
+  border-radius: 8px;
+  /* Not theme-following, on purpose — see --on-media-ink in _variables.css.
+     This type sits over a photograph nobody has seen, so its contrast cannot
+     be delegated to a tenant theme that might resolve pale-on-pale. */
+  background: var(--on-media-scrim);
+  color: var(--on-media-ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.builder-react-root .builder-preview-carousel-caption strong {
+  display: block;
+  font-size: var(--text-lg);
+  line-height: 1.25;
+}
+
+.builder-react-root .builder-preview-carousel-caption p {
+  margin: 4px 0 0;
+  font-size: var(--text-md);
+  line-height: 1.4;
+}
+
+.builder-react-root .builder-preview-carousel-caption-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-preview-carousel-caption-bottom-left {
+  left: 24px;
+  bottom: 24px;
+}
+
+.builder-react-root .builder-preview-carousel-caption-bottom-center {
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-carousel-caption-top-left {
+  left: 24px;
+  top: 24px;
+}
+
+.builder-react-root .builder-preview-carousel-caption-top-center {
+  left: 50%;
+  top: 24px;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-carousel-caption-center {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+/* --- The canvas card: a glance at the module, not the module --- */
+
+.builder-react-root .builder-module-preview-carousel {
+  position: relative;
+}
+
+.builder-react-root .builder-module-preview-carousel img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.builder-react-root .builder-module-preview-carousel-count {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background: rgba(17, 24, 39, 0.75);
+  color: var(--bg-surface);
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.builder-react-root .builder-module-preview-carousel-cards {
+  display: flex;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-module-preview-carousel-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.builder-react-root .builder-module-preview-carousel-card img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.builder-react-root .builder-module-preview-carousel-card-copy p {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+
+/* --- The settings panel's item sub-row ---
+   Link, link label, alt/caption title and description ride a row spanning the
+   item grid, which is what the sub-row mechanism exists for (see the item
+   grid block below). W0: the COLUMN is the grid — these fields declare no
+   widths of their own, the auto-fit tracks measure them. */
+.builder-react-root .builder-carousel-item-sub {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16ch, 1fr));
+  gap: var(--space-2, 6px) var(--space-3, 8px);
+  align-items: start;
+}
+
+.builder-react-root .builder-carousel-item-sub-full {
+  grid-column: 1 / -1;
+}
+
+/* --- Carousel: alignment and narrow screens ---
+   The retired types were named in alignment and mobile rules inside
+   _builder-react.css, which is regenerated wholesale and must not be
+   hand-edited (CLAUDE.md). Their carousel equivalents live here instead, so
+   the merged module keeps the behaviour both halves already had. */
+.builder-react-root .builder-preview-module-shell.is-align-center .builder-preview-carousel-wrap {
+  justify-self: center;
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-module-shell.is-align-right .builder-preview-carousel-wrap {
+  justify-self: end;
+  text-align: right;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-wrap,
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel {
+  max-width: 100%;
+}
+
+/* A card sized for a desktop shelf leaves no room for the next one on a
+   phone, so the width setting yields to a viewport-relative one — the
+   !important overrides the module's own inline minWidth, which is the only
+   way an inline style can be answered. */
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-card {
+  width: min(82vw, 320px) !important;
+  min-width: min(82vw, 320px) !important;
+  scroll-snap-align: start;
+}
+
+/* No min-height on a phone either — same reason. The card is already narrow,
+   so a picture at its own proportions is short, not sprawling. */
+
+/* A caption inset 24px from the edge of a phone-width photo leaves almost no
+   line to read, and its type has to come down with it. */
+.builder-react-root .builder-preview-device-mobile .builder-preview-carousel-caption {
+  max-width: 92%;
+  padding: 8px 10px;
+}
+
+@media (max-width: 900px) {
+  .builder-react-root .builder-preview-carousel-wrap,
+  .builder-react-root .builder-preview-carousel {
+    max-width: 100%;
+  }
+  .builder-react-root .builder-preview-carousel-card {
+    width: min(82vw, 320px) !important;
+    min-width: min(82vw, 320px) !important;
+    scroll-snap-align: start;
+  }
+
+  .builder-react-root .builder-preview-carousel-caption {
+    max-width: 92%;
+    padding: 8px 10px;
+  }
+  .builder-react-root .builder-preview-carousel-caption strong {
+    font-size: var(--text-md);
+  }
+  .builder-react-root .builder-preview-carousel-caption p {
+    font-size: var(--text-base);
+  }
+}
 
 /* ---------------------------------------------------------------------
    Feature Cards module (type: feature-cards)
@@ -1695,6 +2072,40 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-decoration: none;
 }
 
+/* --- Navigation panel: the Links list -------------------------------- */
+
+/* Children indent one step per level while KEEPING a top-level row's
+   field widths: the indent is paid back on the right, so the row slides
+   right instead of shrinking, and a child's action icons deliberately
+   sit beyond the top-level ones (operator, 2026-08-14). The header row
+   and top-level rows carry no depth, so the var falls back to 0. The
+   cell panel is overflow: visible, so the overhang draws rather than
+   clips. */
+.builder-react-root .builder-nav-item-row {
+  margin-left: calc(var(--nav-item-depth, 0) * 26px);
+  margin-right: calc(var(--nav-item-depth, 0) * -26px);
+}
+
+/* The canonical table-header band (_tables.css: black on white, bold) —
+   the Links list is a table in everything but markup, and its headers
+   used to be 11px muted mini-caps that read as hints, not headers
+   (operator, 2026-08-14: "make proper headers out of these"). Tokens
+   rather than the literal hexes _tables.css predates: --ink-primary is
+   the canonical black, --bg-surface the canonical white. The 8px side
+   padding lines the header text up with the text inside the selects
+   below, which carry about the same internal inset. */
+.builder-react-root .builder-nav-items-header {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--ink-primary, #18324a);
+  color: var(--bg-surface, #ffffff);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+}
+
 /* --- Navigation panel: the mega menu's extra column -------------------- */
 
 /* "+ Add Link", "+ Add Module" and the menu the module goes into, on one
@@ -2234,7 +2645,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: 3px 8px;
   border-radius: 5px;
   background: rgba(9, 16, 24, 0.72);
-  color: var(--btn-text, #ffffff);
+  color: var(--btn-text);
   font-size: 11px;
   opacity: 0;
   transition: opacity 140ms ease;
@@ -2407,7 +2818,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Slideshow: a slide is an image and its alt text, nothing else, so both fit
    the primary row and there is no sub-row. The image column is wider because
    it carries the URL and the Choose From Gallery button together. */
-.builder-react-root .builder-item-grid--slides {
+.builder-react-root .builder-item-grid--carousel {
   /* The image column carries a URL AND the Choose From Gallery button, which
      is ~200px of that track before the input gets any. At 1.6fr the input came
      out around 140px — "https://astujhe2h" and nothing more. 2.4fr is what
@@ -2459,8 +2870,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    become items of THIS grid instead of a nested one — that is what lets a
    panel child sit in the same column track as the chrome above it. */
 .builder-react-root .builder-module-editor--feature-cards,
-.builder-react-root .builder-module-editor--program-list,
-.builder-react-root .builder-module-editor--slideshow {
+.builder-react-root .builder-module-editor--program-list {
   display: grid;
   /* Equal halves (operator, 2026-08-12). The settings column was sized to
      its own lattice — 360px, its longest label plus its widest control —
@@ -2484,7 +2894,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-editor--feature-cards > *,
 .builder-react-root .builder-module-editor--program-list > *,
-.builder-react-root .builder-module-editor--slideshow > * {
+.builder-react-root .builder-module-editor--carousel > *,
+.builder-react-root .builder-module-editor--social > * {
   grid-column: 1;
   min-width: 0;
   /* The row spacing the gap used to give, charged to the rows that exist. */
@@ -2493,20 +2904,123 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-editor--feature-cards > *:last-child,
 .builder-react-root .builder-module-editor--program-list > *:last-child,
-.builder-react-root .builder-module-editor--slideshow > *:last-child {
+.builder-react-root .builder-module-editor--carousel > *:last-child,
+.builder-react-root .builder-module-editor--social > *:last-child {
   margin-bottom: 0;
 }
 
 .builder-react-root .builder-module-editor--feature-cards > .builder-cards-panel,
 .builder-react-root .builder-module-editor--program-list > .builder-cards-panel,
-.builder-react-root .builder-module-editor--slideshow > .builder-cards-panel {
+.builder-react-root .builder-module-editor--carousel > .builder-cards-panel,
+.builder-react-root .builder-module-editor--social > .builder-cards-panel {
   display: contents;
 }
 
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-settings {
+/* ------------------------------------------------------------------------
+   SOCIAL AND CAROUSEL RUN THE SAME EDITOR AT THREE COLUMNS — Social on
+   2026-08-16 ("arrange the settings in two columns with the social icons in
+   a third"), Carousel the same day ("move the border controls into its own
+   column to the right of Settings").
+
+   Everything above still applies — the children flatten, the rows carry
+   their own spacing, the gap is horizontal only — except the track list and
+   which column each half lands in, which is all this block changes.
+
+   The list column is the wide one on purpose. The two settings columns are
+   short label/control pairs that measure themselves (W0); the platform rows
+   hold a URL, and at an equal third that field came out about 120px wide.
+   1fr · 1fr · 1.6fr is that measurement, not a guess: it is the narrowest
+   third column in which the Link field clears --builder-field-long-max's
+   readable half at 1440, the narrowest width the check runs.
+   ------------------------------------------------------------------------ */
+.builder-react-root .builder-module-editor--social {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 0 var(--space-6, 24px);
+  align-items: start;
+}
+
+/*
+ * The carousel joins Social's three-column track list, and its top-level
+ * strips have to be able to FIT the narrower first column.
+ *
+ * The module's Label row is a bare field strip directly under the editor —
+ * not inside `.builder-module-chrome`, so the lattice rule that turns a
+ * chrome field into `display: contents` never reached it. Its field was a
+ * flex box carrying BOTH the label and a control at the declared `text-md`
+ * width, so the box measured 292px while holding 370px of content: it
+ * overflowed by the width of the word "Label" and, at a third of the editor,
+ * ran 41px into Image Border and printed over that column's first label
+ * (measured at 1440 in the live editor).
+ *
+ * `check:panels` cannot see this. It checks alignment WITHIN a column, not
+ * one column landing on the next — the same blind spot the doctrine names
+ * for anything it has no shape for.
+ *
+ * The fix is the treatment every other lattice row already gets: the strip
+ * is the grid, the field disappears into it (`display: contents`), and the
+ * control track is `minmax(0, max-content)` so it shrinks when the column is
+ * narrow instead of overflowing it. No width is set on any field — W0's
+ * prohibition stands.
+ */
+.builder-react-root .builder-module-editor--carousel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 0 var(--space-6, 24px);
+  align-items: start;
+}
+
+.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: max-content minmax(0, max-content);
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip .builder-module-field {
+  display: contents;
+}
+
+/* The editor's own children — the "Settings" heading the module card puts
+   above every two-column panel — stay in column 1 with the settings. */
+.builder-react-root .builder-module-editor--social > *,
+.builder-react-root .builder-module-editor--carousel > * {
   grid-column: 1;
 }
+
+/* Column 1 takes the module's own settings, column 2 the Frame axis. The
+   pair is placed by document order rather than by name, so adding a third
+   settings group later is a track, not a rewrite.
+
+   The carousel renders ONE of these — Image Border — so it is selected by
+   class alone, with no `nth-of-type` to match. Worth saying why, because
+   `:last-of-type` looks like the tidy way to cover both panels and is a
+   trap: it counts DIVS, not the class, and the last div here is the item
+   column — so it would have matched nothing and quietly dropped Social's
+   second column back into the first. */
+.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(1) {
+  grid-column: 1;
+}
+.builder-react-root .builder-module-editor--social .builder-cards-panel-settings:nth-of-type(2),
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
+  grid-column: 2;
+  grid-row: 1 / span 100;
+  align-self: start;
+}
+
+/* `span 100` rather than `1 / -1`, for the reason the two-column version
+   gives: -1 on an implicit grid collapses the column to a single row. */
+.builder-react-root .builder-module-editor--social .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
+  grid-column: 3;
+  grid-row: 1 / span 100;
+  align-self: start;
+}
+
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
+  grid-column: 1;
+}
+
 
 /*
  * The chrome STACKS in these two, instead of flowing (operator, 2026-08-12:
@@ -2521,16 +3035,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * chrome label starts at the same x as every other one in the column.
  */
 .builder-react-root .builder-module-editor--feature-cards .builder-module-chrome,
-.builder-react-root .builder-module-editor--slideshow .builder-module-chrome {
+.builder-react-root .builder-module-editor--carousel .builder-module-chrome {
   flex-direction: column;
   align-items: flex-start;
 }
 
 /* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
    implicit grid resolves to the explicit grid's only line, which collapses
-   the column to a single row. */
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-.builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
+   the column to a single row.
+
+   Feature Cards only. The carousel's item column moved to track 3 with the
+   three-column block above, and while it was still named here as well it
+   landed back in track 2 — on top of Image Border, since a later rule of
+   equal specificity wins. Caught by measuring the live editor; the two
+   columns reported the same x. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
   grid-column: 2;
   grid-row: 1 / span 100;
   align-self: start;
@@ -2752,12 +3271,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    row it is supposed to follow. */
 @media (max-width: 1000px) {
   .builder-react-root .builder-module-editor--feature-cards,
-  .builder-react-root .builder-module-editor--slideshow {
+  .builder-react-root .builder-module-editor--carousel {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
-  .builder-react-root .builder-module-editor--slideshow .builder-cards-panel-items {
+  .builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  /* The carousel's middle column has to give up its row-1 placement for the
+     same reason the item column does: pinned to row 1 in a single-track grid
+     it would sit ON the chrome instead of under it. */
+  .builder-react-root .builder-module-editor--carousel .builder-cards-panel-settings {
     grid-column: 1;
     grid-row: auto;
   }
@@ -3372,8 +3899,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* Neither title is a row of the lattice — both span the tracks. The
    sub-heading keeps its rule above it, now drawn across the whole column
-   rather than around a nested box. */
+   rather than around a nested box.
+
+   The COLUMN heading is the third of them, and it was missed until Social
+   took a second settings column on 2026-08-16: left in one cell it pushed
+   every pair below it along by one, so the Frame column rendered its swatch
+   in the label track and its label in the control track, all the way down.
+   A heading is never a row of the lattice — say so once, for all three. */
 .builder-react-root .is-lattice .builder-schema-panel-column > .builder-schema-group-title,
+.builder-react-root .is-lattice .builder-schema-panel-column > .builder-cards-panel-heading,
 .builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-group-subtitle {
   grid-column: 1 / -1;
 }
@@ -4346,6 +4880,42 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--lp-muted, #8590a8);
 }
 
+/*
+ * The row's own "Settings and Styles" bar.
+ *
+ * It sits one level inside the row card, the same depth as a cell's Styles
+ * and Content bars, so it takes the same cell-level colour — one bar shape,
+ * learned once (S1). The generated sheet already paints a bar this way, but
+ * only for headers inside `.builder-column-card`, and this one is a direct
+ * child of the row.
+ *
+ * `--btn-text` rather than a white literal (R3): every other bar in this
+ * stack states its white the same way, and a hex here would be one more
+ * place to find if the chrome ever stops being teal.
+ */
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header {
+  background: var(--builder-header-cell);
+  color: var(--btn-text);
+  border-radius: 14px;
+  padding: 8px 12px;
+}
+
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header:hover {
+  background: var(--builder-header-cell-hover);
+  color: var(--btn-text);
+}
+
+/* The generated sheet turns a COLLAPSED cell bar's title dark (`var(--ink)`),
+   which is right on a pale bar and unreadable on this one. Both states white. */
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label,
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label strong {
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-section-card>.builder-section-settings-panel>.builder-cell-panel-header .builder-cell-panel-title-label:hover {
+  color: rgba(255, 255, 255, 0.86);
+}
+
 /* Standard 7: the only breakpoint. It narrows the split to one column and
    releases the coach name from its right edge; it introduces nothing. */
 @media (max-width: 736px) {
@@ -4431,6 +5001,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: var(--space-3, 12px);
 }
 
+/* Refresh sits beside the text that explains the list, not in the panel
+   heading — the heading is the toggle now, edge to edge, so its arrow lines up
+   with Workspace and the rest. */
+.builder-react-root .builder-page-history-intro-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+}
+
+.builder-react-root .builder-page-history-intro-row .builder-page-history-intro {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
 .builder-react-root .builder-page-history-intro,
 .builder-react-root .builder-page-history-empty {
   margin: 0;
@@ -4464,10 +5050,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Time and size are read; Restore is pressed. Sizing the action column to
    its content keeps the button off the right edge on a wide screen, where a
    stretched button reads as the row's primary purpose rather than its
-   escape hatch. */
+   escape hatch.
+
+   The action track must stay SHRINKABLE (minmax(min-content, …), never bare
+   max-content): a propagate row carries two buttons, and a max-content track
+   is sized to both side by side, so on a narrow panel the row overflows
+   horizontally — the wrap this layout relies on can never fire. The buttons
+   stack vertically (below) so min-content is one button wide. */
 .builder-react-root .builder-page-history-row {
   display: grid;
-  grid-template-columns: minmax(16ch, 1.4fr) minmax(14ch, 1fr) max-content;
+  grid-template-columns: minmax(16ch, 1.4fr) minmax(14ch, 1fr) minmax(min-content, max-content);
   gap: var(--space-3, 12px);
   align-items: center;
   padding: var(--space-2, 8px) 0;
@@ -4498,23 +5090,73 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-muted, #5c6a72);
 }
 
-.builder-react-root .builder-page-history-size {
+/* What the next save did, with the counts under it as the secondary fact.
+   Before this column existed the counts were the ONLY fact, and five
+   consecutive rows reading "41 sections · 84 modules" was the result. */
+.builder-react-root .builder-page-history-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.builder-react-root .builder-page-history-change {
   font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+  /* One line, always: the summary already caps its own name list, and a row
+     that wraps turns the list into a wall. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.builder-react-root .builder-page-history-size {
+  font-size: var(--text-xs, 0.78rem);
   color: var(--ink-muted, #5c6a72);
   font-variant-numeric: tabular-nums;
 }
 
-.builder-react-root .builder-page-history-restore {
+/* Day headings. Retention now keeps hourly milestones for a week and daily
+   ones for a month, so this list spans days rather than the ninety minutes a
+   flat "newest 25" used to cover — without headings the older entries read as
+   noise sitting under the current session. */
+.builder-react-root .builder-page-history-day + .builder-page-history-day {
+  margin-top: var(--space-4, 16px);
+}
+
+.builder-react-root .builder-page-history-day-heading {
+  margin: 0 0 var(--space-1, 4px);
+  font-size: var(--text-xs, 0.78rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #5c6a72);
+}
+
+/* Stacked, right-flush. Each row is its OWN grid, so side-by-side buttons
+   would give a propagate row a wider action track than its neighbours and
+   push its Restore out of the vertical line the save rows sit on. Stacking
+   keeps every row's buttons on the container's right edge, aligned across
+   rows regardless of how many actions a row carries. */
+.builder-react-root .builder-page-history-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2, 8px);
+}
+
+.builder-react-root .builder-page-history-restore,
+.builder-react-root .builder-page-history-undo-run {
   white-space: nowrap;
   width: fit-content;
 }
 
-/* Narrow: the action drops under the facts rather than squeezing them. */
+/* Narrow: the action drops under the facts rather than squeezing them. The
+   action track shrinks the same way as the base grid's — see above. */
 @media (max-width: 640px) {
   .builder-react-root .builder-page-history-row {
-    grid-template-columns: 1fr max-content;
+    grid-template-columns: 1fr minmax(min-content, max-content);
   }
-  .builder-react-root .builder-page-history-size {
+  .builder-react-root .builder-page-history-what {
     grid-column: 1 / -1;
   }
 }
@@ -4642,4 +5284,800 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(6) {
     order: -2;
   }
+}
+
+/* The way back from a shared-section push, offered where the push is
+   reported. A save that rewrote 35 pages is exactly the moment somebody
+   realises it was the wrong save. */
+.builder-react-root .builder-propagation-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  text-align: left;
+}
+
+/* Stale-editor dialog. A save was refused because somebody else saved first,
+   and the operator has a decision to make — so it opens as a modal rather than
+   the inline notice this started as (operator, 2026-08-15). On a long Builder
+   page a banner near the top can sit off screen entirely while they keep
+   editing a page that will not save. It reuses the module editor's framing —
+   blue banner, 40px corners — so it reads as part of the app, not a browser
+   alert. */
+/* The same shape serves any dialog whose job is "these are your choices, and
+   here is what each one does" — the stale-editor one above, and the section
+   Save dialog that asks whether to overwrite the saved section a page section
+   came from (2026-08-16). The rules are shared rather than copied so the two
+   cannot drift into looking like different applications. */
+.builder-react-root .builder-save-conflict-body,
+.builder-react-root .builder-choice-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  text-align: left;
+}
+
+.builder-react-root .builder-save-conflict-lead,
+.builder-react-root .builder-choice-dialog-lead {
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* The page list behind "and it rewrites these". Scrolls rather than growing the
+   dialog past the screen — a shared header can follow 40 pages. */
+.builder-react-root .builder-choice-dialog-detail-title {
+  margin: 0 0 var(--space-2, 8px);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-choice-dialog-list {
+  margin: 0;
+  padding-left: var(--space-5, 20px);
+  max-height: 168px;
+  overflow-y: auto;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+}
+
+/* What each button does, as a definition list: the term IS the button's label,
+   so the reader matches word to word rather than re-reading a paragraph. */
+.builder-react-root .builder-save-conflict-choices,
+.builder-react-root .builder-choice-dialog-choices {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  /* The row gap carries real weight here: at 4px the two choices ran together
+     as one block of text, and this list exists to be read as two distinct
+     options before clicking one of them. */
+  gap: var(--space-3, 12px) var(--space-3, 12px);
+  align-items: baseline;
+  margin: 0;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: 10px;
+  background: rgba(11, 42, 74, 0.05);
+}
+
+.builder-react-root .builder-save-conflict-choices dt,
+.builder-react-root .builder-choice-dialog-choices dt {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-save-conflict-choices dd,
+.builder-react-root .builder-choice-dialog-choices dd {
+  margin: 0;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+}
+
+.builder-react-root .builder-save-conflict-actions,
+.builder-react-root .builder-choice-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-1, 4px);
+}
+
+/* Narrow: the two-column list would crush each description to a word a line. */
+@media (max-width: 560px) {
+  .builder-react-root .builder-save-conflict-choices,
+  .builder-react-root .builder-choice-dialog-choices {
+    grid-template-columns: 1fr;
+  }
+  .builder-react-root .builder-save-conflict-choices dd,
+  .builder-react-root .builder-choice-dialog-choices dd {
+    margin-bottom: var(--space-2, 8px);
+  }
+}
+
+/* ---- The per-page diff inside that dialog -------------------------------
+   The page list above answers WHICH pages an overwrite rewrites; this answers
+   what changes on each, which is the half that lets someone decide rather than
+   only hesitate (operator's 2026-07-21 request, after 46 Marinoff pages).
+
+   Pages that change identically share one block, so the layout's whole job is
+   to make the odd one out obvious: a group with no visible change is muted and
+   starts shut, a group with real changes starts open. Forty pages of which
+   thirty-eight are identical is mostly noise, and that noise is what hides the
+   other two. */
+.builder-react-root .builder-section-diff-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  /* Scrolls rather than pushing the buttons off screen — one of them rewrites
+     the site, so it has to stay reachable however long the list runs. */
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: var(--space-1, 4px);
+}
+
+.builder-react-root .builder-section-diff-truncated {
+  margin: 0 0 var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: 8px;
+  /* A caution wash rather than a brand colour: the text itself stays on a
+     token so it follows the theme. */
+  background: rgba(180, 83, 9, 0.08);
+  color: var(--ink-secondary);
+  line-height: 1.5;
+}
+
+.builder-react-root .builder-section-diff-group {
+  border: 1px solid rgba(11, 42, 74, 0.12);
+  border-radius: 10px;
+  background: rgba(11, 42, 74, 0.03);
+}
+
+.builder-react-root .builder-section-diff-group[data-unchanged="true"] {
+  background: transparent;
+  opacity: 0.72;
+}
+
+/* The heading is one wrapping row: how many pages, how many changes, and which
+   pages. It stays visible whether the detail is open or not, so the panel can
+   never fill with one group and hide that another exists. */
+.builder-react-root .builder-section-diff-group-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  line-height: 1.5;
+}
+
+.builder-react-root summary.builder-section-diff-group-heading {
+  cursor: pointer;
+  /* A flex summary drops the browser's own disclosure triangle, and without one
+     nothing says the block opens and shuts. It is drawn back by hand below. */
+  list-style: none;
+}
+
+.builder-react-root summary.builder-section-diff-group-heading::-webkit-details-marker {
+  display: none;
+}
+
+.builder-react-root summary.builder-section-diff-group-heading::before {
+  content: "▸";
+  flex: 0 0 auto;
+  width: 0.9em;
+  color: var(--ink-muted, #5c6a72);
+  font-size: 0.75em;
+}
+
+.builder-react-root .builder-section-diff-group[open] > summary::before {
+  content: "▾";
+}
+
+/* The unchanged group has no arrow, so its text lines up with the others. */
+.builder-react-root .builder-section-diff-group[data-unchanged="true"] .builder-section-diff-group-heading {
+  padding-left: calc(var(--space-3, 12px) + 0.9em + var(--space-2, 8px));
+}
+
+.builder-react-root .builder-section-diff-group-count {
+  font-weight: 600;
+}
+
+.builder-react-root .builder-section-diff-group-verdict {
+  color: var(--ink-muted, #5c6a72);
+}
+
+/* A separator, so "4 changes" and the page names beside it do not read as one
+   run-on phrase. */
+.builder-react-root .builder-section-diff-group-pages::before {
+  content: "· ";
+}
+
+.builder-react-root .builder-section-diff-group-pages {
+  color: var(--ink-muted, #5c6a72);
+  /* Takes the rest of the row, and wraps under the count when there is no room
+     rather than pushing the dialog sideways. */
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.builder-react-root .builder-section-diff-changes {
+  margin: 0;
+  padding: 0 var(--space-3, 12px) var(--space-3, 12px)
+    calc(var(--space-3, 12px) + 0.9em + var(--space-2, 8px));
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.builder-react-root .builder-section-diff-change-label {
+  display: block;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-section-diff-change-detail {
+  display: block;
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+}
+
+/* "was" over "now" rather than side by side: the two strings are page copy of
+   unpredictable length, and a two-column layout makes the shorter one look
+   like the change rather than the value. */
+.builder-react-root .builder-section-diff-values {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.builder-react-root .builder-section-diff-value {
+  color: var(--ink-muted, #5c6a72);
+  line-height: 1.5;
+  /* Page copy can be one long unbroken string; it wraps rather than forcing
+     the dialog sideways. */
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-section-diff-value em {
+  display: inline-block;
+  min-width: 3em;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink-muted, #5c6a72);
+  opacity: 0.75;
+}
+
+.builder-react-root .builder-section-diff-value[data-side="after"] {
+  color: var(--ink, #16323f);
+}
+
+/* ============================================================== */
+/* THE POPPED-OUT MODULE EDITOR (operator, 2026-08-15)             */
+/* ============================================================== */
+
+/*
+ * The pop-out control moved to the LEFT of the module header, next to the
+ * drag handle and the name. See the comment on the button in
+ * builder-module-card.tsx for why: in a six-column section the right-hand
+ * action cluster is the part that gets clipped, so the control that escapes
+ * a cramped cell was itself unreachable from one.
+ */
+.builder-react-root .builder-module-title > .builder-module-popout {
+  flex: 0 0 auto;
+}
+
+/*
+ * The dialog itself: a 2px bright-blue frame at a 40px radius, with the
+ * title bar as a full-bleed banner in the same blue and its type reversed
+ * out of it. Scoped to `.builder-centered-modal` — the gallery, palette and
+ * rich-text modals share this stylesheet and keep their plain header.
+ *
+ * `padding: 0` (the base modal carries 24px) is what lets the banner reach
+ * the frame; the padding moves onto the banner and the body instead, and
+ * the modal's existing `overflow: hidden` rounds the banner's top corners
+ * against the radius.
+ */
+.builder-react-root .builder-gallery-modal.builder-centered-modal {
+  border: 2px solid var(--builder-modal-accent);
+  border-radius: 40px;
+  padding: 0;
+  gap: 0;
+}
+
+.builder-react-root .builder-centered-modal > .builder-centered-modal-banner {
+  align-items: center;
+  background: var(--builder-modal-accent);
+  color: var(--builder-modal-accent-ink);
+  padding: var(--space-4, 12px) var(--space-6, 24px);
+}
+
+.builder-react-root .builder-centered-modal > .builder-centered-modal-banner h3 {
+  color: inherit;
+}
+
+/*
+ * Room inside the frame for the body, and a little extra at the sides so a
+ * panel's first column does not run into a 40px curve.
+ */
+.builder-react-root .builder-centered-modal > .builder-gallery-body {
+  padding: var(--space-5, 16px) var(--space-6, 24px) var(--space-6, 24px);
+}
+
+/*
+ * Done, reversed to match the banner. `!important` only because the
+ * low-contrast-button rule near the top of this file gives every
+ * `.secondary-button` a 2px dark-navy border with an `!important` of its own,
+ * and a navy hairline on a blue banner reads as a smudge — an !important can
+ * only be answered by one.
+ */
+.builder-react-root .builder-centered-modal .builder-centered-modal-done {
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid var(--builder-modal-accent-ink) !important;
+  color: var(--builder-modal-accent-ink);
+}
+
+.builder-react-root .builder-centered-modal .builder-centered-modal-done:hover {
+  background: var(--builder-modal-accent-ink);
+  color: var(--builder-modal-accent);
+}
+
+/* ============================================================== */
+/* MATCHED SPACING ROWS (doctrine E4b, operator 2026-08-15)        */
+/* ============================================================== */
+
+/*
+ * The chain-link toggle that turns "V Margin" into "Top Margin" and
+ * "Bottom Margin". It rides INSIDE the control cell, after the number, so
+ * the label track still measures nothing but labels (W0) — and it never
+ * grows: `flex: 0 0 auto` keeps the number select the part that flexes.
+ */
+/* The toggle's footprint, so the row without one lines up with the rows
+   that have one (see the comment on the spacer in builder-spacing-fields). */
+.builder-react-root .builder-module-field-control > .builder-spacing-link-spacer {
+  flex: 0 0 auto;
+  width: 22px;
+  margin-left: var(--space-2, 6px);
+}
+
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-left: var(--space-2, 6px);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--builder-editor-label, #12395f);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle:hover {
+  border-color: rgba(11, 42, 74, 0.24);
+  background: rgba(11, 42, 74, 0.06);
+}
+
+/* Split apart is the deliberate state, so it is the one that shows. */
+.builder-react-root .builder-module-field-control > .builder-spacing-link-toggle[aria-pressed="false"] {
+  color: var(--builder-modal-accent, #0d6efd);
+}
+
+/* ============================================================== */
+/* SOCIAL: THE PLATFORM LIST (operator, 2026-08-15)                */
+/* ============================================================== */
+
+/*
+ * The platform rows reuse the Feature Cards item grid wholesale — one grid
+ * for the whole list, `--a`/`--b` pair columns, `data-lattice-pairs="2"`.
+ * These three rules are the only thing Social adds: a grip glyph in the head
+ * row, and the drag feedback that used to live on the per-platform card the
+ * rewrite deleted (a wrapper per item cannot exist inside a shared grid).
+ */
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head[draggable="true"] {
+  cursor: grab;
+}
+
+.builder-react-root .builder-social-item-grip {
+  margin-right: var(--space-2, 6px);
+  color: var(--muted, #445465);
+  font-size: var(--text-sm, 0.82rem);
+  letter-spacing: -0.1em;
+}
+
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head.is-dragging {
+  opacity: 0.55;
+}
+
+/* The row above the one being dropped onto, marked on its own top edge so a
+   grid row can show it without a box of its own to outline. */
+.builder-react-root .builder-cards-panel-fields .builder-card-editor-head.is-drop-target {
+  box-shadow: inset 0 2px 0 0 var(--builder-modal-accent, #004ca6);
+}
+
+/* The icon preview sits beside its Choose button in the picker field, which
+   is already a flex row with 40px of room between its parts. */
+.builder-react-root .builder-cards-panel-fields .builder-card-field--picker > .builder-module-field-control > .builder-social-item-icon-preview {
+  flex: 0 0 auto;
+  /* An icon whose file has gone missing renders as its alt text, and the
+     shared preview rule lets that overflow (`overflow: visible`, for icons
+     that paint outside their circle). In a grid row the spill lands on top
+     of the Change Icon button beside it. */
+  overflow: hidden;
+}
+
+/* ==============================================================
+   PUBLISH PANEL
+   ==============================================================
+   The count is the point. Publishing is a step now, and a step you can forget
+   is worse than no step — so the pending number sits in the panel header where
+   it is visible collapsed, and the body leads with the same fact in words.
+
+   Here rather than _builder-react.css because that file is regenerated
+   wholesale and a hand edit there disappears silently. */
+
+.builder-react-root .builder-publish-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px);
+}
+
+/* Reads as a fact, not a warning: unpublished work is the normal state of a
+   site being worked on, and colouring it like an error would cry wolf all day. */
+.builder-react-root .builder-publish-headline {
+  margin: 0;
+  font-size: var(--text-md, 1rem);
+  color: var(--ink-primary, #16203a);
+}
+
+.builder-react-root .builder-publish-headline.is-pending {
+  font-weight: 600;
+}
+
+.builder-react-root .builder-publish-note,
+.builder-react-root .builder-publish-progress {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-publish-error,
+.builder-react-root .builder-publish-message {
+  margin: 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-left: 3px solid var(--accent, #4f9c3a);
+  background: var(--bg-page, #ffffff);
+  font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+}
+
+.builder-react-root .builder-publish-error {
+  border-left-color: var(--danger, #a03c28);
+}
+
+/* The count badge in the header. Sized to two digits without reflowing the
+   label, since most sites will sit in single or low double figures. */
+.builder-react-root .builder-publish-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: var(--accent, #4f9c3a);
+  /* Text ON the accent, so it follows a tenant's theme rather than assuming
+     the accent stays dark enough for white. */
+  color: var(--btn-text);
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.builder-react-root .builder-publish-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* Name and address, nothing else. What changed on each page is Page History's
+   job, and duplicating it here would just be a worse version of it. */
+.builder-react-root .builder-publish-row {
+  display: grid;
+  grid-template-columns: minmax(12ch, 1.6fr) minmax(10ch, 1fr);
+  gap: var(--space-3, 12px);
+  align-items: baseline;
+  padding: var(--space-2, 8px) 0;
+  border-bottom: 1px solid var(--border-light, #e3e8e6);
+}
+
+.builder-react-root .builder-publish-row:first-child {
+  border-top: 1px solid var(--border-light, #e3e8e6);
+}
+
+.builder-react-root .builder-publish-page-name {
+  font-size: var(--text-sm);
+  color: var(--ink-primary, #16203a);
+}
+
+.builder-react-root .builder-publish-page-slug {
+  font-size: var(--text-sm);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-publish-more {
+  grid-template-columns: 1fr;
+  color: var(--ink-muted, #5c6a72);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .builder-react-root .builder-publish-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* Title and count travel together — see the comment in builder-publish-panel. */
+.builder-react-root .builder-publish-label-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Image effects: Cruise, Tumbleweed, and the controls that drive them
+   ---------------------------------------------------------------------------
+   Both effects were offered in the Image and Floating Image panels since the
+   Normie port and NEITHER had a rule anywhere in this repo — the panel set
+   `starcaster-effect-cruise` / `-tumbleweed` on the figure and no stylesheet
+   answered, so the picture just sat there. Reported by the operator
+   2026-08-16 on the Delray home page.
+
+   Written here rather than in `_builder-react.css` per doctrine R2: that file
+   is regenerated wholesale and a hand-written rule in it disappears silently
+   at the next regeneration.
+
+   THREE MOTIONS ON TWO ELEMENTS. Travel, spin and hop each carry their own
+   rate, and three animations cannot share one `transform` — the last one to
+   touch it wins and the other two vanish. So the figure animates the two
+   INDEPENDENT transform properties at once (`translate` for the travel,
+   `rotate` for the spin), and the hop rides a wrapper element's `translate`,
+   which is a third property on a different box. All three compose, and each
+   keeps a duration of its own.
+   --------------------------------------------------------------------------- */
+
+/* THE CORRIDOR IS THE FULL PAGE, NOT THE COLUMN (operator, 2026-08-17: "though
+   the section is full width, this module is contained — we need to break it
+   out of its container"). Measured on the live Delray page: a 1440px viewport,
+   a full-width section, and the ball travelling inside a 1120px window because
+   the section's 110px padding and the column's 50px were still in force. It
+   appeared and vanished 160px in from each edge.
+
+   `50% - 50vw` walks the clip back from the centre of its container to the
+   centre of the viewport, so the corridor lands edge to edge and CORRECTS
+   ITSELF if the padding above it ever changes — the same self-correcting shape
+   `.builder-preview-section-full-width` uses for the page margin, rather than
+   a number copied from today's theme.
+
+   The overshoot that idiom is normally criticised for (100vw counts the
+   scrollbar; the page then scrolls sideways by its width) cannot happen here:
+   this element clips its own children horizontally, and `max-width: 100%` on
+   the shell above stops the box itself from becoming the overflow. Verified in
+   a browser at 1440 / 768 / 390 rather than argued — see the PR.
+
+   NOT in the editor's module card. That card renders the same component at
+   thumbnail size (`.builder-module-preview-image`), and a 100vw child inside a
+   settings panel is a card that bursts its own editor. The rendered page — the
+   canvas, the preview and the public site — is what breaks out. */
+.builder-react-root .starcaster-effect-motion-clip:not(:has(.builder-module-preview-image)) {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Travel: one crossing, edge to edge. `translate` rather than
+   `transform: translateX` so the spin can run beside it on `rotate`. */
+@keyframes sc-effect-travel {
+  from {
+    translate: -100vw 0;
+  }
+
+  to {
+    translate: 100vw 0;
+  }
+}
+
+/* One turn. Speed comes from the duration, so this serves Spin (turning in
+   place) and Tumbleweed (turning as it goes) from the same six lines. */
+@keyframes sc-effect-turn {
+  from {
+    rotate: 0turn;
+  }
+
+  to {
+    rotate: 1turn;
+  }
+}
+
+/* One hop. A bounce is not a sine wave: leaving the ground is `ease-out` and
+   falling back is `ease-in`, which is the pairing the ported `normie-bounce`
+   keyframes use and the difference between a ball and a bobbing balloon.
+
+   The height is a PERCENTAGE, and for `translate` that means a share of the
+   element's own height — so the arc scales with the picture instead of a
+   fixed 50px hop looking enormous under a small ball and invisible under a
+   big one. It is the operator's Bounce Height since 2026-08-17; the fallback
+   here is only what an un-migrated page falls back to, and it matches
+   DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT so the two cannot drift. */
+@keyframes sc-effect-hop {
+  0% {
+    translate: 0 0;
+    animation-timing-function: ease-out;
+  }
+
+  50% {
+    translate: 0 calc(-1 * var(--sc-effect-bounce, 50%));
+    animation-timing-function: ease-in;
+  }
+
+  100% {
+    translate: 0 0;
+  }
+}
+
+/* Direction is `animation-direction`, not a second set of keyframes: one
+   value applies to every animation in the shorthand list above, so `reverse`
+   turns the travel AND the spin around together. A ball crossing right to
+   left rolls anticlockwise, which is the half a mirrored travel would miss. */
+.builder-react-root .starcaster-effect-cruise {
+  animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-travel-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+.builder-react-root .starcaster-effect-tumbleweed {
+  animation:
+    sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
+    sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  /* TWO values, and the second is why Repeat could not be one keyword: a flat
+     `1` here would stop the spin after a single turn and the ball would slide
+     the rest of the crossing. The renderer works out how many turns fit. */
+  animation-iteration-count:
+    var(--sc-effect-travel-iterations, infinite),
+    var(--sc-effect-turn-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+/* Frequency arrives as a duration: the renderer divides one crossing by the
+   number of hops the operator asked for, so "4 per crossing" stays four
+   however long the crossing is. */
+.builder-react-root .starcaster-effect-hop-stage {
+  display: block;
+  width: 100%;
+  animation: sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-hop-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+/* Spin moves off the ported `normie-spin` (which animates `transform`) onto
+   the same `rotate` keyframes Tumbleweed uses, so one turn is defined once.
+   The default duration is the 2.4s it has always run at. */
+.builder-react-root .starcaster-effect-spin {
+  animation: sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+}
+
+/* R6: motion is decoration on all of these — a visitor who has asked their
+   system for less of it gets the picture, standing still. */
+@media (prefers-reduced-motion: reduce) {
+  .builder-react-root .starcaster-effect-cruise,
+  .builder-react-root .starcaster-effect-tumbleweed,
+  .builder-react-root .starcaster-effect-hop-stage,
+  .builder-react-root .starcaster-effect-spin {
+    animation: none;
+  }
+}
+
+/* ── Module Library breadcrumb ─────────────────────────────────────────────
+ *
+ * "Module Categories › Image", under the modal's title.
+ *
+ * These three class names shipped with NO stylesheet rule behind them
+ * anywhere in the repo — the markup named them and nothing ever matched. The
+ * result was not an unstyled-but-readable trail, it was worse in two ways at
+ * once, and both are things an unstyled element inherits rather than lacks:
+ *
+ *   1. INVISIBLE. The "Module Categories" crumb is a real <button>, and the
+ *      app has a global `button, .btn { color: var(--btn-text) }` — white,
+ *      because nearly every button here is a filled dark one. A bare button on
+ *      the white modal therefore rendered white on white. It was not missing;
+ *      it was there and unreadable, which is why it read as "overwritten".
+ *   2. COLLIDED. The <nav> was `display: block`, so the separator and the
+ *      current page had nothing between them: "Module Categories›Image".
+ *
+ * The same shape as the trap in docs/IMAGE_EFFECTS.md — a class name is not a
+ * rendering. A class that styles nothing is silent here: no test in this repo
+ * sees CSS, and the markup review looks completely correct.
+ */
+.builder-react-root .builder-module-palette-breadcrumb {
+  display: flex;
+  align-items: baseline;
+  /* Wraps rather than pushing the modal's header actions off the row when a
+     category name is long. */
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: var(--text-base);
+  line-height: 1.3;
+}
+
+/* Undo the global filled-button styling explicitly rather than relying on
+   this rule simply coming later: the crumb is a button for the keyboard and
+   the screen reader, and a link for the eye. */
+.builder-react-root .builder-module-palette-breadcrumb-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink-secondary, #475569);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-link:hover {
+  color: var(--ink-primary, #000);
+  text-decoration: underline;
+}
+
+/* Colour alone is not a focus indicator. */
+.builder-react-root .builder-module-palette-breadcrumb-link:focus-visible {
+  outline: 2px solid var(--brand-electric-bright, #7df9ff);
+  outline-offset: 2px;
+  border-radius: 3px;
+  color: var(--ink-primary, #000);
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-sep {
+  color: var(--ink-muted, #94a3b8);
+}
+
+.builder-react-root .builder-module-palette-breadcrumb-current {
+  color: var(--ink-primary, #000);
+  font-weight: 600;
+}
+
+/* Canonical-provenance badges (section AND module cards share these classes:
+   (canonical) / Unlinked / Linked / Custom / Changed) had no styling at all —
+   plain inline text next to the title, on both cards. This gives the shared
+   pill shape everything but Changed already needed; Changed additionally
+   needs a color distinct from the neutral ones, since it is the one state a
+   push will silently skip unless the operator explicitly overwrites it. */
+.builder-react-root .builder-canonical-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2, 8px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-canonical-badge-changed {
+  background: var(--warn-notice-bg, #fdf0d5);
+  color: var(--warn-notice-text, #8a5a00);
 }

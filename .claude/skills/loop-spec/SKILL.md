@@ -15,8 +15,20 @@ write any code here. You produce well-formed tasks.
 ## Inputs
 
 - A rough idea or goal from the operator (one sentence is fine to start).
-- Optionally: a target ClickUp list name (default: **"Loop Queue"** in the
-  **Starcaster** space, id `90146476303`).
+- Optionally: a target ClickUp list name (default: **"Loop Queue"**, list id
+  `901418546619` — ids and the space-vs-list trap are documented once in
+  `docs/LOOP_ENGINEERING.md` §"ClickUp access"). File tasks through the
+  direct script, which carries priority and tags and verifies the body saved:
+  `npm run clickup -- task --list 901418546619 --name "..." --status Queued --priority high --tags "epic-name" --body-file -`
+  (body on stdin). The connector works too when its budget allows, but the
+  direct route is the one that cannot be starved by other sessions.
+  **File at High or below.** Urgent is the operator's own lane (ratified
+  2026-08-18) — the queue sorts priority-then-age, so an Urgent flag is a
+  human override that outranks everything the loop decided, and that only
+  works if agents never set it themselves. `task --priority urgent` refuses
+  outright unless `--operator-asked` is also passed, and that flag is a
+  claim, not a permission check — only add it when the operator explicitly
+  asked for Urgent, by voice or in writing.
 
 ## Workflow
 

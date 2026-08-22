@@ -118,6 +118,29 @@ const TUNED = {
       ]),
     },
   },
+  // The platform list joined the manager family on 2026-08-15, and it is the
+  // third module to need real rows here for the same reason: an empty list
+  // renders no fields, so its lattice would be measured across nothing at all.
+  // Two platforms, one of them missing its icon and its link, so the "Choose
+  // From Gallery" button (the widest control in the grid) is on screen and the
+  // tracks are measured against it.
+  social: {
+    name: 'Social',
+    settings: {
+      socialIconSize: '44',
+      socialGap: '14',
+      socialShowLabels: 'true',
+      socialItems: JSON.stringify([
+        {
+          id: 'facebook', label: 'Facebook', href: 'https://facebook.com/delraytennis',
+          iconUrl: '/images/icon-facebook.svg', backgroundColor: '#1877f2',
+        },
+        {
+          id: 'instagram', label: 'Instagram', href: '', iconUrl: '', backgroundColor: '#c13584',
+        },
+      ]),
+    },
+  },
   // Same lesson as feature-cards, learned again on 2026-08-13: the Programs
   // manager shipped with a staggered, overlapping panel while `check:panels`
   // reported clean, because an empty module renders no fields and a group
@@ -156,6 +179,72 @@ const TUNED = {
       ]),
     },
   },
+  // The carousel, both formats. Same lesson as feature-cards and
+  // program-list: its item manager ships EMPTY from createEmptyModule, so
+  // without real items here the check finds the grid, measures nothing and
+  // passes. Captions ON, because the item sub-row's other four fields are
+  // gated behind that toggle and would otherwise never be measured — the
+  // exact "a control the check cannot see is a control the rule does not
+  // cover" hole. Two items, one missing its link, so the widest control in
+  // the grid (Choose From Gallery) is on screen against a real track.
+  // Drop shadow ON for the same reason captions are: the six shadow controls
+  // added 2026-08-16 only render once the box is ticked, so an unticked
+  // fixture measures the Image Border strip at half its width and reports OK
+  // on controls it never saw.
+  carousel: {
+    name: 'Slideshow',
+    settings: {
+      format: 'slideshow',
+      showCaptions: 'true',
+      captionPosition: 'bottom-left',
+      heightPx: '420',
+      imageBorderWidth: '6',
+      imageShadow: 'true',
+      items: JSON.stringify([
+        {
+          id: 'item-1', title: 'Junior Tennis Programs', body: 'Camps, clinics and private lessons all summer.',
+          // Real files in public/, not the plausible-looking paths the older
+          // seeds use: a 404 image collapses to a 20px broken icon, so a frame
+          // that takes its height from its picture measures nothing.
+          imageUrl: '/images/Gemini_Generated_starcaster_banner.png', imageAlt: 'Junior players gathered at the net',
+          linkUrl: '/delray-champions-junior-tennis-high-performance', linkLabel: 'See the schedule',
+          icon: '', iconImageUrl: '',
+        },
+        {
+          id: 'item-2', title: 'Court Fees & Lesson Prices', body: 'Resident and guest rates.',
+          imageUrl: '/images/background_galaxy_1920x1080.jpg', imageAlt: 'Clay courts at sunrise',
+          linkUrl: '', linkLabel: '', icon: '', iconImageUrl: '',
+        },
+      ]),
+    },
+  },
+  // The standalone image module. It was seeded before 2026-08-16 the way
+  // every type is — straight out of `createEmptyModule`, so with no picture,
+  // no link and no effect. That is how its panel drifted into five separate
+  // mini-layouts stacked above its axis columns with every check green: an
+  // empty module renders half its controls, and a control the check cannot
+  // see is a control the rule does not cover.
+  // `effect: 'tumbleweed'` is the same point at field level — Rotation Rate
+  // is visibleWhen-gated behind a rotating effect and would never be measured
+  // with the effect left at None.
+  image: {
+    name: 'Court Photo',
+    settings: {
+      url: '/images/Gemini_Generated_starcaster_banner.png',
+      alt: 'Clay courts at sunrise',
+      linkUrl: '/delray-champions-junior-tennis-high-performance',
+      newTab: 'true',
+      size: '50',
+      alignment: 'center',
+      paddingTop: '10', paddingBottom: '10', paddingLeft: '20', paddingRight: '20',
+      marginTop: '10', marginBottom: '10', marginLeft: '5', marginRight: '5',
+      horizontalOffset: '4', verticalOffset: '-4',
+      borderThickness: '4', borderColor: '#0f4f8f', borderRadius: '20',
+      effect: 'tumbleweed', effectRotationRate: '40', effectFrequency: '6',
+      effectBounceHeight: '150', effectDirection: 'rtl',
+      effectSpeed: '16', effectRepeat: 'once', effectDelay: '2',
+    },
+  },
   table: {
     name: 'Contact Strip',
     settings: {
@@ -176,6 +265,25 @@ const TUNED = {
       borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
       cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
       backgroundColor: '#ffffff',
+    },
+  },
+  // The rich-text module's Structure / Text / Placement / Frame axes
+  // (2026-08-15). Every frame and spacing setting is non-default and no field
+  // is visibleWhen-gated, so all four columns render every control the panel
+  // has — including "Paragraph Gap", which is the longest label on the Text
+  // axis and therefore the one that sets its track. Real body copy, because
+  // an empty module measures nothing and passes.
+  text: {
+    name: 'Pro Shop',
+    text: '<p><strong>Visit our <a href="/pro-shop">Pro Shop</a> for racket stringing and all your tennis and pickleball needs.</strong></p><p>Stringing, grips, demo racquets and a full pickleball wall.</p>',
+    settings: {
+      size: '66', alignment: 'center',
+      lineHeight: '1.2', paragraphGap: '4',
+      marginTop: '10', marginBottom: '10', marginLeft: '5', marginRight: '5',
+      paddingTop: '15', paddingBottom: '15', paddingLeft: '20', paddingRight: '20',
+      horizontalOffset: '4', verticalOffset: '-4',
+      borderStyle: 'dashed', borderWidth: '2', borderColor: '#0f4f8f', borderRadius: '10',
+      backgroundColor: '#eaf3e2',
     },
   },
   // An EYEBROW heading with its shadow on: the longest labels in the panel
@@ -228,6 +336,45 @@ const PANEL_CHECK_SECTION = {
           ...TUNED.navigation.settings,
           navDropdownStyle: 'mega',
           navMegaPlacement: 'menu',
+        },
+      };
+    })(),
+    // A SECOND proximity-effect module, on a CONTINUOUS preset. Rings is the
+    // default, and Reach and Falloff are `visibleWhen: isContinuous`, so the
+    // module above renders neither and the check measured a panel two fields
+    // short while reporting a clean pass. Caught by dumping the field names
+    // the run actually saw rather than by trusting the green line — same hole
+    // as the mega-panel menu and the cards carousel around it.
+    (() => {
+      const base = createEmptyModule('tractor-nav', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-tractor-nav-glow',
+        name: 'Proximity Effect (Glow)',
+        settings: {
+          ...base.settings,
+          effect: 'glow',
+          reach: '460',
+          falloff: '2',
+        },
+      };
+    })(),
+    // A SECOND carousel, in the cards format. `format` decides which controls
+    // exist — Card Width appears, Transition and the whole Captions group
+    // vanish — so the slideshow module above can only ever measure half of
+    // this panel. Same reasoning as the mega-panel menu directly above.
+    (() => {
+      const base = createEmptyModule('carousel', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-carousel-cards',
+        name: 'Card Slider',
+        settings: {
+          ...base.settings,
+          ...TUNED.carousel.settings,
+          format: 'cards',
+          cardWidth: '280',
+          gap: '16',
         },
       };
     })(),

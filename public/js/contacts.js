@@ -1836,19 +1836,17 @@ App.contacts = (function () {
     fromProjectUi.wired = true;
   }
 
+  // The 'devTeamPage' return-flow that used to branch here went with the Dev
+  // Agent (retired 2026-08-17): App.devAgent no longer exists and that page id
+  // is unreachable, so both branches were dead. They were optional-chained, so
+  // they failed silently rather than throwing — which is exactly why they were
+  // worth removing rather than leaving to rot.
   async function finishContactCreatedFlow(created, savedReturnPage) {
     pendingAddContactMeta = null;
-    if (App.devAgent) App.devAgent.teamAddContext = null;
     await App.refresh();
-    if (savedReturnPage === 'devTeamPage' && created?.id && typeof App.devAgent?.afterTeamContactCreated === 'function') {
-      returnPageOnSave = null;
-      await App.devAgent.afterTeamContactCreated(created);
-    } else if (savedReturnPage) {
+    if (savedReturnPage) {
       App.setActivePage(savedReturnPage);
       returnPageOnSave = null;
-      if (savedReturnPage === 'devTeamPage' && typeof App.devAgent?.showTeamBrowser === 'function') {
-        App.devAgent.showTeamBrowser();
-      }
     } else {
       openContactsPage();
     }
@@ -1863,9 +1861,6 @@ App.contacts = (function () {
     if (!pickerProjectId || !sourceContactId || !sourceProjectId) {
       notify('Select a project and contact', true);
       return;
-    }
-    if (!pendingAddContactMeta && App.devAgent?.teamAddContext) {
-      pendingAddContactMeta = { ...App.devAgent.teamAddContext };
     }
     if (!returnPageOnSave && pendingAddContactMeta?.returnPageId) {
       returnPageOnSave = pendingAddContactMeta.returnPageId;
@@ -3967,9 +3962,6 @@ App.contacts = (function () {
     // Contact form
     els.contactForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!pendingAddContactMeta && App.devAgent?.teamAddContext) {
-        pendingAddContactMeta = { ...App.devAgent.teamAddContext };
-      }
       if (!returnPageOnSave && pendingAddContactMeta?.returnPageId) {
         returnPageOnSave = pendingAddContactMeta.returnPageId;
       }

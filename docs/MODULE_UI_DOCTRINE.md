@@ -156,13 +156,57 @@ kept; the single control that could reach the first took all four sides with
 it, and there was nothing else to try. The operator's ruling, 2026-08-11:
 "standardize all objects on the Top/Bottom/Left/Right model."
 
-*How:* build the controls from `MODULE_MARGIN_SIDES` / `MODULE_PADDING_SIDES`
-in `builder-settings-schema.tsx`, or from the `marginFields()` /
-`paddingFields()` helpers that read those tables. Then the names, the order
+*How:* build the controls from `marginFields()` / `paddingFields()` (or
+`spacingFields()` for a box of your own, like Navigation's link padding) in
+`builder-settings-schema.tsx`, and from `BuilderModuleSpacingFields` in a
+hand-written strip. All four read the same tables, so the names, the order
 and the count hold by construction.
 
 **Checked by:** `check_ui_doctrine.cjs` fails a changed settings file that
 names some sides but not all four, or that still names the retired pair.
+
+#### E4b. Two sides that match show as one row `[auto]` *(added 2026-08-15)*
+
+A spacing box renders **two** rows, not four: `V Margin` and `H Margin`,
+`V Padding` and `H Padding`. Each carries a chain-link toggle that splits it
+into its two sides in place, and the split shows automatically whenever the
+two sides already hold different numbers.
+
+*(operator, 2026-08-15: "reduce the number of options under Placement by
+having default V Margin, H Margin, V Padding, H Padding settings. These don't
+replace the granularity we already have, it simply assumes left and right and
+top and bottom will match… inline icons that can toggle between the default
+'assumed match' form and the optional 'separate values' mode.")*
+
+**This does not reopen E4, and the difference is the whole rule.** E4 is
+about what a spacing box CAN express; E4b is about how many rows it costs
+when you are not using that. The four side keys are still the data model —
+a matched row writes both of its sides — so the banner logo that needed its
+top padding gone and its left padding kept is still one click away, in place,
+on the row itself. What E4 forbids is a control that cannot reach a single
+side at all. Nothing here hides a setting: **A0's guard is about a collapse
+that puts a control on another screen; a mode toggle on the row is not one.**
+
+*Why:* Placement was eleven rows on the Text module — alignment, four
+margins, four paddings, two offsets — and eight of the eleven were spacing.
+Almost every one of them was set symmetrically.
+
+*How:* never write these rows by hand. `marginFields()` / `paddingFields()` /
+`spacingFields()` emit them for a schema panel; `BuilderModuleSpacingFields`
+renders them in a hand-written strip (the shared module chrome, Social, CRM
+Form, the row editor, the cell editor). Both come from
+`builder-spacing-fields.tsx`, which owns the labels, the side order, the
+legacy fallbacks and the toggle.
+
+*The mode is derived, never stored.* Two sides holding the same number show
+matched; two that differ show apart. The only state is one boolean per axis —
+"the operator asked to split this one" — so nothing new is persisted and the
+control can never claim two sides match when they do not.
+
+**Checked by:** `check_ui_doctrine.cjs` (as E4 — the helpers satisfy both) and
+`components/builder/builder-spacing-fields.test.tsx`, which drives the real
+control in a DOM and asserts that a matched row writes both SIDE keys and
+never a vertical/horizontal one.
 
 #### W8. A size dropdown past 100px counts in fives `[auto]` *(added 2026-08-12)*
 
@@ -319,6 +363,26 @@ settings were reported dead. They were not — the renderer reads them through
 The opposite error was real in the same audit: `horizontalOffset` and
 `verticalOffset` genuinely were dead, and were removed. **Trace the helpers,
 not just the literals.**
+
+**A third species, and the audit above walked straight past it (2026-08-16):**
+a control whose setting DOES reach the render path, where the render path has
+nothing to say about it. The Image and Floating Image panels had offered
+Cruise and Tumbleweed since the Normie port; both reached
+`getImageEffectClassName`, which duly put `starcaster-effect-cruise` /
+`-tumbleweed` on the figure — **and no stylesheet in this repo ever defined
+either class**. The operator picked Tumbleweed on the Delray home page and got
+a still picture and no error. The same drift ran the other way at the same
+time: five effects with full keyframes (`flips`, `slide`, `cartwheels`,
+`parkour`, `axis-rotate`) that no panel offers.
+
+Walking "editor → renderer" is therefore not the whole of E7 when the renderer
+is CSS: **a class name is not a rendering.** Nothing in this repo tests CSS
+(§R2's incident, and `docs/DOCTRINE.md` 5.13), so the last hop is exactly where
+a setting dies quietly. `components/builder/builder-image-effects.test.ts`
+closes it for this family by reading `src/css/` and failing when an offered
+effect has no rule — the cheap shape of check for any setting whose only
+consumer is a stylesheet. The full record, including the three other traps the
+same work turned up, is `docs/IMAGE_EFFECTS.md`.
 
 ### 1b. Rendered UI — the published page
 
@@ -533,7 +597,8 @@ They are reproduced here with honest tags.
 | E1 field strips | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
 | E2 width token | `[type]` | `npm run typecheck` |
 | E3 strip order | `[eye]` | state it in the PR |
-| E4 H+V margin | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
+| E4 four sides | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
+| E4b matched rows | `[auto]` + `[test]` | `node scripts/check_ui_doctrine.cjs`, `npm run test:builder-ui` |
 | E5 labels don't wrap | `[eye]` | state it in the PR |
 | E6 no duplicated chrome | `[auto]` | `node scripts/check_ui_doctrine.cjs` |
 | E7 no dead controls | `[eye]` | trace helpers both directions |
@@ -565,7 +630,8 @@ Kept for the record; the doc above assumes they exist.
 3. **The declarative settings schema** — done:
    `components/builder/builder-settings-schema.tsx`. An editor declares its
    fields grouped content/layout/style/advanced; the generator renders the
-   strips, so E1, E2, E3 and E4 (via `marginFields`) hold by construction.
+   strips, so E1, E2, E3, E4 and E4b (via `marginFields`) hold by
+   construction.
    Bespoke UI drops into `custom` fields — one special control is never a
    reason to hand-roll a whole panel. First conversion:
    `builder-current-poll-module-settings.tsx`. A field's `rendersVia` names

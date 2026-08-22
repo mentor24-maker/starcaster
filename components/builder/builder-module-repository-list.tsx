@@ -10,6 +10,7 @@ import type {
   BuilderTemplateSection
 } from "@/lib/builder-template";
 import { repositoryEditingSessionKeyFromFocus } from "@/lib/builder-repository-save-session";
+import { describeUsage, type BlockUsage } from "@/lib/shared-block-usage";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createDefaultBackgroundSettings, createEmptyModule, normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -41,6 +42,8 @@ type BuilderModuleRepositoryListProps = {
   galleryMedia: AdminMediaItem[];
   isUploadingMedia: boolean;
   savedSections: BuilderSavedSectionRecord[];
+  /** How many pages follow each saved section, keyed by saved-section id. */
+  savedSectionUsage: Map<string, BlockUsage>;
   templates: BuilderTemplateRecord[];
   isSaving: boolean;
   onSaveCreatedModule: (source: CreatedModuleSource, module: BuilderTemplateModule) => void;
@@ -1287,6 +1290,7 @@ function RepositoryTable({
 
 function SavedSectionsTable({
   savedSections,
+  savedSectionUsage,
   cellModules,
   products,
   isSaving,
@@ -1325,6 +1329,7 @@ function SavedSectionsTable({
   onUpdateEditingSection
 }: {
   savedSections: BuilderSavedSectionRecord[];
+  savedSectionUsage: Map<string, BlockUsage>;
   cellModules: BuilderCellModuleRecord[];
   products: BuilderProductRecord[];
   isSaving: boolean;
@@ -1451,6 +1456,7 @@ function SavedSectionsTable({
                     <input className="builder-crud-filter-input" placeholder="Search" type="search" value={filters.updated} onChange={(event) => updateFilter("updated", event.target.value)} />
                   </label>
                 </th>
+                <th scope="col" />
                 <th className="crud-actions-cell" scope="col" />
               </tr>
               <tr>
@@ -1459,6 +1465,7 @@ function SavedSectionsTable({
                 <th scope="col"><BuilderCrudSortButton activeSortKey={sortKey} label="Modules" onSort={handleSort} sortDirection={sortDirection} sortKey="modules" /></th>
                 <th scope="col"><BuilderCrudSortButton activeSortKey={sortKey} label="ID" onSort={handleSort} sortDirection={sortDirection} sortKey="id" /></th>
                 <th scope="col"><BuilderCrudSortButton activeSortKey={sortKey} label="Updated" onSort={handleSort} sortDirection={sortDirection} sortKey="updated" /></th>
+                <th scope="col">Used on</th>
                 <th className="crud-actions-cell">Actions</th>
               </tr>
             </thead>
@@ -1471,6 +1478,12 @@ function SavedSectionsTable({
                     <td>{section.section.modules.length}</td>
                     <td className="template-id-cell"><code>{section.id}</code></td>
                     <td>{formatTemplateTimestamp(section.updatedAt)}</td>
+                    <td
+                      className="builder-saved-section-usage-cell"
+                      title="Saving this section rewrites it on every page that follows it"
+                    >
+                      {describeUsage(savedSectionUsage.get(section.id))}
+                    </td>
                     <td className="crud-actions-cell">
                       <div className="builder-template-actions">
                         <button aria-label="Edit saved section" className="polls-icon-button polls-icon-button-edit" disabled={isSaving} onClick={() => onStartEditingSection(section)} title="Edit section" type="button">✎</button>
@@ -1480,7 +1493,7 @@ function SavedSectionsTable({
                   </tr>
                   {editingSectionId === section.id && editingSection ? (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <div className="builder-saved-module-editor">
                           <div className="builder-meta-grid">
                             <label className="field">
@@ -1590,6 +1603,7 @@ export function BuilderModuleRepositoryList({
   galleryMedia,
   isUploadingMedia,
   savedSections,
+  savedSectionUsage,
   templates,
   isSaving,
   onSaveCreatedModule,
@@ -2471,6 +2485,7 @@ export function BuilderModuleRepositoryList({
         title="Saved Cells"
       />
       <SavedSectionsTable
+        savedSectionUsage={savedSectionUsage}
         cellModules={cellModules}
         editingSection={editingSection}
         editingSectionCollapsed={editingSectionCollapsed}

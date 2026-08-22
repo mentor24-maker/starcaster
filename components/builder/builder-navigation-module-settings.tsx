@@ -20,6 +20,7 @@ import {
   dropShadowFields,
   dropShadowIsOn,
   marginFields,
+  spacingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { getModuleBackgroundSettings } from "./builder-utils";
@@ -153,28 +154,26 @@ const isListMenu = (settings: Record<string, string>) => !isMegaMenu(settings);
  * `top` is the default for top/bottom, `side` for left/right, because a
  * link ships 0 above and 14 beside.
  */
+/**
+ * One of this panel's own spacing boxes — the bar's padding, and the padding
+ * inside each link. Both are four sides under a qualified noun, shown matched
+ * per axis with the split one click away (E4b), exactly like the module's own
+ * margins beside them.
+ */
 function sideFields(
   keyPrefix: string,
   label: string,
   { max, top, side }: { max: number; top: string; side: string }
 ) {
-  return (
-    [
-      ["Top", "Top", top],
-      ["Bottom", "Bottom", top],
-      ["Left", "Left", side],
-      ["Right", "Right", side]
-    ] as const
-  ).map(([suffix, word, fallback]) => ({
-    key: `${keyPrefix}${suffix}`,
-    label: `${word} ${label}`,
-    width: "num" as const,
-    control: "number" as const,
-    min: 0,
+  return spacingFields({ keyPrefix, noun: label }, RENDERS_VIA, {
     max,
-    fallback,
-    rendersVia: RENDERS_VIA
-  }));
+    sides: {
+      [`${keyPrefix}Top`]: { fallback: top },
+      [`${keyPrefix}Bottom`]: { fallback: top },
+      [`${keyPrefix}Left`]: { fallback: side },
+      [`${keyPrefix}Right`]: { fallback: side }
+    }
+  });
 }
 
 /**
@@ -610,15 +609,14 @@ export function BuilderNavigationModuleSettings({
                 }
               ],
               ...marginFields("getModuleOuterSpacingStyle", 160).map((field) => [field]),
-              // The bar's own padding, four sides, each on its own strip like the
-              // margins above.
+              // The bar's own padding, matched per axis like the margins above.
               ...sideFields("navPadding", "Padding", {
                 max: 60,
                 top: String(NAV_STYLE_DEFAULTS.paddingV),
                 side: String(NAV_STYLE_DEFAULTS.paddingH)
               }).map((field) => [field]),
-              // W7 names the four spacing controls for a module's OWN box, taken
-              // above by the bar. These four are the padding inside each LINK, a
+              // W7 names the spacing controls for a module's OWN box, taken
+              // above by the bar. These are the padding inside each LINK, a
               // different quantity (same judgement call as Table's "Cell
               // Padding"), so they carry a qualified name.
               ...sideFields("navLinkPadding", "Link Padding", {
@@ -1269,7 +1267,11 @@ export function BuilderNavigationModuleSettings({
                 const isCustomSizing = module.settings.navItemSizing === "custom";
                 const parentOptions = eligibleParents(item);
                 return (
-                  <div key={item.id} className="builder-nav-item-row">
+                  <div
+                    key={item.id}
+                    className="builder-nav-item-row"
+                    style={{ "--nav-item-depth": depthOf(item) } as CSSProperties}
+                  >
                     <div className="builder-nav-item-fields">
                       <select
                         className="builder-nav-item-parent-select"

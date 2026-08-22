@@ -79,13 +79,54 @@ run('git', ['worktree', 'add', dest, '-b', topic, base]);
 console.log('[thread] Installing dependencies (about a minute, and its own copy on purpose)…');
 run('npm', ['ci'], { cwd: dest, stdio: ['ignore', 'ignore', 'inherit'] });
 
+// Settings are deliberately not in git, so a fresh worktree starts unable to
+// reach ANY database — every store call fails, and the app looks broken in a
+// way that points at the code rather than at the folder. Carry the main
+// checkout's settings across so the folder can actually run.
+//
+// Copied, not symlinked: a link would make an edit here silently rewrite the
+// main checkout's settings, and pointing one thread at production would
+// quietly repoint every other thread too.
+const envSource = path.join(mainRoot, '.env.local');
+if (fs.existsSync(envSource)) {
+  fs.copyFileSync(envSource, path.join(dest, '.env.local'));
+  console.log('[thread] Copied your .env.local across.');
+} else {
+  console.log('[thread] No .env.local in the main folder — this one will have none either.');
+}
+
 // AFTER the install, never before. Creating the worktree fires post-checkout,
 // which tries to build while this folder still has no dependencies — esbuild
 // would reach up to the parent checkout and write bundles referencing
 // ../../../node_modules. build_pinned_assets now refuses that, so the folder
 // simply has no artifacts until here.
+// The FULL build, not just the pinned assets.
+//
+// build_pinned_assets alone produces builder-bundle.js and styles.css but not
+// app-shell.html, which IS the admin app — so a fresh worktree could pass every
+// test and still serve a 404 to a browser. On 2026-08-15 that swallowed an hour
+// twice: `npm run check:panels` reported "No panels carrying `.is-lattice` were
+// found", which reads as a broken check rather than a folder that was never
+// built. lib/builder/template.js was missing for the same reason, and took the
+// server-side test suite down with it.
+//
+// Costs about half a minute more than the old step, once, and makes the folder
+// something you can actually run.
 console.log('[thread] Building this folder’s own bundles…');
-run('node', [path.join(dest, 'scripts', 'build_pinned_assets.mjs')], { cwd: dest });
+run('npm', ['run', 'build'], { cwd: dest, stdio: ['ignore', 'ignore', 'inherit'] });
+
+// End by SHOWING the folder's state rather than asserting it is ready.
+// `thread` used to print "Ready." whether or not Docker was running or the
+// database was reachable, so the first sign of trouble was the app
+// misbehaving several minutes later. doctor is read-only and takes a moment.
+console.log('\n[thread] Checking this folder…');
+try {
+  execFileSync('node', [path.join(dest, 'scripts', 'doctor.mjs')], { cwd: dest, stdio: 'inherit' });
+} catch (_) {
+  // A non-zero exit means doctor found something to fix, and it has already
+  // printed what and how. The folder itself is still built and usable, so
+  // this must not fail the command.
+}
 
 console.log(`
 [thread] Ready.

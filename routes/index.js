@@ -52,11 +52,11 @@ const activityLog = require('./activityLog');
 const config      = require('./config');
 const messaging   = require('./messaging');
 const engage      = require('./engage');
+const publish     = require('./publish');
 const builder     = require('./builder');
 const seoAltText  = require('./seoAltText');
 const communityAssets = require('./communityAssets');
 const observe     = require('./observe');
-const roger       = require('./devAgent');
 const personas    = require('./personas');
 const tasks       = require('./tasks');
 const polls       = require('./polls');
@@ -96,6 +96,9 @@ const ROUTE_MODULES = [
   // wizard's routes would start 405-ing with nothing to point at. Matching
   // first costs nothing and removes the dependency.
   themeWizard,
+  // Ahead of `builder`: both claim '/api/builder/*', and publish owns the
+  // narrower '/api/builder/publish' prefix.
+  publish,
   builder,
   siteImport,
   seoAltText,
@@ -104,7 +107,6 @@ const ROUTE_MODULES = [
   activityLog,
   observe,
   config,
-  roger,
   platformScreenshots,
   personas,
   tasks,
@@ -243,7 +245,13 @@ async function handleRequest(req, res) {
   const isAdminAuthRoute = pathname.startsWith('/api/admin/auth');
   const isAdminRoute = pathname.startsWith('/api/admin');
   const isDebugRoute = pathname === '/api/debug-routes';
-  const isWebhookRoute = pathname === '/api/builder/devAgent/worker' || pathname.startsWith('/api/tasks');
+  // SECURITY: this list NARROWED when the Dev Agent was retired —
+  // '/api/builder/devAgent/worker' no longer gets an unauthenticated exemption,
+  // because the route serving it is gone. (It was already a path nothing
+  // answered: routes/devAgent.js declared the prefix '/api/develop/devAgent',
+  // not '/api/builder/'.) '/api/tasks' keeps its exemption; routes/tasks.js
+  // stays.
+  const isWebhookRoute = pathname.startsWith('/api/tasks');
   const isPublicContactSubmit = pathname === '/api/contact' && method === 'POST';
   const isPublicCrmRoute = isPublicCrmRouteForAuth(pathname, method);
   const isPublicTenantReadRoute = isPublicTenantContentReadRoute(pathname, method, req);
@@ -411,11 +419,6 @@ async function handleRequest(req, res) {
         'POST /api/acquire/youtube-comment-suggestions',
         'POST /api/acquire/youtube-comment',
       ],
-      expectedDevAgentTeamRoutes: [
-        'GET /api/builder/devAgent/team',
-        'POST /api/builder/devAgent/team',
-        'DELETE /api/builder/devAgent/team/:id',
-      ],
       assetFeatures: {
         importDriveFolder: typeof assets.handleImportDriveFolder === 'function',
         importDriveFolderPath: assets.IMPORT_DRIVE_FOLDER_PATH || null,
@@ -504,7 +507,6 @@ function isRegisteredApiPath(pathname) {
   if (p === '/api/assets/import-drive-folder') return true;
   if (p === '/api/assets/import-from-fields/status') return true;
   if (p === '/api/assets/import-from-fields') return true;
-  if (p === '/api/builder/devAgent/worker') return true;
   for (const mod of ROUTE_MODULES) {
     const prefixes = Array.isArray(mod?.manifest?.prefixes) ? mod.manifest.prefixes : [];
     for (const prefix of prefixes) {

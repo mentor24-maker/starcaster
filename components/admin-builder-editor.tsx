@@ -1,6 +1,13 @@
 "use client";
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import {
+  ALREADY_UNDONE_MESSAGE,
+  confirmUndoMessage,
+  describeUndoOutcome,
+  fetchPropagationRunScope,
+  performPropagationUndo,
+} from "@/lib/propagation-undo";
 import type { ChangeEvent, DragEvent } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AdminMediaItem } from "@/lib/admin-media";
@@ -9,6 +16,7 @@ import {
   BUILDER_PREVIEW_STORAGE_KEY,
   createDefaultBackgroundSettings,
   createDefaultTheme,
+  resolveRenderTheme,
   createEmptyModule,
   createEmptySection,
   getLayoutColumns,
@@ -51,6 +59,24 @@ import {
 import { BuilderTemplateList } from "./builder/builder-template-list";
 import { BuilderPageList, pageVisibilityFromRecord, pageVisibilityToFlags, type PageVisibility } from "./builder/builder-page-list";
 import { BuilderPageHistory } from "./builder/builder-page-history";
+import { BuilderPublishPanel } from "./builder/builder-publish-panel";
+import {
+  applyTemplateFrame,
+  describeTemplateFrameChange,
+  resolveTemplateSections,
+  toTemplateReferences
+} from "@/lib/builder-template-frame";
+import {
+  buildSavedSectionUsageIndex,
+  describeCanonicalOverwrite,
+  describePropagationOutcome,
+  readPropagationTally,
+  describePushImpact,
+  driftedFollowingPages,
+  type BlockUsage
+} from "@/lib/shared-block-usage";
+import { diffSavedSectionOverwrite } from "@/lib/saved-section-diff";
+import { getSectionContent, hasSectionDrifted } from "@/lib/section-drift";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -65,6 +91,8 @@ import {
 import { BuilderSaveDebugPanel } from "./builder/builder-save-debug-panel";
 import { BuilderSectionCard } from "./builder/builder-section-card";
 import { BuilderCenteredModal } from "./builder/builder-centered-modal";
+import { BuilderSaveConflictModal } from "./builder/builder-save-conflict-modal";
+import { BuilderSectionSaveModal } from "./builder/builder-section-save-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
 import {
   BuilderModulePaletteModal,
@@ -94,6 +122,23 @@ async function readAdminJson<T extends AdminApiPayload>(response: Response, fall
   }
 
   return data;
+}
+
+/**
+ * " 4 minutes ago" for the stale-editor warning, or "" when the timestamp is
+ * missing or unreadable. The sentence it lands in has to read correctly either
+ * way, so this returns a leading space and the caller never adds punctuation.
+ */
+function describeConflictAge(iso: string): string {
+  if (!iso) return "";
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return "";
+  const minutes = Math.round((Date.now() - when.getTime()) / 60000);
+  if (minutes < 1) return " a moment ago";
+  if (minutes === 1) return " 1 minute ago";
+  if (minutes < 60) return ` ${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? " an hour ago" : ` ${hours} hours ago`;
 }
 
 type AdminBuilderEditorProps = {
@@ -132,6 +177,24 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [repositorySaveActive, setRepositorySaveActive] = useState(false);
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
+  // The page's updatedAt as of the version currently on the canvas. Sent with
+  // every save so the server can refuse to write over somebody else's change
+  // (see isStaleEdit in lib/builderPagesStore.js). It MUST be refreshed from
+  // the save response as well as on hydrate -- a successful save moves the row
+  // forward without re-hydrating the editor, so skipping that makes the second
+  // save of any session collide with the first.
+  const loadedUpdatedAtRef = useRef("");
+  const [saveConflict, setSaveConflict] = useState<{ liveUpdatedAt: string; savedByName: string } | null>(null);
+  const [propagationUndo, setPropagationUndo] =
+    useState<{ runId: string; pages: number; name: string } | null>(null);
+  const [isUndoingPropagation, setIsUndoingPropagation] = useState(false);
+  // Sync 5/7: pages a push skipped because they were hand-edited on their
+  // own, still following the section that skipped them. The explicit
+  // opt-in to overwrite them anyway lives here, right where the skip was
+  // reported — not buried behind a checkbox nobody would find before saving.
+  const [driftedSkip, setDriftedSkip] =
+    useState<{ savedSectionId: string; name: string; pageLabels: string[]; pageIds: string[] } | null>(null);
+  const [isForcingDrifted, setIsForcingDrifted] = useState(false);
   const pageThemeDirtyRef = useRef(false);
   // Template and theme are only written back when the operator actually picked
   // one.  Both selects render blank whenever the stored value isn't among their
@@ -142,10 +205,20 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   const [galleryMedia, setGalleryMedia] = useState<AdminMediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Bumped after a page save so the Publish count reflects what just changed
+  // rather than what was true when the panel mounted. A stale count is the one
+  // way this panel could actively mislead.
+  const [publishRefreshKey, setPublishRefreshKey] = useState(0);
   const [dragOverWorkspace, setDragOverWorkspace] = useState(false);
   const [draggingLayout, setDraggingLayout] = useState(false);
   const [dragOverSectionGap, setDragOverSectionGap] = useState<number | null>(null);
   const [savedSectionToPlace, setSavedSectionToPlace] = useState<BuilderSavedSectionRecord | null>(null);
+  /**
+   * Which section's Save button is waiting on "overwrite the original, or file
+   * a new one?". Only set for a section that came from a saved section — for
+   * anything else Save has one meaning and asks nothing.
+   */
+  const [sectionSaveChoice, setSectionSaveChoice] = useState<{ sectionId: string; savedSectionId: string } | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isModulePaletteOpen, setIsModulePaletteOpen] = useState(false);
   const [galleryTarget, setGalleryTarget] = useState<GalleryTarget | null>(null);
@@ -185,7 +258,50 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // Palette swatches for the RTE toolbar: prefer the linked page theme, then fall back to the
   // first available theme so swatches still appear when no theme is selected on the page.
   const activeTheme = linkedTheme ?? builderThemes[0] ?? null;
+  // How many pages follow each saved section. One pass over the pages already
+  // in memory, so the manager can show "used on N pages" and a save can say
+  // what it is about to rewrite.
+  const savedSectionUsage = useMemo(() => buildSavedSectionUsageIndex(pages), [pages]);
+  // The original behind the section whose Save button is waiting on an answer.
+  // Resolved here rather than stored, so a saved section deleted in another tab
+  // closes the dialog instead of offering to overwrite something that is gone.
+  const sectionSaveChoiceMaster = sectionSaveChoice
+    ? savedSections.find((candidate) => candidate.id === sectionSaveChoice.savedSectionId) ?? null
+    : null;
+  /**
+   * Not just WHICH pages an overwrite rewrites, but what changes on each.
+   *
+   * Naming a page is enough to make someone hesitate; it is not enough to make
+   * them decide, and that was the last open piece of the operator's 2026-07-21
+   * request. Computed here as a pure function over the pages already in memory
+   * — `GET /api/admin/pages` is a `select=*`, so every page's sections are
+   * already loaded and nothing stands between the click and the answer.
+   */
+  const sectionSaveDiff = useMemo(() => {
+    if (!sectionSaveChoice) return null;
+    const section = draft.layoutSections.find((candidate) => candidate.id === sectionSaveChoice.sectionId);
+    if (!section) return null;
+    // The same content `overwriteCanonicalFromSection` sends to the PATCH.
+    return diffSavedSectionOverwrite(pages, sectionSaveChoice.savedSectionId, getSectionContent(section));
+  }, [sectionSaveChoice, draft.layoutSections, pages]);
+  /**
+   * Which following pages this overwrite will SKIP rather than rewrite —
+   * a copy already hand-edited on its own page, measured against the
+   * master's content as it stands right now, before this save lands.
+   */
+  const sectionSaveDrift = useMemo(() => {
+    if (!sectionSaveChoice || !sectionSaveChoiceMaster) return { count: 0, pageLabels: [] };
+    return driftedFollowingPages(pages, sectionSaveChoice.savedSectionId, sectionSaveChoiceMaster.section);
+  }, [sectionSaveChoice, sectionSaveChoiceMaster, pages]);
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
+  // What the canvas paints type with. The shell colours above already read
+  // `linkedTheme` — the live record — while the type vars read the copy frozen
+  // into the draft, so editing a theme changed the canvas background and not
+  // its text. Same resolver the public site uses, so the two cannot disagree.
+  const canvasTheme = useMemo(
+    () => resolveRenderTheme(draft.theme, linkedTheme),
+    [draft.theme, linkedTheme]
+  );
   const workspaceShellLayers = useMemo(
     () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
     [draft.pageBackground, linkedTheme]
@@ -201,11 +317,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }),
     [workspaceThemeStyles, workspaceShellLayers.inlineBackground]
   );
+  // `canvasTheme`, not `draft.theme`. A page stopped carrying its own copy of
+  // the theme when it started following one (#256), so `draft.theme.typography`
+  // can now arrive without a `colors` object at all — and this chain is
+  // unguarded, so reading `.text` off it threw and took the WHOLE editor down
+  // to a blank page, every row and every module with it. `resolveRenderTheme`
+  // always returns a normalized theme, and it is the live one the canvas is
+  // already painting with, which is what these swatches should have offered
+  // from the start.
   const rteThemeColors = [
     ...buildBuilderThemePaletteColors(activeTheme),
-    { label: "Body text", hex: draft.theme.typography.colors.text },
-    { label: "Headings", hex: draft.theme.typography.colors.heading },
-    { label: "Link", hex: draft.theme.typography.colors.link },
+    { label: "Body text", hex: canvasTheme.typography.colors.text },
+    { label: "Headings", hex: canvasTheme.typography.colors.heading },
+    { label: "Link", hex: canvasTheme.typography.colors.link },
   ].filter((c) => Boolean(c.hex));
 
   // --- Data loading ---
@@ -469,6 +593,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
 
     hydratedPageSelectionRef.current = selectionKey;
+    loadedUpdatedAtRef.current = page?.updatedAt ?? "";
+    setSaveConflict(null);
     pageThemeDirtyRef.current = false;
     pageTemplateDirtyRef.current = false;
     setDraft(createDraftFromPage(page));
@@ -753,7 +879,36 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setSavedSectionToPlace(savedSection);
   }
 
+  /**
+   * The 💾 button on a section card.
+   *
+   * A section that came from a saved section has TWO possible saves — update
+   * that original, or file a separate copy — and until 2026-08-16 it silently
+   * did the second one, so typing the original's name produced a duplicate
+   * rather than the update the operator meant. Ask instead; the dialog does the
+   * choosing, this only decides whether there is a question to ask.
+   */
   async function saveSection(sectionId: string) {
+    const section = draft.layoutSections.find((candidate) => candidate.id === sectionId);
+
+    if (!section) {
+      return;
+    }
+
+    const savedSectionId = (section as BuilderTemplateSection & { savedSectionId?: string }).savedSectionId;
+
+    // Only when the original still exists — a deleted master leaves the
+    // provenance behind, and offering to overwrite something that is gone
+    // would fail at the PATCH with a 404.
+    if (savedSectionId && savedSections.some((candidate) => candidate.id === savedSectionId)) {
+      setSectionSaveChoice({ sectionId, savedSectionId });
+      return;
+    }
+
+    await saveSectionAsNew(sectionId);
+  }
+
+  async function saveSectionAsNew(sectionId: string) {
     const section = draft.layoutSections.find((candidate) => candidate.id === sectionId);
 
     if (!section) {
@@ -790,9 +945,37 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  function getSectionContent(section: BuilderTemplateSection) {
-    const { id, savedSectionId, canonical, ...content } = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
-    return content;
+  /**
+   * Push a page section back over the saved section it came from.
+   *
+   * Same write the saved-section manager makes, so it goes out through the same
+   * PATCH and the same fan-out to every page that follows the original — page
+   * tally, undo offer and all. The instance is relinked afterwards because the
+   * original now holds exactly this content, so following it again changes
+   * nothing on screen and stops this copy drifting a second time.
+   */
+  async function overwriteCanonicalFromSection(sectionId: string, savedSectionId: string) {
+    const section = draft.layoutSections.find((candidate) => candidate.id === sectionId);
+    const master = savedSections.find((candidate) => candidate.id === savedSectionId);
+
+    if (!section || !master) {
+      setSectionSaveChoice(null);
+      return;
+    }
+
+    const content = { ...getSectionContent(section), id: master.section.id } as BuilderTemplateSection;
+    const saved = await saveSavedSection(savedSectionId, master.name, content, master.isPrivate === true, {
+      // The dialog just listed every page this touches; a second confirm on top
+      // of it is the kind of nagging people learn to click through.
+      skipImpactConfirm: true,
+      note: "This page still needs saving."
+    });
+
+    setSectionSaveChoice(null);
+
+    if (saved) {
+      updateSection(sectionId, (s) => ({ ...s, savedSectionId, canonical: true } as BuilderTemplateSection));
+    }
   }
 
   async function handleToggleSectionCanonical(sectionId: string, checked: boolean) {
@@ -814,10 +997,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       return;
     }
 
-    const localJson = JSON.stringify(getSectionContent(section));
-    const masterJson = JSON.stringify(getSectionContent(master.section));
-
-    if (localJson === masterJson) {
+    if (!hasSectionDrifted(section, master.section)) {
       updateSection(sectionId, (s) => ({ ...s, canonical: true }));
       return;
     }
@@ -1217,11 +1397,35 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  async function saveSavedSection(sectionId: string, name: string, section: BuilderTemplateSection, isPrivate: boolean) {
+  async function saveSavedSection(
+    sectionId: string,
+    name: string,
+    section: BuilderTemplateSection,
+    isPrivate: boolean,
+    options: {
+      /** The caller already showed the page list and got an answer. */
+      skipImpactConfirm?: boolean;
+      /** Appended to the outcome message — what is still left to do. */
+      note?: string;
+    } = {}
+  ): Promise<boolean> {
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Saved section name is required.");
-      return;
+      return false;
+    }
+
+    // Say what this will touch BEFORE writing. Saving a master rewrites the
+    // section on every page that follows it, and that fan-out used to be
+    // completely silent — see lib/builder-client/shared-block-usage.ts.
+    // The master's CURRENT content (before this save lands) is what a
+    // drifted copy is measured against — never the new content about to
+    // be written, which every following page differs from by definition.
+    const currentMaster = savedSections.find((ss) => ss.id === sectionId)?.section ?? null;
+    const drift = driftedFollowingPages(pages, sectionId, currentMaster);
+    if (!options.skipImpactConfirm) {
+      const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId), drift.count);
+      if (impact && !window.confirm(impact)) return false;
     }
 
     setIsSaving(true);
@@ -1234,7 +1438,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmedName, section, isPrivate })
       });
-      const data = await readAdminJson<{ savedSection?: BuilderSavedSectionRecord; error?: string }>(response, "Failed to save saved section.");
+      const data = await readAdminJson<{
+        savedSection?: BuilderSavedSectionRecord;
+        error?: string;
+        meta?: {
+          propagation?: {
+            ok?: boolean; total?: number; updated?: number; failed?: number; runId?: string;
+            skipped?: Array<{ pageId?: string; name?: string }>;
+          };
+        };
+      }>(response, "Failed to save saved section.");
 
       if (!data.savedSection) {
         throw new Error(data.error ?? "Failed to save saved section.");
@@ -1243,9 +1456,34 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       setSavedSections((current) =>
         current.map((section) => (section.id === data.savedSection!.id ? data.savedSection! : section))
       );
-      setMessage(`Saved section "${data.savedSection.name}".`);
+      // The route has always returned this tally; it used to be dropped, so a
+      // fan-out that half failed reported the same "Saved." as a clean one.
+      const outcome = describePropagationOutcome(data.savedSection.name, data.meta?.propagation);
+      const skippedForDrift = data.meta?.propagation?.skipped ?? [];
+      setDriftedSkip(
+        skippedForDrift.length
+          ? {
+              savedSectionId: sectionId,
+              name: data.savedSection.name,
+              pageLabels: skippedForDrift.map((p) => p.name || "Untitled page"),
+              // The ids travel with the banner: the explicit overwrite names
+              // exactly these pages, so a force run touches nothing else.
+              pageIds: skippedForDrift.map((p) => String(p.pageId ?? "")).filter(Boolean),
+            }
+          : null
+      );
+      setMessage(options.note ? `${outcome} ${options.note}` : outcome);
+      // Offer the way back, right where the damage is reported. A push that
+      // rewrote pages is exactly the moment somebody realises it was wrong.
+      const runId = String(data.meta?.propagation?.runId ?? "");
+      const updated = Number(data.meta?.propagation?.updated ?? 0) || 0;
+      setPropagationUndo(runId && updated ? { runId, pages: updated, name: data.savedSection.name } : null);
+      // Those pages now hold new content — refresh so the counts stay true.
+      await loadPages();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save saved section.");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -1541,20 +1779,44 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // Stub templates (empty layoutSections) only tag the page; they don't clear the layout.
     if (!template.layoutSections.length) return;
 
-    // Choosing a template NEVER overwrites a page that already has content.
-    // This dropdown reads blank whenever the page's stored value isn't one of
-    // its own options — which is every page carrying a legacy layout name —
-    // so a destructive apply here reaches the operator as "the field was
-    // empty, I filled it in, the page emptied out".  That is how the Delray
-    // home page lost 35 sections on 2026-08-14.  Seeding an empty page is the
-    // useful half of this and is kept; replacing real content is a deliberate
-    // act and needs its own command, not a change event on a select.
+    // A template is a FRAME, not a photocopy of a page: it owns the shared
+    // furniture (the canonical sections) and the page owns its body. Switching
+    // swaps the frame and carries the body through untouched, so this cannot
+    // repeat 2026-08-14, when applying a template assigned its sections over
+    // the page's and the Delray home page went from 35 sections to 4.
+    //
+    // PR #231 made this refuse to touch a page with content, which was the
+    // right emergency stop and the wrong end state. This does the job instead.
+    // Frame references resolve against the CURRENT masters, so applying a
+    // template can never stamp a header that went stale after the template was
+    // made. Old templates still carrying full copies fall back to those, so
+    // nothing had to be migrated.
+    const frameResolution = { savedSections, makeId: () => crypto.randomUUID() };
+
     if (draft.layoutSections.length) {
-      setMessage(`Tagged this page with "${template.name}". Its existing layout was kept — a template never replaces content that is already on the page.`);
+      const result = applyTemplateFrame(draft.layoutSections, template.layoutSections, frameResolution);
+      // Nothing is written until the operator has seen what changes. The count
+      // of what is KEPT leads, because that is the question this control has
+      // taught him to ask.
+      if (!window.confirm(describeTemplateFrameChange(template.name, result))) {
+        // Put the dropdown back — a cancelled switch must leave no trace.
+        setPageTemplateId(pageTemplateId);
+        pageTemplateDirtyRef.current = false;
+        return;
+      }
+      setDraft((c) => ({ ...c, layoutSections: result.sections as typeof c.layoutSections }));
+      setCollapsedSectionIds(result.sections.map((section: BuilderTemplateSection) => String(section.id ?? "")));
+      setMessage(
+        `Switched to "${template.name}". ${result.keptBody} content section${result.keptBody === 1 ? "" : "s"} kept` +
+        (result.frameRemoved ? `, ${result.frameRemoved} shared section${result.frameRemoved === 1 ? "" : "s"} replaced` : "") +
+        "."
+      );
       return;
     }
 
-    setDraft((c) => ({ ...c, id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: template.layoutSections }));
+    // Seeding an empty page: resolve the references too, or a reference-only
+    // template would seed empty bands where the header and footer should be.
+    setDraft((c) => ({ ...c, id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: resolveTemplateSections(template.layoutSections, savedSections, frameResolution.makeId) as typeof c.layoutSections }));
   }
 
   async function makeTemplateFromPage() {
@@ -1574,7 +1836,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           name: templateName,
           pageBackground: draft.pageBackground,
           theme: draft.theme,
-          layoutSections: draft.layoutSections
+          // Frame sections are stored as REFERENCES, not copies. A template
+          // that embedded the Contact Strip kept serving whatever that strip
+          // looked like on the day the template was made — two sources of
+          // truth for one header, with nothing to show they had diverged.
+          layoutSections: toTemplateReferences(draft.layoutSections)
         })
       });
       const data = await readAdminJson<{ pageTemplate?: BuilderTemplateRecord; error?: string }>(response, "Failed to create template from page.");
@@ -1826,13 +2092,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
-  async function savePage() {
+  /**
+   * @param options.overwriteFrom  The live updatedAt returned by a previous
+   *   409. Passing it re-runs the save against THAT version -- so "overwrite
+   *   anyway" still collides if a third save landed in the meantime, instead
+   *   of switching the guard off and reopening the hole it exists to close.
+   */
+  async function savePage(options: { overwriteFrom?: string } = {}) {
     if (!draft.name.trim()) { setError("Page title is required."); return; }
     // An empty slug is the root/home page (the DB unique index excludes empty
     // slugs). Allow saving an existing root page without a slug; only require
     // one when creating a new page so we don't silently mint duplicate roots.
     if (!selectedPageId && !pageSlug.trim()) { setError("Page slug is required."); return; }
-    setIsSaving(true); setError(null); setMessage(null);
+    setIsSaving(true); setError(null); setMessage(null); setSaveConflict(null);
     try {
       const response = await builderAdminFetch(selectedPageId ? `/api/admin/pages/${selectedPageId}` : "/api/admin/pages", {
         method: selectedPageId ? "PATCH" : "POST",
@@ -1840,6 +2112,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         body: JSON.stringify({
           name: draft.name,
           slug: pageSlug,
+          // Only an existing page can be stale; a create has nothing to collide
+          // with. Blank means "no opinion" and the server lets the save through.
+          ...(selectedPageId
+            ? { expectedUpdatedAt: options.overwriteFrom ?? loadedUpdatedAtRef.current }
+            : {}),
           // Omitted, not nulled, when untouched: the store only writes fields
           // the body actually carries, so leaving them out preserves whatever
           // the row already holds instead of clobbering it with a blank select.
@@ -1852,18 +2129,142 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           layoutSections: draft.layoutSections
         })
       });
+      // Intercepted before readAdminJson, which turns any non-ok response into
+      // a thrown Error and would flatten this into an ordinary red banner.
+      // Nothing was written; the operator still holds every edit they made.
+      if (response.status === 409) {
+        const body = (await response.json().catch(() => ({}))) as {
+          conflict?: { updatedAt?: string; savedByName?: string };
+        };
+        setSaveConflict({
+          liveUpdatedAt: body.conflict?.updatedAt ?? "",
+          savedByName: body.conflict?.savedByName ?? "",
+        });
+        return;
+      }
+
       const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to save page.");
       if (data.page) {
         pageThemeDirtyRef.current = false;
         pageTemplateDirtyRef.current = false;
         setPageThemeId(data.page.themeId ?? "");
+        // Move our idea of "the version I am editing" forward, or the next save
+        // in this session collides with the one we just made.
+        loadedUpdatedAtRef.current = data.page.updatedAt ?? "";
       }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
+      setPublishRefreshKey((current) => current + 1);
       await loadPages();
       if (data.page?.id) setSelectedPageId(data.page.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save page.");
     } finally { setIsSaving(false); }
+  }
+
+  /**
+   * Put every page a shared-section push rewrote back the way it was.
+   *
+   * Each page banks its CURRENT state first (the restore runs through the
+   * ordinary revert path), so this is itself undoable from each page's history.
+   */
+  async function undoPropagation() {
+    if (!propagationUndo) return;
+    const { runId, name } = propagationUndo;
+
+    setIsUndoingPropagation(true);
+    setError(null);
+    try {
+      // The confirm, the undo request, and the outcome sentences are shared
+      // with Page History's durable entry point (lib/builder-client/
+      // propagation-undo.ts) — one copy of the doctrine strings, and a
+      // confirm built from what still HAS restore points rather than from
+      // the count we remember.
+      const scope = await fetchPropagationRunScope(runId);
+      if (scope.undone) {
+        setMessage(ALREADY_UNDONE_MESSAGE);
+        setPropagationUndo(null);
+        return;
+      }
+      if (!scope.pages.length) {
+        setError("That update has no restore points left to undo.");
+        setPropagationUndo(null);
+        return;
+      }
+      if (!window.confirm(confirmUndoMessage(scope, name))) return;
+
+      const outcome = await performPropagationUndo(runId);
+      const summary = describeUndoOutcome(outcome);
+      if (summary.kind === "partial") setError(summary.text);
+      else setMessage(summary.text);
+      setPropagationUndo(null);
+      await loadPages();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not undo that update.");
+    } finally {
+      setIsUndoingPropagation(false);
+    }
+  }
+
+  /**
+   * The explicit opt-in: overwrite the pages the last push skipped for
+   * having local changes. Re-reads the section's already-saved content
+   * server-side rather than resending it — nothing here re-saves the master,
+   * it only re-runs the push with the drift check turned off.
+   */
+  async function forceOverwriteDrifted() {
+    if (!driftedSkip) return;
+    const { savedSectionId, name, pageLabels, pageIds } = driftedSkip;
+    const confirmed = window.confirm(
+      `Overwrite the local changes on ${pageLabels.length === 1 ? "this page" : `these ${pageLabels.length} pages`}?\n\n` +
+        pageLabels.map((label) => `  • ${label}`).join("\n") +
+        "\n\nEach page's current version is saved to its own history first, so this can itself be undone."
+    );
+    if (!confirmed) return;
+
+    setIsForcingDrifted(true);
+    setError(null);
+    try {
+      // Only the pages the push skipped — the route refuses a bodiless call,
+      // because without ids a force run rewrote every follower (46 writes to
+      // overwrite 2) and inflated the undo run to match.
+      const response = await builderAdminFetch(`/api/admin/saved-sections/${savedSectionId}/force-propagate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageIds }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Could not overwrite those pages.");
+
+      // The tally rides `meta.propagation` (same as the save route); the first
+      // version read a flat key that was never there and reported 0 forever.
+      const tally = readPropagationTally(body);
+      const updated = Number(tally?.updated ?? 0) || 0;
+      const failed = Number(tally?.failed ?? 0) || 0;
+      setMessage(
+        `Overwrote ${updated} ${updated === 1 ? "page" : "pages"} with "${name}".` +
+          (failed ? ` ${failed} could not be written — reload and try again.` : "")
+      );
+      const runId = String(tally?.runId ?? "");
+      if (runId && updated) setPropagationUndo({ runId, pages: updated, name });
+      setDriftedSkip(null);
+      await loadPages();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not overwrite those pages.");
+    } finally {
+      setIsForcingDrifted(false);
+    }
+  }
+
+  /** Throw away the local draft and pull down whatever is live now. */
+  function reloadPageFromServer() {
+    setSaveConflict(null);
+    setError(null);
+    setMessage(null);
+    // Clearing the hydration key is what makes the effect re-seed the canvas;
+    // without it loadPages refreshes the list and leaves the stale draft in
+    // place, which is the version we are trying to get rid of.
+    hydratedPageSelectionRef.current = "";
+    void loadPages();
   }
 
   async function bulkCreatePages(
@@ -1876,6 +2277,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     const effectiveTheme = selectedTheme?.typography
       ? { ...(template?.theme ?? createDefaultTheme()), typography: selectedTheme.typography }
       : (template?.theme ?? createDefaultTheme());
+    // Take the CURRENT header/menu/footer, not the copy frozen into the
+    // template — same resolution the single-page path already does.
+    const templateSections = resolveTemplateSections(
+      template?.layoutSections ?? [],
+      savedSections,
+      () => crypto.randomUUID()
+    );
     const results = await Promise.all(
       items.map(async (item): Promise<BulkCreateResult> => {
         try {
@@ -1890,7 +2298,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
               templateKind: "modular",
               pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
               theme: effectiveTheme,
-              layoutSections: template?.layoutSections ?? []
+              layoutSections: templateSections
             })
           });
           const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to create page.");
@@ -2275,6 +2683,74 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       {message ? <div className="notice success admin-notice">{message}</div> : null}
       {error ? <div className="notice error admin-notice">{error}</div> : null}
 
+      {propagationUndo ? (
+        <div className="notice admin-notice builder-propagation-undo">
+          <span>
+            That save rewrote <strong>{propagationUndo.pages}</strong>{" "}
+            {propagationUndo.pages === 1 ? "page" : "pages"}. Not what you wanted?
+          </span>
+          <button
+            className="secondary-button"
+            disabled={isUndoingPropagation}
+            onClick={() => void undoPropagation()}
+            type="button"
+          >
+            {isUndoingPropagation ? "Undoing..." : "Undo This Update"}
+          </button>
+        </div>
+      ) : null}
+
+      {driftedSkip ? (
+        <div className="notice admin-notice builder-propagation-drift-skip">
+          <span>
+            <strong>{driftedSkip.pageLabels.length}</strong>{" "}
+            {driftedSkip.pageLabels.length === 1 ? "page has" : "pages have"} local changes and{" "}
+            {driftedSkip.pageLabels.length === 1 ? "was" : "were"} skipped. Overwrite anyway?
+          </span>
+          <button
+            className="secondary-button"
+            disabled={isForcingDrifted}
+            onClick={() => void forceOverwriteDrifted()}
+            type="button"
+          >
+            {isForcingDrifted ? "Overwriting..." : "Overwrite anyway"}
+          </button>
+        </div>
+      ) : null}
+
+      {saveConflict ? (
+        <BuilderSaveConflictModal
+          age={describeConflictAge(saveConflict.liveUpdatedAt)}
+          isSaving={isSaving}
+          onKeepEditing={() => setSaveConflict(null)}
+          onOverwrite={() => void savePage({ overwriteFrom: saveConflict.liveUpdatedAt })}
+          onReload={reloadPageFromServer}
+          savedByName={saveConflict.savedByName}
+        />
+      ) : null}
+
+      {sectionSaveChoiceMaster ? (
+        <BuilderSectionSaveModal
+          canonicalName={sectionSaveChoiceMaster.name}
+          impact={describeCanonicalOverwrite(
+            sectionSaveChoiceMaster.name,
+            savedSectionUsage.get(sectionSaveChoiceMaster.id),
+            sectionSaveDrift.pageLabels
+          )}
+          diff={sectionSaveDiff}
+          isSaving={isSaving}
+          onCancel={() => setSectionSaveChoice(null)}
+          onOverwrite={() =>
+            void overwriteCanonicalFromSection(sectionSaveChoice!.sectionId, sectionSaveChoice!.savedSectionId)
+          }
+          onSaveAsNew={() => {
+            const { sectionId } = sectionSaveChoice!;
+            setSectionSaveChoice(null);
+            void saveSectionAsNew(sectionId);
+          }}
+        />
+      ) : null}
+
       {builderMode === "pages" ? (
         <AdminLegacyRemindersImportPanel
           pageSlug={pageSlug}
@@ -2339,6 +2815,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       ) : builderMode === "modules" ? (
         <BuilderModuleRepositoryList
           cellModules={cellModules}
+          savedSectionUsage={savedSectionUsage}
           pages={pages}
           products={products}
           galleryMedia={galleryMedia}
@@ -2418,6 +2895,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onDeleteSnapshot={(id) => void deleteSnapshot(id)}
         />
       )}
+
+      {/* Publish sits with the page list, not inside a page: it is a
+          site-level action, and the COUNT has to be visible whether or not a
+          page happens to be open. A step you can forget is worse than no step. */}
+      {builderMode === "pages" ? (
+        <BuilderPublishPanel refreshKey={publishRefreshKey} />
+      ) : null}
 
       {builderMode === "pages" && selectedPageId ? (
         <BuilderPageHistory
@@ -2505,9 +2989,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                       <div className="builder-sections">
                         {draft.layoutSections.map((section, sectionIndex) => {
                           const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
-                          const canonicalSourceName = sectionAny.savedSectionId
-                            ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
+                          const canonicalMaster = sectionAny.savedSectionId
+                            ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)
                             : undefined;
+                          const canonicalSourceName = canonicalMaster?.name;
+                          const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
+                            && hasSectionDrifted(section, canonicalMaster!.section);
                           return (
                           <Fragment key={section.id}>
                           {renderSectionGapDropZone(sectionIndex)}
@@ -2523,8 +3010,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             isCollapsed={collapsedSectionIds.includes(section.id)}
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
+                            hasDrifted={hasDrifted}
                             themeColors={rteThemeColors}
-                            themeStyle={getThemeRootVars(draft.theme)}
+                            themeStyle={getThemeRootVars(canvasTheme)}
                             themeBackgroundColor={activeTheme?.backgroundColor}
                             themePrimaryColor={activeTheme?.primaryColor}
                             onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}
@@ -2584,9 +3072,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                   <div className="builder-sections">
                     {draft.layoutSections.map((section, sectionIndex) => {
                       const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
-                      const canonicalSourceName = sectionAny.savedSectionId
-                        ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)?.name
+                      const canonicalMaster = sectionAny.savedSectionId
+                        ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)
                         : undefined;
+                      const canonicalSourceName = canonicalMaster?.name;
+                      const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
+                        && hasSectionDrifted(section, canonicalMaster!.section);
                       return (
                       <Fragment key={section.id}>
                       {renderSectionGapDropZone(sectionIndex)}
@@ -2602,8 +3093,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         isCollapsed={collapsedSectionIds.includes(section.id)}
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
+                        hasDrifted={hasDrifted}
                         themeColors={rteThemeColors}
-                        themeStyle={getThemeRootVars(draft.theme)}
+                        themeStyle={getThemeRootVars(canvasTheme)}
                         themeBackgroundColor={activeTheme?.backgroundColor}
                         themePrimaryColor={activeTheme?.primaryColor}
                         onToggleCanonical={(checked) => void handleToggleSectionCanonical(section.id, checked)}

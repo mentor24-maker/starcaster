@@ -16,9 +16,11 @@ import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
   normalizeBuilderDocument,
+  resolveRenderTheme,
 } from "@/lib/builder-template";
 import {
   ADMIN_LOGIN_PATH,
+  adminCornerLink,
   getAdminAuthHeaders,
   isAdminNavCookieSet,
   redirectAfterAdminLogout,
@@ -27,7 +29,13 @@ import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcast
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { registerImageRenditionMap } from "@/lib/image-renditions";
 
-type SiteThemeShell = ThemeShellBackgroundSource & BuilderThemeStyles;
+/**
+ * The live theme record the server attaches to each page
+ * (`enrichPagesWithThemeShell`). It has always carried `typography`; nothing
+ * read it until 2026-08-15, which is why a themed page rendered live colours
+ * and frozen type.
+ */
+type SiteThemeShell = ThemeShellBackgroundSource & BuilderThemeStyles & { typography?: unknown };
 
 type SitePage = {
   name: string;
@@ -75,6 +83,27 @@ function pageThemePalette(page: SitePage) {
   };
 }
 
+/**
+ * Which theme this page paints type with. Exported so the choice is testable on
+ * its own — the component around it needs a browser and a session, and this one
+ * line is the whole of the behaviour.
+ *
+ * Typography resolves against the LIVE theme, exactly as the colours already
+ * do. The guard matters: `themeShell` falls back to the project's FIRST theme
+ * for a page that names none (see enrichPagesWithThemeShell), so handing it
+ * straight to the resolver would restyle pages nobody ever themed.
+ */
+export function pickPageRenderTheme(page: {
+  theme: SitePage["theme"];
+  themeId?: string;
+  themeShell?: SiteThemeShell | null;
+}) {
+  return resolveRenderTheme(
+    page.theme,
+    String(page.themeId || "").trim() ? page.themeShell : null
+  );
+}
+
 function normalizePublicSlug(value: string): string {
   let path = String(value || "").trim().split("?")[0]?.split("#")[0] || "";
   path = path.replace(/\.html$/i, "");
@@ -93,16 +122,30 @@ function isHomeSlug(slug: string): boolean {
   return slug === "";
 }
 
-async function fetchPublicPages(projectId: string): Promise<SitePage[]> {
-  const res = await fetch(`/api/public/pages?projectId=${encodeURIComponent(projectId)}`);
-  if (!res.ok) return [];
-  const data = await res.json() as { pages?: unknown[]; renditions?: unknown };
-  // Tells every <img> on this site which scaled-down copies it may choose from.
-  // Registered before the pages render so the first paint already picks the
-  // right file rather than swapping it afterwards.
+/**
+ * The page at this path, and only that page.
+ *
+ * This used to fetch every published page and pick one here — 1.36 MB over the
+ * wire on a 51-page site to show roughly 30 KB of it, including one copy of the
+ * header per page. The server does the picking now.
+ *
+ * /api/public/pages still exists and still returns everything — the site-search
+ * RESULTS module builds its index from every page and genuinely needs them all.
+ * It issues that request itself (see SiteSearchResultsPreview) and only loads on
+ * a results page; the search FIELD in a menu fetches nothing. So the whole-site
+ * payload is now paid by the one page that actually uses it.
+ */
+async function fetchPublicPage(projectId: string, slug: string): Promise<SitePage | null> {
+  const res = await fetch(
+    `/api/public/page?projectId=${encodeURIComponent(projectId)}&slug=${encodeURIComponent(slug)}`
+  );
+  if (!res.ok) return null;
+  const data = await res.json() as { page?: unknown; renditions?: unknown };
+  // Registered before the page renders so the first paint already picks the
+  // right image file rather than swapping it afterwards.
   registerImageRenditionMap(data.renditions);
-  const pages = Array.isArray(data.pages) ? data.pages : [];
-  return pages.map((p: unknown) => mapSitePageRecord(p as Record<string, unknown>));
+  if (!data.page || typeof data.page !== "object") return null;
+  return mapSitePageRecord(data.page as Record<string, unknown>);
 }
 
 async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unauthorized"> {
@@ -233,7 +276,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           }
           return findPageForPath(privatePages, routingPath);
         })
-      : fetchPublicPages(projectId).then((pages) => findPageForPath(pages, routingPath));
+      : fetchPublicPage(projectId, slug);
 
     load
       .then((found) => setPage(found))
@@ -324,6 +367,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   }
 
   const slug = normalizePublicSlug(window.location.pathname || "/");
+
+  /** Admin on the public site, Logout inside the admin area. See adminCornerLink. */
+  const cornerLink = adminCornerLink(slug, { isAdminNav });
+
   const sections = isPrivateSiteSlug(slug)
     ? page.layoutSections
     : filterPublicSections(page.layoutSections);
@@ -331,20 +378,21 @@ export function BuilderPublicSitePage({ projectId }: Props) {
   const effectiveThemeStyles = page.themeShell
     ? buildBuilderThemeStyles(page.themeShell)
     : themeStyles;
+  const effectiveTheme = pickPageRenderTheme(page);
   const effectiveThemeShellBackground = coerceThemeShellBackgroundSource(
     page.themeShell ?? themeShellBackground
   );
 
   return (
     <>
-      {isAdminNav ? (
+      {cornerLink ? (
         <a
           ref={adminLinkRef}
-          href={ADMIN_LOGIN_PATH}
+          href={cornerLink.href}
           className="site-admin-nav-link"
-          aria-label="Admin"
+          aria-label={cornerLink.ariaLabel}
         >
-          Admin
+          {cornerLink.label}
         </a>
       ) : null}
       <BuilderViewportShellLayout
@@ -356,7 +404,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
         <BuilderTemplatePreview
           layoutSections={sections}
           pageBackground={page.pageBackground}
-          theme={page.theme}
+          theme={effectiveTheme}
           themePalette={themePalette ?? pageThemePalette(page)}
           themeStyles={effectiveThemeStyles}
           themeShellBackground={effectiveThemeShellBackground}

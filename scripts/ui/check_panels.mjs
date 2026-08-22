@@ -45,9 +45,23 @@ import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const { createRequire } = await import('node:module');
-const { BUILDER_MODULE_TYPES } = createRequire(path.join(ROOT, 'package.json'))(
-  path.join(ROOT, 'lib/builder/template.js')
-);
+// lib/builder/template.js is a GENERATED artifact and a fresh worktree has
+// none. Without this the run dies on a raw MODULE_NOT_FOUND stack that says
+// nothing about which command produces it — which is exactly how it read on
+// 2026-08-15, twice, in two different worktrees.
+let BUILDER_MODULE_TYPES;
+try {
+  ({ BUILDER_MODULE_TYPES } = createRequire(path.join(ROOT, 'package.json'))(
+    path.join(ROOT, 'lib/builder/template.js')
+  ));
+} catch {
+  console.error(
+    '\n[check:panels] lib/builder/template.js is missing — it is a generated file\n' +
+    'and a fresh worktree does not have one.\n\n' +
+    'Run `npm run build:builder-template`.\n'
+  );
+  process.exit(2);
+}
 const EXPECTED_MODULES = BUILDER_MODULE_TYPES.length;
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
 /*
@@ -131,9 +145,16 @@ async function openPanels(page) {
   // Opening it here is the difference between "W0 holds" and "W0 holds on the
   // surfaces we happened to open" — the same blind spot that let six TABLE
   // panels report a clean pass without a heading among them.
+  //
+  // "Section Settings and Styles" is the row's own editor, which folded behind
+  // a bar on 2026-08-15. Expanding a row no longer reveals it, so without this
+  // line the whole row lattice — Structure, Placement, Frame, Visibility —
+  // would drop out of the measurement and the check would go green by seeing
+  // less: 603 groups instead of 615.
   await page.evaluate(() => {
     document.querySelectorAll('button[aria-label]').forEach((button) => {
-      if (/^expand styles$/i.test(button.getAttribute('aria-label') || '')) button.click();
+      const label = button.getAttribute('aria-label') || '';
+      if (/^expand (styles|section settings and styles)$/i.test(label)) button.click();
     });
   });
   await page.waitForTimeout(3000);
@@ -431,6 +452,34 @@ function assertLattice(panels, width) {
         `${where}: label track is only ${Math.min(...room)}px wider than its longest label — ` +
         'the rule asks for 40px of room (--builder-field-room)'
       );
+    }
+
+    /*
+     * THE PAIR IS STILL A PAIR — every control sits to the RIGHT of its own
+     * label.
+     *
+     * Added 2026-08-16, from a failure this check watched go by. Social took
+     * a second settings column, and its column heading was left occupying one
+     * grid cell instead of spanning both tracks. That pushed every pair below
+     * it along by one: the swatch rendered in the label track and the word
+     * "Icon Fill" in the control track, all the way down the column. Nine
+     * rows of scrambled panel, obvious the moment a person looked at it — and
+     * a clean run here, because everything above measures whether the rows
+     * agree with EACH OTHER, and a whole column shifted by one cell agrees
+     * with itself perfectly.
+     *
+     * One pixel of tolerance: a control whose box starts exactly where its
+     * label's does is a `full` field spanning the tracks, and those are
+     * already out of scope above.
+     */
+    for (const f of placed) {
+      if (f.fieldX + 1 < f.labelBoxX) {
+        failures.push(
+          `${where}: "${f.name}" renders its control LEFT of its own label ` +
+          `(control@${f.fieldX}, label@${f.labelBoxX}) — the label/control pairing has slipped a cell, ` +
+          'usually a heading or a wrapper taking a grid cell instead of spanning the tracks'
+        );
+      }
     }
 
     // L4: a label wider than its track is a cropped word, which the lattice

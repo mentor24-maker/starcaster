@@ -6,8 +6,12 @@ on:
     branches: [main]
 
 env:
-  # Playwright is a devDependency used only by local tooling — skip the
-  # ~100MB browser download in CI.
+  # Skip the browser download during `npm ci` — Playwright would otherwise
+  # fetch every engine (~100MB each) on every run. CI needs exactly one, and
+  # the "Chromium for check:css" step below installs and caches it explicitly.
+  #
+  # This used to say Playwright was "used only by local tooling", which stopped
+  # being true when check:css became a gate.
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
 jobs:
@@ -31,6 +35,48 @@ jobs:
       # because it takes milliseconds.
       - name: Syntax check (browser JS)
         run: npm run check:syntax
+
+      # THE FIRST BROWSER IN CI, and the reason it is worth the ~30s cold
+      # install: nothing in this repo tests CSS (DOCTRINE §5.14), and the one
+      # check that did measure a browser — check:panels — reached the operator
+      # twice with a broken panel because it needs a database and a login, so
+      # it only ever ran when a person remembered. It did not get remembered.
+      #
+      # check:css needs none of that: no server, no database, no login, no
+      # fixture. Only one browser engine is fetched, and only when the cache
+      # misses, so the steady-state cost is a few seconds of cache restore.
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        id: chromium-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          # Keyed on the Playwright version, not the lockfile hash: the browser
+          # only changes when Playwright does, so an unrelated dependency bump
+          # must not throw away a perfectly good 100MB download.
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Chromium for check:css
+        if: steps.chromium-cache.outputs.cache-hit != 'true'
+        # The workflow-level skip flag has to be lifted for THIS command, or
+        # the explicit install obeys it and silently downloads nothing — which
+        # would surface later as a missing-executable error in the check,
+        # pointing at the wrong thing entirely.
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+        run: npx playwright install --with-deps chromium
+
+      # Runs BEFORE the build, deliberately: it reads `src/css/` and the other
+      # committed sources, never a build artifact. Proved rather than assumed —
+      # deleting every generated file and re-running gives byte-identical
+      # output (18,128 declarations, 4,007 pairs, 19 keyframes, 410 custom
+      # properties). So it belongs with the other cheap gates up here, where a
+      # broken stylesheet is reported in about a second.
+      - name: CSS the browser actually keeps (blocking)
+        run: npm run check:css
 
       - name: Typecheck
         run: npm run typecheck
@@ -76,17 +122,60 @@ jobs:
         run: npm run test:site-import
 
       - name: UI doctrine (blocking)
-        # docs/MODULE_UI_DOCTRINE.md. Deliberately a SEPARATE, blocking step:
-        # the conventions check below is advisory because of pre-existing
-        # button-in-<th> violations, and folding the UI rules into it would
-        # have made them advisory too — which is precisely how every previous
-        # UI rule in this repo decayed into a suggestion. These checks are
-        # clean repo-wide today, so this gate is green and only NEW violations
-        # can turn it red.
+        # docs/MODULE_UI_DOCTRINE.md. Kept as a SEPARATE step: it was split out
+        # when the conventions check below still ran advisory, because folding
+        # the UI rules into an advisory step would have made them advisory too —
+        # precisely how every previous UI rule in this repo decayed into a
+        # suggestion. That step now blocks as well, but these stay separate so a
+        # failure names which body of rules broke. Clean repo-wide today, so
+        # this gate is green and only NEW violations can turn it red.
         run: npm run check:ui
 
-      - name: Convention checks (advisory)
-        # Non-blocking until the 7 pre-existing button-in-<th> violations
-        # are cleaned up; then drop continue-on-error to make it a gate.
-        continue-on-error: true
+      - name: Retired AI model ids (blocking)
+        # Same reasoning as the UI doctrine step above, and the same reason it
+        # is not folded into the advisory conventions run below: a retired model
+        # id is a dead endpoint, not a style nit. It fails quietly — the
+        # provider 404s one call, a fallback ladder moves on, and the feature
+        # keeps working on a shrinking set of live models. Four features were
+        # carrying ids dead since Feb/Apr 2026 and nothing looked wrong. The
+        # repo is clean today, so this gate is green and only NEW ids turn it
+        # red.
+        run: npm run check:models
+
+      - name: Machine-specific paths (blocking)
+        # No committed artifact may name a machine (vault doctrine/NODES.md P1).
+        # Same reasoning as the two gates above, and the same reason it is not
+        # folded into the advisory conventions run below. This one fails in the
+        # quietest way of the three: a path that is right on one laptop is simply
+        # absent everywhere else, so the job that needs it does not error, it
+        # just does nothing and exits 0. Thirteen files carried one when the Mac
+        # Mini was provisioned, including the very skill the Mini exists to run.
+        # The repo is clean today, so this gate is green and only NEW paths turn
+        # it red.
+        run: npm run check:paths
+
+      - name: AI token metering coverage (blocking)
+        # A model call that records nothing is invisible spending. The meter was
+        # restored repo-wide on 2026-08-17 (13 call sites); this gate keeps it
+        # that way, because the failure mode is silence — the feature works, the
+        # bill grows, and the Observe total quietly under-reports. Blocking for
+        # the same reason as the two gates above: an advisory version of this
+        # would decay, and the number is what the operator uses to decide
+        # whether an AI feature is safe to leave running.
+        run: npm run check:ai-metering
+
+      - name: Convention checks (blocking)
+        # Was advisory (continue-on-error) from the day it was added, waiting on
+        # "the 7 pre-existing button-in-<th> violations". Six of those seven
+        # turned out not to be violations — bulk-action rows, action-column
+        # buttons, a header filter control, and one code COMMENT describing the
+        # correct pattern. The rule was written as "no interactive element in a
+        # <th>" when the actual house rule is "no nested SORT control in a
+        # <th>". Narrowing it to that left one real violation, which is fixed,
+        # so this is now a gate.
+        #
+        # It is clean repo-wide today. If it ever goes red on something that is
+        # genuinely fine, narrow the rule — do not put continue-on-error back.
+        # An advisory gate is how the UI rules decayed into suggestions, which
+        # is why check:ui and check:models had to be split out above.
         run: node scripts/check_conventions.cjs --all

@@ -1,12 +1,20 @@
-# Supabase migrations (optional CLI path)
+# supabase/migrations — not the source of truth
 
-**Authoritative SQL today:** `docs/*.sql` in the repo root.  
-**Operator tracker:** [`docs/MIGRATIONS_APPLIED.md`](../docs/MIGRATIONS_APPLIED.md)
+**The schema source of truth is `docs/SQL/*.sql`, applied by hand**
+(`docs/DOCTRINE.md` §7). This folder holds five files that were written in the
+Supabase CLI's format and never applied anywhere. They are kept as history.
 
-StarCaster does not yet run `supabase db push` in CI. Apply scripts in the Supabase SQL editor and log them in `MIGRATIONS_APPLIED.md`.
+**Never run `supabase db push` or `supabase db reset --linked` here.** Both
+write to the *cloud* database.
 
-If you adopt Supabase CLI later:
+What to use instead:
 
-1. Copy finalized `docs/NNN_*.sql` files here with timestamp prefixes.
-2. Keep `docs/MIGRATIONS_APPLIED.md` in sync with what ran in each environment.
-3. Never treat `ai-daemon/sandbox/isit-app/docs/` as a source of truth.
+| Question | Answer |
+|---|---|
+| What does production's structure actually look like? | `docs/schema/production.sql` |
+| Has production moved away from that? | `npm run schema:check` |
+| What has been applied, and when? | [`docs/MIGRATIONS_APPLIED.md`](../../docs/MIGRATIONS_APPLIED.md) |
+| How do I get a local copy of production? | `npm run db:refresh` — see [`docs/LOCAL_DEVELOPMENT.md`](../../docs/LOCAL_DEVELOPMENT.md) |
+
+This README used to point at `docs/MIGRATIONS_APPLIED.md`, which did not exist
+for three months. It does now.

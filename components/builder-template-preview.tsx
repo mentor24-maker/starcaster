@@ -22,6 +22,11 @@ import { imageProps } from "@/lib/image-renditions";
 const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
 import { parseTableData } from "@/lib/builder-table-data";
 import { parseBuilderCardItems, parseCardBody } from "@/lib/builder-card-items";
+import { carouselSeamShift, carouselShortestDelta } from "@/lib/builder-carousel-loop";
+import {
+  getCarouselImageFrameStyle,
+  getCarouselImageShadowGutter
+} from "@/lib/builder-carousel-image-frame";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
@@ -111,6 +116,8 @@ import {
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
   getPlainTextModuleStyle,
+  getTextModuleFrameStyle,
+  getTextModuleRhythmStyle,
   getTextModuleWidthStyle,
   getVideoEmbedSource,
   isVideoMedia
@@ -169,6 +176,17 @@ function normalizeNavPath(value: string) {
     normalized = `/${normalized}`;
   }
   return normalized === "/home" ? "/" : normalized;
+}
+
+// The home item never takes the active highlight. Landing on "/" is the
+// default state of the site rather than a place you navigated to, so lighting
+// up Home reads as a stuck button; every other page still highlights.
+// It also mops up bare "#" hrefs, which normalize to "/" and would otherwise
+// all light up on the home page.
+function isNavPathActive(href: string, activePath: string) {
+  const normalized = normalizeNavPath(href || "#");
+  if (normalized === "/") return false;
+  return normalized === activePath;
 }
 
 function toPublicHref(href: string): string {
@@ -1700,8 +1718,14 @@ function BuilderSectionPreview({
                     // Table paints its own background on the <table>, which is
                     // where Max Width constrains it. Painting it here too put
                     // the fill across the full column behind a narrow table.
+                    // Text paints its own fill inside the frame, so the fill
+                    // follows the Width, the Radius and the padding rather
+                    // than spanning the column behind them
+                    // (getTextModuleFrameStyle, operator 2026-08-15) — the
+                    // same reason table and button opt out here.
                     ...(module.type === "navigation" ||
                     module.type === "table" ||
+                    module.type === "text" ||
                     isPageOverlayFlowModule ||
                     isSectionOverlayModule ||
                     module.type === "button" ||
@@ -1793,8 +1817,8 @@ function BuilderModulePreview({
     return <HeadlineRotatorPreview module={module} />;
   }
 
-  if (module.type === "slideshow") {
-    return <SlideshowPreview module={module} />;
+  if (module.type === "carousel") {
+    return <CarouselPreview module={module} />;
   }
 
   if (module.type === "program-list") {
@@ -1823,7 +1847,9 @@ function BuilderModulePreview({
         className={`builder-preview-text builder-preview-text-${variant || "default"}`}
         style={{
           ...getTextModuleWidthStyle(module.settings),
-          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {})
+          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+          ...getTextModuleRhythmStyle(module.settings),
+          ...getTextModuleFrameStyle(module.settings)
         }}
         dangerouslySetInnerHTML={{ __html: html || "" }}
       />
@@ -2002,10 +2028,6 @@ function BuilderModulePreview({
 
   if (module.type === "table") {
     return <TableModulePreview module={module} />;
-  }
-
-  if (module.type === "slider") {
-    return <SliderModulePreview module={module} />;
   }
 
   if (module.type === "social") {
@@ -5168,86 +5190,480 @@ function BlogModulePlaceholder({ type }: { type: string }) {
   );
 }
 
-function SlideshowPreview({
+/**
+ * The Carousel — one renderer for both formats.
+ *
+ * `slideshow` and `slider` were separate module types until 2026-08-16.
+ * They were never two different mechanisms: both hold an ordered row of
+ * items and move through it. They differed in exactly two settings, each
+ * hard-coded at opposite extremes — how many items share the frame, and
+ * whether it advances on its own. Because those were fixed rather than
+ * chosen, neither could ever borrow the other's behaviour: a slideshow had
+ * no arrows and no clickable slides, a card shelf could not rotate.
+ *
+ * `format` is that choice, made once, and everything downstream reads from
+ * it. The union of the two old setting sets applies to both formats except
+ * where a setting is meaningless — see `formatSupports` below, which is the
+ * single place that judgement is written down so the settings panel and this
+ * renderer cannot disagree about it.
+ */
+function CarouselPreview({
   module
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
 }) {
-  const slides = useMemo(() => {
-    try {
-      const raw = JSON.parse(module.settings.slides || "[]");
-      if (!Array.isArray(raw)) return [] as { id: string; url: string; alt: string }[];
-      return raw
-        .map((entry, index) => ({
-          id: String((entry as { id?: string })?.id || `slide-${index}`),
-          url: String((entry as { url?: string })?.url || "").trim(),
-          alt: String((entry as { alt?: string })?.alt || "")
-        }))
-        .filter((slide) => slide.url);
-    } catch {
-      return [] as { id: string; url: string; alt: string }[];
-    }
-  }, [module.settings.slides]);
-  const intervalMs = Math.max(Number.parseInt(module.settings.intervalMs ?? "5000", 10) || 5000, 1000);
-  const transition = module.settings.transition === "fade" ? "fade" : "slide";
-  const heightPx = Number.parseInt(module.settings.heightPx ?? "", 10) || 0;
+  const settings = module.settings;
+  const format = settings.format === "cards" ? "cards" : "slideshow";
+  const isCards = format === "cards";
+
+  // Empty-image items are dropped at display time but kept in storage — a
+  // just-added item must survive until its picture is picked. Cards may
+  // legitimately have no image at all, so they only need SOME content.
+  const items = useMemo(() => {
+    const parsed = parseBuilderCardItems(settings.items, "item");
+    return isCards
+      ? parsed.filter((item) => item.imageUrl || item.title || item.body)
+      : parsed.filter((item) => item.imageUrl);
+  }, [settings.items, isCards]);
+
+  const intervalMs = Math.max(Number.parseInt(settings.intervalMs ?? "5000", 10) || 5000, 1000);
+  const transition = !isCards && settings.transition === "fade" ? "fade" : "slide";
+  const heightPx = Number.parseInt(settings.heightPx ?? "", 10) || 0;
+  const gap = Number.parseInt(settings.gap ?? (isCards ? "16" : "0"), 10) || 0;
+  const cardWidth = Number.parseInt(settings.cardWidth ?? "280", 10) || 280;
+  const autoplay = settings.autoplay === undefined ? !isCards : settings.autoplay !== "false";
+  const pauseOnHover = settings.pauseOnHover !== "false";
+  const loop = settings.loop !== "false";
+  const showArrows = settings.showArrows !== "false";
+  const showDots = settings.showDots === undefined ? !isCards : settings.showDots !== "false";
+  const showCaptions = settings.showCaptions === "true";
+  const captionPosition = settings.captionPosition || "bottom-left";
+
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const count = items.length;
+  const step = cardWidth + gap;
+  const setWidth = count * step;
+
+  /**
+   * Does the shelf hold more than it can show?
+   *
+   * Looping is built by rendering the cards three times over, so only the
+   * middle copy is ever on screen and the strip can be walked past either end
+   * without running out. That trick is worse than useless when the whole set
+   * already fits: two cards on a wide page would render as "A B A B A B",
+   * visibly repeating with nothing gained. Measured rather than guessed,
+   * because it depends on the container the module happens to land in.
+   */
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    if (!isCards) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setOverflows(setWidth > el.clientWidth + 1);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [isCards, setWidth]);
+
+  const loopCards = isCards && loop && overflows && count > 1;
+  const copies = loopCards ? 3 : 1;
+
+  /**
+   * Park on the middle copy so there is a whole set of cards waiting on each
+   * side. Runs when looping turns on, and again if the card geometry changes
+   * under it.
+   */
+  useEffect(() => {
+    if (!loopCards) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = setWidth;
+    targetRef.current = setWidth;
+  }, [loopCards, setWidth]);
+
+  /**
+   * The seam. Once scrolling settles, if the strip has walked off the middle
+   * copy, put it back by exactly one set-width. The three copies are
+   * identical, so the jump lands on the same picture in the same place and is
+   * invisible — which is what makes the first card come round again instead
+   * of the shelf dead-ending (operator, 2026-08-16).
+   *
+   * AFTER it settles, not during: a smooth scroll is still animating toward a
+   * target, and moving the ground under it mid-flight lands somewhere nobody
+   * asked for. `scrollend` would say this exactly, but Safari does not have
+   * it, so the 120ms quiet period stands in.
+   */
+  useEffect(() => {
+    if (!isCards) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    let settle = 0;
+
+    function onScroll() {
+      if (!el) return;
+      // The dots follow the eye immediately, even mid-drag.
+      const at = Math.round(el.scrollLeft / Math.max(step, 1));
+      setIndex(count > 0 ? ((at % count) + count) % count : 0);
+
+      if (!loopCards) return;
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        if (!el) return;
+        const shift = carouselSeamShift(el.scrollLeft, setWidth);
+        if (shift) {
+          el.scrollLeft += shift;
+          if (targetRef.current != null) {
+            // The pending target moves with the ground...
+            targetRef.current += shift;
+            // ...and the journey is restarted, because assigning `scrollLeft`
+            // cancels any smooth scroll still running. Without this, a press
+            // that lands while the strip is crossing the seam is thrown away
+            // — eight quick presses moved seven cards.
+            if (Math.abs(el.scrollLeft - targetRef.current) > 1) {
+              el.scrollTo({ left: targetRef.current, behavior: "smooth" });
+            }
+          }
+        }
+        // Adopt reality only once the strip has actually arrived. A target
+        // still some distance off means something is mid-flight toward it,
+        // and overwriting it here would drop that step. Far-off with nothing
+        // in flight is a swipe, which is exactly when adopting is right.
+        if (targetRef.current == null || Math.abs(el.scrollLeft - targetRef.current) < step * 0.5) {
+          targetRef.current = el.scrollLeft;
+        }
+      }, 120);
+    }
+
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.clearTimeout(settle);
+      el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [isCards, step, count, loopCards, setWidth]);
+
+  /**
+   * Where the strip is HEADED, which is not where it currently is.
+   *
+   * A smooth scroll takes a moment, and every arrow press during that moment
+   * used to read the half-finished position and work out its next step from
+   * there — so a visitor clicking quickly got most of their presses ignored
+   * (six deliberate clicks moved one card). Steps are counted from the
+   * target instead, and the target is resynced to reality whenever scrolling
+   * settles, which is also what absorbs a swipe.
+   */
+  const targetRef = useRef<number | null>(null);
+
+  /** One card left or right, relative — position repeats while looping. */
+  const nudgeCards = (direction: -1 | 1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const next = (targetRef.current ?? el.scrollLeft) + direction * step;
+    targetRef.current = next;
+    el.scrollTo({ left: next, behavior: "smooth" });
+  };
+
+  const goTo = (next: number) => {
+    if (count === 0) return;
+    if (isCards) {
+      const el = scrollRef.current;
+      if (!el) return;
+      if (loopCards) {
+        // Walk to the wanted card from wherever the strip is headed, rather
+        // than to an absolute offset that names one of three identical
+        // copies. The shorter way round wins, so the dots never take the
+        // long trip past everything to reach a neighbour.
+        const base = targetRef.current ?? el.scrollLeft;
+        const at = Math.round(base / Math.max(step, 1));
+        const to = base + carouselShortestDelta(at, next, count) * step;
+        targetRef.current = to;
+        el.scrollTo({ left: to, behavior: "smooth" });
+        return;
+      }
+      const clamped = Math.min(Math.max(next, 0), count - 1);
+      targetRef.current = clamped * step;
+      el.scrollTo({ left: clamped * step, behavior: "smooth" });
+      setIndex(clamped);
+      return;
+    }
+    const wrapped = loop ? ((next % count) + count) % count : Math.min(Math.max(next, 0), count - 1);
+    setIndex(wrapped);
+  };
 
   useEffect(() => {
-    if (slides.length <= 1 || paused) return;
+    if (!autoplay || count <= 1 || paused) return;
     const timer = window.setInterval(() => {
-      setIndex((current) => (current + 1) % slides.length);
+      if (isCards) {
+        if (loopCards) {
+          nudgeCards(1);
+          return;
+        }
+        setIndex((current) => {
+          const next = Math.min(current + 1, count - 1);
+          scrollRef.current?.scrollTo({ left: next * step, behavior: "smooth" });
+          return next;
+        });
+        return;
+      }
+      setIndex((current) => {
+        const next = current + 1;
+        // Autoplay respects Loop: without it the run stops on the last item
+        // rather than snapping back to the first.
+        return loop ? next % count : Math.min(next, count - 1);
+      });
     }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [slides.length, intervalMs, paused]);
+  }, [autoplay, count, paused, intervalMs, isCards, step, loop, loopCards]);
 
   useEffect(() => {
-    if (index >= slides.length) setIndex(0);
-  }, [slides.length, index]);
+    if (index >= count) setIndex(0);
+  }, [count, index]);
 
-  if (slides.length === 0) {
-    return <div className="builder-preview-slideshow builder-preview-slideshow-empty">Add slides in the editor</div>;
+  if (count === 0) {
+    return (
+      <div className="builder-preview-carousel builder-preview-carousel-empty">
+        {isCards ? "Add cards in the editor" : "Add slides in the editor"}
+      </div>
+    );
   }
 
   // The nudge (operator, 2026-08-12), the same two settings and the same
   // helper the image and heading modules use, so an operator learns it once.
   // `position: relative` only when there is a transform to apply: an
   // unconditional one would become the containing block for any
-  // fixed-position overlay inside the slideshow.
-  const nudgeTransform = getModuleNudgeTransform(module.settings);
+  // fixed-position overlay inside the carousel.
+  const nudgeTransform = getModuleNudgeTransform(settings);
+  const wrapStyle: CSSProperties = nudgeTransform
+    ? { transform: nudgeTransform, position: "relative" }
+    : {};
+  /**
+   * Where Height lands depends on the format, because the two formats have
+   * different things whose height an operator is actually setting.
+   *
+   * Slideshow: the frame IS the picture, so Height sizes the frame.
+   * Cards: the frame is a scrolling row whose height comes from the cards in
+   *   it — sizing the frame just adds an empty band underneath (operator,
+   *   2026-08-16: "the images in this slideshow are being cut off, and
+   *   neither auto (0) nor a larger size changes the height"). What Height
+   *   means on a shelf of cards is how tall each card's PICTURE is.
+   *
+   * Auto (0) leaves the picture at its own proportions rather than cropping
+   * it to a fixed box, which is the other half of that report: the card
+   * image used to be a hard 180px with `object-fit: cover`, so a poster lost
+   * its top and bottom and no setting could give them back.
+   */
+  /**
+   * The border, corner and drop shadow, one set for every picture in the
+   * module (operator, 2026-08-16). Where it LANDS differs by format for the
+   * same reason Height does — what the operator means by "the image" is the
+   * frame on a slideshow and each card's picture on a shelf:
+   *
+   * Slideshow: the frame is the picture, and it already clips to itself
+   *   (`overflow: hidden`), so a border drawn on it is a mount around the
+   *   photo and the radius rounds the photo inside it.
+   * Cards: the picture's own box, so the copy under it keeps its square
+   *   corners and sits outside the frame.
+   *
+   * Both boxes already carried a hard `border-radius: 8px` in the stylesheet,
+   * which is why 8 is the resolver's default rather than 0.
+   */
+  const imageFrame = getCarouselImageFrameStyle(settings);
+  /**
+   * Room for the shadow to fall into. `overflow-x: auto` on the card row
+   * clips the other axis whether or not anything asks it to, so without this
+   * the shadow stops dead at the bottom of the card. Vertical only — see
+   * `getCarouselImageShadowGutter`.
+   */
+  const shadowGutter = isCards ? getCarouselImageShadowGutter(settings) : 0;
   const frameStyle: CSSProperties = {
-    ...(heightPx > 0 ? { height: `${heightPx}px` } : {}),
-    ...(nudgeTransform ? { transform: nudgeTransform, position: "relative" as const } : {})
+    ...(heightPx > 0 && !isCards ? { height: `${heightPx}px` } : {}),
+    ...(shadowGutter > 0 ? { paddingTop: `${shadowGutter}px`, paddingBottom: `${shadowGutter}px` } : {}),
+    // The card row carries its OWN rounding in CSS (8px) and clips to it,
+    // which shaves the outer corners of the first and last card whatever the
+    // pictures are set to — so Radius 0 could not actually reach square
+    // (operator, 2026-08-16: "allow the radius to go all the way to 0px").
+    // The row follows the setting instead of holding a number of its own.
+    ...(isCards ? { borderRadius: imageFrame.borderRadius } : imageFrame)
   };
+  const cardImageStyle: CSSProperties = {
+    ...(heightPx > 0 ? { height: `${heightPx}px` } : {}),
+    ...imageFrame
+  };
+
+  const atStart = index <= 0;
+  const atEnd = index >= count - 1;
+
+  const caption = (item: (typeof items)[number]) => {
+    if (!showCaptions || (!item.title && !item.body)) return null;
+    return (
+      <div className={`builder-preview-carousel-caption builder-preview-carousel-caption-${captionPosition}`}>
+        {item.title ? <strong>{item.title}</strong> : null}
+        {item.body ? <p>{item.body}</p> : null}
+        {item.linkUrl && item.linkLabel ? (
+          <span className="builder-preview-carousel-caption-link">
+            {item.linkLabel}
+            <span aria-hidden="true"> →</span>
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
+  /** A whole item wrapped in its link, when it has one. */
+  const linked = (item: (typeof items)[number], children: React.ReactNode) =>
+    item.linkUrl ? (
+      <Link className="builder-preview-carousel-link" href={item.linkUrl}>
+        {children}
+      </Link>
+    ) : (
+      children
+    );
+
   return (
     <div
-      className={`builder-preview-slideshow builder-preview-slideshow-${transition}`}
-      style={frameStyle}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      className={`builder-preview-carousel-wrap builder-preview-carousel-wrap-${format}`}
+      style={wrapStyle}
+      onMouseEnter={() => pauseOnHover && setPaused(true)}
+      onMouseLeave={() => pauseOnHover && setPaused(false)}
     >
-      {transition === "slide" ? (
-        <div
-          className="builder-preview-slideshow-track"
-          style={{ transform: `translateX(-${index * 100}%)` }}
+      {showArrows && count > 1 && (!isCards || !atStart || loop) ? (
+        <button
+          type="button"
+          className="builder-preview-carousel-arrow builder-preview-carousel-arrow-left"
+          onClick={() => goTo(index - 1)}
+          disabled={!loop && atStart}
+          aria-label="Previous"
         >
-          {slides.map((slide) => (
-            <img key={slide.id} {...imageProps(slide.url)} alt={slide.alt} loading="lazy" />
-          ))}
+          ‹
+        </button>
+      ) : null}
+
+      {isCards ? (
+        <div
+          className="builder-preview-carousel builder-preview-carousel-cards"
+          ref={scrollRef}
+          style={{ ...frameStyle, gap: `${gap}px` }}
+        >
+          {/* The set, rendered `copies` times — once normally, or three times
+              when looping. Only the middle copy is ever on screen; the outer
+              two are what the strip walks into instead of hitting an end.
+              Clones are hidden from screen readers and taken out of the tab
+              order, so a keyboard or screen-reader visitor meets each card
+              once rather than three times. */}
+          {Array.from({ length: copies }).flatMap((_, copy) =>
+            items.map((item) => (
+            <article
+              key={`${item.id}-copy-${copy}`}
+              className="builder-preview-carousel-card"
+              aria-hidden={copies > 1 && copy !== 1 ? true : undefined}
+              inert={copies > 1 && copy !== 1 ? true : undefined}
+              // Both, not `minWidth` alone: a flex item with `flex: 0 0 auto`
+              // and no width takes its size from its content, so a card
+              // holding a 1920px photo came out 1920px wide.
+              style={{ width: `${cardWidth}px`, minWidth: `${cardWidth}px` }}
+            >
+              {linked(
+                item,
+                <>
+                  {item.imageUrl ? (
+                    <div className="builder-preview-carousel-card-image" style={cardImageStyle}>
+                      <img
+                        {...imageProps(item.imageUrl, { sizes: `${cardWidth}px` })}
+                        alt={item.imageAlt || item.title || ""}
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="builder-preview-carousel-card-copy">
+                    {item.title ? <strong>{item.title}</strong> : null}
+                    {item.body ? <p>{item.body}</p> : null}
+                    {item.linkUrl && item.linkLabel ? (
+                      <span className="builder-preview-carousel-caption-link">
+                        {item.linkLabel}
+                        <span aria-hidden="true"> →</span>
+                      </span>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </article>
+            ))
+          )}
         </div>
       ) : (
-        slides.map((slide, slideIndex) => (
-          <img
-            key={slide.id}
-            {...imageProps(slide.url)}
-            alt={slide.alt}
-            loading="lazy"
-            className="builder-preview-slideshow-fade-frame"
-            style={{ opacity: slideIndex === index ? 1 : 0 }}
-          />
-        ))
+        <div
+          className={`builder-preview-carousel builder-preview-carousel-slideshow builder-preview-carousel-anim-${transition}`}
+          style={frameStyle}
+        >
+          {transition === "slide" ? (
+            <div
+              className="builder-preview-carousel-track"
+              style={{ transform: `translateX(-${index * 100}%)`, gap: `${gap}px` }}
+            >
+              {items.map((item) => (
+                <div key={item.id} className="builder-preview-carousel-slide">
+                  {linked(
+                    item,
+                    <>
+                      <img {...imageProps(item.imageUrl)} alt={item.imageAlt} loading="lazy" />
+                      {caption(item)}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            items.map((item, slideIndex) => (
+              <div
+                key={item.id}
+                className="builder-preview-carousel-slide builder-preview-carousel-fade-frame"
+                style={{ opacity: slideIndex === index ? 1 : 0 }}
+                aria-hidden={slideIndex === index ? undefined : true}
+              >
+                {linked(
+                  item,
+                  <>
+                    <img {...imageProps(item.imageUrl)} alt={item.imageAlt} loading="lazy" />
+                    {caption(item)}
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       )}
+
+      {showArrows && count > 1 && (!isCards || !atEnd || loop) ? (
+        <button
+          type="button"
+          className="builder-preview-carousel-arrow builder-preview-carousel-arrow-right"
+          onClick={() => goTo(index + 1)}
+          disabled={!loop && atEnd}
+          aria-label="Next"
+        >
+          ›
+        </button>
+      ) : null}
+
+      {showDots && count > 1 ? (
+        <div className="builder-preview-carousel-dots">
+          {items.map((item, dotIndex) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`builder-preview-carousel-dot${dotIndex === index ? " is-current" : ""}`}
+              onClick={() => goTo(dotIndex)}
+              aria-label={`Go to ${isCards ? "card" : "slide"} ${dotIndex + 1}`}
+              aria-current={dotIndex === index ? "true" : undefined}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -5513,7 +5929,7 @@ function NavMegaItem({
   }
 
   const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
-  const isActive = normalizeNavPath(item.href || "#") === activePath;
+  const isActive = isNavPathActive(item.href || "#", activePath);
   const featureImage = item.featureImage ? resolvePublicBuilderAssetUrl(item.featureImage) : "";
 
   return (
@@ -5565,7 +5981,7 @@ function NavMegaItem({
               ) : null}
               {column.links.map((link) => {
                 const linkHref = previewMode ? toPreviewHref(link.href || "#") : toPublicHref(link.href || "#");
-                const linkActive = normalizeNavPath(link.href || "#") === activePath;
+                const linkActive = isNavPathActive(link.href || "#", activePath);
                 return (
                   <Link
                     key={link.id ?? `${linkHref}-${link.label}`}
@@ -5715,7 +6131,7 @@ function NavigationModulePreview({
       <div className="site-nav-items" id={menuId}>
       {topLevelItems.map((item) => {
         const href = previewMode ? toPreviewHref(item.href || "#") : toPublicHref(item.href || "#");
-        const isActive = normalizeNavPath(item.href || "#") === activePath;
+        const isActive = isNavPathActive(item.href || "#", activePath);
         const itemId = item.id ?? `${href}-${item.label}`;
         const children = navLevels >= 2 ? childrenOf(itemId) : [];
         const rawWidth = itemSizing === "custom" && item.width ? item.width.trim() : undefined;
@@ -5771,7 +6187,7 @@ function NavigationModulePreview({
             <div className="site-nav-dropdown-menu">
               {children.map((child) => {
                 const childHref = previewMode ? toPreviewHref(child.href || "#") : toPublicHref(child.href || "#");
-                const childActive = normalizeNavPath(child.href || "#") === activePath;
+                const childActive = isNavPathActive(child.href || "#", activePath);
                 return (
                   <Link
                     key={child.id ?? `${childHref}-${child.label}`}
@@ -5845,11 +6261,6 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
  * operator can move content between them — see lib/builder-client/
  * builder-card-items.ts. Slider ignores the fields it has no use for.
  */
-type SliderItem = import("@/lib/builder-card-items").BuilderCardItem;
-
-function parseSliderItems(settings: Record<string, string>): SliderItem[] {
-  return parseBuilderCardItems(settings.sliderItems, "slide");
-}
 
 const FEATURE_CARD_ASPECTS: Record<string, string> = {
   "4-3": "4 / 3",
@@ -6184,74 +6595,6 @@ function FeatureCardsModulePreview({
           </article>
         );
       })}
-    </div>
-  );
-}
-
-function SliderModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
-  const items = parseSliderItems(module.settings);
-  const gap = Number.parseInt(module.settings.sliderGap || "16", 10);
-  const cardWidth = Number.parseInt(module.settings.sliderCardWidth || "280", 10);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    function update() {
-      if (!el) return;
-      setCanScrollLeft(el.scrollLeft > 0);
-      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-    }
-
-    update();
-    el.addEventListener("scroll", update);
-    window.addEventListener("resize", update);
-    return () => {
-      el.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [items]);
-
-  function scroll(direction: "left" | "right") {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: direction === "left" ? -320 : 320, behavior: "smooth" });
-  }
-
-  return (
-    <div className="builder-preview-slider-wrap">
-      {canScrollLeft && (
-        <button type="button" className="builder-preview-slider-arrow builder-preview-slider-arrow-left" onClick={() => scroll("left")}>
-          ‹
-        </button>
-      )}
-      <div className="builder-preview-slider" ref={scrollRef} style={{ gap: `${gap}px` }}>
-        {items.map((item) => (
-          <article key={item.id} className="builder-preview-slider-card" style={{ minWidth: `${cardWidth}px` }}>
-            {item.imageUrl ? (
-              <div className="builder-preview-slider-image">
-                <Image alt={item.imageAlt || item.title || "Slider item"} fill sizes="280px" src={item.imageUrl} unoptimized />
-              </div>
-            ) : null}
-            <div className="builder-preview-slider-copy">
-              {item.linkUrl ? (
-                <Link href={item.linkUrl}><strong>{item.title}</strong></Link>
-              ) : (
-                <strong>{item.title}</strong>
-              )}
-              <p>{item.body}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-      {canScrollRight && (
-        <button type="button" className="builder-preview-slider-arrow builder-preview-slider-arrow-right" onClick={() => scroll("right")}>
-          ›
-        </button>
-      )}
     </div>
   );
 }

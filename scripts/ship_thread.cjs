@@ -53,6 +53,7 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
+const { pickPullRequestCommit, REPIN_SUBJECT } = require('./builder/pullRequestCommit');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -185,7 +186,7 @@ if (DRY) {
 if (!DRY && git(['status', '--porcelain'])) {
   say('    Rebuild re-stamped the asset pins — committing them.');
   git(['add', '-A']);
-  run('git', ['commit', '--no-verify', '-m', 'Re-pin asset hashes from a clean build']);
+  run('git', ['commit', '--no-verify', '-m', REPIN_SUBJECT]);
 }
 
 /* ---------------------------------------------------------------- 4. push */
@@ -232,8 +233,7 @@ if (prNumber) {
 } else if (DRY) {
   say('    Would open a pull request from the commit message.');
 } else {
-  const subject = git(['log', '-1', '--format=%s']);
-  const body = git(['log', '-1', '--format=%b']);
+  const { subject, body } = pickPullRequestCommit(git);
   const created = quiet('gh', ['pr', 'create', '--title', subject, '--body', body || subject]);
   if (!created.ok) fail(`Could not open a pull request:\n\n${created.out}`);
   prNumber = (created.out.match(/\/pull\/(\d+)/) || [])[1];
@@ -274,7 +274,18 @@ if (state.out === 'DIRTY' || state.out === 'BEHIND') {
     'Nothing was merged. Run `npm run ship` again — it will catch up and carry on.'
   );
 }
-run('gh', ['pr', 'merge', prNumber, '--squash', '--delete-branch'], { allowFail: true });
+// No --delete-branch: this repo already has GitHub's own
+// "Automatically delete head branches" setting on (delete_branch_on_merge),
+// so the remote branch is gone the moment the merge lands, with or without
+// this flag. What the flag ALSO does — try to switch the LOCAL checkout off
+// the now-dead branch — is what printed a red `fatal: 'main' is already
+// used by worktree at ...` on a run that had already succeeded: every
+// `ship` runs from a worktree, and `main` is always checked out somewhere
+// else, so that local switch fails every single time. Local cleanup is
+// already `post-merge`'s and `npm run tidy`'s job (step 8, below), done
+// properly via `git cherry` rather than a plain checkout — so gh's attempt
+// was both redundant and the actual source of the whole problem.
+run('gh', ['pr', 'merge', prNumber, '--squash'], { allowFail: true });
 
 const merged = quiet('gh', ['pr', 'view', prNumber, '--json', 'state', '--jq', '.state']);
 if (merged.out !== 'MERGED') {

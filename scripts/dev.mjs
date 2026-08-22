@@ -4,6 +4,8 @@
  * Avoids the shell precedence bug where `node server.js` ran in parallel with builds.
  */
 import { spawn, execSync } from 'node:child_process';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +21,41 @@ function run(command, args, options = {}) {
 
 function runSync(command, args) {
   execSync([command, ...args].join(' '), { cwd: root, stdio: 'inherit' });
+}
+
+// Refuse to start against the live database unless that is deliberate.
+//
+// The point of the local setup is that production stops being where you find
+// out whether something works. Nothing used to ask: a checkout left pointing
+// at the cloud started up looking exactly like a local one, and the first
+// clue was a change appearing on a client's site.
+//
+// ALLOW_CLOUD_DEV=1 exists because debugging a production-only problem is a
+// real need. Having to type it is the whole control.
+const envFile = path.join(root, '.env.local');
+let pointedAt = '';
+try {
+  const match = /^SUPABASE_URL=(.*)$/m.exec(fs.readFileSync(envFile, 'utf8'));
+  pointedAt = match ? match[1].trim().replace(/^["']|["']$/g, '') : '';
+} catch (_) {
+  pointedAt = '';
+}
+// Shared with the banner and `db:use`, deliberately: the guard must agree
+// with the strip across the top of the app about what "local" means.
+const { classify } = createRequire(import.meta.url)(path.join(root, 'lib/environmentBanner.js'));
+const isLocalDb = classify(pointedAt) === 'local';
+
+if (!isLocalDb && process.env.ALLOW_CLOUD_DEV !== '1') {
+  console.error('');
+  console.error('  This folder is pointed at ' + (pointedAt || 'no database at all') + '.');
+  console.error('');
+  console.error('  That is the LIVE database - 21 tenant sites read from it, and');
+  console.error('  anything you change while developing is real and immediate.');
+  console.error('');
+  console.error('  Switch to your own copy:   npm run db:use local');
+  console.error('  Or, if you really mean it: ALLOW_CLOUD_DEV=1 npm run dev');
+  console.error('');
+  process.exit(1);
 }
 
 console.log('[dev] Building HTML…');

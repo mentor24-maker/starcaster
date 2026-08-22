@@ -1,0 +1,1234 @@
+{
+  "_readme": [
+    "Fill in \"decisions\" to resolve the review pile, then re-run the script.",
+    "A target page slug pairs the imported page there, regardless of score.",
+    "null sets it aside for good. \"\" means undecided — the run skips it.",
+    "This file outranks every score and is the record of why each call was made."
+  ],
+  "jobId": "simp_1786047449851_duiqnj",
+  "generatedAt": "2026-08-16T08:59:03.456Z",
+  "decisions": {
+    "course": "our-mission",
+    "events-calendar": "events",
+    "programs-adult-clinics": "tennis-drills-clinics",
+    "programs": null,
+    "home": "",
+    "summer-tennis-camp-fun-for-junior-players-delray-beach-tennis": "",
+    "tag-us-open": "",
+    "category-tennis-professionals": "",
+    "tag-tennis": "",
+    "contact-us": "",
+    "delray-beach-tennis-january-20th-2018-biggest-wanna-workout-this-year-with-over-35-participants": "",
+    "tag-pickleball": "",
+    "delray-beach-youth-tennis-foundation-3rd-annual-tennis-tournament": "",
+    "jeff-bingo-with-jamie-corsillo-ballboy-at-delray-beach-open-and-recipient-of-tennis-scholorship": "",
+    "delray-beach-youth-tennis-foundation-inspires-children-in-the-community": "",
+    "bryan-brothers-tennis-clinic-at-delray-open-2018": "",
+    "programs-league": "",
+    "welcome-marius-copos-delray-beach-head-tennis-professional": "",
+    "from-us-open-to-delray-tennis-play-delray-after-school-program": "",
+    "email-club": "",
+    "tag-elite-tennis": "",
+    "the-delray-tennis-center-is-looking-for-players-for-our-womens-team-tennis-in-all-divisions-from-1-7": "",
+    "tennis-program": "",
+    "tag-davis-cup": "",
+    "pickleball-schedule": "",
+    "round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018": "",
+    "course-fees": "",
+    "usta-boys-18-16-national-clay-court-championships-delray-beach-tennis-center": "",
+    "tag-tennis-programs": "",
+    "tennis-membership-information-summer-membership-application-2018": "",
+    "category-community": "",
+    "delray-champions-usta-l9-tennis-tournament": "",
+    "delray-beach-tennis-center-welcomes-jeff-bingo-new-general-manager-of-racquet-sports": "",
+    "alejandro-gerlach-and-simba-tomlin-tennis-champions": "",
+    "let-there-be-shade-new-canopy-for-pickleball-courts-delray-beach-tennis-center": "",
+    "tag-new-york": "",
+    "delray-beach-junior-tennis-summer-camp": "",
+    "category-announcements": "",
+    "delray-tennis-new-pro-staff-new-tennis-courts-and-lights-and-new-programs-and-events": "",
+    "spring-and-summer-junior-tennis-programs": "",
+    "high-performance-tennis-event-at-dbtc": "",
+    "elite-tennis": "",
+    "july-4th-round-robin-tennis-mixer-delray-beach-tennis-center": "",
+    "tag-adult-tennis": "",
+    "tag-mixers": "",
+    "meet-tennis-coach-brent-wellman-delray-beach-junior-tennis-director": "",
+    "tag-drills": "",
+    "course-blog": "",
+    "tag-events": "",
+    "author-delraybeachtennis": "",
+    "tag-team-tennis": "",
+    "monday-night-tennis-wanna-work-out-16-advanced-players-drilling-and-playing-at-a-high-level": "",
+    "ladies-from-chevy-chase-back-for-tennis-round-2-with-coach-jeff": "",
+    "tag-tournaments": "",
+    "all-peoples-day-diversity-festival-food-and-free-admission-march-24": "",
+    "category-tournaments": "",
+    "delray-beach-tennis-center-receives-2021-usta-outstanding-facility-award": "",
+    "introduction-to-pickleball-101": "",
+    "category-us-open": "",
+    "delray-beach-tennis-center-hosting-the-national-clay-championships-from-july-14th-july-22nd": "",
+    "delray-beach-open-tennis-tournament-visit-historic-delray-beach-events": "",
+    "author-jcdgroup": "",
+    "course-lessons": "",
+    "another-packed-house-for-the-saturday-morning-tennis-workout-clinic-at-the-delray-beach-tennis-center": "",
+    "delray-beach-junior-tennis-program": "",
+    "stroke-of-the-week": "",
+    "programs-junior": "",
+    "us-open-update": "",
+    "delray-beach-tennis-center-saturday-clinic-full-house": "",
+    "category-uncategorized": "",
+    "tag-jeff-bingo": "",
+    "delray-beach-tennis-center-after-school-program": "",
+    "tag-tennis-awards": "",
+    "contact-us-directions": "",
+    "tag-clinics": "",
+    "category-adult-tennis": "",
+    "course-instruct-staff": "",
+    "course-photo-gallery": "",
+    "pickleball-in-delray-beach": "",
+    "programs-special-events": "",
+    "category-pickleball": "",
+    "womens-doubles-round-robin-tennis-april-27th-and-april-30th": "",
+    "delray-beach-tennis-round-robin-mixers": "",
+    "job-opportunity": "",
+    "visit-the-sundy-house-restaurant-inn-and-botanical-garden-in-delray-beach": "",
+    "july-4th-tennis-mixer-progressive-mixed-doubles-round-robin-delray-beach-tennis": "",
+    "pickleball-strategies-and-techniques-for-the-intermediate-player": "",
+    "claymates-princess-ll-red-division-winners-with-coach-jeff-delray-beach-tennis": "",
+    "programs-pickleball": "",
+    "princess-ll-blue-claymates-tennis-team-a-successful-season": "",
+    "delray-beach-tennis-center-complimentary-labor-day-mixer-for-members-only": "",
+    "davis-cup-at-delray-beach-tennis-center": "",
+    "category-events": "",
+    "pickleball-social-mixer-at-delray-beach-tennis-center-picklers-unite-on-july-4th": "",
+    "meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray": ""
+  },
+  "appliedByThisFile": [],
+  "notes": [
+    {
+      "sourceSlug": "course-photo-gallery",
+      "originalPath": "/course/photo-gallery",
+      "title": "Photo Gallery",
+      "setAsideBecause": "best match scored 0.50, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "photos (0.50, fuzzy-nav-label)",
+        "court-status (0.23, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-fees",
+      "originalPath": "/course/fees",
+      "title": "Court Fees",
+      "setAsideBecause": "best match scored 0.33, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.33, fuzzy-nav-label)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-junior",
+      "originalPath": "/programs/junior",
+      "title": "Junior Programs",
+      "setAsideBecause": "best match scored 0.33, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "junior-tournaments (0.33, fuzzy-nav-label)",
+        "program-guide (0.33, fuzzy-nav-label)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-league",
+      "originalPath": "/programs/league",
+      "title": "Women's League Info",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "program-guide (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-blog",
+      "originalPath": "/course/blog",
+      "title": "Blog",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-lessons",
+      "originalPath": "/course/lessons",
+      "title": "Lesson Prices",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-pickleball",
+      "originalPath": "/programs/pickleball",
+      "title": "Pickleball",
+      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "program-guide (0.30, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "course-instruct-staff",
+      "originalPath": "/course/instruct-staff",
+      "title": "Managers & Instructional Staff",
+      "setAsideBecause": "best match scored 0.23, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "court-status (0.23, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-special-events",
+      "originalPath": "/programs/special-events",
+      "title": "Special Events",
+      "setAsideBecause": "best match scored 0.23, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "program-guide (0.23, fuzzy-slug)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "contact-us",
+      "originalPath": "/contact-us",
+      "title": "Contact Us",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs",
+      "originalPath": "/programs",
+      "title": "Programs",
+      "setAsideBecause": "set aside by decision file",
+      "class": "nav-page",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "course",
+      "originalPath": "/course",
+      "title": "Overview of the Delray Beach Tennis Center",
+      "setAsideBecause": "decision file names \"our-mission\", which has no PLACEHOLDER SECTION to fill",
+      "class": "nav-page",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "events-calendar",
+      "originalPath": "/events-calendar",
+      "title": "Events Calendar",
+      "setAsideBecause": "decision file names \"events\", which has no PLACEHOLDER SECTION to fill",
+      "class": "nav-page",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "programs-adult-clinics",
+      "originalPath": "/programs/adult-clinics",
+      "title": "Adult Clinics",
+      "setAsideBecause": "decision file names \"tennis-drills-clinics\", which has no PLACEHOLDER SECTION to fill",
+      "class": "nav-page",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "contact-us-directions",
+      "originalPath": "/contact-us/directions",
+      "title": "Directions & Hours",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "job-opportunity",
+      "originalPath": "/job-opportunity",
+      "title": "Job Opportunity",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "email-club",
+      "originalPath": "/email-club",
+      "title": "Join Our Email List",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "mailing-list (0.50, fuzzy-title)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "pickleball-in-delray-beach",
+      "originalPath": "/pickleball-in-delray-beach",
+      "title": "Pickleball in Delray Beach",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "delray-beach-open (0.50, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-junior-tennis-program",
+      "originalPath": "/delray-beach-junior-tennis-program",
+      "title": "Delray Beach Junior Tennis Program",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "delray-beach-open (0.33, fuzzy-title)",
+        "tennis (0.20, fuzzy-title)",
+        "tennis-mixers (0.17, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "bryan-brothers-tennis-clinic-at-delray-open-2018",
+      "originalPath": "/bryan-brothers-tennis-clinic-at-delray-open-2018",
+      "title": "Bryan Brothers Tennis Clinic at Delray Open 2018",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "delray-beach-open (0.25, fuzzy-title)",
+        "tennis (0.14, fuzzy-title)",
+        "tennis-mixers (0.13, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "july-4th-round-robin-tennis-mixer-delray-beach-tennis-center",
+      "originalPath": "/july-4th-round-robin-tennis-mixer-delray-beach-tennis-center",
+      "title": "July 4th Round Robin Tennis Mixer Delray Beach Tennis Center",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "tennis-mixers (0.22, fuzzy-title)",
+        "delray-beach-open (0.20, fuzzy-title)",
+        "tennis (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "tennis-membership-information-summer-membership-application-2018",
+      "originalPath": "/tennis-membership-information-summer-membership-application-2018",
+      "title": "Tennis Membership Information - Summer Membership Application 2018",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "membership (0.17, fuzzy-title)",
+        "tennis (0.17, fuzzy-title)",
+        "tennis-mixers (0.14, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "womens-doubles-round-robin-tennis-april-27th-and-april-30th",
+      "originalPath": "/womens-doubles-round-robin-tennis-april-27th-and-april-30th",
+      "title": "Women's Doubles Round Robin Tennis April 27th and April 30th",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "princess-ll-blue-claymates-tennis-team-a-successful-season",
+      "originalPath": "/princess-ll-blue-claymates-tennis-team-a-successful-season",
+      "title": "Princess ll Blue Claymates Tennis Team - A Successful Season!",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray",
+      "originalPath": "/meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray",
+      "title": "Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "tennis (0.10, fuzzy-title)",
+        "tennis-mixers (0.09, fuzzy-title)",
+        "junior-tournaments (0.09, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018",
+      "originalPath": "/round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018",
+      "title": "Round Robin Pickleball Tournament to Benefit Gift of Life on March 21, 2018",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "junior-tournaments (0.08, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "monday-night-tennis-wanna-work-out-16-advanced-players-drilling-and-playing-at-a-high-level",
+      "originalPath": "/monday-night-tennis-wanna-work-out-16-advanced-players-drilling-and-playing-at-a-high-level",
+      "title": "Monday Night Tennis Wanna Work Out 16 Advanced Players Drilling and Playing at a High Level",
+      "setAsideBecause": "not linked from the original site menu",
+      "class": "orphan",
+      "bestCandidates": [
+        "tennis (0.08, fuzzy-title)",
+        "tennis-mixers (0.07, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "home",
+      "originalPath": "/",
+      "title": "Welcome to Delray Beach Tennis Center",
+      "setAsideBecause": "home page — the new home is already built by hand",
+      "class": "home",
+      "bestCandidates": [
+        "delray-beach-open (0.33, fuzzy-title)",
+        "tennis (0.20, fuzzy-title)",
+        "tennis-mixers (0.17, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "tennis-program",
+      "originalPath": "/tennis-program",
+      "title": "Tennis Program",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.50, fuzzy-title)",
+        "tennis-mixers (0.33, fuzzy-title)",
+        "program-guide (0.33, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "elite-tennis",
+      "originalPath": "/elite-tennis",
+      "title": "Tennis Drills, Clinics, Mixers and More",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.45, fuzzy-slug)",
+        "tennis-mixers (0.40, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-open-tennis-tournament-visit-historic-delray-beach-events",
+      "originalPath": "/delray-beach-open-tennis-tournament-visit-historic-delray-beach-events",
+      "title": "Delray Beach Open Tennis Tournament - Visit Historic Delray Beach - Events",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.38, fuzzy-title)",
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "pickleball-schedule",
+      "originalPath": "/pickleball-schedule",
+      "title": "Pickleball Schedule",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "weekly-schedule (0.33, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-round-robin-mixers",
+      "originalPath": "/delray-beach-tennis-round-robin-mixers",
+      "title": "Delray Beach Tennis Round Robin Mixers",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis-mixers (0.33, fuzzy-title)",
+        "delray-beach-open (0.29, fuzzy-title)",
+        "tennis (0.17, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-junior-tennis-summer-camp",
+      "originalPath": "/delray-beach-junior-tennis-summer-camp",
+      "title": "Delray Beach Junior Tennis Summer Camp",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.29, fuzzy-title)",
+        "tennis (0.17, fuzzy-title)",
+        "tennis-mixers (0.14, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "davis-cup-at-delray-beach-tennis-center",
+      "originalPath": "/davis-cup-at-delray-beach-tennis-center",
+      "title": "Davis Cup at Delray Beach Tennis Center",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.29, fuzzy-title)",
+        "tennis (0.17, fuzzy-title)",
+        "tennis-mixers (0.14, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "jeff-bingo-with-jamie-corsillo-ballboy-at-delray-beach-open-and-recipient-of-tennis-scholorship",
+      "originalPath": "/jeff-bingo-with-jamie-corsillo-ballboy-at-delray-beach-open-and-recipient-of-tennis-scholorship",
+      "title": "Jeff Bingo With Jamie Corsillo, Ballboy at Delray Beach Open and Recipient of Tennis Scholorship",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.25, fuzzy-title)",
+        "tennis (0.08, fuzzy-title)",
+        "tennis-mixers (0.08, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "us-open-update",
+      "originalPath": "/us-open-update",
+      "title": "US Open Update",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-center-after-school-program",
+      "originalPath": "/delray-beach-tennis-center-after-school-program",
+      "title": "Delray Beach Tennis Center After School Program",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.25, fuzzy-title)",
+        "tennis (0.14, fuzzy-title)",
+        "tennis-mixers (0.13, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "summer-tennis-camp-fun-for-junior-players-delray-beach-tennis",
+      "originalPath": "/summer-tennis-camp-fun-for-junior-players-delray-beach-tennis",
+      "title": "Summer Tennis Camp Fun For Junior Players - Delray Beach Tennis",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.22, fuzzy-title)",
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-youth-tennis-foundation-3rd-annual-tennis-tournament",
+      "originalPath": "/delray-beach-youth-tennis-foundation-3rd-annual-tennis-tournament",
+      "title": "Delray Beach Youth Tennis Foundation 3rd Annual Tennis Tournament",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.22, fuzzy-title)",
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-youth-tennis-foundation-inspires-children-in-the-community",
+      "originalPath": "/delray-beach-youth-tennis-foundation-inspires-children-in-the-community",
+      "title": "Delray Beach Youth Tennis Foundation Inspires Children in the Community",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.22, fuzzy-title)",
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "welcome-marius-copos-delray-beach-head-tennis-professional",
+      "originalPath": "/welcome-marius-copos-delray-beach-head-tennis-professional",
+      "title": "Welcome Marius Copos Delray Beach Head Tennis Professional",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.22, fuzzy-title)",
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "from-us-open-to-delray-tennis-play-delray-after-school-program",
+      "originalPath": "/from-us-open-to-delray-tennis-play-delray-after-school-program",
+      "title": "From US Open to Delray Tennis - Play Delray After-School Program",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.22, fuzzy-title)",
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-center-saturday-clinic-full-house",
+      "originalPath": "/delray-beach-tennis-center-saturday-clinic-full-house",
+      "title": "Delray Beach Tennis Center Saturday Clinic - Full House",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.22, fuzzy-title)",
+        "tennis (0.13, fuzzy-title)",
+        "tennis-mixers (0.11, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "spring-and-summer-junior-tennis-programs",
+      "originalPath": "/spring-and-summer-junior-tennis-programs",
+      "title": "Spring and Summer Junior Tennis Programs",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.20, fuzzy-title)",
+        "tennis-mixers (0.17, fuzzy-title)",
+        "junior-tournaments (0.17, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "high-performance-tennis-event-at-dbtc",
+      "originalPath": "/high-performance-tennis-event-at-dbtc",
+      "title": "High Performance Tennis Event at DBTC",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.20, fuzzy-title)",
+        "tennis-mixers (0.17, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "meet-tennis-coach-brent-wellman-delray-beach-junior-tennis-director",
+      "originalPath": "/meet-tennis-coach-brent-wellman-delray-beach-junior-tennis-director",
+      "title": "Meet Tennis Coach Brent Wellman Delray Beach Junior Tennis Director",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.20, fuzzy-title)",
+        "tennis (0.11, fuzzy-title)",
+        "tennis-mixers (0.10, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "visit-the-sundy-house-restaurant-inn-and-botanical-garden-in-delray-beach",
+      "originalPath": "/visit-the-sundy-house-restaurant-inn-and-botanical-garden-in-delray-beach",
+      "title": "Visit the Sundy House Restaurant, Inn and Botanical Garden in Delray Beach",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.20, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-center-complimentary-labor-day-mixer-for-members-only",
+      "originalPath": "/delray-beach-tennis-center-complimentary-labor-day-mixer-for-members-only",
+      "title": "Delray Beach Tennis Center Complimentary Labor Day Mixer for Members Only",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis-mixers (0.20, fuzzy-title)",
+        "delray-beach-open (0.18, fuzzy-title)",
+        "tennis (0.10, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-center-receives-2021-usta-outstanding-facility-award",
+      "originalPath": "/delray-beach-tennis-center-receives-2021-usta-outstanding-facility-award",
+      "title": "Delray Beach Tennis Center Receives 2021 USTA Outstanding Facility Award",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.18, fuzzy-title)",
+        "tennis (0.10, fuzzy-title)",
+        "tennis-mixers (0.09, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "july-4th-tennis-mixer-progressive-mixed-doubles-round-robin-delray-beach-tennis",
+      "originalPath": "/july-4th-tennis-mixer-progressive-mixed-doubles-round-robin-delray-beach-tennis",
+      "title": "July 4th Tennis Mixer - Progressive Mixed Doubles Round Robin - Delray Beach Tennis",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis-mixers (0.18, fuzzy-title)",
+        "delray-beach-open (0.17, fuzzy-title)",
+        "tennis (0.09, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-champions-usta-l9-tennis-tournament",
+      "originalPath": "/delray-champions-usta-l9-tennis-tournament",
+      "title": "Delray Champions USTA L9 Tennis Tournament",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.17, fuzzy-title)",
+        "tennis-mixers (0.14, fuzzy-title)",
+        "junior-tournaments (0.14, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "alejandro-gerlach-and-simba-tomlin-tennis-champions",
+      "originalPath": "/alejandro-gerlach-and-simba-tomlin-tennis-champions",
+      "title": "Alejandro Gerlach and Simba Tomlin Tennis Champions",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.17, fuzzy-title)",
+        "tennis-mixers (0.14, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "another-packed-house-for-the-saturday-morning-tennis-workout-clinic-at-the-delray-beach-tennis-center",
+      "originalPath": "/another-packed-house-for-the-saturday-morning-tennis-workout-clinic-at-the-delray-beach-tennis-center",
+      "title": "Another Packed House for the Saturday Morning Tennis Workout Clinic at the Delray Beach Tennis Center",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.17, fuzzy-title)",
+        "tennis (0.09, fuzzy-title)",
+        "tennis-mixers (0.08, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "pickleball-social-mixer-at-delray-beach-tennis-center-picklers-unite-on-july-4th",
+      "originalPath": "/pickleball-social-mixer-at-delray-beach-tennis-center-picklers-unite-on-july-4th",
+      "title": "Pickleball Social Mixer at Delray Beach Tennis Center - Picklers Unite on July 4th",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis-mixers (0.17, fuzzy-title)",
+        "delray-beach-open (0.15, fuzzy-title)",
+        "tennis (0.08, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-center-welcomes-jeff-bingo-new-general-manager-of-racquet-sports",
+      "originalPath": "/delray-beach-tennis-center-welcomes-jeff-bingo-new-general-manager-of-racquet-sports",
+      "title": "Delray Beach Tennis Center Welcomes Jeff Bingo New General Manager of Racquet Sports",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.15, fuzzy-title)",
+        "tennis (0.08, fuzzy-title)",
+        "tennis-mixers (0.08, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-center-hosting-the-national-clay-championships-from-july-14th-july-22nd",
+      "originalPath": "/delray-beach-tennis-center-hosting-the-national-clay-championships-from-july-14th-july-22nd",
+      "title": "Delray Beach Tennis Center Hosting the National Clay Championships from July 14th - July 22nd",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.15, fuzzy-title)",
+        "tennis (0.08, fuzzy-title)",
+        "tennis-mixers (0.08, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "claymates-princess-ll-red-division-winners-with-coach-jeff-delray-beach-tennis",
+      "originalPath": "/claymates-princess-ll-red-division-winners-with-coach-jeff-delray-beach-tennis",
+      "title": "Claymates Princess ll Red Division Winners with Coach Jeff - Delray Beach Tennis",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.15, fuzzy-title)",
+        "tennis (0.08, fuzzy-title)",
+        "tennis-mixers (0.08, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "usta-boys-18-16-national-clay-court-championships-delray-beach-tennis-center",
+      "originalPath": "/usta-boys-18-16-national-clay-court-championships-delray-beach-tennis-center",
+      "title": "USTA BOYS’ 18 and 16 NATIONAL CLAY COURT CHAMPIONSHIPS",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.14, fuzzy-slug)",
+        "court-status (0.11, fuzzy-title)",
+        "tennis (0.07, fuzzy-slug)"
+      ]
+    },
+    {
+      "sourceSlug": "let-there-be-shade-new-canopy-for-pickleball-courts-delray-beach-tennis-center",
+      "originalPath": "/let-there-be-shade-new-canopy-for-pickleball-courts-delray-beach-tennis-center",
+      "title": "Let There Be Shade! New Canopy for Pickleball Courts",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.14, fuzzy-slug)",
+        "court-status (0.11, fuzzy-title)",
+        "tennis (0.07, fuzzy-slug)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-beach-tennis-january-20th-2018-biggest-wanna-workout-this-year-with-over-35-participants",
+      "originalPath": "/delray-beach-tennis-january-20th-2018-biggest-wanna-workout-this-year-with-over-35-participants",
+      "title": "Delray Beach Tennis January 20th 2018 Biggest Wanna Workout This Year With Over 35 Participants",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "delray-beach-open (0.13, fuzzy-title)",
+        "tennis (0.07, fuzzy-title)",
+        "tennis-mixers (0.06, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "delray-tennis-new-pro-staff-new-tennis-courts-and-lights-and-new-programs-and-events",
+      "originalPath": "/delray-tennis-new-pro-staff-new-tennis-courts-and-lights-and-new-programs-and-events",
+      "title": "Delray Tennis - New Pro Staff, New Tennis Courts and Lights and New Programs and Events",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.11, fuzzy-title)",
+        "court-status (0.10, fuzzy-title)",
+        "pro-shop (0.10, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "ladies-from-chevy-chase-back-for-tennis-round-2-with-coach-jeff",
+      "originalPath": "/ladies-from-chevy-chase-back-for-tennis-round-2-with-coach-jeff",
+      "title": "Ladies from Chevy Chase Back for Tennis Round 2 With Coach Jeff",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.09, fuzzy-title)",
+        "tennis-mixers (0.08, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "the-delray-tennis-center-is-looking-for-players-for-our-womens-team-tennis-in-all-divisions-from-1-7",
+      "originalPath": "/the-delray-tennis-center-is-looking-for-players-for-our-womens-team-tennis-in-all-divisions-from-1-7",
+      "title": "The Delray Tennis Center is Looking for Players for our Women’s Team Tennis in all Divisions from 1-7",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "tennis (0.08, fuzzy-title)",
+        "tennis-mixers (0.07, fuzzy-title)",
+        "delray-beach-open (0.07, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "all-peoples-day-diversity-festival-food-and-free-admission-march-24",
+      "originalPath": "/all-peoples-day-diversity-festival-food-and-free-admission-march-24",
+      "title": "All People's Day Diversity Festival - Food and Free Admission - March 24",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "introduction-to-pickleball-101",
+      "originalPath": "/introduction-to-pickleball-101",
+      "title": "Introduction to Pickleball 101",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "stroke-of-the-week",
+      "originalPath": "/stroke-of-the-week",
+      "title": "Stroke of the Week",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "pickleball-strategies-and-techniques-for-the-intermediate-player",
+      "originalPath": "/pickleball-strategies-and-techniques-for-the-intermediate-player",
+      "title": "Pickleball Strategies and Techniques for the Intermediate Player",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-tennis",
+      "originalPath": "/tag/tennis",
+      "title": "tennis Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.50, fuzzy-title)",
+        "tennis-mixers (0.33, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-tennis-professionals",
+      "originalPath": "/category/tennis-professionals",
+      "title": "Tennis Professionals Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.33, fuzzy-title)",
+        "tennis-mixers (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-elite-tennis",
+      "originalPath": "/tag/elite-tennis",
+      "title": "elite tennis Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.33, fuzzy-title)",
+        "tennis-mixers (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-tennis-programs",
+      "originalPath": "/tag/tennis-programs",
+      "title": "tennis programs Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.33, fuzzy-title)",
+        "tennis-mixers (0.25, fuzzy-title)",
+        "program-guide (0.25, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-adult-tennis",
+      "originalPath": "/tag/adult-tennis",
+      "title": "adult tennis Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.33, fuzzy-title)",
+        "tennis-mixers (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-mixers",
+      "originalPath": "/tag/mixers",
+      "title": "mixers Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis-mixers (0.33, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-team-tennis",
+      "originalPath": "/tag/team-tennis",
+      "title": "Team Tennis Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.33, fuzzy-title)",
+        "tennis-mixers (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-tournaments",
+      "originalPath": "/tag/tournaments",
+      "title": "tournaments Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "junior-tournaments (0.33, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-tournaments",
+      "originalPath": "/category/tournaments",
+      "title": "Tournaments Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "junior-tournaments (0.33, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-tennis-awards",
+      "originalPath": "/tag/tennis-awards",
+      "title": "tennis awards Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.33, fuzzy-title)",
+        "tennis-mixers (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-adult-tennis",
+      "originalPath": "/category/adult-tennis",
+      "title": "Adult Tennis Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "tennis (0.33, fuzzy-title)",
+        "tennis-mixers (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "author-jcdgroup",
+      "originalPath": "/author/jcdgroup",
+      "title": "jcdgroup, Author at Delray Beach Tennis Center",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "delray-beach-open (0.29, fuzzy-title)",
+        "tennis (0.17, fuzzy-title)",
+        "tennis-mixers (0.14, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-us-open",
+      "originalPath": "/tag/us-open",
+      "title": "US Open Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "delray-beach-open (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "author-delraybeachtennis",
+      "originalPath": "/author/delraybeachtennis",
+      "title": "Jeff Bingo, Author at Delray Beach Tennis Center",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "delray-beach-open (0.25, fuzzy-title)",
+        "tennis (0.14, fuzzy-title)",
+        "tennis-mixers (0.13, fuzzy-title)"
+      ]
+    },
+    {
+      "sourceSlug": "category-us-open",
+      "originalPath": "/category/us-open",
+      "title": "US Open Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "delray-beach-open (0.25, fuzzy-title)",
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-pickleball",
+      "originalPath": "/tag/pickleball",
+      "title": "pickleball Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-davis-cup",
+      "originalPath": "/tag/davis-cup",
+      "title": "Davis Cup Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-community",
+      "originalPath": "/category/community",
+      "title": "Community Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-new-york",
+      "originalPath": "/tag/new-york",
+      "title": "New York Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-announcements",
+      "originalPath": "/category/announcements",
+      "title": "Announcements Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-drills",
+      "originalPath": "/tag/drills",
+      "title": "drills Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-events",
+      "originalPath": "/tag/events",
+      "title": "events Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-uncategorized",
+      "originalPath": "/category/uncategorized",
+      "title": "Uncategorized Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-jeff-bingo",
+      "originalPath": "/tag/jeff-bingo",
+      "title": "Jeff Bingo Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "tag-clinics",
+      "originalPath": "/tag/clinics",
+      "title": "clinics Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-pickleball",
+      "originalPath": "/category/pickleball",
+      "title": "Pickleball Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "category-events",
+      "originalPath": "/category/events",
+      "title": "Events Archives",
+      "setAsideBecause": "WordPress archive listing, not a content page",
+      "class": "archive",
+      "bestCandidates": [
+        "mailing-list (0.00, fuzzy-nav-label)",
+        "court-status (0.00, fuzzy-nav-label)",
+        "photos (0.00, fuzzy-nav-label)"
+      ]
+    }
+  ]
+}
