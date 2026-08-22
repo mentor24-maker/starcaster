@@ -30,6 +30,28 @@ npm run clickup -- comment --task <id> --body-file -                         # b
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
 
+## Loop note — stamp the queue as you go (queue visibility)
+
+At each transition you perform, stamp the ticket's **Loop note** so the Loop
+Queue shows what is happening at a glance (not just the stage). One write per
+real transition — never per queued ticket:
+
+```bash
+npm run clickup -- loop-note --task <id> --transition claimed        # when you claim it
+npm run clickup -- loop-note --task <id> --transition pr-open --pr <n>   # when the PR is open / handed to review
+npm run clickup -- loop-note --task <id> --transition escalated       # when you move it to Needs your input
+```
+
+If it prints `CANNOT STAMP — custom field "Loop note" not found`, that is not a
+failure of your build: the field is a one-time ClickUp setup (see
+`docs/LOOP_ENGINEERING.md`). Note it in your run report and carry on.
+
+At the END of the pass, one heartbeat so the list shows the pipeline is alive:
+
+```bash
+npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task name>"
+```
+
 ## Workflow
 
 1. **Claim the next task.** Find the oldest `Queued` task (highest priority
