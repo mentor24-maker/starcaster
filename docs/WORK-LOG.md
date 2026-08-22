@@ -36,6 +36,15 @@ travelling motion Flips does not have. Each of the three now takes the existing
 Speed, Rotation Rate, Bounce Height and Direction controls, so there is nothing
 new to learn.
 
+After review, the automated visual check was strengthened. The general check
+only asked "is anything moving?", which could not catch a real hazard: the old
+retired animations still sit in the regenerated stylesheet under the same
+names, so if a new effect's real rule ever broke, the picture would keep
+moving on the OLD rule — ignoring every setting — and the check would stay
+green. Each of the three effects now has a check that names the exact
+animation it must run; breaking the rule on purpose makes that check fail
+(proven), so a future stylesheet regeneration cannot silently gut them.
+
 One thing worth knowing: **Slide and Cruise are the same movement.** Nothing is
 wrong with either, and both work — but a picture set to Slide and a picture set
 to Cruise will look identical and offer identical settings, which is exactly the

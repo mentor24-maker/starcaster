@@ -204,6 +204,63 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  // ── The three effects added in this task, asserted BY ANIMATION NAME ──────
+  // Not just "something animates": the regenerated base file (_builder-react.css)
+  // still carries the OLD normie-* keyframes on these same class names, so if a
+  // settings-driven override rule breaks, the effect silently degrades to a
+  // fixed-duration normie-* animation that ignores every setting — and the
+  // generic effect sweep (any animation running) stays green. Asserting the
+  // OVERRIDE's animation name is what catches that degrade. (Break-proof: remove
+  // the override's `animation:` line, rebuild CSS, and the matching contract
+  // below fails because a normie-* name runs instead.)
+  {
+    id: 'image-effect-slide-named',
+    why: 'Slide must run the OVERRIDE animation (sc-effect-travel), not the base file\'s normie-slide fallback.',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide', effectSpeed: '8' } },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      if (!names.includes('sc-effect-travel')) {
+        return `slide is not running \`sc-effect-travel\` (found: ${names.join(', ') || 'none'}). ` +
+          'If a normie-* name is here instead, the override broke and slide fell back to a settings-ignoring animation.';
+      }
+      if (!sample.advanced) return `slide's animation did not advance over ${sample.settleMs}ms — it is parked.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-effect-axis-rotate-named',
+    why: 'Axis-rotate must run sc-effect-turn-y (the override), not normie-axis-rotate (the base fallback).',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'axis-rotate', effectRotationRate: '30' } },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      if (!names.includes('sc-effect-turn-y')) {
+        return `axis-rotate is not running \`sc-effect-turn-y\` (found: ${names.join(', ') || 'none'}). ` +
+          'A normie-axis-rotate here means the override broke and Rotation Rate is being ignored.';
+      }
+      if (!sample.advanced) return `axis-rotate's animation did not advance over ${sample.settleMs}ms — it is parked.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-effect-flips-named',
+    why: 'Flips must run BOTH override animations (sc-effect-turn + sc-effect-hop), not the base fallbacks.',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'flips', effectRotationRate: '30', effectBounceHeight: '150' } },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      for (const required of ['sc-effect-turn', 'sc-effect-hop']) {
+        if (!names.includes(required)) {
+          return `flips is not running \`${required}\` (found: ${names.join(', ') || 'none'}). ` +
+            'A missing override name means flips degraded to a settings-ignoring fallback.';
+        }
+      }
+      if (!sample.advanced) return `flips' animations did not advance over ${sample.settleMs}ms — parked.`;
+      return null;
+    },
+  },
+
   {
     id: 'image-never-renders-larger-than-its-file',
     why:
