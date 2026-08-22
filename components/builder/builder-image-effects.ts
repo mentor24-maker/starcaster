@@ -76,15 +76,20 @@ export const IMAGE_EFFECT_ROTATION_RATE_OPTIONS: { value: string; label: string 
  * rather than per second so it stays a shape you can picture: "4" is four
  * hops from one edge to the other, however long that takes.
  */
+// Bare counts, not "N per crossing": the count means per-CROSSING for the
+// travelling hoppers (Tumbleweed) but per-TURN for the in-place ones (Flips
+// counts hops per turn, and its hop speed rides Rotation Rate). One label set
+// that is honest for both — the field is "Frequency (hops)" and the effect
+// decides what a hop is timed against.
 export const IMAGE_EFFECT_FREQUENCY_OPTIONS: { value: string; label: string }[] = [
-  { value: "1", label: "1 per crossing" },
-  { value: "2", label: "2 per crossing" },
-  { value: "3", label: "3 per crossing" },
-  { value: "4", label: "4 per crossing" },
-  { value: "6", label: "6 per crossing" },
-  { value: "8", label: "8 per crossing" },
-  { value: "12", label: "12 per crossing" },
-  { value: "16", label: "16 per crossing" }
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
+  { value: "6", label: "6" },
+  { value: "8", label: "8" },
+  { value: "12", label: "12" },
+  { value: "16", label: "16" }
 ];
 
 /**

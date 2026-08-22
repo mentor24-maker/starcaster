@@ -36,6 +36,11 @@ travelling motion Flips does not have. Each of the three now takes the existing
 Speed, Rotation Rate, Bounce Height and Direction controls, so there is nothing
 new to learn.
 
+Round-3 review fixes: the Frequency dropdown now shows bare counts (it read
+"per crossing", which is wrong for Flips, which counts hops per turn), and the
+Slide effect on a floating image no longer loses its position and size — old
+leftover layout rules were forcing it to the far left and full width.
+
 After review, the automated visual check was strengthened. The general check
 only asked "is anything moving?", which could not catch a real hazard: the old
 retired animations still sit in the regenerated stylesheet under the same
