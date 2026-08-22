@@ -1,6 +1,13 @@
 "use client";
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import {
+  ALREADY_UNDONE_MESSAGE,
+  confirmUndoMessage,
+  describeUndoOutcome,
+  fetchPropagationRunScope,
+  performPropagationUndo,
+} from "@/lib/propagation-undo";
 import type { ChangeEvent, DragEvent } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AdminMediaItem } from "@/lib/admin-media";
@@ -2132,43 +2139,33 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
    */
   async function undoPropagation() {
     if (!propagationUndo) return;
-    const { runId, pages, name } = propagationUndo;
-    const confirmed = window.confirm(
-      `Undo the update to "${name}"?\n\n` +
-        `${pages} ${pages === 1 ? "page goes" : "pages go"} back to how ${pages === 1 ? "it was" : "they were"} ` +
-        "before you saved it — the WHOLE page, not just the shared part. So anything " +
-        "edited on those pages since then is rolled back too.\n\n" +
-        "The current version of each page is saved to its own history first, so nothing is lost " +
-        "and this can itself be undone."
-    );
-    if (!confirmed) return;
+    const { runId, name } = propagationUndo;
 
     setIsUndoingPropagation(true);
     setError(null);
     try {
-      const response = await builderAdminFetch(`/api/admin/propagation-runs/${runId}/undo`, {
-        method: "POST",
-      });
-      const body = (await response.json().catch(() => ({}))) as {
-        restored?: Array<{ name?: string }>;
-        failed?: Array<{ name?: string }>;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(body.error ?? "Could not undo that update.");
-
-      const restored = body.restored?.length ?? 0;
-      const failed = body.failed ?? [];
-      if (failed.length) {
-        // NAMES them. A partial undo reporting plain success is the failure
-        // this whole feature exists to stop happening quietly.
-        setError(
-          `Put back ${restored} ${restored === 1 ? "page" : "pages"}, but ${failed.length} could not be restored: ` +
-            `${failed.map((f) => f.name || "(unnamed)").join(", ")}. Their history still holds the old version — ` +
-            "restore those from the page itself."
-        );
-      } else {
-        setMessage(`Undone. ${restored} ${restored === 1 ? "page is" : "pages are"} back to how they were.`);
+      // The confirm, the undo request, and the outcome sentences are shared
+      // with Page History's durable entry point (lib/builder-client/
+      // propagation-undo.ts) — one copy of the doctrine strings, and a
+      // confirm built from what still HAS restore points rather than from
+      // the count we remember.
+      const scope = await fetchPropagationRunScope(runId);
+      if (scope.undone) {
+        setMessage(ALREADY_UNDONE_MESSAGE);
+        setPropagationUndo(null);
+        return;
       }
+      if (!scope.pages.length) {
+        setError("That update has no restore points left to undo.");
+        setPropagationUndo(null);
+        return;
+      }
+      if (!window.confirm(confirmUndoMessage(scope, name))) return;
+
+      const outcome = await performPropagationUndo(runId);
+      const summary = describeUndoOutcome(outcome);
+      if (summary.kind === "partial") setError(summary.text);
+      else setMessage(summary.text);
       setPropagationUndo(null);
       await loadPages();
     } catch (e) {
@@ -2618,7 +2615,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             onClick={() => void undoPropagation()}
             type="button"
           >
-            {isUndoingPropagation ? "Undoing..." : "Undo this update"}
+            {isUndoingPropagation ? "Undoing..." : "Undo This Update"}
           </button>
         </div>
       ) : null}
