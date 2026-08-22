@@ -234,6 +234,29 @@ is different, so the loops have guardrails baked in:
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
 
+## Reading the queue at a glance — the Loop note
+
+The Status column says which STAGE a ticket is in; the **Loop note** column
+says what is actually happening and what happens next, in plain language:
+`🔨 building — claimed 10:12am`, `🔀 PR #351 open — waiting for a review pass`,
+`👀 verified — waiting on Dane to say "merge"`, `↩ returned to the line…`,
+`✅ live 8/20`. An empty note means "waiting in line" — correct, not a gap.
+A pinned **Loop heartbeat** ticket carries one line per pass
+(`pass finished 10:48am — 33 in line, next up: "…"`) so you can tell whether
+the line is MOVING, not just how long it is.
+
+The loops stamp these themselves (`loop-note` / `loop-heartbeat` in
+`scripts/clickup_direct.mjs`, wording in `scripts/builder/loopNote.js`) — one
+write per real transition, never per queued ticket (that would be ~33 writes a
+pass against a rate-limited API for what the sort order already shows).
+
+**One-time setup (ClickUp UI — the API cannot create either):**
+1. On the Loop Queue list: Columns → + → Create field → **Text**, named
+   exactly **Loop note**. Add it to the List view. Until it exists the loops
+   print `CANNOT STAMP` and carry on — the note is missing, nothing else is.
+2. Create one ticket named **Loop heartbeat** in the list; put its id in
+   `CLICKUP_HEARTBEAT_TASK` (Doppler) so `loop-heartbeat` has a home.
+
 ## Cost — the part the demos skip
 
 A loop is an agent running continuously, so it spends tokens whether the output
