@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — Three jobs that must never run twice now refuse to (#PR)
+## 2026-08-22 — Three jobs that must never run twice now refuse to (#383)
 
 There are two machines now, and that is only an improvement if both of them
 know which work is theirs. Three jobs break badly if two machines do them at
