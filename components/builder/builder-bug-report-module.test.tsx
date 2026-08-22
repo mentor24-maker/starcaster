@@ -36,6 +36,20 @@ async function flush() {
   });
 }
 
+/**
+ * Flush repeatedly until `check` holds. A screenshot upload is a chain of a
+ * FileReader macrotask, a fetch, its .json(), and a setState — more than one
+ * flush's worth of ticks, and how many is timing-dependent (it passed locally
+ * and flaked in CI on a single flush). Waiting on the settled DOM marker is
+ * deterministic where a fixed flush count is not.
+ */
+async function flushUntil(check: () => boolean, tries = 30) {
+  for (let i = 0; i < tries; i += 1) {
+    if (check()) return;
+    await flush();
+  }
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as unknown as Response;
 }
@@ -204,7 +218,9 @@ describe("BugReportModule — popup and submit", () => {
       Object.defineProperty(input, "files", { value: [file], configurable: true });
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await flush();
+    // Wait for the upload to settle (the shot leaves "uploading") before submit,
+    // or the form blocks on "a screenshot is still uploading".
+    await flushUntil(() => !!document.querySelector(".builder-bug-report-shot-list .is-ready"));
 
     const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
     act(() => {
@@ -238,7 +254,8 @@ describe("BugReportModule — popup and submit", () => {
       Object.defineProperty(input, "files", { value: [file], configurable: true });
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await flush();
+    // Wait for the upload to settle into its error state before submit.
+    await flushUntil(() => !!document.querySelector(".builder-bug-report-shot-list .is-error"));
 
     const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
     act(() => {
