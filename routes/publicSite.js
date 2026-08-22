@@ -13,6 +13,7 @@ const {
   assertProjectIdAllowedOnHost,
   assertDomainQueryAllowedOnHost,
   resolveTenantProjectFromHost,
+  resolvePublicProjectForRequest,
 } = require('../lib/publicSiteHostBinding');
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
@@ -206,27 +207,18 @@ async function handle(req, res, pathname, method) {
     if (checkEndpointLimit(req, res, 'public.bugReport')) return true;
 
     const body = await parseJsonBody(req);
-    const projectId = String(body.projectId || '').trim();
-    const bind = await assertProjectIdAllowedOnHost(req, projectId);
-    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+
+    // Shape of the payload first, so obviously-invalid input costs no database
+    // work — then the project the report may be filed against.
     const description = String(body.description || '').trim();
     if (!description) return respondErr(res, req, 400, 'A description is required'), true;
     if (description.length > MAX_BUG_REPORT_DESCRIPTION_LENGTH) {
       return respondErr(res, req, 400, `Description must be ${MAX_BUG_REPORT_DESCRIPTION_LENGTH} characters or fewer`), true;
     }
 
-    let scopedProjectId = bind.projectId || '';
-    if (!scopedProjectId) {
-      // System host (starcaster.pro, localhost, previews): the host names no
-      // tenant, so the body's projectId is an unverified claim — resolve it
-      // against real projects before writing, or any string becomes a tenant.
-      if (!projectId) return respondErr(res, req, 400, 'projectId is required'), true;
-      const project = await getPublicProjectById(projectId);
-      if (!project.ok || !project.data) {
-        return respondErr(res, req, 404, 'Unknown project', { code: 'PROJECT_NOT_FOUND' }), true;
-      }
-      scopedProjectId = String(project.data.id);
-    }
+    const bind = await resolvePublicProjectForRequest(req, body.projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+    const scopedProjectId = bind.projectId;
 
     // A report claiming a client/staff viewer tier is only trusted if the
     // request carries a real tenant admin session for THIS project —
