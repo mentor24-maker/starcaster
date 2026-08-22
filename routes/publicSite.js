@@ -253,6 +253,10 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
 
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return respondErr(res, req, 400, 'That upload could not be read — please pick the file again.', { code: 'VALIDATION_ERROR' }), true;
+    }
+
     const resolved = await resolveBugReportProject(req, body.projectId);
     if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
 
@@ -270,6 +274,9 @@ async function handle(req, res, pathname, method) {
     if (checkEndpointLimit(req, res, 'public.bugReport')) return true;
 
     const body = await parseJsonBody(req);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return respondErr(res, req, 400, 'A description is required', { code: 'VALIDATION_ERROR' }), true;
+    }
     const description = String(body.description || '').trim();
     if (!description) return respondErr(res, req, 400, 'A description is required'), true;
     if (description.length > MAX_BUG_REPORT_DESCRIPTION_LENGTH) {
@@ -296,10 +303,14 @@ async function handle(req, res, pathname, method) {
     }
 
     // Screenshots were uploaded ahead of time (one request each) and are
-    // attached here by asset id. Verified read-only BEFORE the row is written
-    // — a scoped lookup, so an id from another tenant simply does not exist.
+    // attached here by (id, token) — the token proves this submitter uploaded
+    // them, so guessed ids cannot harvest another reporter's screenshots.
+    // `screenshots` is [{ id, token }] from the upload responses; the legacy
+    // `screenshotAssetIds` shape carries no tokens and is refused (the task
+    // 4/5 module must send `screenshots`).
     const scope = { projectId: scopedProjectId, userId: ownerUserId };
-    const screenshots = await verifyBugReportScreenshots(body.screenshotAssetIds, scope);
+    const screenshotRefs = Array.isArray(body.screenshots) ? body.screenshots : body.screenshotAssetIds;
+    const screenshots = await verifyBugReportScreenshots(screenshotRefs, scope);
     if (!screenshots.ok) return respondErr(res, req, screenshots.status || 400, screenshots.error, { code: screenshots.code }), true;
 
     const result = await createBugReport({
@@ -314,7 +325,7 @@ async function handle(req, res, pathname, method) {
 
     // The row exists and references them; flipping pending → attached is the
     // orphan-sweep bookkeeping, best-effort by design (see the library header).
-    if (screenshots.data.assetIds.length) await markScreenshotsAttached(screenshots.data.assetIds, scope);
+    if (screenshots.data.assetIds.length) await markScreenshotsAttached(screenshots.data.assetIds, { projectId: scopedProjectId });
 
     return respondJson(res, req, 201, {
       ok: true,
