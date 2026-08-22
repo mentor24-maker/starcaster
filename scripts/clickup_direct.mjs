@@ -163,6 +163,8 @@ function usage(code = 2) {
   console.error('                                             back to Queued; "ready to launch" is notify-only (it waits on');
   console.error('                                             a merge, not a reply). --list/--statuses = that one list,');
   console.error('                                             notify-only; --dry-run prints without posting or moving');
+  console.error('  task-open --task <id>                      exit 0 if the task is still open (status.type), 1 if closed/done');
+  console.error('                                             or gone — used by `npm run thread`/`tidy` (Task-closes-thread)');
   process.exit(code);
 }
 
@@ -593,6 +595,60 @@ if (cmd === 'whoami') {
   }
   if (lastRes) reportLimits(lastRes);
   if (unchecked.length) process.exit(1);
+
+} else if (cmd === 'task-open') {
+  // Charter Q1 (Task-closes-thread): a thread should only exist while its
+  // ClickUp task is open. ClickUp's own status.type is the general signal —
+  // 'closed' or 'done' means the task is finished (however that list's
+  // workflow spells its terminal status: "Live", "Done", "Cancelled", ...),
+  // anything else ('open' or a workflow 'custom' status) means it is still
+  // in flight. This is deliberately NOT a status-NAME allowlist: npm run
+  // thread is used against arbitrary ClickUp lists, not only the Loop Queue.
+  //
+  // Exit codes are the contract callers rely on to decide whether to DELETE
+  // something, so a transient failure must never look the same as a
+  // confirmed "closed" — three-way, not two-way:
+  //   0 = confirmed open        1 = confirmed closed/done/gone
+  //   3 = could not tell (network, auth, rate limit — NOT a "safe to delete")
+  const task = arg('task');
+  if (!task) usage();
+  // A REJECTED fetch (offline, DNS, TLS) would otherwise throw out of here and
+  // node would exit 1 — indistinguishable from "confirmed closed", which is
+  // the one thing this contract must never let happen (a caller deletes on 1).
+  // Catch it and route to the exit-3 "cannot tell" path with the reason.
+  let out;
+  try {
+    out = await call('GET', `/api/v2/task/${task}`);
+  } catch (err) {
+    console.error(`\ncheck task ${task}: could not reach ClickUp — ${err.message}`);
+    console.error('This is NOT a "closed" result — treat it as "unknown", never "safe to delete".');
+    process.exit(3);
+  }
+  if (out.res.status === 404) {
+    console.log(`task:   ${task}`);
+    console.log('status: (not found)');
+    console.log('type:   (not found)');
+    console.log('open:   false');
+    reportLimits(out.res);
+    process.exit(1);
+  }
+  if (!out.res.ok) {
+    console.error(`\ncheck task ${task}: could not determine open/closed — HTTP ${out.res.status}`);
+    console.error(out.json?.err || out.json?.error || out.text.slice(0, 500));
+    console.error('This is NOT a "closed" result — a caller deciding whether to delete something');
+    console.error('must treat this the same as "unknown", never the same as "confirmed closed".');
+    if (out.res) reportLimits(out.res);
+    process.exit(3);
+  }
+  const t = out.json;
+  const type = t.status?.type ?? '?';
+  const isOpen = type !== 'closed' && type !== 'done';
+  console.log(`task:   ${t.id}`);
+  console.log(`status: ${t.status?.status ?? '?'}`);
+  console.log(`type:   ${type}`);
+  console.log(`open:   ${isOpen}`);
+  reportLimits(out.res);
+  process.exit(isOpen ? 0 : 1);
 
 } else {
   usage();
