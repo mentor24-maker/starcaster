@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — Editing on main is now blocked whichever way you do it (#TBD)
+## 2026-08-22 — Editing on main is now blocked whichever way you do it (#372)
 
 The rule "don't work directly on the main branch (it deploys straight to the
 live site)" was only enforced for the Edit tool — files written through the
