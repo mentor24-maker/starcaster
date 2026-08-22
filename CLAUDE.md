@@ -189,6 +189,31 @@ talking to, `npm run dev` refuses to start against the live one without
 budget and left every tenant site down on 2026-08-17 (`docs/DOCTRINE.md` §1.5).
 Weekly is the rhythm; `doctor` says when you have drifted.
 
+## Some jobs run on exactly one machine
+
+There is more than one machine now, and three jobs are not safe to run twice
+at once: **`bus-relay`** (two relays both post the same comment), **`db:refresh`**
+(Supabase disk IO is one budget for the whole company — six runs in a day took
+every client site down on 2026-08-17) and **the loop skills** (claiming a
+ticket is check-then-act, which is only sound with a single claimant).
+
+Which machine owns which job is a committed table in **`lib/nodeRoles.js`**,
+and every one of those jobs asks it first. Moving a job to another machine is
+a one-line edit there plus a commit — deliberately reviewable, rather than a
+setting somebody flips on one machine at 2am.
+
+```
+npm run node:whoami          # which machine is this, and what may it run
+npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
+```
+
+Each machine says who it is in `~/.alphire-node` (one short line:
+`macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
+which is a guess — rename the Mac and the guess changes. **A machine whose
+name is not recognised does not quietly skip; it refuses out loud**, because
+"another machine is doing it" and "nobody is doing it" look identical
+otherwise, and only one of them is safe.
+
 ## One thread, one topic, one session
 
 A worktree keeps two threads from corrupting each other's files. It does

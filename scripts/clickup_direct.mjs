@@ -43,6 +43,7 @@ import { readFileSync } from 'node:fs';
 import { writeFileSync } from 'node:fs';
 import busRelayPlan from './builder/busRelayPlan.js';
 const { defaultWatches, handbackTarget } = busRelayPlan;
+import nodeRoles from '../lib/nodeRoles.js';
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -163,6 +164,8 @@ function usage(code = 2) {
   console.error('                                             back to Queued; "ready to launch" is notify-only (it waits on');
   console.error('                                             a merge, not a reply). --list/--statuses = that one list,');
   console.error('                                             notify-only; --dry-run prints without posting or moving');
+  console.error('                                             ONE machine relays (lib/nodeRoles.js); on any other it');
+  console.error('                                             says so and exits 0. npm run node:whoami names this one');
   process.exit(code);
 }
 
@@ -481,6 +484,26 @@ if (cmd === 'whoami') {
   reportLimits(folders.res);
 
 } else if (cmd === 'bus-relay') {
+  // Exactly one machine relays. Two of them can both read "this comment has
+  // not been relayed yet" in the same minute and both post it before either
+  // writes its marker back, and the operator sees his own message twice.
+  // Who that machine is lives in lib/nodeRoles.js — the same table db:refresh
+  // and the loop skills read, so nothing here can hold a second opinion.
+  //
+  // Not the owner is a NORMAL outcome for a poller running on a timer, so it
+  // says which machine owns the job and exits 0 rather than failing. But a
+  // machine we cannot IDENTIFY is a different thing entirely: quietly doing
+  // nothing there is how a relay stops relaying for a week with nobody the
+  // wiser, so that one exits loudly (DOCTRINE 3.11).
+  const guard = nodeRoles.checkRole('bus-relay');
+  if (!guard.owned) {
+    console.error(guard.message);
+    console.error(guard.verdict === 'other-node'
+      ? 'bus-relay: 0 relayed, 0 handed back — not this machine\'s job.'
+      : 'bus-relay: nothing was checked, and this is a FAILURE, not a quiet no-op.');
+    process.exit(guard.verdict === 'other-node' ? 0 : 1);
+  }
+
   const channel = arg('channel', BUS_CHANNEL);
   const dryRun = flag('dry-run');
 
