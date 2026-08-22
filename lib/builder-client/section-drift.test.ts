@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { getSectionContent, hasSectionDrifted } from "./section-drift";
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const serverTwin = require("../builder/document.js");
+
+// NOTE: the server hand-ports these two functions in lib/builder/document.js.
+// That twin is checked in scripts/builder/sectionDriftServerTwin.test.js (the
+// NODE suite), NOT here: document.js requires the generated ./template, which
+// CI has not built at `vitest` time — requiring it from a vitest file makes CI
+// red while every local run stays green (the generated-lib-in-vitest landmine).
 
 const master = {
   id: "master-1",
@@ -65,24 +69,5 @@ describe("hasSectionDrifted", () => {
     expect(hasSectionDrifted(null, master)).toBe(false);
     expect(hasSectionDrifted(instance(), null)).toBe(false);
     expect(hasSectionDrifted(undefined, undefined)).toBe(false);
-  });
-});
-
-// lib/builder/document.js hand-ports these two functions for the server,
-// which cannot require a .ts file. Nothing enforces the two copies agree
-// except this test — if it goes red, the port has drifted from its source.
-describe("the server's hand-ported twin (lib/builder/document.js) agrees", () => {
-  it("on an untouched copy", () => {
-    expect(serverTwin.hasSectionDrifted(instance(), master)).toBe(hasSectionDrifted(instance(), master));
-  });
-
-  it("on a drifted copy", () => {
-    const edited = instance({ modules: [{ id: "m1", type: "text", column: "main", name: "", text: "changed", settings: {} }] });
-    expect(serverTwin.hasSectionDrifted(edited, master)).toBe(true);
-    expect(serverTwin.hasSectionDrifted(edited, master)).toBe(hasSectionDrifted(edited, master));
-  });
-
-  it("on which fields getSectionContent strips", () => {
-    expect(serverTwin.getSectionContent(instance())).toEqual(getSectionContent(instance()));
   });
 });
