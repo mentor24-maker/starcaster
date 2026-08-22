@@ -243,7 +243,12 @@ export function BugReportModule({ settings, previewMode = false, projectId = "",
   );
 }
 
-type PickedShot = { name: string; assetId?: number; token?: string; error?: string; uploading: boolean };
+// `id` is a stable, client-only handle assigned at pick time. EVERY update
+// (upload result, error, remove) keys off it, never off array position — an
+// in-flight upload's index shifts the moment another row is removed, and
+// index-keyed updates then land on the wrong row or vanish (round-2 bug: the
+// good upload was orphaned "uploading" forever and the form could not submit).
+type PickedShot = { id: number; name: string; assetId?: number; token?: string; error?: string; uploading: boolean };
 
 function BugReportDialog({
   settings: s,
@@ -265,6 +270,7 @@ function BugReportDialog({
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const shotIdRef = useRef(0); // monotonic, per-dialog — stable ids for picked shots
 
   useEffect(() => { textareaRef.current?.focus(); }, []);
 
@@ -301,10 +307,10 @@ function BugReportDialog({
     return () => window.clearTimeout(timer);
   }, [done, onClose]);
 
-  const uploadOne = useCallback(async (file: File, index: number) => {
+  const uploadOne = useCallback(async (file: File, id: number) => {
     const tooBig = file.size > BUG_REPORT_MAX_SCREENSHOT_MB * 1024 * 1024;
     if (tooBig) {
-      setShots((current) => current.map((shot, i) => (i === index ? { ...shot, uploading: false, error: `Over ${BUG_REPORT_MAX_SCREENSHOT_MB} MB` } : shot)));
+      setShots((current) => current.map((shot) => (shot.id === id ? { ...shot, uploading: false, error: `Over ${BUG_REPORT_MAX_SCREENSHOT_MB} MB` } : shot)));
       return;
     }
     const fileBase64 = await new Promise<string>((resolve, reject) => {
@@ -319,8 +325,11 @@ function BugReportDialog({
       body: JSON.stringify({ projectId, fileName: file.name, fileBase64 }),
     });
     const body = (await response.json().catch(() => ({}))) as { data?: { assetId?: number; token?: string }; error?: { message?: string } };
-    setShots((current) => current.map((shot, i) => {
-      if (i !== index) return shot;
+    // Key off id, not index: the row may have moved (another row removed) or
+    // been removed entirely (then this map simply finds nothing and no-ops,
+    // which is the correct outcome — a removed shot must not resurrect).
+    setShots((current) => current.map((shot) => {
+      if (shot.id !== id) return shot;
       // The upload hands back an unguessable token (an HMAC of asset + project);
       // the submit MUST present it per screenshot or task 2/5's attach step
       // refuses it. A response with no token is not a real success — treat it as
@@ -342,15 +351,17 @@ function BugReportDialog({
     const room = BUG_REPORT_MAX_SCREENSHOTS - activeShotCount;
     const accepted = files.slice(0, Math.max(0, room));
     if (!accepted.length) return;
-    const startIndex = shots.length;
-    setShots((current) => [...current, ...accepted.map((file) => ({ name: file.name, uploading: true }))]);
-    accepted.forEach((file, offset) => { void uploadOne(file, startIndex + offset).catch(() => {
-      setShots((current) => current.map((shot, i) => (i === startIndex + offset ? { ...shot, uploading: false, error: "Upload failed" } : shot)));
+    // Stamp each pick with a stable id up front; every later update finds it by
+    // id, so removing one row never disturbs another's in-flight upload.
+    const picked = accepted.map((file) => ({ id: shotIdRef.current++, file }));
+    setShots((current) => [...current, ...picked.map(({ id, file }) => ({ id, name: file.name, uploading: true }))]);
+    picked.forEach(({ id, file }) => { void uploadOne(file, id).catch(() => {
+      setShots((current) => current.map((shot) => (shot.id === id ? { ...shot, uploading: false, error: "Upload failed" } : shot)));
     }); });
   }
 
-  function removeShot(index: number) {
-    setShots((current) => current.filter((_, i) => i !== index));
+  function removeShot(id: number) {
+    setShots((current) => current.filter((shot) => shot.id !== id));
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -416,17 +427,19 @@ function BugReportDialog({
                 </label>
                 {shots.length ? (
                   <ul className="builder-bug-report-shot-list">
-                    {shots.map((shot, i) => (
-                      <li key={`${shot.name}-${i}`} className={shot.error ? "is-error" : shot.uploading ? "is-uploading" : "is-ready"}>
+                    {shots.map((shot) => (
+                      <li key={shot.id} className={shot.error ? "is-error" : shot.uploading ? "is-uploading" : "is-ready"}>
                         <span className="builder-bug-report-shot-name">{shot.name}{shot.uploading ? " — uploading…" : shot.error ? ` — ${shot.error}` : " ✓"}</span>
-                        {shot.uploading ? null : (
-                          <button
-                            type="button"
-                            className="builder-bug-report-shot-remove"
-                            onClick={() => removeShot(i)}
-                            aria-label={`Remove ${shot.name}`}
-                          >×</button>
-                        )}
+                        {/* Removable in EVERY state, uploading included: a stuck
+                            or slow upload must never be able to trap the form.
+                            Removing an in-flight one is safe — its later result
+                            finds no row by id and no-ops. */}
+                        <button
+                          type="button"
+                          className="builder-bug-report-shot-remove"
+                          onClick={() => removeShot(shot.id)}
+                          aria-label={`Remove ${shot.name}`}
+                        >×</button>
                       </li>
                     ))}
                   </ul>

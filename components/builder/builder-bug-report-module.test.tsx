@@ -55,8 +55,12 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 /** A fetch that answers the three endpoints; records every call. */
-function fakeFetch({ tier = "public", screenshotRoute = 404, submitStatus = 201, uploadStatus = 201, uploadAssetId = 7, uploadToken = "tok_7" } = {}) {
+function fakeFetch({ tier = "public", screenshotRoute = 404, submitStatus = 201, uploadStatus = 201, uploadAssetId = 7, uploadToken = "tok_7", holdUpload = false } = {}) {
   const calls: Array<{ url: string; body?: unknown }> = [];
+  // When holdUpload is set, a real screenshot upload blocks until releaseUpload()
+  // is called — so a test can remove another row while THIS one is in flight.
+  let releaseUpload: () => void = () => {};
+  const uploadGate = new Promise<void>((resolve) => { releaseUpload = resolve; });
   const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -69,6 +73,7 @@ function fakeFetch({ tier = "public", screenshotRoute = 404, submitStatus = 201,
       if ((body as { probe?: boolean } | undefined)?.probe) {
         return jsonResponse({ ok: screenshotRoute < 400, error: { message: "probe" } }, screenshotRoute);
       }
+      if (holdUpload) await uploadGate;
       return uploadStatus >= 200 && uploadStatus < 300
         ? jsonResponse({ ok: true, data: { assetId: uploadAssetId, token: uploadToken } }, uploadStatus)
         : jsonResponse({ ok: false, error: { message: "Upload failed" } }, uploadStatus);
@@ -80,7 +85,7 @@ function fakeFetch({ tier = "public", screenshotRoute = 404, submitStatus = 201,
     }
     return jsonResponse({}, 404);
   }) as typeof fetch;
-  return { impl, calls };
+  return { impl, calls, releaseUpload: () => releaseUpload() };
 }
 
 function markLiveSite() {
@@ -323,6 +328,55 @@ describe("BugReportModule — popup and submit", () => {
     await flush();
     const submit = calls.find((c) => c.url.endsWith("/bug-report"));
     expect(submit!.body).toMatchObject({ screenshots: [] });
+  });
+
+  it("removing a failed row while another upload is in flight does not orphan the good one (round-3)", async () => {
+    // The round-2 bug: remove-by-index shifted an in-flight upload's position, so
+    // its result landed on the wrong row (or nowhere) — the good upload stuck at
+    // "uploading" forever, the form refused to submit, and closing to escape
+    // threw away the description. Stable ids fix it. This is the reviewer's
+    // required break-test; revert to index-keying and it fails.
+    const { impl, calls, releaseUpload } = fakeFetch({ screenshotRoute: 201, holdUpload: true, uploadAssetId: 7, uploadToken: "tok_7" });
+    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+
+    const input = document.querySelector<HTMLInputElement>('.builder-bug-report-picker input[type="file"]')!;
+    const tooBig = new File([new Uint8Array(4 * 1024 * 1024)], "big.png", { type: "image/png" }); // > 3 MB → errors, no upload
+    const good = new File([new Uint8Array([137, 80, 78, 71])], "good.png", { type: "image/png" }); // uploads (held open)
+    act(() => {
+      Object.defineProperty(input, "files", { value: [tooBig, good], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // The oversize row errors; the good one is uploading with its fetch held.
+    await flushUntil(() => !!document.querySelector(".builder-bug-report-shot-list .is-error"));
+    const errorRow = [...document.querySelectorAll(".builder-bug-report-shot-list li")].find((li) => li.classList.contains("is-error")) as HTMLElement;
+    expect(errorRow).toBeTruthy();
+    expect(document.querySelector(".builder-bug-report-shot-list .is-uploading")).toBeTruthy();
+
+    // Remove the FAILED row while the good upload is still in flight.
+    act(() => errorRow.querySelector<HTMLButtonElement>(".builder-bug-report-shot-remove")!.click());
+    await flush();
+
+    // Release the good upload — it must find its row by id and land READY.
+    act(() => releaseUpload());
+    await flushUntil(() => !!document.querySelector(".builder-bug-report-shot-list .is-ready"));
+    expect(document.querySelectorAll(".builder-bug-report-shot-list li")).toHaveLength(1);
+    expect(document.querySelector(".builder-bug-report-shot-list .is-uploading")).toBeNull();
+
+    // And the form submits, carrying the good screenshot as an { id, token } pair.
+    const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(textarea, "One good picture after removing a failed one");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+    const submit = calls.find((c) => c.url.endsWith("/bug-report"));
+    expect(submit!.body).toMatchObject({ screenshots: [{ id: 7, token: "tok_7" }] });
   });
 });
 
