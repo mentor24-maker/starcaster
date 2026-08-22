@@ -188,6 +188,15 @@ function main() {
   for (const note of modelNotes) console.log(`[conventions] ${note}`);
   failures.push(...modelFailures);
 
+  // Machine-specific paths (vault doctrine/NODES.md P1). Own module and own
+  // blocking CI step for the same reason as the two above — this script runs
+  // advisory in CI — and surfaced here so pre-commit, which blocks, catches it
+  // at the moment somebody types a path instead of deriving one.
+  const machinePaths = require('./check_machine_paths.cjs');
+  const { failures: pathFailures, notes: pathNotes } = machinePaths.run({ all: MODE_ALL });
+  for (const note of pathNotes) console.log(`[conventions] ${note}`);
+  failures.push(...pathFailures);
+
   if (failures.length) {
     console.error('\n[conventions] Commit blocked — fix the following (or SKIP_CONVENTIONS=1 with a stated reason):\n');
     for (const f of failures) console.error(`  ✗ ${f}\n`);

@@ -2,7 +2,6 @@
   "projectName": "starcaster",
   "productName": "StarCaster",
   "company": "Alphire",
-  "repositoryPath": "/Users/mentor/WebApps/starcaster",
   "description": "StarCaster by Alphire — multi-tenant platform for influencers and creators to establish web presence, promote content, and engage organically across social channels (comments, likes, shares, posts, articles, video).",
   "primaryStack": "React/TypeScript (components/ + lib/builder-client) for new UI; frozen vanilla JS SPA (public/js) for legacy admin screens",
   "backend": "Node.js (server.js local, Vercel serverless api/[...slug].js, shared dispatcher routes/index.js)",
