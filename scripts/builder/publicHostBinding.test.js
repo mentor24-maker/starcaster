@@ -506,13 +506,148 @@ test('a real X-Project-ID still mints context (Builder preview, localhost dev)',
   }
 });
 
+// ── POST /api/public/bug-report + /api/public/bug-report/screenshot ──────────
+
+/**
+ * The two bug-report writes. These are the endpoints the shared resolver came
+ * FROM (Bug Report 1/5 had a local copy of it), and the screenshot one landed
+ * on main after this branch opened — so it is here to prove the seventh public
+ * write goes through the same door as the other six.
+ */
+function bugReportMocks(reports, uploads) {
+  return {
+    'lib/projectBugReportsStore.js': {
+      ...require('../../lib/projectBugReportsStore.js'),
+      createBugReport: async (row, scope) => {
+        reports.push({ row, scope });
+        return { ok: true, status: 201, data: { id: 'bug_1', ...row } };
+      },
+    },
+    'lib/projectBugReportScreenshots.js': {
+      ...require('../../lib/projectBugReportScreenshots.js'),
+      storeBugReportScreenshot: async (file, scope) => {
+        uploads.push({ file, scope });
+        return { ok: true, status: 201, data: { assetId: 1, token: 'tok' } };
+      },
+      verifyBugReportScreenshots: async () => ({ ok: true, data: { assetIds: [], assets: [] } }),
+      markScreenshotsAttached: async () => ({ ok: true }),
+    },
+    'lib/bugReportForward.js': {
+      ...require('../../lib/bugReportForward.js'),
+      forwardBugReport: async () => ({ ok: true }),
+    },
+  };
+}
+
+test('bug-report submit: system host + a made-up project files no report', async () => {
+  const reports = [];
+  const { loaded, restore } = withMocks('routes/publicSite.js', bugReportMocks(reports, []));
+  try {
+    const { status, payload } = await post(loaded, '/api/public/bug-report', {
+      body: { projectId: 'proj_i_made_this_up', description: 'the button does nothing' },
+    });
+    assert.equal(status, 404);
+    assert.equal(payload.error.code, 'PROJECT_NOT_FOUND');
+    assert.equal(reports.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('bug-report submit: tenant host + its own project still files (unchanged)', async () => {
+  const reports = [];
+  const { loaded, restore } = withMocks('routes/publicSite.js', bugReportMocks(reports, []));
+  try {
+    const { status } = await post(loaded, '/api/public/bug-report', {
+      host: KNOWN_PROJECT_DOMAIN,
+      body: { projectId: KNOWN_PROJECT_ID, description: 'the button does nothing' },
+    });
+    assert.equal(status, 201);
+    assert.equal(reports.length, 1);
+    assert.equal(reports[0].scope.projectId, KNOWN_PROJECT_ID);
+  } finally {
+    restore();
+  }
+});
+
+test('bug-report screenshot: system host + a made-up project stores no file', async () => {
+  // The seventh public write, added to main after this branch opened. It used a
+  // local copy of the resolver; it now shares the one door.
+  const uploads = [];
+  const { loaded, restore } = withMocks('routes/publicSite.js', bugReportMocks([], uploads));
+  try {
+    const { status, payload } = await post(loaded, '/api/public/bug-report/screenshot', {
+      body: { projectId: 'proj_i_made_this_up', fileName: 'shot.png', fileBase64: 'AAAA' },
+    });
+    assert.equal(status, 404);
+    assert.equal(payload.error.code, 'PROJECT_NOT_FOUND');
+    assert.equal(uploads.length, 0, 'a made-up tenant may not park a file in blob storage');
+  } finally {
+    restore();
+  }
+});
+
+test('bug-report screenshot: system host + NO projectId is refused, not stored untenanted', async () => {
+  const uploads = [];
+  const { loaded, restore } = withMocks('routes/publicSite.js', bugReportMocks([], uploads));
+  try {
+    const { status, payload } = await post(loaded, '/api/public/bug-report/screenshot', {
+      body: { fileName: 'shot.png', fileBase64: 'AAAA' },
+    });
+    assert.equal(status, 400);
+    assert.equal(payload.error.code, 'PROJECT_ID_REQUIRED');
+    assert.equal(uploads.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('bug-report screenshot: tenant host + its own project still uploads (unchanged)', async () => {
+  const uploads = [];
+  const { loaded, restore } = withMocks('routes/publicSite.js', bugReportMocks([], uploads));
+  try {
+    const { status } = await post(loaded, '/api/public/bug-report/screenshot', {
+      host: KNOWN_PROJECT_DOMAIN,
+      body: { projectId: KNOWN_PROJECT_ID, fileName: 'shot.png', fileBase64: 'AAAA' },
+    });
+    assert.equal(status, 201);
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].scope.projectId, KNOWN_PROJECT_ID);
+  } finally {
+    restore();
+  }
+});
+
+test('bug-report screenshot: tenant host, a body naming ANOTHER project is still refused', async () => {
+  const uploads = [];
+  const { loaded, restore } = withMocks('routes/publicSite.js', bugReportMocks([], uploads));
+  try {
+    const { status, payload } = await post(loaded, '/api/public/bug-report/screenshot', {
+      host: KNOWN_PROJECT_DOMAIN,
+      body: { projectId: 'proj_someone_else', fileName: 'shot.png', fileBase64: 'AAAA' },
+    });
+    assert.equal(status, 403);
+    assert.equal(payload.error.code, 'PROJECT_HOST_MISMATCH');
+    assert.equal(uploads.length, 0);
+  } finally {
+    restore();
+  }
+});
+
 // ── The guard ────────────────────────────────────────────────────────────────
 
 test('only the audited READ endpoints still call the unverifying host check', () => {
-  // The audit of 86bbjj6qb: these four are GET/HEAD reads of data that is
-  // public anyway, so the weaker check is fine there. Anything NEW that calls
-  // it — especially a POST — has to be classified before this list grows.
-  const ALLOWED = new Set(['lib/publicSiteHostBinding.js', 'routes/publicSite.js']);
+  // The audit of 86bbjj6qb: the reads of published/public data may keep the
+  // weaker check. Anything NEW that calls it — especially a POST — has to be
+  // classified before this list grows.
+  //
+  // routes/publicSite.js is NOT here. It was, and that made it the one blind
+  // spot in this guard: it is where public endpoints live, so allowing the
+  // whole FILE meant the next public write added to it was waved through
+  // unexamined. POST /api/public/bug-report/screenshot then landed on main
+  // exactly that way. It is checked endpoint by endpoint in the next test.
+  const ALLOWED = new Set(['lib/publicSiteHostBinding.js']);
+  const PER_ENDPOINT = new Set(['routes/publicSite.js']);
 
   const repoRoot = path.resolve(__dirname, '../..');
   const offenders = [];
@@ -522,8 +657,9 @@ test('only the audited READ endpoints still call the unverifying host check', ()
         const next = `${rel}/${entry.name}`;
         if (entry.isDirectory()) { walk(next); continue; }
         if (!entry.name.endsWith('.js')) continue;
+        if (ALLOWED.has(next) || PER_ENDPOINT.has(next)) continue;
         const source = fs.readFileSync(path.join(repoRoot, next), 'utf8');
-        if (source.includes('assertProjectIdAllowedOnHost') && !ALLOWED.has(next)) offenders.push(next);
+        if (source.includes('assertProjectIdAllowedOnHost')) offenders.push(next);
       }
     };
     walk(dir);
@@ -535,5 +671,66 @@ test('only the audited READ endpoints still call the unverifying host check', ()
     'assertProjectIdAllowedOnHost does not verify the projectId on system hosts. '
     + 'If this file WRITES or has a side effect, use resolvePublicProjectForRequest. '
     + 'If it only READS public data, add it to ALLOWED here with a note saying why.'
+  );
+});
+
+/**
+ * Split routes/publicSite.js into its endpoint blocks.
+ *
+ * Every endpoint there is `if (pathname === '<path>' && <method test>) {`, so
+ * the header lines are the boundaries: each block runs to the next header, and
+ * the last one to the end of `handle`. Crude on purpose — it needs no parser
+ * and it fails loudly (zero blocks found) if the file's shape ever changes.
+ */
+function publicSiteEndpointBlocks() {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const source = fs.readFileSync(path.join(repoRoot, 'routes/publicSite.js'), 'utf8');
+  const header = /^\s*if \(pathname === '([^']+)' && (.+)\) \{$/;
+  const lines = source.split('\n');
+
+  const starts = [];
+  lines.forEach((line, i) => {
+    const match = header.exec(line);
+    if (match) starts.push({ line: i, pathname: match[1], methodTest: match[2] });
+  });
+
+  return starts.map((start, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1].line : lines.length;
+    const body = lines.slice(start.line, end).join('\n');
+    // A read is a block whose method test mentions only GET and/or HEAD.
+    const methods = start.methodTest.match(/'([A-Z]+)'/g) || [];
+    const reads = methods.length > 0 && methods.every((m) => m === "'GET'" || m === "'HEAD'");
+    return { pathname: start.pathname, methodTest: start.methodTest, body, reads };
+  });
+}
+
+test('every WRITE endpoint in routes/publicSite.js resolves its project, none believe it', () => {
+  const blocks = publicSiteEndpointBlocks();
+  assert.ok(blocks.length >= 7, `expected the endpoint blocks to be found, got ${blocks.length}`);
+
+  const writes = blocks.filter((b) => !b.reads);
+  assert.ok(writes.length >= 2, `expected at least the two bug-report writes, got ${writes.length}`);
+
+  const believed = writes
+    .filter((b) => b.body.includes('assertProjectIdAllowedOnHost'))
+    .map((b) => b.pathname);
+  assert.deepEqual(
+    believed,
+    [],
+    'these public WRITE endpoints call assertProjectIdAllowedOnHost, which on a '
+    + 'system host waves an unverified projectId through. Use '
+    + 'resolvePublicProjectForRequest.'
+  );
+
+  const unresolved = writes
+    .filter((b) => !b.body.includes('resolvePublicProjectForRequest'))
+    .map((b) => b.pathname);
+  assert.deepEqual(
+    unresolved,
+    [],
+    'these public WRITE endpoints resolve their project some other way. There is '
+    + 'one door — resolvePublicProjectForRequest — so two call sites cannot '
+    + 'disagree about who owns a row (a local copy is how the screenshot '
+    + 'endpoint and the submit endpoint drifted apart in the first place).'
   );
 });

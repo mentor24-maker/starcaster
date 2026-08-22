@@ -18,6 +18,13 @@ const {
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
+const { forwardBugReport } = require('../lib/bugReportForward');
+const {
+  storeBugReportScreenshot,
+  verifyBugReportScreenshots,
+  markScreenshotsAttached,
+  MAX_SCREENSHOT_BYTES: MAX_BUG_REPORT_SCREENSHOT_BYTES,
+} = require('../lib/projectBugReportScreenshots');
 
 const manifest = {
   id: 'public-site',
@@ -201,6 +208,45 @@ async function handle(req, res, pathname, method) {
     return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
   }
 
+  // POST /api/public/bug-report/screenshot — one screenshot for a report that
+  // is about to be submitted. Why one file per request, why magic bytes, and
+  // the orphan cleanup rule: lib/projectBugReportScreenshots.js.
+  if (pathname === '/api/public/bug-report/screenshot' && readMethod === 'POST') {
+    if (checkEndpointLimit(req, res, 'public.bugReportScreenshot')) return true;
+
+    let body;
+    try {
+      body = await parseJsonBody(req);
+    } catch (e) {
+      // The body parser's own 10 MB ceiling fires BEFORE our size check can —
+      // turn it into the same plain-language answer rather than a bare 500.
+      const tooLarge = /too large/i.test(String(e?.message || ''));
+      return respondErr(
+        res,
+        req,
+        tooLarge ? 413 : 400,
+        tooLarge
+          ? `That screenshot is too large to upload. Screenshots must be ${Math.round(MAX_BUG_REPORT_SCREENSHOT_BYTES / (1024 * 1024))} MB or smaller.`
+          : 'That upload could not be read — please pick the file again.',
+        { code: tooLarge ? 'PAYLOAD_TOO_LARGE' : 'VALIDATION_ERROR' }
+      ), true;
+    }
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return respondErr(res, req, 400, 'That upload could not be read — please pick the file again.', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const bind = await resolvePublicProjectForRequest(req, body.projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+
+    const stored = await storeBugReportScreenshot(
+      { fileName: body.fileName, fileBase64: body.fileBase64 },
+      { projectId: bind.projectId }
+    );
+    if (!stored.ok) return respondErr(res, req, stored.status || 500, stored.error, { code: stored.code }), true;
+    return respondJson(res, req, 201, { ok: true, data: stored.data }), true;
+  }
+
   // POST /api/public/bug-report — bug-report intake, no auth required (any
   // tenant site visitor can hit this). See docs/SQL/project_bug_reports_setup.sql.
   if (pathname === '/api/public/bug-report' && readMethod === 'POST') {
@@ -210,6 +256,9 @@ async function handle(req, res, pathname, method) {
 
     // Shape of the payload first, so obviously-invalid input costs no database
     // work — then the project the report may be filed against.
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return respondErr(res, req, 400, 'A description is required', { code: 'VALIDATION_ERROR' }), true;
+    }
     const description = String(body.description || '').trim();
     if (!description) return respondErr(res, req, 400, 'A description is required'), true;
     if (description.length > MAX_BUG_REPORT_DESCRIPTION_LENGTH) {
@@ -235,15 +284,46 @@ async function handle(req, res, pathname, method) {
       }
     }
 
+    // Screenshots were uploaded ahead of time (one request each) and are
+    // attached here by (id, token) — the token proves this submitter uploaded
+    // them, so guessed ids cannot harvest another reporter's screenshots.
+    // `screenshots` is [{ id, token }] from the upload responses; the legacy
+    // `screenshotAssetIds` shape carries no tokens and is refused (the task
+    // 4/5 module must send `screenshots`).
+    const scope = { projectId: scopedProjectId, userId: ownerUserId };
+    const screenshotRefs = Array.isArray(body.screenshots) ? body.screenshots : body.screenshotAssetIds;
+    const screenshots = await verifyBugReportScreenshots(screenshotRefs, scope);
+    if (!screenshots.ok) return respondErr(res, req, screenshots.status || 400, screenshots.error, { code: screenshots.code }), true;
+
     const result = await createBugReport({
       description,
       pageUrl: body.pageUrl,
       userAgent: body.userAgent || req.headers['user-agent'] || '',
       viewerTier,
-    }, { projectId: scopedProjectId, userId: ownerUserId });
+      screenshotAssetIds: screenshots.data.assetIds,
+    }, scope);
 
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to save bug report'), true;
-    return respondJson(res, req, 201, { ok: true, data: result.data }), true;
+
+    // The row exists and references them; flipping pending → attached is the
+    // orphan-sweep bookkeeping, best-effort by design (see the library header).
+    if (screenshots.data.assetIds.length) await markScreenshotsAttached(screenshots.data.assetIds, { projectId: scopedProjectId });
+
+    // AFTER the write, never before: the row is the record. Forwarding to
+    // ClickUp (held for the operator) can fail without the reporter ever
+    // knowing — the row is marked failed_forward and the failure is logged
+    // loudly (lib/bugReportForward.js). Awaited on purpose: serverless freezes
+    // the function once the response goes out.
+    const forward = await forwardBugReport(result.data, scope);
+
+    return respondJson(res, req, 201, {
+      ok: true,
+      data: {
+        ...result.data,
+        status: forward.ok ? 'forwarded' : 'failed_forward',
+        screenshots: screenshots.data.assets,
+      },
+    }), true;
   }
 
   return false;
