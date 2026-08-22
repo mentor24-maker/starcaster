@@ -54,7 +54,13 @@ export const BUG_REPORT_CORNER_OPTIONS: Array<{ value: BugReportCorner; label: s
 
 /** Mirrors the 2/5 caps (lib/projectBugReportScreenshots.js) for the panel's read-only note and the picker. */
 export const BUG_REPORT_MAX_SCREENSHOTS = 5;
-export const BUG_REPORT_MAX_SCREENSHOT_MB = 8;
+// HAND-COPY of the server cap: lib/projectBugReportScreenshots.js
+// `MAX_SCREENSHOT_BYTES` (3 MB). It cannot be imported here — that lib is plain
+// server JS and this is bundled client TS — so if the server cap changes, this
+// MUST change with it. Desync is not cosmetic: the picker accepting a file the
+// submit then rejects is the exact "matches the contract 2/5 shipped" failure
+// this module was held for. 3, not 8.
+export const BUG_REPORT_MAX_SCREENSHOT_MB = 3;
 
 export const BUG_REPORT_SUBMIT_PATH = "/api/public/bug-report";
 export const BUG_REPORT_SCREENSHOT_PATH = "/api/public/bug-report/screenshot";
@@ -143,22 +149,39 @@ type Props = {
 
 export function BugReportModule({ settings, previewMode = false, projectId = "", fetchImpl }: Props) {
   const s = readBugReportSettings(settings);
-  const doFetch = fetchImpl ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  // Stable across renders so the dialog's probe effect (which depends on it)
+  // does not re-POST to the rate-limited screenshot endpoint on every parent
+  // re-render while the popup is open.
+  const doFetch = useCallback(
+    fetchImpl ?? ((...args: Parameters<typeof fetch>) => fetch(...args)),
+    [fetchImpl],
+  );
 
-  // Live-site detection happens after mount (SSR-safe): until then render
-  // nothing fixed and nothing gated, which is also what a test environment
-  // without the layout class gets — inline, as in the preview.
-  const [live, setLive] = useState(false);
+  // Live-site detection runs in the INITIAL state, before first paint: the
+  // module always renders inside its page's DOM, so the layout class is already
+  // present. Resolving `live` lazily rather than in a post-mount effect stops a
+  // gated button painting inline-then-fixed (a content shift on every load) and,
+  // worse, a clients/staff-only button flashing to a public visitor for a frame.
+  // SSR-safe: onLiveTenantPage returns false with no document, and the effect
+  // below re-resolves it should previewMode ever change.
+  const [live, setLive] = useState(() => !previewMode && onLiveTenantPage());
   const [tier, setTier] = useState<BugReportViewerTier | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const isLive = !previewMode && onLiveTenantPage();
-    setLive(isLive);
+    setLive(!previewMode && onLiveTenantPage());
   }, [previewMode]);
 
   // Ask the server which tier this browser is — only on the live site, and
   // only when the setting actually gates anything.
+  //
+  // DELIBERATE: a "public" module skips this lookup entirely, so it does not
+  // cost a request on every page load of a public tenant page. The trade is
+  // that a signed-in staff member who files from a public-visibility module is
+  // recorded WITHOUT a tier or owner (viewerTier resolves to "public" below).
+  // For a module whose icon is shown to everyone, most reports are anonymous
+  // visitors anyway; attributing the rare signed-in one is not worth a lookup
+  // on every public view. A gated (clients/staff) module always resolves it.
   useEffect(() => {
     if (!live || s.visibility === "public") { setTier(null); return; }
     let cancelled = false;
@@ -251,8 +274,10 @@ function BugReportDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Probe the screenshot route once: 404 means task 2/5 is not deployed here
-  // and the picker should not offer something that cannot work.
+  // Probe the screenshot route once and only offer the picker if it can work.
+  // 404 = task 2/5 is not deployed here. 503 = it is, but blob storage has no
+  // credentials (ASSET_STORAGE_NOT_CONFIGURED), so every upload would fail — do
+  // not offer a picker that is guaranteed to break, either way.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -262,7 +287,7 @@ function BugReportDialog({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ projectId, probe: true }),
         });
-        if (!cancelled) setPickerAvailable(response.status !== 404);
+        if (!cancelled) setPickerAvailable(response.status !== 404 && response.status !== 503);
       } catch {
         if (!cancelled) setPickerAvailable(false);
       }
@@ -305,10 +330,16 @@ function BugReportDialog({
     }));
   }, [fetchImpl, projectId]);
 
+  // Failed picks do not count toward the cap — otherwise five bad picks lock
+  // the picker with no way out but closing the popup, which throws away the
+  // typed description. They stay visible (so the reporter sees what failed) but
+  // can be removed, and never block a good one.
+  const activeShotCount = shots.filter((shot) => !shot.error).length;
+
   function onPickFiles(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
     event.target.value = "";
-    const room = BUG_REPORT_MAX_SCREENSHOTS - shots.length;
+    const room = BUG_REPORT_MAX_SCREENSHOTS - activeShotCount;
     const accepted = files.slice(0, Math.max(0, room));
     if (!accepted.length) return;
     const startIndex = shots.length;
@@ -316,6 +347,10 @@ function BugReportDialog({
     accepted.forEach((file, offset) => { void uploadOne(file, startIndex + offset).catch(() => {
       setShots((current) => current.map((shot, i) => (i === startIndex + offset ? { ...shot, uploading: false, error: "Upload failed" } : shot)));
     }); });
+  }
+
+  function removeShot(index: number) {
+    setShots((current) => current.filter((_, i) => i !== index));
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -376,14 +411,22 @@ function BugReportDialog({
             {pickerAvailable ? (
               <div className="builder-bug-report-shots">
                 <label className="builder-bug-report-picker">
-                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={onPickFiles} disabled={shots.length >= BUG_REPORT_MAX_SCREENSHOTS} />
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={onPickFiles} disabled={activeShotCount >= BUG_REPORT_MAX_SCREENSHOTS} />
                   <span>Add screenshots (up to {BUG_REPORT_MAX_SCREENSHOTS}, {BUG_REPORT_MAX_SCREENSHOT_MB} MB each)</span>
                 </label>
                 {shots.length ? (
                   <ul className="builder-bug-report-shot-list">
                     {shots.map((shot, i) => (
                       <li key={`${shot.name}-${i}`} className={shot.error ? "is-error" : shot.uploading ? "is-uploading" : "is-ready"}>
-                        {shot.name}{shot.uploading ? " — uploading…" : shot.error ? ` — ${shot.error}` : " ✓"}
+                        <span className="builder-bug-report-shot-name">{shot.name}{shot.uploading ? " — uploading…" : shot.error ? ` — ${shot.error}` : " ✓"}</span>
+                        {shot.uploading ? null : (
+                          <button
+                            type="button"
+                            className="builder-bug-report-shot-remove"
+                            onClick={() => removeShot(i)}
+                            aria-label={`Remove ${shot.name}`}
+                          >×</button>
+                        )}
                       </li>
                     ))}
                   </ul>

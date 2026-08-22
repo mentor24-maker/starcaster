@@ -2,7 +2,7 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BugReportModule, bugReportVisibleFor, readBugReportSettings } from "./builder-bug-report-module";
+import { BugReportModule, bugReportVisibleFor, readBugReportSettings, BUG_REPORT_MAX_SCREENSHOT_MB } from "./builder-bug-report-module";
 
 /**
  * Bug Report module (task 4/5): the floating trigger, the popup, the submit,
@@ -270,6 +270,60 @@ describe("BugReportModule — popup and submit", () => {
     expect(submit).toBeTruthy();
     expect(submit!.body).toMatchObject({ screenshots: [] });
   });
+
+  it("the picker promises the SAME cap the server enforces (3 MB, not 8)", async () => {
+    // The desync half of the original hold: the module advertised 8 MB while
+    // 2/5's server cap is 3 MB, so a 4 MB phone screenshot was accepted by the
+    // picker and refused by the submit. The promise must match the enforcement.
+    expect(BUG_REPORT_MAX_SCREENSHOT_MB).toBe(3);
+    const { impl } = fakeFetch({ screenshotRoute: 400 });
+    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+    expect(document.querySelector(".builder-bug-report-picker")!.textContent).toContain("3 MB");
+  });
+
+  it("hides the picker when blob storage is not configured (probe 503), not only on 404", async () => {
+    const { impl } = fakeFetch({ screenshotRoute: 503 });
+    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+    expect(document.querySelector(".builder-bug-report-picker")).toBeNull();
+  });
+
+  it("a screenshot can be removed, freeing its slot and dropping it from the submit", async () => {
+    const { impl, calls } = fakeFetch({ screenshotRoute: 201, uploadAssetId: 7, uploadToken: "tok_7" });
+    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+
+    const input = document.querySelector<HTMLInputElement>('.builder-bug-report-picker input[type="file"]')!;
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "shot.png", { type: "image/png" });
+    act(() => {
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flushUntil(() => !!document.querySelector(".builder-bug-report-shot-list .is-ready"));
+    expect(document.querySelectorAll(".builder-bug-report-shot-list li")).toHaveLength(1);
+
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-shot-remove")!.click());
+    await flush();
+    expect(document.querySelectorAll(".builder-bug-report-shot-list li")).toHaveLength(0);
+
+    const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(textarea, "Removed the picture, sending text only");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+    const submit = calls.find((c) => c.url.endsWith("/bug-report"));
+    expect(submit!.body).toMatchObject({ screenshots: [] });
+  });
 });
 
 describe("BugReportModule — visibility on the live site", () => {
@@ -284,6 +338,16 @@ describe("BugReportModule — visibility on the live site", () => {
     expect(trigger.parentElement).toBe(document.body); // portaled out of any column
     expect(calls.filter((c) => c.url.includes("/viewer"))).toHaveLength(0);
   });
+
+  // NOTE ON THE FIRST-PAINT FLASH (review finding #2): the fix resolves `live`
+  // in the initial useState rather than a post-mount effect, so a gated button
+  // never paints for a frame before the tier resolves. There is deliberately NO
+  // jsdom test for it: act() flushes the mount effect inside render(), so the
+  // pre-effect frame — the exact thing that used to flash — is never observable
+  // here, and a test asserting the post-act DOM would pass either way (a test
+  // that cannot fail is worse than none, DOCTRINE §3.2/§5.14). The reviewer's
+  // own note said this needs a real published page to watch; the fix is their
+  // exact prescription (lazy initial state).
 
   it("clients visibility hides the icon from a public viewer and shows it to a signed-in client", async () => {
     markLiveSite();

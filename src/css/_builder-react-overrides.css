@@ -6198,9 +6198,33 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 .builder-bug-report-shot-list {
   margin: 6px 0 0;
-  padding-left: 18px;
+  padding-left: 0;
+  list-style: none;
   font-size: var(--text-sm);
 }
+.builder-bug-report-shot-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.builder-bug-report-shot-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.builder-bug-report-shot-remove {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  font-size: 1.1em;
+  color: var(--ink-muted);
+}
+.builder-bug-report-shot-remove:hover { color: var(--ink-primary); }
 .builder-bug-report-shot-list .is-error { color: var(--ink-primary); }
 .builder-bug-report-shot-list .is-uploading { color: var(--ink-muted); }
 .builder-bug-report-error {
