@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — Two review sessions can no longer step on each other (#TBD)
+## 2026-08-22 — Two review sessions can no longer step on each other (#374)
 
 Overnight, two automated review sessions checked the same pull request at the
 same time, and the slower one wrote its "ready" verdict over the other's
