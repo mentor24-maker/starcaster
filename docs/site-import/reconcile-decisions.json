@@ -6,12 +6,23 @@
     "This file outranks every score and is the record of why each call was made."
   ],
   "jobId": "simp_1786047449851_duiqnj",
-  "generatedAt": "2026-08-16T08:59:03.456Z",
+  "generatedAt": "2026-08-22T07:28:53.850Z",
   "decisions": {
     "course": "our-mission",
     "events-calendar": "events",
     "programs-adult-clinics": "tennis-drills-clinics",
     "programs": null,
+    "bryan-brothers-tennis-clinic-at-delray-open-2018": null,
+    "email-club": "mailing-list",
+    "round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018": null,
+    "tennis-membership-information-summer-membership-application-2018": null,
+    "july-4th-round-robin-tennis-mixer-delray-beach-tennis-center": null,
+    "monday-night-tennis-wanna-work-out-16-advanced-players-drilling-and-playing-at-a-high-level": null,
+    "delray-beach-junior-tennis-program": "junior-programs",
+    "pickleball-in-delray-beach": "pickleball",
+    "womens-doubles-round-robin-tennis-april-27th-and-april-30th": null,
+    "princess-ll-blue-claymates-tennis-team-a-successful-season": null,
+    "meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray": null,
     "home": "",
     "summer-tennis-camp-fun-for-junior-players-delray-beach-tennis": "",
     "tag-us-open": "",
@@ -23,21 +34,17 @@
     "delray-beach-youth-tennis-foundation-3rd-annual-tennis-tournament": "",
     "jeff-bingo-with-jamie-corsillo-ballboy-at-delray-beach-open-and-recipient-of-tennis-scholorship": "",
     "delray-beach-youth-tennis-foundation-inspires-children-in-the-community": "",
-    "bryan-brothers-tennis-clinic-at-delray-open-2018": "",
     "programs-league": "",
     "welcome-marius-copos-delray-beach-head-tennis-professional": "",
     "from-us-open-to-delray-tennis-play-delray-after-school-program": "",
-    "email-club": "",
     "tag-elite-tennis": "",
     "the-delray-tennis-center-is-looking-for-players-for-our-womens-team-tennis-in-all-divisions-from-1-7": "",
     "tennis-program": "",
     "tag-davis-cup": "",
     "pickleball-schedule": "",
-    "round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018": "",
     "course-fees": "",
     "usta-boys-18-16-national-clay-court-championships-delray-beach-tennis-center": "",
     "tag-tennis-programs": "",
-    "tennis-membership-information-summer-membership-application-2018": "",
     "category-community": "",
     "delray-champions-usta-l9-tennis-tournament": "",
     "delray-beach-tennis-center-welcomes-jeff-bingo-new-general-manager-of-racquet-sports": "",
@@ -50,7 +57,6 @@
     "spring-and-summer-junior-tennis-programs": "",
     "high-performance-tennis-event-at-dbtc": "",
     "elite-tennis": "",
-    "july-4th-round-robin-tennis-mixer-delray-beach-tennis-center": "",
     "tag-adult-tennis": "",
     "tag-mixers": "",
     "meet-tennis-coach-brent-wellman-delray-beach-junior-tennis-director": "",
@@ -59,7 +65,6 @@
     "tag-events": "",
     "author-delraybeachtennis": "",
     "tag-team-tennis": "",
-    "monday-night-tennis-wanna-work-out-16-advanced-players-drilling-and-playing-at-a-high-level": "",
     "ladies-from-chevy-chase-back-for-tennis-round-2-with-coach-jeff": "",
     "tag-tournaments": "",
     "all-peoples-day-diversity-festival-food-and-free-admission-march-24": "",
@@ -72,7 +77,6 @@
     "author-jcdgroup": "",
     "course-lessons": "",
     "another-packed-house-for-the-saturday-morning-tennis-workout-clinic-at-the-delray-beach-tennis-center": "",
-    "delray-beach-junior-tennis-program": "",
     "stroke-of-the-week": "",
     "programs-junior": "",
     "us-open-update": "",
@@ -86,10 +90,8 @@
     "category-adult-tennis": "",
     "course-instruct-staff": "",
     "course-photo-gallery": "",
-    "pickleball-in-delray-beach": "",
     "programs-special-events": "",
     "category-pickleball": "",
-    "womens-doubles-round-robin-tennis-april-27th-and-april-30th": "",
     "delray-beach-tennis-round-robin-mixers": "",
     "job-opportunity": "",
     "visit-the-sundy-house-restaurant-inn-and-botanical-garden-in-delray-beach": "",
@@ -97,12 +99,10 @@
     "pickleball-strategies-and-techniques-for-the-intermediate-player": "",
     "claymates-princess-ll-red-division-winners-with-coach-jeff-delray-beach-tennis": "",
     "programs-pickleball": "",
-    "princess-ll-blue-claymates-tennis-team-a-successful-season": "",
     "delray-beach-tennis-center-complimentary-labor-day-mixer-for-members-only": "",
     "davis-cup-at-delray-beach-tennis-center": "",
     "category-events": "",
-    "pickleball-social-mixer-at-delray-beach-tennis-center-picklers-unite-on-july-4th": "",
-    "meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray": ""
+    "pickleball-social-mixer-at-delray-beach-tennis-center-picklers-unite-on-july-4th": ""
   },
   "appliedByThisFile": [],
   "notes": [
@@ -115,7 +115,7 @@
       "bestCandidates": [
         "photos (0.50, fuzzy-nav-label)",
         "court-status (0.23, fuzzy-slug)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -126,8 +126,8 @@
       "class": "nav-page",
       "bestCandidates": [
         "court-status (0.33, fuzzy-nav-label)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -138,20 +138,8 @@
       "class": "nav-page",
       "bestCandidates": [
         "junior-tournaments (0.33, fuzzy-nav-label)",
-        "program-guide (0.33, fuzzy-nav-label)",
-        "mailing-list (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "programs-league",
-      "originalPath": "/programs/league",
-      "title": "Women's League Info",
-      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
-      "class": "nav-page",
-      "bestCandidates": [
-        "program-guide (0.30, fuzzy-slug)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -162,8 +150,8 @@
       "class": "nav-page",
       "bestCandidates": [
         "court-status (0.30, fuzzy-slug)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -174,20 +162,8 @@
       "class": "nav-page",
       "bestCandidates": [
         "court-status (0.30, fuzzy-slug)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "programs-pickleball",
-      "originalPath": "/programs/pickleball",
-      "title": "Pickleball",
-      "setAsideBecause": "best match scored 0.30, below the 0.6 bar",
-      "class": "nav-page",
-      "bestCandidates": [
-        "program-guide (0.30, fuzzy-slug)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -198,20 +174,8 @@
       "class": "nav-page",
       "bestCandidates": [
         "court-status (0.23, fuzzy-slug)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "programs-special-events",
-      "originalPath": "/programs/special-events",
-      "title": "Special Events",
-      "setAsideBecause": "best match scored 0.23, below the 0.6 bar",
-      "class": "nav-page",
-      "bestCandidates": [
-        "program-guide (0.23, fuzzy-slug)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -221,9 +185,21 @@
       "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
       "class": "nav-page",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-league",
+      "originalPath": "/programs/league",
+      "title": "Women's League Info",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -265,9 +241,21 @@
       "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
       "class": "nav-page",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
+      "sourceSlug": "programs-special-events",
+      "originalPath": "/programs/special-events",
+      "title": "Special Events",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
+      "bestCandidates": [
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -277,142 +265,110 @@
       "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
       "class": "nav-page",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
-      "sourceSlug": "email-club",
-      "originalPath": "/email-club",
-      "title": "Join Our Email List",
-      "setAsideBecause": "not linked from the original site menu",
-      "class": "orphan",
+      "sourceSlug": "programs-pickleball",
+      "originalPath": "/programs/pickleball",
+      "title": "Pickleball",
+      "setAsideBecause": "best match scored 0.00, below the 0.6 bar",
+      "class": "nav-page",
       "bestCandidates": [
-        "mailing-list (0.50, fuzzy-title)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "pickleball-in-delray-beach",
-      "originalPath": "/pickleball-in-delray-beach",
-      "title": "Pickleball in Delray Beach",
-      "setAsideBecause": "not linked from the original site menu",
-      "class": "orphan",
-      "bestCandidates": [
-        "delray-beach-open (0.50, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "delray-beach-junior-tennis-program",
-      "originalPath": "/delray-beach-junior-tennis-program",
-      "title": "Delray Beach Junior Tennis Program",
-      "setAsideBecause": "not linked from the original site menu",
-      "class": "orphan",
-      "bestCandidates": [
-        "delray-beach-open (0.33, fuzzy-title)",
-        "tennis (0.20, fuzzy-title)",
-        "tennis-mixers (0.17, fuzzy-title)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
       "sourceSlug": "bryan-brothers-tennis-clinic-at-delray-open-2018",
       "originalPath": "/bryan-brothers-tennis-clinic-at-delray-open-2018",
       "title": "Bryan Brothers Tennis Clinic at Delray Open 2018",
-      "setAsideBecause": "not linked from the original site menu",
+      "setAsideBecause": "set aside by decision file",
       "class": "orphan",
-      "bestCandidates": [
-        "delray-beach-open (0.25, fuzzy-title)",
-        "tennis (0.14, fuzzy-title)",
-        "tennis-mixers (0.13, fuzzy-title)"
-      ]
+      "bestCandidates": []
     },
     {
-      "sourceSlug": "july-4th-round-robin-tennis-mixer-delray-beach-tennis-center",
-      "originalPath": "/july-4th-round-robin-tennis-mixer-delray-beach-tennis-center",
-      "title": "July 4th Round Robin Tennis Mixer Delray Beach Tennis Center",
-      "setAsideBecause": "not linked from the original site menu",
+      "sourceSlug": "email-club",
+      "originalPath": "/email-club",
+      "title": "Join Our Email List",
+      "setAsideBecause": "decision file names \"mailing-list\", which has no PLACEHOLDER SECTION to fill",
       "class": "orphan",
-      "bestCandidates": [
-        "tennis-mixers (0.22, fuzzy-title)",
-        "delray-beach-open (0.20, fuzzy-title)",
-        "tennis (0.11, fuzzy-title)"
-      ]
-    },
-    {
-      "sourceSlug": "tennis-membership-information-summer-membership-application-2018",
-      "originalPath": "/tennis-membership-information-summer-membership-application-2018",
-      "title": "Tennis Membership Information - Summer Membership Application 2018",
-      "setAsideBecause": "not linked from the original site menu",
-      "class": "orphan",
-      "bestCandidates": [
-        "membership (0.17, fuzzy-title)",
-        "tennis (0.17, fuzzy-title)",
-        "tennis-mixers (0.14, fuzzy-title)"
-      ]
-    },
-    {
-      "sourceSlug": "womens-doubles-round-robin-tennis-april-27th-and-april-30th",
-      "originalPath": "/womens-doubles-round-robin-tennis-april-27th-and-april-30th",
-      "title": "Women's Doubles Round Robin Tennis April 27th and April 30th",
-      "setAsideBecause": "not linked from the original site menu",
-      "class": "orphan",
-      "bestCandidates": [
-        "tennis (0.13, fuzzy-title)",
-        "tennis-mixers (0.11, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "princess-ll-blue-claymates-tennis-team-a-successful-season",
-      "originalPath": "/princess-ll-blue-claymates-tennis-team-a-successful-season",
-      "title": "Princess ll Blue Claymates Tennis Team - A Successful Season!",
-      "setAsideBecause": "not linked from the original site menu",
-      "class": "orphan",
-      "bestCandidates": [
-        "tennis (0.13, fuzzy-title)",
-        "tennis-mixers (0.11, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
-      ]
-    },
-    {
-      "sourceSlug": "meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray",
-      "originalPath": "/meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray",
-      "title": "Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray",
-      "setAsideBecause": "not linked from the original site menu",
-      "class": "orphan",
-      "bestCandidates": [
-        "tennis (0.10, fuzzy-title)",
-        "tennis-mixers (0.09, fuzzy-title)",
-        "junior-tournaments (0.09, fuzzy-title)"
-      ]
+      "bestCandidates": []
     },
     {
       "sourceSlug": "round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018",
       "originalPath": "/round-robin-pickleball-tournament-to-benefit-gift-of-life-on-march-21-2018",
       "title": "Round Robin Pickleball Tournament to Benefit Gift of Life on March 21, 2018",
-      "setAsideBecause": "not linked from the original site menu",
+      "setAsideBecause": "set aside by decision file",
       "class": "orphan",
-      "bestCandidates": [
-        "junior-tournaments (0.08, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
-      ]
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "tennis-membership-information-summer-membership-application-2018",
+      "originalPath": "/tennis-membership-information-summer-membership-application-2018",
+      "title": "Tennis Membership Information - Summer Membership Application 2018",
+      "setAsideBecause": "set aside by decision file",
+      "class": "orphan",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "july-4th-round-robin-tennis-mixer-delray-beach-tennis-center",
+      "originalPath": "/july-4th-round-robin-tennis-mixer-delray-beach-tennis-center",
+      "title": "July 4th Round Robin Tennis Mixer Delray Beach Tennis Center",
+      "setAsideBecause": "set aside by decision file",
+      "class": "orphan",
+      "bestCandidates": []
     },
     {
       "sourceSlug": "monday-night-tennis-wanna-work-out-16-advanced-players-drilling-and-playing-at-a-high-level",
       "originalPath": "/monday-night-tennis-wanna-work-out-16-advanced-players-drilling-and-playing-at-a-high-level",
       "title": "Monday Night Tennis Wanna Work Out 16 Advanced Players Drilling and Playing at a High Level",
-      "setAsideBecause": "not linked from the original site menu",
+      "setAsideBecause": "set aside by decision file",
       "class": "orphan",
-      "bestCandidates": [
-        "tennis (0.08, fuzzy-title)",
-        "tennis-mixers (0.07, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
-      ]
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "delray-beach-junior-tennis-program",
+      "originalPath": "/delray-beach-junior-tennis-program",
+      "title": "Delray Beach Junior Tennis Program",
+      "setAsideBecause": "decision file names \"junior-programs\", which has no PLACEHOLDER SECTION to fill",
+      "class": "orphan",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "pickleball-in-delray-beach",
+      "originalPath": "/pickleball-in-delray-beach",
+      "title": "Pickleball in Delray Beach",
+      "setAsideBecause": "decision file names \"pickleball\", which has no PLACEHOLDER SECTION to fill",
+      "class": "orphan",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "womens-doubles-round-robin-tennis-april-27th-and-april-30th",
+      "originalPath": "/womens-doubles-round-robin-tennis-april-27th-and-april-30th",
+      "title": "Women's Doubles Round Robin Tennis April 27th and April 30th",
+      "setAsideBecause": "set aside by decision file",
+      "class": "orphan",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "princess-ll-blue-claymates-tennis-team-a-successful-season",
+      "originalPath": "/princess-ll-blue-claymates-tennis-team-a-successful-season",
+      "title": "Princess ll Blue Claymates Tennis Team - A Successful Season!",
+      "setAsideBecause": "set aside by decision file",
+      "class": "orphan",
+      "bestCandidates": []
+    },
+    {
+      "sourceSlug": "meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray",
+      "originalPath": "/meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray",
+      "title": "Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray",
+      "setAsideBecause": "set aside by decision file",
+      "class": "orphan",
+      "bestCandidates": []
     },
     {
       "sourceSlug": "home",
@@ -435,7 +391,7 @@
       "bestCandidates": [
         "tennis (0.50, fuzzy-title)",
         "tennis-mixers (0.33, fuzzy-title)",
-        "program-guide (0.33, fuzzy-title)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -447,7 +403,7 @@
       "bestCandidates": [
         "tennis (0.45, fuzzy-slug)",
         "tennis-mixers (0.40, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -459,19 +415,7 @@
       "bestCandidates": [
         "delray-beach-open (0.38, fuzzy-title)",
         "tennis (0.13, fuzzy-title)",
-        "tennis-mixers (0.11, fuzzy-title)"
-      ]
-    },
-    {
-      "sourceSlug": "pickleball-schedule",
-      "originalPath": "/pickleball-schedule",
-      "title": "Pickleball Schedule",
-      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
-      "class": "post",
-      "bestCandidates": [
-        "weekly-schedule (0.33, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "junior-tournaments (0.11, fuzzy-title)"
       ]
     },
     {
@@ -495,7 +439,7 @@
       "bestCandidates": [
         "delray-beach-open (0.29, fuzzy-title)",
         "tennis (0.17, fuzzy-title)",
-        "tennis-mixers (0.14, fuzzy-title)"
+        "junior-tournaments (0.14, fuzzy-title)"
       ]
     },
     {
@@ -530,8 +474,8 @@
       "class": "post",
       "bestCandidates": [
         "delray-beach-open (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -555,7 +499,7 @@
       "bestCandidates": [
         "delray-beach-open (0.22, fuzzy-title)",
         "tennis (0.13, fuzzy-title)",
-        "tennis-mixers (0.11, fuzzy-title)"
+        "junior-tournaments (0.11, fuzzy-title)"
       ]
     },
     {
@@ -567,7 +511,7 @@
       "bestCandidates": [
         "delray-beach-open (0.22, fuzzy-title)",
         "tennis (0.13, fuzzy-title)",
-        "tennis-mixers (0.11, fuzzy-title)"
+        "junior-tournaments (0.11, fuzzy-title)"
       ]
     },
     {
@@ -626,8 +570,8 @@
       "class": "post",
       "bestCandidates": [
         "tennis (0.20, fuzzy-title)",
-        "tennis-mixers (0.17, fuzzy-title)",
-        "junior-tournaments (0.17, fuzzy-title)"
+        "junior-tournaments (0.17, fuzzy-title)",
+        "tennis-mixers (0.17, fuzzy-title)"
       ]
     },
     {
@@ -639,7 +583,7 @@
       "bestCandidates": [
         "tennis (0.20, fuzzy-title)",
         "tennis-mixers (0.17, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -651,7 +595,7 @@
       "bestCandidates": [
         "delray-beach-open (0.20, fuzzy-title)",
         "tennis (0.11, fuzzy-title)",
-        "tennis-mixers (0.10, fuzzy-title)"
+        "junior-tournaments (0.10, fuzzy-title)"
       ]
     },
     {
@@ -662,8 +606,8 @@
       "class": "post",
       "bestCandidates": [
         "delray-beach-open (0.20, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -710,8 +654,8 @@
       "class": "post",
       "bestCandidates": [
         "tennis (0.17, fuzzy-title)",
-        "tennis-mixers (0.14, fuzzy-title)",
-        "junior-tournaments (0.14, fuzzy-title)"
+        "junior-tournaments (0.14, fuzzy-title)",
+        "tennis-mixers (0.14, fuzzy-title)"
       ]
     },
     {
@@ -723,7 +667,7 @@
       "bestCandidates": [
         "tennis (0.17, fuzzy-title)",
         "tennis-mixers (0.14, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -759,7 +703,7 @@
       "bestCandidates": [
         "delray-beach-open (0.15, fuzzy-title)",
         "tennis (0.08, fuzzy-title)",
-        "tennis-mixers (0.08, fuzzy-title)"
+        "racket-stringing (0.08, fuzzy-title)"
       ]
     },
     {
@@ -831,7 +775,7 @@
       "bestCandidates": [
         "tennis (0.11, fuzzy-title)",
         "court-status (0.10, fuzzy-title)",
-        "pro-shop (0.10, fuzzy-title)"
+        "tennis-mixers (0.10, fuzzy-title)"
       ]
     },
     {
@@ -843,7 +787,7 @@
       "bestCandidates": [
         "tennis (0.09, fuzzy-title)",
         "tennis-mixers (0.08, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -859,15 +803,27 @@
       ]
     },
     {
+      "sourceSlug": "pickleball-schedule",
+      "originalPath": "/pickleball-schedule",
+      "title": "Pickleball Schedule",
+      "setAsideBecause": "blog post — belongs to the blog, not a menu page",
+      "class": "post",
+      "bestCandidates": [
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
+      ]
+    },
+    {
       "sourceSlug": "all-peoples-day-diversity-festival-food-and-free-admission-march-24",
       "originalPath": "/all-peoples-day-diversity-festival-food-and-free-admission-march-24",
       "title": "All People's Day Diversity Festival - Food and Free Admission - March 24",
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -877,9 +833,9 @@
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -889,9 +845,9 @@
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -901,9 +857,9 @@
       "setAsideBecause": "blog post — belongs to the blog, not a menu page",
       "class": "post",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -915,7 +871,7 @@
       "bestCandidates": [
         "tennis (0.50, fuzzy-title)",
         "tennis-mixers (0.33, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -927,7 +883,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -939,7 +895,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -951,7 +907,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "program-guide (0.25, fuzzy-title)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -963,7 +919,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -974,8 +930,8 @@
       "class": "archive",
       "bestCandidates": [
         "tennis-mixers (0.33, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -987,7 +943,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -998,8 +954,8 @@
       "class": "archive",
       "bestCandidates": [
         "junior-tournaments (0.33, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1010,8 +966,8 @@
       "class": "archive",
       "bestCandidates": [
         "junior-tournaments (0.33, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1023,7 +979,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1035,7 +991,7 @@
       "bestCandidates": [
         "tennis (0.33, fuzzy-title)",
         "tennis-mixers (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1058,8 +1014,8 @@
       "class": "archive",
       "bestCandidates": [
         "delray-beach-open (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1082,8 +1038,8 @@
       "class": "archive",
       "bestCandidates": [
         "delray-beach-open (0.25, fuzzy-title)",
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1093,9 +1049,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1105,9 +1061,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1117,9 +1073,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1129,9 +1085,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1141,9 +1097,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1153,9 +1109,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1165,9 +1121,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1177,9 +1133,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1189,9 +1145,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1201,9 +1157,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1213,9 +1169,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     },
     {
@@ -1225,9 +1181,9 @@
       "setAsideBecause": "WordPress archive listing, not a content page",
       "class": "archive",
       "bestCandidates": [
-        "mailing-list (0.00, fuzzy-nav-label)",
-        "court-status (0.00, fuzzy-nav-label)",
-        "photos (0.00, fuzzy-nav-label)"
+        "testimonials (0.00, fuzzy-nav-label)",
+        "membership (0.00, fuzzy-nav-label)",
+        "delray-beach-open (0.00, fuzzy-nav-label)"
       ]
     }
   ]
