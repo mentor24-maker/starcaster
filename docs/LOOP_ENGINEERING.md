@@ -97,6 +97,33 @@ operator asked for Urgent, sitting in shell history and the session
 transcript where it can be checked later. Loop-filed tasks (`loop-spec`) are
 High or below by default; Urgent only on the operator's explicit word.
 
+
+## Two reviewers, one ticket — claim visibly, verdict race-safely
+
+On 2026-08-22 two `loop-review` sessions independently verified the same PR end
+to end (duplicate work), and the slower one then wrote "Ready to launch" over
+the faster one's fail verdict AND over a fresh `Building` re-claim — its queue
+snapshot was ~25 minutes stale by the time it wrote. Two rules close it, both
+using the `--if-status` guard that `scripts/clickup_direct.mjs status` already
+carries:
+
+1. **Claim a review visibly before verifying.** There is no "reviewing"
+   status, so the claim is a `REVIEW CLAIM: <node> at <time>` comment. A
+   session that sees a claim under ~30 minutes old with no verdict after it
+   stands down and takes the next ticket.
+2. **Every verdict write is guarded** with `--if-status "In review"`. If the
+   ticket moved since the claim, the write is refused (exit 3) and the session
+   re-reads and stands down instead of clobbering — a stale verdict never wins.
+
+`loop-build` already claims with `--status Building --if-status Queued`; this
+gives review the same protection.
+
+**"Gates green" includes the PR's own CI.** Local `npm run test:*` passing is
+NOT proof GitHub is green — PR #344 sat CI-red through three review passes
+because everyone checked local, not `gh pr checks`. loop-build watches
+`gh pr checks <n>` until `verify` reports before handing off; loop-review reads
+it before any verdict and sends a red-CI PR straight back.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the

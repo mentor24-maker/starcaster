@@ -130,13 +130,27 @@ the run report.
      "How to test" steps, and a note that a Vercel preview will be attached.
      End with the Generated-with trailer.
 
-7. **Hand off to review.** Set the task status to `In review`, leave it
-   unassigned (it is the machine's turn, not Dane's), and add the PR URL as a
-   ClickUp comment. **Do NOT merge** — `main` is PR-protected (the "verify"
-   check must go green) and merges happen only on the operator's explicit
-   say-so. The `loop-review` skill takes it from here.
+7. **Watch the PR's own CI before you call it built.** "Gates green" INCLUDES
+   GitHub's checks, not just your local run — local green fooled PR #344 into
+   sitting CI-red through three review passes because nobody looked. After
+   pushing, watch it land:
 
-8. **Report** which task you built and the PR number, then finish (the `/loop`
+   ```bash
+   gh pr checks <n> --watch --interval 20   # wait for `verify` to report
+   ```
+
+   `no checks reported` right after a push means CI has not registered yet —
+   wait and re-poll, do not treat it as done. A **red** `verify` is NOT a
+   finished build: fix it and push again before handing off. Only a green
+   `verify` (Vercel too) is a completed pass.
+
+8. **Hand off to review.** Set the task status to `In review`, leave it
+   unassigned (it is the machine's turn, not Dane's), and add the PR URL as a
+   ClickUp comment **stating CI is green**. **Do NOT merge** — `main` is
+   PR-protected (the "verify" check must go green) and merges happen only on
+   the operator's explicit say-so. The `loop-review` skill takes it from here.
+
+9. **Report** which task you built and the PR number, then finish (the `/loop`
    wrapper will re-invoke you for the next task).
 
 ## Guardrails
