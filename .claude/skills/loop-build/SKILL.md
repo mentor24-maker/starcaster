@@ -63,18 +63,36 @@ the run report.
    automatically; if the status command ever reports an assignee that did not
    stick or clear, treat that as a failed handoff, not a cosmetic detail.
 
+   **Which repo the task belongs to.** The Loop Queue carries work for more
+   than one repo. A task declares its repo with a `repo:<name>` tag (known:
+   `starcaster`, `normie`, `pulse`, `vault`); no tag means `starcaster`. The
+   `queue` and `get` commands already resolve it — `queue` prints a **repo**
+   column (`?<name>` there means "does not resolve — escalate"), and `get`
+   prints a `repo:` line. The rule the resolver enforces
+   (`scripts/builder/taskRepo.js`):
+
+   - **A known repo** (or no tag → starcaster) → build in THAT repo (step 2).
+   - **An unknown repo tag, or two different repo tags** → do NOT build. Move
+     the task to `Needs your input`, assign Dane, comment why (quote the
+     `get` command's `repo:` line), and take the next task. Guessing would
+     build in the wrong checkout against the wrong gates and call it done.
+
 2. **Get an isolated workspace — MANDATORY.** Create a dedicated worktree and
-   branch off the latest main. Never build in a shared folder; never edit main.
+   branch off the latest main, **inside the repo the task declares**. Never
+   build in a shared folder; never edit main. `$REPO` is that repo's checkout
+   (`node -e "console.log(require('<starcaster>/scripts/builder/taskRepo.js').repoHome('<repo>'))"`
+   resolves it; for `starcaster` it is this checkout):
 
    ```bash
-   git -C /Users/mentor/WebApps/starcaster fetch origin --quiet
-   git -C /Users/mentor/WebApps/starcaster worktree add \
-     .claude/worktrees/<task-slug> -b <task-slug> origin/main
-   cd /Users/mentor/WebApps/starcaster/.claude/worktrees/<task-slug> && npm ci
+   git -C "$REPO" fetch origin --quiet
+   git -C "$REPO" worktree add \
+     "$REPO/.claude/worktrees/<task-slug>" -b <task-slug> origin/main
+   cd "$REPO/.claude/worktrees/<task-slug>" && npm ci
    ```
 
    `<task-slug>` = short kebab-case name from the task. Do ALL work for this
-   task inside that worktree.
+   task inside that worktree. A repo other than `starcaster` runs THAT repo's
+   gates (see `docs/LOOP_ENGINEERING.md` → "Per-repo gates"), not starcaster's.
 
 3. **Build to the acceptance criteria.** Implement exactly what the task's
    Scope and Acceptance criteria describe. Respect the Non-goals — do not

@@ -14,6 +14,21 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-19 — The loop queue can now carry work for more than one repo (#TBD)
+
+The build/review loops assumed every task was starcaster work and always built
+in the starcaster folder. Now a task can say which project it belongs to — by
+carrying a `repo:` tag (`repo:normie`, `repo:pulse`, `repo:vault`) — and the
+loop builds it in that project's folder and runs that project's checks instead.
+A task with no tag is treated as starcaster exactly as before, so nothing
+already in the queue changes. A tag naming a project the system doesn't know,
+or two different project tags on one task, is never guessed at: the task is
+handed to Dane to sort out rather than built in the wrong place. The task list
+(`npm run clickup -- queue`) now shows a project column so it's visible at a
+glance. This is the plumbing only — no actual non-starcaster work is built here.
+
+---
+
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
 
 First of five pieces building the in-app Bug Report tool. This one is

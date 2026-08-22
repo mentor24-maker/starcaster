@@ -51,8 +51,15 @@ the run report.
    verifies it stuck: `Ready to launch` / `Needs your input` assign Dane,
    `Queued` clears assignees. Flags exist only to deviate.
 
-2. **Check out the PR in a worktree.** Reuse the build worktree if present, or
-   add one from the PR branch. Run `npm ci` if dependencies changed.
+2. **Check out the PR in a worktree — in the task's repo.** A task declares
+   its repo with a `repo:<name>` tag (`starcaster` default; also `normie`,
+   `pulse`, `vault`); `npm run clickup -- get --task <id>` prints the resolved
+   `repo:` line. Verify in THAT repo's checkout and run THAT repo's gates
+   (`docs/LOOP_ENGINEERING.md` → "Per-repo gates") — verifying a vault task
+   against starcaster's gates proves nothing. An unknown/ambiguous repo tag is
+   the build loop's to escalate, not review's; if you meet one In review,
+   send it back to `Queued` with a note. Reuse the build worktree if present,
+   or add one from the PR branch. Run `npm ci` if dependencies changed.
 
 3. **Verify independently — do not trust the build loop's word.**
    - Re-run the gates: `npm run typecheck`, the affected tests
