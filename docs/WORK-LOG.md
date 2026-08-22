@@ -14,6 +14,20 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — A defined shape for the Approvals surface (#TBD)
+
+Sets out how visual/content changes get approved: each arrives as a task with
+a before and an after picture, and Dane approves or rejects it in one word.
+This writes down the shape — where the list lives, what every approval task
+carries (the two images, the summary, the links), how one-click approve/reject
+works, and how it stays separate from the merge queue and the questions inbox
+so it does not become a second version of either. It is a proposal to live
+with before any custom screens get built; the list itself is a 30-second
+one-time creation in ClickUp (its own daily surface, so Dane makes it, not an
+automated pass). No code yet — this is the convention every agent will follow.
+
+---
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's

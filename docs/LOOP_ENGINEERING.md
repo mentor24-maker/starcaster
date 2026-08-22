@@ -97,6 +97,12 @@ operator asked for Urgent, sitting in shell history and the session
 transcript where it can be checked later. Loop-filed tasks (`loop-spec`) are
 High or below by default; Urgent only on the operator's explicit word.
 
+## The Approvals surface
+
+Visual/content before-after sign-offs live on their OWN surface, not the Loop
+Queue — see **`docs/APPROVALS.md`**. `Ready to launch` is a merge decision (read
+code); an approval is a look-at-two-pictures decision. Keep them apart.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
