@@ -69,6 +69,7 @@ npm run clickup -- status --task <id> --status Building --if-status Queued   # s
 npm run clickup -- status --task <id> --status "Needs your input"            # auto-assigns Dane
 npm run clickup -- comment --task <id> --body-file -           # body on stdin
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
+npm run clickup -- attach --task <id> --file a.png --file b.png             # before/after pictures
 ```
 
 `status` enforces the handoff rule by itself: moving into `Needs your input`
@@ -208,6 +209,19 @@ offers every status in the workspace at once. Assignment sidesteps all of it.
 
 If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
+
+## Visual changes come to you as pictures
+
+A ticket that changes what a page *renders* arrives with before/after
+screenshots attached, so the question you are asked is "does this look right"
+rather than "check out this branch and run it". The build loop runs
+`npm run check:shots --task <ticket>`, which builds the code as it is on `main`,
+builds the branch, photographs six pages through both, and attaches every pair
+that differs.
+
+If the two pictures are identical, nothing is attached and nothing interrupts
+you. Full details, including why the comparison has no tolerance and what a
+green run does *not* prove: **`docs/VISUAL_REVIEW.md`**.
 
 ## The work log — a plain-English record
 
