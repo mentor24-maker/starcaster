@@ -14,6 +14,34 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — `npm run map` stops calling a brand-new folder rubbish (#PR)
+
+Set up a new workspace with `npm run thread`, then read the map from the main
+folder, and the map said the folder you had just built was *"already shipped,
+safe to delete."* Nothing had shipped — the branch was seconds old with zero
+changes in it, and the folder held a fresh install and a full build, several
+minutes of work.
+
+The map has three things it can say about a branch, and it picked the right one
+here: "this branch has no changes of its own." It just described that state in
+English as "shipped", and only got the wording right in the one case where you
+happened to be standing inside the folder it was talking about — which is
+almost never, because you make the folder from the main folder and then read
+the map from the main folder.
+
+Now it says what is actually true: *"a prepared workspace — nothing committed
+yet, nothing to ship."* No wording anywhere calls a zero-change branch shipped
+or safe to delete. Branches whose work really is live still read "already live,
+safe to delete", which is correct and unchanged.
+
+Worth saying plainly: `npm run tidy` was never in danger of deleting one of
+these folders — it has always refused to touch a branch with no changes, on
+purpose. This was the report lying, not the cleanup misbehaving. But the map is
+the thing you are told to read before starting a piece of work, so it is the
+thing that was giving bad advice. A test now builds a throwaway repository with
+one empty branch, one already-shipped branch and one branch with live work in
+it, and fails if the map ever again calls the empty one shipped.
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
