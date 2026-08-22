@@ -29,8 +29,15 @@ function main(input) {
   const command = String(payload?.tool_input?.command || '');
   if (!command) process.exit(0);
 
-  const root = String(process.env.CLAUDE_PROJECT_DIR || path.join(__dirname, '..', '..'));
-  const onMain = currentBranch(root) === 'main';
+  // Decide from where the command ACTUALLY runs, not where the session
+  // started. The Bash tool's cwd persists across calls, so a session that
+  // began in the main folder and cd'd into a worktree runs later commands in
+  // the worktree — payload.cwd carries that. Keying off CLAUDE_PROJECT_DIR
+  // (session start = main) instead would block every legitimate in-worktree
+  // write. Same precedence the other hooks use (explain_denied_commands,
+  // require_sql_handoff).
+  const cwd = String(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  const onMain = currentBranch(cwd) === 'main';
   const verdict = shouldBlockBashOnMain(command, { onMain });
   if (!verdict.block) process.exit(0);
 

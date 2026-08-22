@@ -26,7 +26,7 @@ everything ends in a commit); `npm run doctor` reports when the main folder
 has stray uncommitted changes; and the terminal is watched for commands that
 write source files while on main, blocking them early (best-effort, and it
 stays out of the way when you're properly in a worktree). All three respect
-the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off.
+the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: the terminal check now judges the folder the command actually runs in, so it never trips on legitimate work inside a worktree.)
 
 ---
 
