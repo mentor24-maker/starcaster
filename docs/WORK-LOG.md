@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — `npm run map` stops calling a brand-new folder rubbish (#PR)
+## 2026-08-22 — `npm run map` stops calling a brand-new folder rubbish (#375)
 
 Set up a new workspace with `npm run thread`, then read the map from the main
 folder, and the map said the folder you had just built was *"already shipped,
