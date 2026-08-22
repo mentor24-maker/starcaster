@@ -6141,3 +6141,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-primary, #000);
   font-weight: 600;
 }
+
+/* Canonical-provenance badges (section AND module cards share these classes:
+   (canonical) / Unlinked / Linked / Custom / Changed) had no styling at all —
+   plain inline text next to the title, on both cards. This gives the shared
+   pill shape everything but Changed already needed; Changed additionally
+   needs a color distinct from the neutral ones, since it is the one state a
+   push will silently skip unless the operator explicitly overwrites it. */
+.builder-react-root .builder-canonical-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2, 8px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-canonical-badge-changed {
+  background: var(--warn-notice-bg, #fdf0d5);
+  color: var(--warn-notice-text, #8a5a00);
+}
