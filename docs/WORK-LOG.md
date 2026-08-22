@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — See what the loop queue is actually doing, at a glance (#TBD)
+## 2026-08-22 — See what the loop queue is actually doing, at a glance (#370)
 
 The task list showed which stage each item was in, but not whether the
 pipeline was alive, when it last moved, or what it would pick up next. Now the
