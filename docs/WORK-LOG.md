@@ -14,6 +14,28 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
+
+Thirteen files had a folder path typed into them that only exists on Dane's
+MacBook. That is fine right up until the same code runs somewhere else — on
+the Mac Mini that folder is simply not there, and the failure it produces is
+the worst kind: nothing errors, nothing is logged, the job just quietly does
+nothing and reports success. The file that mattered most was the instruction
+sheet the build loop follows, which is precisely the thing the Mini was bought
+to run.
+
+Every one of those paths is now worked out at the moment the code runs instead
+of being written down in advance. A new check refuses any future commit that
+types one in, and it runs as its own step so it can actually fail a build
+rather than just printing a warning nobody reads. Six old one-off scripts from
+finished jobs were filed away into an archive folder while we were in there.
+
+Nothing about the app changes for anyone using it. What changes is that the
+system can now be run from more than one machine, which is what lets work
+continue overnight while the laptop is closed.
+
+---
+
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
 
 First of five pieces building the in-app Bug Report tool. This one is
