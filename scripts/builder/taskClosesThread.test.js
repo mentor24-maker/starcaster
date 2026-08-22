@@ -119,28 +119,28 @@ test('branchInventory reads the stamp back via the same git-config key new_threa
 });
 
 test('isTaskOpen is exported and reads a real git config value end to end', () => {
-  // A real integration check, not a source grep: stamp THIS repo's own
-  // current branch (in a try/finally that always unsets it) and read it back
-  // through the real branchInventory(), the same function repo_tidy.cjs uses.
+  // A real integration check, not a source grep — but it must NOT depend on
+  // the checked-out branch: GitHub Actions checks a PR out as a DETACHED HEAD,
+  // so `git branch --show-current` is empty in CI and an earlier version of
+  // this test could never pass there (red on every run, unnoticed for days).
+  // Instead, create a scratch branch REF off HEAD (no checkout needed, works
+  // detached), stamp it, read it back through the real branchInventory(), and
+  // delete it in finally. branchInventory() enumerates refs/heads via
+  // for-each-ref, so a ref that is not checked out still appears.
   const { branchInventory } = require(REPO_STATE);
   const repoRoot = path.join(__dirname, '..', '..');
-  const currentBranch = execFileSync('git', ['branch', '--show-current'], { cwd: repoRoot, encoding: 'utf8' }).trim();
-  assert.ok(currentBranch, 'must be on a real branch to run this test');
-
-  const key = `branch.${currentBranch}.clickup-task`;
-  const previous = (() => {
-    try { return execFileSync('git', ['config', '--get', key], { cwd: repoRoot, encoding: 'utf8' }).trim(); }
-    catch { return null; }
-  })();
+  const scratch = `tct-test-stamp-${process.pid}`;
+  const key = `branch.${scratch}.clickup-task`;
 
   try {
+    execFileSync('git', ['branch', '-f', scratch, 'HEAD'], { cwd: repoRoot });
     execFileSync('git', ['config', key, 'TEST_TASK_ID_12345'], { cwd: repoRoot });
-    const entry = branchInventory().find((b) => b.name === currentBranch);
-    assert.ok(entry, 'the current branch must appear in the inventory');
+    const entry = branchInventory().find((b) => b.name === scratch);
+    assert.ok(entry, 'the stamped scratch branch must appear in the inventory');
     assert.equal(entry.clickupTaskId, 'TEST_TASK_ID_12345');
   } finally {
-    if (previous === null) execFileSync('git', ['config', '--unset', key], { cwd: repoRoot });
-    else execFileSync('git', ['config', key, previous], { cwd: repoRoot });
+    try { execFileSync('git', ['config', '--unset', key], { cwd: repoRoot }); } catch { /* already gone */ }
+    try { execFileSync('git', ['branch', '-D', scratch], { cwd: repoRoot }); } catch { /* already gone */ }
   }
 });
 
