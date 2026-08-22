@@ -5959,13 +5959,97 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   animation: sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
 }
 
+/* ---------------------------------------------------------------------------
+   Slide, Axis Rotate and Flips (2026-08-22)
+   ---------------------------------------------------------------------------
+   Three of the five effects that had keyframes in `_builder-react.css` and no
+   way to pick them. Surfaced on the operator's decision (ClickUp 86bbfrpbb);
+   cartwheels stays unsurfaced because it is Tumbleweed under another name.
+
+   The old rules are LEFT WHERE THEY ARE rather than deleted. They lose to
+   these on cascade order — `main.css` imports this file after that one — and
+   deleting them means editing a file that is regenerated wholesale (R2), so
+   the deletion would come back on its own.
+   --------------------------------------------------------------------------- */
+
+/* SLIDE IS CRUISE. Same keyframes, same four controls, same everything —
+   the two names exist only because the two keyframe sets were written years
+   apart, and the operator asked for the picker entry when he surfaced the
+   buried effects. Written out in full rather than grouped with Cruise's
+   selector because the tests in builder-image-effects.test.ts look for a
+   `.starcaster-effect-<name> {` rule per offered effect, which is the guard
+   that catches an effect shipping with no stylesheet at all.
+
+   Worth a second look before this reaches a customer: it is the same
+   duplicate-under-two-names shape the operator rejected cartwheels for. */
+.builder-react-root .starcaster-effect-slide {
+  animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-travel-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+/* One turn about the VERTICAL axis. `sc-effect-turn` cannot serve this the
+   way it serves Spin and Tumbleweed: the bare `rotate: 1turn` it uses is
+   shorthand for a turn about Z, and there is no variable that redirects an
+   axis. So this is a second keyframe rather than a parameter — the only
+   non-Z rotation in the codebase.
+
+   `rotate: y <angle>` (the individual property) rather than
+   `transform: rotateY()`, for the same reason every other effect here moved
+   off `transform`: it leaves `translate` free for anything that also needs
+   to move, and two animations on one element cannot share one property. */
+@keyframes sc-effect-turn-y {
+  from {
+    rotate: y 0turn;
+  }
+
+  to {
+    rotate: y 1turn;
+  }
+}
+
+/* DEPTH LIVES ON THE PARENT. `perspective` only bends the children of the box
+   that declares it, so a picture spinning about its own Y axis with
+   `perspective` on itself stays flat — it reads as a horizontal squash rather
+   than a turn. The shell is the nearest box that is not the animated element,
+   which is exactly where the old dead rule put it too. 900px matches it. */
+.builder-react-root .builder-preview-image-shell:has(.starcaster-effect-axis-rotate),
+.builder-react-root .player-game-floating-image-host .builder-preview-image-shell:has(.starcaster-effect-axis-rotate) {
+  perspective: 900px;
+}
+
+.builder-react-root .starcaster-effect-axis-rotate {
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  animation: sc-effect-turn-y var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+}
+
+/* Flips turns and hops WITHOUT going anywhere, and that is why it needs no
+   wrapper. Tumbleweed's hop rides a stage element only because Tumbleweed's
+   figure has already spent `translate` on the travel. Flips has no travel, so
+   both motions fit on the figure: the turn on `rotate`, the hop on
+   `translate`. Two animations, two properties, one element.
+
+   Frequency reaches this as hops per TURN rather than per crossing — see
+   getImageEffectStyle. Nothing crosses, so there is no crossing to count. */
+.builder-react-root .starcaster-effect-flips {
+  animation:
+    sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite,
+    sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
+}
+
 /* R6: motion is decoration on all of these — a visitor who has asked their
    system for less of it gets the picture, standing still. */
 @media (prefers-reduced-motion: reduce) {
   .builder-react-root .starcaster-effect-cruise,
   .builder-react-root .starcaster-effect-tumbleweed,
   .builder-react-root .starcaster-effect-hop-stage,
-  .builder-react-root .starcaster-effect-spin {
+  .builder-react-root .starcaster-effect-spin,
+  .builder-react-root .starcaster-effect-slide,
+  .builder-react-root .starcaster-effect-axis-rotate,
+  .builder-react-root .starcaster-effect-flips {
     animation: none;
   }
 }

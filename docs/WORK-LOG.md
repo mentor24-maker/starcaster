@@ -14,6 +14,34 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Three picture animations that were built but hidden are now on the menu (#PR)
+
+The Image module has a dropdown of movements a picture can make — Bounce,
+Spin, Cruise, Tumbleweed. Behind the scenes there were five more that had been
+fully written years ago and simply never added to that list, so the only way to
+use one was to hand-edit a page's saved settings. Dane went through them and
+picked three to bring out: **Slide** (crosses the page), **Axis Rotate**
+(turns on the spot like a card revolving on a string, so you see its edge and
+its back) and **Flips** (turns and hops in place at the same time). He
+deliberately left **Cartwheels** out — it is Tumbleweed under a different name
+— and **Parkour** is a bigger job of its own, still to come.
+
+Two things needed real work rather than just flipping a switch. Axis Rotate is
+the first thing on the site that turns on a *different axis*, which needs the
+browser to be told to draw depth — without that it reads as the picture being
+squashed side to side rather than turning. And Flips had to turn and hop at the
+same moment; Tumbleweed does that using a hidden extra layer, and it turned out
+Flips does not need one, because the layer only exists to make room for the
+travelling motion Flips does not have. Each of the three now takes the existing
+Speed, Rotation Rate, Bounce Height and Direction controls, so there is nothing
+new to learn.
+
+One thing worth knowing: **Slide and Cruise are the same movement.** Nothing is
+wrong with either, and both work — but a picture set to Slide and a picture set
+to Cruise will look identical and offer identical settings, which is exactly the
+reason Cartwheels was left out. Whether Slide stays on the menu is Dane's call;
+removing it later is a one-line change.
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
