@@ -30,6 +30,62 @@ schedule yet; that's its own upcoming piece of work (the Mac Mini setup).
 
 ---
 
+## 2026-08-18 — A place for visitors to report a broken page (#341)
+
+First of five pieces building the in-app Bug Report tool. This one is
+plumbing only — no button anyone can click yet (that's a later piece) — but
+it lays a safe place to send reports to. Any tenant site can now POST a bug
+report (what's wrong, what page, who reported it) to a new endpoint, which
+checks the report isn't spam, isn't absurdly long, and isn't falsely claiming
+to come from a signed-in staff member before saving it. Each report is kept
+strictly to the site that reported it, matching the rule every other table
+in this database follows. Nothing changes yet for anyone using the app.
+After review, one hole was closed before launch: a request arriving through
+the platform's own address (rather than a tenant's domain) could name any
+project it liked — even a made-up one — and have its report filed under that
+name. The endpoint now checks the named project really exists before saving,
+and refuses otherwise.
+
+---
+
+## 2026-08-18 — Urgent is now yours alone to hand out (#347)
+
+The task queue is sorted so the most urgent, oldest work is always done
+first — which only works as a way for you to jump the line if nothing else
+can also mark something Urgent. Loop tasks now file at High or below by
+default, and an agent trying to set something to Urgent gets refused with a
+plain explanation, unless it can point to you having actually asked for it.
+Nothing about how the queue itself sorts or how tasks get claimed changed —
+this only closes off who is allowed to reach for the top priority.
+
+---
+
+## 2026-08-18 — Test coverage for the "no more polls" message picker (#348)
+
+The small piece of code that decides what message a player sees when
+they've run out of polls to answer (wrong category, ran out of preferred
+categories, none published at all, etc.) had no test coverage. Added tests
+locking in that every one of those seven situations shows its own message
+rather than a blank or a generic one, and that an unrecognized situation
+still shows something sensible instead of nothing. No behavior changed —
+this only makes sure the existing behavior can't quietly break later.
+
+---
+
+## 2026-08-18 — Shipping cleanly no longer LOOKS like it broke (#346)
+
+Merging a finished piece of work with `npm run ship` was printing a scary
+red error at the very end, even when everything genuinely worked — the
+error came from a GitHub tool trying to also switch this computer's local
+copy off the branch it just deleted, which never works from the kind of
+folder every piece of work here happens in, and never mattered anyway,
+since a separate step already handles that cleanup properly. That tool call
+is now told to skip the part that always failed and never did anything
+useful. A successful ship now looks like what it is — clean — and, just as
+important, still reports a real failure honestly when one actually happens.
+
+---
+
 ## 2026-08-18 — Test coverage for the gallery badge helpers (#351)
 
 The Media Gallery module marks certain images as "badges" — reward symbols —
