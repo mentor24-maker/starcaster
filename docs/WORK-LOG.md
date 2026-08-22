@@ -16,6 +16,14 @@ was built. The log starts when the loop did.
 
 ## 2026-08-18 — Bug Report 3/5: every report lands on Dane's desk in ClickUp (#364)
 
+After review, the fail-safe was hardened: when a forwarded task lands in the
+wrong status the code deletes it — and now it CHECKS that the delete actually
+worked. If the delete fails, it says so loudly and names the task still
+sitting in the queue, instead of falsely reporting it was removed. Every
+ClickUp call now times out rather than hanging the person filing the report,
+an empty-bodied task is caught, and a task that was created but couldn't be
+verified is named in the log so it can be found.
+
 Third of five pieces of the in-app Bug Report tool. Until now a submitted
 bug sat in the database where nobody looks. Now each one is also filed as a
 ClickUp task in the Loop Queue — in "Needs your input", assigned to Dane's

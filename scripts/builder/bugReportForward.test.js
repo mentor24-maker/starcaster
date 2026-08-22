@@ -23,7 +23,7 @@ const MACHINE = 54254347;
 
 // ── A fake ClickUp: records requests, answers like the real API ────────────
 
-function fakeClickup({ createStatus = 401, landedStatus = 'Needs your input', landedAssignees = [OPERATOR], stickyWrongStatus = false } = {}) {
+function fakeClickup({ createStatus = 401, landedStatus = 'Needs your input', landedAssignees = [OPERATOR], stickyWrongStatus = false, deleteStatus = 200, readBackBody = 'body', throwOn = null } = {}) {
   const requests = [];
   let reads = 0;
   const fetchImpl = async (url, init = {}) => {
@@ -31,6 +31,10 @@ function fakeClickup({ createStatus = 401, landedStatus = 'Needs your input', la
     const path = String(url).replace('https://api.clickup.com', '');
     const body = init.body ? JSON.parse(init.body) : undefined;
     requests.push({ method, path, body, auth: init.headers?.Authorization });
+    // Simulate a hung ClickUp: the real clickupRequest aborts and catches.
+    if (throwOn && throwOn === method) {
+      const e = new Error('aborted'); e.name = 'TimeoutError'; throw e;
+    }
     const json = (status, payload) => ({ ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(payload) });
 
     if (method === 'POST' && path === `/api/v2/list/${LOOP_QUEUE}/task`) {
@@ -39,16 +43,16 @@ function fakeClickup({ createStatus = 401, landedStatus = 'Needs your input', la
     }
     if (method === 'GET' && path === '/api/v2/task/task_abc') {
       reads += 1;
-      // After a corrective PUT the second read may show the fix — unless sticky.
       const corrected = reads > 1 && !stickyWrongStatus;
       return json(200, {
         id: 'task_abc',
         status: { status: corrected ? 'Needs your input' : landedStatus },
         assignees: (corrected ? [OPERATOR] : landedAssignees).map((id) => ({ id })),
-        description: 'body',
+        description: readBackBody,
       });
     }
-    if (method === 'PUT' || method === 'DELETE') return json(200, { id: 'task_abc' });
+    if (method === 'DELETE') return json(deleteStatus, { id: 'task_abc' });
+    if (method === 'PUT') return json(200, { id: 'task_abc' });
     return json(404, { err: 'unexpected path' });
   };
   return { fetchImpl, requests };
@@ -120,6 +124,40 @@ test('a task that lands "queued" is corrected once, and if still wrong it is DEL
   assert.ok(requests.some((r) => r.method === 'PUT'), 'one corrective PUT');
   assert.ok(requests.some((r) => r.method === 'DELETE' && r.path === '/api/v2/task/task_abc'), 'the hazard is removed');
   assert.match(result.error, /deleted it/);
+});
+
+test('BLOCKER: when the fail-safe DELETE itself fails, the result says the task SURVIVES — never "deleted it"', async () => {
+  const { createHeldTask } = require('../../lib/clickupForward');
+  // Lands wrong and stays wrong, AND the DELETE 401s (scoped token / rate limit).
+  const { fetchImpl, requests } = fakeClickup({ createStatus: 200, landedStatus: 'queued', stickyWrongStatus: true, deleteStatus: 401 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'HELD_STATUS_NOT_DELETED');
+  assert.ok(requests.some((r) => r.method === 'DELETE'), 'the DELETE was attempted');
+  assert.match(result.error, /could NOT be deleted/);
+  assert.match(result.error, /task_abc/);
+  assert.match(result.error, /Move or delete it by hand/);
+  assert.doesNotMatch(result.error, /deleted it rather than/);
+  assert.equal(result.taskId, 'task_abc', 'the surviving task id is returned so it can be found');
+});
+
+test('a hung ClickUp (request timeout) is a failure, never mistaken for success', async () => {
+  const { createHeldTask } = require('../../lib/clickupForward');
+  const { fetchImpl } = fakeClickup({ createStatus: 200, throwOn: 'POST' });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
+  assert.equal(result.ok, false, 'a timeout must not read as a created task');
+  assert.equal(result.code, 'CLICKUP_CREATE_FAILED');
+  assert.match(result.error, /timed out/);
+});
+
+test('an empty task body (the wrong-field 200-but-blank trap) is not accepted as landed', async () => {
+  const { createHeldTask } = require('../../lib/clickupForward');
+  // Status and assignees are right, but the body read back empty — a task was
+  // created blank. It is corrected once (cannot fix the body) then deleted.
+  const { fetchImpl, requests } = fakeClickup({ createStatus: 200, readBackBody: '', deleteStatus: 200 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'real body' }, { fetchImpl, token: 't' });
+  assert.equal(result.ok, false, 'a blank-bodied task must not pass');
+  assert.ok(requests.some((r) => r.method === 'DELETE'), 'the blank task is removed');
 });
 
 test('a task that lands wrong but is fixed by the corrective PUT is accepted', async () => {
