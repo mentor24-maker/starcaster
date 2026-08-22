@@ -71,6 +71,20 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — Undoing a shared-section push, from any later visit (#342)
+
+When editing a section that's shared across many pages, saving it rewrites
+every page that uses it — sometimes dozens at once. The server-side pieces
+to undo that as one action already existed, but the only button for it lived
+in a banner that appeared right after you saved and vanished the moment you
+dismissed it or reloaded the page. If you came back later — a different
+session, a different day — there was no way to trigger that undo at all,
+only to restore each affected page one at a time. Page History (the panel
+that shows a page's past versions) now carries its own "Undo this update"
+button on any row that came from a shared-section push, so that undo is
+reachable any time, not just in the moment right after saving. Nothing about
+the existing per-page Restore button changed.
+
 ---
 
 ## 2026-08-18 — A place for visitors to report a broken page (#341)

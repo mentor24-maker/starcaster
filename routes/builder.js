@@ -136,6 +136,7 @@ const {
 const {
   listPageRevisions,
   listRunRevisions,
+  undoRunIdFor,
   getPageRevision,
 } = require('../lib/builderPageRevisionsStore');
 const {
@@ -1662,6 +1663,47 @@ async function handle(req, res, pathname, method) {
     .match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/([^/]+)\/restore\/?$/);
   const propagationUndoMatch = String(pathname || '')
     .match(/^\/api\/builder\/propagation-runs\/([^/]+)\/undo\/?$/);
+  const propagationRunMatch = String(pathname || '')
+    .match(/^\/api\/builder\/propagation-runs\/([^/]+)\/?$/);
+
+  // GET /api/builder/propagation-runs/:runId — what an undo would touch NOW.
+  //
+  // The undo confirm is built from this rather than from remembered counts:
+  // retention pruning deletes old restore points, so months after a push the
+  // honest statement is "N pages still have restore points", never the
+  // original run size (unrecoverable once pruned). A confirm that promises
+  // more than the data can deliver is the PR #21 failure with a dialog on it.
+  //
+  // Also answers "was this run already undone?" — the undo stamps its revert
+  // revisions with a derived run id (undoRunIdFor), so one row under that id
+  // means yes, and the button can say so instead of silently replaying old
+  // snapshots over newer work.
+  if (propagationRunMatch && requestMethod === 'GET') {
+    const runId = decodeURIComponent(propagationRunMatch[1] || '').trim();
+    if (!runId) return sendErr(res, 400, 'propagation run id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const runResult = await listRunRevisions(runId, scope);
+    if (!runResult.ok) {
+      return sendErr(res, runResult.status || 500, runResult.error || 'Could not load that update', {
+        code: runResult.code || null,
+      }), true;
+    }
+    const pages = (Array.isArray(runResult.data) ? runResult.data : []).map((entry) => ({
+      pageId: entry.pageId,
+      name: entry.name,
+      createdAt: entry.createdAt,
+    }));
+
+    const undoneResult = await listRunRevisions(undoRunIdFor(runId), scope);
+    if (!undoneResult.ok) {
+      return sendErr(res, undoneResult.status || 500, undoneResult.error || 'Could not load that update', {
+        code: undoneResult.code || null,
+      }), true;
+    }
+    const undone = (Array.isArray(undoneResult.data) ? undoneResult.data : []).length > 0;
+
+    return sendOk(res, 200, { pages, undone }, { pages, undone }, { total: pages.length }), true;
+  }
 
   // POST /api/builder/propagation-runs/:runId/undo
   //
@@ -1708,7 +1750,10 @@ async function handle(req, res, pathname, method) {
           ...(revision.theme ? { theme: revision.theme } : {}),
         },
         scope,
-        { reason: 'revert', actor: actorFrom(req) }
+        // The revert revisions carry their OWN (derived) run id, so an undo
+        // that dies partway is itself a grouped, resumable event — and its
+        // existence is how the GET above reports "already undone".
+        { reason: 'revert', actor: actorFrom(req), propagationRunId: undoRunIdFor(runId) }
       );
       if (result.ok) restored.push({ pageId: entry.pageId, name: entry.name });
       else failed.push({ pageId: entry.pageId, name: entry.name, error: result.error || 'save failed' });
