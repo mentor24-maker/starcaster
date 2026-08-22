@@ -14,6 +14,43 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Public forms can no longer file themselves under a made-up client (#373)
+
+Every StarCaster client site has a few pages that anyone can use without
+logging in: the contact form, the "forgot my password" box, the bug-report
+button. Each of those sends the site's client id along with the message, so we
+know whose inbox it belongs in.
+
+On a client's own web address that id is checked against the address — a form
+on brandonmarinoff.com cannot file into another client's records. But on our
+own addresses (starcaster.pro, a preview link, or your laptop while you are
+working) there is no client address to check against, so the id was simply
+believed. Anyone who typed a made-up id got a real submission filed under a
+client that does not exist: a row nobody owns, that shows up on nobody's
+screen and cannot be cleaned up because nobody knows it is there. Typing a
+*real* client's id was worse — it filed into their records.
+
+There is now one piece of code that answers "which client is this request
+allowed to act on", and every public form goes through it. A made-up id is
+turned away before anything is written. A real one still works, which is
+deliberate: those same forms are already open to the world on the client's own
+website, so refusing them here would protect nothing and would break both
+local testing and the Builder's own preview.
+
+The four remaining places that use the older, looser check were reviewed one
+by one — all of them only *read* pages that are public anyway — and a test now
+fails the build if anyone adds a fifth without making that call.
+
+While this was waiting to be checked, a seventh public form went live: the
+picture upload behind the new bug-report button. It had its own private copy
+of the "which client is this" check, which is exactly how two versions of the
+same rule start to drift apart. It now goes through the shared one, and the
+private copy is gone. The build check that is supposed to catch this had a
+blind spot — it trusted one whole file rather than each form inside it, and
+that file is where public forms live — so it now looks at every form
+individually. Run against the old code it correctly refuses to pass, which is
+how we know it is actually looking.
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
