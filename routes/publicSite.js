@@ -48,8 +48,8 @@ function respondErr(res, req, status, message, opts = {}) {
  * only agree with it. On a system host (starcaster.pro, localhost, previews)
  * the host names no tenant, so the body's projectId is an unverified claim —
  * it is resolved against real projects first, or any string becomes a
- * tenant (the 1/5 review finding). Shared by the submit and screenshot
- * endpoints so the two can never disagree about who owns a report.
+ * tenant (the 1/5 review finding). Shared by the bug-report endpoints so they
+ * can never disagree about who owns a report.
  */
 async function resolveBugReportProject(req, projectIdInput) {
   const projectId = String(projectIdInput || '').trim();
@@ -228,6 +228,25 @@ async function handle(req, res, pathname, method) {
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to load pages'), true;
 
     return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
+  }
+
+  // GET /api/public/bug-report/viewer?projectId=… — which visibility tier the
+  // current browser is, for the Bug Report module's RENDER-side gating:
+  // public (no tenant admin session), client (a signed-in tenant admin,
+  // editor role), staff (admin role). This is UX, not security — the submit
+  // endpoint below re-verifies the session before trusting a tier claim.
+  if (pathname === '/api/public/bug-report/viewer' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    const { searchParams } = getUrlObj(req);
+    const resolved = await resolveBugReportProject(req, searchParams.get('projectId'));
+    if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
+    let tier = 'public';
+    const token = projectAdmin.readAdminSessionToken(req);
+    const session = token ? await getAdminSession(token) : null;
+    if (session && String(session.projectId) === String(resolved.projectId)) {
+      tier = session.adminUser?.isStaff || session.adminUser?.role === 'admin' ? 'staff' : 'client';
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    return respondJson(res, req, 200, { ok: true, data: { tier } }), true;
   }
 
   // POST /api/public/bug-report/screenshot — one screenshot for a report that
