@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — A defined shape for the Approvals surface (#TBD)
+## 2026-08-22 — A defined shape for the Approvals surface (#377)
 
 Sets out how visual/content changes get approved: each arrives as a task with
 a before and an after picture, and Dane approves or rejects it in one word.
