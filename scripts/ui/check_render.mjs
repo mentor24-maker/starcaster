@@ -94,6 +94,24 @@ function documentFor(...specs) {
   };
 }
 
+/** A page carrying ONE section with the given layout + modules — so a contract
+ *  can measure a SECTION-level layout (e.g. the 4/5/6 equal-column rows), which
+ *  documentFor (always `layout: 'single'`) cannot reach. */
+function documentForSection({ layout = 'single', modules = [] } = {}) {
+  return {
+    name: 'Render Contract Section',
+    layoutSections: [{
+      id: 'section-render-contract',
+      title: 'Render Contract Section',
+      layout,
+      locked: false,
+      alignment: 'left',
+      widthMode: 'contained',
+      modules: modules.map(moduleFrom),
+    }],
+  };
+}
+
 async function render(page, doc) {
   await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [DRAFT_KEY, JSON.stringify(doc)]);
   // NOT `networkidle`: the page runs animations and never goes idle, so it
@@ -350,7 +368,7 @@ try {
     process.exit(1);
   }
   for (const contract of RENDER_CONTRACTS) {
-    await render(page, documentFor(contract.module));
+    await render(page, contract.section ? documentForSection(contract.section) : documentFor(contract.module));
     const result = await sample(page, contract.selector, contract.read || [], SETTLE_MS);
 
     // R1 — IT RENDERED AT ALL. Zero measured is a failure, never a pass: this
