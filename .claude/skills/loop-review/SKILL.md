@@ -68,6 +68,10 @@ the run report.
    add one from the PR branch. Run `npm ci` if dependencies changed.
 
 3. **Verify independently — do not trust the build loop's word.**
+   - **Check the PR's own CI FIRST:** `gh pr checks <n>` — a **red** `verify`
+     is an automatic send-back, no further review needed (PR #344 sat CI-red
+     through three passes because everyone checked local green, not GitHub).
+     "Gates green" always includes GitHub's checks, not just a local run.
    - Re-run the gates: `npm run typecheck`, the affected tests
      (`test:builder-ui` / `test:builder`), `node scripts/check_conventions.cjs`,
      and `npm run check:syntax` if `public/js/` was touched.

@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — Two review sessions can no longer step on each other (#374)
+## 2026-08-22 — Two review sessions can no longer step on each other (#374) It also writes down that "gates green" means the pull request's OWN checks on GitHub, not just a local test run — the loop now watches those before handing work on, so nothing sits broken-but-looking-fine.
 
 Overnight, two automated review sessions checked the same pull request at the
 same time, and the slower one wrote its "ready" verdict over the other's

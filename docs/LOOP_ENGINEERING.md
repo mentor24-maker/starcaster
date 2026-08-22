@@ -118,6 +118,12 @@ carries:
 `loop-build` already claims with `--status Building --if-status Queued`; this
 gives review the same protection.
 
+**"Gates green" includes the PR's own CI.** Local `npm run test:*` passing is
+NOT proof GitHub is green — PR #344 sat CI-red through three review passes
+because everyone checked local, not `gh pr checks`. loop-build watches
+`gh pr checks <n>` until `verify` reports before handing off; loop-review reads
+it before any verdict and sends a red-CI PR straight back.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
