@@ -1,103 +1,75 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Marinoff admin back-end — add a Support page and repair the orphaned
- * "Support" menu item. 2026-07-29.
+ * Marinoff admin back-end — add a Settings page and menu item. 2026-07-29.
  *
  * WHAT THIS DOES
- * 1. Creates the page `admin-support` ("Admin: Support") holding two content
- *    modules: a rich-text block of contact details (editable in the Builder,
- *    no code needed) and one admin-support-form module. Its header, footer and
- *    copyright sections are canonical instances of the same saved sections the
- *    other admin pages use, so it inherits their look and any future edits.
- * 2. REPAIRS the existing "Support" item in the admin Main Menu rather than
- *    adding a second one. That item (nav-1781451703204-26) is currently:
- *        label="Support"  href="support"  parentId="nav-1781437856820-6"
- *    and nav-1781437856820-6 does not exist in the admin menu — it is left
- *    over from the public site's nav. The renderer builds its top level with
- *    `navItems.filter(item => !item.parentId)` and renders children only under
- *    a parent that exists, so this item currently renders NOWHERE. Its href
- *    also pointed at a `support` page that does not exist in this project.
- *    The repair drops parentId and repoints href at `admin-support`.
- * 3. Applies that repair to the "Admin Header" saved-section MASTER as well as
- *    to every linked page. The master matters: the header is a canonical
- *    section, so the next time anyone saves that master it overwrites every
- *    page's copy. Fixing only the pages would make the repair vanish the next
- *    time the header is edited.
+ * 1. Creates the page `admin-settings` ("Admin: Settings") holding one
+ *    admin-site-settings module (the Contact Alert Email field). Its header,
+ *    footer and copyright sections are canonical instances of the same saved
+ *    sections the other admin pages use, so it inherits their look and any
+ *    future header edits.
+ * 2. Adds a "Settings" item to the admin Main Menu — on all four admin pages
+ *    AND on the "Admin Header" saved-section master. The master matters: the
+ *    header is a canonical/linked section, so the next time anyone saves that
+ *    master it overwrites every page's copy. Updating only the pages would
+ *    make the new menu item vanish on the next header edit.
  *
- * SLUG PRIVACY: `admin-support` starts with "admin-", which
+ * SLUG PRIVACY: `admin-settings` starts with "admin-", which
  * lib/builder-client/public-site-page-slugs.js treats as private — the page
- * requires project-admin login and stays out of GET /api/public/pages. No code
- * change is needed for that; is_private is also set explicitly.
- *
- * PREREQUISITE: docs/SQL/project_support_requests.sql must be applied to
- * Supabase first, or the form will save nothing. This script checks and
- * refuses to --apply if the table is missing.
+ * requires project-admin login and stays out of GET /api/public/pages. No
+ * code change needed for that; is_private is also set explicitly.
  *
  * SAFETY
  * - Dry run by default; pass --apply to write.
- * - Writes a full JSON backup of every page + the saved-section master to
- *   docs/SQL/backups/ before any change.
- * - Idempotent: re-running neither duplicates the page nor the menu item, and
- *   never creates a second "Support" entry.
+ * - Writes a full JSON backup of every touched page + the saved-section
+ *   master to docs/SQL/backups/ before any change.
+ * - Idempotent: re-running neither duplicates the page nor the menu item.
  * - Does NOT trigger canonical propagation. It edits the master's stored JSON
  *   and each linked instance directly, in one pass, to the same value — it
  *   never calls the push endpoint that rewrites all linked pages.
  *
  * Usage:
- *   node scripts/marinoff_admin_support_page_20260729.mjs            # dry run
- *   node scripts/marinoff_admin_support_page_20260729.mjs --apply
+ *   node scripts/marinoff_admin_settings_page_20260729.mjs            # dry run
+ *   node scripts/marinoff_admin_settings_page_20260729.mjs --apply
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mainCheckoutDir } from '../lib/main_checkout.mjs';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
 const { createClient } = require('@supabase/supabase-js');
 
 const PROJECT_ID = 'proj_1780601274760_97i84r';   // Marinoff & Associates
 const PAGES_TABLE = 'builder_landing_page';
 const SAVED_SECTIONS_TABLE = 'builder_saved_sections';
-const SUPPORT_TABLE = 'app_project_support_requests';
 const HEADER_MASTER_ID = 'saved_section_1782534344813_j7kkz2';   // "Admin Header"
 
-const SOURCE_SLUG = 'admin-settings';   // page whose chrome we mirror
-const NEW_SLUG = 'admin-support';
-const NEW_NAME = 'Admin: Support';
+const SOURCE_SLUG = 'admin-contact-manager';   // page whose chrome we mirror
+const NEW_SLUG = 'admin-settings';
+const NEW_NAME = 'Admin: Settings';
 
-/** The existing orphaned item. We repair this id — we never add another. */
-const SUPPORT_NAV_ITEM_ID = 'nav-1781451703204-26';
-const SUPPORT_NAV_LABEL = 'Support';
-const SUPPORT_NAV_HREF = 'admin-support';
+const NAV_ITEM = Object.freeze({
+  id: 'nav-20260729-admin-settings',
+  label: 'Settings',
+  href: 'admin-settings',
+});
+/** Insert the new item directly after this existing one. */
+const NAV_ITEM_AFTER_HREF = 'admin-contact-manager';
 
 const APPLY = process.argv.includes('--apply');
 const ALLOW_LOCAL = process.argv.includes('--allow-local');
 const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
-const stamp = '20260729';
-
-/**
- * Placeholder contact details. Deliberately a plain rich-text module rather
- * than anything code-driven, so Dane can edit it in the Builder like any other
- * text — no deploy required.
- */
-const CONTACT_HTML = [
-  '<h3><span style="font-size: 20px;"><strong>Need a hand with your website?</strong></span></h3>',
-  '<p><span style="font-size: 16px;">Use the form below and it comes straight to us, ',
-  'along with anything you attach. For anything urgent, reach out directly:</span></p>',
-  '<p><span style="font-size: 16px;"><strong>Email:</strong> ',
-  '<a href="mailto:support@alphire.com">support@alphire.com</a></span></p>',
-  '<p><span style="font-size: 16px;"><strong>Phone:</strong> (add your support number here)</span></p>',
-  '<p><span style="font-size: 16px;"><strong>Hours:</strong> Monday to Friday, 9am to 5pm MT</span></p>',
-].join('');
 
 // Env files are gitignored, so a git worktree does not have them — fall back to
 // the main checkout. Prefer the cloud-backup file: plain .env.local currently
 // carries BOTH a cloud and a local SUPABASE_URL, and the last one wins, so
 // reading it would quietly point this at the local dev database.
-const MAIN_CHECKOUT = '/Users/mentor/WebApps/starcaster';
+const MAIN_CHECKOUT = mainCheckoutDir(ROOT);
 const ENV_CANDIDATES = [
   process.env.STARCASTER_ENV_FILE,
   path.join(ROOT, '.env.local.cloud-backup'),
@@ -155,24 +127,6 @@ if (APPLY && isLocalDb && !ALLOW_LOCAL) {
 }
 
 // ---------------------------------------------------------------------------
-// Preflight — the form is useless without its table
-// ---------------------------------------------------------------------------
-
-const { error: tableErr } = await sb.from(SUPPORT_TABLE).select('id').limit(1);
-const supportTableReady = !tableErr;
-if (!supportTableReady) {
-  console.log(`⚠  Table ${SUPPORT_TABLE} is not reachable: ${tableErr.message}`);
-  console.log('   Apply docs/SQL/project_support_requests.sql on Supabase first, or the');
-  console.log('   Support form will accept a request and save nothing.\n');
-  if (APPLY) {
-    console.error('Refusing to --apply until the table exists.');
-    process.exit(1);
-  }
-} else {
-  console.log(`Preflight: ${SUPPORT_TABLE} exists.\n`);
-}
-
-// ---------------------------------------------------------------------------
 // Load
 // ---------------------------------------------------------------------------
 
@@ -196,16 +150,17 @@ if (!masterRow) {
 const sourcePage = pageRows.find((p) => p.slug === SOURCE_SLUG);
 if (!sourcePage) { console.error(`Source page "${SOURCE_SLUG}" not found — aborting.`); process.exit(1); }
 
-const existingSupportPage = pageRows.find((p) => p.slug === NEW_SLUG) || null;
+const existingSettingsPage = pageRows.find((p) => p.slug === NEW_SLUG) || null;
 
 // ---------------------------------------------------------------------------
 // Backup
 // ---------------------------------------------------------------------------
 
+const stamp = '20260729';
 mkdirSync(BACKUP_DIR, { recursive: true });
-const backupPath = path.join(BACKUP_DIR, `marinoff_admin_support_${stamp}_backup.json`);
+const backupPath = path.join(BACKUP_DIR, `marinoff_admin_settings_${stamp}_backup.json`);
 writeFileSync(backupPath, JSON.stringify({
-  capturedFor: 'marinoff_admin_support_page_20260729',
+  capturedFor: 'marinoff_admin_settings_page_20260729',
   projectId: PROJECT_ID,
   pages: pageRows,
   headerMaster: masterRow,
@@ -224,78 +179,55 @@ function sectionsOf(doc) {
 function parseNavItems(raw) {
   try {
     const parsed = JSON.parse(String(raw || '[]'));
-    return Array.isArray(parsed) ? parsed : null;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return null;   // unparseable — caller must skip rather than clobber
   }
 }
 
 /**
- * Repair the Support item in one navItems JSON string.
- *
- * Matches on id first, then on a menu-less href, so this still finds the item
- * if somebody renamed its label. Never appends a second Support entry when one
- * is already present and correct.
+ * Return an updated navItems JSON string with the Settings item present, or
+ * null when nothing needs to change / the value could not be parsed.
  */
-function withRepairedSupportItem(rawNavItems) {
+function withSettingsNavItem(rawNavItems) {
   const items = parseNavItems(rawNavItems);
   if (items === null) return { error: 'navItems is not valid JSON' };
-
-  const idx = items.findIndex((i) => String(i?.id || '') === SUPPORT_NAV_ITEM_ID);
-  if (idx < 0) {
-    // No orphan to repair. Only add one if there is no Support link at all.
-    if (items.some((i) => String(i?.href || '') === SUPPORT_NAV_HREF)) return { unchanged: true };
-    const next = [...items, { id: SUPPORT_NAV_ITEM_ID, label: SUPPORT_NAV_LABEL, href: SUPPORT_NAV_HREF }];
-    return { value: JSON.stringify(next), action: 'added' };
+  if (items.some((i) => String(i?.href || '') === NAV_ITEM.href || String(i?.id || '') === NAV_ITEM.id)) {
+    return { unchanged: true };
   }
-
-  const current = items[idx];
-  const alreadyFixed = String(current.href || '') === SUPPORT_NAV_HREF && !current.parentId;
-  if (alreadyFixed) return { unchanged: true };
-
-  // Drop parentId entirely rather than nulling it. The renderer's top level is
-  // `navItems.filter(item => !item.parentId)`, so any falsy value works, but an
-  // absent key matches how every other top-level item in this menu is stored.
-  const { parentId, ...rest } = current;
-  const repaired = { ...rest, label: String(current.label || SUPPORT_NAV_LABEL), href: SUPPORT_NAV_HREF };
   const next = [...items];
-  next[idx] = repaired;
-  return {
-    value: JSON.stringify(next),
-    action: 'repaired',
-    detail: `href "${current.href}" -> "${SUPPORT_NAV_HREF}"`
-      + (parentId ? `, dropped orphan parentId "${parentId}"` : ''),
-  };
+  const anchor = next.findIndex((i) => String(i?.href || '') === NAV_ITEM_AFTER_HREF);
+  // Top-level items only: a child (one with parentId) must not end up between
+  // a parent and its own children, so fall back to appending.
+  if (anchor >= 0) next.splice(anchor + 1, 0, { ...NAV_ITEM });
+  else next.push({ ...NAV_ITEM });
+  return { value: JSON.stringify(next) };
 }
 
-/** Patch every navigation module inside a sections array. Returns a copy. */
-function repairNavInSections(sections, label) {
+/** Patch every navigation module inside a sections array. Mutates a copy. */
+function addNavItemToSections(sections, label) {
   let changed = 0;
-  const notes = [];
   const out = sections.map((section) => {
     const modules = Array.isArray(section?.modules) ? section.modules : [];
     if (!modules.some((m) => m?.type === 'navigation')) return section;
     const nextModules = modules.map((m) => {
       if (m?.type !== 'navigation') return m;
-      // Only touch the admin menu, never the public site's nav.
-      if (!String(m?.settings?.navItems || '').includes('admin-dashboard')) return m;
-      const result = withRepairedSupportItem(m?.settings?.navItems);
+      const result = withSettingsNavItem(m?.settings?.navItems);
       if (result.error) {
         console.log(`    ! ${label}: nav module ${m.id} skipped — ${result.error}`);
         return m;
       }
       if (result.unchanged) return m;
       changed += 1;
-      notes.push(`${result.action}${result.detail ? ` (${result.detail})` : ''}`);
       return { ...m, settings: { ...m.settings, navItems: result.value } };
     });
     return { ...section, modules: nextModules };
   });
-  return { sections: out, changed, notes };
+  return { sections: out, changed };
 }
 
 // ---------------------------------------------------------------------------
-// Step 1 — build the new Support page document
+// Step 1 — build the new Settings page document
 // ---------------------------------------------------------------------------
 
 const sourceDoc = sourcePage.layout_sections || {};
@@ -313,7 +245,7 @@ if (!headerSection) { console.error('Could not find the admin header section on 
 
 const contentSection = {
   id: randomUUID(),
-  title: 'Support',
+  title: 'Site Settings',
   layout: 'single',
   locked: false,
   isPrivate: false,
@@ -326,37 +258,17 @@ const contentSection = {
   desktopHidden: false,
   modules: [
     {
-      id: `module_${stamp}_supportcontact`,
-      type: 'text',
+      id: `module_${stamp}_adminsitesettings`,
+      type: 'admin-site-settings',
       column: 'main',
-      name: 'Support Contact Details',
-      text: CONTACT_HTML,
-      settings: {
-        align: 'left',
-        headingLevel: 'H3',
-        headlineId: '',
-        mobileHidden: 'false',
-        desktopHidden: 'false',
-        verticalMargin: '0',
-      },
-    },
-    {
-      id: `module_${stamp}_adminsupportform`,
-      type: 'admin-support-form',
-      column: 'main',
-      name: 'Support Request Form',
+      name: 'Site Settings',
       text: '',
       settings: {
-        formTitle: 'Request Support',
+        panelTitle: 'Site Settings',
         showTitle: 'true',
-        defaultPriority: 'normal',
-        showScreenshot: 'true',
-        buttonText: 'Send Request',
-        showHistory: 'true',
-        historyTitle: 'Your Recent Requests',
+        verticalMargin: '0',
         mobileHidden: 'false',
         desktopHidden: 'false',
-        verticalMargin: '0',
       },
     },
   ],
@@ -371,8 +283,8 @@ const newDoc = {
   ],
 };
 
-// Repair the nav on the brand-new page too, so it ships correct.
-const newDocRepaired = { ...newDoc, sections: repairNavInSections(newDoc.sections, NEW_SLUG).sections };
+// Apply the nav item to the brand-new page too, so it ships correct.
+const newDocWithNav = { ...newDoc, sections: addNavItemToSections(newDoc.sections, NEW_SLUG).sections };
 
 const newPageRow = {
   project_id: PROJECT_ID,
@@ -382,27 +294,27 @@ const newPageRow = {
   template_id: sourcePage.template_id,
   template_kind: sourcePage.template_kind || 'modular',
   theme_id: sourcePage.theme_id,
-  layout_sections: newDocRepaired,
+  layout_sections: newDocWithNav,
   content_overrides: {},
   is_published: true,
   is_private: true,
 };
 
-console.log('── Step 1: Support page ─────────────────────────────────────────');
-if (existingSupportPage) {
-  console.log(`  Page "${NEW_SLUG}" already exists (id ${existingSupportPage.id}) — leaving its content alone.`);
+console.log('── Step 1: Settings page ────────────────────────────────────────');
+if (existingSettingsPage) {
+  console.log(`  Page "${NEW_SLUG}" already exists (id ${existingSettingsPage.id}) — leaving its content alone.`);
 } else {
   console.log(`  CREATE page "${NEW_SLUG}" (${NEW_NAME})`);
-  console.log(`    sections: ${newDocRepaired.sections.map((s) => s.title || '(untitled)').join(' | ')}`);
-  console.log(`    content modules: text (contact details), admin-support-form`);
+  console.log(`    sections: ${newDocWithNav.sections.map((s) => s.title || '(untitled)').join(' | ')}`);
+  console.log(`    content module: admin-site-settings`);
   console.log(`    is_published=true  is_private=true (login-gated by the admin- slug rule)`);
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — repair the nav item on the header master
+// Step 2 — nav item on the header master
 // ---------------------------------------------------------------------------
 
-console.log('\n── Step 2: repair the "Support" menu item on the master ─────────');
+console.log('\n── Step 2: "Settings" menu item ─────────────────────────────────');
 
 const masterDataKey = ['section', 'data', 'payload', 'content'].find(
   (k) => masterRow[k] && typeof masterRow[k] === 'object'
@@ -411,24 +323,21 @@ let masterUpdate = null;
 if (!masterDataKey) {
   console.log(`  ! Could not find the section JSON on the master row.`);
   console.log(`    Columns present: ${Object.keys(masterRow).join(', ')}`);
-  console.log(`    NOT updating the master — the repair would be undone on the next header save.`);
+  console.log(`    NOT updating the master — the menu item would be lost on the next header save.`);
 } else {
   const masterSection = masterRow[masterDataKey];
-  const result = repairNavInSections([masterSection], `master(${masterDataKey})`);
+  const result = addNavItemToSections([masterSection], `master(${masterDataKey})`);
   if (result.changed) {
     masterUpdate = { [masterDataKey]: result.sections[0] };
-    console.log(`  UPDATE "Admin Header" master (${HEADER_MASTER_ID})`);
-    for (const note of result.notes) console.log(`    ${note}`);
+    console.log(`  UPDATE "Admin Header" master (${HEADER_MASTER_ID}) — adds Settings to its Main Menu`);
   } else {
-    console.log(`  Master already correct — no change.`);
+    console.log(`  Master already has the Settings item — no change.`);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Step 3 — repair the nav item on every existing admin page
+// Step 3 — nav item on every existing admin page
 // ---------------------------------------------------------------------------
-
-console.log('\n── Step 3: repair the menu item on each linked page ─────────────');
 
 const pageUpdates = [];
 for (const page of pageRows) {
@@ -440,17 +349,18 @@ for (const page of pageRows) {
   ));
   if (!hasAdminNav) continue;
 
-  const result = repairNavInSections(sections, slug);
+  const result = addNavItemToSections(sections, slug);
   if (!result.changed) {
-    console.log(`  ${slug}: already correct — no change.`);
+    console.log(`  ${slug}: already has Settings — no change.`);
     continue;
   }
   pageUpdates.push({
     id: page.id,
     slug,
     layout_sections: { ...page.layout_sections, sections: result.sections },
+    navModules: result.changed,
   });
-  console.log(`  UPDATE ${slug} — ${result.notes.join('; ')}`);
+  console.log(`  UPDATE ${slug} — ${result.changed} nav module(s) gain the Settings item`);
 }
 
 if (!pageUpdates.length) console.log('  (no existing page needed a nav change)');
@@ -460,7 +370,7 @@ if (!pageUpdates.length) console.log('  (no existing page needed a nav change)')
 // ---------------------------------------------------------------------------
 
 console.log('\n── Summary ──────────────────────────────────────────────────────');
-console.log(`  New page:        ${existingSupportPage ? 'skip (exists)' : '1 insert'}`);
+console.log(`  New page:        ${existingSettingsPage ? 'skip (exists)' : '1 insert'}`);
 console.log(`  Header master:   ${masterUpdate ? '1 update' : 'no change'}`);
 console.log(`  Admin pages:     ${pageUpdates.length} update(s)`);
 
@@ -471,9 +381,9 @@ if (!APPLY) {
 
 console.log('\nApplying…');
 
-if (!existingSupportPage) {
+if (!existingSettingsPage) {
   const { data: inserted, error } = await sb.from(PAGES_TABLE).insert(newPageRow).select('id,slug');
-  if (error) { console.error('  FAILED to insert the Support page:', error); process.exit(1); }
+  if (error) { console.error('  FAILED to insert the Settings page:', error); process.exit(1); }
   console.log(`  Created page ${inserted?.[0]?.slug} (id ${inserted?.[0]?.id})`);
 }
 
@@ -503,25 +413,14 @@ const { data: after, error: afterErr } = await sb
 if (afterErr) { console.error('  Verification read failed:', afterErr); process.exit(1); }
 
 let problems = 0;
-
-const supportPage = after.find((p) => p.slug === NEW_SLUG);
-if (!supportPage) {
-  console.log(`  MISSING: ${NEW_SLUG}`);
-  problems += 1;
-} else {
-  const modules = sectionsOf(supportPage.layout_sections).flatMap((s) => s.modules || []);
-  const hasForm = modules.some((m) => m?.type === 'admin-support-form');
-  console.log(`  ${NEW_SLUG}: published=${supportPage.is_published} private=${supportPage.is_private} `
-    + `admin-support-form module=${hasForm ? 'yes' : 'NO'}`);
-  // A "text" module where the form should be means the server bundle does not
-  // know the type and coerced it — i.e. `npm run build:builder-template` was
-  // skipped. Catch that here rather than letting the page quietly rot.
-  if (!hasForm) {
-    console.log('    ! The form module is missing. If it came back as "text", the server');
-    console.log('      template bundle does not know "admin-support-form" — run');
-    console.log('      `npm run build:builder-template` and redeploy.');
-    problems += 1;
-  }
+const settingsPage = after.find((p) => p.slug === NEW_SLUG);
+if (!settingsPage) { console.log(`  MISSING: ${NEW_SLUG}`); problems += 1; }
+else {
+  const hasModule = sectionsOf(settingsPage.layout_sections)
+    .some((s) => (s.modules || []).some((m) => m?.type === 'admin-site-settings'));
+  console.log(`  ${NEW_SLUG}: published=${settingsPage.is_published} private=${settingsPage.is_private} `
+    + `admin-site-settings module=${hasModule ? 'yes' : 'NO'}`);
+  if (!hasModule) problems += 1;
 }
 
 for (const page of after) {
@@ -529,27 +428,17 @@ for (const page of after) {
     .flatMap((s) => (s.modules || []).filter((m) => m?.type === 'navigation'))
     .filter((m) => String(m?.settings?.navItems || '').includes('admin-dashboard'));
   if (!navs.length) continue;
-
-  let good = 0;
-  let duplicates = 0;
-  for (const m of navs) {
-    const items = parseNavItems(m?.settings?.navItems) || [];
-    const supportItems = items.filter((i) => String(i?.href || '') === SUPPORT_NAV_HREF);
-    if (supportItems.length > 1) duplicates += 1;
-    if (supportItems.length === 1 && !supportItems[0].parentId) good += 1;
-  }
-  console.log(`  ${page.slug}: ${navs.length} admin nav module(s), Support renders in ${good}/${navs.length}`
-    + (duplicates ? `  ⚠ ${duplicates} with DUPLICATE Support items` : ''));
-  if (good !== navs.length || duplicates) problems += 1;
+  const missing = navs.filter((m) => !String(m?.settings?.navItems || '').includes(NAV_ITEM.href));
+  console.log(`  ${page.slug}: ${navs.length} admin nav module(s), Settings item present in `
+    + `${navs.length - missing.length}/${navs.length}`);
+  if (missing.length) problems += 1;
 }
 
 const { data: masterAfter } = await sb.from(SAVED_SECTIONS_TABLE).select('*').eq('id', HEADER_MASTER_ID);
 if (masterDataKey && masterAfter?.[0]) {
-  const nav = (masterAfter[0][masterDataKey]?.modules || []).find((m) => m?.type === 'navigation');
-  const items = parseNavItems(nav?.settings?.navItems) || [];
-  const support = items.filter((i) => String(i?.href || '') === SUPPORT_NAV_HREF);
-  const ok = support.length === 1 && !support[0].parentId;
-  console.log(`  header master: Support item correct = ${ok ? 'yes' : 'NO'}`);
+  const json = JSON.stringify(masterAfter[0][masterDataKey] || {});
+  const ok = json.includes(NAV_ITEM.href);
+  console.log(`  header master: Settings item present = ${ok ? 'yes' : 'NO'}`);
   if (!ok) problems += 1;
 }
 

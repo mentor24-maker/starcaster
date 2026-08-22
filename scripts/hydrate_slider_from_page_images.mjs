@@ -39,12 +39,13 @@
 import path from 'node:path';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { mainCheckoutDir } from './lib/main_checkout.mjs';
 import { createRequire } from 'node:module';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
 
-const MAIN_CHECKOUT = '/Users/mentor/WebApps/starcaster';
+const MAIN_CHECKOUT = mainCheckoutDir(ROOT);
 const ENV_CANDIDATES = [
   process.env.STARCASTER_ENV_FILE,
   path.join(ROOT, '.env.local.cloud-backup'),
