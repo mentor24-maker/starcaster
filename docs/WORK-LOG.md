@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — `npm run doctor` now catches canon nobody can see (#TBD)
+## 2026-08-22 — `npm run doctor` now catches canon nobody can see (#378)
 
 The vault holds the project's canon, but two ways it can silently go wrong had
 no detector: canon written and committed locally but never pushed (so HQ can't
