@@ -90,8 +90,14 @@ the run report.
 ## Guardrails
 
 - **Never merge autonomously.** `Ready to launch` ≠ merged. The operator
-  merges (via CC on explicit command). This is the human checkpoint that keeps
-  a bad change off the auto-deploying `main`.
+  merges — either by telling a CC session to, or by replying `merge` on the
+  ticket, which the hourly bus-relay pass carries out for him (task
+  86bbjd5nn). Either way the authorization is his and this loop never
+  supplies it. This is the human checkpoint that keeps a bad change off the
+  auto-deploying `main`.
+  One consequence for the pass message: the "Reply/tell me to merge when
+  you're ready" line is now literal — replying the single word `merge` on the
+  ticket is enough, and is the route that works when no session is open.
 - **Only the operator moves a task out of `Ready to launch` or
   `Needs your input`.** Putting a task into one of those two is handing it to
   him; taking it back out is his call, not a loop's.

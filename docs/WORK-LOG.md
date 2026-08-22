@@ -14,6 +14,38 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Saying "merge" on a ticket now actually merges it (#PR)
+
+When a piece of work has been built and independently reviewed, it waits in
+`Ready to launch` for Dane to say go. He says go by replying **merge** on the
+ticket — and until now nothing was listening. On 2026-08-20 three tickets he
+had already approved sat unmerged for hours, purely because no session
+happened to be open to notice. The approval was never the bottleneck; the
+waiting after it was.
+
+The hourly job that already carries his comments to the team chat now also
+acts on that one word. If the whole comment is `merge` (or `merge it`,
+`ship it`, `approve`), it checks — every time, freshly — that the ticket is
+still `Ready to launch`, that the comment really is his (matched on his
+account id, so an agent typing "merge" is ignored), that the last review
+verdict was a pass and his go-ahead came after it, and that the pull request
+is open, has all its checks green and does not clash with newer work. Only
+then does it merge, close the ticket as `Live`, and say so on the chat. A
+sentence like "merge after the other one lands" is just a comment; it takes
+the bare word to act.
+
+Two refusals matter most. If the branch has fallen behind the main copy of
+the code, it catches it up and waits for the tests to re-run rather than
+merging on a result that no longer describes the branch. If it genuinely
+clashes with newer work, it stops dead, explains on the ticket that a session
+needs to sort out the overlap, and leaves everything exactly where it was — a
+script must never untangle that blind. Every other refusal is written on the
+ticket in plain English with the reason, once, never twice.
+
+Nothing about who decides has changed: the merge is still his, and no loop
+can approve its own work. What changed is that his decision no longer has to
+wait for someone to be watching.
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
