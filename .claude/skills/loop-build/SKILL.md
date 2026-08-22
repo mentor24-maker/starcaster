@@ -79,16 +79,30 @@ the run report.
 
 2. **Get an isolated workspace — MANDATORY.** Create a dedicated worktree and
    branch off the latest main, **inside the repo the task declares**. Never
-   build in a shared folder; never edit main. `$REPO` is that repo's checkout
-   (`node -e "console.log(require('<starcaster>/scripts/builder/taskRepo.js').repoHome('<repo>'))"`
-   resolves it; for `starcaster` it is this checkout):
+   build in a shared folder; never edit main. `$REPO` is that repo's checkout,
+   resolved by `taskRepo.repoHome('<repo>')` — this checkout for `starcaster`,
+   the sibling or `~/vault` for the others. (Step 1 already ESCALATED a repo
+   whose checkout is missing, so by here `$REPO` exists.)
+
+   Run this as ONE command — shell variables do not survive between tool
+   calls, and `REPO` has to still be set when the later lines use it. `npm ci`
+   is skipped where the repo has no `package.json` (the vault is prose-only):
 
    ```bash
-   git -C "$REPO" fetch origin --quiet
-   git -C "$REPO" worktree add \
-     "$REPO/.claude/worktrees/<task-slug>" -b <task-slug> origin/main
-   cd "$REPO/.claude/worktrees/<task-slug>" && npm ci
+   REPO="$(node -e "console.log(require('$(git rev-parse --show-toplevel)/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
+     git -C "$REPO" fetch origin --quiet && \
+     git -C "$REPO" worktree add "$REPO/.claude/worktrees/<task-slug>" \
+       -b <task-slug> origin/main && \
+     cd "$REPO/.claude/worktrees/<task-slug>" && \
+     { [ -f package.json ] && npm ci || echo "no package.json (e.g. vault) — skipping npm ci"; }
    ```
+
+   The checkout is **derived, never written down**: this skill runs on more
+   than one machine, and a literal path is an assumption that fails silently
+   on every machine but the one it was typed on (vault `doctrine/NODES.md`,
+   principle P1). Start the loop session in the main starcaster checkout, not
+   inside an existing worktree — `--show-toplevel` locates this checkout so
+   `taskRepo.js` can be required, and `repoHome()` derives the target repo.
 
    `<task-slug>` = short kebab-case name from the task. Do ALL work for this
    task inside that worktree. A repo other than `starcaster` runs THAT repo's

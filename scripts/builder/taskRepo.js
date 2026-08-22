@@ -26,6 +26,7 @@
  * ecosystem-map and vault-drift tools already use).
  */
 
+const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
@@ -83,7 +84,7 @@ function tagNames(tags) {
  *   `action` is what the loop should do: 'build' (repo is resolved) or
  *   'escalate' (move to Needs your input, do not guess).
  */
-function resolveTaskRepo(tags) {
+function resolveTaskRepo(tags, { exists = fs.existsSync } = {}) {
   const declared = tagNames(tags)
     .map((name) => {
       const m = name.match(REPO_TAG_RE);
@@ -112,13 +113,26 @@ function resolveTaskRepo(tags) {
       reason: `unknown repo "${repo}" — known repos are ${Object.keys(KNOWN_REPOS).join(', ')}`,
     };
   }
+  // A KNOWN repo whose checkout is not on THIS machine must escalate, not
+  // build: otherwise the loop claims it and dies on a raw `git -C <missing>`
+  // partway through — the "wrong checkout, called done" failure this resolver
+  // exists to prevent, one step later. (docs/LOOP_ENGINEERING.md promises it.)
+  const home = repoHome(repo);
+  if (!exists(home)) {
+    return {
+      repo,
+      known: true,
+      action: 'escalate',
+      reason: `repo:${repo} is not checked out on this machine (${home}) — provision it or run this task on the node that has it`,
+    };
+  }
   return { repo, known: true, action: 'build', reason: `tagged repo:${repo}` };
 }
 
 /** Absolute checkout path for a known repo, or '' for an unknown one. */
 function repoHome(repo) {
-  const entry = KNOWN_REPOS[repo];
-  return entry ? entry.home : '';
+  if (!Object.prototype.hasOwnProperty.call(KNOWN_REPOS, repo)) return '';
+  return KNOWN_REPOS[repo].home;
 }
 
 module.exports = {

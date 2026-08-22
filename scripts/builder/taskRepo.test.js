@@ -29,14 +29,16 @@ test('no repo tag defaults to starcaster — today\'s behaviour is the default, 
 });
 
 test('a known repo tag resolves to that repo (tag objects OR plain strings)', () => {
+  // Inject exists:true so this pins the tag→repo MAPPING regardless of which
+  // sibling repos happen to be checked out on the machine running the test.
+  const present = { exists: () => true };
   assert.deepEqual(
-    resolveTaskRepo([{ name: 'repo:vault' }]),
+    resolveTaskRepo([{ name: 'repo:vault' }], present),
     { repo: 'vault', known: true, action: 'build', reason: 'tagged repo:vault' }
   );
-  assert.equal(resolveTaskRepo(['repo:normie']).repo, 'normie');
-  assert.equal(resolveTaskRepo(['repo:pulse']).action, 'build');
-  // Case-insensitive on the tag and the repo name.
-  assert.equal(resolveTaskRepo(['Repo:VAULT']).repo, 'vault');
+  assert.equal(resolveTaskRepo(['repo:normie'], present).repo, 'normie');
+  assert.equal(resolveTaskRepo(['repo:pulse'], present).action, 'build');
+  assert.equal(resolveTaskRepo(['Repo:VAULT'], present).repo, 'vault');
 });
 
 test('an UNKNOWN repo escalates, never guesses (would run wrong gates in wrong checkout)', () => {
@@ -56,9 +58,26 @@ test('TWO different repo tags escalate — "both" is not a repo', () => {
 });
 
 test('the same repo tagged twice is not ambiguous — it is that repo', () => {
-  const r = resolveTaskRepo(['repo:vault', { name: 'repo:vault' }]);
+  const r = resolveTaskRepo(['repo:vault', { name: 'repo:vault' }], { exists: () => true });
   assert.equal(r.action, 'build');
   assert.equal(r.repo, 'vault');
+});
+
+test('a KNOWN repo whose checkout is MISSING escalates, naming the path — never silently builds', () => {
+  // The doc promises "a sibling repo not present on the machine is an
+  // escalation, not a silent skip." Enforced in code, not prose: otherwise
+  // the loop claims it and dies on a raw `git -C <missing>` mid-build.
+  const r = resolveTaskRepo(['repo:pulse'], { exists: () => false });
+  assert.equal(r.action, 'escalate');
+  assert.equal(r.known, true);
+  assert.match(r.reason, /not checked out on this machine/);
+  assert.match(r.reason, /pulse/);
+});
+
+test('starcaster (this checkout) always resolves to build — its home is present by definition', () => {
+  // No injected exists: the real fs sees this checkout, so the default path
+  // (no tag) must build, not escalate.
+  assert.equal(resolveTaskRepo([]).action, 'build');
 });
 
 test('repo homes resolve to the MAIN checkout and its siblings, not the worktree this runs in', () => {
@@ -72,6 +91,7 @@ test('repo homes resolve to the MAIN checkout and its siblings, not the worktree
   assert.equal(repoHome('pulse'), path.join(siblings, 'pulse'));
   assert.equal(repoHome('vault'), path.join(os.homedir(), 'vault'));
   assert.equal(repoHome('nonsense'), '', 'an unknown repo has no home');
+  assert.equal(repoHome('constructor'), '', 'a prototype property name is not a repo (hasOwnProperty guard)');
 });
 
 test('the SOURCE hardcodes no machine path (NODES P1) — homes are derived at runtime', () => {
