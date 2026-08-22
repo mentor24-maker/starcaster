@@ -50,7 +50,14 @@ write any code here. You produce well-formed tasks.
 3. **Write each task.** File a ClickUp task (`clickup_create_task`) in the
    target list with `status: "Queued"`, **no assignee** (assignment is how the
    loops hand a ticket to Dane — see below), and a `markdown_description` in
-   exactly this shape:
+   exactly this shape.
+
+   **If the task is not for starcaster, tag it `repo:<name>`** (`normie`,
+   `pulse`, or `vault`). A task with no `repo:` tag builds in starcaster — the
+   default, so most tasks need no repo tag at all. Only tag when the work
+   lives in another repo; an unknown repo name makes the build loop escalate
+   the task rather than build it, so use exactly one of the four known names
+   (`starcaster`, `normie`, `pulse`, `vault`).
 
    ```markdown
    ## Goal
