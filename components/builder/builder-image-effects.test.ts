@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { normalizeBuilderModuleSettingsForType } from "@/lib/builder-template";
 import {
   DEFAULT_IMAGE_EFFECT_ROTATION_RATE,
   IMAGE_EFFECT_OPTIONS,
@@ -413,5 +414,75 @@ describe("image effects", () => {
     expect(normalizeImageEffectRotationRate("nonsense")).toBe(25);
     expect(normalizeImageEffectRotationRate("0")).toBe(1);
     expect(normalizeImageEffectRotationRate("99999")).toBe(600);
+  });
+
+  /*
+   * THE CONTROL THE PANEL SHOWS IS THE CONTROL THE PAGE GETS.
+   *
+   * Two halves decide the same thing. The panel decides which of the seven
+   * effect controls to SHOW, from the three predicates above.
+   * `normalizeImageEffectSettings` decides which to KEEP on the way to the
+   * renderer — and it used to decide that by listing effect NAMES by hand.
+   *
+   * So Slide, Axis Rotate and Flips shipped a full review round offering
+   * seven controls between them that were all deleted before they reached
+   * the page: the operator moved a slider, the value saved, and the picture
+   * carried on at the built-in default. Nothing errored, and the picture was
+   * animating the whole time, so every other check stayed green.
+   *
+   * This asserts the two halves agree for EVERY offered effect, so the next
+   * one added to the list cannot arrive half-wired.
+   */
+  const CONTROL_GATES: { key: string; visible: (effect: string) => boolean }[] = [
+    { key: "effectDirection", visible: imageEffectTravels },
+    { key: "effectSpeed", visible: imageEffectTravels },
+    { key: "effectRepeat", visible: imageEffectTravels },
+    { key: "effectDelay", visible: imageEffectTravels },
+    { key: "effectRotationRate", visible: imageEffectRotates },
+    { key: "effectFrequency", visible: imageEffectBounces },
+    { key: "effectBounceHeight", visible: imageEffectBounces }
+  ];
+
+  // Every value non-default, so a key that survives proves the VALUE survived
+  // and not merely that a default was re-stamped in its place.
+  const ALL_CONTROLS = {
+    effectDirection: "rtl",
+    effectSpeed: "2",
+    effectRepeat: "once",
+    effectDelay: "3",
+    effectRotationRate: "90",
+    effectFrequency: "6",
+    effectBounceHeight: "150"
+  };
+
+  it.each(IMAGE_EFFECT_OPTIONS.map((option) => option.value))(
+    "keeps exactly the controls its panel offers: %s",
+    (effect) => {
+      const kept = normalizeBuilderModuleSettingsForType("image", { effect, ...ALL_CONTROLS });
+
+      for (const { key, visible } of CONTROL_GATES) {
+        if (visible(effect)) {
+          expect(kept[key], `${effect} shows ${key}, so the page must receive it`).toBe(
+            ALL_CONTROLS[key as keyof typeof ALL_CONTROLS]
+          );
+        } else {
+          expect(kept[key], `${effect} hides ${key}, so it must not be carried`).toBeUndefined();
+        }
+      }
+    }
+  );
+
+  it("carries the same controls on a floating image", () => {
+    // The floating-image panel is a second copy of the same fields, and it
+    // normalizes down a separate branch — a fix applied to one and not the
+    // other is invisible until someone overlays a picture.
+    const kept = normalizeBuilderModuleSettingsForType("floating-image", {
+      effect: "flips",
+      ...ALL_CONTROLS
+    });
+    expect(kept.effectRotationRate).toBe("90");
+    expect(kept.effectFrequency).toBe("6");
+    expect(kept.effectBounceHeight).toBe("150");
+    expect(kept.effectDirection).toBeUndefined();
   });
 });

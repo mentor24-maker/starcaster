@@ -131,6 +131,49 @@ export const RENDER_DIFFERENTIALS = [
     setting: 'effectDelay', from: '0', to: '9',
     why: 'Start Delay is only written when non-zero — a conditional emit is exactly where a control goes dead.',
   },
+  /*
+   * THE SAME FOUR CONTROLS, ON THE THREE EFFECTS ADDED 2026-08-22.
+   *
+   * Every differential above is pinned to cruise, spin or tumbleweed, and that
+   * is exactly how Slide, Axis Rotate and Flips shipped a review round with
+   * SEVEN DEAD CONTROLS. `normalizeImageEffectSettings` matched effects by
+   * name, the three new names were not in its lists, and it deleted every
+   * value on the way to the page. The picture animated the whole time — at the
+   * built-in default, forever — so the "does it animate" sweep, the named
+   * animation contracts and the tumbleweed differentials were all green
+   * together while nothing the operator touched did anything.
+   *
+   * The task's own non-goal said a new effect needs no differential because
+   * the sweep already requires it to animate. That reasoning is what let this
+   * through: animating and obeying are different claims, and only the second
+   * one is what a control is for. A NEW EFFECT NEEDS A DIFFERENTIAL ON EVERY
+   * CONTROL ITS PANEL OFFERS — one per motion is enough, since the three
+   * motions are what the keep-rule is grouped by.
+   */
+  {
+    id: 'image-slide-speed',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide' } },
+    setting: 'effectSpeed', from: '8', to: '30',
+    why: 'Slide travels, so it offers Speed. It was deleted before it reached the page for a whole review round.',
+  },
+  {
+    id: 'image-axis-rotate-rotation-rate',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'axis-rotate' } },
+    setting: 'effectRotationRate', from: '25', to: '120',
+    why: 'Rotation Rate is the ONLY control Axis Rotate offers — dead, it has no working control at all.',
+  },
+  {
+    id: 'image-flips-frequency',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'flips' } },
+    setting: 'effectFrequency', from: '4', to: '14',
+    why: 'Flips hops in place, so Frequency rides the figure rather than a stage wrapper — a different path to tumbleweed.',
+  },
+  {
+    id: 'image-flips-bounce-height',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'flips' } },
+    setting: 'effectBounceHeight', from: '50', to: '400',
+    why: 'The other half of the hop, on the same in-place path; height and frequency reach the element separately.',
+  },
   {
     id: 'image-border-radius',
     module: { type: 'image', settings: { ...PICTURE } },

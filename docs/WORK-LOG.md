@@ -45,6 +45,30 @@ green. Each of the three effects now has a check that names the exact
 animation it must run; breaking the rule on purpose makes that check fail
 (proven), so a future stylesheet regeneration cannot silently gut them.
 
+A second review round then caught something worse, and it is worth
+understanding because it is the kind of fault that hides in plain sight. All
+three new effects were animating perfectly — and every one of their settings
+was being thrown away. The operator could open Slide, choose a Speed, save it,
+watch the toast say it saved, and the picture would carry on at its built-in
+speed forever. Same for Axis Rotate's Rotation Rate and all three of Flips'
+controls. Seven dead controls, no error anywhere, and a picture moving on
+screen the whole time, which is precisely why every check stayed green.
+
+The cause was two halves of the program disagreeing. One half decides which
+controls to SHOW for a given effect; a second half decides which ones to KEEP
+on the way to the page — and the second half worked off a hand-written list of
+effect names that the three new ones were never added to. They now read the
+same rule, so showing a control and honouring it can no longer come apart, and
+the next effect added cannot repeat it.
+
+Two new safety nets went in behind that, both broken on purpose first to prove
+they can actually fail: a test that checks every effect on the menu keeps
+exactly the controls its own panel offers, and four browser checks that move a
+real slider on a real page and fail if the picture does not change. That second
+kind matters most — the previous round's checks all asked whether the picture
+was moving, and the answer was yes the entire time it was ignoring everything
+it was told.
+
 One thing worth knowing: **Slide and Cruise are the same movement.** Nothing is
 wrong with either, and both work — but a picture set to Slide and a picture set
 to Cruise will look identical and offer identical settings, which is exactly the
