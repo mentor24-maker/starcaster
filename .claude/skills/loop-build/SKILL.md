@@ -71,11 +71,16 @@ the run report.
    prints a `repo:` line. The rule the resolver enforces
    (`scripts/builder/taskRepo.js`):
 
-   - **A known repo** (or no tag → starcaster) → build in THAT repo (step 2).
+   - **A known repo, present on this machine** (or no tag → starcaster) →
+     build in THAT repo (step 2).
    - **An unknown repo tag, or two different repo tags** → do NOT build. Move
      the task to `Needs your input`, assign Dane, comment why (quote the
      `get` command's `repo:` line), and take the next task. Guessing would
      build in the wrong checkout against the wrong gates and call it done.
+   - **A known repo whose checkout is NOT on this machine** → escalate too.
+     The `get` command's `repo:` line reads
+     `ESCALATE — repo:<name> is not checked out on this machine (<path>)`;
+     quote it. (This is why step 2 can assume `$REPO` exists.)
 
 2. **Get an isolated workspace — MANDATORY.** Create a dedicated worktree and
    branch off the latest main, **inside the repo the task declares**. Never
@@ -90,11 +95,12 @@ the run report.
 
    ```bash
    REPO="$(node -e "console.log(require('$(git rev-parse --show-toplevel)/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
+     [ -n "$REPO" ] || { echo "repoHome returned empty — do not build"; exit 1; } && \
      git -C "$REPO" fetch origin --quiet && \
      git -C "$REPO" worktree add "$REPO/.claude/worktrees/<task-slug>" \
        -b <task-slug> origin/main && \
      cd "$REPO/.claude/worktrees/<task-slug>" && \
-     { [ -f package.json ] && npm ci || echo "no package.json (e.g. vault) — skipping npm ci"; }
+     if [ -f package.json ]; then npm ci; else echo "no package.json (e.g. vault) — skipping npm ci"; fi
    ```
 
    The checkout is **derived, never written down**: this skill runs on more

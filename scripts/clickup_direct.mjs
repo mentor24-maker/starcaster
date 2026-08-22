@@ -259,6 +259,18 @@ if (cmd === 'whoami') {
   console.log(`  status:      ${t.status?.status}`);
   console.log(`  priority:    ${t.priority?.priority ?? '(none)'}`);
   console.log(`  description: ${chars} characters`);
+  // Tags are load-bearing now (loop-spec routes a task to its repo by a
+  // repo:<name> tag) and a dropped one reads as starcaster and looks fine —
+  // so verify they landed, same discipline as the body/status read-back.
+  if (tags && tags.length) {
+    const landed = new Set((t.tags || []).map((x) => String(x.name || '').toLowerCase()));
+    const missing = tags.filter((want) => !landed.has(want.toLowerCase()));
+    console.log(`  tags:        ${(t.tags || []).map((x) => x.name).join(', ') || '(none)'}`);
+    if (missing.length) {
+      console.error(`\n  TAGS DID NOT STICK: asked for [${missing.join(', ')}] — a repo:<name> tag dropped here routes the task to the wrong repo.`);
+      process.exit(1);
+    }
+  }
   if (chars === 0) {
     console.error('\n  BODY IS EMPTY — the description did not save. Task exists but is a shell.');
     process.exit(1);

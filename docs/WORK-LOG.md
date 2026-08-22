@@ -14,21 +14,6 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-19 — The loop queue can now carry work for more than one repo (#366)
-
-The build/review loops assumed every task was starcaster work and always built
-in the starcaster folder. Now a task can say which project it belongs to — by
-carrying a `repo:` tag (`repo:normie`, `repo:pulse`, `repo:vault`) — and the
-loop builds it in that project's folder and runs that project's checks instead.
-A task with no tag is treated as starcaster exactly as before, so nothing
-already in the queue changes. A tag naming a project the system doesn't know,
-or two different project tags on one task, is never guessed at: the task is
-handed to Dane to sort out rather than built in the wrong place. The task list
-(`npm run clickup -- queue`) now shows a project column so it's visible at a
-glance. This is the plumbing only — no actual non-starcaster work is built here.
-
----
-
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
@@ -48,6 +33,21 @@ finished jobs were filed away into an archive folder while we were in there.
 Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
+
+---
+
+## 2026-08-19 — The loop queue can now carry work for more than one repo (#366)
+
+The build/review loops assumed every task was starcaster work and always built
+in the starcaster folder. Now a task can say which project it belongs to — by
+carrying a `repo:` tag (`repo:normie`, `repo:pulse`, `repo:vault`) — and the
+loop builds it in that project's folder and runs that project's checks instead.
+A task with no tag is treated as starcaster exactly as before, so nothing
+already in the queue changes. A tag naming a project the system doesn't know,
+or two different project tags on one task, is never guessed at: the task is
+handed to Dane to sort out rather than built in the wrong place. The task list
+(`npm run clickup -- queue`) now shows a project column so it's visible at a
+glance. This is the plumbing only — no actual non-starcaster work is built here.
 
 ---
 
