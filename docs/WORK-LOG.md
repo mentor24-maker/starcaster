@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-18 — Bug Report 3/5: every report lands on Dane's desk in ClickUp (#TBD)
+## 2026-08-18 — Bug Report 3/5: every report lands on Dane's desk in ClickUp (#364)
 
 Third of five pieces of the in-app Bug Report tool. Until now a submitted
 bug sat in the database where nobody looks. Now each one is also filed as a
