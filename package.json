@@ -20,6 +20,7 @@
     "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
     "check:css": "node scripts/ui/check_css.mjs",
     "check:render": "node scripts/ui/check_render.mjs",
+    "check:shots": "node scripts/ui/shoot_changes.mjs",
     "bust": "node scripts/bump_cache.js",
     "build:builder": "node scripts/build_builder_bundle.mjs",
     "build:css": "npm run build:styles && node scripts/pin_asset_versions.cjs",

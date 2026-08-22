@@ -105,6 +105,25 @@ the run report.
      Needs `npm run dev` and `npm run seed:ui-fixture` first, and is **not** a
      CI gate (CI has no browsers), so nothing else will catch a regression here.
 
+5. **Photograph the change if it altered a rendering.** Charter Q5: a visual
+   change reaches Dane as before/after pictures on the ticket, so the decision
+   he is asked for is "does this look right" rather than "check out this branch".
+
+   ```
+   PORT=3058 node server.js
+   UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:shots -- --task <task-id>
+   ```
+
+   Run it on EVERY task, not only the ones you think are visual — deciding
+   that yourself is the failure it exists to prevent. It costs about ten
+   seconds when nothing under `components/`, `lib/builder-client/`, `src/css/`,
+   `public/images/` or `builder-preview.html` changed: it says so and stops
+   without opening a browser. When renders are identical it also files nothing,
+   so a non-visual PR never interrupts him.
+
+   `docs/VISUAL_REVIEW.md` covers the rest — in particular, that a green run
+   proves something changed, never that it changed correctly.
+
    If a gate fails and you cannot fix it **within the task's scope**, set the
    task to `Needs your input` **and assign Dane (`48012725`)**, add a ClickUp
    comment explaining exactly what failed, and stop. Do not force a broken
@@ -112,7 +131,7 @@ the run report.
    status is the operator's inbox: write the comment for a non-programmer, and
    end it with the specific question or decision you need from him.
 
-5. **Add a plain-English work-log entry.** Prepend one dated entry to
+6. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
    explain it to a non-programmer: what changed and why it mattered, plus the
    `(#PR)` number once known. Keep it to a short paragraph. This entry is part
@@ -121,7 +140,7 @@ the run report.
    causes a merge conflict here, it is trivial (two entries at the top); resolve
    by keeping both.
 
-6. **Commit and open the PR.**
+7. **Commit and open the PR.**
    - Inspect `git diff --cached` before committing (staging is whole-file; make
      sure no stray edits ride along). Never commit generated artifacts.
    - Commit message ends with the Co-Authored-By trailer from CLAUDE.md.
@@ -130,13 +149,13 @@ the run report.
      "How to test" steps, and a note that a Vercel preview will be attached.
      End with the Generated-with trailer.
 
-7. **Hand off to review.** Set the task status to `In review`, leave it
+8. **Hand off to review.** Set the task status to `In review`, leave it
    unassigned (it is the machine's turn, not Dane's), and add the PR URL as a
    ClickUp comment. **Do NOT merge** — `main` is PR-protected (the "verify"
    check must go green) and merges happen only on the operator's explicit
    say-so. The `loop-review` skill takes it from here.
 
-8. **Report** which task you built and the PR number, then finish (the `/loop`
+9. **Report** which task you built and the PR number, then finish (the `/loop`
    wrapper will re-invoke you for the next task).
 
 ## Guardrails

@@ -14,6 +14,35 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
+
+Until today, if a piece of work changed how a page *looks*, the only way to
+judge it was to check out the branch, start a server and open a browser. That
+is a real ask, so in practice it did not happen — and nothing else could catch
+it, because none of the automatic checks here can tell a page that looks right
+from one that does not. They test wiring, not appearance.
+
+There is now a command that takes the pictures for you. It builds the site
+twice — once with the code as it stands on the live branch, once with the
+change — photographs six representative pages through both, and compares them
+pixel by pixel. Any page that came out different gets attached to the ticket as
+a before-and-after pair, so the question waiting for you is simply "does this
+look right", answerable from your phone.
+
+If a change alters nothing you could see, nothing is attached and nothing
+interrupts you. That is the half worth stating plainly: it stays silent by
+default, and only speaks when there is genuinely something to look at.
+
+Two details that decide whether the thing is trustworthy. The comparison has no
+"close enough" — one differing pixel counts — because a tolerance would hide
+exactly the changes worth a human eye: a border that lost a hair, a colour two
+shades off. And before it compares anything, it photographs the same page twice
+against identical code and demands the two shots be perfectly identical. If
+they are not, it reports nothing at all rather than showing you differences
+that were never real.
+
+---
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's

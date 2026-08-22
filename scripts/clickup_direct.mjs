@@ -40,6 +40,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import busRelayPlan from './builder/busRelayPlan.js';
 const { defaultWatches, handbackTarget } = busRelayPlan;
@@ -75,6 +76,19 @@ function arg(name, fallback = null) {
 
 function flag(name) {
   return process.argv.includes(`--${name}`);
+}
+
+/**
+ * Every occurrence of a repeatable flag (`--file a.png --file b.png`).
+ * `arg()` returns only the first, which for an attachment upload would file
+ * one image and report success — the "before" with no "after".
+ */
+function argAll(name) {
+  const out = [];
+  for (let i = 0; i < process.argv.length; i += 1) {
+    if (process.argv[i] === `--${name}` && process.argv[i + 1]) out.push(process.argv[i + 1]);
+  }
+  return out;
 }
 
 function readBody(spec) {
@@ -155,6 +169,10 @@ function usage(code = 2) {
   console.error('                                             machine statuses auto-clear; --if-status makes it a safe claim;');
   console.error('                                             status AND assignees verified from the write response');
   console.error('  comment --task <id> --body-file <file|->   add a comment, verified by reading the comments back');
+  console.error('  attach --task <id> --file <path> [--file <path> ...]');
+  console.error('                                             upload image(s) onto a task — the before/after pair');
+  console.error("                                             the approval queue runs on; verified by reading the");
+  console.error("                                             task's attachment list back");
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
   console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run]');
   console.error('                                             relay the operator\'s new comments on open tasks to the bus.');
@@ -459,6 +477,63 @@ if (cmd === 'whoami') {
   }
   console.log(`Comment ${newId} added to task ${task} (${found.comment_text.length} characters, verified by reading it back).`);
   reportLimits(check.res);
+
+} else if (cmd === 'attach') {
+  /*
+   * SCREENSHOTS ARE THE POINT OF THE APPROVAL QUEUE.
+   *
+   * Charter Q5 (2026-08-18): a visual change reaches the operator as
+   * before/after pictures on the ticket, so the decision he is asked for is
+   * "does this look right" rather than "check out this branch and run it".
+   * `scripts/ui/shoot_changes.mjs` produces the pair; this puts them where he
+   * will actually see them.
+   *
+   * Multipart, not JSON — so this cannot go through call(), which pins
+   * Content-Type to application/json. Node supplies FormData/Blob natively;
+   * fetch sets the multipart boundary, and setting Content-Type by hand here
+   * breaks the upload with a boundary mismatch.
+   */
+  const task = arg('task');
+  const files = argAll('file');
+  if (!task || !files.length) usage();
+
+  const before = await call('GET', `/api/v2/task/${task}`);
+  if (!before.res.ok) die('read task before attaching', before);
+  const had = (before.json.attachments || []).length;
+
+  const uploaded = [];
+  for (const file of files) {
+    const bytes = readFileSync(file);
+    const form = new FormData();
+    form.append('attachment', new Blob([bytes]), basename(file));
+    const res = await fetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
+      method: 'POST',
+      headers: { Authorization: TOKEN },
+      body: form,
+    });
+    const text = await res.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+    if (!res.ok) die(`attach ${basename(file)}`, { res, json, text });
+    uploaded.push({ name: basename(file), id: json?.id ?? '(no id)', bytes: bytes.length });
+    reportLimits(res);
+  }
+
+  // A 200 per upload is not proof the task carries them: read the list back
+  // and count. The write response is not the record (DOCTRINE 3.10).
+  const after = await call('GET', `/api/v2/task/${task}`);
+  if (!after.res.ok) {
+    console.error('WARNING: uploaded, but could not read the task back to verify.');
+    process.exit(1);
+  }
+  const now = (after.json.attachments || []).length;
+  for (const u of uploaded) console.log(`${u.id}\t${u.name}\t${u.bytes} bytes`);
+  console.error(`Attached ${uploaded.length} file(s) to task ${task}; the task now lists ${now} (was ${had}).`);
+  if (now < had + uploaded.length) {
+    console.error('\nFEWER attachments than were uploaded — ClickUp accepted the request but did not keep them all.');
+    process.exit(1);
+  }
+  reportLimits(after.res);
 
 } else if (cmd === 'lists') {
   // Exists because of 2026-08-18: 90146476303 (the Starcaster SPACE) was
