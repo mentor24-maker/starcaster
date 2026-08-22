@@ -220,7 +220,7 @@ export function BugReportModule({ settings, previewMode = false, projectId = "",
   );
 }
 
-type PickedShot = { name: string; assetId?: number; error?: string; uploading: boolean };
+type PickedShot = { name: string; assetId?: number; token?: string; error?: string; uploading: boolean };
 
 function BugReportDialog({
   settings: s,
@@ -293,11 +293,15 @@ function BugReportDialog({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, fileName: file.name, fileBase64 }),
     });
-    const body = (await response.json().catch(() => ({}))) as { data?: { assetId?: number }; error?: { message?: string } };
+    const body = (await response.json().catch(() => ({}))) as { data?: { assetId?: number; token?: string }; error?: { message?: string } };
     setShots((current) => current.map((shot, i) => {
       if (i !== index) return shot;
-      if (!response.ok || !body.data?.assetId) return { ...shot, uploading: false, error: body.error?.message || "Upload failed" };
-      return { ...shot, uploading: false, assetId: body.data.assetId };
+      // The upload hands back an unguessable token (an HMAC of asset + project);
+      // the submit MUST present it per screenshot or task 2/5's attach step
+      // refuses it. A response with no token is not a real success — treat it as
+      // a failed upload rather than sending a token-less ref that will be rejected.
+      if (!response.ok || !body.data?.assetId || !body.data?.token) return { ...shot, uploading: false, error: body.error?.message || "Upload failed" };
+      return { ...shot, uploading: false, assetId: body.data.assetId, token: body.data.token };
     }));
   }, [fetchImpl, projectId]);
 
@@ -331,7 +335,11 @@ function BugReportDialog({
           pageUrl: typeof window !== "undefined" ? window.location.href : "",
           userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
           viewerTier: tier,
-          screenshotAssetIds: shots.map((shot) => shot.assetId).filter((id): id is number => typeof id === "number"),
+          // Task 2/5's submit verifies each screenshot by (id, token) and refuses
+          // the legacy id-only shape, so send the paired refs the upload returned.
+          screenshots: shots
+            .filter((shot) => typeof shot.assetId === "number" && shot.token)
+            .map((shot) => ({ id: shot.assetId as number, token: shot.token as string })),
         }),
       });
       const body = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: { message?: string } };

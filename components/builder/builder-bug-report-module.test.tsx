@@ -41,14 +41,24 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 /** A fetch that answers the three endpoints; records every call. */
-function fakeFetch({ tier = "public", screenshotRoute = 404, submitStatus = 201 } = {}) {
+function fakeFetch({ tier = "public", screenshotRoute = 404, submitStatus = 201, uploadStatus = 201, uploadAssetId = 7, uploadToken = "tok_7" } = {}) {
   const calls: Array<{ url: string; body?: unknown }> = [];
   const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url, body });
     if (url.includes("/bug-report/viewer")) return jsonResponse({ ok: true, data: { tier } });
-    if (url.includes("/bug-report/screenshot")) return jsonResponse({ ok: false, error: { message: "probe" } }, screenshotRoute);
+    if (url.includes("/bug-report/screenshot")) {
+      // Hit twice: a `{ probe: true }` availability check (only its status is
+      // read) and the real file upload, which MUST return { assetId, token } —
+      // the submit attaches each screenshot by that pair (task 2/5).
+      if ((body as { probe?: boolean } | undefined)?.probe) {
+        return jsonResponse({ ok: screenshotRoute < 400, error: { message: "probe" } }, screenshotRoute);
+      }
+      return uploadStatus >= 200 && uploadStatus < 300
+        ? jsonResponse({ ok: true, data: { assetId: uploadAssetId, token: uploadToken } }, uploadStatus)
+        : jsonResponse({ ok: false, error: { message: "Upload failed" } }, uploadStatus);
+    }
     if (url.endsWith("/bug-report")) {
       return submitStatus === 201
         ? jsonResponse({ ok: true, data: { id: "bug_1" } }, 201)
@@ -131,7 +141,7 @@ describe("BugReportModule — popup and submit", () => {
 
     const submit = calls.find((c) => c.url.endsWith("/bug-report"));
     expect(submit).toBeTruthy();
-    expect(submit!.body).toMatchObject({ projectId: "proj_1", description: "The menu overlaps the logo", viewerTier: "public", screenshotAssetIds: [] });
+    expect(submit!.body).toMatchObject({ projectId: "proj_1", description: "The menu overlaps the logo", viewerTier: "public", screenshots: [] });
     expect(String((submit!.body as { pageUrl: string }).pageUrl)).toContain("http");
     expect(document.body.textContent).toContain("Got it!");
 
@@ -177,6 +187,71 @@ describe("BugReportModule — popup and submit", () => {
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
     expect(document.querySelector(".builder-bug-report-picker")).toBeTruthy();
+  });
+
+  it("uploads a screenshot and submits it as an { id, token } pair — the task 2/5 contract", async () => {
+    // The whole reason this module was held: the submit must present the token
+    // the upload handed back, or 2/5's attach step refuses every picture.
+    const { impl, calls } = fakeFetch({ screenshotRoute: 201, uploadAssetId: 7, uploadToken: "tok_7" });
+    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+
+    const input = document.querySelector<HTMLInputElement>('.builder-bug-report-picker input[type="file"]')!;
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "shot.png", { type: "image/png" });
+    act(() => {
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flush();
+
+    const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(textarea, "Broken, and here is a picture");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+
+    const submit = calls.find((c) => c.url.endsWith("/bug-report"));
+    expect(submit).toBeTruthy();
+    // The legacy id-only shape is gone; the paired ref is what 2/5 verifies.
+    expect(submit!.body).toMatchObject({ screenshots: [{ id: 7, token: "tok_7" }] });
+    expect((submit!.body as { screenshotAssetIds?: unknown }).screenshotAssetIds).toBeUndefined();
+  });
+
+  it("a failed screenshot upload never reaches the submit as a token-less ref", async () => {
+    // Resilience: a broken upload shows an error on that thumbnail, and the
+    // report still submits — carrying NO screenshot rather than one that 2/5
+    // would reject. The report is never lost to a picture that would not attach.
+    const { impl, calls } = fakeFetch({ screenshotRoute: 201, uploadStatus: 500 });
+    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+
+    const input = document.querySelector<HTMLInputElement>('.builder-bug-report-picker input[type="file"]')!;
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "shot.png", { type: "image/png" });
+    act(() => {
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flush();
+
+    const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(textarea, "The upload failed but the report should still go");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+
+    const submit = calls.find((c) => c.url.endsWith("/bug-report"));
+    expect(submit).toBeTruthy();
+    expect(submit!.body).toMatchObject({ screenshots: [] });
   });
 });
 
