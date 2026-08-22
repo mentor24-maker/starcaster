@@ -14,6 +14,20 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Two review sessions can no longer step on each other (#TBD)
+
+Overnight, two automated review sessions checked the same pull request at the
+same time, and the slower one wrote its "ready" verdict over the other's
+"send it back" — its picture of the queue was ~25 minutes out of date by the
+time it wrote. The review instructions now (1) post a visible "review claim"
+before starting, so a second session sees it and moves on, and (2) attach a
+safety condition to every verdict so that if the ticket has moved since the
+claim, the write is refused rather than silently overwriting a newer state.
+Both use a guard the tooling already had; this is instructions + a doc note,
+no new machinery.
+
+---
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
