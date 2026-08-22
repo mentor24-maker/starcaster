@@ -17,6 +17,12 @@ const {
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
+const {
+  storeBugReportScreenshot,
+  verifyBugReportScreenshots,
+  markScreenshotsAttached,
+  MAX_SCREENSHOT_BYTES: MAX_BUG_REPORT_SCREENSHOT_BYTES,
+} = require('../lib/projectBugReportScreenshots');
 
 const manifest = {
   id: 'public-site',
@@ -32,6 +38,29 @@ function respondJson(res, req, status, payload) {
 function respondErr(res, req, status, message, opts = {}) {
   if (isHeadRequest(req)) return sendStatus(res, status);
   return sendErr(res, status, message, opts);
+}
+
+/**
+ * Which project a public bug-report request belongs to.
+ *
+ * On a tenant's own domain the host decides and the body's projectId may
+ * only agree with it. On a system host (starcaster.pro, localhost, previews)
+ * the host names no tenant, so the body's projectId is an unverified claim —
+ * it is resolved against real projects first, or any string becomes a
+ * tenant (the 1/5 review finding). Shared by the submit and screenshot
+ * endpoints so the two can never disagree about who owns a report.
+ */
+async function resolveBugReportProject(req, projectIdInput) {
+  const projectId = String(projectIdInput || '').trim();
+  const bind = await assertProjectIdAllowedOnHost(req, projectId);
+  if (!bind.ok) return { ok: false, status: bind.status || 403, error: bind.error, code: bind.code };
+  if (bind.projectId) return { ok: true, projectId: String(bind.projectId) };
+  if (!projectId) return { ok: false, status: 400, error: 'projectId is required', code: 'VALIDATION_ERROR' };
+  const project = await getPublicProjectById(projectId);
+  if (!project.ok || !project.data) {
+    return { ok: false, status: 404, error: 'Unknown project', code: 'PROJECT_NOT_FOUND' };
+  }
+  return { ok: true, projectId: String(project.data.id) };
 }
 
 async function handle(req, res, pathname, method) {
@@ -200,33 +229,63 @@ async function handle(req, res, pathname, method) {
     return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
   }
 
+  // POST /api/public/bug-report/screenshot — one screenshot for a report that
+  // is about to be submitted. Why one file per request, why magic bytes, and
+  // the orphan cleanup rule: lib/projectBugReportScreenshots.js.
+  if (pathname === '/api/public/bug-report/screenshot' && readMethod === 'POST') {
+    if (checkEndpointLimit(req, res, 'public.bugReportScreenshot')) return true;
+
+    let body;
+    try {
+      body = await parseJsonBody(req);
+    } catch (e) {
+      // The body parser's own 10 MB ceiling fires BEFORE our size check can —
+      // turn it into the same plain-language answer rather than a bare 500.
+      const tooLarge = /too large/i.test(String(e?.message || ''));
+      return respondErr(
+        res,
+        req,
+        tooLarge ? 413 : 400,
+        tooLarge
+          ? `That screenshot is too large to upload. Screenshots must be ${Math.round(MAX_BUG_REPORT_SCREENSHOT_BYTES / (1024 * 1024))} MB or smaller.`
+          : 'That upload could not be read — please pick the file again.',
+        { code: tooLarge ? 'PAYLOAD_TOO_LARGE' : 'VALIDATION_ERROR' }
+      ), true;
+    }
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return respondErr(res, req, 400, 'That upload could not be read — please pick the file again.', { code: 'VALIDATION_ERROR' }), true;
+    }
+
+    const resolved = await resolveBugReportProject(req, body.projectId);
+    if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
+
+    const stored = await storeBugReportScreenshot(
+      { fileName: body.fileName, fileBase64: body.fileBase64 },
+      { projectId: resolved.projectId }
+    );
+    if (!stored.ok) return respondErr(res, req, stored.status || 500, stored.error, { code: stored.code }), true;
+    return respondJson(res, req, 201, { ok: true, data: stored.data }), true;
+  }
+
   // POST /api/public/bug-report — bug-report intake, no auth required (any
   // tenant site visitor can hit this). See docs/SQL/project_bug_reports_setup.sql.
   if (pathname === '/api/public/bug-report' && readMethod === 'POST') {
     if (checkEndpointLimit(req, res, 'public.bugReport')) return true;
 
     const body = await parseJsonBody(req);
-    const projectId = String(body.projectId || '').trim();
-    const bind = await assertProjectIdAllowedOnHost(req, projectId);
-    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return respondErr(res, req, 400, 'A description is required', { code: 'VALIDATION_ERROR' }), true;
+    }
     const description = String(body.description || '').trim();
     if (!description) return respondErr(res, req, 400, 'A description is required'), true;
     if (description.length > MAX_BUG_REPORT_DESCRIPTION_LENGTH) {
       return respondErr(res, req, 400, `Description must be ${MAX_BUG_REPORT_DESCRIPTION_LENGTH} characters or fewer`), true;
     }
 
-    let scopedProjectId = bind.projectId || '';
-    if (!scopedProjectId) {
-      // System host (starcaster.pro, localhost, previews): the host names no
-      // tenant, so the body's projectId is an unverified claim — resolve it
-      // against real projects before writing, or any string becomes a tenant.
-      if (!projectId) return respondErr(res, req, 400, 'projectId is required'), true;
-      const project = await getPublicProjectById(projectId);
-      if (!project.ok || !project.data) {
-        return respondErr(res, req, 404, 'Unknown project', { code: 'PROJECT_NOT_FOUND' }), true;
-      }
-      scopedProjectId = String(project.data.id);
-    }
+    const resolved = await resolveBugReportProject(req, body.projectId);
+    if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
+    const scopedProjectId = resolved.projectId;
 
     // A report claiming a client/staff viewer tier is only trusted if the
     // request carries a real tenant admin session for THIS project —
@@ -243,15 +302,35 @@ async function handle(req, res, pathname, method) {
       }
     }
 
+    // Screenshots were uploaded ahead of time (one request each) and are
+    // attached here by (id, token) — the token proves this submitter uploaded
+    // them, so guessed ids cannot harvest another reporter's screenshots.
+    // `screenshots` is [{ id, token }] from the upload responses; the legacy
+    // `screenshotAssetIds` shape carries no tokens and is refused (the task
+    // 4/5 module must send `screenshots`).
+    const scope = { projectId: scopedProjectId, userId: ownerUserId };
+    const screenshotRefs = Array.isArray(body.screenshots) ? body.screenshots : body.screenshotAssetIds;
+    const screenshots = await verifyBugReportScreenshots(screenshotRefs, scope);
+    if (!screenshots.ok) return respondErr(res, req, screenshots.status || 400, screenshots.error, { code: screenshots.code }), true;
+
     const result = await createBugReport({
       description,
       pageUrl: body.pageUrl,
       userAgent: body.userAgent || req.headers['user-agent'] || '',
       viewerTier,
-    }, { projectId: scopedProjectId, userId: ownerUserId });
+      screenshotAssetIds: screenshots.data.assetIds,
+    }, scope);
 
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to save bug report'), true;
-    return respondJson(res, req, 201, { ok: true, data: result.data }), true;
+
+    // The row exists and references them; flipping pending → attached is the
+    // orphan-sweep bookkeeping, best-effort by design (see the library header).
+    if (screenshots.data.assetIds.length) await markScreenshotsAttached(screenshots.data.assetIds, { projectId: scopedProjectId });
+
+    return respondJson(res, req, 201, {
+      ok: true,
+      data: { ...result.data, screenshots: screenshots.data.assets },
+    }), true;
   }
 
   return false;

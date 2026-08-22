@@ -66,6 +66,27 @@ skipped (it had been re-pushing every linked page to overwrite two), it
 reports the true count and offers the undo it had been forgetting to offer,
 and an overwritten page is described as overwritten rather than "skipped".
 
+## 2026-08-21 — Bug Report 2/5: screenshots for bug reports (#362)
+
+Second of five pieces of the in-app Bug Report tool. A visitor filing a bug
+can now attach pictures: each screenshot is sent on its own (the hosting
+platform caps a single request at a few megabytes, so five big images can
+never travel together), checked by its actual contents rather than its file
+name — so a program renamed to look like a picture is refused — capped at
+3 MB each (the largest that reliably survives the hosting platform's upload
+limit) and five per report, and stored through the same image pipeline the
+rest of the site uses. The report then lists its pictures by id and links to
+each one. Still no button anyone can click — that is piece four.
+
+After a security review, the way a picture gets attached to a report was
+rebuilt: each upload now hands back a secret token, and a report can only
+attach a picture whose token it holds — so a visitor can't guess at picture
+numbers and collect screenshots someone else uploaded. Attaching is
+one-time, all rejections read the same (so nothing leaks whether a picture
+exists), the pictures are kept out of the site's normal image library, an
+upload that fails to record deletes its own leftover file, and a truly
+abandoned upload is left for a scheduled clean-up filed as its own task.
+
 ---
 
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
