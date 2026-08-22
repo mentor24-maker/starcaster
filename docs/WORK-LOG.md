@@ -14,6 +14,40 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
+
+Thirteen files had a folder path typed into them that only exists on Dane's
+MacBook. That is fine right up until the same code runs somewhere else — on
+the Mac Mini that folder is simply not there, and the failure it produces is
+the worst kind: nothing errors, nothing is logged, the job just quietly does
+nothing and reports success. The file that mattered most was the instruction
+sheet the build loop follows, which is precisely the thing the Mini was bought
+to run.
+
+Every one of those paths is now worked out at the moment the code runs instead
+of being written down in advance. A new check refuses any future commit that
+types one in, and it runs as its own step so it can actually fail a build
+rather than just printing a warning nobody reads. Six old one-off scripts from
+finished jobs were filed away into an archive folder while we were in there.
+
+Nothing about the app changes for anyone using it. What changes is that the
+system can now be run from more than one machine, which is what lets work
+continue overnight while the laptop is closed.
+
+## 2026-08-18 — Undoing a shared-section push, from any later visit (#342)
+
+When editing a section that's shared across many pages, saving it rewrites
+every page that uses it — sometimes dozens at once. The server-side pieces
+to undo that as one action already existed, but the only button for it lived
+in a banner that appeared right after you saved and vanished the moment you
+dismissed it or reloaded the page. If you came back later — a different
+session, a different day — there was no way to trigger that undo at all,
+only to restore each affected page one at a time. Page History (the panel
+that shows a page's past versions) now carries its own "Undo this update"
+button on any row that came from a shared-section push, so that undo is
+reachable any time, not just in the moment right after saving. Nothing about
+the existing per-page Restore button changed.
+
 ## 2026-08-18 — A shared section can no longer silently swallow a local edit (#343)
 
 Shared sections (the same header, footer or banner reused on many pages) work
