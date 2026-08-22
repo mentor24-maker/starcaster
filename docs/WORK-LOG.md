@@ -14,6 +14,34 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Three jobs that must never run twice now refuse to (#PR)
+
+There are two machines now, and that is only an improvement if both of them
+know which work is theirs. Three jobs break badly if two machines do them at
+once, each for a different reason. The bus relay would read "this message has
+not been passed along yet" on both machines in the same minute and pass it
+along twice. `db:refresh` spends Supabase's disk-space budget, and there is one
+budget for the whole company — spending it twice in a day is what took every
+client site down for two and a half hours on 17 August. And the build loop
+claims a ticket by reading its status, checking it, then writing a new one;
+that is safe with one machine doing it and a coin-flip with two.
+
+Until now the only thing preventing all three was a person remembering a rule
+before typing a command. This adds a small table, kept in the code where it can
+be reviewed like anything else, saying which machine owns which job — and every
+one of those jobs now asks that table before it does anything. Ask it yourself
+with `npm run node:whoami`. Handing a job to the other machine is a one-line
+change to that table, which means it happens as a reviewable commit rather than
+as a setting quietly flipped on one machine.
+
+The important detail is what happens on a machine the system does not
+recognise. It does **not** quietly skip the work — it stops and says so. "Some
+other machine is handling this" and "nobody is handling this" look identical
+from the inside, and only one of them is safe; the difference between them is
+the whole point.
+
+---
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
