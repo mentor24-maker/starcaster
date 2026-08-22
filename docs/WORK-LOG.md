@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-19 — The loop queue can now carry work for more than one repo (#TBD)
+## 2026-08-19 — The loop queue can now carry work for more than one repo (#366)
 
 The build/review loops assumed every task was starcaster work and always built
 in the starcaster folder. Now a task can say which project it belongs to — by
