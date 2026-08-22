@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-18 — Bug Report 4/5: the button visitors actually click (#TBD)
+## 2026-08-18 — Bug Report 4/5: the button visitors actually click (#365)
 
 Fourth of five pieces of the in-app Bug Report tool, and the first one
 anyone can see: a "Bug Report" module in the Builder. Drop it on a page and
