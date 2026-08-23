@@ -38,6 +38,59 @@ have seen before.
 Also fixed a wrong signpost: when the checker finds no panels at all it told
 you to go look at a list of module types that does not exist anywhere in the
 codebase. It now names the real thing.
+## 2026-08-22 — See what the loop queue is actually doing, at a glance (#370)
+
+The task list showed which stage each item was in, but not whether the
+pipeline was alive, when it last moved, or what it would pick up next. Now the
+loops write a plain-language "Loop note" on each ticket as it moves — "building
+— claimed 10:12am", "PR open — waiting for a review pass", "verified — waiting
+on Dane to say merge", "returned to the line with notes", "live 8/20" — and a
+pinned "Loop heartbeat" ticket carries one line per pass ("pass finished
+10:48am — 33 in line, next up: …"). An untouched ticket stays blank, which
+reads correctly as "waiting in line". It is one write per real move, never a
+rewrite of the whole queue. One 30-second ClickUp setup step is needed first
+(create a "Loop note" text field); until then the loops say so plainly and
+keep working. Wording lives in one tested place so two loops can't phrase the
+same move two ways.
+
+---
+
+## 2026-08-22 — Three jobs that must never run twice now refuse to (#383)
+
+There are two machines now, and that is only an improvement if both of them
+know which work is theirs. Three jobs break badly if two machines do them at
+once, each for a different reason. The bus relay would read "this message has
+not been passed along yet" on both machines in the same minute and pass it
+along twice. `db:refresh` spends Supabase's disk-space budget, and there is one
+budget for the whole company — spending it twice in a day is what took every
+client site down for two and a half hours on 17 August. And the build loop
+claims a ticket by reading its status, checking it, then writing a new one;
+that is safe with one machine doing it and a coin-flip with two.
+
+Until now the only thing preventing all three was a person remembering a rule
+before typing a command. This adds a small table, kept in the code where it can
+be reviewed like anything else, saying which machine owns which job — and every
+one of those jobs now asks that table before it does anything. Ask it yourself
+with `npm run node:whoami`. Handing a job to the other machine is a one-line
+change to that table, which means it happens as a reviewable commit rather than
+as a setting quietly flipped on one machine.
+
+The important detail is what happens on a machine the system does not
+recognise. It does **not** quietly skip the work — it stops and says so. "Some
+other machine is handling this" and "nobody is handling this" look identical
+from the inside, and only one of them is safe; the difference between them is
+the whole point.
+## 2026-08-22 — `npm run doctor` now catches canon nobody can see (#378)
+
+The vault holds the project's canon, but two ways it can silently go wrong had
+no detector: canon written and committed locally but never pushed (so HQ can't
+see it), and signed doctrine citing a doctrine file that doesn't exist (the
+quota-doctrine gap that went two days unnoticed). A new read-only check —
+part of `npm run doctor` and a standalone `npm run check:vault-drift` — reports
+both in plain language, each with its one-line fix. It never writes to the
+vault, and a machine without the vault (a worktree, CI) is told "can't check"
+rather than a false all-clear. Run against the real vault on day one it already
+found one uncommitted change waiting to be committed.
 
 ---
 
@@ -271,6 +324,18 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — Closing a task now cleans up its thread too (#344)
+
+Starting a new piece of work (`npm run thread`) creates its own folder and
+branch; finishing it normally cleans both up automatically once the work
+ships. But if a piece of work gets abandoned or redirected instead of
+shipped — the ClickUp task closed without ever merging — nothing ever
+noticed, and the folder sat there forever. `npm run thread` now requires the
+ClickUp task it's for, and stamps that onto the branch; closing that task
+(even with unfinished work on it) now lets the next cleanup remove the folder
+and branch the same way finished work already gets removed, with the same
+restore-log safety net. Starting a thread without an open task to point at no
+longer works.
 ## 2026-08-18 — A tool that notices when ClickUp and GitHub disagree (#345)
 
 A task can end up saying "in review" or "building" days after the work
@@ -368,6 +433,21 @@ loop), and ClickUp being down or misconfigured never costs the reporter —
 the report is saved first, the row is marked as "could not forward", the
 failure is logged loudly, and the visitor still gets their thank-you. Needs
 one server setting (CLICKUP_API_TOKEN) and a redeploy before it works live.
+
+---
+
+## 2026-08-19 — The loop queue can now carry work for more than one repo (#366)
+
+The build/review loops assumed every task was starcaster work and always built
+in the starcaster folder. Now a task can say which project it belongs to — by
+carrying a `repo:` tag (`repo:normie`, `repo:pulse`, `repo:vault`) — and the
+loop builds it in that project's folder and runs that project's checks instead.
+A task with no tag is treated as starcaster exactly as before, so nothing
+already in the queue changes. A tag naming a project the system doesn't know,
+or two different project tags on one task, is never guessed at: the task is
+handed to Dane to sort out rather than built in the wrong place. The task list
+(`npm run clickup -- queue`) now shows a project column so it's visible at a
+glance. This is the plumbing only — no actual non-starcaster work is built here.
 
 ---
 

@@ -12,6 +12,30 @@ Each run verifies **one** task's PR. Run under `/loop` it keeps the review queue
 drained so the operator only ever sees PRs that already passed an independent
 check.
 
+## Before anything else: is this the machine that runs this loop?
+
+Two machines can both reach ClickUp, and claiming a ticket is check-then-act —
+a read, a comparison, then a write. There is no way to make that one atomic
+step, so it is only sound while exactly ONE machine is claiming. Which machine
+that is lives in `lib/nodeRoles.js`, the same table `db:refresh` and the bus
+relay read.
+
+**Run this first, before reading the queue or touching anything:**
+
+```bash
+npm run node:owns -- loop-review
+```
+
+*   **exit 0** — this machine owns the loop. Carry on.
+*   **exit 3** — another machine owns it. **Stop.** Claim nothing, build
+    nothing. Report the message it printed, which names the owning machine,
+    and finish the run. This is a normal outcome, not a failure.
+*   **exit 1** — it could not tell which machine this is. **Stop and say so
+    loudly.** Do not treat it as "not mine": "someone else is doing it" and
+    "nobody is doing it" look identical from here, and only one of them is
+    safe. The message says exactly what to type to fix it (one line, once per
+    machine). `npm run node:whoami` shows the whole picture.
+
 ## ClickUp access: use the direct script, not the connector
 
 Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
@@ -54,6 +78,18 @@ body is four sections, checked before anything is sent:
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
 
+## Loop note — stamp your verdict (queue visibility)
+
+When you decide, stamp the ticket's **Loop note** so the queue shows it:
+
+```bash
+npm run clickup -- loop-note --task <id> --transition verified    # PASS -> Ready to launch
+npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back to Queued
+```
+
+`CANNOT STAMP` means the one-time "Loop note" field is not set up yet (see
+`docs/LOOP_ENGINEERING.md`) — note it and carry on; it never blocks a verdict.
+
 ## Workflow
 
 1. **Claim the next task.** Find the oldest task with status `In review` in the
@@ -72,8 +108,15 @@ the run report.
    verifies it stuck: `Ready to launch` / `Needs your input` assign Dane,
    `Queued` clears assignees. Flags exist only to deviate.
 
-2. **Check out the PR in a worktree.** Reuse the build worktree if present, or
-   add one from the PR branch. Run `npm ci` if dependencies changed.
+2. **Check out the PR in a worktree — in the task's repo.** A task declares
+   its repo with a `repo:<name>` tag (`starcaster` default; also `normie`,
+   `pulse`, `vault`); `npm run clickup -- get --task <id>` prints the resolved
+   `repo:` line. Verify in THAT repo's checkout and run THAT repo's gates
+   (`docs/LOOP_ENGINEERING.md` → "Per-repo gates") — verifying a vault task
+   against starcaster's gates proves nothing. An unknown/ambiguous repo tag is
+   the build loop's to escalate, not review's; if you meet one In review,
+   send it back to `Queued` with a note. Reuse the build worktree if present,
+   or add one from the PR branch. Run `npm ci` if dependencies changed.
 
 3. **Verify independently — do not trust the build loop's word.**
    - Re-run the gates: `npm run typecheck`, the affected tests
