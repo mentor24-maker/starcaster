@@ -66,6 +66,31 @@ describe("describeBlockLineage", () => {
     expect(lineage.line).toBeNull();
   });
 
+  // Review finding 3, 2026-08-23. `saveSection()` keys off `savedSectionId`
+  // ALONE and never reads `canonical`, so a disconnected copy's save button
+  // still opens the "overwrite the original?" dialog and fans out to every
+  // follower. Both blocks below used to promise "edits here stay on this
+  // page"; for one of them that is the opposite of the truth, on the one
+  // screen whose entire job is saying how far a save reaches.
+  it("promises a local save ONLY for a block that never had a master", () => {
+    const neverLinked = describeBlockLineage({ isFollowing: false, hasMasterSource: false });
+    expect(neverLinked.hint).toContain("stay on this page");
+  });
+
+  it("warns that a disconnected copy can still overwrite its original", () => {
+    const disconnected = describeBlockLineage({
+      isFollowing: false,
+      hasMasterSource: true,
+      masterName: "2 - Menu Banner",
+    });
+    expect(disconnected.state).toBe("independent");
+    expect(disconnected.label).toBe("Independent");
+    expect(disconnected.line).toBeNull();
+    // The promise that is false for this block must not be made.
+    expect(disconnected.hint).not.toContain("stay on this page");
+    expect(disconnected.hint).toMatch(/overwrite/i);
+  });
+
   it("treats a deliberately detached copy as Independent, master or no master", () => {
     const lineage = describeBlockLineage({
       isFollowing: false,

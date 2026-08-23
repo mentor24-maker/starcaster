@@ -174,6 +174,7 @@ export function BuilderSectionCard({
     isMaster: isCanonicalMaster,
     isFollowing: isCanonical,
     hasDrifted,
+    hasMasterSource: hasCanonicalSource,
     masterName: canonicalSourceName,
     usage: canonicalUsage,
   });

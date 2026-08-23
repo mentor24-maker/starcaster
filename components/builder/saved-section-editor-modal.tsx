@@ -12,7 +12,7 @@ import {
 import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import { appApi } from "@/lib/adapters/starcaster-app";
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
-import { savedSectionUsage, type BlockUsage } from "@/lib/shared-block-usage";
+import { loadSavedSectionUsage, type BlockUsage } from "@/lib/shared-block-usage";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
 import { buildBuilderThemePaletteColors } from "./builder-utils";
@@ -115,10 +115,14 @@ export function SavedSectionEditorModal({
         // It is rewritten to /api/builder/landing-pages and given the project
         // scope headers by this adapter, which is also what the page editor
         // calls. Reaching for the plainer helper 404s (and did).
-        const response = await builderAdminFetch("/api/admin/pages", { cache: "no-store" });
-        const body = (await response.json()) as { pages?: unknown };
-        const pages = Array.isArray(body?.pages) ? body.pages : [];
-        if (!cancelled) setUsage(savedSectionUsage(pages, savedSectionId));
+        // `null` back from this means "could not be counted", which is NOT the
+        // same as zero and must not become "Not used on any page yet". The
+        // branch lives in shared-block-usage.ts so a test can reach it.
+        const counted = await loadSavedSectionUsage(
+          () => builderAdminFetch("/api/admin/pages", { cache: "no-store" }),
+          savedSectionId
+        );
+        if (!cancelled) setUsage(counted);
       } catch {
         if (!cancelled) setUsage(null);
       }

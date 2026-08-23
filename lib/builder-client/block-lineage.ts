@@ -14,7 +14,10 @@
  *   Changed      — a copy still marked as following, but hand-edited here, so
  *                  the next push skips it unless it is overwritten on purpose
  *                  (`hasSectionDrifted`, ./section-drift).
- *   Independent  — not linked to a master at all.
+ *   Independent  — not taking updates from a master. Two blocks land here:
+ *                  one that never had a master, and one that remembers a
+ *                  master but has stopped following it. Their tooltips differ,
+ *                  because only the first is genuinely local — see the branch.
  *
  * READ-ONLY BY CONSTRUCTION. Nothing here writes, and nothing here decides
  * what a push does — it only describes state that already exists. The actions
@@ -51,6 +54,13 @@ export type BlockLineageInput = {
   isFollowing?: boolean;
   /** True when this following copy's content no longer matches the master. */
   hasDrifted?: boolean;
+  /**
+   * True when the block still carries a `savedSectionId`, whether or not it
+   * still follows it. Separate from `isFollowing` on purpose: "where did this
+   * come from" and "does it still take updates" are two different questions
+   * (`docs/SAVED_SECTIONS.md`), and the save path keys off the FIRST one.
+   */
+  hasMasterSource?: boolean;
   /** The master's name, when it could be resolved. */
   masterName?: string;
   /** Usage for the master, straight out of `buildSavedSectionUsageIndex`. */
@@ -66,6 +76,7 @@ export function describeBlockLineage({
   isMaster = false,
   isFollowing = false,
   hasDrifted = false,
+  hasMasterSource = false,
   masterName,
   usage,
 }: BlockLineageInput): BlockLineage {
@@ -89,13 +100,28 @@ export function describeBlockLineage({
   }
 
   if (!isFollowing) {
-    // Covers both a block that never had a master and one deliberately
-    // detached from its own: neither takes updates, so neither has a lineage
-    // to state. See BlockLineage.line for why this is null and not "".
+    // Two different blocks land here, and they do NOT behave the same way.
+    //
+    // A block that never had a master is genuinely local: saving it can only
+    // create something new. But a block that still remembers a master and has
+    // merely stopped following it is not local at all --- `saveSection()` in
+    // admin-builder-editor.tsx keys off `savedSectionId` ALONE and never looks
+    // at `canonical`, so its save button still opens the "overwrite the
+    // original?" dialog, which fans out to every page that does follow.
+    //
+    // Both used to read "edits here stay on this page", which is the exact
+    // failure this feature exists to end: a confident sentence that is the
+    // opposite of the truth, on the one screen the operator consults to find
+    // out how far a save reaches. Same chip, honest tooltip --- the smallest
+    // truthful change. Whether "disconnected" deserves a visible state of its
+    // own is the operator's call, and is one line from here.
     return {
       state: "independent",
       label: "Independent",
-      hint: "Not following a saved section — edits here stay on this page.",
+      hint: hasMasterSource
+        ? "No longer takes updates from the original — but it still remembers one, " +
+          "so saving it can still offer to overwrite that original for every page following it."
+        : "Not following a saved section — edits here stay on this page.",
       line: null,
     };
   }
