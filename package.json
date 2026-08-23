@@ -18,6 +18,7 @@
     "check:assets": "node scripts/check_asset_versions.cjs",
     "check:syntax": "node scripts/check_syntax.cjs",
     "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
+    "reconcile": "doppler run --project starcaster --config dev --no-check-version -- node scripts/reconcile_clickup_github.cjs",
     "check:css": "node scripts/ui/check_css.mjs",
     "check:render": "node scripts/ui/check_render.mjs",
     "bust": "node scripts/bump_cache.js",

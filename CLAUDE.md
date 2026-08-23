@@ -332,6 +332,15 @@ both use, from one shared module so they can never disagree.
 .claude/worktrees/<topic>` cleans one up. Caveat: `.git/hooks` is **shared**
 across worktrees, so `npm install` in one reinstalls hooks for all of them.
 
+**`npm run reconcile`** (Charter Q2, 2026-08-18) catches the drift the tools
+above can't see on their own: a Loop Queue task left in-flight after its PR
+already merged (moves it to Live), and a branch stamped with a task
+(`npm run thread`) that has since closed but is still on the Mac (flags it to
+the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
+Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
+Meant to run on a schedule — see the Mac Mini engine-room task for when that
+lands; today it's a command to run by hand.
+
 **Dev servers collide on port 3001, and `pkill` is a shared-resource action.**
 Every worktree's `npm run dev` wants the same port, so the first one started
 owns it and the others silently fail — which means a browser check can be
