@@ -33,6 +33,9 @@ type BuilderSectionCardProps = {
   expandedModuleIds: string[];
   /** Name of the saved section this instance is linked to, if any. */
   canonicalSourceName?: string;
+  /** True when this canonical instance's content no longer matches its
+   *  master — hand-edited here directly rather than through a push. */
+  hasDrifted?: boolean;
   /** Called when the user toggles canonical on/off for this section. */
   onToggleCanonical?: (checked: boolean) => void;
   onToggleCollapsed: () => void;
@@ -104,6 +107,7 @@ export function BuilderSectionCard({
   isCollapsed,
   expandedModuleIds,
   canonicalSourceName,
+  hasDrifted = false,
   onToggleCanonical,
   onToggleCollapsed,
   onMoveUp,
@@ -425,6 +429,14 @@ export function BuilderSectionCard({
             <span className="builder-section-title-label">
               <strong>{displayTitle}</strong>
               <span className="builder-canonical-badge" title={canonicalSourceName ? `Canonical — linked to "${canonicalSourceName}"` : "Canonical"}>(canonical)</span>
+              {hasDrifted ? (
+                <span
+                  className="builder-canonical-badge builder-canonical-badge-changed"
+                  title="This copy was edited directly and no longer matches its master — the next push skips it unless you overwrite it explicitly"
+                >
+                  Changed
+                </span>
+              ) : null}
             </span>
           ) : isEditingTitle ? (
             <input

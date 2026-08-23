@@ -14,6 +14,163 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
+
+ClickUp shows a ticket's description on the left, wide, and its comments on the
+right, narrow. The loops had that backwards. The left column held a spec written
+for a machine, and everything meant for Dane — the reasoning, the risk, the
+question — went into a comment, arriving as a wall of text in the skinniest part
+of the screen.
+
+Two tickets stalled on it the same day. On one, a long comment offered three
+ways to slice the work; Dane picked the smallest and safest, but the ticket went
+back into the build queue still carrying its original full scope, so the next
+unattended pass would have built the risky half he had just deferred — the part
+that rewrites roughly thirty-five live customer pages in one motion. The other
+sat in his inbox for a day under a red "needs your input" badge with no question
+anywhere on it. It was never waiting on him; it was waiting on the first ticket.
+
+Now the detail goes on the left, and the right column carries one short card
+with three fixed parts: his own words that caused the ticket to exist, the
+problem and the fix in fifty to a hundred words of plain English, and the
+specific ask under a banner he can find without reading. The word range is
+checked rather than suggested — too short stops being useful, too long is the
+wall of text this replaces. Handing a ticket to Dane is now a single command
+that posts the card and moves the status together, so a ticket can no longer
+land in his inbox with nothing on it to answer.
+
+---
+
+## 2026-08-22 — Saying "merge" on a ticket now actually merges it (#371)
+
+When a piece of work has been built and independently reviewed, it waits in
+`Ready to launch` for Dane to say go. He says go by replying **merge** on the
+ticket — and until now nothing was listening. On 2026-08-20 three tickets he
+had already approved sat unmerged for hours, purely because no session
+happened to be open to notice. The approval was never the bottleneck; the
+waiting after it was.
+
+The hourly job that already carries his comments to the team chat now also
+acts on that one word. If the whole comment is `merge` (or `merge it`,
+`ship it`, `approve`), it checks — every time, freshly — that the ticket is
+still `Ready to launch`, that the comment really is his (matched on his
+account id, so an agent typing "merge" is ignored), that the last review
+verdict was a pass and his go-ahead came after it, and that the pull request
+is open, has all its checks green and does not clash with newer work. Only
+then does it merge, close the ticket as `Live`, and say so on the chat. A
+sentence like "merge after the other one lands" is just a comment; it takes
+the bare word to act.
+
+Two refusals matter most. If the branch has fallen behind the main copy of
+the code, it catches it up and waits for the tests to re-run rather than
+merging on a result that no longer describes the branch. If it genuinely
+clashes with newer work, it stops dead, explains on the ticket that a session
+needs to sort out the overlap, and leaves everything exactly where it was — a
+script must never untangle that blind. Every other refusal is written on the
+ticket in plain English with the reason, once, never twice.
+
+Nothing about who decides has changed: the merge is still his, and no loop
+can approve its own work. What changed is that his decision no longer has to
+wait for someone to be watching.
+
+## 2026-08-22 — The code stops assuming it lives on one particular laptop (#368)
+
+Thirteen files had a folder path typed into them that only exists on Dane's
+MacBook. That is fine right up until the same code runs somewhere else — on
+the Mac Mini that folder is simply not there, and the failure it produces is
+the worst kind: nothing errors, nothing is logged, the job just quietly does
+nothing and reports success. The file that mattered most was the instruction
+sheet the build loop follows, which is precisely the thing the Mini was bought
+to run.
+
+Every one of those paths is now worked out at the moment the code runs instead
+of being written down in advance. A new check refuses any future commit that
+types one in, and it runs as its own step so it can actually fail a build
+rather than just printing a warning nobody reads. Six old one-off scripts from
+finished jobs were filed away into an archive folder while we were in there.
+
+Nothing about the app changes for anyone using it. What changes is that the
+system can now be run from more than one machine, which is what lets work
+continue overnight while the laptop is closed.
+
+## 2026-08-18 — Undoing a shared-section push, from any later visit (#342)
+
+When editing a section that's shared across many pages, saving it rewrites
+every page that uses it — sometimes dozens at once. The server-side pieces
+to undo that as one action already existed, but the only button for it lived
+in a banner that appeared right after you saved and vanished the moment you
+dismissed it or reloaded the page. If you came back later — a different
+session, a different day — there was no way to trigger that undo at all,
+only to restore each affected page one at a time. Page History (the panel
+that shows a page's past versions) now carries its own "Undo this update"
+button on any row that came from a shared-section push, so that undo is
+reachable any time, not just in the moment right after saving. Nothing about
+the existing per-page Restore button changed.
+
+## 2026-08-18 — A shared section can no longer silently swallow a local edit (#343)
+
+Shared sections (the same header, footer or banner reused on many pages) work
+by staying linked to a master copy — save the master, every linked page
+follows. Until now, a page that had been hand-edited directly while still
+linked looked completely identical to an ordinary linked page, so a routine
+master edit would silently flatten it along with everything else. Now the
+Builder can tell the difference: a page whose copy has drifted from the
+master shows a "Changed" badge, a master save skips those pages by default
+and says so before you click ("34 pages will update, 2 have local changes and
+will be skipped"), and after saving there's a one-click way to overwrite them
+anyway if that's really what you wanted. Nothing about an ordinary push
+changed for the 34 pages that hadn't drifted. After review, the "overwrite
+anyway" button was tightened: it now rewrites only the pages that were
+skipped (it had been re-pushing every linked page to overwrite two), it
+reports the true count and offers the undo it had been forgetting to offer,
+and an overwritten page is described as overwritten rather than "skipped".
+
+## 2026-08-21 — Bug Report 2/5: screenshots for bug reports (#362)
+
+Second of five pieces of the in-app Bug Report tool. A visitor filing a bug
+can now attach pictures: each screenshot is sent on its own (the hosting
+platform caps a single request at a few megabytes, so five big images can
+never travel together), checked by its actual contents rather than its file
+name — so a program renamed to look like a picture is refused — capped at
+3 MB each (the largest that reliably survives the hosting platform's upload
+limit) and five per report, and stored through the same image pipeline the
+rest of the site uses. The report then lists its pictures by id and links to
+each one. Still no button anyone can click — that is piece four.
+
+After a security review, the way a picture gets attached to a report was
+rebuilt: each upload now hands back a secret token, and a report can only
+attach a picture whose token it holds — so a visitor can't guess at picture
+numbers and collect screenshots someone else uploaded. Attaching is
+one-time, all rejections read the same (so nothing leaks whether a picture
+exists), the pictures are kept out of the site's normal image library, an
+upload that fails to record deletes its own leftover file, and a truly
+abandoned upload is left for a scheduled clean-up filed as its own task.
+
+## 2026-08-18 — Bug Report 3/5: every report lands on Dane's desk in ClickUp (#364)
+
+After review, the fail-safe was hardened: when a forwarded task lands in the
+wrong status the code deletes it — and now it CHECKS that the delete actually
+worked. If the delete fails, it says so loudly and names the task still
+sitting in the queue, instead of falsely reporting it was removed. Every
+ClickUp call now times out rather than hanging the person filing the report,
+an empty-bodied task is caught, and a task that was created but couldn't be
+verified is named in the log so it can be found.
+
+Third of five pieces of the in-app Bug Report tool. Until now a submitted
+bug sat in the database where nobody looks. Now each one is also filed as a
+ClickUp task in the Loop Queue — in "Needs your input", assigned to Dane's
+own account, tagged with the site it came from — with the description, the
+page, who reported it and links to any screenshots. Two things are built in
+as guarantees rather than settings: the task can only ever land in that
+held status (if ClickUp puts it anywhere else, the code moves it once and
+otherwise deletes it, so public text can never reach the automated build
+loop), and ClickUp being down or misconfigured never costs the reporter —
+the report is saved first, the row is marked as "could not forward", the
+failure is logged loudly, and the visitor still gets their thank-you. Needs
+one server setting (CLICKUP_API_TOKEN) and a redeploy before it works live.
+
+---
+
 ## 2026-08-18 — A place for visitors to report a broken page (#341)
 
 First of five pieces building the in-app Bug Report tool. This one is
