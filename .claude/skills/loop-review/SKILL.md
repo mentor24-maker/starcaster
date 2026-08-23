@@ -75,6 +75,36 @@ body is four sections, checked before anything is sent:
 @@NEEDED    the specific ask, under a banner he can spot without reading
 ```
 
+### A `Ready to launch` card must carry a link he can click
+
+If the work has **any visible surface**, the card names a URL he can open and
+says what he should see there. One of these, in order of preference:
+
+1. **The Vercel preview URL** for the PR — every PR gets one, it is already
+   built, and it is the real thing rather than a description of it. Name the
+   exact page: not the site root, the page the change is on.
+2. **A published Artifact page** — for work with no page of its own (a
+   generated diagram, a report, a before/after pair).
+3. **The exact localhost URL with the command that starts the server**, both
+   copy-pasteable, when neither of the above can exist.
+
+Then two or three lines of **what to look for**, in his words, not the
+ticket's: *"the chip on each block header should say Following, Changed or
+Independent"* — not *"verify the lineage state renders"*.
+
+**No link, on work with a visible surface, is a review FAILURE.** Not a
+footnote, not an apology in the run report — send it back. Dane said it
+outright on task 86bbh7qer:
+
+> This should include a clickable link I can click to test... none of the "How to test" options are clear how I actually do it.
+
+A card that hands him a branch name and a build command has moved the work to
+his desk at the exact moment the loop was supposed to have finished it.
+
+Work with genuinely no visible surface — a guard, a script, a docs change —
+says so in one line (*"nothing to look at; this is a check that runs at commit
+time"*) rather than leaving him to wonder whether a link was forgotten.
+
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
 
