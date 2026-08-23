@@ -40,6 +40,10 @@ const DEFAULT_OUT = path.join(os.homedir(), 'vault', 'wiki', 'ecosystem');
 const args = process.argv.slice(2);
 const outArg = args.indexOf('--out');
 const OUT_DIR = outArg !== -1 ? path.resolve(args[outArg + 1]) : DEFAULT_OUT;
+// --public writes a shareable copy (ecosystem.public.html) with every `detail`
+// block stripped: the shared page is safe by construction, not by remembering to
+// redact. The default build is untouched — same file, same bytes.
+const PUBLIC = args.includes('--public');
 
 const doc = parseYaml(fs.readFileSync(INVENTORY, 'utf8'));
 
@@ -54,11 +58,12 @@ try {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-const html = renderPage(doc, svg);
+const html = renderPage(doc, svg, { public: PUBLIC });
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-const outFile = path.join(OUT_DIR, 'ecosystem.html');
+const outFile = path.join(OUT_DIR, PUBLIC ? 'ecosystem.public.html' : 'ecosystem.html');
 fs.writeFileSync(outFile, html);
 
 console.log(`[ecosystem-html] Wrote ${outFile} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KB)`);
+if (PUBLIC) console.log('[ecosystem-html] public mode: details omitted — safe to share');
 console.log(`[ecosystem-html] ${(doc.objects ?? []).length} object(s), ${(doc.relationships ?? []).length} connection(s); self-contained, no external requests`);

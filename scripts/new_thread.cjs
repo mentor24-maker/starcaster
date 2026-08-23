@@ -2,7 +2,8 @@
 'use strict';
 
 /**
- * `npm run thread <topic>` — start a new piece of work, correctly, in one step.
+ * `npm run thread <topic> <clickup-task-id>` — start a new piece of work,
+ * correctly, in one step.
  *
  * Every part of this used to be done by hand, and each one had a failure that
  * cost real time:
@@ -14,7 +15,16 @@
  *
  * So: tidy first, branch off CURRENT origin/main, real install, every time.
  *
- *   npm run thread my-topic
+ * Charter Q1 (Task-closes-thread): a thread exists only while its ClickUp
+ * task is open. The task id is REQUIRED here and stamped onto the branch
+ * (`git config branch.<topic>.clickup-task <id>`) — the same `branch.<name>.*`
+ * namespace git and VS Code already use for per-branch metadata, so it lives
+ * in the shared `.git/config` and survives `git worktree remove` until the
+ * branch itself is deleted. `npm run tidy` reads that stamp back to decide
+ * whether a thread whose task has since closed should be cleaned up even
+ * though its commits never shipped — see scripts/repo_tidy.cjs.
+ *
+ *   npm run thread my-topic 86bbggvud
  */
 
 const fs = require('fs');
@@ -23,17 +33,33 @@ const { execFileSync } = require('child_process');
 const { git } = require('./lib/repo_state.cjs');
 
 const topic = process.argv[2];
+const taskId = process.argv[3];
 
-if (!topic || topic.startsWith('-')) {
-  console.error('\nUsage: npm run thread <topic>\n');
+function usageAndExit() {
+  console.error('\nUsage: npm run thread <topic> <clickup-task-id>\n');
   console.error('  <topic> names the work, in lowercase-with-dashes.');
-  console.error('  Example: npm run thread table-cell-editor\n');
+  console.error('  <clickup-task-id> is the task this thread is FOR — required, so the');
+  console.error('  thread can be cleaned up automatically once that task closes.');
+  console.error('  Example: npm run thread table-cell-editor 86bbggvud\n');
   process.exit(1);
 }
+
+if (!topic || topic.startsWith('-')) usageAndExit();
 
 if (!/^[a-z0-9][a-z0-9-]*$/.test(topic)) {
   console.error(`\n"${topic}" will not work as a name.`);
   console.error('Use lowercase letters, numbers and dashes only — e.g. slideshow-captions.\n');
+  process.exit(1);
+}
+
+if (!taskId || taskId.startsWith('-')) usageAndExit();
+
+console.log(`[thread] Checking that ClickUp task ${taskId} exists and is open…`);
+try {
+  execFileSync('npm', ['run', 'clickup', '--', 'task-open', '--task', taskId], { stdio: 'inherit' });
+} catch {
+  console.error(`\nTask ${taskId} is not open (closed, done, or does not exist) — nothing was created.`);
+  console.error('A thread is only started for OPEN work; if the task id is wrong, check it and try again.\n');
   process.exit(1);
 }
 
@@ -75,6 +101,13 @@ run('git', ['fetch', 'origin', '--prune']);
 const base = git(['rev-parse', '--verify', '--quiet', 'origin/main'], '') ? 'origin/main' : 'main';
 console.log(`[thread] Creating the folder, branched off ${base}…`);
 run('git', ['worktree', 'add', dest, '-b', topic, base]);
+
+// Branch-scoped config, not worktree-scoped: it lives in the shared
+// .git/config (git rev-parse --git-common-dir is the same value from every
+// worktree), so it survives `git worktree remove` and is readable by
+// `npm run tidy` run from anywhere in the repo, right up until the branch
+// itself is deleted.
+run('git', ['config', `branch.${topic}.clickup-task`, taskId]);
 
 console.log('[thread] Installing dependencies (about a minute, and its own copy on purpose)…');
 run('npm', ['ci'], { cwd: dest, stdio: ['ignore', 'ignore', 'inherit'] });
@@ -133,8 +166,10 @@ console.log(`
 
   Folder:  ${dest}
   Branch:  ${topic}   (branched off ${base} just now, so it is current)
+  Task:    ${taskId}   (stamped on the branch — closing this task cleans up the thread too)
 
   Open a session in that folder and work there. When the work has merged,
   \`npm run tidy\` removes the folder and the branch — or the next
-  \`npm run thread\` does it for you.
+  \`npm run thread\` does it for you. Closing the ClickUp task without
+  shipping does the same.
 `);

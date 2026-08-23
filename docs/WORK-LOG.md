@@ -45,6 +45,104 @@ storing pages in a shape the server accepts but quietly strips lineage from,
 which meant a canonical section seeded for a check came back looking
 unconnected — it now writes the shape production actually stores, so a check
 over shared sections is measuring the real thing.
+## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
+
+Until today, if a piece of work changed how a page *looks*, the only way to
+judge it was to check out the branch, start a server and open a browser. That
+is a real ask, so in practice it did not happen — and nothing else could catch
+it, because none of the automatic checks here can tell a page that looks right
+from one that does not. They test wiring, not appearance.
+
+There is now a command that takes the pictures for you. It builds the site
+twice — once with the code as it stands on the live branch, once with the
+change — photographs six representative pages through both, and compares them
+pixel by pixel. Any page that came out different gets attached to the ticket as
+a before-and-after pair, so the question waiting for you is simply "does this
+look right", answerable from your phone.
+
+If a change alters nothing you could see, nothing is attached and nothing
+interrupts you. That is the half worth stating plainly: it stays silent by
+default, and only speaks when there is genuinely something to look at.
+
+Two details that decide whether the thing is trustworthy. The comparison has no
+"close enough" — one differing pixel counts — because a tolerance would hide
+exactly the changes worth a human eye: a border that lost a hair, a colour two
+shades off. And before it compares anything, it photographs the same page twice
+against identical code and demands the two shots be perfectly identical. If
+they are not, it reports nothing at all rather than showing you differences
+that were never real.
+
+---
+
+## 2026-08-22 — Rows can split into four, five, or six equal columns (#TBD)
+
+The Builder could split a row into up to three columns; now it also offers
+four, five, and six equal columns, chosen from the same row-layout control.
+Existing pages are untouched — the new layouts are additions, not changes to
+any current one. The automated render check was taught to measure a whole
+row's column layout (it could only look at single modules before), and it now
+verifies a four-column row actually lays out four equal columns; breaking the
+layout on purpose makes it fail, so a future change cannot silently collapse
+the grid.
+
+---
+
+## 2026-08-22 — See what the loop queue is actually doing, at a glance (#370)
+
+The task list showed which stage each item was in, but not whether the
+pipeline was alive, when it last moved, or what it would pick up next. Now the
+loops write a plain-language "Loop note" on each ticket as it moves — "building
+— claimed 10:12am", "PR open — waiting for a review pass", "verified — waiting
+on Dane to say merge", "returned to the line with notes", "live 8/20" — and a
+pinned "Loop heartbeat" ticket carries one line per pass ("pass finished
+10:48am — 33 in line, next up: …"). An untouched ticket stays blank, which
+reads correctly as "waiting in line". It is one write per real move, never a
+rewrite of the whole queue. One 30-second ClickUp setup step is needed first
+(create a "Loop note" text field); until then the loops say so plainly and
+keep working. Wording lives in one tested place so two loops can't phrase the
+same move two ways.
+
+---
+
+## 2026-08-22 — Three jobs that must never run twice now refuse to (#383)
+
+There are two machines now, and that is only an improvement if both of them
+know which work is theirs. Three jobs break badly if two machines do them at
+once, each for a different reason. The bus relay would read "this message has
+not been passed along yet" on both machines in the same minute and pass it
+along twice. `db:refresh` spends Supabase's disk-space budget, and there is one
+budget for the whole company — spending it twice in a day is what took every
+client site down for two and a half hours on 17 August. And the build loop
+claims a ticket by reading its status, checking it, then writing a new one;
+that is safe with one machine doing it and a coin-flip with two.
+
+Until now the only thing preventing all three was a person remembering a rule
+before typing a command. This adds a small table, kept in the code where it can
+be reviewed like anything else, saying which machine owns which job — and every
+one of those jobs now asks that table before it does anything. Ask it yourself
+with `npm run node:whoami`. Handing a job to the other machine is a one-line
+change to that table, which means it happens as a reviewable commit rather than
+as a setting quietly flipped on one machine.
+
+The important detail is what happens on a machine the system does not
+recognise. It does **not** quietly skip the work — it stops and says so. "Some
+other machine is handling this" and "nobody is handling this" look identical
+from the inside, and only one of them is safe; the difference between them is
+the whole point.
+## 2026-08-22 — `npm run doctor` now catches canon nobody can see (#378)
+
+The vault holds the project's canon, but two ways it can silently go wrong had
+no detector: canon written and committed locally but never pushed (so HQ can't
+see it), and signed doctrine citing a doctrine file that doesn't exist (the
+quota-doctrine gap that went two days unnoticed). A new read-only check —
+part of `npm run doctor` and a standalone `npm run check:vault-drift` — reports
+both in plain language, each with its one-line fix. It never writes to the
+vault, and a machine without the vault (a worktree, CI) is told "can't check"
+rather than a false all-clear. Run against the real vault on day one it already
+found one uncommitted change waiting to be committed.
+
+---
+
 ## 2026-08-22 — `npm run map` stops calling a brand-new folder rubbish (#375)
 
 Set up a new workspace with `npm run thread`, then read the map from the main
@@ -275,6 +373,18 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — Closing a task now cleans up its thread too (#344)
+
+Starting a new piece of work (`npm run thread`) creates its own folder and
+branch; finishing it normally cleans both up automatically once the work
+ships. But if a piece of work gets abandoned or redirected instead of
+shipped — the ClickUp task closed without ever merging — nothing ever
+noticed, and the folder sat there forever. `npm run thread` now requires the
+ClickUp task it's for, and stamps that onto the branch; closing that task
+(even with unfinished work on it) now lets the next cleanup remove the folder
+and branch the same way finished work already gets removed, with the same
+restore-log safety net. Starting a thread without an open task to point at no
+longer works.
 ## 2026-08-18 — A tool that notices when ClickUp and GitHub disagree (#345)
 
 A task can end up saying "in review" or "building" days after the work
@@ -372,6 +482,51 @@ loop), and ClickUp being down or misconfigured never costs the reporter —
 the report is saved first, the row is marked as "could not forward", the
 failure is logged loudly, and the visitor still gets their thank-you. Needs
 one server setting (CLICKUP_API_TOKEN) and a redeploy before it works live.
+
+---
+
+## 2026-08-18 — Bug Report 4/5: the button visitors actually click (#365)
+
+Fourth of five pieces of the in-app Bug Report tool, and the first one
+anyone can see: a "Bug Report" module in the Builder. Drop it on a page and
+a small bug icon floats in a corner of every visitor's screen; clicking it
+opens a popup where they describe the problem, attach screenshots (when that
+piece is live), and send — then a short thank-you and the popup closes. The
+module's settings choose who can see the icon (everyone, signed-in clients,
+or staff only), which icon and how big, which corner, its colours, an
+optional label, and the popup's words. Behind the scenes the icon floats
+from the very top of the page rather than from inside its column, because
+a column's styling can quietly pin a "fixed" element to the wrong spot — a
+trap this site has already fallen into once. Hiding the icon is a
+convenience, not security: the server re-checks who is signed in before it
+trusts any claim.
+
+Review caught one real problem before this shipped, and it took four rounds
+to kill properly. The module worked out whether it was on a real published
+page by looking around at the page it had landed in — but at the instant it
+asks, the page around it does not exist yet, because the browser builds the
+whole page in memory and only puts it on screen afterwards. So the answer was
+always "no", and for a single frame every visitor — including one who should
+never see it — got a flash of a staff-only "Report a problem" button sitting
+in the middle of the text, which then vanished and jumped to the corner. The
+fix stops it guessing: the page now simply tells the module where it is. The
+tests were part of why this survived three rounds — they had been building a
+fake page shape the real site never has, so they cheerfully passed on the
+broken code. They now build the real shape and check the very first frame a
+visitor would see. One small extra: the "who is looking at this?" request now
+has the same rate limit as its two neighbours, so nobody can hammer it.
+## 2026-08-19 — The loop queue can now carry work for more than one repo (#366)
+
+The build/review loops assumed every task was starcaster work and always built
+in the starcaster folder. Now a task can say which project it belongs to — by
+carrying a `repo:` tag (`repo:normie`, `repo:pulse`, `repo:vault`) — and the
+loop builds it in that project's folder and runs that project's checks instead.
+A task with no tag is treated as starcaster exactly as before, so nothing
+already in the queue changes. A tag naming a project the system doesn't know,
+or two different project tags on one task, is never guessed at: the task is
+handed to Dane to sort out rather than built in the wrong place. The task list
+(`npm run clickup -- queue`) now shows a project column so it's visible at a
+glance. This is the plumbing only — no actual non-starcaster work is built here.
 
 ---
 

@@ -37,6 +37,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import nodeRoles from '../lib/nodeRoles.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB_CONTAINER = 'supabase_db_starcaster';
@@ -96,6 +97,29 @@ function die(message, fix) {
   if (fix) process.stdout.write(`${yellow('→')} ${fix}\n`);
   process.stdout.write('\n');
   process.exit(1);
+}
+
+// --- which machine is allowed to do this --------------------------------------
+
+// BEFORE anything reaches production, including the read that proves the
+// credential is read-only. Reading production is not free: pg_dump against it
+// spends Supabase disk IO, and that budget belongs to the whole company, not
+// to a machine. Six runs in one day exhausted it on 2026-08-17 and left every
+// tenant site dark for two and a half hours (docs/DOCTRINE.md §1.5). It does
+// not matter which machine spent it — there is one meter — so exactly one
+// machine may run this, and lib/nodeRoles.js is where that is written down.
+//
+// Unlike the bus relay, this is a command a person just typed and is standing
+// there waiting on. "Not your machine" therefore REFUSES out loud rather than
+// exiting quietly: silence here reads as "it worked".
+const roleGuard = nodeRoles.checkRole('db-refresh');
+if (!roleGuard.owned) {
+  die(
+    roleGuard.message.split('\n')[0] + '\n  ' + roleGuard.message.split('\n').slice(1).join('\n  '),
+    roleGuard.verdict === 'other-node'
+      ? `Run it on ${roleGuard.owner} instead — nothing was copied and no production IO was spent.`
+      : 'npm run node:whoami      (tells you what this machine thinks it is, and how to fix it)',
+  );
 }
 
 // --- environment ------------------------------------------------------------
