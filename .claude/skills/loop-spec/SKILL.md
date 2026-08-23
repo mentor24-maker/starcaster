@@ -47,10 +47,10 @@ write any code here. You produce well-formed tasks.
      merge them into one task or note the ordering explicitly.
    - **Reviewable by a human in a couple of minutes.**
 
-3. **Write each task.** File a ClickUp task (`clickup_create_task`) in the
-   target list with `status: "Queued"`, **no assignee** (assignment is how the
-   loops hand a ticket to Dane — see below), and a `markdown_description` in
-   exactly this shape.
+3. **Write each task.** File a ClickUp task in the target list with
+   `status: "Queued"`, **no assignee** (assignment is how the loops hand a
+   ticket to Dane — see below), and a `markdown_description` in exactly this
+   shape.
 
    **If the task is not for starcaster, tag it `repo:<name>`** (`normie`,
    `pulse`, or `vault`). A task with no `repo:` tag builds in starcaster — the
@@ -59,9 +59,21 @@ write any code here. You produce well-formed tasks.
    the task rather than build it, so use exactly one of the four known names
    (`starcaster`, `normie`, `pulse`, `vault`).
 
-   ```markdown
+   **The description is the LEFT column, and it is where the detail goes.** The
+   right-hand column is narrow; reasoning written there arrives as a wall of
+   text in the skinniest part of the screen. Ratified 2026-08-22, after Sync
+   6/7 and 7/7 both stalled on exactly that. The right column carries only the
+   operator card (see "The operator card" below).
+
+   **Never use a `> ` blockquote anywhere in a ClickUp body.** ClickUp *deletes*
+   those lines — from descriptions and from comments alike. They do not arrive
+   unformatted, they arrive not at all, and the write still returns a clean 200.
+   Found live on 2026-08-22, on the first ticket rewritten with this template:
+   the quoted instruction was gone and nothing said so. Use a fenced block.
+   `describe` and `ask` both refuse a body containing one.
+
    ## Goal
-   One or two sentences: what and why.
+   One or two sentences: what this task does about it.
 
    ## Scope
    - Bullet list of what this task changes.
@@ -70,7 +82,7 @@ write any code here. You produce well-formed tasks.
    - What this task must NOT touch (prevents scope creep in the build loop).
 
    ## Affected files / artifacts
-   - Source files likely involved.
+   - Source files likely involved — real paths, checked, not guessed.
    - Generated artifacts + their rebuild command (see CLAUDE.md table), e.g.
      "edits builder-template.ts → MUST run `npm run build:builder-template`".
 
@@ -78,14 +90,60 @@ write any code here. You produce well-formed tasks.
    - [ ] Concrete, checkable outcomes. The build loop is done when all are met.
 
    ## How to test
-   - Steps a human (or the review loop) follows to confirm it works, including
-     which page/module to open.
+   - Steps a human (or the review loop) follows to confirm it works: the exact
+     address to open, the exact clicks, and what should appear. "Open the page
+     in a browser" is not a step.
 
    ## Risk
    low | medium | high — and one line on the blast radius.
-   ```
+   ````
 
    Tag each task with the feature/epic name so the queue stays legible.
+
+   To rewrite an existing task's description, use the direct script — it
+   refuses an empty body and reads the result back, because this write
+   **replaces** the whole left column:
+
+   ```bash
+   npm run clickup -- describe --task <id> --body-file -
+   ```
+
+## The operator card — the only thing that goes in the right column
+
+Anything a loop puts in front of Dane goes through **one** command, which posts
+the card and moves the status together so the two can never come apart:
+
+```bash
+npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
+```
+
+The body is four sections, and the check runs **before** anything is sent:
+
+```
+@@ASKED
+build the chip display
+@@WHEN
+2026-08-22 10:56am, on this ticket
+@@CONTEXT
+The problem and the fix in plain English. 50-100 words, enforced — under 50 it
+stops carrying enough to act on, over 100 it becomes the wall of text this
+replaces. The long version belongs in the description.
+@@NEEDED
+The specific ask. "Nothing right now" is a good answer and a useful one — but it
+has to be written down, not left blank.
+```
+
+It renders with `@@NEEDED` under a banner he can spot without reading:
+
+```
+#############################
+NEEDED FROM DANE: 
+#############################
+```
+
+`status --status "Needs your input"` now refuses on its own and points here.
+The escape hatch is `--no-card`, which is a written claim that no card is owed,
+not a way around the format.
 
 4. **Report back.** List the tasks you filed (name + risk + one-line goal) and
    the total. Remind the operator they can now start the build loop:
