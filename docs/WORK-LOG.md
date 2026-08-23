@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — Two checkers can no longer review the same job at once (#PR)
+## 2026-08-23 — Two checkers can no longer review the same job at once (#391)
 
 The loop has a checking step: after something is built, a separate pass goes
 over it independently and says pass or fail. Last night two of those checks ran
