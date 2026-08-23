@@ -41,14 +41,19 @@ const claimed = [];
 // parent can hold both until both are actually warm.
 if (startAtRaw === 'handshake') {
   process.stdout.write('READY\n');
-  const fd = fs.openSync('/dev/stdin', 'rs');
+  // Read file descriptor 0 DIRECTLY. Opening '/dev/stdin' by path works on a
+  // Mac and fails on GitHub's runner with ENXIO — the path is not there. The
+  // first version of this handshake did exactly that, and turned a flaky test
+  // into a test that failed every time in CI and never locally, which is the
+  // worse of the two.
   const buf = Buffer.alloc(1);
-  // Blocks until the parent writes a byte. No timing assumption at all.
-  while (true) {
+  for (;;) {
     try {
-      if (fs.readSync(fd, buf, 0, 1, null) > 0) break;
+      if (fs.readSync(0, buf, 0, 1, null) > 0) break;
     } catch (err) {
-      if (err.code === 'EAGAIN') continue;
+      // A pipe with nothing in it yet, on either platform's spelling.
+      if (err.code === 'EAGAIN' || err.code === 'EWOULDBLOCK') continue;
+      if (err.code === 'EOF') break;
       throw err;
     }
   }
