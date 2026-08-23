@@ -64,6 +64,14 @@ const MUST_DETECT = [
   ['dd if=/dev/zero of=public/app.js', 'dd of='],
   ['truncate -s 0 lib/x.js', 'truncate empties it'],
   ['install -m 644 /tmp/x lib/new.js', 'install is a copy'],
+  // Caught in review: the first draft of this fix sent a SHELL heredoc's body
+  // to the program scan only, so these two became allowed -- a regression
+  // against main, where the same redirect on one line has always been refused.
+  ['bash - <<SH\necho x > lib/evil.js\nSH', 'a bash heredoc whose body redirects into source'],
+  ['bash <<SH\nsed -i "" s/a/b/ lib/evil.js\nSH', 'a bash heredoc running an in-place edit'],
+  ['sh <<SH\ncat /tmp/x | tee lib/evil.js\nSH', 'a sh heredoc piping into tee'],
+  ['ruby -e "File.write(\'lib/x.js\', 1)"', "ruby's one-call file write"],
+  ['python3 -c "import shutil; shutil.copyfile(0, \'lib/x.js\')"', 'shutil copying over source'],
 ];
 
 test('every way of handing a program a path to write is caught', async (t) => {
@@ -79,6 +87,43 @@ test('the original forms still work — this is additive', () => {
   assert.ok(detectSourceWrite('sed -i "" "s/a/b/" scripts/thing.cjs'));
   assert.ok(detectSourceWrite("node -e \"require('fs').writeFileSync('lib/x.js','y')\""));
   assert.ok(detectSourceWrite("python3 - <<'PY'\nopen('lib/x.js','w').write('z')\nPY"));
+  // This test was VACUOUS while the shell-heredoc regression was present: not
+  // one of the four cases above is a shell heredoc, so it passed throughout.
+  // A test that cannot fail for the case it is guarding is not a guard.
+  assert.ok(detectSourceWrite('bash <<SH\nprintf y >> src/css/main.css\nSH'));
+});
+
+test('a shell heredoc body is shell, and gets the shell rules', () => {
+  // The three-way split. Conflating any two of these is a hole:
+  //   program interpreter -> body is a program
+  //   shell interpreter   -> body is shell text
+  //   anything else       -> body is data
+  const { codeBodies, shellBodies } = splitHeredocs('bash <<SH\necho x > lib/y.js\nSH');
+  assert.equal(shellBodies.length, 1, "a shell's body goes to the shell bucket");
+  assert.equal(codeBodies.length, 0, 'and not to the program bucket');
+
+  const py = splitHeredocs('python3 - <<PY\npass\nPY');
+  assert.equal(py.codeBodies.length, 1);
+  assert.equal(py.shellBodies.length, 0);
+
+  const data = splitHeredocs('cat > /tmp/x <<TXT\necho y > lib/z.js\nTXT');
+  assert.equal(data.codeBodies.length, 0);
+  assert.equal(data.shellBodies.length, 0, "cat's body is data and is dropped");
+});
+
+test('searching FOR a write is not performing one', () => {
+  // `git log -S writeFileSync -- lib/` satisfies "a write verb somewhere and a
+  // code path somewhere" while being a pure search. The module errs toward not
+  // blocking, and refusing to let someone look for writes is the wrong side.
+  // The paths here are COMPLETE on purpose. A first draft used `-- lib/`,
+  // which CODE_PATH does not match (it needs a character after the slash), so
+  // every assertion passed with the exemption removed — vacuous, and it would
+  // have shipped a dead branch with a test that could not fail.
+  assert.equal(detectSourceWrite("git log -S 'writeFileSync(' -- lib/acquire/YoutubeVideosStore.js"), '');
+  assert.equal(detectSourceWrite('grep -rn "writeFileSync(" lib/builder/template.js'), '');
+  assert.equal(detectSourceWrite('git grep "write_text(" -- scripts/builder/mainGuard.js'), '');
+  // But a search followed by a real write is still a real write.
+  assert.ok(detectSourceWrite('git log -S x -- lib/a/b.js && echo y > lib/z.js'));
 });
 
 // ── The opposite failure: prose about the rule ─────────────────────────────

@@ -15,6 +15,25 @@
  * Only writes into tracked CODE directories count; docs/, scratch files, /tmp
  * and data are not the hazard this guards (and are edited legitimately from
  * the main folder during ops).
+ *
+ * KNOWN AND ACCEPTED: an example quoted INLINE in a command still refuses.
+ * Writing `echo x > lib/y.js` inside a sentence, on the same line as the
+ * command, is indistinguishable from running it without parsing the shell
+ * properly — so documenting this rule from the main folder trips it, and did
+ * so three times while this very fix was being written and reviewed. A heredoc
+ * bound for a non-interpreter is handled (its body is data and is dropped),
+ * which covers the common case of writing notes to a file. For the rest the
+ * answer is `ALLOW_MAIN_EDITS=1` with a reason, and this paragraph exists so
+ * that is a DECISION rather than a thing nobody noticed. The direction is the
+ * safe one: refusing to write prose costs a rephrase, missing a write to
+ * `main` costs a deploy.
+ *
+ * THE LIMIT OF THE VERB LIST is likewise deliberate. A list of remembered
+ * shapes is the defect this file keeps rediscovering, and no list will be
+ * complete — `os.rename`, a perl three-argument open, anything not yet
+ * invented. What makes that survivable is that this guard is not the
+ * guarantee: the pre-commit refusal is, and every path to production goes
+ * through a commit. This moves the failure earlier and cheaper, nothing more.
  */
 
 const CODE_DIRS = ['lib', 'routes', 'src', 'components', 'scripts', 'public', 'api'];
@@ -57,8 +76,10 @@ const PROGRAM_WRITE_VERBS = [
   // node
   'writeFileSync', 'writeFile', 'appendFileSync', 'appendFile',
   'createWriteStream', 'truncateSync', 'copyFileSync', 'renameSync',
-  // python — pathlib
-  'write_text', 'write_bytes',
+  // python — pathlib, then the stdlib file movers
+  'write_text', 'write_bytes', 'copyfile', 'copy2', 'copytree', 'move',
+  // ruby's one-call file write
+  'IO\\.write', 'File\\.write',
 ];
 const VERB_ALT = PROGRAM_WRITE_VERBS.join('|');
 
@@ -77,8 +98,30 @@ const PROGRAM_WRITE_FORMS = [
   },
 ];
 
-/** An interpreter's heredoc body is a PROGRAM; anything else's is data. */
-const INTERPRETERS = /\b(?:python3?|node|perl|ruby|sh|bash|zsh|php)\b/;
+/**
+ * A heredoc body is one of THREE things, depending on who receives it, and
+ * conflating any two of them is a hole.
+ *
+ *   program interpreter  the body is a program  -> scan with PROGRAM_WRITE_FORMS
+ *   shell interpreter    the body is shell text -> scan with SHELL_WRITE_FORMS
+ *   anything else        the body is data       -> do not scan it at all
+ *
+ * The first draft of this file put `sh`/`bash`/`zsh` in with the program
+ * interpreters, which sent their bodies to the program scan only. A bash
+ * heredoc redirecting into a tracked path was then silently permitted —
+ * a REGRESSION against the rule it was meant to strengthen, because the plain
+ * `echo x > lib/y.js` form has always been caught. Caught in review.
+ */
+const PROGRAM_INTERPRETERS = /\b(?:python3?|node|perl|ruby|php)\b/;
+const SHELL_INTERPRETERS = /\b(?:sh|bash|zsh|ksh|dash)\b/;
+
+/**
+ * Commands that cannot write, whatever they mention. `git log -S writeFileSync
+ * -- lib/` satisfies "a write verb somewhere and a code path somewhere" while
+ * being a pure search — the module's stated bias is to err toward not blocking,
+ * and refusing to let someone SEARCH for writes is the wrong side of that.
+ */
+const READ_ONLY_LEADERS = /^(?:git\s+(?:log|grep|show|diff|blame)|grep|rg|ag|ack|cat|less|head|tail|wc|find)\b/;
 
 /**
  * Split a command into its shell text and the heredoc bodies that are code.
@@ -93,6 +136,7 @@ function splitHeredocs(command) {
   const text = String(command || '');
   const opener = /<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1/g;
   const codeBodies = [];
+  const shellBodies = [];
   let shell = '';
   let cursor = 0;
   let match;
@@ -102,7 +146,6 @@ function splitHeredocs(command) {
     // The line the heredoc was opened on tells us who receives the body.
     const lineStart = text.lastIndexOf('\n', match.index) + 1;
     const openingLine = text.slice(lineStart, match.index);
-    const isCode = INTERPRETERS.test(openingLine);
 
     const bodyStart = text.indexOf('\n', opener.lastIndex);
     if (bodyStart === -1) break;
@@ -110,14 +153,26 @@ function splitHeredocs(command) {
     const rest = text.slice(bodyStart + 1);
     const endMatch = end.exec(rest);
     const bodyEnd = endMatch ? bodyStart + 1 + endMatch.index : text.length;
+    const body = text.slice(bodyStart + 1, bodyEnd);
 
     shell += text.slice(cursor, bodyStart + 1);
-    if (isCode) codeBodies.push(text.slice(bodyStart + 1, bodyEnd));
+    if (PROGRAM_INTERPRETERS.test(openingLine)) codeBodies.push(body);
+    else if (SHELL_INTERPRETERS.test(openingLine)) shellBodies.push(body);
+    // else: data, and deliberately dropped.
+
     cursor = endMatch ? bodyEnd + endMatch[0].length : text.length;
     opener.lastIndex = cursor;
   }
   shell += text.slice(cursor);
-  return { shell, codeBodies };
+  return { shell, codeBodies, shellBodies };
+}
+
+/** Split on shell separators so a read-only leader is judged per subcommand. */
+function subcommands(text) {
+  return String(text || '')
+    .split(/\s*(?:&&|\|\||;|\||\r?\n)\s*/g)
+    .map((part) => part.trim().replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, ''))
+    .filter(Boolean);
 }
 
 /** The reason a command looks like a main-source write, or '' if it does not. */
@@ -125,15 +180,22 @@ function detectSourceWrite(command) {
   const cmd = String(command || '');
   if (!cmd.trim()) return '';
 
-  const { shell, codeBodies } = splitHeredocs(cmd);
+  const { shell, codeBodies, shellBodies } = splitHeredocs(cmd);
 
+  // Shell text is the command itself PLUS any heredoc body handed to a shell —
+  // that body is shell too, and omitting it let `bash <<SH ... > lib/x ... SH`
+  // through when the identical redirect on one line has always been refused.
+  const shellText = [shell, ...shellBodies].join('\n');
   for (const form of SHELL_WRITE_FORMS) {
-    if (form.re.test(shell)) return form.why;
+    if (form.re.test(shellText)) return form.why;
   }
 
   // A program's own source: the shell text (covers `python3 -c "..."` and
-  // `node -e "..."`) plus any heredoc body an interpreter was given.
-  const programText = [shell, ...codeBodies].join('\n');
+  // `node -e "..."`) plus any heredoc body a program interpreter was given.
+  // Subcommands led by a pure search are dropped first, so looking FOR a write
+  // is not mistaken for performing one.
+  const programText = [...subcommands(shellText).filter((part) => !READ_ONLY_LEADERS.test(part)), ...codeBodies]
+    .join('\n');
   for (const form of PROGRAM_WRITE_FORMS) {
     if (form.test(programText)) return form.why;
   }
@@ -159,4 +221,4 @@ function shouldBlockBashOnMain(command, { onMain }) {
   return reason ? { block: true, reason } : { block: false, reason: '' };
 }
 
-module.exports = { detectSourceWrite, targetsWorktree, shouldBlockBashOnMain, splitHeredocs, CODE_DIRS };
+module.exports = { detectSourceWrite, targetsWorktree, shouldBlockBashOnMain, splitHeredocs, subcommands, CODE_DIRS };
