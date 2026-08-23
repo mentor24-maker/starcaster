@@ -14,6 +14,33 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Tickets stop burying the ask in the narrow column (#PR)
+
+ClickUp shows a ticket's description on the left, wide, and its comments on the
+right, narrow. The loops had that backwards. The left column held a spec written
+for a machine, and everything meant for Dane — the reasoning, the risk, the
+question — went into a comment, arriving as a wall of text in the skinniest part
+of the screen.
+
+Two tickets stalled on it the same day. On one, a long comment offered three
+ways to slice the work; Dane picked the smallest and safest, but the ticket went
+back into the build queue still carrying its original full scope, so the next
+unattended pass would have built the risky half he had just deferred — the part
+that rewrites roughly thirty-five live customer pages in one motion. The other
+sat in his inbox for a day under a red "needs your input" badge with no question
+anywhere on it. It was never waiting on him; it was waiting on the first ticket.
+
+Now the detail goes on the left, and the right column carries one short card
+with three fixed parts: his own words that caused the ticket to exist, the
+problem and the fix in fifty to a hundred words of plain English, and the
+specific ask under a banner he can find without reading. The word range is
+checked rather than suggested — too short stops being useful, too long is the
+wall of text this replaces. Handing a ticket to Dane is now a single command
+that posts the card and moves the status together, so a ticket can no longer
+land in his inbox with nothing on it to answer.
+
+---
+
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 
 Thirteen files had a folder path typed into them that only exists on Dane's

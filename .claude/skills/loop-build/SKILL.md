@@ -23,9 +23,37 @@ list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
 npm run clickup -- queue --list 901418546619 --status Queued   # FIRST LINE is the task to claim
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim; exit 3 = someone beat you, take the next
 npm run clickup -- status --task <id> --status "In review"                   # hand off (assignees auto-cleared)
-npm run clickup -- status --task <id> --status "Needs your input"            # escalate (Dane auto-assigned)
-npm run clickup -- comment --task <id> --body-file -                         # body on stdin
+npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # escalate: card + status together
+npm run clickup -- comment --task <id> --body-file -                         # a plain note (PR URL, progress)
+npm run clickup -- describe --task <id> --body-file -                        # REPLACE the description (left column)
 ```
+
+## The two columns — which one you are writing to
+
+ClickUp shows the description on the **left**, wide, and comments on the
+**right**, narrow. Detail goes left. The right column carries the PR URL and the
+operator card, nothing else.
+
+Ratified 2026-08-22 after Sync 6/7 and 7/7 both stalled: the loops had been
+writing their reasoning as long comments, so it arrived as a wall of text in the
+skinniest part of the screen while the roomy left column held a machine-shaped
+spec. Dane could not tell what was being asked of him on either ticket.
+
+**Escalating is one command, not two.** `status --status "Needs your input"`
+refuses on its own now — a status move with no stated ask is a red badge in his
+inbox with no answerable question on it, which is exactly how 7/7 sat there for
+a day. Use `ask`, whose body is four sections, checked before anything is sent:
+
+```
+@@ASKED     his own words that caused this ticket, verbatim — never invented
+@@WHEN      optional — when and where he said it
+@@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
+@@NEEDED    the specific ask; "Nothing right now" is fine, but say it out loud
+```
+
+`@@NEEDED` renders under a banner he can spot without reading. If the ticket
+genuinely has no instruction behind it, say that in `@@ASKED` and name the
+standing decision it descends from.
 
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
@@ -105,12 +133,14 @@ the run report.
      Needs `npm run dev` and `npm run seed:ui-fixture` first, and is **not** a
      CI gate (CI has no browsers), so nothing else will catch a regression here.
 
-   If a gate fails and you cannot fix it **within the task's scope**, set the
-   task to `Needs your input` **and assign Dane (`48012725`)**, add a ClickUp
-   comment explaining exactly what failed, and stop. Do not force a broken
-   build through, and do not expand scope to chase an unrelated failure. That
-   status is the operator's inbox: write the comment for a non-programmer, and
-   end it with the specific question or decision you need from him.
+   If a gate fails and you cannot fix it **within the task's scope**, escalate
+   with `ask` (which posts the card and assigns Dane in one move) and stop. Do
+   not force a broken build through, and do not expand scope to chase an
+   unrelated failure. Put the full diagnosis in the **description** with
+   `describe` — the failing command, its output, what you tried — and keep
+   `@@CONTEXT` to the 50-100 words a non-programmer needs to decide. End
+   `@@NEEDED` with the specific question, and where you can, give him named
+   options to pick between rather than an open question.
 
 5. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
@@ -146,7 +176,12 @@ the run report.
   another step or by the operator.
 - **Never set `Ready to launch` and never clear `Needs your input`.** Those two
   are the operator's; only he moves a task out of them.
-- If the task description is too vague to build safely, set it
-  `Needs your input` with a comment asking for a `loop-spec` pass — don't
-  guess.
+- If the task description is too vague to build safely, `ask` for a `loop-spec`
+  pass — don't guess. Name in `@@NEEDED` the specific thing that is missing.
+- **If a task is bigger or riskier than one unattended pass should build**, say
+  so with `ask` *before* building, and offer him named slices to pick from,
+  smallest-and-safest first. Then **build only the slice he names** — narrow the
+  description with `describe` to match his answer before you start. A ticket
+  handed back to `Queued` still carrying its original wide scope is how the
+  risky half gets built by accident (Sync 6/7, 2026-08-22).
 - Leave the worktree in place until the PR merges; `loop-review` may reuse it.
