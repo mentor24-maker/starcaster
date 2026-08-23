@@ -87,6 +87,41 @@ wrong with either, and both work — but a picture set to Slide and a picture se
 to Cruise will look identical and offer identical settings, which is exactly the
 reason Cartwheels was left out. Whether Slide stays on the menu is Dane's call;
 removing it later is a one-line change.
+## 2026-08-22 — Three ways an approved ticket quietly never shipped, closed (#388)
+
+Saying "merge" on a ticket now actually merges it, which works — but clearing
+the backlog on 2026-08-22 turned up three ways your approval could sit there
+doing nothing while everything looked fine. All three were bookkeeping: the
+work was built, reviewed and approved, and still did not ship.
+
+**One: a refusal used to be permanent.** When the merge step couldn't act — say
+the ticket didn't name its pull request — it explained why once and then never
+looked at that ticket again, even after the reason was fixed minutes later. Two
+tickets went quiet that way and only a hand audit found them. A refusal is now
+re-checked on every pass: the moment the reason goes away the ticket goes
+through, with no second word from you. While the reason still stands it says
+nothing, so nothing gets noisier. The refusal message now says this out loud
+instead of reading like a report you have to act on.
+
+**Two: the trail from ticket to pull request was written down but not
+enforced.** Four approved tickets had no record of which pull request they were
+about, so the merge step rightly refused to guess; two of those pull requests
+also carried no link back to their ticket, leaving the two matchable only by
+reading titles. Recording the pull request is now a command that checks the
+link runs both ways and re-reads its own writing through the merge step's eyes
+— if it can't be read back, the build run fails then and there rather than
+handing over a ticket that will stall later.
+
+**Three: two tickets reached "Ready to launch" without ever passing review.**
+That status is your safe-to-merge signal, so you approved both in good faith.
+Recording the review verdict is now a command too, and the two places a loop
+can set that status both refuse it unless a passing verdict is on the ticket.
+(The ClickUp website and the ClickUp connector can still set it directly —
+nothing in this codebase can reach those, and that is written down where the
+next person will look.)
+
+---
+
 ## 2026-08-22 — Editing on main is now blocked whichever way you do it (#372)
 
 The rule "don't work directly on the main branch (it deploys straight to the

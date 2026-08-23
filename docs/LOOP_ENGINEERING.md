@@ -67,7 +67,9 @@ npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
-npm run clickup -- comment --task <id> --body-file -           # a plain note (PR URL, progress)
+npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
+npm run clickup -- verdict --task <id> --pass|--fail --body-file -  # record the review verdict (loop-review step 4)
+npm run clickup -- comment --task <id> --body-file -           # a plain note (progress, context)
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 ```
@@ -77,6 +79,57 @@ clears assignees, and both halves of the write are verified from the response.
 `--if-status` makes a claim safe against a parallel loop: it exits code 3
 without writing if the task has already moved. It **refuses** to move a ticket
 into `Needs your input` or `Ready to launch` — see the next section.
+
+### The two traces a ticket must carry (added 2026-08-22, task 86bbjt18r)
+
+`pr-opened` and `verdict` are not politer spellings of `comment`. Each writes
+one exact shape, and each **reads it back through the same parser its consumer
+uses** — so a comment that the merge step could not act on is a comment these
+commands refuse to call written. Both exit non-zero when the trace does not
+land, and a non-zero exit fails the loop run.
+
+They exist because both traces used to be prose in a skill file, and prose is
+followed most of the time. Draining the Ready-to-launch backlog on 2026-08-22
+found what the other times cost:
+
+- **Four approved tickets had no `PR opened:` comment**, so the merge step
+  correctly refused to guess which PR they meant — and two of those PRs also
+  shipped with no ClickUp link in the body, so ticket and PR could only be
+  paired by reading titles. `pr-opened` now checks the PR body FIRST (exit 4
+  if the link is missing) and only then writes the ticket side.
+- **Two tickets reached `Ready to launch` with no passing review on them.**
+  That status is the operator's "safe to merge" signal; he approved both in
+  good faith. `ask` and `status` now both refuse to set it unless the newest
+  verdict on the ticket is a PASS. `--operator-asked` overrides, and says in
+  the transcript that a human took responsibility for it.
+
+**What the gate does NOT cover, stated out loud.** `status` and `ask` in
+`scripts/clickup_direct.mjs` are the only two writers of that status anywhere
+in this repo — `scripts/reconcile_clickup_github.cjs` treats operator statuses
+as read-only and never sets them — so every loop path is now closed. Two doors
+remain open that code here cannot reach: the ClickUp **web UI** (a person
+dragging a card), and the claude.ai **ClickUp connector** (`clickup_update_task`),
+which any agent session can call directly without passing through this script.
+If an unreviewed ticket turns up in `Ready to launch` again, look there first
+— and the loops should keep using `npm run clickup`, which is the only door
+with a lock on it.
+
+### A refusal is not a verdict on the ticket
+
+The merge step marks an authorization it has acted on, so the same answer is
+never posted twice. Until task 86bbjt18r that marker was permanent even for a
+**refusal**, which meant a refused ticket was never looked at again. On
+2026-08-22 two tickets were refused for "no PR opened: comment", the comment
+was added by hand minutes later, and the next three passes did not re-read
+them: they simply dropped out of the run. Dane's approval was still there,
+still valid, and only a human audit would ever have found it.
+
+Refusal markers now record their reason and are **re-decided on every pass**.
+Nothing extra is posted while the reason still holds — the same answer twice
+says nothing new — but the moment it changes, or goes away, the ticket goes
+through with no second word from him. Markers for a completed merge or a
+conflict hand-off stay terminal, because re-deciding a merged PR is the one
+mistake that cannot be undone.
 
 ## The two columns, and the operator card (ratified 2026-08-22)
 
