@@ -27,7 +27,6 @@ the grid.
 
 ---
 
-## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 ## 2026-08-22 — See what the loop queue is actually doing, at a glance (#370)
 
 The task list showed which stage each item was in, but not whether the
