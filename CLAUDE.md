@@ -167,6 +167,14 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     success. Spread the page (`{ ...page, layoutSections: next }`) so
     `pageBackground` and `theme` are not reset, and read the page back after
     writing before you touch the next one.
+14. **A vitest test must not require a generated server lib.** CI runs
+    `npx vitest run` BEFORE `npm run build`, so anything under `lib/builder/`
+    (`template.js`, `document.js` → `./template`, …) does not exist at vitest
+    time — a test reaching it passes locally forever and fails CI forever
+    (PR #343). vitest (`components/**`, `lib/builder-client/**`) tests TS
+    sources only; a test needing a generated lib goes in the node suite
+    (`scripts/builder/*.test.js`, run after the build). Enforced by
+    `check_vitest_generated_lib.cjs`; full story in `docs/DOCTRINE.md` §5.18.
 
 ## Working locally
 
