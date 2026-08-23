@@ -269,3 +269,102 @@ test('checkState reads both rollup shapes and both failure spellings', () => {
   assert.deepEqual(s.pending, ['c', 'd']);
   assert.equal(s.failed.length, 2);
 });
+
+// ------------------------------------------- re-planning a refusal (86bbjt18r)
+
+const {
+  MERGE_MARKER,
+  parseMergeMarker,
+  latestMergeMarker,
+} = require('./mergeOnComment.js');
+
+/** A marker reply, in the exact shape markMergeHandled writes. */
+function marker(t, what) {
+  return { id: `m${nextId++}`, date: String(1000 + t), comment_text: `${MERGE_MARKER} ${what} — 2026-08-22T0${t}:00:00.000Z` };
+}
+
+test('a marker that is not ours parses as nothing', () => {
+  assert.equal(parseMergeMarker('[bus-relay] sent to channel 2kydhxeu-474 at ...'), null);
+  assert.equal(parseMergeMarker(''), null);
+  assert.equal(parseMergeMarker('merge'), null);
+});
+
+test('a refusal marker keeps its reason, em-dash and all', () => {
+  const why = 'no "PR opened:" comment on this ticket — nothing to merge';
+  const parsed = parseMergeMarker(`${MERGE_MARKER} refused: ${why} — 2026-08-22T04:00:00.000Z`);
+  assert.equal(parsed.kind, 'refused');
+  assert.equal(parsed.reason, why);
+  assert.equal(parsed.at, '2026-08-22T04:00:00.000Z');
+});
+
+test('a merge and a conflict hand-off are terminal, and stay terminal', () => {
+  assert.equal(parseMergeMarker(`${MERGE_MARKER} merged PR #372 at 2026-08-22T04:00:00.000Z — 2026-08-22T04:00:01.000Z`).kind, 'terminal');
+  assert.equal(parseMergeMarker(`${MERGE_MARKER} conflict hand-off on PR #380 — 2026-08-22T04:00:00.000Z`).kind, 'terminal');
+});
+
+test('markers written before this change still parse (nothing needs migrating)', () => {
+  // The live format has not changed — only its reading. Both of these are
+  // verbatim from the 2026-08-22 run.
+  assert.equal(parseMergeMarker(`${MERGE_MARKER} refused: the most recent review verdict is not a PASS — 2026-08-22T03:12:44.101Z`).kind, 'refused');
+  assert.equal(parseMergeMarker(`${MERGE_MARKER} merged PR #345 at 2026-08-22T03:20:00.000Z — 2026-08-22T03:20:02.222Z`).kind, 'terminal');
+});
+
+test('the NEWEST marker decides — a refusal after a refusal replaces it', () => {
+  const replies = [marker(1, 'refused: reason A'), marker(3, 'refused: reason B'), marker(2, 'refused: reason C')];
+  assert.equal(latestMergeMarker(replies).reason, 'reason B');
+  assert.equal(latestMergeMarker([]), null);
+});
+
+test('THE BUG: a refusal is re-planned once its reason is fixed, with no second "merge"', () => {
+  // 2026-08-22, verbatim: refused for "no PR opened:", the comment added by
+  // hand minutes later, and three later passes never looked again.
+  const cmd = c(3, OPERATOR, 'merge');
+  const before = [reviewPassed(2), cmd];
+  const first = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments: before });
+  assert.equal(first.act, 'refuse');
+  assert.match(first.reason, /no "PR opened:"/);
+
+  // The pass that refused wrote a marker recording that reason. Rebuild the
+  // refusal map the way bus-relay does — by PARSING that marker back off the
+  // reply thread — so this test exercises the reader, not just the rule.
+  // Under the old rule the comment was struck off forever. Now the missing PR
+  // comment arrives and the very next pass merges it — Dane says nothing.
+  const replies = [marker(3, `refused: ${first.reason}`)];
+  const parsed = latestMergeMarker(replies);
+  assert.equal(parsed.kind, 'refused');
+  const refused = new Map([[first.commentId, parsed.reason]]);
+  const after = [...before, prOpened(4)];
+  const second = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments: after, refused });
+  assert.equal(second.act, 'merge');
+  assert.equal(second.pr.number, 362);
+});
+
+test('re-planning is silent while the reason still holds — no duplicate refusals', () => {
+  const cmd = c(3, OPERATOR, 'merge');
+  const comments = [reviewPassed(2), cmd];
+  const first = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments });
+  const refused = new Map([[first.commentId, first.reason]]);
+  const again = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments, refused });
+  assert.equal(again.act, 'ignore');
+  assert.match(again.reason, /already refused for the same reason/);
+});
+
+test('a DIFFERENT refusal reason is news, and is said out loud', () => {
+  const cmd = c(3, OPERATOR, 'merge');
+  const comments = [reviewPassed(2), cmd];
+  const refused = new Map([[String(cmd.id), 'some older reason that no longer applies']]);
+  const out = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments, refused });
+  assert.equal(out.act, 'refuse');
+  assert.match(out.reason, /no "PR opened:"/);
+});
+
+test('a TERMINAL marker is still spent forever — a merged PR is never re-merged', () => {
+  const cmd = c(3, OPERATOR, 'merge');
+  const comments = [reviewPassed(1), prOpened(2), cmd];
+  const out = mergeDecision({
+    status: 'ready to launch', operatorId: OPERATOR, comments,
+    handled: new Set([String(cmd.id)]),
+    refused: new Map(),
+  });
+  assert.equal(out.act, 'ignore');
+});
