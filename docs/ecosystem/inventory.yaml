@@ -237,7 +237,7 @@ objects:
     name: bus-relay
     kind: job
     layer: coordination
-    summary: Every hour, relays Dane's new ClickUp task comments onto the party line so agents see what he said.
+    summary: Every hour, relays Dane's new ClickUp task comments onto the party line, hands answered tickets back to the machine, and merges the PRs he has approved by comment.
     links:
       url: https://github.com/mentor24-maker/starcaster/blob/main/scripts/builder/busRelayPlan.js
     host: macbook-pro
@@ -447,6 +447,7 @@ relationships:
   - {from: job-colima, to: mac-mini, label: scheduled on, kind: schedules}
   - {from: job-bus-relay, to: clickup-bus, label: posts to, kind: writes}
   - {from: job-bus-relay, to: clickup-api, label: reads comments through, kind: reads}
+  - {from: job-bus-relay, to: repo-starcaster, label: merges approved PRs into, kind: writes}
   - {from: job-librarian-sweep, to: repo-vault, label: sweeps, kind: reads}
   - {from: job-channel-steward, to: repo-pulse, label: run by, kind: runs}
   - {from: job-librarian-sweep, to: repo-pulse, label: run by, kind: runs}
