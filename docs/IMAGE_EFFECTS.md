@@ -23,14 +23,27 @@ A control that does nothing is the specific bug this feature was born from
 
 | Setting | Applies to | Values | Default | Means |
 |---|---|---|---|---|
-| **Effect** | all | None, Bounce, Fast Bounce, Big Bounce, Spin, Cruise, Tumbleweed | None | What it does |
-| **Direction** | Cruise, Tumbleweed | Left to Right, Right to Left | Left to Right | Which way it crosses |
-| **Speed** | Cruise, Tumbleweed | 2s – 60s | 8s | How long ONE crossing takes |
-| **Repeat** | Cruise, Tumbleweed | Forever, Once | Forever | Loop, or cross once and stay gone |
-| **Rotation Rate** | Spin, Tumbleweed | 5 – 120 turns/min | 25 | How fast it turns |
-| **Frequency** | Tumbleweed | 1 – 16 per crossing | 4 | How many hops per crossing |
-| **Bounce Height** | Tumbleweed | 10% – 500% | 50% | Hop height, as a share of the picture's own height |
-| **Start Delay** | Cruise, Tumbleweed | 0 – 12s | 0 | Wait before setting off |
+| **Effect** | all | None, Bounce, Fast Bounce, Big Bounce, Spin, Slide, Tumbleweed, Axis Rotate, Flips | None | What it does |
+| **Direction** | Slide, Tumbleweed | Left to Right, Right to Left | Left to Right | Which way it crosses |
+| **Speed** | Slide, Tumbleweed | 2s – 60s | 8s | How long ONE crossing takes |
+| **Repeat** | Slide, Tumbleweed | Forever, Once | Forever | Loop, or cross once and stay gone |
+| **Rotation Rate** | Spin, Tumbleweed, Axis Rotate, Flips | 5 – 120 turns/min | 25 | How fast it turns |
+| **Frequency** | Tumbleweed, Flips | 1 – 16 per crossing | 4 | How many hops per crossing |
+| **Bounce Height** | Tumbleweed, Flips | 10% – 500% | 50% | Hop height, as a share of the picture's own height |
+| **Start Delay** | Slide, Tumbleweed | 0 – 12s | 0 | Wait before setting off |
+
+**Slide, Axis Rotate and Flips were surfaced on 2026-08-22.** They had full
+keyframes in the stylesheet and no way to pick them — the mirror image of the
+bug below. Cartwheels and Parkour are still unsurfaced; Cartwheels because it
+is Tumbleweed under another name.
+
+**Cruise was retired the same day and IS Slide.** The two were one effect
+under two names, with byte-for-byte identical CSS, so the operator collapsed
+them: "wherever you see Cruise, consolidate it into Slide." Pages saved before
+that still store `effect: "cruise"` and still animate — `RETIRED_IMAGE_EFFECTS`
+in `components/builder/builder-image-effects.ts` maps the old name to the new
+one at every entry point, the same way `RETIRED_MODULE_TYPES` handles a renamed
+module. Nothing needs migrating; the picker simply no longer offers it.
 
 Two of those units are deliberate and worth keeping:
 

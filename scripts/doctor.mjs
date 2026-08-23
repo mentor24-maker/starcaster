@@ -365,6 +365,41 @@ if (missing.length) {
   ok('All present, and newer than the code behind them.');
 }
 
+// --- main branch: no stray edits in the shared checkout ---------------------
+
+heading('MAIN BRANCH');
+
+// Work belongs in a worktree; the main checkout should stay clean. Uncommitted
+// changes there are the 2026-08-20 failure (a whole feature written into the
+// main folder) waiting to happen. Find the main worktree from `git worktree
+// list` — doctor may be run from a linked worktree — and check ITS tree.
+const wtList = sh('git', ['worktree', 'list', '--porcelain']);
+let mainWorktreePath = '';
+if (wtList.ok) {
+  let cur = '';
+  for (const line of wtList.text.split('\n')) {
+    if (line.startsWith('worktree ')) cur = line.slice('worktree '.length).trim();
+    else if (line.trim() === 'branch refs/heads/main') { mainWorktreePath = cur; break; }
+  }
+}
+if (!mainWorktreePath) {
+  unknown('Could not locate the main worktree.', 'git worktree list reported no branch refs/heads/main checkout.');
+} else {
+  const dirty = sh('git', ['-C', mainWorktreePath, 'status', '--porcelain']);
+  const changes = dirty.ok ? dirty.text.split('\n').filter((l) => l.trim()).length : -1;
+  if (changes > 0) {
+    bad(
+      `main has ${changes} uncommitted change${changes === 1 ? '' : 's'} — work belongs in a worktree.`,
+      'npm run thread <topic>   (git stash → new worktree → git stash pop to carry them over)',
+      `The main checkout auto-deploys on push; stray edits there are how the 2026-08-20 near-miss happened. (${mainWorktreePath})`,
+    );
+  } else if (changes === 0) {
+    ok('Clean — no stray edits in the shared main checkout.');
+  } else {
+    unknown('Could not read the main checkout status.', `git -C ${mainWorktreePath} status failed.`);
+  }
+}
+
 // --- 5. the app itself ------------------------------------------------------
 
 heading('THE APP');
