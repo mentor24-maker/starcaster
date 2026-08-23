@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — Saying "merge" on a ticket now actually merges it (#PR)
+## 2026-08-22 — Saying "merge" on a ticket now actually merges it (#371)
 
 When a piece of work has been built and independently reviewed, it waits in
 `Ready to launch` for Dane to say go. He says go by replying **merge** on the
@@ -46,7 +46,7 @@ Nothing about who decides has changed: the merge is still his, and no loop
 can approve its own work. What changed is that his decision no longer has to
 wait for someone to be watching.
 
-## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
+## 2026-08-22 — The code stops assuming it lives on one particular laptop (#368)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
 MacBook. That is fine right up until the same code runs somewhere else — on
