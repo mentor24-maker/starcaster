@@ -314,6 +314,18 @@ let lastReport = '';
  * hooks re-pin an asset the commit stops being empty, which is equally fine —
  * all that matters is that the head SHA moves.
  */
+/**
+ * Which STEP of the nudge failed, or null if it did not fail.
+ *
+ * 'commit' and 'push' are different situations for the operator and the advice
+ * differs completely: after a failed commit the branch really does need a new
+ * one, but after a failed push the commit already exists locally and an
+ * ordinary `git push` (or another `npm run ship`) sends it. The message at the
+ * bottom used to give the commit-failed advice for both, so in the push case it
+ * told him NOT to do the one thing that works.
+ */
+let nudgeFailedAt = null;
+
 function nudgeChecks() {
   say('    Still nothing after the grace window. Waiting longer cannot help: with no new');
   say('    push GitHub never creates a run. Pushing an empty commit to trigger one.');
@@ -325,13 +337,16 @@ function nudgeChecks() {
   const committed = quiet('git', ['commit', '--allow-empty', '-m', message]);
   if (!committed.ok) {
     say(`    Could not make the commit:\n${committed.out}`);
+    nudgeFailedAt = 'commit';
     return false;
   }
   const pushed = quiet('git', pushArgs);
   if (!pushed.ok) {
     say(`    Could not push it:\n${pushed.out}`);
+    nudgeFailedAt = 'push';
     return false;
   }
+  nudgeFailedAt = null;
   say('    Pushed. Watching for the run it should create.');
   return true;
 }
@@ -367,13 +382,24 @@ if (wait.outcome === 'never_appeared') {
         `on this branch. Nothing was merged; the work is safe. Check that Actions is enabled\n` +
         `for the repository and that the workflow file is present on the branch.\n\n` +
         `Look at: ${prUrl}`
-      // The nudge is only skipped when it could not be made — a failed commit or
-      // a rejected push, both already printed above.
-      : `No checks ever appeared on the branch, and the extra push that would have created\n` +
-        `one could not be made (see the reason above). Nothing was merged; the work is safe\n` +
-        `on the branch. Re-running \`npm run ship\` on its own will NOT help — the branch\n` +
-        `needs a new commit before GitHub will make a run.\n\n` +
-        `Look at: ${prUrl}`
+      // The nudge is only skipped when it could not be made — and the two ways
+      // it can fail need OPPOSITE advice, so they get their own sentences. The
+      // single message that used to stand here gave the commit-failed advice in
+      // both cases, which in the push case told the operator not to do the one
+      // thing that works.
+      : nudgeFailedAt === 'push'
+        ? `No checks ever appeared on the branch. The extra commit that would create one was\n` +
+          `made, but pushing it failed (see the reason above), so it is sitting on this branch\n` +
+          `locally and GitHub has not seen it. Nothing was merged; the work is safe.\n\n` +
+          `Push it and the run should start:\n` +
+          `  git push\n` +
+          `or just run \`npm run ship\` again — it picks up where it got to.\n\n` +
+          `Look at: ${prUrl}`
+        : `No checks ever appeared on the branch, and the extra commit that would have created\n` +
+          `one could not be made (see the reason above). Nothing was merged; the work is safe\n` +
+          `on the branch. Re-running \`npm run ship\` on its own will NOT help — the branch\n` +
+          `needs a new commit before GitHub will make a run.\n\n` +
+          `Look at: ${prUrl}`
   );
 }
 if (wait.outcome === 'timed_out_pending') {

@@ -480,9 +480,19 @@ git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push
 ```
 
 **Avoiding it in the first place:** do not push again in the seconds right after
-`gh pr create`. The build loop's own work-log entry carries the PR number, so it
-is written and pushed *before* the PR is opened where possible; where it cannot
-be, leave a gap or expect the nudge to do the work.
+`gh pr create`. Open the PR, wait until `gh pr checks <pr>` lists a run, and
+only then push the work-log commit — the ordering
+`.claude/skills/loop-build/SKILL.md` step 7 spells out.
+
+This used to say the opposite: push the work-log commit *before* opening the PR.
+That advice was self-contradictory (the entry carries the PR number, so it
+cannot be written before the PR exists) and it caused the OTHER failure while
+avoiding this one. Follow it and the work-log commit is the newest
+hand-authored commit when the PR is named, so `pickPullRequestCommit` titles the
+PR after it — `SHIP_AUTHORED_SUBJECTS` skips only the re-pin and nudge subjects,
+and a work-log commit is hand-authored. Squash-merge then makes that title
+permanent. That is exactly the #304 failure, and why
+`docs/MISLABELED_MERGES.md` exists.
 
 ## Reading the queue at a glance — the Loop note
 
