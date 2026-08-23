@@ -16,7 +16,11 @@ import type { CSSProperties } from "react";
  * The five effects that DO have keyframes but no option — flips, slide,
  * cartwheels, parkour, axis-rotate — were the other half of the same drift:
  * reachable only by hand-editing a setting, because surfacing them was a
- * design question for the operator rather than a bug fix.
+ * design question for the operator rather than a bug fix. Three of them
+ * (flips, slide, axis-rotate) were surfaced on 2026-08-22; cartwheels and
+ * parkour stay unsurfaced, cartwheels because it is Tumbleweed renamed.
+ *
+ * Surfacing Slide then made Cruise redundant — see RETIRED_IMAGE_EFFECTS.
  *
  * He answered it on 2026-08-19 (ClickUp 86bbfrpbb). Slide, axis-rotate and
  * flips are offered here from 2026-08-22. CARTWHEELS IS DELIBERATELY NOT —
@@ -41,7 +45,6 @@ export const IMAGE_EFFECT_OPTIONS: { value: string; label: string }[] = [
   { value: "fast-bounce", label: "Fast Bounce" },
   { value: "big-bounce", label: "Big Bounce" },
   { value: "spin", label: "Spin" },
-  { value: "cruise", label: "Cruise" },
   { value: "tumbleweed", label: "Tumbleweed" },
   // Surfaced 2026-08-22 on the operator's decision (ClickUp 86bbfrpbb): three
   // of the five effects that had keyframes but no way to pick them. Cartwheels
@@ -51,6 +54,32 @@ export const IMAGE_EFFECT_OPTIONS: { value: string; label: string }[] = [
   { value: "axis-rotate", label: "Axis Rotate" },
   { value: "flips", label: "Flips" }
 ];
+
+/**
+ * Effects that have been folded into another one. Cruise and Slide were the
+ * SAME effect under two names — byte-for-byte identical CSS, one animation on
+ * one property with the same defaults — and Slide is the name that survives
+ * (operator, 2026-08-22). Cartwheels was rejected earlier for exactly this
+ * duplicate-under-two-names shape; Cruise had already shipped, so it gets an
+ * alias instead of a deletion.
+ *
+ * An alias, not a removal, because saved pages carry `effect: "cruise"` in
+ * their settings JSON. Dropping the option without this map would leave those
+ * pictures with an effect nothing renders — a still image and no error, which
+ * is the exact failure that put this whole module in the repair queue on
+ * 2026-08-16. `normalizeImageEffect` is applied at every entry point that
+ * reads an effect name, so nothing downstream needs to know the old spelling.
+ * The same idea as RETIRED_MODULE_TYPES in builder-template.ts.
+ */
+export const RETIRED_IMAGE_EFFECTS: Record<string, string> = {
+  cruise: "slide"
+};
+
+/** The surviving name for an effect, given whatever a saved page stored. */
+export function normalizeImageEffect(effect: string | undefined): string | undefined {
+  if (effect === undefined) return undefined;
+  return RETIRED_IMAGE_EFFECTS[effect] ?? effect;
+}
 
 /**
  * Rotation Rate, in turns per minute. A rate is the natural unit here
@@ -98,7 +127,7 @@ export const IMAGE_EFFECT_FREQUENCY_OPTIONS: { value: string; label: string }[] 
  * every page that already uses it renders unchanged.
  */
 /**
- * Direction of travel (operator, 2026-08-17). Offered on Cruise as well as
+ * Direction of travel (operator, 2026-08-17). Offered on Slide as well as
  * Tumbleweed: it is one motion underneath, and a control that appears on one
  * of two identical travels is a control the operator has to remember the
  * exception for.
@@ -199,17 +228,17 @@ export const DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT = "50";
  */
 export const IMAGE_EFFECT_TRAVEL_SECONDS = 8;
 
-export function getImageEffectClassName(effect: string | undefined) {
+export function getImageEffectClassName(rawEffect: string | undefined) {
+  const effect = normalizeImageEffect(rawEffect);
   if (effect === "bounce") return " starcaster-effect-bounce";
   if (effect === "fast-bounce") return " starcaster-effect-fast-bounce";
   if (effect === "big-bounce") return " starcaster-effect-big-bounce";
   if (effect === "spin") return " starcaster-effect-spin";
-  if (effect === "cruise") return " starcaster-effect-cruise";
   if (effect === "tumbleweed") return " starcaster-effect-tumbleweed";
   // NOT `starcaster-effect-slide`: `_builder-react.css` (regenerated, never
   // hand-edited) still carries the buried effect's OLD `!important` overlay
   // LAYOUT rules keyed on `:has(.starcaster-effect-slide)`, which collapse a
-  // floating image to 0px. Cruise/tumbleweed had no such legacy rules, so
+  // floating image to 0px. The other effects had no such legacy rules, so
   // their class could keep its plain name; slide's must dodge the dead
   // selectors, so it emits a name they do not match (loop-review round 4).
   if (effect === "slide") return " starcaster-effect-slide-motion";
@@ -219,7 +248,7 @@ export function getImageEffectClassName(effect: string | undefined) {
 }
 
 /**
- * Cruise / tumbleweed travel a whole viewport width in each direction, so
+ * Slide / tumbleweed travel a whole viewport width in each direction, so
  * they need the clip — both to stop the page scrolling sideways and, since
  * 2026-08-17, to break the corridor out of whatever column contains it.
  */
@@ -228,12 +257,14 @@ export function usesHorizontalMotionClip(effect: string | undefined): boolean {
 }
 
 /** The effects that cross the page — Direction applies to these. */
-export function imageEffectTravels(effect: string | undefined): boolean {
-  return effect === "cruise" || effect === "tumbleweed" || effect === "slide";
+export function imageEffectTravels(rawEffect: string | undefined): boolean {
+  const effect = normalizeImageEffect(rawEffect);
+  return effect === "tumbleweed" || effect === "slide";
 }
 
 /** The effects Rotation Rate applies to — nothing else shows the control. */
-export function imageEffectRotates(effect: string | undefined): boolean {
+export function imageEffectRotates(rawEffect: string | undefined): boolean {
+  const effect = normalizeImageEffect(rawEffect);
   return (
     effect === "spin" ||
     effect === "tumbleweed" ||
@@ -243,7 +274,8 @@ export function imageEffectRotates(effect: string | undefined): boolean {
 }
 
 /** The effects Frequency applies to. */
-export function imageEffectBounces(effect: string | undefined): boolean {
+export function imageEffectBounces(rawEffect: string | undefined): boolean {
+  const effect = normalizeImageEffect(rawEffect);
   return effect === "tumbleweed" || effect === "flips";
 }
 
@@ -294,7 +326,7 @@ export function imageEffectRunsOnce(settings: Record<string, string>): boolean {
 export function normalizeImageEffectBounceHeight(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed)) return Number(DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT);
-  // 0 is allowed and means "travel flat" — the same picture Cruise gives, but
+  // 0 is allowed and means "travel flat" — the same picture Slide gives, but
   // reachable without losing the spin.
   return Math.min(Math.max(parsed, 0), 1000);
 }

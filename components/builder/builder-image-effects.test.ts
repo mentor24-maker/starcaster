@@ -16,6 +16,7 @@ import {
   imageEffectRotates,
   imageEffectRunsOnce,
   imageEffectTravels,
+  normalizeImageEffect,
   normalizeImageEffectBounceHeight,
   normalizeImageEffectDelay,
   normalizeImageEffectFrequency,
@@ -124,8 +125,8 @@ describe("image effects", () => {
   });
 
   it("Start Delay is written only when it is not zero", () => {
-    expect((getImageEffectStyle({ effect: "cruise", effectDelay: "3" }) as Record<string, string>)["--sc-effect-delay"]).toBe("3s");
-    expect((getImageEffectStyle({ effect: "cruise", effectDelay: "0" }) as Record<string, string>)["--sc-effect-delay"]).toBeUndefined();
+    expect((getImageEffectStyle({ effect: "slide", effectDelay: "3" }) as Record<string, string>)["--sc-effect-delay"]).toBe("3s");
+    expect((getImageEffectStyle({ effect: "slide", effectDelay: "0" }) as Record<string, string>)["--sc-effect-delay"]).toBeUndefined();
     // The hop has to wait with it, or the ball bounces before it sets off.
     expect(
       (getImageEffectStageStyle({ effect: "tumbleweed", effectDelay: "3" }) as Record<string, string>)["--sc-effect-delay"]
@@ -176,7 +177,7 @@ describe("image effects", () => {
   it("offers Rotation Rate only to the effects that rotate", () => {
     expect(imageEffectRotates("spin")).toBe(true);
     expect(imageEffectRotates("tumbleweed")).toBe(true);
-    expect(imageEffectRotates("cruise")).toBe(false);
+    expect(imageEffectRotates("slide")).toBe(false);
     expect(imageEffectRotates("bounce")).toBe(false);
     expect(imageEffectRotates(undefined)).toBe(false);
   });
@@ -224,8 +225,8 @@ describe("image effects", () => {
   it("only tumbleweed leaves the midline", () => {
     expect(imageEffectBounces("tumbleweed")).toBe(true);
     expect(imageEffectBounces("spin")).toBe(false);
-    expect(imageEffectBounces("cruise")).toBe(false);
-    expect(getImageEffectStageStyle({ effect: "cruise", effectFrequency: "4" })).toBeUndefined();
+    expect(imageEffectBounces("slide")).toBe(false);
+    expect(getImageEffectStageStyle({ effect: "slide", effectFrequency: "4" })).toBeUndefined();
     expect(getImageEffectStageStyle({ effect: "spin", effectFrequency: "4" })).toBeUndefined();
   });
 
@@ -250,17 +251,17 @@ describe("image effects", () => {
     expect(getImageEffectStyle({ effect: "bounce" })).toBeUndefined();
     // Cruise does not rotate, so it gets no turn duration — but it travels,
     // so it carries a crossing time and is entitled to a direction.
-    expect(getImageEffectStyle({ effect: "cruise", effectRotationRate: "60" })).toEqual({
+    expect(getImageEffectStyle({ effect: "slide", effectRotationRate: "60" })).toEqual({
       "--sc-effect-travel-duration": "8s"
     });
   });
 
   it("reverses travel and spin together, and only when asked", () => {
-    expect(imageEffectTravels("cruise")).toBe(true);
+    expect(imageEffectTravels("slide")).toBe(true);
     expect(imageEffectTravels("tumbleweed")).toBe(true);
     expect(imageEffectTravels("spin")).toBe(false);
 
-    expect(getImageEffectStyle({ effect: "cruise", effectDirection: "rtl" })).toEqual({
+    expect(getImageEffectStyle({ effect: "slide", effectDirection: "rtl" })).toEqual({
       "--sc-effect-travel-duration": "8s",
       "--sc-effect-direction": "reverse"
     });
@@ -270,7 +271,7 @@ describe("image effects", () => {
       "--sc-effect-direction": "reverse"
     });
     // Left to right is the absence of the variable, not a second keyword.
-    expect(getImageEffectStyle({ effect: "cruise", effectDirection: "ltr" })).toEqual({
+    expect(getImageEffectStyle({ effect: "slide", effectDirection: "ltr" })).toEqual({
       "--sc-effect-travel-duration": "8s"
     });
     // Spin turns in place; a direction on it would be a control that does
@@ -280,10 +281,47 @@ describe("image effects", () => {
     });
   });
 
+  /* ── Cruise retired into Slide (2026-08-22) ──────────────────────────────
+   *
+   * The operator collapsed the two after Slide was surfaced: "wherever you see
+   * Cruise, consolidate it into Slide". They were one effect under two names —
+   * identical CSS, identical controls. Cruise had SHIPPED, though, so saved
+   * pages carry `effect: "cruise"` and must keep animating. These tests are the
+   * guard on that: an alias that quietly stopped resolving would leave those
+   * pictures still and raise no error, which is precisely the failure that put
+   * this module in the repair queue in the first place.
+   */
+  it("Cruise is no longer offered in the picker", () => {
+    expect(IMAGE_EFFECT_OPTIONS.map((o) => o.value)).not.toContain("cruise");
+    expect(IMAGE_EFFECT_OPTIONS.map((o) => o.value)).toContain("slide");
+  });
+
+  it("a page saved with Cruise renders as Slide", () => {
+    expect(normalizeImageEffect("cruise")).toBe("slide");
+    expect(getImageEffectClassName("cruise")).toBe(getImageEffectClassName("slide"));
+    expect(getImageEffectClassName("cruise").trim()).toBeTruthy();
+  });
+
+  it("Cruise keeps every behaviour Slide has", () => {
+    expect(imageEffectTravels("cruise")).toBe(true);
+    expect(imageEffectRotates("cruise")).toBe(false);
+    expect(imageEffectBounces("cruise")).toBe(false);
+    expect(getImageEffectStyle({ effect: "cruise", effectDirection: "rtl" }))
+      .toEqual(getImageEffectStyle({ effect: "slide", effectDirection: "rtl" }));
+  });
+
+  it("leaves an effect it does not know alone", () => {
+    // The alias map must not become a silent catch-all: an unknown name has to
+    // pass through untouched so a genuinely dead effect still shows up as one.
+    expect(normalizeImageEffect("tumbleweed")).toBe("tumbleweed");
+    expect(normalizeImageEffect("nonsense")).toBe("nonsense");
+    expect(normalizeImageEffect(undefined)).toBeUndefined();
+  });
+
   it("both travelling effects declare a direction in the stylesheet", () => {
     // Slide's class is not `starcaster-effect-slide` — it dodges the buried
     // effect's dead legacy selectors — so derive it rather than hardcode it.
-    const travellers = ["cruise", "tumbleweed", "slide"].map((e) => getImageEffectClassName(e).trim());
+    const travellers = ["tumbleweed", "slide"].map((e) => getImageEffectClassName(e).trim());
     for (const cls of travellers) {
       const rule = winningRule(cls);
       expect(rule, cls).toBeDefined();

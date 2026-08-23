@@ -154,20 +154,20 @@ export const RENDER_DIFFERENTIALS = [
   },
   {
     id: 'image-direction',
-    module: { type: 'image', settings: { ...PICTURE, effect: 'cruise' } },
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide' } },
     setting: 'effectDirection', from: 'ltr', to: 'rtl',
     why: 'Left-to-right is the ABSENCE of a variable rather than a second keyword, which is easy to break silently.',
   },
   {
     id: 'image-delay',
-    module: { type: 'image', settings: { ...PICTURE, effect: 'cruise' } },
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide' } },
     setting: 'effectDelay', from: '0', to: '9',
     why: 'Start Delay is only written when non-zero — a conditional emit is exactly where a control goes dead.',
   },
   /*
    * THE SAME FOUR CONTROLS, ON THE THREE EFFECTS ADDED 2026-08-22.
    *
-   * Every differential above is pinned to cruise, spin or tumbleweed, and that
+   * Every differential above is pinned to slide, spin or tumbleweed, and that
    * is exactly how Slide, Axis Rotate and Flips shipped a review round with
    * SEVEN DEAD CONTROLS. `normalizeImageEffectSettings` matched effects by
    * name, the three new names were not in its lists, and it deleted every

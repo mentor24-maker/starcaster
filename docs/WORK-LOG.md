@@ -26,6 +26,14 @@ its back) and **Flips** (turns and hops in place at the same time). He
 deliberately left **Cartwheels** out — it is Tumbleweed under a different name
 — and **Parkour** is a bigger job of its own, still to come.
 
+Bringing Slide out then showed that **Cruise was the same animation under a
+second name** — the two were identical down to the last line of styling. Dane's
+call: "wherever you see Cruise, consolidate it into Slide." So the menu now
+offers Slide and no longer offers Cruise. Any page already using Cruise keeps
+working exactly as before and needs no attention — the old name quietly points
+at Slide wherever it turns up. Nothing on a live site changes; there is simply
+one fewer thing on the menu that did the same job twice.
+
 Two things needed real work rather than just flipping a switch. Axis Rotate is
 the first thing on the site that turns on a *different axis*, which needs the
 browser to be told to draw depth — without that it reads as the picture being
@@ -95,7 +103,6 @@ the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: th
 
 ---
 
-## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 ## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
 
 ClickUp shows a ticket's description on the left, wide, and its comments on the

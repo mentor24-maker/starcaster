@@ -5832,13 +5832,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ---------------------------------------------------------------------------
-   Image effects: Cruise, Tumbleweed, and the controls that drive them
+   Image effects: Slide, Tumbleweed, and the controls that drive them
    ---------------------------------------------------------------------------
-   Both effects were offered in the Image and Floating Image panels since the
-   Normie port and NEITHER had a rule anywhere in this repo — the panel set
-   `starcaster-effect-cruise` / `-tumbleweed` on the figure and no stylesheet
-   answered, so the picture just sat there. Reported by the operator
+   Cruise and Tumbleweed were offered in the Image and Floating Image panels
+   since the Normie port and NEITHER had a rule anywhere in this repo — the
+   panel set `starcaster-effect-cruise` / `-tumbleweed` on the figure and no
+   stylesheet answered, so the picture just sat there. Reported by the operator
    2026-08-16 on the Delray home page.
+
+   Cruise itself was retired on 2026-08-22: it was Slide under a second name,
+   and its rule here was byte-for-byte identical to Slide's. Saved pages that
+   stored `cruise` are mapped to `slide` by RETIRED_IMAGE_EFFECTS, so this
+   file no longer carries a `-cruise` selector at all.
 
    Written here rather than in `_builder-react.css` per doctrine R2: that file
    is regenerated wholesale and a hand-written rule in it disappears silently
@@ -5937,14 +5942,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    value applies to every animation in the shorthand list above, so `reverse`
    turns the travel AND the spin around together. A ball crossing right to
    left rolls anticlockwise, which is the half a mirrored travel would miss. */
-.builder-react-root .starcaster-effect-cruise {
-  animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
-  animation-direction: var(--sc-effect-direction, normal);
-  animation-delay: var(--sc-effect-delay, 0s);
-  animation-iteration-count: var(--sc-effect-travel-iterations, infinite);
-  animation-fill-mode: var(--sc-effect-fill, none);
-}
-
 .builder-react-root .starcaster-effect-tumbleweed {
   animation:
     sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
@@ -5992,13 +5989,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    the deletion would come back on its own.
    --------------------------------------------------------------------------- */
 
-/* SLIDE IS CRUISE. Same keyframes, same four controls, same everything —
-   the two names exist only because the two keyframe sets were written years
-   apart, and the operator asked for the picker entry when he surfaced the
-   buried effects. Written out in full rather than grouped with Cruise's
-   selector because the tests in builder-image-effects.test.ts look for a
-   `.<class> {` rule per offered effect (via getImageEffectClassName), which is
-   the guard that catches an effect shipping with no stylesheet at all.
+/* SLIDE — formerly ALSO called Cruise. The two names existed only because the
+   two keyframe sets were written years apart; the rules were identical, and on
+   2026-08-22 the operator collapsed Cruise into Slide ("wherever you see
+   Cruise, consolidate it into Slide"). This is now the single travel-only
+   effect, and `cruise` reaches it through RETIRED_IMAGE_EFFECTS.
+
+   Kept as its own rule rather than shared with Tumbleweed's because the tests
+   in builder-image-effects.test.ts look for a `.<class> {` rule per offered
+   effect (via getImageEffectClassName), which is the guard that catches an
+   effect shipping with no stylesheet at all.
 
    The class is `starcaster-effect-slide-MOTION`, not `-slide`: the generated
    `_builder-react.css` still carries the buried effect's OLD `!important`
@@ -6072,7 +6072,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* R6: motion is decoration on all of these — a visitor who has asked their
    system for less of it gets the picture, standing still. */
 @media (prefers-reduced-motion: reduce) {
-  .builder-react-root .starcaster-effect-cruise,
   .builder-react-root .starcaster-effect-tumbleweed,
   .builder-react-root .starcaster-effect-hop-stage,
   .builder-react-root .starcaster-effect-spin,

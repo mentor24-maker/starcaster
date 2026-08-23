@@ -110,8 +110,9 @@ something changed, never that it changed correctly.
 
 ## Image effects — read `docs/IMAGE_EFFECTS.md` first
 
-The `image` / `floating-image` motion settings (Cruise, Tumbleweed, Spin and
-the eight controls behind them). The doc carries the unit decisions, the
+The `image` / `floating-image` motion settings (Slide, Tumbleweed, Spin and
+the eight controls behind them; Cruise was folded into Slide on 2026-08-22 and
+survives only as an alias for pages that saved it). The doc carries the unit decisions, the
 two-element/three-property structure the motions need, and the four traps —
 including the one that started it: **a class name is not a rendering**. Two of
 these effects were offered for months with no stylesheet rule behind them, and
