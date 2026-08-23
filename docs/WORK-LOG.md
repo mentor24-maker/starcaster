@@ -45,6 +45,47 @@ storing pages in a shape the server accepts but quietly strips lineage from,
 which meant a canonical section seeded for a check came back looking
 unconnected — it now writes the shape production actually stores, so a check
 over shared sections is measuring the real thing.
+## 2026-08-22 — Editing on main is now blocked whichever way you do it (#372)
+
+The rule "don't work directly on the main branch (it deploys straight to the
+live site)" was only enforced for the Edit tool — files written through the
+terminal (heredocs, small scripts) slipped straight past it, which is exactly
+how a whole feature landed in the main folder by accident on 2026-08-20. Now
+three things cover every path: committing on main is refused outright with
+plain instructions for moving the work to a worktree (the real backstop —
+everything ends in a commit); `npm run doctor` reports when the main folder
+has stray uncommitted changes; and the terminal is watched for commands that
+write source files while on main, blocking them early (best-effort, and it
+stays out of the way when you're properly in a worktree). All three respect
+the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: the terminal check now judges the folder the command actually runs in, so it never trips on legitimate work inside a worktree.)
+
+---
+
+## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
+## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
+
+ClickUp shows a ticket's description on the left, wide, and its comments on the
+right, narrow. The loops had that backwards. The left column held a spec written
+for a machine, and everything meant for Dane — the reasoning, the risk, the
+question — went into a comment, arriving as a wall of text in the skinniest part
+of the screen.
+
+Two tickets stalled on it the same day. On one, a long comment offered three
+ways to slice the work; Dane picked the smallest and safest, but the ticket went
+back into the build queue still carrying its original full scope, so the next
+unattended pass would have built the risky half he had just deferred — the part
+that rewrites roughly thirty-five live customer pages in one motion. The other
+sat in his inbox for a day under a red "needs your input" badge with no question
+anywhere on it. It was never waiting on him; it was waiting on the first ticket.
+
+Now the detail goes on the left, and the right column carries one short card
+with three fixed parts: his own words that caused the ticket to exist, the
+problem and the fix in fifty to a hundred words of plain English, and the
+specific ask under a banner he can find without reading. The word range is
+checked rather than suggested — too short stops being useful, too long is the
+wall of text this replaces. Handing a ticket to Dane is now a single command
+that posts the card and moves the status together, so a ticket can no longer
+land in his inbox with nothing on it to answer.
 
 ---
 
@@ -100,6 +141,28 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — A tool that notices when ClickUp and GitHub disagree (#345)
+
+A task can end up saying "in review" or "building" days after the work
+actually shipped and merged — nobody moved it, so it just sits there looking
+unfinished. A new command, `npm run reconcile`, checks every in-progress
+Loop Queue task against the GitHub pull request it's linked to: if that pull
+request already merged, the task gets moved to Live automatically. It
+defaults to a dry run that only prints what it would do; nothing changes
+unless you ask it to. It also checks for the reverse problem — a work folder
+still sitting on the machine after its task closed without shipping — though
+that check can only cover folders started after this same session's earlier
+piece (Task-closes-thread, PR #344) began tagging them. It's not on a
+schedule yet; that's its own upcoming piece of work (the Mac Mini setup).
+
+After review, several ways it could quietly give the wrong answer were closed:
+it now trusts the NEWEST pull request a task links (a reworked task carries an
+old, dead link too), treats a pull request that was closed WITHOUT merging as
+drift to flag rather than "fine", reads a task's whole comment history rather
+than only the newest page, and never moves a task out of one of your own
+statuses ("Needs your input" / "Ready to launch") on its own — it flags those
+for you instead. Status moves now go through the same verified path everything
+else uses, and a flagged problem is posted to the bus once, not on every run.
 ## 2026-08-18 — Undoing a shared-section push, from any later visit (#342)
 
 When editing a section that's shared across many pages, saving it rewrites

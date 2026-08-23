@@ -17,6 +17,30 @@ const path = require('path');
 const root = path.join(__dirname, '..', '..');
 const MAIN = 'main';
 
+/**
+ * The branch-scoped git config key `npm run thread` stamps a ClickUp task id
+ * onto (Charter Q1). It is defined HERE, in the shared repo-state module,
+ * on purpose: PR #344 (Task-closes-thread) is the WRITER and the reconciler
+ * (Charter Q2) is a READER, and a magic key read and written by two scripts
+ * in two PRs must have exactly one definition or they silently drift apart —
+ * the very failure repo_state.cjs itself exists to prevent (see the header).
+ * When #344 lands, its own copy of this constant/reader resolves against
+ * this one; keep a single definition.
+ */
+const CLICKUP_TASK_STAMP_KEY = (branchName) => `branch.${branchName}.clickup-task`;
+
+/**
+ * The ClickUp task id stamped on a branch, or '' for an unstamped branch
+ * (made by hand, or predating the stamp). cwd is PINNED to the repo root:
+ * under launchd/cron the process cwd is `/`, where `git config` finds no
+ * repo and every read fails silently — a branch check that is permanently
+ * inert while printing plausible output. branchInventory() already pins cwd
+ * this way; this reader must too.
+ */
+function stampedTaskId(branchName) {
+  return git(['config', '--get', CLICKUP_TASK_STAMP_KEY(branchName)], '');
+}
+
 function git(args, fallback = '', cwd = root) {
   try {
     // stderr ignored: several probes are expected to fail on refs that do not
@@ -133,6 +157,8 @@ function mainWorktree(worktrees = worktreeInventory()) {
 module.exports = {
   MAIN,
   root,
+  CLICKUP_TASK_STAMP_KEY,
+  stampedTaskId,
   git,
   lines,
   mergeBase,
