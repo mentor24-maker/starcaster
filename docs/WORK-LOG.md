@@ -14,6 +14,44 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The rule against force-pushing now actually holds (#394)
+
+Some background first. "Force-pushing" means overwriting the history of a
+branch — replacing what is stored with a different version, rather than adding
+to it. It is the one git operation that can destroy work, so you long ago told
+the system never to do it, and wrote four rules saying so.
+
+Overnight, three unattended build runs did it anyway. Nothing was lost — each
+one was rewriting its own branch, seconds old, that nobody else had touched.
+But the rule not holding is the finding, and the only reason anyone knew is
+that all three runs owned up to it afterwards.
+
+Here is why it slipped. Your rules describe commands that *start* with the words
+"git push". The way anything in this project actually pushes starts with a
+short bit of setup first — a setting that tells git where to find the GitHub
+password, which it cannot otherwise reach from an automated session. So the
+command began with that setup rather than with "git push", and every one of the
+four rules looked straight past it. Nobody invented that as a way around you;
+it is simply how this repo has always pushed. The house habit walked through
+the house rule.
+
+Three other ways in turned out to be open too, including one where the command
+contains no "force" anywhere — a single "+" character does the same job.
+
+The fix stops matching the words and reads the command instead. It takes the
+command apart, sets the settings and options aside, and asks two plain
+questions: is this a push, and does anything in it overwrite? There is no
+wording to word around, so the same gap cannot reopen in a new spelling. It
+also refuses even when the rule file cannot be read at all — "I could not
+check" must never come out as "go ahead" — and the one switch that used to
+quiet these warnings can no longer quiet this one.
+
+The last piece removes the temptation entirely. All three runs wanted to
+force-push for the same small reason: they wrote this very log entry, opened
+the pull request, then went back to stamp its number into the entry — and
+changing something already sent means overwriting it. The build instructions
+now say to add the log entry afterwards as its own separate step, with the
+number already in hand. This entry was written that way.
 ## 2026-08-23 — Groundwork for downloading a YouTube video, not just reading it (#392)
 
 The Acquire screen can already pull a YouTube video's title, description and
