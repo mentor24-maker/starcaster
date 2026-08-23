@@ -14,6 +14,36 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — starcaster.pro wears its own icon again (#409)
+
+You reported that starcaster.pro was showing the favicon of whichever client you
+happened to have selected, rather than the Starcaster one.
+
+There are really two websites here. There is your admin app, which lives at
+starcaster.pro, and there is each client's published site, which lives on that
+client's own domain. Their tab icons should differ — yours should always be
+Alphire's, theirs should always be their own — and the two had collapsed into a
+single answer.
+
+The admin app was deliberately swapping its tab icon to match the selected
+project. That went in back in June, described at the time as showing the icon
+"per active workspace", which sounds sensible right up until you notice where
+the admin app actually runs: only ever at starcaster.pro. A client's domain is
+served entirely different files. So the swap was never correct anywhere — it
+simply meant the one tab that should always say Alphire wore whichever client
+was open.
+
+It now always shows the Starcaster icon.
+
+Nothing changed for clients. Their sites get their icons by a completely
+separate route on the server, and there is now a check exercising that, because
+breaking the client side while fixing yours is the obvious way to get this
+wrong. Choosing a favicon for a project in Settings still works and still
+matters — that picture is what their published site uses. Only your admin tab
+stops borrowing it.
+
+---
+
 ## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
 
 Until today, if a piece of work changed how a page *looks*, the only way to
