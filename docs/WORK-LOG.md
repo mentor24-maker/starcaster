@@ -41,9 +41,19 @@ does not do — a crashed worker would hold its lock forever. A borrowed job
 simply comes back when the loan runs out, with nobody woken up to fix it. That
 is the whole point on a machine nobody is watching at three in the morning.
 
-A job that keeps failing waits twice as long before each retry, and after five
-attempts stops for good in a state that **keeps the reason it failed** rather
-than quietly vanishing from the list.
+There are two ways a job can go badly, and they are counted separately — which
+took a review pass to get right. A job can **fail**: the worker ran it and it
+did not work. Or the worker can simply **stop responding**, usually because the
+machine went to sleep. The first version counted both together, and that single
+number was wrong in both directions at once. A job that crashed its worker every
+time looped forever without anyone being told, and four laptop naps could send a
+perfectly healthy job to the scrapheap on its first genuine failure.
+
+Now a job that keeps failing waits twice as long before each retry and stops
+after five, and a job that keeps taking its worker down with it stops too — on a
+separate, more generous count. Either way it stops in a state that **keeps the
+reason**, and says which of the two it was, rather than quietly vanishing from
+the list.
 
 Worth recording how the test for the "two workers never get the same job" rule
 went, because it took three attempts to become real. The first version ran the

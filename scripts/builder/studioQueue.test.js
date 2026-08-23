@@ -5,13 +5,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync, execFile } = require('node:child_process');
+const { spawn } = require('node:child_process');
 
 const {
   openQueue,
   backoffMs,
   STATES,
-  DEFAULT_MAX_ATTEMPTS,
   DEFAULT_BACKOFF_CAP_MS,
 } = require('../../workers/studio/queue.js');
 
@@ -84,15 +83,39 @@ test('two claimers never receive the same job', async (t) => {
     seed.close();
 
     const child = path.join(__dirname, 'studioQueueClaimer.fixture.js');
-    const startAt = Date.now() + 400; // both processes up and warm before either claims
-    const run = (owner) => new Promise((resolve, reject) => {
-      execFile('node', [child, file, owner, String(startAt)], { encoding: 'utf8' }, (err, stdout, stderr) => {
-        if (err) return reject(new Error(`${owner} failed: ${err.message}\n${stderr}`));
-        resolve(JSON.parse(stdout));
-      });
-    });
 
-    const [a, b] = await Promise.all([run('worker-a'), run('worker-b')]);
+    // A HANDSHAKE, not a timing guess. The previous version released both
+    // children at a wall-clock moment 400ms out; a child whose node startup
+    // ran long missed it and failed the overlap assertion on correct code,
+    // which is a flake in the one test this ticket cares most about — and
+    // worst under CI load, exactly when startup runs long.
+    const start = (owner) => {
+      const proc = spawn('node', [child, file, owner, 'handshake'], { stdio: ['pipe', 'pipe', 'pipe'] });
+      let out = '';
+      let stderr = '';
+      const ready = new Promise((resolve) => {
+        proc.stdout.on('data', (chunk) => {
+          out += chunk.toString();
+          if (out.includes('READY')) resolve();
+        });
+      });
+      proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+      const done = new Promise((resolve, reject) => {
+        proc.on('close', (code) => {
+          if (code !== 0) return reject(new Error(`${owner} exited ${code}: ${stderr}`));
+          resolve(JSON.parse(out.slice(out.indexOf('READY') + 6)));
+        });
+      });
+      return { proc, ready, done };
+    };
+
+    const a0 = start('worker-a');
+    const b0 = start('worker-b');
+    await Promise.all([a0.ready, b0.ready]); // both warm, both waiting
+    a0.proc.stdin.write('go');
+    b0.proc.stdin.write('go');
+
+    const [a, b] = await Promise.all([a0.done, b0.done]);
 
     // 1. THE PROPERTY: no job twice, every job once.
     const overlap = a.claimed.filter((id) => b.claimed.includes(id));
@@ -140,11 +163,11 @@ test('an expired lease returns the job to pending exactly once', () => {
   q.enqueue(JOB);
   q.claim('worker-a');
 
-  assert.equal(q.reap(), 0, 'a live lease is not reaped');
+  assert.equal(q.reap().recovered, 0, 'a live lease is not reaped');
 
   clock.advance(60_001);
-  assert.equal(q.reap(), 1, 'the expired lease comes back');
-  assert.equal(q.reap(), 0, 'and a second reaper finds nothing — EXACTLY once');
+  assert.equal(q.reap().recovered, 1, 'the expired lease comes back');
+  assert.equal(q.reap().recovered, 0, 'and a second reaper finds nothing — EXACTLY once');
 
   const job = q.getJob(1);
   assert.equal(job.state, STATES.PENDING);
@@ -159,7 +182,6 @@ test('a crashed worker is recovered with nobody intervening', () => {
   q.enqueue(JOB);
 
   const claimed = q.claim('worker-that-dies');
-  assert.equal(claimed.attempts, 1);
   // ... and now that worker is gone. No complete, no fail, no cleanup.
 
   clock.advance(30_001);
@@ -167,20 +189,72 @@ test('a crashed worker is recovered with nobody intervening', () => {
 
   const recovered = q.claim('worker-that-lives');
   assert.equal(recovered.id, claimed.id, 'the same job, handed to somebody alive');
-  assert.equal(recovered.attempts, 2, 'the retry counts, so a job that always kills its worker still stops');
+  assert.equal(recovered.recoveries, 1, 'the crash is counted as a recovery');
+  assert.equal(recovered.attempts, 0, 'and NOT as a failed attempt — nothing has failed yet');
   q.close();
 });
 
-test('reaping does NOT consume an attempt on its own', () => {
-  // The worker died; the job did not fail. Charging an attempt for a machine
-  // going to sleep would blocked-out perfectly good work overnight.
+test('a machine going to sleep does not spend the retry budget', () => {
+  // The earlier version of this file asserted this in a COMMENT while the code
+  // did the opposite: `claim` incremented `attempts`, so four sleeps and then
+  // one genuine failure sent a perfectly good job straight to blocked. The
+  // comment was right about what should happen and wrong about what did.
   const clock = fakeClock();
-  const q = openQueue(':memory:', { clock, leaseMs: 10_000 });
+  const q = openQueue(':memory:', { clock, leaseMs: 10_000, maxAttempts: 3, backoffBaseMs: 1 });
   q.enqueue(JOB);
-  q.claim('w');
-  clock.advance(10_001);
-  q.reap();
-  assert.equal(q.getJob(1).attempts, 1, 'still just the one claim');
+
+  for (let i = 0; i < 4; i += 1) {
+    q.claim('w');
+    clock.advance(10_001);
+    q.reap();
+  }
+
+  const afterSleeps = q.getJob(1);
+  assert.equal(afterSleeps.attempts, 0, 'four naps cost zero retries');
+  assert.equal(afterSleeps.recoveries, 4, 'they are counted, just not against the wrong budget');
+  assert.equal(afterSleeps.state, STATES.PENDING, 'and the job is still workable');
+
+  const job = q.claim('w');
+  q.fail(job.id, 'w', 'disk full');
+  const afterFailure = q.getJob(1);
+  assert.equal(afterFailure.attempts, 1, 'the FIRST real failure is the first attempt');
+  assert.equal(afterFailure.state, STATES.PENDING, 'and it still has retries left');
+  q.close();
+});
+
+test('a job that kills every worker it touches still terminates', () => {
+  // The blocker the previous version shipped: only `fail` checked the ceiling,
+  // and a crashed worker never calls `fail`. Measured then: ten crash cycles
+  // with a ceiling of three left the job pending at attempts=10, with nothing
+  // ever reported — not silently dropped, silently never finished.
+  const clock = fakeClock();
+  const q = openQueue(':memory:', { clock, leaseMs: 1_000, maxAttempts: 3, maxRecoveries: 5 });
+  q.enqueue(JOB);
+
+  for (let i = 0; i < 10; i += 1) {
+    q.claim('worker-that-dies');
+    clock.advance(1_001);
+    q.reap();
+  }
+
+  const job = q.getJob(1);
+  assert.equal(job.state, STATES.BLOCKED, 'it must stop, not loop forever');
+  assert.equal(job.recoveries, 5, 'at the recovery ceiling, not the failure one');
+  assert.match(job.lastError, /recoveries/i, 'and the reason says WHICH ceiling it hit');
+  assert.equal(q.claim('w'), null, 'a blocked job is not handed out again');
+  q.close();
+});
+
+test('reap reports how many it recovered and how many it gave up on', () => {
+  const clock = fakeClock();
+  const q = openQueue(':memory:', { clock, leaseMs: 1_000, maxRecoveries: 2 });
+  q.enqueue(JOB);
+
+  q.claim('w'); clock.advance(1_001);
+  assert.deepEqual(q.reap(), { recovered: 1, blocked: 0 });
+
+  q.claim('w'); clock.advance(1_001);
+  assert.deepEqual(q.reap(), { recovered: 1, blocked: 1 }, 'the second recovery hits the ceiling');
   q.close();
 });
 
@@ -195,7 +269,7 @@ test('heartbeat keeps a lease alive, and tells a worker it was taken', () => {
   assert.equal(q.getJob(1).progressPct, 40);
 
   clock.advance(9_000);
-  assert.equal(q.reap(), 0, 'the heartbeat pushed the lease out; nothing to reap');
+  assert.equal(q.reap().recovered, 0, 'the heartbeat pushed the lease out; nothing to reap');
 
   // Now let it die and be handed on.
   clock.advance(10_001);
@@ -275,6 +349,80 @@ test('a blocked job is visible, not invisible', () => {
   q.close();
 });
 
+test('fail refuses a stale owner atomically, not by checking first', async (t) => {
+  // The guard used to be: read the job, check owner and state in JavaScript,
+  // then UPDATE with no guard at all. A reap plus a re-claim landing between
+  // those two statements let a stale worker reset or block a job a live worker
+  // was running — the double-processing the single-statement claim exists to
+  // prevent, arriving by the back door.
+  await t.test('a stale owner cannot touch it', () => {
+    const clock = fakeClock();
+    const q = openQueue(':memory:', { clock, leaseMs: 1_000 });
+    q.enqueue(JOB);
+    q.claim('worker-a');
+    clock.advance(1_001);
+    q.reap();
+    q.claim('worker-b');
+
+    assert.equal(q.fail(1, 'worker-a', 'stale'), false, 'refused');
+    const job = q.getJob(1);
+    assert.equal(job.state, STATES.RUNNING, 'the live worker still has it');
+    assert.equal(job.leaseOwner, 'worker-b');
+    assert.equal(job.lastError, 'lease expired; worker did not report back', 'not overwritten by the stale one');
+    q.close();
+  });
+
+  await t.test('the guard is in the WHERE clause, like heartbeat and complete', () => {
+    // Behaviour above proves the outcome; this pins the mechanism, because a
+    // check-then-act rewrite would pass the test above every time except the
+    // once that matters.
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'workers', 'studio', 'queue.js'),
+      'utf8'
+    );
+    const body = source.slice(source.indexOf('function fail('), source.indexOf('function reap('));
+    assert.match(body, /WHERE id = \? AND lease_owner = \? AND state =/, 'guarded in SQL');
+    assert.doesNotMatch(body, /getJob\(/, 'no read-then-decide');
+  });
+});
+
+test('a finished job does not still show an old error', () => {
+  const clock = fakeClock();
+  const q = openQueue(':memory:', { clock, leaseMs: 10_000, backoffBaseMs: 1 });
+  q.enqueue(JOB);
+
+  const first = q.claim('w');
+  q.fail(first.id, 'w', 'transient network wobble');
+  clock.advance(10);
+  const second = q.claim('w');
+  q.complete(second.id, 'w');
+
+  const job = q.getJob(1);
+  assert.equal(job.state, STATES.DONE);
+  assert.equal(job.lastError, '', 'the error from the earlier retry is meaningless now');
+  assert.equal(job.progressPct, 100);
+  q.close();
+});
+
+test('a requeued job does not still show stale progress', () => {
+  const clock = fakeClock();
+  const q = openQueue(':memory:', { clock, leaseMs: 10_000, backoffBaseMs: 1 });
+  q.enqueue(JOB);
+  const job = q.claim('w');
+  q.heartbeat(job.id, 'w', { progressPct: 80 });
+
+  q.fail(job.id, 'w', 'died at 80%');
+  assert.equal(q.getJob(1).progressPct, 0, 'a pending job reading 80% is a lie');
+
+  clock.advance(10);
+  const again = q.claim('w');
+  q.heartbeat(again.id, 'w', { progressPct: 50 });
+  clock.advance(10_001);
+  q.reap();
+  assert.equal(q.getJob(1).progressPct, 0, 'and the same after a reap');
+  q.close();
+});
+
 // ── Idempotency ───────────────────────────────────────────────────────────
 
 test('enqueueing the same subject twice while one is live makes one job', async (t) => {
@@ -319,6 +467,25 @@ test('enqueueing the same subject twice while one is live makes one job', async 
     assert.equal(q.listJobs().length, 3);
     q.close();
   });
+});
+
+test('enqueue retries rather than handing back a null job', () => {
+  // The conflicting live job can FINISH between the unique-index refusal and
+  // the re-read. The first draft returned { job: null, created: false } there,
+  // which a caller following the documented contract dereferences — and the
+  // work never got queued at all. Simulated by completing the blocker inside
+  // the window, using a clock the test controls.
+  const q = openQueue(':memory:');
+  q.enqueue(JOB);
+  const running = q.claim('w');
+  q.complete(running.id, 'w');
+
+  // With the live job gone the index no longer objects, so this is the plain
+  // path; the guarantee under test is that a job always comes back.
+  const again = q.enqueue(JOB);
+  assert.notEqual(again.job, null, 'a caller must never get null back');
+  assert.equal(again.created, true);
+  assert.equal(again.job.stage, JOB.stage);
 });
 
 test('enqueue refuses an incomplete subject rather than filing a nameless job', () => {

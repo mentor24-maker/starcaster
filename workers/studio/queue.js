@@ -30,8 +30,39 @@ const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
 
-/** A job that has been handed back this many times is a problem, not a retry. */
+/**
+ * TWO COUNTERS, BECAUSE THERE ARE TWO DIFFERENT PROBLEMS.
+ *
+ * `attempts` counts genuine FAILURES: the worker ran the job and it did not
+ * work. `recoveries` counts CRASHES: the worker stopped saying it was alive
+ * and the lease was reaped.
+ *
+ * The first draft had one counter, incremented on every claim, and it was
+ * wrong in both directions at once — which is what a single counter for two
+ * causes always is:
+ *
+ *   - A job that KILLS its worker never terminated. Only `fail` checked the
+ *     ceiling, and a crashed worker never calls `fail`, so the cycle was
+ *     claim -> crash -> reap -> claim, forever. Measured: ten cycles with a
+ *     ceiling of three left the job pending at attempts=10, with nothing ever
+ *     reported. DOCTRINE 3.11 on the crash path: not silently dropped,
+ *     silently never finished, on a machine nobody watches.
+ *   - And the MACHINE GOING TO SLEEP spent the failure budget. Four sleeps
+ *     later, the first genuine failure sent a perfectly good job straight to
+ *     `blocked`.
+ *
+ * Splitting them fixes both: sleeping costs a recovery and never a retry, and
+ * a poison job still terminates — through the recovery ceiling rather than
+ * the failure one, with a reason that says which.
+ */
 const DEFAULT_MAX_ATTEMPTS = 5;
+/**
+ * Deliberately generous, and separate. One sleep costs one recovery, so this
+ * is also the number of times the Mini may nap mid-job before the queue
+ * decides something is actually wrong. A job still running after this many
+ * interruptions is worth a human's eye either way.
+ */
+const DEFAULT_MAX_RECOVERIES = 20;
 /** How long a claim is good for before `reap` may take it back. */
 const DEFAULT_LEASE_MS = 5 * 60 * 1000;
 /** First retry waits this long; each subsequent one doubles. */
@@ -55,6 +86,7 @@ const SCHEMA = `
     subject_id        TEXT    NOT NULL,
     state             TEXT    NOT NULL DEFAULT 'pending',
     attempts          INTEGER NOT NULL DEFAULT 0,
+    recoveries        INTEGER NOT NULL DEFAULT 0,
     lease_owner       TEXT    NOT NULL DEFAULT '',
     lease_expires_at  INTEGER NOT NULL DEFAULT 0,
     run_after         INTEGER NOT NULL DEFAULT 0,
@@ -116,6 +148,7 @@ function openQueue(file, options = {}) {
     clock = nowMs,
     leaseMs = DEFAULT_LEASE_MS,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
+    maxRecoveries = DEFAULT_MAX_RECOVERIES,
     backoffBaseMs = DEFAULT_BACKOFF_BASE_MS,
     backoffCapMs = DEFAULT_BACKOFF_CAP_MS,
   } = options;
@@ -179,7 +212,20 @@ function openQueue(file, options = {}) {
             LIMIT 1`
         )
         .get(row.stage, row.subject_kind, row.subject_id);
-      return { job: existing ? shape(existing) : null, created: false };
+      if (existing) return { job: shape(existing), created: false };
+
+      // The conflicting job FINISHED between the refusal and this read, so the
+      // index no longer objects and there is nothing to return either. The
+      // first draft handed back `{ job: null }`, which a caller following the
+      // documented contract dereferences — and the work never got queued at
+      // all. Insert again: the window is gone, so this is the ordinary path.
+      const retry = db
+        .prepare(
+          `INSERT INTO jobs (stage, subject_kind, subject_id, state, run_after, created_at, updated_at)
+           VALUES (?, ?, ?, '${STATES.PENDING}', ?, ?, ?)`
+        )
+        .run(row.stage, row.subject_kind, row.subject_id, Number(runAfter) || 0, at, at);
+      return { job: getJob(Number(retry.lastInsertRowid)), created: true };
     }
   }
 
@@ -190,6 +236,10 @@ function openQueue(file, options = {}) {
    * two, and two concurrent claimers both pass the select before either
    * updates — the classic double-claim. `UPDATE ... WHERE id = (SELECT ...)`
    * is atomic within SQLite's write lock, so exactly one of them changes a row.
+   *
+   * It counts NOTHING. Incrementing `attempts` here was the original mistake:
+   * picking a job up is not an attempt at it, and charging one meant a laptop
+   * closing spent the retry budget of every job it was running.
    */
   function claim(owner, { stages = null } = {}) {
     const who = text(owner);
@@ -208,7 +258,6 @@ function openQueue(file, options = {}) {
             SET state = '${STATES.RUNNING}',
                 lease_owner = ?,
                 lease_expires_at = ?,
-                attempts = attempts + 1,
                 updated_at = ?
           WHERE id = (
             SELECT id FROM jobs
@@ -256,6 +305,7 @@ function openQueue(file, options = {}) {
                 lease_owner = '',
                 lease_expires_at = 0,
                 progress_pct = 100,
+                last_error = '',
                 updated_at = ?
           WHERE id = ? AND lease_owner = ? AND state = '${STATES.RUNNING}'`
       )
@@ -274,30 +324,52 @@ function openQueue(file, options = {}) {
    */
   function fail(id, owner, error) {
     const at = clock();
-    const job = getJob(id);
-    if (!job || job.leaseOwner !== text(owner) || job.state !== STATES.RUNNING) return false;
-
     const reason = text(error) || 'failed with no reason given';
-    const exhausted = job.attempts >= maxAttempts;
+    const who = text(owner);
 
-    if (exhausted) {
+    // ONE STATEMENT, GUARDED IN THE WHERE CLAUSE — like heartbeat and
+    // complete, and for the same reason. The first draft read the job with
+    // getJob, checked owner and state in JavaScript, then ran an UPDATE with
+    // no guard at all. A reap plus a re-claim by another process landing
+    // between those two statements let a stale worker reset or block a job a
+    // live worker was running: the double-processing the single-statement
+    // `claim` exists to prevent, arriving by the back door.
+    //
+    // `attempts` is incremented HERE and nowhere else, because this is the
+    // only place that knows the job was actually tried and actually failed.
+    const bumped = db
+      .prepare(
+        `UPDATE jobs
+            SET attempts = attempts + 1, last_error = ?, updated_at = ?
+          WHERE id = ? AND lease_owner = ? AND state = '${STATES.RUNNING}'
+          RETURNING *`
+      )
+      .get(reason, at, Number(id), who);
+
+    if (!bumped) return false; // not ours any more, or not running
+
+    const job = shape(bumped);
+    if (job.attempts >= maxAttempts) {
+      // Terminal, and it KEEPS ITS REASON. Never silently dropped
+      // (DOCTRINE 3.11).
       db.prepare(
         `UPDATE jobs
             SET state = '${STATES.BLOCKED}', lease_owner = '', lease_expires_at = 0,
-                last_error = ?, updated_at = ?
+                updated_at = ?
           WHERE id = ?`
-      ).run(reason, at, Number(id));
+      ).run(at, job.id);
       return true;
     }
 
     db.prepare(
       `UPDATE jobs
           SET state = '${STATES.PENDING}', lease_owner = '', lease_expires_at = 0,
-              run_after = ?, last_error = ?, updated_at = ?
+              run_after = ?, progress_pct = 0, updated_at = ?
         WHERE id = ?`
-    ).run(at + backoffMs(job.attempts, { base: backoffBaseMs, cap: backoffCapMs }), reason, at, Number(id));
+    ).run(at + backoffMs(job.attempts, { base: backoffBaseMs, cap: backoffCapMs }), at, job.id);
     return true;
   }
+
 
   /**
    * Return every job whose lease has expired to pending. Answers with how many.
@@ -309,17 +381,54 @@ function openQueue(file, options = {}) {
    */
   function reap() {
     const at = clock();
-    const result = db
+
+    // EXACTLY ONCE is the property that matters: the update is conditioned on
+    // the state it is changing FROM, so a second reaper running at the same
+    // moment changes nothing and reports zero rather than resurrecting a job
+    // twice.
+    //
+    // A recovery is counted, and it is NOT an attempt. The worker died; the
+    // job did not fail. Keeping the two apart is what stops a laptop closing
+    // from spending a job's retry budget — and, in the other direction, what
+    // lets a job that kills every worker it touches still terminate.
+    const recovered = db
       .prepare(
         `UPDATE jobs
             SET state = '${STATES.PENDING}', lease_owner = '', lease_expires_at = 0,
-                last_error = CASE WHEN last_error = '' THEN 'lease expired; worker did not report back' ELSE last_error END,
+                recoveries = recoveries + 1,
+                progress_pct = 0,
+                last_error = 'lease expired; worker did not report back',
                 updated_at = ?
-          WHERE state = '${STATES.RUNNING}' AND lease_expires_at <= ?`
+          WHERE state = '${STATES.RUNNING}' AND lease_expires_at <= ?
+          RETURNING *`
       )
-      .run(at, at);
-    return result.changes;
+      .all(at, at);
+
+    // A job that has been recovered too many times is not unlucky, it is
+    // poison: it takes its worker down every time and would otherwise loop
+    // forever with nothing ever reported. It goes terminal, and the reason
+    // says which ceiling it hit — a job blocked for crashing reads very
+    // differently from one blocked for failing.
+    let blocked = 0;
+    for (const row of recovered) {
+      if (Number(row.recoveries) < maxRecoveries) continue;
+      db.prepare(
+        `UPDATE jobs
+            SET state = '${STATES.BLOCKED}',
+                last_error = ?,
+                updated_at = ?
+          WHERE id = ? AND state = '${STATES.PENDING}'`
+      ).run(
+        `gave up after ${row.recoveries} recoveries — the worker stopped responding every time`,
+        at,
+        row.id
+      );
+      blocked += 1;
+    }
+
+    return { recovered: recovered.length, blocked };
   }
+
 
   function getJob(id) {
     const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(Number(id));
@@ -394,6 +503,7 @@ function shape(row) {
     subjectId: String(row.subject_id),
     state: String(row.state),
     attempts: Number(row.attempts),
+    recoveries: Number(row.recoveries),
     leaseOwner: String(row.lease_owner),
     leaseExpiresAt: Number(row.lease_expires_at),
     runAfter: Number(row.run_after),
@@ -409,6 +519,7 @@ module.exports = {
   backoffMs,
   STATES,
   DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_MAX_RECOVERIES,
   DEFAULT_LEASE_MS,
   DEFAULT_BACKOFF_BASE_MS,
   DEFAULT_BACKOFF_CAP_MS,
