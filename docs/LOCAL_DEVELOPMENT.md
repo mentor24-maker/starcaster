@@ -52,7 +52,7 @@ about the one question the whole setup rests on.
 A normal session:
 
 ```
-npm run thread my-topic   # new folder + branch, already carrying your settings
+npm run thread my-topic 86bbggvud   # new folder + branch, already carrying your settings
 npm run doctor            # anything to fix before starting?
 npm run dev               # http://localhost:3001
 npm run ship              # checks, pull request, merge, cleanup

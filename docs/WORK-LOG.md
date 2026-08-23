@@ -283,6 +283,18 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — Closing a task now cleans up its thread too (#344)
+
+Starting a new piece of work (`npm run thread`) creates its own folder and
+branch; finishing it normally cleans both up automatically once the work
+ships. But if a piece of work gets abandoned or redirected instead of
+shipped — the ClickUp task closed without ever merging — nothing ever
+noticed, and the folder sat there forever. `npm run thread` now requires the
+ClickUp task it's for, and stamps that onto the branch; closing that task
+(even with unfinished work on it) now lets the next cleanup remove the folder
+and branch the same way finished work already gets removed, with the same
+restore-log safety net. Starting a thread without an open task to point at no
+longer works.
 ## 2026-08-18 — A tool that notices when ClickUp and GitHub disagree (#345)
 
 A task can end up saying "in review" or "building" days after the work

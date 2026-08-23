@@ -278,11 +278,24 @@ Give every thread its own worktree — a separate folder with its own branch,
 sharing the same repo history. **Use the command, not the raw git:**
 
 ```
-npm run thread <topic>     # tidy first, branch off CURRENT origin/main, npm ci, build
+npm run thread <topic> <clickup-task-id>   # tidy first, branch off CURRENT origin/main, npm ci, build
 npm run ship               # catch up, verify, push, PR, wait for CI, merge, tidy
 npm run map                # what exists, what is shipped, what is still live work
 npm run tidy               # delete shipped branches, remove finished worktrees
 ```
+
+**A thread exists only while its ClickUp task is open** (Charter Q1,
+2026-08-18). The task id is required, not optional — `npm run thread` stamps
+it onto the branch (`git config branch.<topic>.clickup-task <id>`, the same
+`branch.<name>.*` namespace git/VS Code already use for per-branch metadata)
+and refuses to create a thread for a task that is not confirmed open. `npm
+run tidy` reads the stamp back and cleans up a thread whose task has since
+closed — branch deleted, worktree removed, logged to `tidy-restore.log` —
+**even if its commits never shipped**, which the older shipped-only check
+could never reach (an abandoned thread's commits are legitimately "active" by
+`git cherry`, and would otherwise sit there forever). A branch whose ClickUp
+status can't be determined (network, auth, rate limit) is never treated as
+closed — only a clean, confirmed read authorizes a delete.
 
 `npm run ship` is the other end of `thread`: the nine hand-run steps between
 "the work is done" and "it is live", in order, with the state checked between
