@@ -86,9 +86,30 @@ const BUS_RELAY_MARKER = '[bus-relay]';
 
 /** What counts as delivered, given how each surface answered. Chat is still
  *  preferred — the fallback is a fallback, not a second channel. */
-function deliveryVerdict({ chatOk, receiptOk } = {}) {
+function deliveryVerdict({ chatOk, receiptOk, handsBack } = {}) {
   if (chatOk) return { ok: true, via: 'chat' };
-  if (receiptOk) return { ok: true, via: 'ticket' };
+
+  // A ticket receipt only DELIVERS on a watch that hands the ticket back.
+  //
+  // Review finding, 2026-08-23, and it is the one that matters. Of the three
+  // watches, only one has a handback target:
+  //
+  //   Agent Response, fresh comment   -> no target
+  //   Loop Queue, "ready to launch"   -> no target
+  //   Loop Queue, "needs your input"  -> Queued        <- the only one
+  //
+  // The ticket's own reasoning for the fallback — "the answer is already a
+  // comment on the ticket, which is where every loop reads it from" — is only
+  // true for that last one. On the other two NOTHING reads the ticket: the
+  // party line IS the delivery. Counting a receipt there would post a note to
+  // Dane on a ticket he is already looking at, write the permanent dedup
+  // marker, and drop the bus message for good once chat recovered.
+  //
+  // Before this feature those two cases retried every pass until the bus took
+  // them. Turning a self-healing retry into silent permanent loss is the exact
+  // shape of bug this ticket exists to remove, so: no handback, no delivery.
+  if (receiptOk && handsBack) return { ok: true, via: 'ticket' };
+  if (receiptOk) return { ok: false, via: 'none', why: 'receipted, but this watch hands nothing back — only the party line delivers here' };
   return { ok: false, via: 'none' };
 }
 
@@ -106,13 +127,20 @@ function relayMarkerText({ via, channel, at } = {}) {
 /** The fallback comment itself. A RECEIPT, not a re-quote: Dane's words are
  *  already on this ticket, one comment up. What is missing without this is
  *  the acknowledgement that they were read and acted on. */
+const RECEIPT_FINGERPRINT = 'Your answer was read and picked up.';
+
 function receiptText({ why, target } = {}) {
-  // A notify-only watch (Agent Response) moves nothing, so do not promise a
-  // move there — say only what is true.
-  const read = target
-    ? `Your answer was read and this ticket is going back to ${target}.`
-    : 'Your answer was read and picked up.';
-  return `${read} The party line is unavailable right now (${why || 'reason unknown'}), so this note is the record instead.
+  // Past tense for what is certain, present for what is under way — never the
+  // future. Review finding, 2026-08-23: the first version announced "this
+  // ticket is going back to Queued" BEFORE the move was attempted, so a failed
+  // PUT left the ticket sitting in "Needs your input" carrying a comment
+  // saying otherwise. The failure was always reported in `unchecked`, but the
+  // untrue note stayed on the ticket.
+  //
+  // A receipt is only ever written on a watch that hands the ticket back, so
+  // `target` is always set by the time this is called.
+  const move = target ? ` This ticket is being returned to ${target}.` : '';
+  return `${RECEIPT_FINGERPRINT}${move} The party line is unavailable right now (${why || 'reason unknown'}), so this note is the record instead.
 
 (Automatic — bus-relay.)`;
 }
@@ -137,6 +165,7 @@ module.exports = {
   handbackTarget,
   mergeEnabled,
   BUS_RELAY_MARKER,
+  RECEIPT_FINGERPRINT,
   deliveryVerdict,
   relayMarkerText,
   receiptText,

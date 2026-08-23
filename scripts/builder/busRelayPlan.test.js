@@ -63,6 +63,7 @@ const {
   deliveryVerdict,
   relayMarkerText,
   receiptText,
+  RECEIPT_FINGERPRINT,
   busFailureBucket,
 } = require('./busRelayPlan.js');
 
@@ -82,7 +83,7 @@ test('chat winning is not conditional on the receipt — it is preferred, not a 
 });
 
 test('delivered via the fallback: chat failed, the ticket receipt landed', () => {
-  const v = deliveryVerdict({ chatOk: false, receiptOk: true });
+  const v = deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: true });
   assert.deepEqual(v, { ok: true, via: 'ticket' });
   assert.equal(
     relayMarkerText({ ...v, channel: '2kydhxeu-474', at: AT }),
@@ -110,12 +111,16 @@ test('every marker starts with the shared prefix, so "already relayed" still mat
 test('the receipt is a receipt, not a re-quote of his words', () => {
   const text = receiptText({ why: 'HTTP 400', target: 'Queued' });
   assert.match(text, /Your answer was read/);
-  assert.match(text, /going back to Queued/);
+  assert.match(text, /being returned to Queued/);
   assert.match(text, /HTTP 400/);
   assert.match(text, /party line is unavailable/i);
 });
 
-test('a notify-only watch gets a receipt that promises no move it will not make', () => {
+// Defence in depth only: since the review fix, deliverToBus never writes a
+// receipt without a handback target, because a receipt there delivers nothing.
+// The branch stays so a future caller cannot produce a sentence promising a
+// move that was never going to happen.
+test('a receipt with no target promises no move (unreachable, kept as a guard)', () => {
   const text = receiptText({ why: 'HTTP 400' });
   assert.match(text, /read and picked up/);
   assert.doesNotMatch(text, /going back to/);
@@ -134,4 +139,110 @@ test('a bus failure whose explanation is already on the ticket is cosmetic', () 
 test('a bus failure nobody was told about is still "could not fully verify"', () => {
   assert.equal(busFailureBucket({ delivered: false, cosmetic: false }), 'unchecked');
   assert.equal(busFailureBucket({}), 'unchecked');
+});
+
+// ── The receipt only delivers where something reads the ticket ────────────
+
+/**
+ * Review finding, 2026-08-23, and the one that mattered. Of the three watches
+ * only ONE hands the ticket back:
+ *
+ *   Agent Response, fresh comment   -> no target
+ *   Loop Queue, "ready to launch"   -> no target
+ *   Loop Queue, "needs your input"  -> Queued
+ *
+ * The fallback's whole justification is "the answer is already a comment on
+ * the ticket, which is where every loop reads it from" — true only for that
+ * last one. On the other two the party line IS the delivery, so counting a
+ * receipt would post a note to Dane on a ticket he is already reading, write
+ * the permanent dedup marker, and lose the bus message for good once chat
+ * recovered. That converts a self-healing retry into silent permanent loss,
+ * which is the exact bug this whole ticket exists to remove.
+ */
+test('a receipt on a watch that hands nothing back is NOT delivery', () => {
+  const v = deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: false });
+  assert.equal(v.ok, false, 'nothing reads this ticket — the party line was the delivery');
+  assert.equal(v.via, 'none');
+  assert.match(v.why, /hands nothing back/);
+});
+
+test('handsBack omitted is treated as no handback, not as yes', () => {
+  // The safe default, because the failure is silent in one direction only.
+  assert.equal(deliveryVerdict({ chatOk: false, receiptOk: true }).ok, false);
+});
+
+test('and so no marker is written for it — it retries next pass', () => {
+  const v = deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: false });
+  assert.equal(relayMarkerText({ ...v, channel: 'c', at: AT }), null,
+    'a marker here would make the "already relayed" check skip it forever');
+});
+
+test('exactly one of the three watched cases hands the ticket back', () => {
+  const handsBack = (watch, status) => Boolean(handbackTarget(watch, status, 1));
+  // This is the table the fix is built on, asserted rather than assumed.
+  assert.equal(handsBack(loopQueue, 'needs your input'), true);
+  assert.equal(handsBack(loopQueue, 'ready to launch'), false);
+  assert.equal(handsBack(agentResponse, 'pending response'), false);
+  assert.equal(handsBack(agentResponse, 'responding'), false);
+});
+
+// ── The receipt says what has happened, never what is about to ────────────
+
+test('the receipt does not announce a move it has not made', () => {
+  const text = receiptText({ why: 'HTTP 400', target: 'Queued' });
+  assert.match(text, /Your answer was read and picked up\./);
+  assert.match(text, /being returned to Queued/);
+  // "is going back to" promised a completed move before the PUT was tried; a
+  // failed move then left the ticket carrying a comment saying otherwise.
+  assert.doesNotMatch(text, /is going back to/);
+  assert.doesNotMatch(text, /has been returned|was returned|has moved/);
+});
+
+test('the receipt carries the fingerprint the read-back searches for', () => {
+  // deliverToBus proves the receipt stuck by finding this string. If the
+  // wording and the fingerprint ever drift apart, every receipt reads as
+  // "posted but could not be read back" and no ticket is ever handed back.
+  assert.ok(receiptText({ why: 'x', target: 'Queued' }).includes(RECEIPT_FINGERPRINT));
+});
+
+test('the receipt still names why the party line was skipped', () => {
+  assert.match(receiptText({ why: 'HTTP 400', target: 'Queued' }), /HTTP 400/);
+  assert.match(receiptText({ target: 'Queued' }), /reason unknown/);
+});
+
+// ── The plumbing side of the two review findings ──────────────────────────
+
+/**
+ * These two fixes live in scripts/clickup_direct.mjs, which holds only network
+ * plumbing and has no test harness. They are pinned here because both fail
+ * SILENTLY: an unverified receipt hands a ticket back with the acknowledgement
+ * existing nowhere, and a per-comment receipt piles duplicate notes onto a
+ * ticket during exactly the outage this feature exists for.
+ */
+const RELAY_SRC = require('node:fs').readFileSync(
+  require('node:path').join(__dirname, '../clickup_direct.mjs'), 'utf8');
+
+test('the receipt is read back before it is trusted', () => {
+  const post = RELAY_SRC.indexOf('comment_text: body });');
+  const readBack = RELAY_SRC.indexOf('RECEIPT_FINGERPRINT');
+  assert.ok(post > -1, 'the receipt POST moved — re-point this test');
+  assert.ok(RELAY_SRC.includes('could not be read back'),
+    'a 200 that did not stick must be reported, not treated as delivery');
+  assert.ok(readBack > -1, 'nothing searches for the receipt after writing it');
+  // The verdict must be built from the read-back, never from the POST status.
+  assert.match(RELAY_SRC, /deliveryVerdict\(\{ chatOk: false, receiptOk: stuck, handsBack: true \}\)/,
+    'the verdict must use the read-back result, not out.res.ok');
+});
+
+test('a watch with no handback target never posts a receipt at all', () => {
+  // Not merely "does not count it" — does not write it. This watch retries
+  // every pass until the bus accepts, so a receipt per pass would pile
+  // identical notes onto the ticket forever while still losing the message.
+  assert.match(RELAY_SRC, /if \(!taskId \|\| !target\) \{/,
+    'deliverToBus must bail out before the receipt when nothing hands back');
+});
+
+test('the receipt is deduped per ticket, not per comment', () => {
+  assert.match(RELAY_SRC, /receipted\.has\(String\(taskId\)\)/);
+  assert.match(RELAY_SRC, /const receipted = new Set\(\)/);
 });

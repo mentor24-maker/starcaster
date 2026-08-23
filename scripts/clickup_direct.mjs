@@ -61,9 +61,10 @@ import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
+import branchCatchUp from './builder/branchCatchUp.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled,
-  deliveryVerdict, relayMarkerText, receiptText, busFailureBucket,
+  deliveryVerdict, relayMarkerText, receiptText, busFailureBucket, RECEIPT_FINGERPRINT,
 } = busRelayPlan;
 const { mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker } = mergeOnComment;
 const {
@@ -326,17 +327,44 @@ async function postToBus(channel, content) {
  * Returns { ok, via, why }: `ok` is the handback gate, `via` picks the marker
  * text, `why` carries the chat failure for the report even on success.
  */
-async function deliverToBus(channel, content, { taskId, target } = {}) {
+async function deliverToBus(channel, content, { taskId, target, receipted } = {}) {
   const chat = await postToBus(channel, content);
   if (chat.ok) return { ...deliveryVerdict({ chatOk: true }), why: '' };
-  if (!taskId) return { ...deliveryVerdict({ chatOk: false, receiptOk: false }), why: chat.why };
 
-  const out = await call('POST', `/api/v2/task/${taskId}/comment`, {
-    comment_text: receiptText({ why: chat.why, target }),
-  });
-  const verdict = deliveryVerdict({ chatOk: false, receiptOk: out.res.ok });
+  // No handback target means nothing on this watch reads the ticket, so a
+  // receipt there delivers nothing (busRelayPlan.deliveryVerdict says why).
+  // Do not even post one: this watch retries every pass until the bus takes
+  // it, and a receipt per pass would pile identical notes onto the ticket
+  // forever while still losing the bus message.
+  if (!taskId || !target) {
+    return { ...deliveryVerdict({ chatOk: false, receiptOk: false }), why: chat.why };
+  }
+
+  // One receipt per TICKET per pass, not per comment. Three of Dane's
+  // comments during an outage otherwise leave three identical notes.
+  if (receipted && receipted.has(String(taskId))) {
+    return { ...deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: true }), why: chat.why };
+  }
+
+  const body = receiptText({ why: chat.why, target });
+  const out = await call('POST', `/api/v2/task/${taskId}/comment`, { comment_text: body });
+
+  // Read it back before trusting it. Every other comment write in this file
+  // does (DOCTRINE 3.10), and this one now unlocks both the dedup marker and
+  // the ticket move — a 200 that did not stick would move the ticket with the
+  // acknowledgement existing nowhere.
+  let stuck = false;
+  if (out.res.ok) {
+    const back = await call('GET', `/api/v2/task/${taskId}/comment`);
+    stuck = Boolean(back.res.ok && (back.json.comments || []).some(
+      (c) => String(c.comment_text || '').includes(RECEIPT_FINGERPRINT)
+    ));
+  }
+  if (stuck && receipted) receipted.add(String(taskId));
+
+  const verdict = deliveryVerdict({ chatOk: false, receiptOk: stuck, handsBack: true });
   const why = out.res.ok
-    ? chat.why
+    ? (stuck ? chat.why : `${chat.why}; the fallback receipt reported HTTP 200 but could not be read back`)
     : `${chat.why}; the fallback receipt comment also failed (HTTP ${out.res.status})`;
   return { ...verdict, why };
 }
@@ -461,11 +489,45 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     }
   }
 
+  // GitHub says it conflicts. Before believing that, ask THIS machine.
+  //
+  // GitHub cannot run the asset-pins merge driver — git refuses to run a
+  // driver defined by a cloned repo, so it lives in .git/config and is
+  // registered by npm install. Every branch that touches anything bundled
+  // shifts those `?v=` pins, so GitHub reports a collision on a file that
+  // resolves cleanly here, by asset path. That produced twelve false
+  // hand-offs on 2026-08-23, each one stalling a merge Dane had authorized.
+  //
+  // This does NOT resolve a conflict. It attempts an ordinary merge in a
+  // throwaway worktree: clean means the difference was the driver and the
+  // branch is pushed so CI re-runs; anything else — including "could not
+  // tell" — falls straight through to the hand-off below, unchanged.
+  if (gate.action === 'conflict' && !dryRun) {
+    const local = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
+    if (local.ok) {
+      console.error(`  MERGE WAITING on ${label}: GitHub reported a conflict, but ${local.reason}`);
+      return { outcome: 'waiting', reason: 'false conflict resolved locally; waiting for CI' };
+    }
+    // Carry WHY into the hand-off, so the reader learns whether it was a real
+    // overlap or something that could not be checked at all.
+    gate = { ...gate, reason: gate.reason, localVerdict: local };
+  }
+
   // A script never resolves a merge conflict (task 86bbjd5nn, binding).
   if (gate.action === 'conflict') {
     console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}`);
     if (dryRun) return { outcome: 'would-hand-off', reason: gate.reason };
-    const body = `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. A session will merge main into the branch, sort out the overlap and re-run the checks — then your merge still stands and this goes through.\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${decision.commentId}.)`;
+    // What the local attempt found, in the operator's terms. "It really does
+    // overlap" and "I could not check" are different problems with different
+    // fixes, and reading one as the other is how a machine problem gets
+    // diagnosed as a code problem.
+    const verdict = gate.localVerdict;
+    const localLine = !verdict
+      ? ''
+      : verdict.code === branchCatchUp.CODES.REAL_CONFLICT
+        ? `\n\nChecked on this machine too, and it is a real overlap — ${verdict.reason}. This one genuinely needs a person.`
+        : `\n\nWorth knowing: this could not be checked properly here either — ${verdict.reason}. So it may not be a real conflict at all; GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.`;
+    const body = `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. A session will merge main into the branch, sort out the overlap and re-run the checks — then your merge still stands and this goes through.${localLine}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${decision.commentId}.)`;
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body });
     if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
     const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and re-run CI. Ticket left in Ready to launch.\n\n${pr.url}`);
@@ -1329,6 +1391,10 @@ if (cmd === 'whoami') {
   // write returned 400 for sixteen hours and the whole pipeline stopped
   // behind it, though every answer was sitting on its ticket the entire time.
   const busSkipped = [];
+  // Tickets already receipted THIS pass. One acknowledgement per ticket, not
+  // one per comment — three answers during an outage otherwise leave three
+  // identical notes on the same ticket (review finding, 2026-08-23).
+  const receipted = new Set();
   let lastRes = null;
 
   for (const watch of watches) {
@@ -1393,6 +1459,7 @@ if (cmd === 'whoami') {
         const delivery = await deliverToBus(channel, busBody, {
           taskId: t.id,
           target: handbackTarget(watch, t.status?.status, 1),
+          receipted,
         });
         if (!delivery.ok) {
           unchecked.push(`${t.id} comment ${c.id}: could not deliver anywhere — the party line failed and so did the receipt comment (${delivery.why}). NOT marked relayed (will retry next run)`);

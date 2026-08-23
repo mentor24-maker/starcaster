@@ -1,3 +1,26 @@
+## 2026-08-23 — The relay stops crying wolf about merge conflicts
+
+Twelve times in one day, the robot that merges your approved work gave up and
+said "this branch conflicts with main, a human needs to sort it out". Every
+single time, it merged here with nothing to sort out. Each false alarm parked a
+merge you had already said yes to.
+
+The cause is a quirk worth knowing. Four of our HTML files carry little version
+stamps that change every time anything is rebuilt, so any two branches collide
+there even when neither touched a word of the actual page. We wrote a small
+tool that fixes those automatically — but git flatly refuses to run a tool like
+that from a downloaded copy of a project, for good security reasons, so it only
+exists on our own machines. **GitHub cannot run it.** GitHub sees two different
+version stamps on one line, calls it a conflict, and the relay believed it.
+
+So the relay now asks the machine it is standing on instead of taking GitHub's
+word. It tries the merge for real, in a scratch folder that touches nothing. If
+it comes out clean, the branch is caught up and the checks re-run. If anything
+genuinely overlaps, it hands over exactly as before — and now says which file,
+so nobody has to work that out again.
+
+It still never resolves a conflict, and it still never force-pushes. (#PR)
+
 # Work Log
 
 Plain-English record of work shipped through the development loop
@@ -47,6 +70,33 @@ move, and the run still reports a failure. The safety check was re-aimed at a
 sturdier target, not switched off. A chat outage is now a line in the report
 rather than a stopped pipeline.
 
+## 2026-08-23 — starcaster.pro wears its own icon again (#409)
+
+You reported that starcaster.pro was showing the favicon of whichever client you
+happened to have selected, rather than the Starcaster one.
+
+There are really two websites here. There is your admin app, which lives at
+starcaster.pro, and there is each client's published site, which lives on that
+client's own domain. Their tab icons should differ — yours should always be
+Alphire's, theirs should always be their own — and the two had collapsed into a
+single answer.
+
+The admin app was deliberately swapping its tab icon to match the selected
+project. That went in back in June, described at the time as showing the icon
+"per active workspace", which sounds sensible right up until you notice where
+the admin app actually runs: only ever at starcaster.pro. A client's domain is
+served entirely different files. So the swap was never correct anywhere — it
+simply meant the one tab that should always say Alphire wore whichever client
+was open.
+
+It now always shows the Starcaster icon.
+
+Nothing changed for clients. Their sites get their icons by a completely
+separate route on the server, and there is now a check exercising that, because
+breaking the client side while fixing yours is the obvious way to get this
+wrong. Choosing a favicon for a project in Settings still works and still
+matters — that picture is what their published site uses. Only your admin tab
+stops borrowing it.
 ## 2026-08-23 — The rule against force-pushing now actually holds (#394)
 
 Some background first. "Force-pushing" means overwriting the history of a
