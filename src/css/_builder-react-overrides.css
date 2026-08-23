@@ -2074,13 +2074,83 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* --- Navigation panel: the Links list -------------------------------- */
 
+/* ONE definition of the columns, read by both the header and every row.
+   L6a's first shape is a titled-column grid, and "clean" is the word it
+   uses; this list was not one. The header and the rows were two separate
+   FLEX containers working out three `1fr`-ish columns each from a
+   different available width — the header carries its own 8px side padding
+   and its "Action" title is narrower than the three icon buttons beneath
+   it. The columns therefore disagreed, and the error accumulated across
+   the row: at 1440 "Page Name" sat 15px right of the field it titles and
+   "Slug" 21px. Two containers cannot share a track width by computing it
+   twice; they share it by reading it from one place, which is what this
+   custom property is.
+
+   The rows stay separate boxes rather than becoming `display: contents`
+   children of one grid because a child row has to slide sideways as a
+   whole (see the indent below), and only a box can do that.
+
+   --nav-link-action-col is the three icon buttons at their fixed 26px,
+   stated once so the header's title track and the row's button track
+   cannot drift apart. --nav-link-width-col holds the 64px Width input
+   plus its "%" — it only appears under custom sizing. */
+.builder-react-root .builder-nav-items-manager {
+  --nav-link-action-col: 78px;
+  --nav-link-width-col: 82px;
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager[data-nav-width-col="true"] {
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-width-col) var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header,
+.builder-react-root .builder-nav-items-manager .builder-nav-item-row {
+  display: grid;
+  grid-template-columns: var(--nav-link-cols);
+  align-items: center;
+  gap: 8px;
+}
+
+/* W0's mechanism, applied to a titled-column grid: the wrapper has no box
+   of its own, so the selects and inputs inside it land directly on the
+   row's tracks. Without this the whole group would take ONE track and the
+   columns would be back to being decided by a nested flex box. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-fields {
+  display: contents;
+}
+
+/* The three action buttons keep their own row, right-aligned so the ✕ sits
+   on the block edge (L8) rather than wherever three 26px buttons happen to
+   end. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The mega menu's "Feature column" disclosure was the row's THIRD flex
+   child, so on a parent row it shared the line with the fields and took
+   width from them: at 1440 that row's fields rendered 341px against every
+   other row's 384px, its icons floated into the middle of the row, and the
+   summary text ran off the right edge of the panel. It spans the full grid
+   instead, which puts it on its own line under the row it belongs to and
+   gives every row in the list the same three columns. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-feature {
+  grid-column: 1 / -1;
+}
+
 /* Children indent one step per level while KEEPING a top-level row's
    field widths: the indent is paid back on the right, so the row slides
    right instead of shrinking, and a child's action icons deliberately
    sit beyond the top-level ones (operator, 2026-08-14). The header row
    and top-level rows carry no depth, so the var falls back to 0. The
    cell panel is overflow: visible, so the overhang draws rather than
-   clips. */
+   clips.
+
+   This is a NAMED EXEMPTION from L8's single right edge, recorded in
+   docs/UI_RULES.md — an indented row deliberately overhangs, and the
+   equal-and-opposite margins keep its track widths identical to a
+   top-level row's rather than shrinking them. */
 .builder-react-root .builder-nav-item-row {
   margin-left: calc(var(--nav-item-depth, 0) * 26px);
   margin-right: calc(var(--nav-item-depth, 0) * -26px);
@@ -2091,11 +2161,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    used to be 11px muted mini-caps that read as hints, not headers
    (operator, 2026-08-14: "make proper headers out of these"). Tokens
    rather than the literal hexes _tables.css predates: --ink-primary is
-   the canonical black, --bg-surface the canonical white. The 8px side
-   padding lines the header text up with the text inside the selects
-   below, which carry about the same internal inset. */
+   the canonical black, --bg-surface the canonical white.
+
+   The 8px that lines a title up with the text inside the select below it
+   is now carried by the title CELLS, not by the band. On the band it
+   narrowed the header's content box by 16px against the rows', which is
+   half of why the columns disagreed; on the cells it does the same job to
+   the eye and leaves both grids the same width to divide up. */
 .builder-react-root .builder-nav-items-header {
-  padding: 5px 8px;
+  padding: 5px 0;
   border-radius: 6px;
   background: var(--ink-primary, #18324a);
   color: var(--bg-surface, #ffffff);
@@ -2104,6 +2178,19 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-transform: none;
   letter-spacing: 0;
   margin-bottom: 6px;
+}
+
+/* Each title sits over its own column, inset by the same 8px the select
+   under it insets its text. "Action" is the exception: the buttons it
+   titles have no internal inset and their ✕ sits on the block edge, so the
+   title is right-aligned to that edge. */
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header .builder-nav-item-fields > span {
+  padding-left: 8px;
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header-action {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 /* --- Navigation panel: the mega menu's extra column -------------------- */
