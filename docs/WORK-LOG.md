@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — Groundwork for downloading a YouTube video, not just reading it (#PR)
+## 2026-08-23 — Groundwork for downloading a YouTube video, not just reading it (#392)
 
 The Acquire screen can already pull a YouTube video's title, description and
 transcript. What it has never been able to do is keep the video itself — the
