@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — The menu editor's link list lines up with its own headings (#PR)
+## 2026-08-23 — The menu editor's link list lines up with its own headings (#411)
 
 Open a Navigation module and the bottom half is the list of links — a black
 heading bar reading Parent Page / Page Name / Slug / Action, and a row of
