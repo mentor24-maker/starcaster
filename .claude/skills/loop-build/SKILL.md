@@ -11,6 +11,30 @@ See `docs/LOOP_ENGINEERING.md` for the whole system.
 Each run of this skill builds **one** task into **one** PR. When run under
 `/loop`, it repeats, draining the queue one clean PR at a time.
 
+## Before anything else: is this the machine that runs this loop?
+
+Two machines can both reach ClickUp, and claiming a ticket is check-then-act —
+a read, a comparison, then a write. There is no way to make that one atomic
+step, so it is only sound while exactly ONE machine is claiming. Which machine
+that is lives in `lib/nodeRoles.js`, the same table `db:refresh` and the bus
+relay read.
+
+**Run this first, before reading the queue or touching anything:**
+
+```bash
+npm run node:owns -- loop-build
+```
+
+*   **exit 0** — this machine owns the loop. Carry on.
+*   **exit 3** — another machine owns it. **Stop.** Claim nothing, build
+    nothing. Report the message it printed, which names the owning machine,
+    and finish the run. This is a normal outcome, not a failure.
+*   **exit 1** — it could not tell which machine this is. **Stop and say so
+    loudly.** Do not treat it as "not mine": "someone else is doing it" and
+    "nobody is doing it" look identical from here, and only one of them is
+    safe. The message says exactly what to type to fix it (one line, once per
+    machine). `npm run node:whoami` shows the whole picture.
+
 ## ClickUp access: use the direct script, not the connector
 
 Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
