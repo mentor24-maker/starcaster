@@ -1537,6 +1537,8 @@ function SavedSectionsTable({
                             cellModules={cellModules}
                             editorDevice="browser"
                             expandedModuleIds={editingSectionExpandedModuleIds}
+                            isCanonicalMaster
+                            canonicalUsage={savedSectionUsage.get(section.id)}
                             isCollapsed={editingSectionCollapsed}
                             key={editingSection.id}
                             products={products}

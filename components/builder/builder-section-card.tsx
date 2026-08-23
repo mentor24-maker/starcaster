@@ -10,6 +10,8 @@ import type {
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import { getLayoutColumns, getLayoutGridTemplate } from "@/lib/builder-template";
+import { describeBlockLineage } from "@/lib/block-lineage";
+import type { BlockUsage } from "@/lib/shared-block-usage";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
@@ -36,6 +38,15 @@ type BuilderSectionCardProps = {
   /** True when this canonical instance's content no longer matches its
    *  master — hand-edited here directly rather than through a push. */
   hasDrifted?: boolean;
+  /** Usage for the master this block belongs to, from
+   *  `buildSavedSectionUsageIndex`. Drives the "used on N pages" half of the
+   *  lineage line; omit it and the line names the master without a count. */
+  canonicalUsage?: BlockUsage | null;
+  /** True when this card is editing the MASTER itself (the saved-section
+   *  editors) rather than a copy of it on a page. A master follows nothing,
+   *  so without this it would read as "Independent" — which is true of the
+   *  data and wrong to the eye, since it is the thing everything follows. */
+  isCanonicalMaster?: boolean;
   /** Called when the user toggles canonical on/off for this section. */
   onToggleCanonical?: (checked: boolean) => void;
   onToggleCollapsed: () => void;
@@ -108,6 +119,8 @@ export function BuilderSectionCard({
   expandedModuleIds,
   canonicalSourceName,
   hasDrifted = false,
+  canonicalUsage,
+  isCanonicalMaster = false,
   onToggleCanonical,
   onToggleCollapsed,
   onMoveUp,
@@ -154,6 +167,16 @@ export function BuilderSectionCard({
   const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
   const isCanonical = sectionAny.canonical === true;
   const hasCanonicalSource = Boolean(sectionAny.savedSectionId);
+
+  // Display only. Nothing below this line writes, and nothing here is allowed
+  // to — the actions that act on these states are slices 6b and 6c.
+  const lineage = describeBlockLineage({
+    isMaster: isCanonicalMaster,
+    isFollowing: isCanonical,
+    hasDrifted,
+    masterName: canonicalSourceName,
+    usage: canonicalUsage,
+  });
 
   const columns = getLayoutColumns(section.layout);
   const savedCells = cellModules.filter((cellModule) => cellModule.modules.length !== 1);
@@ -425,48 +448,47 @@ export function BuilderSectionCard({
     <article className={`builder-section-card${isCanonical ? " builder-section-card-canonical" : ""}`} style={getSectionStyle()}>
       <div aria-expanded={!isCollapsed} className="builder-section-header" ref={sectionHeaderRef}>
         <div className="builder-section-title">
-          {isCanonical ? (
-            <span className="builder-section-title-label">
-              <strong>{displayTitle}</strong>
-              <span className="builder-canonical-badge" title={canonicalSourceName ? `Canonical — linked to "${canonicalSourceName}"` : "Canonical"}>(canonical)</span>
-              {hasDrifted ? (
-                <span
-                  className="builder-canonical-badge builder-canonical-badge-changed"
-                  title="This copy was edited directly and no longer matches its master — the next push skips it unless you overwrite it explicitly"
-                >
-                  Changed
-                </span>
-              ) : null}
-            </span>
-          ) : isEditingTitle ? (
-            <input
-              ref={titleInputRef}
-              className="builder-section-title-input"
-              type="text"
-              value={section.title ?? ""}
-              onChange={(event) =>
-                onUpdateSection((current) => ({ ...current, title: event.target.value }))
-              }
-              onBlur={handleTitleBlur}
-              onKeyDown={handleTitleKeyDown}
-              placeholder={`Section ${sectionIndex + 1}`}
-              autoFocus
-            />
-          ) : (
-            <button
-              className="builder-section-title-label"
-              onClick={handleTitleClick}
-              title="Click to rename"
-              type="button"
+          <div className="builder-section-title-main">
+            {isCanonical ? (
+              <span className="builder-section-title-label">
+                <strong>{displayTitle}</strong>
+              </span>
+            ) : isEditingTitle ? (
+              <input
+                ref={titleInputRef}
+                className="builder-section-title-input"
+                type="text"
+                value={section.title ?? ""}
+                onChange={(event) =>
+                  onUpdateSection((current) => ({ ...current, title: event.target.value }))
+                }
+                onBlur={handleTitleBlur}
+                onKeyDown={handleTitleKeyDown}
+                placeholder={`Section ${sectionIndex + 1}`}
+                autoFocus
+              />
+            ) : (
+              <button
+                className="builder-section-title-label"
+                onClick={handleTitleClick}
+                title="Click to rename"
+                type="button"
+              >
+                <strong>{displayTitle}</strong>
+                {hasCanonicalSource ? null : <span className="builder-section-title-edit-hint">✎</span>}
+              </button>
+            )}
+            <span
+              className={`builder-block-state-chip builder-block-state-chip-${lineage.state}`}
+              data-block-state={lineage.state}
+              title={lineage.hint}
             >
-              <strong>{displayTitle}</strong>
-              {hasCanonicalSource ? (
-                <span className="builder-canonical-badge builder-canonical-badge-unlinked" title="Unlinked from canonical — click Relink to reconnect">Unlinked</span>
-              ) : (
-                <span className="builder-section-title-edit-hint">✎</span>
-              )}
-            </button>
-          )}
+              {lineage.label}
+            </span>
+          </div>
+          {lineage.line ? (
+            <div className="builder-block-lineage" title={lineage.hint}>{lineage.line}</div>
+          ) : null}
         </div>
         <div className="builder-section-actions">
           <button aria-label={isCollapsed ? "Expand section" : "Collapse section"} className="builder-icon-button" onClick={handleToggleSectionCollapsed} title={isCollapsed ? "Expand section" : "Collapse section"} type="button"><BuilderCollapseIcon expanded={!isCollapsed} /></button>
