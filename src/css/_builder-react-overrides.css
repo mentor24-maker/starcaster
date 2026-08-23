@@ -5050,10 +5050,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Time and size are read; Restore is pressed. Sizing the action column to
    its content keeps the button off the right edge on a wide screen, where a
    stretched button reads as the row's primary purpose rather than its
-   escape hatch. */
+   escape hatch.
+
+   The action track must stay SHRINKABLE (minmax(min-content, …), never bare
+   max-content): a propagate row carries two buttons, and a max-content track
+   is sized to both side by side, so on a narrow panel the row overflows
+   horizontally — the wrap this layout relies on can never fire. The buttons
+   stack vertically (below) so min-content is one button wide. */
 .builder-react-root .builder-page-history-row {
   display: grid;
-  grid-template-columns: minmax(16ch, 1.4fr) minmax(14ch, 1fr) max-content;
+  grid-template-columns: minmax(16ch, 1.4fr) minmax(14ch, 1fr) minmax(min-content, max-content);
   gap: var(--space-3, 12px);
   align-items: center;
   padding: var(--space-2, 8px) 0;
@@ -5126,15 +5132,29 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-muted, #5c6a72);
 }
 
-.builder-react-root .builder-page-history-restore {
+/* Stacked, right-flush. Each row is its OWN grid, so side-by-side buttons
+   would give a propagate row a wider action track than its neighbours and
+   push its Restore out of the vertical line the save rows sit on. Stacking
+   keeps every row's buttons on the container's right edge, aligned across
+   rows regardless of how many actions a row carries. */
+.builder-react-root .builder-page-history-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2, 8px);
+}
+
+.builder-react-root .builder-page-history-restore,
+.builder-react-root .builder-page-history-undo-run {
   white-space: nowrap;
   width: fit-content;
 }
 
-/* Narrow: the action drops under the facts rather than squeezing them. */
+/* Narrow: the action drops under the facts rather than squeezing them. The
+   action track shrinks the same way as the base grid's — see above. */
 @media (max-width: 640px) {
   .builder-react-root .builder-page-history-row {
-    grid-template-columns: 1fr max-content;
+    grid-template-columns: 1fr minmax(min-content, max-content);
   }
   .builder-react-root .builder-page-history-what {
     grid-column: 1 / -1;
@@ -6036,4 +6056,28 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-module-palette-breadcrumb-current {
   color: var(--ink-primary, #000);
   font-weight: 600;
+}
+
+/* Canonical-provenance badges (section AND module cards share these classes:
+   (canonical) / Unlinked / Linked / Custom / Changed) had no styling at all —
+   plain inline text next to the title, on both cards. This gives the shared
+   pill shape everything but Changed already needed; Changed additionally
+   needs a color distinct from the neutral ones, since it is the one state a
+   push will silently skip unless the operator explicitly overwrites it. */
+.builder-react-root .builder-canonical-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2, 8px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-canonical-badge-changed {
+  background: var(--warn-notice-bg, #fdf0d5);
+  color: var(--warn-notice-text, #8a5a00);
 }

@@ -136,6 +136,7 @@ const {
 const {
   listPageRevisions,
   listRunRevisions,
+  undoRunIdFor,
   getPageRevision,
 } = require('../lib/builderPageRevisionsStore');
 const {
@@ -191,6 +192,7 @@ const { listContacts, createContact, updateContact, rowToContact } = require('..
 const { savePollSubmission, getPollResults } = require('../lib/pollSubmissionsStore');
 const {
   listSavedSections,
+  getSavedSection,
   createSavedSection,
   updateSavedSection,
   deleteSavedSection,
@@ -1662,6 +1664,47 @@ async function handle(req, res, pathname, method) {
     .match(/^\/api\/builder\/landing-pages\/([^/]+)\/revisions\/([^/]+)\/restore\/?$/);
   const propagationUndoMatch = String(pathname || '')
     .match(/^\/api\/builder\/propagation-runs\/([^/]+)\/undo\/?$/);
+  const propagationRunMatch = String(pathname || '')
+    .match(/^\/api\/builder\/propagation-runs\/([^/]+)\/?$/);
+
+  // GET /api/builder/propagation-runs/:runId — what an undo would touch NOW.
+  //
+  // The undo confirm is built from this rather than from remembered counts:
+  // retention pruning deletes old restore points, so months after a push the
+  // honest statement is "N pages still have restore points", never the
+  // original run size (unrecoverable once pruned). A confirm that promises
+  // more than the data can deliver is the PR #21 failure with a dialog on it.
+  //
+  // Also answers "was this run already undone?" — the undo stamps its revert
+  // revisions with a derived run id (undoRunIdFor), so one row under that id
+  // means yes, and the button can say so instead of silently replaying old
+  // snapshots over newer work.
+  if (propagationRunMatch && requestMethod === 'GET') {
+    const runId = decodeURIComponent(propagationRunMatch[1] || '').trim();
+    if (!runId) return sendErr(res, 400, 'propagation run id is required', { code: 'VALIDATION_ERROR' }), true;
+
+    const runResult = await listRunRevisions(runId, scope);
+    if (!runResult.ok) {
+      return sendErr(res, runResult.status || 500, runResult.error || 'Could not load that update', {
+        code: runResult.code || null,
+      }), true;
+    }
+    const pages = (Array.isArray(runResult.data) ? runResult.data : []).map((entry) => ({
+      pageId: entry.pageId,
+      name: entry.name,
+      createdAt: entry.createdAt,
+    }));
+
+    const undoneResult = await listRunRevisions(undoRunIdFor(runId), scope);
+    if (!undoneResult.ok) {
+      return sendErr(res, undoneResult.status || 500, undoneResult.error || 'Could not load that update', {
+        code: undoneResult.code || null,
+      }), true;
+    }
+    const undone = (Array.isArray(undoneResult.data) ? undoneResult.data : []).length > 0;
+
+    return sendOk(res, 200, { pages, undone }, { pages, undone }, { total: pages.length }), true;
+  }
 
   // POST /api/builder/propagation-runs/:runId/undo
   //
@@ -1708,7 +1751,10 @@ async function handle(req, res, pathname, method) {
           ...(revision.theme ? { theme: revision.theme } : {}),
         },
         scope,
-        { reason: 'revert', actor: actorFrom(req) }
+        // The revert revisions carry their OWN (derived) run id, so an undo
+        // that dies partway is itself a grouped, resumable event — and its
+        // existence is how the GET above reports "already undone".
+        { reason: 'revert', actor: actorFrom(req), propagationRunId: undoRunIdFor(runId) }
       );
       if (result.ok) restored.push({ pageId: entry.pageId, name: entry.name });
       else failed.push({ pageId: entry.pageId, name: entry.name, error: result.error || 'save failed' });
@@ -2140,6 +2186,14 @@ async function handle(req, res, pathname, method) {
   const savedSectionMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)$/);
   if (savedSectionMatch && requestMethod === 'PATCH') {
     const body = await parseJsonBody(req);
+    // Read BEFORE the patch overwrites it — this is the "before" a following
+    // page's drift is measured against, not the new content about to land.
+    // Best-effort: a missing/unreadable previous row just disables the drift
+    // check for this push (propagateCanonicalSection fails open on it), it
+    // must never block the save itself.
+    const beforeResult = await getSavedSection(savedSectionMatch[1], scope).catch(() => null);
+    const previousSection = beforeResult && beforeResult.ok ? beforeResult.data.section : null;
+
     const result = await updateSavedSection(savedSectionMatch[1], {
       name: body.name,
       section: body.section,
@@ -2152,7 +2206,7 @@ async function handle(req, res, pathname, method) {
       savedSectionMatch[1],
       result.data.section,
       scope,
-      { actor: actorFrom(req) },
+      { actor: actorFrom(req), previousSection, overwriteDrifted: body.overwriteDrifted === true },
     );
     return sendOk(res, 200, result.data, { savedSection: result.data }, { propagation }), true;
   }
@@ -2160,6 +2214,38 @@ async function handle(req, res, pathname, method) {
     const result = await deleteSavedSection(savedSectionMatch[1], scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not delete saved section'), true;
     return sendOk(res, 200, result.data, { savedSection: result.data }), true;
+  }
+
+  // POST /api/builder/saved-sections/:id/force-propagate — the explicit
+  // opt-in to overwrite pages a normal push skipped for having local changes.
+  // Re-reads the section's CURRENT (already-saved) content and re-runs the
+  // push with the drift check off, rather than asking the client to resend
+  // the whole section body a second time.
+  //
+  // The body names the pages: `{ pageIds: [...] }` — exactly the ones the
+  // push reported as skipped. Required, not optional: without it this route
+  // rewrote EVERY follower to overwrite two drifted copies (review finding,
+  // 2026-08-20), and drift cannot be recomputed here because the master has
+  // already been saved. The tally rides `meta.propagation`, same as the
+  // ordinary save route — clients read it from there.
+  const forcePropagateMatch = pathname.match(/^\/api\/builder\/saved-sections\/([^/]+)\/force-propagate$/);
+  if (forcePropagateMatch && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const pageIds = Array.isArray(body.pageIds) ? body.pageIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+    if (!pageIds.length) {
+      return sendErr(res, 400, 'pageIds is required — name the pages to overwrite (the ones the push skipped).', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const currentResult = await getSavedSection(forcePropagateMatch[1], scope);
+    if (!currentResult.ok) {
+      return sendErr(res, currentResult.status || 404, currentResult.error || 'Saved section not found'), true;
+    }
+    const propagation = await propagateCanonicalSection(
+      forcePropagateMatch[1],
+      currentResult.data.section,
+      scope,
+      { actor: actorFrom(req), overwriteDrifted: true, onlyPageIds: pageIds },
+    );
+    return sendOk(res, 200, {}, {}, { propagation }), true;
   }
 
   if (pathname === '/api/builder/products' && requestMethod === 'GET') {
