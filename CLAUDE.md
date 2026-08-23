@@ -167,6 +167,14 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     success. Spread the page (`{ ...page, layoutSections: next }`) so
     `pageBackground` and `theme` are not reset, and read the page back after
     writing before you touch the next one.
+14. **A vitest test must not require a generated server lib.** CI runs
+    `npx vitest run` BEFORE `npm run build`, so anything under `lib/builder/`
+    (`template.js`, `document.js` → `./template`, …) does not exist at vitest
+    time — a test reaching it passes locally forever and fails CI forever
+    (PR #343). vitest (`components/**`, `lib/builder-client/**`) tests TS
+    sources only; a test needing a generated lib goes in the node suite
+    (`scripts/builder/*.test.js`, run after the build). Enforced by
+    `check_vitest_generated_lib.cjs`; full story in `docs/DOCTRINE.md` §5.18.
 
 ## Working locally
 
@@ -188,6 +196,31 @@ talking to, `npm run dev` refuses to start against the live one without
 **`db:refresh` costs production disk IO.** Six runs in one day exhausted the
 budget and left every tenant site down on 2026-08-17 (`docs/DOCTRINE.md` §1.5).
 Weekly is the rhythm; `doctor` says when you have drifted.
+
+## Some jobs run on exactly one machine
+
+There is more than one machine now, and three jobs are not safe to run twice
+at once: **`bus-relay`** (two relays both post the same comment), **`db:refresh`**
+(Supabase disk IO is one budget for the whole company — six runs in a day took
+every client site down on 2026-08-17) and **the loop skills** (claiming a
+ticket is check-then-act, which is only sound with a single claimant).
+
+Which machine owns which job is a committed table in **`lib/nodeRoles.js`**,
+and every one of those jobs asks it first. Moving a job to another machine is
+a one-line edit there plus a commit — deliberately reviewable, rather than a
+setting somebody flips on one machine at 2am.
+
+```
+npm run node:whoami          # which machine is this, and what may it run
+npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
+```
+
+Each machine says who it is in `~/.alphire-node` (one short line:
+`macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
+which is a guess — rename the Mac and the guess changes. **A machine whose
+name is not recognised does not quietly skip; it refuses out loud**, because
+"another machine is doing it" and "nobody is doing it" look identical
+otherwise, and only one of them is safe.
 
 ## One thread, one topic, one session
 
@@ -245,11 +278,24 @@ Give every thread its own worktree — a separate folder with its own branch,
 sharing the same repo history. **Use the command, not the raw git:**
 
 ```
-npm run thread <topic>     # tidy first, branch off CURRENT origin/main, npm ci, build
+npm run thread <topic> <clickup-task-id>   # tidy first, branch off CURRENT origin/main, npm ci, build
 npm run ship               # catch up, verify, push, PR, wait for CI, merge, tidy
 npm run map                # what exists, what is shipped, what is still live work
 npm run tidy               # delete shipped branches, remove finished worktrees
 ```
+
+**A thread exists only while its ClickUp task is open** (Charter Q1,
+2026-08-18). The task id is required, not optional — `npm run thread` stamps
+it onto the branch (`git config branch.<topic>.clickup-task <id>`, the same
+`branch.<name>.*` namespace git/VS Code already use for per-branch metadata)
+and refuses to create a thread for a task that is not confirmed open. `npm
+run tidy` reads the stamp back and cleans up a thread whose task has since
+closed — branch deleted, worktree removed, logged to `tidy-restore.log` —
+**even if its commits never shipped**, which the older shipped-only check
+could never reach (an abandoned thread's commits are legitimately "active" by
+`git cherry`, and would otherwise sit there forever). A branch whose ClickUp
+status can't be determined (network, auth, rate limit) is never treated as
+closed — only a clean, confirmed read authorizes a delete.
 
 `npm run ship` is the other end of `thread`: the nine hand-run steps between
 "the work is done" and "it is live", in order, with the state checked between
@@ -323,6 +369,15 @@ both use, from one shared module so they can never disagree.
 `git worktree list` shows every active thread; `git worktree remove
 .claude/worktrees/<topic>` cleans one up. Caveat: `.git/hooks` is **shared**
 across worktrees, so `npm install` in one reinstalls hooks for all of them.
+
+**`npm run reconcile`** (Charter Q2, 2026-08-18) catches the drift the tools
+above can't see on their own: a Loop Queue task left in-flight after its PR
+already merged (moves it to Live), and a branch stamped with a task
+(`npm run thread`) that has since closed but is still on the Mac (flags it to
+the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
+Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
+Meant to run on a schedule — see the Mac Mini engine-room task for when that
+lands; today it's a command to run by hand.
 
 **Dev servers collide on port 3001, and `pkill` is a shared-resource action.**
 Every worktree's `npm run dev` wants the same port, so the first one started

@@ -67,7 +67,9 @@ npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
-npm run clickup -- comment --task <id> --body-file -           # a plain note (PR URL, progress)
+npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
+npm run clickup -- verdict --task <id> --pass|--fail --body-file -  # record the review verdict (loop-review step 4)
+npm run clickup -- comment --task <id> --body-file -           # a plain note (progress, context)
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 ```
@@ -77,6 +79,57 @@ clears assignees, and both halves of the write are verified from the response.
 `--if-status` makes a claim safe against a parallel loop: it exits code 3
 without writing if the task has already moved. It **refuses** to move a ticket
 into `Needs your input` or `Ready to launch` — see the next section.
+
+### The two traces a ticket must carry (added 2026-08-22, task 86bbjt18r)
+
+`pr-opened` and `verdict` are not politer spellings of `comment`. Each writes
+one exact shape, and each **reads it back through the same parser its consumer
+uses** — so a comment that the merge step could not act on is a comment these
+commands refuse to call written. Both exit non-zero when the trace does not
+land, and a non-zero exit fails the loop run.
+
+They exist because both traces used to be prose in a skill file, and prose is
+followed most of the time. Draining the Ready-to-launch backlog on 2026-08-22
+found what the other times cost:
+
+- **Four approved tickets had no `PR opened:` comment**, so the merge step
+  correctly refused to guess which PR they meant — and two of those PRs also
+  shipped with no ClickUp link in the body, so ticket and PR could only be
+  paired by reading titles. `pr-opened` now checks the PR body FIRST (exit 4
+  if the link is missing) and only then writes the ticket side.
+- **Two tickets reached `Ready to launch` with no passing review on them.**
+  That status is the operator's "safe to merge" signal; he approved both in
+  good faith. `ask` and `status` now both refuse to set it unless the newest
+  verdict on the ticket is a PASS. `--operator-asked` overrides, and says in
+  the transcript that a human took responsibility for it.
+
+**What the gate does NOT cover, stated out loud.** `status` and `ask` in
+`scripts/clickup_direct.mjs` are the only two writers of that status anywhere
+in this repo — `scripts/reconcile_clickup_github.cjs` treats operator statuses
+as read-only and never sets them — so every loop path is now closed. Two doors
+remain open that code here cannot reach: the ClickUp **web UI** (a person
+dragging a card), and the claude.ai **ClickUp connector** (`clickup_update_task`),
+which any agent session can call directly without passing through this script.
+If an unreviewed ticket turns up in `Ready to launch` again, look there first
+— and the loops should keep using `npm run clickup`, which is the only door
+with a lock on it.
+
+### A refusal is not a verdict on the ticket
+
+The merge step marks an authorization it has acted on, so the same answer is
+never posted twice. Until task 86bbjt18r that marker was permanent even for a
+**refusal**, which meant a refused ticket was never looked at again. On
+2026-08-22 two tickets were refused for "no PR opened: comment", the comment
+was added by hand minutes later, and the next three passes did not re-read
+them: they simply dropped out of the run. Dane's approval was still there,
+still valid, and only a human audit would ever have found it.
+
+Refusal markers now record their reason and are **re-decided on every pass**.
+Nothing extra is posted while the reason still holds — the same answer twice
+says nothing new — but the moment it changes, or goes away, the ticket goes
+through with no second word from him. Markers for a completed merge or a
+conflict hand-off stay terminal, because re-deciding a merged PR is the one
+mistake that cannot be undone.
 
 ## The two columns, and the operator card (ratified 2026-08-22)
 
@@ -361,6 +414,55 @@ is different, so the loops have guardrails baked in:
   `Needs your input` for a human instead of shipping broken.
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
+
+## Reading the queue at a glance — the Loop note
+
+The Status column says which STAGE a ticket is in; the **Loop note** column
+says what is actually happening and what happens next, in plain language:
+`🔨 building — claimed 10:12am`, `🔀 PR #351 open — waiting for a review pass`,
+`👀 verified — waiting on Dane to say "merge"`, `↩ returned to the line…`,
+`✅ live 8/20`. An empty note means "waiting in line" — correct, not a gap.
+A pinned **Loop heartbeat** ticket carries one line per pass
+(`pass finished 10:48am — 33 in line, next up: "…"`) so you can tell whether
+the line is MOVING, not just how long it is.
+
+The loops stamp these themselves (`loop-note` / `loop-heartbeat` in
+`scripts/clickup_direct.mjs`, wording in `scripts/builder/loopNote.js`) — one
+write per real transition, never per queued ticket (that would be ~33 writes a
+pass against a rate-limited API for what the sort order already shows).
+
+**One-time setup (ClickUp UI — the API cannot create either):**
+1. On the Loop Queue list: Columns → + → Create field → **Text**, named
+   exactly **Loop note**. Add it to the List view. Until it exists the loops
+   print `CANNOT STAMP` and carry on — the note is missing, nothing else is.
+2. Create one ticket named **Loop heartbeat** in the list; put its id in
+   `CLICKUP_HEARTBEAT_TASK` (Doppler) so `loop-heartbeat` has a home.
+
+## Per-repo gates — a task declares its repo
+
+The Loop Queue is not starcaster-only. A task declares its repo with a
+`repo:<name>` **tag**; no tag means `starcaster` (so nothing already in the
+queue changes). The resolver is `scripts/builder/taskRepo.js` — one function,
+not prose each loop re-reads differently — and the `queue`/`get` commands
+surface the result (`queue` prints a **repo** column, `?<name>` = "escalate,
+do not build"; `get` prints a `repo:` line). An unknown repo name, or two
+different `repo:` tags, is never guessed: the build loop moves the task to
+`Needs your input`.
+
+Each repo runs its OWN gates in its OWN checkout. A repo without a test suite
+declares what it *does* have rather than silently running nothing:
+
+| Repo | Checkout | Gates a loop runs |
+|---|---|---|
+| `starcaster` | `~/WebApps/starcaster` | the full set above — `typecheck`, `test:builder` / `test:builder-ui`, generated-artifact rebuilds, `check_conventions`, and the UI checks when a panel or render changed |
+| `normie` | `~/WebApps/normie` (sibling) | that repo's own `npm run typecheck` and test suite; it shares the Builder schema, so schema-touching work rebuilds the same generated artifacts |
+| `pulse` | `~/WebApps/pulse` (sibling) | no app test suite — `node --check` on every changed `.mjs`/`.cjs`, plus any generator's determinism check (run it twice, diff); say in the PR that this is the whole gate |
+| `vault` | `~/vault` | a no-machinery, prose-only repo — there is no build. The gate is a clean `git` diff reviewed by eye plus the vault-drift check (`npm run check:vault-drift`, once it lands); **the loop never runs machinery inside the vault**, it only edits and commits prose |
+
+The checkout paths are derived at runtime (`taskRepo.js` finds the main
+starcaster checkout via git and its siblings beside it; the vault is
+`~/vault`), never hardcoded — NODES P1. A sibling repo whose checkout is not
+present on the machine is an escalation, not a silent skip.
 
 ## Cost — the part the demos skip
 

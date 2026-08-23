@@ -21,6 +21,11 @@ import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
 import { normalizeProximityEffectSettings } from "./proximity-effects";
+import {
+  imageEffectBounces,
+  imageEffectRotates,
+  imageEffectTravels
+} from "@/components/builder/builder-image-effects";
 
 /**
  * Section (row) column structures. Values are named for their `fr` ratio;
@@ -1891,10 +1896,30 @@ function stripOverlayOnlyImageSettings(settings: Record<string, string>) {
  * and 25 is the speed Spin has always run at, so an existing page is
  * unchanged either way.
  */
+/**
+ * Keep the effect controls that apply to the chosen effect, drop the rest.
+ *
+ * ONE RULE, TWO HALVES. The settings panel decides which of the seven
+ * controls to SHOW with three predicates (`imageEffectTravels`,
+ * `imageEffectRotates`, `imageEffectBounces`); this function decides which
+ * ones to KEEP on the way to the page. Those have to be the same rule, and
+ * they were not — the keep-half listed effect names by hand.
+ *
+ * So when Slide, Axis Rotate and Flips were surfaced on 2026-08-22, their
+ * panels correctly offered Speed, Rotation Rate, Frequency and the rest, the
+ * operator could move every one of them, the value saved — and it was
+ * deleted here before it ever reached the renderer. All three ran at the
+ * built-in defaults forever, with no error anywhere and an animation on
+ * screen the whole time, so "it animates" stayed true while every control
+ * was dead. Found in review the same day.
+ *
+ * Reading the panel's own predicates is what stops the next effect repeating
+ * it: adding one to `imageEffectRotates` now teaches both halves at once.
+ */
 function normalizeImageEffectSettings(settings: Record<string, string>) {
-  // Direction belongs to the two travelling effects, and is stored only when
-  // it is not the default — a page that never chose one carries no key.
-  if (settings.effect === "cruise" || settings.effect === "tumbleweed") {
+  // Direction belongs to the travelling effects, and is stored only when it
+  // is not the default — a page that never chose one carries no key.
+  if (imageEffectTravels(settings.effect)) {
     if (settings.effectDirection !== "rtl") delete settings.effectDirection;
     if (settings.effectRepeat !== "once") delete settings.effectRepeat;
     settings.effectSpeed = normalizeSpacingValue(settings.effectSpeed, "8", 1, 600);
@@ -1906,18 +1931,16 @@ function normalizeImageEffectSettings(settings: Record<string, string>) {
     delete settings.effectDelay;
   }
 
-  if (settings.effect !== "spin" && settings.effect !== "tumbleweed") {
+  if (imageEffectRotates(settings.effect)) {
+    settings.effectRotationRate = normalizeSpacingValue(settings.effectRotationRate, "25", 1, 600);
+  } else {
     delete settings.effectRotationRate;
-    delete settings.effectFrequency;
-    delete settings.effectBounceHeight;
-    return;
   }
 
-  settings.effectRotationRate = normalizeSpacingValue(settings.effectRotationRate, "25", 1, 600);
-
-  // Frequency — hops per crossing — belongs to Tumbleweed alone; Spin turns in
-  // place and never leaves the midline.
-  if (settings.effect === "tumbleweed") {
+  // Frequency — hops per crossing — and how high each hop goes belong to the
+  // effects that leave the midline: Tumbleweed while it crosses the page,
+  // Flips without going anywhere. Spin turns in place and stays on it.
+  if (imageEffectBounces(settings.effect)) {
     settings.effectFrequency = normalizeSpacingValue(settings.effectFrequency, "4", 1, 60);
     settings.effectBounceHeight = normalizeSpacingValue(settings.effectBounceHeight, "50", 0, 1000);
   } else {

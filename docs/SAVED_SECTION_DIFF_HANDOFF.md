@@ -6,7 +6,7 @@ Paste everything below the line into a fresh Claude Code session started in
 ---
 
 Read `CLAUDE.md`, then `docs/SAVED_SECTIONS.md` before anything else. Work in
-your own worktree: `npm run thread section-diff`. Never edit `main`.
+your own worktree: `npm run thread section-diff <clickup-task-id>`. Never edit `main`.
 
 ## The job
 

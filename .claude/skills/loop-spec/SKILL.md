@@ -52,6 +52,13 @@ write any code here. You produce well-formed tasks.
    ticket to Dane — see below), and a `markdown_description` in exactly this
    shape.
 
+   **If the task is not for starcaster, tag it `repo:<name>`** (`normie`,
+   `pulse`, or `vault`). A task with no `repo:` tag builds in starcaster — the
+   default, so most tasks need no repo tag at all. Only tag when the work
+   lives in another repo; an unknown repo name makes the build loop escalate
+   the task rather than build it, so use exactly one of the four known names
+   (`starcaster`, `normie`, `pulse`, `vault`).
+
    **The description is the LEFT column, and it is where the detail goes.** The
    right-hand column is narrow; reasoning written there arrives as a wall of
    text in the skinniest part of the screen. Ratified 2026-08-22, after Sync
@@ -64,20 +71,6 @@ write any code here. You produce well-formed tasks.
    Found live on 2026-08-22, on the first ticket rewritten with this template:
    the quoted instruction was gone and nothing said so. Use a fenced block.
    `describe` and `ask` both refuse a body containing one.
-
-   ````markdown
-   ## Dane asked for
-   ```
-   His own words, verbatim — the instruction that caused this ticket to exist.
-   ```
-   — where and when he said it (a ClickUp comment, the bus, a voice note)
-
-   If a task descends from a standing decision rather than a fresh instruction,
-   say so and name the decision. **Never invent a quote.**
-
-   ## The problem
-   Two or three sentences of plain English: what is wrong today, and why it
-   matters to the business or to Dane. No jargon, or explain it in place.
 
    ## Goal
    One or two sentences: what this task does about it.
