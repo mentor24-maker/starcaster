@@ -14,6 +14,23 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — See what the loop queue is actually doing, at a glance (#370)
+
+The task list showed which stage each item was in, but not whether the
+pipeline was alive, when it last moved, or what it would pick up next. Now the
+loops write a plain-language "Loop note" on each ticket as it moves — "building
+— claimed 10:12am", "PR open — waiting for a review pass", "verified — waiting
+on Dane to say merge", "returned to the line with notes", "live 8/20" — and a
+pinned "Loop heartbeat" ticket carries one line per pass ("pass finished
+10:48am — 33 in line, next up: …"). An untouched ticket stays blank, which
+reads correctly as "waiting in line". It is one write per real move, never a
+rewrite of the whole queue. One 30-second ClickUp setup step is needed first
+(create a "Loop note" text field); until then the loops say so plainly and
+keep working. Wording lives in one tested place so two loops can't phrase the
+same move two ways.
+
+---
+
 ## 2026-08-22 — Three jobs that must never run twice now refuse to (#383)
 
 There are two machines now, and that is only an improvement if both of them

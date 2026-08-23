@@ -50,6 +50,8 @@
 
 import { readFileSync } from 'node:fs';
 import { writeFileSync } from 'node:fs';
+import loopNoteLib from './builder/loopNote.js';
+const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
 import busRelayPlan from './builder/busRelayPlan.js';
 import mergeOnComment from './builder/mergeOnComment.js';
@@ -180,6 +182,9 @@ function usage(code = 2) {
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
+  console.error('  loop-note --task <id> --transition claimed|pr-open|verified|sent-back|merged|escalated [--pr N]');
+  console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent');
+  console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
   console.error('  chat --channel <id> --body-file <file|->');
   console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
   console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name');
@@ -1293,6 +1298,35 @@ if (cmd === 'whoami') {
   if (lastRes) reportLimits(lastRes);
   if (unchecked.length) process.exit(1);
 
+} else if (cmd === 'loop-note') {
+  // Stamp the "Loop note" custom field with a plain-language transition line
+  // (Queue visibility). CANNOT STAMP loudly if the field does not exist — the
+  // field must be created once in the ClickUp UI (the API cannot create it);
+  // a missing field is reported, never silently skipped (DOCTRINE 3.11). This
+  // is ONE write per real transition — not per pass, not per queued ticket.
+  const task = arg('task'), transition = arg('transition');
+  if (!task || !transition) usage();
+  let text;
+  try {
+    text = loopNote(transition, { at: nowClock(), pr: arg('pr') });
+  } catch (e) {
+    console.error(`\nloop-note: ${e.message}`);
+    process.exit(2);
+  }
+  await stampLoopNote(task, text);
+
+} else if (cmd === 'loop-heartbeat') {
+  // One write per loop pass, onto the pinned "Loop heartbeat" ticket, so the
+  // list shows the pipeline is alive and what is next. Target ticket id from
+  // --task or CLICKUP_HEARTBEAT_TASK (created once in the UI, like the field).
+  const task = arg('task', process.env.CLICKUP_HEARTBEAT_TASK);
+  if (!task) {
+    console.error('\nloop-heartbeat: no heartbeat ticket — pass --task <id> or set CLICKUP_HEARTBEAT_TASK.');
+    console.error('Create one ticket in the Loop Queue named "Loop heartbeat" once, then use its id.');
+    process.exit(2);
+  }
+  const text = heartbeatNote({ at: nowClock(), inLine: Number(arg('in-line', '0')), nextUp: arg('next', '') });
+  await stampLoopNote(task, text);
 } else if (cmd === 'task-open') {
   // Charter Q1 (Task-closes-thread): a thread should only exist while its
   // ClickUp task is open. ClickUp's own status.type is the general signal —
@@ -1349,4 +1383,42 @@ if (cmd === 'whoami') {
 
 } else {
   usage();
+}
+
+/** hh:mmam local — the register the operator reads. */
+function nowClock() {
+  return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '');
+}
+
+/**
+ * Set the "Loop note" text custom field on a task and verify by read-back.
+ * Resolves the field id by NAME from the task's own custom_fields, so no id is
+ * hardcoded. Missing field → CANNOT STAMP, loud, exit 1 (never a silent pass).
+ */
+async function stampLoopNote(taskId, text) {
+  const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
+  if (!before.res.ok) die('read task for loop-note', before);
+  const field = (before.json.custom_fields || []).find(
+    (f) => String(f.name || '').trim().toLowerCase() === 'loop note'
+  );
+  if (!field) {
+    console.error('\nCANNOT STAMP — custom field "Loop note" not found on this list.');
+    console.error('Create it once in ClickUp: the list -> Columns -> + -> Create field -> Text, named "Loop note".');
+    console.error('This is reported, not skipped: the build/review pass continues; only the note is missing.');
+    process.exit(1);
+  }
+  const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
+  if (!out.res.ok) die('set loop-note field', out);
+
+  // Verify from a fresh read — a 200 is not proof the value stuck.
+  const after = await call('GET', `/api/v2/task/${taskId}`);
+  const got = after.res.ok
+    ? (after.json.custom_fields || []).find((f) => f.id === field.id)?.value
+    : undefined;
+  if (String(got ?? '') !== text) {
+    console.error(`\nLoop note did NOT stick: wrote ${JSON.stringify(text)}, read back ${JSON.stringify(got ?? null)}.`);
+    process.exit(1);
+  }
+  console.log(`Loop note on ${taskId}: ${text} (verified by reading it back).`);
+  reportLimits(out.res);
 }

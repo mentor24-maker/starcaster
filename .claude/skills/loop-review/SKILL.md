@@ -78,6 +78,18 @@ body is four sections, checked before anything is sent:
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
 
+## Loop note — stamp your verdict (queue visibility)
+
+When you decide, stamp the ticket's **Loop note** so the queue shows it:
+
+```bash
+npm run clickup -- loop-note --task <id> --transition verified    # PASS -> Ready to launch
+npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back to Queued
+```
+
+`CANNOT STAMP` means the one-time "Loop note" field is not set up yet (see
+`docs/LOOP_ENGINEERING.md`) — note it and carry on; it never blocks a verdict.
+
 ## Workflow
 
 1. **Claim the next task.** Find the oldest task with status `In review` in the
