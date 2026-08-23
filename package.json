@@ -87,7 +87,8 @@
     "check:ecosystem-drift": "node scripts/check_ecosystem_drift.cjs",
     "build:ecosystem": "node scripts/build_ecosystem_diagram.mjs",
     "build:ecosystem-notes": "node scripts/build_ecosystem_notes.mjs",
-    "build:ecosystem-html": "node scripts/build_ecosystem_html.mjs"
+    "build:ecosystem-html": "node scripts/build_ecosystem_html.mjs",
+    "check:vault-drift": "node scripts/check_vault_drift.cjs"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

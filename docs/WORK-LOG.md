@@ -39,6 +39,17 @@ recognise. It does **not** quietly skip the work — it stops and says so. "Some
 other machine is handling this" and "nobody is handling this" look identical
 from the inside, and only one of them is safe; the difference between them is
 the whole point.
+## 2026-08-22 — `npm run doctor` now catches canon nobody can see (#378)
+
+The vault holds the project's canon, but two ways it can silently go wrong had
+no detector: canon written and committed locally but never pushed (so HQ can't
+see it), and signed doctrine citing a doctrine file that doesn't exist (the
+quota-doctrine gap that went two days unnoticed). A new read-only check —
+part of `npm run doctor` and a standalone `npm run check:vault-drift` — reports
+both in plain language, each with its one-line fix. It never writes to the
+vault, and a machine without the vault (a worktree, CI) is told "can't check"
+rather than a false all-clear. Run against the real vault on day one it already
+found one uncommitted change waiting to be committed.
 
 ---
 

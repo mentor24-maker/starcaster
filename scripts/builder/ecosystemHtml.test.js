@@ -61,6 +61,47 @@ test('renderPage refuses a vault-mode diagram — its boxes have no stylesheet t
   assert.throws(() => renderPage(doc, ''), /web-mode diagram/);
 });
 
+test('public mode strips every detail block — the key is ABSENT, not null (pageData)', () => {
+  const priv = pageData(doc);
+  const pub = pageData(doc, { public: true });
+  assert.deepEqual(priv.objects[0].detail, { user: 'daneofearth', tags: ['a', 'b'] }, 'private keeps detail (control)');
+  assert.ok(!('detail' in pub.objects[0]), 'the detail key must be absent, not null');
+  for (const o of pub.objects) assert.ok(!('detail' in o), 'no object may carry a detail key in public mode');
+});
+
+test('public renderPage embeds no detail key and no sensitive value; private embeds both', () => {
+  const priv = renderPage(doc, webSvg);
+  const pub = renderPage(doc, webSvg, { public: true });
+  assert.ok(priv.includes('"detail":'), 'private output keeps the detail key (control)');
+  assert.ok(priv.includes('daneofearth'), 'private output keeps the sensitive value (control)');
+  // Break-test: make pageData\'s strip a no-op (drop the `if (!isPublic)` guard)
+  // and both assertions below fail — a detail key and the value leak back in.
+  assert.ok(!pub.includes('"detail":'), 'public output must carry no detail key');
+  assert.ok(!pub.includes('daneofearth'), 'public output must carry no sensitive detail value');
+});
+
+test('public and private renders are each deterministic', () => {
+  assert.equal(renderPage(doc, webSvg, { public: true }), renderPage(doc, webSvg, { public: true }));
+  assert.equal(renderPage(doc, webSvg), renderPage(doc, webSvg));
+});
+
+test('end to end --public: writes ecosystem.public.html only, no detail, no local-dev login', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'eco-pub-'));
+  const out2 = fs.mkdtempSync(path.join(os.tmpdir(), 'eco-pub2-'));
+  try {
+    execFileSync(process.execPath, [SCRIPT, '--public', '--out', out], { stdio: 'pipe' });
+    assert.deepEqual(fs.readdirSync(out), ['ecosystem.public.html'], 'a public run writes only the public file, never ecosystem.html');
+    const html = fs.readFileSync(path.join(out, 'ecosystem.public.html'), 'utf8');
+    assert.equal((html.match(/"detail":/g) || []).length, 0, 'no detail keys in the public copy');
+    assert.equal((html.match(/localdev/g) || []).length, 0, 'no local-dev login string in the public copy');
+    execFileSync(process.execPath, [SCRIPT, '--public', '--out', out2], { stdio: 'pipe' });
+    assert.equal(html, fs.readFileSync(path.join(out2, 'ecosystem.public.html'), 'utf8'), 'two public runs are byte-identical');
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+    fs.rmSync(out2, { recursive: true, force: true });
+  }
+});
+
 test('end to end: the generator is deterministic and writes only into --out', () => {
   const a = fs.mkdtempSync(path.join(os.tmpdir(), 'eco-html-a-'));
   const b = fs.mkdtempSync(path.join(os.tmpdir(), 'eco-html-b-'));
