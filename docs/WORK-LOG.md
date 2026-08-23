@@ -1,3 +1,22 @@
+## 2026-08-23 — Bug reports can now email you, if you ask them to
+
+The bug-report button on a tenant site already saved every report and filed it
+in the Loop Queue. Now there is a tickbox on the module — **"Email each report"**
+— and when it is on, each report also lands in that project's Support Email
+inbox, using the same mail plumbing the Support form already uses.
+
+The interesting part is what the server does NOT trust. That submit address is
+open to the public: anyone visiting a client's site can post to it, with no
+login. So if the "please email this" flag travelled along with the report, a
+stranger could point a client's own website at their inbox and hold the button
+down. Instead the server ignores the request entirely and goes and reads the
+project's own pages to see whether the tickbox is on.
+
+And if it cannot read those pages, it does not send. "I could not tell" is not
+the same as "yes" — the report is already saved and already in the queue either
+way, so the safe thing to do with an unanswerable question is nothing, loudly
+logged. (#PR)
+
 # Work Log
 
 Plain-English record of work shipped through the development loop
