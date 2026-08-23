@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — Parkour: the last of the four picture effects you asked for (#PR)
+## 2026-08-23 — Parkour: the last of the four picture effects you asked for (#395)
 
 Back on 19 August you looked at a list of animations that were built into the
 Builder but that nobody could actually pick, and you chose four to bring out.
