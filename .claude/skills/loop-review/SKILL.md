@@ -24,6 +24,8 @@ list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
 npm run clickup -- queue --list 901418546619 --status "In review"   # FIRST LINE is the one to review
 npm run clickup -- get --task <id>                                  # the task, header + body
 npm run clickup -- comments --task <id>                             # the comments — the PR URL lives here
+npm run clickup -- verdict --task <id> --pass --body-file -                   # RECORD THE VERDICT FIRST — the gate reads this
+npm run clickup -- verdict --task <id> --fail --body-file -                   # ... or the send-back, same shape
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -   # pass: card + status together
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -  # a judgment call only he can settle
 npm run clickup -- status --task <id> --status Queued               # send back (assignees auto-cleared)
@@ -84,7 +86,22 @@ the run report.
    - Sanity-check against the task: are all acceptance criteria met? Any
      Non-goals violated? Any generated artifact left un-rebuilt?
 
-4. **Decide.**
+4. **Decide — and record the verdict BEFORE you move anything.**
+
+   ```bash
+   npm run clickup -- verdict --task <id> --pass --body-file -   # or --fail
+   ```
+
+   `Ready to launch` is the operator's "safe to merge" signal, and since task
+   86bbjt18r `ask` and `status` both **refuse** to set it unless the newest
+   verdict on the ticket is a PASS. That is not paperwork: on 2026-08-22 two
+   tickets reached that status with no passing review recorded on them at all,
+   and he approved both in good faith. The command writes the one shape the
+   gate and the merge step both read, and verifies it through the gate itself.
+
+   `--body-file -` takes your one-line reason on stdin — what you ran, what you
+   walked through, what convinced you. Then:
+
    - **Pass** → `ask --status "Ready to launch"`. `@@ASKED` carries the
      instruction the ticket came from; `@@CONTEXT` says in 50-100 words what
      changed and what he will see; `@@NEEDED` is the merge approval, with the
@@ -94,7 +111,7 @@ the run report.
      Also post the compact version to the bus channel.
      Do **NOT** merge — per standing rule, CC merges only on the operator's
      explicit command, and only with all checks green.
-   - **Fail, and a machine can fix it** → set the task back to `Queued`,
+   - **Fail, and a machine can fix it** → `verdict --fail` first, then set the task back to `Queued`,
      **clear its assignees**, and add a ClickUp comment listing precisely what
      to fix and why. The `loop-build` skill will pick it up again. Do not fix
      it yourself inside the review step — keep build and review separate so the
