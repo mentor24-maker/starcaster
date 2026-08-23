@@ -14,6 +14,50 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Editing on main is now blocked whichever way you do it (#372)
+
+The rule "don't work directly on the main branch (it deploys straight to the
+live site)" was only enforced for the Edit tool — files written through the
+terminal (heredocs, small scripts) slipped straight past it, which is exactly
+how a whole feature landed in the main folder by accident on 2026-08-20. Now
+three things cover every path: committing on main is refused outright with
+plain instructions for moving the work to a worktree (the real backstop —
+everything ends in a commit); `npm run doctor` reports when the main folder
+has stray uncommitted changes; and the terminal is watched for commands that
+write source files while on main, blocking them early (best-effort, and it
+stays out of the way when you're properly in a worktree). All three respect
+the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: the terminal check now judges the folder the command actually runs in, so it never trips on legitimate work inside a worktree.)
+
+---
+
+## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
+## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
+
+ClickUp shows a ticket's description on the left, wide, and its comments on the
+right, narrow. The loops had that backwards. The left column held a spec written
+for a machine, and everything meant for Dane — the reasoning, the risk, the
+question — went into a comment, arriving as a wall of text in the skinniest part
+of the screen.
+
+Two tickets stalled on it the same day. On one, a long comment offered three
+ways to slice the work; Dane picked the smallest and safest, but the ticket went
+back into the build queue still carrying its original full scope, so the next
+unattended pass would have built the risky half he had just deferred — the part
+that rewrites roughly thirty-five live customer pages in one motion. The other
+sat in his inbox for a day under a red "needs your input" badge with no question
+anywhere on it. It was never waiting on him; it was waiting on the first ticket.
+
+Now the detail goes on the left, and the right column carries one short card
+with three fixed parts: his own words that caused the ticket to exist, the
+problem and the fix in fifty to a hundred words of plain English, and the
+specific ask under a banner he can find without reading. The word range is
+checked rather than suggested — too short stops being useful, too long is the
+wall of text this replaces. Handing a ticket to Dane is now a single command
+that posts the card and moves the status together, so a ticket can no longer
+land in his inbox with nothing on it to answer.
+
+---
+
 ## 2026-08-22 — Saying "merge" on a ticket now actually merges it (#371)
 
 When a piece of work has been built and independently reviewed, it waits in
