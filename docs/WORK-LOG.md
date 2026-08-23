@@ -29,6 +29,157 @@ automated pass). No code yet — this is the convention every agent will follow.
 ---
 
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
+## 2026-08-22 — `npm run map` stops calling a brand-new folder rubbish (#375)
+
+Set up a new workspace with `npm run thread`, then read the map from the main
+folder, and the map said the folder you had just built was *"already shipped,
+safe to delete."* Nothing had shipped — the branch was seconds old with zero
+changes in it, and the folder held a fresh install and a full build, several
+minutes of work.
+
+The map has three things it can say about a branch, and it picked the right one
+here: "this branch has no changes of its own." It just described that state in
+English as "shipped", and only got the wording right in the one case where you
+happened to be standing inside the folder it was talking about — which is
+almost never, because you make the folder from the main folder and then read
+the map from the main folder.
+
+Now it says what is actually true: *"a prepared workspace — nothing committed
+yet, nothing to ship."* No wording anywhere calls a zero-change branch shipped
+or safe to delete. Branches whose work really is live still read "already live,
+safe to delete", which is correct and unchanged.
+
+Worth saying plainly: `npm run tidy` was never in danger of deleting one of
+these folders — it has always refused to touch a branch with no changes, on
+purpose. This was the report lying, not the cleanup misbehaving. But the map is
+the thing you are told to read before starting a piece of work, so it is the
+thing that was giving bad advice. A test now builds a throwaway repository with
+one empty branch, one already-shipped branch and one branch with live work in
+it, and fails if the map ever again calls the empty one shipped.
+## 2026-08-22 — Three picture animations that were built but hidden are now on the menu (#369)
+
+The Image module has a dropdown of movements a picture can make — Bounce,
+Spin, Cruise, Tumbleweed. Behind the scenes there were five more that had been
+fully written years ago and simply never added to that list, so the only way to
+use one was to hand-edit a page's saved settings. Dane went through them and
+picked three to bring out: **Slide** (crosses the page), **Axis Rotate**
+(turns on the spot like a card revolving on a string, so you see its edge and
+its back) and **Flips** (turns and hops in place at the same time). He
+deliberately left **Cartwheels** out — it is Tumbleweed under a different name
+— and **Parkour** is a bigger job of its own, still to come.
+
+Bringing Slide out then showed that **Cruise was the same animation under a
+second name** — the two were identical down to the last line of styling. Dane's
+call: "wherever you see Cruise, consolidate it into Slide." So the menu now
+offers Slide and no longer offers Cruise. Any page already using Cruise keeps
+working exactly as before and needs no attention — the old name quietly points
+at Slide wherever it turns up. Nothing on a live site changes; there is simply
+one fewer thing on the menu that did the same job twice.
+
+Two things needed real work rather than just flipping a switch. Axis Rotate is
+the first thing on the site that turns on a *different axis*, which needs the
+browser to be told to draw depth — without that it reads as the picture being
+squashed side to side rather than turning. And Flips had to turn and hop at the
+same moment; Tumbleweed does that using a hidden extra layer, and it turned out
+Flips does not need one, because the layer only exists to make room for the
+travelling motion Flips does not have. Each of the three now takes the existing
+Speed, Rotation Rate, Bounce Height and Direction controls, so there is nothing
+new to learn.
+
+Round-3 review fixes: the Frequency dropdown now shows bare counts (it read
+"per crossing", which is wrong for Flips, which counts hops per turn), and the
+Slide effect on a floating image no longer loses its position and size — old
+leftover layout rules were forcing it to the far left and full width.
+
+After review, the automated visual check was strengthened. The general check
+only asked "is anything moving?", which could not catch a real hazard: the old
+retired animations still sit in the regenerated stylesheet under the same
+names, so if a new effect's real rule ever broke, the picture would keep
+moving on the OLD rule — ignoring every setting — and the check would stay
+green. Each of the three effects now has a check that names the exact
+animation it must run; breaking the rule on purpose makes that check fail
+(proven), so a future stylesheet regeneration cannot silently gut them.
+
+A second review round then caught something worse, and it is worth
+understanding because it is the kind of fault that hides in plain sight. All
+three new effects were animating perfectly — and every one of their settings
+was being thrown away. The operator could open Slide, choose a Speed, save it,
+watch the toast say it saved, and the picture would carry on at its built-in
+speed forever. Same for Axis Rotate's Rotation Rate and all three of Flips'
+controls. Seven dead controls, no error anywhere, and a picture moving on
+screen the whole time, which is precisely why every check stayed green.
+
+The cause was two halves of the program disagreeing. One half decides which
+controls to SHOW for a given effect; a second half decides which ones to KEEP
+on the way to the page — and the second half worked off a hand-written list of
+effect names that the three new ones were never added to. They now read the
+same rule, so showing a control and honouring it can no longer come apart, and
+the next effect added cannot repeat it.
+
+Two new safety nets went in behind that, both broken on purpose first to prove
+they can actually fail: a test that checks every effect on the menu keeps
+exactly the controls its own panel offers, and four browser checks that move a
+real slider on a real page and fail if the picture does not change. That second
+kind matters most — the previous round's checks all asked whether the picture
+was moving, and the answer was yes the entire time it was ignoring everything
+it was told.
+
+One thing worth knowing: **Slide and Cruise are the same movement.** Nothing is
+wrong with either, and both work — but a picture set to Slide and a picture set
+to Cruise will look identical and offer identical settings, which is exactly the
+reason Cartwheels was left out. Whether Slide stays on the menu is Dane's call;
+removing it later is a one-line change.
+## 2026-08-22 — Three ways an approved ticket quietly never shipped, closed (#388)
+
+Saying "merge" on a ticket now actually merges it, which works — but clearing
+the backlog on 2026-08-22 turned up three ways your approval could sit there
+doing nothing while everything looked fine. All three were bookkeeping: the
+work was built, reviewed and approved, and still did not ship.
+
+**One: a refusal used to be permanent.** When the merge step couldn't act — say
+the ticket didn't name its pull request — it explained why once and then never
+looked at that ticket again, even after the reason was fixed minutes later. Two
+tickets went quiet that way and only a hand audit found them. A refusal is now
+re-checked on every pass: the moment the reason goes away the ticket goes
+through, with no second word from you. While the reason still stands it says
+nothing, so nothing gets noisier. The refusal message now says this out loud
+instead of reading like a report you have to act on.
+
+**Two: the trail from ticket to pull request was written down but not
+enforced.** Four approved tickets had no record of which pull request they were
+about, so the merge step rightly refused to guess; two of those pull requests
+also carried no link back to their ticket, leaving the two matchable only by
+reading titles. Recording the pull request is now a command that checks the
+link runs both ways and re-reads its own writing through the merge step's eyes
+— if it can't be read back, the build run fails then and there rather than
+handing over a ticket that will stall later.
+
+**Three: two tickets reached "Ready to launch" without ever passing review.**
+That status is your safe-to-merge signal, so you approved both in good faith.
+Recording the review verdict is now a command too, and the two places a loop
+can set that status both refuse it unless a passing verdict is on the ticket.
+(The ClickUp website and the ClickUp connector can still set it directly —
+nothing in this codebase can reach those, and that is written down where the
+next person will look.)
+
+---
+
+## 2026-08-22 — Editing on main is now blocked whichever way you do it (#372)
+
+The rule "don't work directly on the main branch (it deploys straight to the
+live site)" was only enforced for the Edit tool — files written through the
+terminal (heredocs, small scripts) slipped straight past it, which is exactly
+how a whole feature landed in the main folder by accident on 2026-08-20. Now
+three things cover every path: committing on main is refused outright with
+plain instructions for moving the work to a worktree (the real backstop —
+everything ends in a commit); `npm run doctor` reports when the main folder
+has stray uncommitted changes; and the terminal is watched for commands that
+write source files while on main, blocking them early (best-effort, and it
+stays out of the way when you're properly in a worktree). All three respect
+the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: the terminal check now judges the folder the command actually runs in, so it never trips on legitimate work inside a worktree.)
+
+---
+
 ## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
 
 ClickUp shows a ticket's description on the left, wide, and its comments on the
@@ -108,6 +259,28 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — A tool that notices when ClickUp and GitHub disagree (#345)
+
+A task can end up saying "in review" or "building" days after the work
+actually shipped and merged — nobody moved it, so it just sits there looking
+unfinished. A new command, `npm run reconcile`, checks every in-progress
+Loop Queue task against the GitHub pull request it's linked to: if that pull
+request already merged, the task gets moved to Live automatically. It
+defaults to a dry run that only prints what it would do; nothing changes
+unless you ask it to. It also checks for the reverse problem — a work folder
+still sitting on the machine after its task closed without shipping — though
+that check can only cover folders started after this same session's earlier
+piece (Task-closes-thread, PR #344) began tagging them. It's not on a
+schedule yet; that's its own upcoming piece of work (the Mac Mini setup).
+
+After review, several ways it could quietly give the wrong answer were closed:
+it now trusts the NEWEST pull request a task links (a reworked task carries an
+old, dead link too), treats a pull request that was closed WITHOUT merging as
+drift to flag rather than "fine", reads a task's whole comment history rather
+than only the newest page, and never moves a task out of one of your own
+statuses ("Needs your input" / "Ready to launch") on its own — it flags those
+for you instead. Status moves now go through the same verified path everything
+else uses, and a flagged problem is posted to the bus once, not on every run.
 ## 2026-08-18 — Undoing a shared-section push, from any later visit (#342)
 
 When editing a section that's shared across many pages, saving it rewrites

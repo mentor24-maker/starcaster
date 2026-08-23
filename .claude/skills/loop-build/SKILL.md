@@ -24,7 +24,8 @@ npm run clickup -- queue --list 901418546619 --status Queued   # FIRST LINE is t
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim; exit 3 = someone beat you, take the next
 npm run clickup -- status --task <id> --status "In review"                   # hand off (assignees auto-cleared)
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # escalate: card + status together
-npm run clickup -- comment --task <id> --body-file -                         # a plain note (PR URL, progress)
+npm run clickup -- pr-opened --task <id> --pr <pr-url>                        # record the PR — REQUIRED, and it verifies itself
+npm run clickup -- comment --task <id> --body-file -                         # a plain note (progress, notes)
 npm run clickup -- describe --task <id> --body-file -                        # REPLACE the description (left column)
 ```
 
@@ -156,22 +157,47 @@ the run report.
      sure no stray edits ride along). Never commit generated artifacts.
    - Commit message ends with the Co-Authored-By trailer from CLAUDE.md.
    - Push the branch and open a PR to `main` with `gh`. The PR body must
-     include: link to the ClickUp task, a plain-language summary, the task's
-     "How to test" steps, and a note that a Vercel preview will be attached.
-     End with the Generated-with trailer.
+     include: **the ClickUp task URL** (`https://app.clickup.com/t/<id>`, on a
+     line of its own — this is not optional), a plain-language summary, the
+     task's "How to test" steps, and a note that a Vercel preview will be
+     attached. End with the Generated-with trailer.
 
-7. **Hand off to review.** Set the task status to `In review`, leave it
-   unassigned (it is the machine's turn, not Dane's), and add the PR URL as a
-   ClickUp comment. **Do NOT merge** — `main` is PR-protected (the "verify"
-   check must go green) and merges happen only on the operator's explicit
-   say-so. The `loop-review` skill takes it from here.
+7. **Record the PR on the ticket — with the command, and check what it says.**
 
-8. **Report** which task you built and the PR number, then finish (the `/loop`
+   ```bash
+   npm run clickup -- pr-opened --task <id> --pr <pr-url>
+   ```
+
+   This is not the same as `comment`. It refuses first if the PR body has no
+   link back to the ticket, then posts the one line the merge step can read
+   (`PR opened: <url>`) and **parses it back with that step's own reader**.
+
+   **A non-zero exit here fails the run.** Do not carry on to step 8, and do
+   not hand the ticket to review — a ticket with no readable PR trail is a
+   ticket the merge step will later refuse, which strands the operator's
+   approval with nobody noticing. Exit 4 means the PR body is missing the
+   ClickUp link: add the line, run the command again.
+
+   Why it is a command and not an instruction: on 2026-08-22 four approved
+   tickets had no `PR opened:` comment at all and two of their PRs carried no
+   ClickUp link either, so ticket and PR could only be paired by reading
+   titles. The step had been written down the whole time.
+
+8. **Hand off to review.** Set the task status to `In review` and leave it
+   unassigned (it is the machine's turn, not Dane's). **Do NOT merge** —
+   `main` is PR-protected (the "verify" check must go green) and merges happen
+   only on the operator's explicit say-so. The `loop-review` skill takes it
+   from here.
+
+9. **Report** which task you built and the PR number, then finish (the `/loop`
    wrapper will re-invoke you for the next task).
 
 ## Guardrails
 
 - **One task, one worktree, one PR.** Never build two tasks in one branch.
+- **The PR and the ticket must name each other.** `pr-opened` enforces both
+  directions and verifies its own write; if it exits non-zero the run has
+  failed, whatever else went right.
 - **Never touch a task that isn't `Queued`.** Every other status is owned by
   another step or by the operator.
 - **Never set `Ready to launch` and never clear `Needs your input`.** Those two
