@@ -48,6 +48,61 @@ got written down.
 
 Proved rather than assumed: the check builds a real repository with real linked
 folders and confirms the answer comes back the same from either place.
+## 2026-08-23 — Groundwork for downloading a YouTube video, not just reading it (#392)
+
+The Acquire screen can already pull a YouTube video's title, description and
+transcript. What it has never been able to do is keep the video itself — the
+.mp4 and the .mp3. That work was written back in July and then sat on a shelf
+as one large piece: a screen, a download service, a database change and a
+deployment, all tangled together. It has now been split into four smaller
+pieces that can each be finished and checked on their own. This is the first
+of them.
+
+This piece is the plumbing behind the screen, and it deliberately does nothing
+visible yet. It adds the two web addresses the screen will call — one to start
+a download, one to ask how it is going — plus a new entry under Settings >
+APIs where the download service's address and password will eventually go, and
+the database change that will remember where each finished file ended up.
+
+The important part is what happens while the rest is still missing. Asking for
+a download today gets a plain "the media worker is not configured — add its
+URL and shared secret under Settings > APIs" rather than an error page or a
+spinner that never stops. Adding the video's files to an ordinary acquire is
+opt-in, and if that half fails it is reported alongside the title and
+transcript rather than throwing them away — you keep what you already paid
+for. And because the database change has not been run yet, the code treats a
+not-yet-existing column as "cannot save this, carry on" instead of letting it
+break every other thing the video list does.
+
+Still to come: the screen itself, the download service, and then running the
+database change and deploying — that last one needs Dane's hands, because it
+involves a password only he should ever see.
+## 2026-08-23 — The job that listens for your answers moved to the machine that stays awake (#410)
+
+When you reply on a ticket, a job called the relay is what carries your answer
+forward — it reads your comment, posts it to the party line, and hands the
+ticket back to the machines so work resumes. It is the only automatic path from
+"Dane replied" to "the loop carries on".
+
+That job was running on the laptop. The laptop closes. So on the morning of the
+23rd you answered two tickets at 06:19, and at 15:30 both were still sitting in
+"Needs your input" — one of them with every blocker already cleared. Nothing had
+broken and nothing had errored. Your answers had simply landed somewhere nothing
+was listening.
+
+The relay now lives on the Mac Mini, which does not close, alongside the two
+loops that were moved there for the same reason last week. It still runs in
+exactly one place — two copies would post your messages to the party line twice
+— and the register that decides which machine that is now records why, so the
+next person to wonder does not have to work it out from scratch.
+
+Two smaller things came with it. The schedule used to exist only as something
+somebody had typed by hand on one Mac, written down nowhere, so "is it still
+running on the old machine?" could only be answered by going and looking; there
+is now a single command that installs it, removes it, or reports what it finds.
+And because nobody sits at the Mini, nothing there was ever pulling down new
+code — the relay now brings its own copy up to date before each run, carefully,
+never touching work in progress.
 
 ---
 
