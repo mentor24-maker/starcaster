@@ -5050,10 +5050,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Time and size are read; Restore is pressed. Sizing the action column to
    its content keeps the button off the right edge on a wide screen, where a
    stretched button reads as the row's primary purpose rather than its
-   escape hatch. */
+   escape hatch.
+
+   The action track must stay SHRINKABLE (minmax(min-content, …), never bare
+   max-content): a propagate row carries two buttons, and a max-content track
+   is sized to both side by side, so on a narrow panel the row overflows
+   horizontally — the wrap this layout relies on can never fire. The buttons
+   stack vertically (below) so min-content is one button wide. */
 .builder-react-root .builder-page-history-row {
   display: grid;
-  grid-template-columns: minmax(16ch, 1.4fr) minmax(14ch, 1fr) max-content;
+  grid-template-columns: minmax(16ch, 1.4fr) minmax(14ch, 1fr) minmax(min-content, max-content);
   gap: var(--space-3, 12px);
   align-items: center;
   padding: var(--space-2, 8px) 0;
@@ -5126,15 +5132,29 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-muted, #5c6a72);
 }
 
-.builder-react-root .builder-page-history-restore {
+/* Stacked, right-flush. Each row is its OWN grid, so side-by-side buttons
+   would give a propagate row a wider action track than its neighbours and
+   push its Restore out of the vertical line the save rows sit on. Stacking
+   keeps every row's buttons on the container's right edge, aligned across
+   rows regardless of how many actions a row carries. */
+.builder-react-root .builder-page-history-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2, 8px);
+}
+
+.builder-react-root .builder-page-history-restore,
+.builder-react-root .builder-page-history-undo-run {
   white-space: nowrap;
   width: fit-content;
 }
 
-/* Narrow: the action drops under the facts rather than squeezing them. */
+/* Narrow: the action drops under the facts rather than squeezing them. The
+   action track shrinks the same way as the base grid's — see above. */
 @media (max-width: 640px) {
   .builder-react-root .builder-page-history-row {
-    grid-template-columns: 1fr max-content;
+    grid-template-columns: 1fr minmax(min-content, max-content);
   }
   .builder-react-root .builder-page-history-what {
     grid-column: 1 / -1;
@@ -5812,13 +5832,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ---------------------------------------------------------------------------
-   Image effects: Cruise, Tumbleweed, and the controls that drive them
+   Image effects: Slide, Tumbleweed, and the controls that drive them
    ---------------------------------------------------------------------------
-   Both effects were offered in the Image and Floating Image panels since the
-   Normie port and NEITHER had a rule anywhere in this repo — the panel set
-   `starcaster-effect-cruise` / `-tumbleweed` on the figure and no stylesheet
-   answered, so the picture just sat there. Reported by the operator
+   Cruise and Tumbleweed were offered in the Image and Floating Image panels
+   since the Normie port and NEITHER had a rule anywhere in this repo — the
+   panel set `starcaster-effect-cruise` / `-tumbleweed` on the figure and no
+   stylesheet answered, so the picture just sat there. Reported by the operator
    2026-08-16 on the Delray home page.
+
+   Cruise itself was retired on 2026-08-22: it was Slide under a second name,
+   and its rule here was byte-for-byte identical to Slide's. Saved pages that
+   stored `cruise` are mapped to `slide` by RETIRED_IMAGE_EFFECTS, so this
+   file no longer carries a `-cruise` selector at all.
 
    Written here rather than in `_builder-react.css` per doctrine R2: that file
    is regenerated wholesale and a hand-written rule in it disappears silently
@@ -5917,14 +5942,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    value applies to every animation in the shorthand list above, so `reverse`
    turns the travel AND the spin around together. A ball crossing right to
    left rolls anticlockwise, which is the half a mirrored travel would miss. */
-.builder-react-root .starcaster-effect-cruise {
-  animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
-  animation-direction: var(--sc-effect-direction, normal);
-  animation-delay: var(--sc-effect-delay, 0s);
-  animation-iteration-count: var(--sc-effect-travel-iterations, infinite);
-  animation-fill-mode: var(--sc-effect-fill, none);
-}
-
 .builder-react-root .starcaster-effect-tumbleweed {
   animation:
     sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
@@ -5959,13 +5976,108 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   animation: sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite;
 }
 
+/* ---------------------------------------------------------------------------
+   Slide, Axis Rotate and Flips (2026-08-22)
+   ---------------------------------------------------------------------------
+   Three of the five effects that had keyframes in `_builder-react.css` and no
+   way to pick them. Surfaced on the operator's decision (ClickUp 86bbfrpbb);
+   cartwheels stays unsurfaced because it is Tumbleweed under another name.
+
+   The old rules are LEFT WHERE THEY ARE rather than deleted. They lose to
+   these on cascade order — `main.css` imports this file after that one — and
+   deleting them means editing a file that is regenerated wholesale (R2), so
+   the deletion would come back on its own.
+   --------------------------------------------------------------------------- */
+
+/* SLIDE — formerly ALSO called Cruise. The two names existed only because the
+   two keyframe sets were written years apart; the rules were identical, and on
+   2026-08-22 the operator collapsed Cruise into Slide ("wherever you see
+   Cruise, consolidate it into Slide"). This is now the single travel-only
+   effect, and `cruise` reaches it through RETIRED_IMAGE_EFFECTS.
+
+   Kept as its own rule rather than shared with Tumbleweed's because the tests
+   in builder-image-effects.test.ts look for a `.<class> {` rule per offered
+   effect (via getImageEffectClassName), which is the guard that catches an
+   effect shipping with no stylesheet at all.
+
+   The class is `starcaster-effect-slide-MOTION`, not `-slide`: the generated
+   `_builder-react.css` still carries the buried effect's OLD `!important`
+   overlay-layout rules keyed on `:has(.starcaster-effect-slide)`, and on a
+   FLOATING image those collapse the shell to 0px — the picture disappears.
+   Fighting them with `revert !important` was the round-3 attempt and it made
+   the shell 0px too; dodging the selector name is what actually works
+   (verified in-browser, loop-review round 4). getImageEffectClassName carries
+   the matching note.
+
+   Worth a second look before this reaches a customer: it is the same
+   duplicate-under-two-names shape the operator rejected cartwheels for. */
+.builder-react-root .starcaster-effect-slide-motion {
+  animation: sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  animation-iteration-count: var(--sc-effect-travel-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
+/* One turn about the VERTICAL axis. `sc-effect-turn` cannot serve this the
+   way it serves Spin and Tumbleweed: the bare `rotate: 1turn` it uses is
+   shorthand for a turn about Z, and there is no variable that redirects an
+   axis. So this is a second keyframe rather than a parameter — the only
+   non-Z rotation in the codebase.
+
+   `rotate: y <angle>` (the individual property) rather than
+   `transform: rotateY()`, for the same reason every other effect here moved
+   off `transform`: it leaves `translate` free for anything that also needs
+   to move, and two animations on one element cannot share one property. */
+@keyframes sc-effect-turn-y {
+  from {
+    rotate: y 0turn;
+  }
+
+  to {
+    rotate: y 1turn;
+  }
+}
+
+/* DEPTH LIVES ON THE PARENT. `perspective` only bends the children of the box
+   that declares it, so a picture spinning about its own Y axis with
+   `perspective` on itself stays flat — it reads as a horizontal squash rather
+   than a turn. The shell is the nearest box that is not the animated element,
+   which is exactly where the old dead rule put it too. 900px matches it. */
+.builder-react-root .builder-preview-image-shell:has(.starcaster-effect-axis-rotate),
+.builder-react-root .player-game-floating-image-host .builder-preview-image-shell:has(.starcaster-effect-axis-rotate) {
+  perspective: 900px;
+}
+
+.builder-react-root .starcaster-effect-axis-rotate {
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  animation: sc-effect-turn-y var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+}
+
+/* Flips turns and hops WITHOUT going anywhere, and that is why it needs no
+   wrapper. Tumbleweed's hop rides a stage element only because Tumbleweed's
+   figure has already spent `translate` on the travel. Flips has no travel, so
+   both motions fit on the figure: the turn on `rotate`, the hop on
+   `translate`. Two animations, two properties, one element.
+
+   Frequency reaches this as hops per TURN rather than per crossing — see
+   getImageEffectStyle. Nothing crosses, so there is no crossing to count. */
+.builder-react-root .starcaster-effect-flips {
+  animation:
+    sc-effect-turn var(--sc-effect-rotation-duration, 2.4s) linear infinite,
+    sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
+}
+
 /* R6: motion is decoration on all of these — a visitor who has asked their
    system for less of it gets the picture, standing still. */
 @media (prefers-reduced-motion: reduce) {
-  .builder-react-root .starcaster-effect-cruise,
   .builder-react-root .starcaster-effect-tumbleweed,
   .builder-react-root .starcaster-effect-hop-stage,
-  .builder-react-root .starcaster-effect-spin {
+  .builder-react-root .starcaster-effect-spin,
+  .builder-react-root .starcaster-effect-slide-motion,
+  .builder-react-root .starcaster-effect-axis-rotate,
+  .builder-react-root .starcaster-effect-flips {
     animation: none;
   }
 }
@@ -6036,4 +6148,28 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-module-palette-breadcrumb-current {
   color: var(--ink-primary, #000);
   font-weight: 600;
+}
+
+/* Canonical-provenance badges (section AND module cards share these classes:
+   (canonical) / Unlinked / Linked / Custom / Changed) had no styling at all —
+   plain inline text next to the title, on both cards. This gives the shared
+   pill shape everything but Changed already needed; Changed additionally
+   needs a color distinct from the neutral ones, since it is the one state a
+   push will silently skip unless the operator explicitly overwrites it. */
+.builder-react-root .builder-canonical-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2, 8px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-canonical-badge-changed {
+  background: var(--warn-notice-bg, #fdf0d5);
+  color: var(--warn-notice-text, #8a5a00);
 }

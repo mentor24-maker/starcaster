@@ -25,6 +25,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -363,6 +364,61 @@ if (missing.length) {
   );
 } else {
   ok('All present, and newer than the code behind them.');
+}
+
+// --- the vault (canon nothing else reads) ----------------------------------
+
+heading('VAULT');
+
+// Read-only drift check: canon committed-but-unpushed, or doctrine citing a
+// file that does not exist. A missing vault is CANNOT TELL, never a failure —
+// worktrees and CI do not carry one.
+try {
+  const { checkVaultDrift } = await import('./builder/vaultDrift.js').then((m) => m.default || m);
+  const vaultDir = path.join(os.homedir(), 'vault');
+  const { findings, cannotTell, ok: vaultOk, checked } = checkVaultDrift(vaultDir);
+  if (findings.length) {
+    for (const f of findings) bad(f, 'see `npm run check:vault-drift`');
+  }
+  for (const c of cannotTell) unknown(c);
+  if (checked && vaultOk) ok('Committed, pushed, and every doctrine citation resolves.');
+} catch (err) {
+  unknown(`Vault check could not run (${err.message}).`);
+}
+
+// --- main branch: no stray edits in the shared checkout ---------------------
+
+heading('MAIN BRANCH');
+
+// Work belongs in a worktree; the main checkout should stay clean. Uncommitted
+// changes there are the 2026-08-20 failure (a whole feature written into the
+// main folder) waiting to happen. Find the main worktree from `git worktree
+// list` — doctor may be run from a linked worktree — and check ITS tree.
+const wtList = sh('git', ['worktree', 'list', '--porcelain']);
+let mainWorktreePath = '';
+if (wtList.ok) {
+  let cur = '';
+  for (const line of wtList.text.split('\n')) {
+    if (line.startsWith('worktree ')) cur = line.slice('worktree '.length).trim();
+    else if (line.trim() === 'branch refs/heads/main') { mainWorktreePath = cur; break; }
+  }
+}
+if (!mainWorktreePath) {
+  unknown('Could not locate the main worktree.', 'git worktree list reported no branch refs/heads/main checkout.');
+} else {
+  const dirty = sh('git', ['-C', mainWorktreePath, 'status', '--porcelain']);
+  const changes = dirty.ok ? dirty.text.split('\n').filter((l) => l.trim()).length : -1;
+  if (changes > 0) {
+    bad(
+      `main has ${changes} uncommitted change${changes === 1 ? '' : 's'} — work belongs in a worktree.`,
+      'npm run thread <topic>   (git stash → new worktree → git stash pop to carry them over)',
+      `The main checkout auto-deploys on push; stray edits there are how the 2026-08-20 near-miss happened. (${mainWorktreePath})`,
+    );
+  } else if (changes === 0) {
+    ok('Clean — no stray edits in the shared main checkout.');
+  } else {
+    unknown('Could not read the main checkout status.', `git -C ${mainWorktreePath} status failed.`);
+  }
 }
 
 // --- 5. the app itself ------------------------------------------------------

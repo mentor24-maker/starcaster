@@ -123,6 +123,41 @@ test('--dry-run and --no-merge exist, so it can be inspected before it acts', ()
   assert.match(code, /no-merge/);
 });
 
+test('the CI step waits for checks to appear rather than reading absence as failure', () => {
+  // The bug (PRs #356/#358): `gh pr checks --watch` returns non-zero the instant
+  // a branch has zero checks, and ship read that as "the checks did not pass".
+  // The fix routes the decision through waitForChecks, which tells "not yet"
+  // apart from "failed". This is a source-level guard because driving the real
+  // step needs a remote, a PR and CI (same reason as the force-push guard above).
+  assert.match(code, /require\(['"]\.\/builder\/waitForChecks['"]\)/, 'ship must use the waitForChecks helper');
+  assert.match(code, /waitForChecks\(/, 'the CI step must call waitForChecks');
+});
+
+test('absence, timeout and real failure are three DIFFERENT messages — none of them lies', () => {
+  // never_appeared and timed_out_pending must not print "did not pass": that is
+  // precisely the false alarm the ticket is about.
+  const neverIdx = code.indexOf("=== 'never_appeared'");
+  const timeoutIdx = code.indexOf("=== 'timed_out_pending'");
+  const failedIdx = code.indexOf("=== 'failed'");
+  assert.ok(neverIdx > -1, 'must handle the never_appeared outcome');
+  assert.ok(timeoutIdx > -1, 'must handle the timed_out_pending outcome');
+  assert.ok(failedIdx > -1, 'must handle the failed outcome');
+  // "did not pass" belongs ONLY to the genuine-failure branch.
+  assert.match(source, /did not pass/, 'the genuine-failure message is still present');
+  const failedBranch = source.slice(source.indexOf("outcome === 'failed'"));
+  assert.match(failedBranch.slice(0, 300), /did not pass/, 'only the failed branch says "did not pass"');
+});
+
+test('a broken gh call still stops ship — absence must not swallow a real error', () => {
+  // queryPullRequestChecks returns [] for "no checks yet" but must fail() when
+  // gh itself is broken (auth/network), or a dead endpoint would look like an
+  // eternally-empty branch.
+  assert.match(code, /function queryPullRequestChecks/);
+  const q = code.slice(code.indexOf('function queryPullRequestChecks'));
+  assert.match(q.slice(0, 800), /no checks reported/i, 'only the explicit "no checks reported" case returns empty');
+  assert.match(q.slice(0, 800), /fail\(/, 'any other unreadable gh result stops ship');
+});
+
 test('the comment-stripper does not defeat the test it feeds', () => {
   // Guard the guard: if withoutComments ever ate real code, every assertion
   // above would pass vacuously.

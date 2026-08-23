@@ -15,6 +15,12 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/explain_denied_commands.cjs\"",
             "timeout": 15,
             "statusMessage": "Checking standing permission rules"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/block_bash_writes_on_main.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking branch (no source writes on main)"
           }
         ]
       },

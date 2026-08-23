@@ -784,6 +784,44 @@ a valid value, which is a different question from the one that harness asks.
   Both halves of this one were found that way and neither was obvious on
   screen.
 
+### 5.18 A vitest test that requires a generated lib passes locally and always fails CI
+
+2026-08-22, PR #343 (Sync 5/7). Every local gate was green — typecheck,
+`test:builder` 490/490, `test:builder-ui` 1102/1102, conventions — and CI's
+`verify` job was RED. The new `lib/builder-client/section-drift.test.ts` did
+`require("../builder/document.js")`, whose own line 3 requires `./template`,
+and `lib/builder/template.js` is a **gitignored generated artifact**.
+
+CI's step order is the whole story:
+
+```
+npm ci → check:syntax → check:css → typecheck → npx vitest run → npm run build → … → npm run test:builder
+```
+
+`npx vitest run` happens **before** `npm run build`, so at vitest time the
+generated libs under `lib/builder/` do not exist. On any developer machine they
+already do — which is why this shape of test passes locally forever and fails
+CI forever. **A green local `npm run test:builder-ui` is not evidence the same
+test passes in CI.**
+
+**The rule.** vitest (`components/**`, `lib/builder-client/**`) tests
+TypeScript sources only. Anything that must require a generated server lib
+(anything under `lib/builder/`) belongs in the **node** suite
+(`scripts/builder/*.test.js`, run by `npm run test:builder`), which CI runs
+**after** the build — which is why every existing node test may require them
+freely.
+
+**Prove a fix:** `mv lib/builder/template.js /tmp/ && npx vitest run` must stay
+clean, then restore. Reproduced deliberately that way at the time: it produced
+the identical `Cannot find module './template'` CI error.
+
+**Enforced, not just remembered** (`scripts/check_vitest_generated_lib.cjs`, in
+`check_conventions.cjs`). It walks each vitest test file's relative-import graph
+and fails the moment the chain reaches `lib/builder/` — the direct require *and*
+the indirect one through a committed source like `document.js`. A grep could not
+see the indirect case. To prove the guard bites: add a vitest test that requires
+`lib/builder/…`, run conventions, watch it fail; remove it, watch it pass.
+
 ---
 
 ## 6. Working in this repo

@@ -14,16 +14,27 @@
  *   1. Fetch and prune, so every judgement is made against current GitHub state
  *   2. Fast-forward the local main (a stale main is why new work branches off
  *      old code and then needs rebasing)
- *   3. Remove worktrees whose branch is shipped and whose folder is clean
+ *   3. Remove worktrees whose branch is shipped and whose folder is clean —
+ *      OR whose stamped ClickUp task has closed (Charter Q1, 2026-08-18):
+ *      `npm run thread` stamps the task it was started for onto the branch,
+ *      and a thread whose task closed without shipping (redirected,
+ *      abandoned, decided against) is cleaned up here too, not left orphaned
+ *      forever just because its commits never reached main.
  *   4. Delete local branches whose every commit is already on main by content
+ *      — or, same as above, whose stamped task has closed.
  *
  * What it NEVER touches:
  *   - anything with uncommitted edits, or a branch with unshipped commits
+ *     UNLESS that branch's stamped ClickUp task has confirmed-closed
  *   - the worktree you are standing in, or a locked worktree
  *   - main, or any branch checked out in a worktree
- *   - a folder whose branch has no commits yet — that is a workspace someone
- *     just set up, not a leftover
+ *   - a folder whose branch has no commits yet and carries no closed-task
+ *     stamp — that is a workspace someone just set up, not a leftover
  *   - anything on GitHub (that is now handled by delete_branch_on_merge)
+ *   - a branch whose ClickUp status could not be determined (network, auth,
+ *     rate limit) — "unknown" is never treated as "closed"; only a clean,
+ *     confirmed read authorizes a delete (scripts/lib/repo_state.cjs,
+ *     `isTaskOpen`)
  *
  * Every deletion is appended to .git/tidy-restore.log with the command that
  * puts it back, so nothing is ever actually lost.
@@ -43,6 +54,7 @@ const {
   classifyBranch,
   worktreeInventory,
   mainWorktree,
+  isTaskOpen,
 } = require('./lib/repo_state.cjs');
 
 const dryRun = process.argv.includes('--dry-run');
@@ -100,6 +112,16 @@ if (mainTree && base === `origin/${MAIN}`) {
 
 const branches = branchInventory();
 const classified = new Map(branches.map((b) => [b.name, classifyBranch(b, base)]));
+// Charter Q1 (Task-closes-thread): a branch whose stamped ClickUp task has
+// closed is eligible for cleanup EVEN IF `classifyBranch` calls it 'active'
+// (unshipped commits) — that is precisely the abandoned-thread case this
+// exists for. One `isTaskOpen` call per stamped branch, reused by both loops
+// below rather than asked twice. A branch with no stamp is 'unknown' and
+// never affected — this is additive to the existing shipped-branch cleanup,
+// never a replacement for it.
+const taskStates = new Map(
+  branches.map((b) => [b.name, b.clickupTaskId ? isTaskOpen(b.clickupTaskId) : 'unknown'])
+);
 
 if (!branchesOnly) {
   for (const tree of worktrees) {
@@ -121,12 +143,17 @@ if (!branchesOnly) {
       continue;
     }
 
-    // Only folders whose work has SHIPPED. A branch with no commits yet is a
-    // freshly prepared workspace (`npm run thread` just built it, dependencies
-    // and all) — deleting that because it is "empty" would be a nasty surprise
-    // for someone who stepped away before their first commit.
+    // Only folders whose work has SHIPPED — or whose ClickUp task has closed,
+    // meaning the thread was abandoned or redirected rather than shipped.
+    // A branch with no commits yet is a freshly prepared workspace (`npm run
+    // thread` just built it, dependencies and all) — deleting that because it
+    // is "empty" would be a nasty surprise for someone who stepped away
+    // before their first commit; a closed task overrides that too, since an
+    // empty workspace for a task that is already closed has nothing left to
+    // start.
     const state = classified.get(tree.branch);
-    if (!state || state.state !== 'shipped') continue;
+    const closedTask = taskStates.get(tree.branch) === 'closed';
+    if (!closedTask && (!state || state.state !== 'shipped')) continue;
 
     if (!dryRun) {
       try {
@@ -136,7 +163,12 @@ if (!branchesOnly) {
         continue;
       }
     }
-    done.push(`removed finished worktree ${path.basename(tree.path)}`);
+    const shippedNotClosed = state && state.state === 'shipped';
+    const label = shippedNotClosed
+      ? `removed finished worktree ${path.basename(tree.path)}`
+      : `removed worktree ${path.basename(tree.path)} — its ClickUp task ` +
+        `${branches.find((b) => b.name === tree.branch)?.clickupTaskId} closed`;
+    done.push(label);
   }
   if (!dryRun) git(['worktree', 'prune']);
 }
@@ -149,17 +181,25 @@ const stillCheckedOut = new Set(
 );
 
 let deleted = 0;
+let deletedForClosedTask = 0;
 for (const branch of branches) {
   if (!branch.onMac) continue;
   if (branch.name === MAIN) continue;
   if (stillCheckedOut.has(branch.name)) continue;
 
   const state = classified.get(branch.name);
-  if (!state || state.state === 'active') continue;
+  const closedTask = taskStates.get(branch.name) === 'closed';
+  // Shipped/empty branches always qualified; a closed task now ALSO
+  // qualifies an 'active' (unshipped) branch — the abandoned-thread case.
+  if (!closedTask && (!state || state.state === 'active')) continue;
 
+  const abandonedForClosedTask = state?.state === 'active' && closedTask;
   const sha = git(['rev-parse', branch.name], '');
   if (!dryRun) {
-    recordRestore(`git branch ${branch.name} ${sha}`);
+    const restoreLine = abandonedForClosedTask
+      ? `git branch ${branch.name} ${sha}  # ClickUp task ${branch.clickupTaskId} closed, never shipped`
+      : `git branch ${branch.name} ${sha}`;
+    recordRestore(restoreLine);
     try {
       // -D, not -d: squash-merging rewrites the commit, so -d refuses on work
       // that is demonstrably already live. classifyBranch is the real check.
@@ -169,9 +209,16 @@ for (const branch of branches) {
       continue;
     }
   }
-  deleted += 1;
+  if (abandonedForClosedTask) deletedForClosedTask += 1;
+  else deleted += 1;
 }
 if (deleted) done.push(`deleted ${deleted} shipped branch${deleted === 1 ? '' : 'es'}`);
+if (deletedForClosedTask) {
+  done.push(
+    `deleted ${deletedForClosedTask} branch${deletedForClosedTask === 1 ? '' : 'es'} whose ClickUp task closed ` +
+    `before shipping`
+  );
+}
 
 // --- Report -----------------------------------------------------------------
 
