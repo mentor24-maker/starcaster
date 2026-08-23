@@ -92,7 +92,6 @@ the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: th
 
 ---
 
-## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 ## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
 
 ClickUp shows a ticket's description on the left, wide, and its comments on the
