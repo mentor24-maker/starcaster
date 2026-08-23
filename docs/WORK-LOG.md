@@ -14,6 +14,39 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The relay no longer stops when the chat room does (#PR)
+
+Yesterday the whole task pipeline sat still for sixteen hours. Every one of
+your answers had been written, read and understood — they were sitting right
+there on the tickets — but nothing moved.
+
+Here is why. When you answer a parked ticket, an hourly job reads your answer,
+posts it to the party line (the shared chat channel everyone watches), and only
+then releases the ticket back to the machines. That last "only then" is
+deliberate: a ticket must never move on an answer nobody actually received.
+The trouble was that "received" meant exactly one thing — a message landing in
+that chat channel — and yesterday ClickUp's chat refused every single message
+we sent it, for sixteen hours, then quietly started working again. Twenty-three
+comments and five handbacks piled up behind one broken door.
+
+The first explanation was that we had hit a limit on the free plan and needed
+to pay. That turned out to be wrong, which is worth knowing: the plan was the
+same before, during and after, and chat posts work fine on it. Two commands
+proved it once the outage lifted. Paying would have fixed nothing.
+
+So the rule stays and the door moves. The job now tries the party line first;
+if chat is down, it writes a short note on the ticket itself instead — "your
+answer was read, this ticket is going back to Queued, the party line is
+unavailable so this note is the record" — and that counts as delivered. Ticket
+comments were the one thing that kept working throughout. The trail says which
+route was used, so anyone reading it later can see what happened.
+
+What has not changed is the part that matters: if a message reaches neither the
+chat room nor the ticket, it is still undelivered, the ticket still does not
+move, and the run still reports a failure. The safety check was re-aimed at a
+sturdier target, not switched off. A chat outage is now a line in the report
+rather than a stopped pipeline.
+
 ## 2026-08-23 — The rule against force-pushing now actually holds (#394)
 
 Some background first. "Force-pushing" means overwriting the history of a

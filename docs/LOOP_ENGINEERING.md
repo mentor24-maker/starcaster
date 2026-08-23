@@ -429,6 +429,67 @@ is different, so the loops have guardrails baked in:
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
 
+## The party line is not the only way out — and the 2026-08-23 outage
+
+The relay only hands a ticket back once the operator's answer has been
+**delivered**. That gate is right: a ticket must never move on an answer that
+nobody received. But until 2026-08-23 "delivered" meant exactly one thing —
+a chat message posted to the party line — and that made the busiest surface in
+the stack a single point of failure for the whole pipeline.
+
+**What happened.** For about sixteen hours, every chat write in the workspace
+returned `HTTP 400` and every custom-field write returned `usages exceeded`.
+The party line's own history dates it precisely: last message before the gap
+**06:00:08Z**, next message **22:04:00Z**, nothing in between. Twenty-three
+comments and five handbacks piled up behind it, including two answers written
+at 06:19 that sat for the rest of the day. Then it cleared on its own. Cause
+unknown, and almost certainly ClickUp-side.
+
+**The first diagnosis was wrong, and it is worth knowing why.** The failures
+were read as the Free Forever plan blocking chat posting, and the proposed fix
+was to pay for an upgrade. Two commands disproved it once the outage lifted:
+
+```bash
+# Still on the same plan it was on before, during and after:
+GET  /api/v2/team/<team>/plan                     # 200 — "Free Forever", plan_id 13
+
+# And chat posting works on that plan:
+POST /api/v3/workspaces/<ws>/chat/channels/<ch>/messages   # 200 — message id returned
+```
+
+Nothing about the plan had changed, so nothing about the plan could explain a
+window that opened and closed. **If you see a wall of 400s from chat writes,
+check whether it is a window before you go looking for a permission** — read
+the channel's own timestamps, and try again in an hour. Paying would have
+fixed nothing.
+
+**What changed as a result.** The gate stayed; its target moved. Delivery is
+now a chain, not a single call (`deliverToBus` in `scripts/clickup_direct.mjs`,
+decisions in `scripts/builder/busRelayPlan.js`):
+
+1. Post to the party line.
+2. If that fails, post a short **receipt comment** on the ticket the message
+   concerns — task comments were the one write that kept working throughout.
+   It is a receipt, not a re-quote: his words are already on that ticket one
+   comment up; what was missing was the acknowledgement they were read.
+3. The handback fires if **either** landed.
+
+The dedup marker records which surface carried it — `[bus-relay] sent to
+channel X at …` versus `[bus-relay] chat unavailable, receipted on the ticket
+at …` — behind the same prefix the "already relayed" check reads, so the trail
+stays legible without changing how it is parsed.
+
+A chat failure that was covered this way is **not a run failure**. It prints
+under its own heading (*"Party line unavailable — N message(s) receipted on
+their tickets instead"*) and the pass still exits 0. The same goes for the
+merge step's three bus posts: each of those writes its real explanation onto
+the ticket first, so a failed bus post there was only ever cosmetic and should
+never have stopped a pass.
+
+What did **not** change: a message that reached neither surface is still
+undelivered, still lands in "Could not fully verify", still exits 1, and still
+moves no ticket. The gate was re-pointed, not weakened.
+
 ## Reading the queue at a glance — the Loop note
 
 The Status column says which STAGE a ticket is in; the **Loop note** column

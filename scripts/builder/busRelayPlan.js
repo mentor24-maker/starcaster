@@ -65,4 +65,80 @@ function mergeEnabled(watch) {
   return Boolean(watch && watch.merge);
 }
 
-module.exports = { defaultWatches, handbackTarget, mergeEnabled };
+/**
+ * DELIVERY (2026-08-23, task 86bbjxew2). The handback gate above is right:
+ * a ticket must not move on an answer that was never delivered. But it used
+ * to be wired to a single chat POST, and on 2026-08-23 every chat write in
+ * the workspace returned HTTP 400 for sixteen hours. The answers themselves
+ * were never at risk — they are comments on the tickets, which is where the
+ * loops read them from — but the RECEIPT was unavailable, so nothing moved:
+ * 23 comments and 5 handbacks parked behind one surface.
+ *
+ * So the gate stays and the target moves. "Delivered" now means the message
+ * reached somewhere durable: the party line, or failing that a short receipt
+ * comment on the ticket the message concerns. Task comments were the most
+ * reliable write in this API throughout that outage.
+ */
+
+/** The dedup marker prefix. Exported so the text a pass WRITES and the
+ *  "already relayed" check that READS it can never drift apart. */
+const BUS_RELAY_MARKER = '[bus-relay]';
+
+/** What counts as delivered, given how each surface answered. Chat is still
+ *  preferred — the fallback is a fallback, not a second channel. */
+function deliveryVerdict({ chatOk, receiptOk } = {}) {
+  if (chatOk) return { ok: true, via: 'chat' };
+  if (receiptOk) return { ok: true, via: 'ticket' };
+  return { ok: false, via: 'none' };
+}
+
+/** The dedup marker's text. Same PREFIX whichever surface was used, so the
+ *  existing "already relayed" check still matches either one; the words
+ *  after it differ so a human reading the trail later can see which surface
+ *  carried the message. Nothing delivered means nothing to mark — null, and
+ *  the comment is retried next pass. */
+function relayMarkerText({ via, channel, at } = {}) {
+  if (via === 'chat') return `${BUS_RELAY_MARKER} sent to channel ${channel} at ${at}`;
+  if (via === 'ticket') return `${BUS_RELAY_MARKER} chat unavailable, receipted on the ticket at ${at}`;
+  return null;
+}
+
+/** The fallback comment itself. A RECEIPT, not a re-quote: Dane's words are
+ *  already on this ticket, one comment up. What is missing without this is
+ *  the acknowledgement that they were read and acted on. */
+function receiptText({ why, target } = {}) {
+  // A notify-only watch (Agent Response) moves nothing, so do not promise a
+  // move there — say only what is true.
+  const read = target
+    ? `Your answer was read and this ticket is going back to ${target}.`
+    : 'Your answer was read and picked up.';
+  return `${read} The party line is unavailable right now (${why || 'reason unknown'}), so this note is the record instead.
+
+(Automatic — bus-relay.)`;
+}
+
+/**
+ * Where a failed bus post gets reported. Two buckets, and the difference is
+ * whether anybody was actually told:
+ *
+ *   'skipped'   — cosmetic. The message reached a durable surface anyway, or
+ *                 (merge step) its real explanation was already written onto
+ *                 the ticket by the caller. Gets its own summary heading and
+ *                 does NOT fail the run.
+ *   'unchecked' — nobody was told. Still "could not fully verify", still
+ *                 exits 1. The gate is re-pointed, never weakened.
+ */
+function busFailureBucket({ delivered, cosmetic } = {}) {
+  return delivered || cosmetic ? 'skipped' : 'unchecked';
+}
+
+module.exports = {
+  defaultWatches,
+  handbackTarget,
+  mergeEnabled,
+  BUS_RELAY_MARKER,
+  deliveryVerdict,
+  relayMarkerText,
+  receiptText,
+  busFailureBucket,
+};
