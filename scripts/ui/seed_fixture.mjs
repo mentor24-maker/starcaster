@@ -299,6 +299,19 @@ const TUNED = {
       dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
     },
   },
+  // Bug Report module (task 4/5): the floating icon + popup. Every setting
+  // non-default and nothing visibleWhen-gated except the block colour, which
+  // is ON here so the Frame strip renders its full width. The label text is
+  // the longest control on the Content axis and sets that track.
+  'bug-report': {
+    name: 'Bug Report (floating, staff only)',
+    settings: {
+      visibility: 'staff', icon: 'ladybug', corner: 'bottom-left', iconSize: '55',
+      iconBlock: 'true', blockColor: '#7a1f3d', iconColor: '#fff4e6', labelText: 'Report a problem',
+      popupTitle: 'Tell us what broke', promptPlaceholder: 'What happened, and what did you expect?',
+      thankYouMessage: 'Got it — thank you for helping us fix this.',
+    },
+  },
 };
 
 const PANEL_CHECK_SECTION = {

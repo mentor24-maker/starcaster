@@ -219,9 +219,48 @@ export const RENDER_DIFFERENTIALS = [
     setting: 'lineHeight', from: '1.2', to: '2.4',
     why: 'A non-image module, so a regression in the shared spacing pipeline is visible here too.',
   },
+  {
+    id: 'bug-report-icon-size',
+    module: { type: 'bug-report', settings: { iconSize: '40', labelText: 'Report a problem' } },
+    setting: 'iconSize', from: '40', to: '70',
+    why: 'The icon size is the one number the operator will tune first; it rides a CSS variable on the trigger and a dead variable renders a fixed 40px forever.',
+  },
+  {
+    id: 'bug-report-block-color',
+    module: { type: 'bug-report', settings: { iconBlock: 'true', blockColor: '#0f4f8f' } },
+    setting: 'blockColor', from: '#0f4f8f', to: '#c0392b',
+    why: 'The background block colour is only emitted while the block toggle is on — a conditional emit is exactly where a control goes dead.',
+  },
 ];
 
 export const RENDER_CONTRACTS = [
+  {
+    id: 'bug-report-trigger-renders-to-its-settings',
+    why:
+      'The Bug Report module is a floating button on tenant pages (task 4/5). It is the first module ' +
+      'whose visible element is a control rather than content, so nothing else on this page proves ' +
+      'that its size, label and block colour reach the stylesheet — a dead setting here renders a ' +
+      'default chip and no error, the image-effect failure with a button instead of a picture.',
+    module: {
+      type: 'bug-report',
+      settings: { iconSize: '60', labelText: 'Report a problem', iconBlock: 'true', blockColor: '#c0392b', iconColor: '#ffffff' },
+    },
+    selector: '.builder-bug-report-trigger',
+    read: ['backgroundColor', 'height'],
+    expect(sample) {
+      if (sample.box.height < 56 || sample.box.height > 72) {
+        return `trigger height is ${sample.box.height}px for Icon Size 60 — the size setting is not reaching the button.`;
+      }
+      if (!/Report a problem/.test(sample.text)) {
+        return `trigger text is "${sample.text}" — the label setting is not rendering.`;
+      }
+      if (sample.styles.backgroundColor !== 'rgb(192, 57, 43)') {
+        return `trigger background is ${sample.styles.backgroundColor}, not the block colour #c0392b — the block colour is not reaching the button.`;
+      }
+      return null;
+    },
+  },
+
   {
     id: 'section-four-column-grid',
     why:

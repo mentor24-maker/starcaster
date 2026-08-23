@@ -107,6 +107,7 @@ import { BuilderAdminTeamUsersModuleSettings } from "./builder-admin-team-users-
 import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-module-settings";
 import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
 import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
+import { BuilderBugReportModuleSettings } from "./builder-bug-report-module-settings";
 import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
 import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
@@ -2276,6 +2277,33 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "bug-report") {
+    const label = module.settings.labelText || "";
+    const who = module.settings.visibility === "staff" ? "staff only" : module.settings.visibility === "clients" ? "signed-in clients" : "everyone";
+    return (
+      <div className="builder-module-preview-copy" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 10px",
+            borderRadius: 999,
+            background: module.settings.iconBlock === "false" ? "transparent" : module.settings.blockColor || "#0f4f8f",
+            color: module.settings.iconColor || "#fff",
+            fontSize: 12,
+            fontWeight: 600
+          }}
+        >
+          🐞{label ? ` ${label}` : ""}
+        </span>
+        <span style={{ fontSize: 12, color: "#5c6a72" }}>
+          floats {module.settings.corner === "bottom-left" ? "bottom left" : "bottom right"} · visible to {who}
+        </span>
+      </div>
+    );
+  }
+
   if (module.type === "admin-nav-link") {
     const linkText = module.settings.linkText || "Admin";
     return (
@@ -3005,6 +3033,7 @@ export function BuilderModuleCard({
     const isAdminModulesModule = module.type === "admin-modules";
     const isAdminLoginModule = module.type === "admin-login";
     const isAdminNavLinkModule = module.type === "admin-nav-link";
+    const isBugReportModule = module.type === "bug-report";
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
@@ -3477,6 +3506,8 @@ export function BuilderModuleCard({
               <BuilderAdminModulesModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminLoginModule ? (
               <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBugReportModule ? (
+              <BuilderBugReportModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminNavLinkModule ? (
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSiteSettingsModule ? (
@@ -3855,6 +3886,7 @@ export function BuilderModuleCard({
           module.type !== "floating-image" &&
           module.type !== "contact-form" &&
           module.type !== "crm-form" &&
+          module.type !== "bug-report" &&
           module.type !== "player-portal" &&
           module.type !== "table" &&
           module.type !== "social" &&
