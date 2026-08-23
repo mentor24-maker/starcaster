@@ -142,6 +142,18 @@ jobs:
         # red.
         run: npm run check:models
 
+      - name: Machine-specific paths (blocking)
+        # No committed artifact may name a machine (vault doctrine/NODES.md P1).
+        # Same reasoning as the two gates above, and the same reason it is not
+        # folded into the advisory conventions run below. This one fails in the
+        # quietest way of the three: a path that is right on one laptop is simply
+        # absent everywhere else, so the job that needs it does not error, it
+        # just does nothing and exits 0. Thirteen files carried one when the Mac
+        # Mini was provisioned, including the very skill the Mini exists to run.
+        # The repo is clean today, so this gate is green and only NEW paths turn
+        # it red.
+        run: npm run check:paths
+
       - name: AI token metering coverage (blocking)
         # A model call that records nothing is invisible spending. The meter was
         # restored repo-wide on 2026-08-17 (13 call sites); this gate keeps it

@@ -274,7 +274,18 @@ if (state.out === 'DIRTY' || state.out === 'BEHIND') {
     'Nothing was merged. Run `npm run ship` again — it will catch up and carry on.'
   );
 }
-run('gh', ['pr', 'merge', prNumber, '--squash', '--delete-branch'], { allowFail: true });
+// No --delete-branch: this repo already has GitHub's own
+// "Automatically delete head branches" setting on (delete_branch_on_merge),
+// so the remote branch is gone the moment the merge lands, with or without
+// this flag. What the flag ALSO does — try to switch the LOCAL checkout off
+// the now-dead branch — is what printed a red `fatal: 'main' is already
+// used by worktree at ...` on a run that had already succeeded: every
+// `ship` runs from a worktree, and `main` is always checked out somewhere
+// else, so that local switch fails every single time. Local cleanup is
+// already `post-merge`'s and `npm run tidy`'s job (step 8, below), done
+// properly via `git cherry` rather than a plain checkout — so gh's attempt
+// was both redundant and the actual source of the whole problem.
+run('gh', ['pr', 'merge', prNumber, '--squash'], { allowFail: true });
 
 const merged = quiet('gh', ['pr', 'view', prNumber, '--json', 'state', '--jq', '.state']);
 if (merged.out !== 'MERGED') {

@@ -41,3 +41,15 @@ test('a watch with no handback table at all is safe', () => {
 test('an unknown status is never moved even with fresh comments', () => {
   assert.equal(handbackTarget(loopQueue, 'building', 1), null);
 });
+
+test('only the Loop Queue watch may merge — Agent Response never can', () => {
+  const { mergeEnabled } = require('./busRelayPlan.js');
+  assert.equal(mergeEnabled(loopQueue), true);
+  assert.equal(mergeEnabled(agentResponse), false);
+});
+
+test('an ad-hoc --list watch (no merge flag) can never merge anything', () => {
+  const { mergeEnabled } = require('./busRelayPlan.js');
+  assert.equal(mergeEnabled({ list: 'X', statuses: ['ready to launch'], handback: {} }), false);
+  assert.equal(mergeEnabled(undefined), false);
+});
