@@ -14,6 +14,48 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The video pipeline's to-do list (#405)
+
+Second of eight pieces in the Studio work. This one is the list that remembers
+which videos still need processing, hands each job to a worker, and — the part
+that matters — takes the job back if that worker dies.
+
+It keeps its list in a plain file on the Mini rather than in the main database.
+That is a deliberate choice with a scar behind it: this list gets written to
+thousands of times per video, and on 16 August the main database ran out of its
+daily capacity and took every client site offline for two and a half hours.
+Nothing precious is stored here — delete the file and the pipeline works its
+list out again from scratch.
+
+Two ideas do most of the work.
+
+The first is that handing out a job has to happen in **one** step. Looking for a
+free job and then marking it as taken are two separate steps, and two workers
+can both finish looking before either one marks — which is how the same video
+gets processed twice. Doing it in one motion makes that impossible rather than
+unlikely.
+
+The second is that a worker **borrows** a job for a while rather than locking
+it. A lock is given up when a program finishes, which is precisely what a crash
+does not do — a crashed worker would hold its lock forever. A borrowed job
+simply comes back when the loan runs out, with nobody woken up to fix it. That
+is the whole point on a machine nobody is watching at three in the morning.
+
+A job that keeps failing waits twice as long before each retry, and after five
+attempts stops for good in a state that **keeps the reason it failed** rather
+than quietly vanishing from the list.
+
+Worth recording how the test for the "two workers never get the same job" rule
+went, because it took three attempts to become real. The first version ran the
+two workers one after the other, so the first took everything and the second
+took nothing — the test passed for a reason that had nothing to do with the
+rule. The second version ran them properly at the same time but failed
+unpredictably, because it checked something that genuinely varies. The third
+version uncovered an actual bug in the new code, which was then fixed. Only
+after that did a passing run mean anything.
+
+---
+
 ## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
 
 Until today, if a piece of work changed how a page *looks*, the only way to
