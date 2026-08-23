@@ -66,16 +66,109 @@ npm run clickup -- queue --list 901418546619 --status Queued   # first line = th
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
-npm run clickup -- status --task <id> --status "Needs your input"            # auto-assigns Dane
-npm run clickup -- comment --task <id> --body-file -           # body on stdin
+npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
+npm run clickup -- comment --task <id> --body-file -           # a plain note (PR URL, progress)
+npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 ```
 
-`status` enforces the handoff rule by itself: moving into `Needs your input`
-or `Ready to launch` assigns Dane automatically, moving into any machine
-status clears assignees, and both halves of the write are verified from the
-response. `--if-status` makes a claim safe against a parallel loop: it exits
-code 3 without writing if the task has already moved.
+`status` enforces the handoff rule by itself: moving into any machine status
+clears assignees, and both halves of the write are verified from the response.
+`--if-status` makes a claim safe against a parallel loop: it exits code 3
+without writing if the task has already moved. It **refuses** to move a ticket
+into `Needs your input` or `Ready to launch` — see the next section.
+
+## The two columns, and the operator card (ratified 2026-08-22)
+
+ClickUp puts the task description on the **left**, wide, and the comment stream
+on the **right**, narrow. Until 2026-08-22 the loops had that backwards: the
+description held a spec written for a machine, and every piece of human-facing
+reasoning went into a comment — so it reached Dane as a wall of text in the
+skinniest part of the screen.
+
+Two tickets stalled on it the same day. **Sync 6/7** (`86bbev0g3`) carried a
+long comment offering three ways to slice the work; Dane answered "build the
+chip display", the relay handed the ticket back to `Queued` still wearing its
+original wide scope, and the next unattended build pass would have built the
+half he had just deferred — the one that rewrites ~35 live tenant pages.
+**Sync 7/7** (`86bbev0gx`) sat in his inbox for a day under a red *Needs your
+input* badge with no answerable question anywhere on it; it was not blocked on
+him at all, it was blocked on 6/7.
+
+So:
+
+**Detail goes left.** `describe --task <id> --body-file -` replaces the whole
+description, refuses an empty body, and reads the result back (a description
+write that normalizes to nothing returns a clean 200 — DOCTRINE 3.10). The
+description shape lives in `loop-spec`'s SKILL.md and now opens with
+**## Dane asked for** — his own words, verbatim, that caused the ticket to
+exist. If it descends from a standing decision instead, say so and name it.
+Never invent a quote.
+
+**The right column carries the operator card, and nothing else.** One command
+posts it and moves the status together, so the two can never come apart:
+
+```bash
+npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
+npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -
+```
+
+The body is four sections. The check runs **before** the first network call, so
+a card that fails the shape leaves the ticket exactly where it was:
+
+```
+@@ASKED
+build the chip display
+@@WHEN
+2026-08-22 10:56am, on this ticket          (optional)
+@@CONTEXT
+The problem and the fix in plain English. 50-100 words — enforced, not
+suggested. Under 50 it stops carrying enough for him to act on without opening
+anything else; over 100 it becomes the wall of text this replaces.
+@@NEEDED
+The specific ask. "Nothing right now" is a good answer and a useful one, but it
+has to be written down rather than left blank.
+```
+
+`@@NEEDED` renders under a banner he can find without reading:
+
+```
+#############################
+NEEDED FROM DANE: 
+#############################
+```
+
+The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
+(`scripts/builder/operatorCard.test.js`), not a convention an agent has to
+remember. `status --status "Needs your input"` refuses on its own and prints
+the `ask` form; `--no-card` is the escape hatch, and like `--operator-asked`
+above it is a written claim in the transcript, not a permission check.
+
+### ClickUp deletes `> ` blockquotes — from comments AND descriptions
+
+Found live while building the above, on 2026-08-22. A body posted with
+`> quoted words` comes back with those lines **gone** — not unformatted, not
+escaped, absent — and the write returns a clean 200 with a healthy-looking
+character count. The first two operator cards ever posted lost Dane's own
+words that way, which is the one part of a card nobody can reconstruct later.
+
+A probe of six forms against the live API (scratch task `86bbgm68r`) settled
+which are safe:
+
+| Form | Survives? |
+|---|---|
+| `> blockquote` | **no — deleted entirely** |
+| ` ``` ` fenced block | yes |
+| `***bold italic***` | yes |
+| four-space indent | yes |
+| `"plain quotation marks"` | yes |
+| `**— bold with a dash**` | yes |
+
+So verbatim text goes in a fence, which is also the only form that leaves its
+contents uninterpreted. `describe` refuses a body containing a blockquote
+before it sends; `ask` refuses one in any card section, and after posting reads
+the card back and confirms Dane's words are actually in it. A `>` inside a
+fence is fine and is not flagged.
 
 **Urgent is the human lane (ratified 2026-08-18).** The queue sorts
 priority-then-age, so an Urgent flag is a human override that outranks
@@ -140,9 +233,35 @@ Two rules keep it honest:
   to the bus and moves the ticket back to `Queued`, where a build loop picks
   it up with your answer sitting in the comments. That is not a loop
   reclaiming its escalation — it is you releasing the ticket, with the relay
-  as your hands. No fresh comment from you, no move, ever. And a comment on
-  a `Ready to launch` ticket moves nothing: that status waits on the merge
-  you alone authorize, so the relay only carries your words to the bus.
+  as your hands. No fresh comment from you, no move, ever.
+
+  Since 2026-08-21 (task 86bbjd5nn) the same is true at the other end. On a
+  `Ready to launch` ticket, a comment from you that is **exactly** a merge
+  command — `merge`, `merge it`, `ship it` or `approve`, the whole comment,
+  nothing else — merges the PR and closes the ticket as `Live`. Anything
+  longer is just a comment: "merge after the other one lands" changes
+  nothing. This is still your merge, not the loop's; the only thing that
+  changed is that you no longer have to wait for a session to notice. Before
+  it merges, the relay re-checks every gate itself:
+
+  - the ticket is in `Ready to launch` **now**;
+  - the comment is yours, checked by ClickUp user id, never by display name
+    (an agent comment saying "merge" does nothing, and there is a test that
+    fails if that ever stops being true);
+  - the newest review verdict on the ticket is a PASS, and your comment came
+    **after** it — so a "merge" from an earlier round cannot release a PR
+    that was rebuilt since;
+  - the PR named in the ticket's own `PR opened:` comment is open, not a
+    draft, and its checks are green (a PR with no checks at all is refused —
+    unverified is not green);
+  - the branch does not conflict with `main`.
+
+  If the branch is merely behind `main`, the relay catches it up and waits
+  for CI to re-run rather than merging on a stale green. If it **conflicts**,
+  the relay stops, says so on the ticket in plain language and on the bus,
+  and leaves the ticket where it is: a script never resolves a conflict. Any
+  other refusal is written on the ticket with the reason. Nothing is ever
+  half-moved, and no refusal is posted twice.
 
 `Live` is configured as a **closed**-type status in ClickUp, not merely the
 last active one. That is what makes finished work disappear from the open
@@ -186,14 +305,16 @@ Your day:
 1. **Morning:** run `loop-spec`, answer its questions, approve the task list.
 2. **During the day:** the loops build and review. You get a message per
    `Ready to launch` PR with a preview link and test steps.
-3. **When you're ready:** tell CC "merge PR #NN" and it merges (only with all
-   checks green). Merging stays manual on purpose — see Safety.
+3. **When you're ready:** reply **`merge`** on the ticket — just that word.
+   Within one bus-relay cycle (hourly) it is merged and the ticket closes as
+   `Live`, provided the PR is still open, green and conflict-free. Telling a
+   CC session "merge PR #NN" still works and is faster if one is open; the
+   comment is the version that works when nobody is watching. Either way the
+   decision is yours — see Safety.
 4. **When a ticket asks you a question** (`Needs your input`): answer it as a
    comment on the ticket. Within one bus-relay cycle (hourly) your answer is
    posted to the bus and the ticket goes back to `Queued` for a build loop to
-   pick up — the comment alone is enough, no status clicking. This does NOT
-   apply to `Ready to launch`: a comment there is relayed but the ticket
-   waits for your merge.
+   pick up — the comment alone is enough, no status clicking.
 
 ### The one place to check: Assigned to me
 
@@ -230,6 +351,13 @@ is different, so the loops have guardrails baked in:
 
 - **`main` auto-deploys to production.** So no loop ever merges on its own. The
   review loop can only mark a PR `Ready to launch`; **you** authorize the merge.
+  Since 2026-08-21 that authorization can be a one-word comment on the ticket
+  and the hourly relay carries it out (task 86bbjd5nn) — which moves the
+  *hands*, not the *decision*. The relay merges nothing you did not name, on a
+  ticket no independent review passed, or on a branch that is red or in
+  conflict. It exists because on 2026-08-20 three tickets you had already
+  approved sat unmerged for hours waiting for a human to notice: the
+  checkpoint was doing its job, the delay after it was pure friction.
 - **Every loop runs in its own worktree.** Two agents in one folder clobber
   each other's files — the single most common way this repo breaks. The build
   skill creates a fresh worktree per task automatically.

@@ -29,6 +29,66 @@ automated pass). No code yet — this is the convention every agent will follow.
 ---
 
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
+## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
+
+ClickUp shows a ticket's description on the left, wide, and its comments on the
+right, narrow. The loops had that backwards. The left column held a spec written
+for a machine, and everything meant for Dane — the reasoning, the risk, the
+question — went into a comment, arriving as a wall of text in the skinniest part
+of the screen.
+
+Two tickets stalled on it the same day. On one, a long comment offered three
+ways to slice the work; Dane picked the smallest and safest, but the ticket went
+back into the build queue still carrying its original full scope, so the next
+unattended pass would have built the risky half he had just deferred — the part
+that rewrites roughly thirty-five live customer pages in one motion. The other
+sat in his inbox for a day under a red "needs your input" badge with no question
+anywhere on it. It was never waiting on him; it was waiting on the first ticket.
+
+Now the detail goes on the left, and the right column carries one short card
+with three fixed parts: his own words that caused the ticket to exist, the
+problem and the fix in fifty to a hundred words of plain English, and the
+specific ask under a banner he can find without reading. The word range is
+checked rather than suggested — too short stops being useful, too long is the
+wall of text this replaces. Handing a ticket to Dane is now a single command
+that posts the card and moves the status together, so a ticket can no longer
+land in his inbox with nothing on it to answer.
+
+---
+
+## 2026-08-22 — Saying "merge" on a ticket now actually merges it (#371)
+
+When a piece of work has been built and independently reviewed, it waits in
+`Ready to launch` for Dane to say go. He says go by replying **merge** on the
+ticket — and until now nothing was listening. On 2026-08-20 three tickets he
+had already approved sat unmerged for hours, purely because no session
+happened to be open to notice. The approval was never the bottleneck; the
+waiting after it was.
+
+The hourly job that already carries his comments to the team chat now also
+acts on that one word. If the whole comment is `merge` (or `merge it`,
+`ship it`, `approve`), it checks — every time, freshly — that the ticket is
+still `Ready to launch`, that the comment really is his (matched on his
+account id, so an agent typing "merge" is ignored), that the last review
+verdict was a pass and his go-ahead came after it, and that the pull request
+is open, has all its checks green and does not clash with newer work. Only
+then does it merge, close the ticket as `Live`, and say so on the chat. A
+sentence like "merge after the other one lands" is just a comment; it takes
+the bare word to act.
+
+Two refusals matter most. If the branch has fallen behind the main copy of
+the code, it catches it up and waits for the tests to re-run rather than
+merging on a result that no longer describes the branch. If it genuinely
+clashes with newer work, it stops dead, explains on the ticket that a session
+needs to sort out the overlap, and leaves everything exactly where it was — a
+script must never untangle that blind. Every other refusal is written on the
+ticket in plain English with the reason, once, never twice.
+
+Nothing about who decides has changed: the merge is still his, and no loop
+can approve its own work. What changed is that his decision no longer has to
+wait for someone to be watching.
+
+## 2026-08-22 — The code stops assuming it lives on one particular laptop (#368)
 
 Thirteen files had a folder path typed into them that only exists on Dane's
 MacBook. That is fine right up until the same code runs somewhere else — on
