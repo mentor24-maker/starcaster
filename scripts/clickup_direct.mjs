@@ -57,6 +57,7 @@ import { spawnSync } from 'node:child_process';
 import busRelayPlan from './builder/busRelayPlan.js';
 import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
+import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
@@ -214,6 +215,9 @@ function usage(code = 2) {
   console.error('                                             upload image(s) onto a task — the before/after pair');
   console.error("                                             the approval queue runs on; verified by reading the");
   console.error("                                             task's attachment list back");
+  console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
+  console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
+  console.error('                                             1 = could not tell (do NOT guess)');
   console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
@@ -885,6 +889,47 @@ if (cmd === 'whoami') {
     process.exit(1);
   }
   reportLimits(after.res);
+} else if (cmd === 'build-start') {
+  // "Is somebody already building this?" — asked BEFORE a branch is created.
+  //
+  // On 2026-08-23 a build pass opened two duplicate PRs in one session,
+  // because the atomic claim answers a different question: it stops two
+  // builders starting at once, and says nothing about work that was started
+  // days ago and handed back. A sent-back ticket is genuinely `Queued`, its
+  // PR is genuinely still open, and nothing looked.
+  const task = arg('task');
+  if (!task) usage();
+
+  const got = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!got.res.ok) die('read the task comments', got);
+
+  // gh, not the GitHub API directly: it is already the repo's authenticated
+  // path everywhere else, and a second auth story is a second thing to break.
+  const lookupPr = (number) => {
+    const out = spawnSync('gh', ['pr', 'view', String(number), '--json', 'state,headRefName'], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (out.status !== 0) return null; // could not tell — NOT "no PR"
+    try {
+      return JSON.parse(out.stdout);
+    } catch {
+      return null;
+    }
+  };
+
+  const decision = buildStart.resolveBuildStart(got.json.comments || [], { lookupPr });
+  console.log(buildStart.describeBuildStart(decision));
+  if (decision.pr) {
+    console.log(`pr:     #${decision.pr.number}${decision.pr.branch ? ` (branch ${decision.pr.branch})` : ''}`);
+    console.log(`url:    ${decision.pr.url}`);
+  }
+  reportLimits(got.res);
+
+  // Exit codes so a shell can branch on this without parsing prose, matching
+  // `node:owns`: 0 = go ahead, 3 = somebody else's work, 1 = cannot tell.
+  if (decision.action === 'continue') process.exit(3);
+  if (decision.action === 'unknown') process.exit(1);
+  process.exit(0);
 } else if (cmd === 'pr-opened') {
   // The build loop's audit trail, made into a command (task 86bbjt18r).
   // Until now step 7 of loop-build said "add the PR URL as a ClickUp
