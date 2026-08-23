@@ -175,7 +175,10 @@ the run report.
 - **Never touch a task that isn't `Queued`.** Every other status is owned by
   another step or by the operator.
 - **Never set `Ready to launch` and never clear `Needs your input`.** Those two
-  are the operator's; only he moves a task out of them.
+  are the operator's; only he moves a task out of them — in person, or through
+  the bus-relay pass acting on a comment he wrote (an answer releases
+  `Needs your input`; the single word `merge` releases `Ready to launch` by
+  merging it). A build loop never sets either one and never merges.
 - If the task description is too vague to build safely, `ask` for a `loop-spec`
   pass — don't guess. Name in `@@NEEDED` the specific thing that is missing.
 - **If a task is bigger or riskier than one unattended pass should build**, say

@@ -227,9 +227,35 @@ Two rules keep it honest:
   to the bus and moves the ticket back to `Queued`, where a build loop picks
   it up with your answer sitting in the comments. That is not a loop
   reclaiming its escalation — it is you releasing the ticket, with the relay
-  as your hands. No fresh comment from you, no move, ever. And a comment on
-  a `Ready to launch` ticket moves nothing: that status waits on the merge
-  you alone authorize, so the relay only carries your words to the bus.
+  as your hands. No fresh comment from you, no move, ever.
+
+  Since 2026-08-21 (task 86bbjd5nn) the same is true at the other end. On a
+  `Ready to launch` ticket, a comment from you that is **exactly** a merge
+  command — `merge`, `merge it`, `ship it` or `approve`, the whole comment,
+  nothing else — merges the PR and closes the ticket as `Live`. Anything
+  longer is just a comment: "merge after the other one lands" changes
+  nothing. This is still your merge, not the loop's; the only thing that
+  changed is that you no longer have to wait for a session to notice. Before
+  it merges, the relay re-checks every gate itself:
+
+  - the ticket is in `Ready to launch` **now**;
+  - the comment is yours, checked by ClickUp user id, never by display name
+    (an agent comment saying "merge" does nothing, and there is a test that
+    fails if that ever stops being true);
+  - the newest review verdict on the ticket is a PASS, and your comment came
+    **after** it — so a "merge" from an earlier round cannot release a PR
+    that was rebuilt since;
+  - the PR named in the ticket's own `PR opened:` comment is open, not a
+    draft, and its checks are green (a PR with no checks at all is refused —
+    unverified is not green);
+  - the branch does not conflict with `main`.
+
+  If the branch is merely behind `main`, the relay catches it up and waits
+  for CI to re-run rather than merging on a stale green. If it **conflicts**,
+  the relay stops, says so on the ticket in plain language and on the bus,
+  and leaves the ticket where it is: a script never resolves a conflict. Any
+  other refusal is written on the ticket with the reason. Nothing is ever
+  half-moved, and no refusal is posted twice.
 
 `Live` is configured as a **closed**-type status in ClickUp, not merely the
 last active one. That is what makes finished work disappear from the open
@@ -273,14 +299,16 @@ Your day:
 1. **Morning:** run `loop-spec`, answer its questions, approve the task list.
 2. **During the day:** the loops build and review. You get a message per
    `Ready to launch` PR with a preview link and test steps.
-3. **When you're ready:** tell CC "merge PR #NN" and it merges (only with all
-   checks green). Merging stays manual on purpose — see Safety.
+3. **When you're ready:** reply **`merge`** on the ticket — just that word.
+   Within one bus-relay cycle (hourly) it is merged and the ticket closes as
+   `Live`, provided the PR is still open, green and conflict-free. Telling a
+   CC session "merge PR #NN" still works and is faster if one is open; the
+   comment is the version that works when nobody is watching. Either way the
+   decision is yours — see Safety.
 4. **When a ticket asks you a question** (`Needs your input`): answer it as a
    comment on the ticket. Within one bus-relay cycle (hourly) your answer is
    posted to the bus and the ticket goes back to `Queued` for a build loop to
-   pick up — the comment alone is enough, no status clicking. This does NOT
-   apply to `Ready to launch`: a comment there is relayed but the ticket
-   waits for your merge.
+   pick up — the comment alone is enough, no status clicking.
 
 ### The one place to check: Assigned to me
 
@@ -317,6 +345,13 @@ is different, so the loops have guardrails baked in:
 
 - **`main` auto-deploys to production.** So no loop ever merges on its own. The
   review loop can only mark a PR `Ready to launch`; **you** authorize the merge.
+  Since 2026-08-21 that authorization can be a one-word comment on the ticket
+  and the hourly relay carries it out (task 86bbjd5nn) — which moves the
+  *hands*, not the *decision*. The relay merges nothing you did not name, on a
+  ticket no independent review passed, or on a branch that is red or in
+  conflict. It exists because on 2026-08-20 three tickets you had already
+  approved sat unmerged for hours waiting for a human to notice: the
+  checkpoint was doing its job, the delay after it was pure friction.
 - **Every loop runs in its own worktree.** Two agents in one folder clobber
   each other's files — the single most common way this repo breaks. The build
   skill creates a fresh worktree per task automatically.
