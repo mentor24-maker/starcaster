@@ -14,6 +14,52 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The guard against touching the live branch had a gap (#397)
+
+There is a rule here that an automated helper must never edit files directly in
+the main folder — the one wired to the live site. There is a guard enforcing it,
+and tonight something slipped past.
+
+What happened: a build session was working in its own private copy, as it should
+be. Between one command and the next, its working folder silently reverted to
+the main one. The next command used a short filename, so an edit intended for
+the private copy landed in the live folder instead. It was spotted immediately
+and undone; the folder was clean again within a minute, nothing was sent
+anywhere and the live site never saw it. No harm done. **The guard staying
+silent is the part worth fixing.**
+
+The reason is almost embarrassing in hindsight. There are many ways to write a
+file, and the guard recognised only a few of them. It knew the ones that look
+like classic command-line plumbing, and it did not know the one that was used —
+a perfectly ordinary way to make a multi-line edit that simply was not on its
+list. Nor several close relatives. Each is the same act spelled differently, and
+the guard knew only the spellings someone had happened to think of.
+
+That is the second time in one night the same shape of bug has turned up: a
+guard built out of *patterns*, protecting a rule that is really about *meaning*.
+The other one let an automated helper overwrite branch history despite four
+rules forbidding it. Both are now closed.
+
+There was a comic second half. When the problem was written up as a ticket, the
+guard **refused to let the ticket be written** — because the ticket quoted an
+example of a forbidden command as documentation. It could not tell an
+instruction from a description of one. That is fixed too, by paying attention to
+who a block of text is actually being handed to: text given to a program is
+treated as a program, text being saved as notes is treated as notes. Writing
+about a rule should never trip the rule, or people quietly stop writing the
+examples down.
+
+One deliberate restraint: the ticket argued for making the guard far more
+suspicious — refuse anything that mentions a filename near anything that writes.
+On reading the surrounding code that looked like the wrong trade, and it was not
+done. There is a second, stronger check that runs before anything can reach the
+live site, and tonight's incident is evidence for that arrangement rather than
+against it: the damage was zero precisely because that later step never
+happened. The specific gaps are closed; the guard has not been turned into
+something that cries wolf.
+
+---
+
 ## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
 
 Until today, if a piece of work changed how a page *looks*, the only way to
