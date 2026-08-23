@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — Abandoned bug-report screenshots now clean themselves up (#PR)
+## 2026-08-23 — Abandoned bug-report screenshots now clean themselves up (#398)
 
 When somebody reports a bug on one of your sites, they can attach a screenshot.
 The picture has to be uploaded the moment they pick it, before they press Send,
