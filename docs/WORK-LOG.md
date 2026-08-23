@@ -28,7 +28,6 @@ found one uncommitted change waiting to be committed.
 
 ---
 
-## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 ## 2026-08-22 — `npm run map` stops calling a brand-new folder rubbish (#375)
 
 Set up a new workspace with `npm run thread`, then read the map from the main
