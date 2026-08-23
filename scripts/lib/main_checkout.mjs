@@ -28,3 +28,17 @@ export function mainCheckoutDir(fallbackDir) {
   }
   return fallbackDir;
 }
+
+// Runnable, so a shell can ask the same question the scripts do:
+//
+//   node "$(git rev-parse --show-toplevel)/scripts/lib/main_checkout.mjs"
+//
+// The `--show-toplevel` there only locates THIS FILE, which every worktree
+// carries, so it is correct from anywhere. The answer itself comes from the
+// function above. `loop-build`'s step 2 used `--show-toplevel` for the answer
+// as well, which is the bug: it means "the folder I am in", so a loop started
+// inside a worktree nested its per-task worktrees inside that one. Two
+// spellings of "where is the main checkout" would drift apart, so there is one.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  process.stdout.write(`${mainCheckoutDir(process.cwd())}\n`);
+}

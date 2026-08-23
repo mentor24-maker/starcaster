@@ -334,16 +334,37 @@ settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
 
 ## How to run it
 
-Two commands, each in **its own worktree** (a separate folder + branch so the
-loops never step on each other — this is the #1 safety rule):
+Two commands, each in **its own session**:
 
 ```
-# In session/worktree A:
+# In session A:
 /loop 30m loop-build
 
-# In session/worktree B:
+# In session B:
 /loop 30m loop-review
 ```
+
+**Start them wherever you like — the main checkout is the natural place.**
+Neither loop edits the folder it is started in: `loop-build` creates a
+per-task worktree and works there, `loop-review` checks a PR out into one.
+The main checkout stays on `main` and stays clean, so the collision that
+"one worktree per thread" guards against — two sessions sharing one HEAD and
+one set of uncommitted edits — is not reachable here.
+
+This paragraph used to say each loop needed **its own worktree**, and called
+that the #1 safety rule. It contradicted `loop-build`'s own step 2, which
+derived its checkout with `git rev-parse --show-toplevel` — *"the folder I am
+in"*. Follow the old advice and the loop nested its per-task worktrees inside
+the worktree it was started in. Nothing errored; the work simply happened
+somewhere nobody expected. Step 2 now asks `scripts/lib/main_checkout.mjs`
+instead, which answers the same from anywhere, so where you start no longer
+matters — but two documents giving different instructions is the part that
+had to stop (2026-08-22, after NODES Slice A #368).
+
+The "one worktree per thread" rule in `CLAUDE.md` is untouched and still
+applies to **building**: every piece of work gets its own folder and branch.
+That is what the loops do for each task. It was never about where a loop
+session is launched from.
 
 `/loop 30m X` means "run X, then run it again every 30 minutes." Build drains
 the `Queued` pile into PRs; review drains the `In review` pile into
