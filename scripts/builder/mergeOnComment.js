@@ -100,6 +100,72 @@ function byDateNewestFirst(comments) {
 }
 
 /**
+ * The merge path's dedup marker, written as a threaded reply on the
+ * operator's own comment. Defined HERE, next to the parser that reads it
+ * back, so the writer and the reader can never drift apart.
+ */
+const MERGE_MARKER = '[merge-on-comment]';
+
+/**
+ * Read one marker reply back into a decision.
+ *
+ * WHY THIS EXISTS (2026-08-22, task 86bbjt18r). Until now every marker meant
+ * the same thing — "this authorization is spent, never look at it again" —
+ * and that is wrong for a REFUSAL. On 2026-08-22 two tickets were refused for
+ * "no PR opened: comment", the missing comment was added by hand minutes
+ * later, and the next three passes did not look at them again: Dane's
+ * approval was still sitting there, still valid, and the ticket had gone
+ * quiet forever. A refusal is a snapshot of a moment, not a verdict on the
+ * ticket.
+ *
+ * So markers now carry a KIND. 'terminal' (merged, or handed to a human for
+ * a conflict) is spent forever — re-deciding a merged PR is the one mistake
+ * that cannot be undone. 'refused' is re-decided on every later pass, and
+ * only stays quiet while the reason it gave is still the true one.
+ *
+ * The format is the one already in the live record — `[merge-on-comment]
+ * refused: <why> — <ISO>` — so markers written before this change parse
+ * correctly and nothing needs migrating. `lastIndexOf` finds the timestamp
+ * separator because the REASON often contains an em-dash of its own
+ * ("no \"PR opened:\" comment on this ticket — nothing to merge").
+ */
+function parseMergeMarker(text) {
+  const raw = String(text || '');
+  if (!raw.startsWith(MERGE_MARKER)) return null;
+  let rest = raw.slice(MERGE_MARKER.length).trim();
+  let at = '';
+  const cut = rest.lastIndexOf(' — ');
+  if (cut !== -1) {
+    const tail = rest.slice(cut + 3).trim();
+    if (/^\d{4}-\d{2}-\d{2}T/.test(tail)) {
+      at = tail;
+      rest = rest.slice(0, cut).trim();
+    }
+  }
+  if (/^refused\s*:/i.test(rest)) {
+    return { kind: 'refused', reason: rest.replace(/^refused\s*:\s*/i, '').trim(), at };
+  }
+  return { kind: 'terminal', reason: rest, at };
+}
+
+/**
+ * The NEWEST marker on one comment's reply thread decides its state. A
+ * ticket refused twice for different reasons carries two markers, and only
+ * the last one describes where it actually stands.
+ */
+function latestMergeMarker(replies) {
+  let best = null;
+  let bestDate = -Infinity;
+  for (const r of replies || []) {
+    const parsed = parseMergeMarker(r && r.comment_text);
+    if (!parsed) continue;
+    const d = commentDate(r);
+    if (d >= bestDate) { best = parsed; bestDate = d; }
+  }
+  return best;
+}
+
+/**
  * Decide what a bus-relay pass should do with one Ready-to-launch ticket.
  *
  * Returns `{ act, reason, ... }` where act is one of:
@@ -109,12 +175,20 @@ function byDateNewestFirst(comments) {
  *   'merge'   — every ClickUp-side precondition holds; the caller now checks
  *               GitHub (see githubGate) and merges
  *
- * `handled` is the set of comment ids already acted on (the dedup marker
- * bus-relay writes as a threaded reply), so a pass never re-decides a
- * comment it has already answered.
+ * `handled` is the set of comment ids whose answer was TERMINAL — merged, or
+ * handed to a human for a conflict. Those are never re-decided.
+ *
+ * `refused` is the other half (task 86bbjt18r): a map of comment id -> the
+ * reason that refusal gave. A refused authorization IS re-decided on every
+ * later pass, because the reason may have gone away — that is the whole
+ * point. The map is what keeps it quiet in the meantime: if the pass reaches
+ * the SAME refusal again, the decision is 'ignore' and nothing is posted, so
+ * re-planning costs no extra noise on the ticket. A different reason, or a
+ * clean run through to 'merge', is new information and is acted on.
  */
-function mergeDecision({ status, comments, operatorId, handled }) {
+function mergeDecision({ status, comments, operatorId, handled, refused }) {
   const seen = handled instanceof Set ? handled : new Set(handled || []);
+  const priorRefusals = refused instanceof Map ? refused : new Map(Object.entries(refused || {}));
   const all = byDateNewestFirst(comments);
 
   // Only Ready to launch. The same word on any other status does nothing —
@@ -135,6 +209,18 @@ function mergeDecision({ status, comments, operatorId, handled }) {
 
   const base = { commentId: String(authorization.id), commentDate: commentDate(authorization) };
 
+  // A refusal we have already given, whose reason is still true, is not news.
+  // Saying it again on every hourly pass would bury the ticket in identical
+  // comments, so it goes quiet — but it goes quiet by RE-DERIVING the same
+  // answer, not by being permanently struck off. The moment the reason
+  // changes (or disappears), the next pass acts.
+  const wasRefusedFor = priorRefusals.get(base.commentId);
+  const refuse = (reason) => (
+    reason === wasRefusedFor
+      ? { ...base, act: 'ignore', reason: `already refused for the same reason: ${reason}` }
+      : { ...base, act: 'refuse', reason }
+  );
+
   // The newest REVIEW verdict must be a PASS, and the authorization must be
   // NEWER than it. Both halves matter: the first is "a human-independent
   // check said this is good", the second is "he was authorizing THIS
@@ -143,22 +229,18 @@ function mergeDecision({ status, comments, operatorId, handled }) {
   // and must not release the new PR.
   const verdict = all.find((c) => isReviewVerdict(c.comment_text));
   if (!verdict) {
-    return { ...base, act: 'refuse', reason: 'no review verdict on this ticket — loop-review has not passed it' };
+    return refuse('no review verdict on this ticket — loop-review has not passed it');
   }
   if (!isReviewPassed(verdict.comment_text)) {
-    return { ...base, act: 'refuse', reason: 'the most recent review verdict is not a PASS' };
+    return refuse('the most recent review verdict is not a PASS');
   }
   if (commentDate(authorization) < commentDate(verdict)) {
-    return {
-      ...base,
-      act: 'refuse',
-      reason: 'the merge command predates the current review verdict — it authorized an earlier round',
-    };
+    return refuse('the merge command predates the current review verdict — it authorized an earlier round');
   }
 
   const pr = findPullRequest(all);
   if (!pr) {
-    return { ...base, act: 'refuse', reason: 'no "PR opened:" comment on this ticket — nothing to merge' };
+    return refuse('no "PR opened:" comment on this ticket — nothing to merge');
   }
 
   return { ...base, act: 'merge', pr, reason: `authorized by comment ${authorization.id}` };
@@ -251,6 +333,9 @@ function githubGate(pr) {
 
 module.exports = {
   MERGE_PHRASES,
+  MERGE_MARKER,
+  parseMergeMarker,
+  latestMergeMarker,
   normalizeCommand,
   isMergeCommand,
   isReviewVerdict,

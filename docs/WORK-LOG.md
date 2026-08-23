@@ -41,6 +41,56 @@ the thing you are told to read before starting a piece of work, so it is the
 thing that was giving bad advice. A test now builds a throwaway repository with
 one empty branch, one already-shipped branch and one branch with live work in
 it, and fails if the map ever again calls the empty one shipped.
+## 2026-08-22 — Three ways an approved ticket quietly never shipped, closed (#388)
+
+Saying "merge" on a ticket now actually merges it, which works — but clearing
+the backlog on 2026-08-22 turned up three ways your approval could sit there
+doing nothing while everything looked fine. All three were bookkeeping: the
+work was built, reviewed and approved, and still did not ship.
+
+**One: a refusal used to be permanent.** When the merge step couldn't act — say
+the ticket didn't name its pull request — it explained why once and then never
+looked at that ticket again, even after the reason was fixed minutes later. Two
+tickets went quiet that way and only a hand audit found them. A refusal is now
+re-checked on every pass: the moment the reason goes away the ticket goes
+through, with no second word from you. While the reason still stands it says
+nothing, so nothing gets noisier. The refusal message now says this out loud
+instead of reading like a report you have to act on.
+
+**Two: the trail from ticket to pull request was written down but not
+enforced.** Four approved tickets had no record of which pull request they were
+about, so the merge step rightly refused to guess; two of those pull requests
+also carried no link back to their ticket, leaving the two matchable only by
+reading titles. Recording the pull request is now a command that checks the
+link runs both ways and re-reads its own writing through the merge step's eyes
+— if it can't be read back, the build run fails then and there rather than
+handing over a ticket that will stall later.
+
+**Three: two tickets reached "Ready to launch" without ever passing review.**
+That status is your safe-to-merge signal, so you approved both in good faith.
+Recording the review verdict is now a command too, and the two places a loop
+can set that status both refuse it unless a passing verdict is on the ticket.
+(The ClickUp website and the ClickUp connector can still set it directly —
+nothing in this codebase can reach those, and that is written down where the
+next person will look.)
+
+---
+
+## 2026-08-22 — Editing on main is now blocked whichever way you do it (#372)
+
+The rule "don't work directly on the main branch (it deploys straight to the
+live site)" was only enforced for the Edit tool — files written through the
+terminal (heredocs, small scripts) slipped straight past it, which is exactly
+how a whole feature landed in the main folder by accident on 2026-08-20. Now
+three things cover every path: committing on main is refused outright with
+plain instructions for moving the work to a worktree (the real backstop —
+everything ends in a commit); `npm run doctor` reports when the main folder
+has stray uncommitted changes; and the terminal is watched for commands that
+write source files while on main, blocking them early (best-effort, and it
+stays out of the way when you're properly in a worktree). All three respect
+the same ALLOW_MAIN_EDITS=1 override for a deliberate one-off. (After review: the terminal check now judges the folder the command actually runs in, so it never trips on legitimate work inside a worktree.)
+
+---
 
 ## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 ## 2026-08-22 — Tickets stop burying the ask in the narrow column (#385)
@@ -122,6 +172,28 @@ Nothing about the app changes for anyone using it. What changes is that the
 system can now be run from more than one machine, which is what lets work
 continue overnight while the laptop is closed.
 
+## 2026-08-18 — A tool that notices when ClickUp and GitHub disagree (#345)
+
+A task can end up saying "in review" or "building" days after the work
+actually shipped and merged — nobody moved it, so it just sits there looking
+unfinished. A new command, `npm run reconcile`, checks every in-progress
+Loop Queue task against the GitHub pull request it's linked to: if that pull
+request already merged, the task gets moved to Live automatically. It
+defaults to a dry run that only prints what it would do; nothing changes
+unless you ask it to. It also checks for the reverse problem — a work folder
+still sitting on the machine after its task closed without shipping — though
+that check can only cover folders started after this same session's earlier
+piece (Task-closes-thread, PR #344) began tagging them. It's not on a
+schedule yet; that's its own upcoming piece of work (the Mac Mini setup).
+
+After review, several ways it could quietly give the wrong answer were closed:
+it now trusts the NEWEST pull request a task links (a reworked task carries an
+old, dead link too), treats a pull request that was closed WITHOUT merging as
+drift to flag rather than "fine", reads a task's whole comment history rather
+than only the newest page, and never moves a task out of one of your own
+statuses ("Needs your input" / "Ready to launch") on its own — it flags those
+for you instead. Status moves now go through the same verified path everything
+else uses, and a flagged problem is posted to the bus once, not on every run.
 ## 2026-08-18 — Undoing a shared-section push, from any later visit (#342)
 
 When editing a section that's shared across many pages, saving it rewrites

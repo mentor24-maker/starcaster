@@ -23,6 +23,22 @@
 set -e
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+
+# Refuse to commit on main — it auto-deploys to production, and work belongs in
+# a worktree. This is the guarantee behind the (best-effort) PreToolUse checks:
+# every path to a change ends in a commit, and this catches all of them,
+# whichever tool wrote the files. Override for a deliberate one-off with
+# ALLOW_MAIN_EDITS=1 (say so and why).
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+if [ "$BRANCH" = "main" ] && [ "$ALLOW_MAIN_EDITS" != "1" ]; then
+  echo "BLOCKED: refusing to commit on main — it auto-deploys to production." >&2
+  echo "Move this work onto its own branch (nothing is lost):" >&2
+  echo "  git stash            # set your changes aside" >&2
+  echo "  npm run thread <topic>   # new worktree + branch off origin/main" >&2
+  echo "  cd .claude/worktrees/<topic> && git stash pop   # bring them over" >&2
+  echo "(Deliberate one-off: prefix with ALLOW_MAIN_EDITS=1 and say why.)" >&2
+  exit 1
+fi
 node scripts/build_pinned_assets.mjs
 node scripts/check_build_paths.cjs --quiet
 node scripts/pin_asset_versions.cjs --stage
