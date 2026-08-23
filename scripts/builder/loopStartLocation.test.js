@@ -6,9 +6,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SKILL = path.join(ROOT, '.claude', 'skills', 'loop-build', 'SKILL.md');
+const SPEC = path.join(ROOT, '.claude', 'skills', 'loop-spec', 'SKILL.md');
 const DOC = path.join(ROOT, 'docs', 'LOOP_ENGINEERING.md');
 const HELPER = path.join(ROOT, 'scripts', 'lib', 'main_checkout.mjs');
 
@@ -62,6 +64,34 @@ test('the derivation gives the MAIN checkout from inside a linked worktree', () 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('it still runs as a command from an awkward path', () => {
+  // Two separate ways the "was I run or imported?" check goes wrong, both of
+  // which make it print NOTHING and exit 0 — the caller gets an empty string
+  // and dies later naming nothing useful:
+  //   1. a hand-built file:// URL does no percent-encoding, so a space breaks it
+  //   2. import.meta.url is the REAL path while argv[1] is the path as typed,
+  //      and on macOS /tmp is a symlink to /private/tmp
+  // Fixing only (1) still fails under /tmp. Both are exercised here at once.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mc awkward '));
+  const copy = path.join(dir, 'main_checkout.mjs');
+  fs.copyFileSync(HELPER, copy);
+
+  const out = execFileSync('node', [copy], { cwd: ROOT, encoding: 'utf8' }).trim();
+  assert.ok(out.length > 0, 'a path with a space, under a symlinked /tmp, must still print');
+  assert.ok(path.isAbsolute(out));
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('importing it prints nothing', () => {
+  // The other half of the same guard: if it fired on import, every script that
+  // imports it would emit a stray path line into its own output.
+  const out = execFileSync('node', ['-e', `import(${JSON.stringify(pathToFileURL(HELPER).href)}).then(() => {})`], {
+    cwd: ROOT, encoding: 'utf8',
+  });
+  assert.equal(out.trim(), '', 'an import must stay silent');
+});
+
 test('the helper runs as a command, not only as an import', () => {
   // The skill is a shell snippet; if this file stops being executable the
   // snippet silently produces an empty MAIN and the guard on the next line
@@ -113,15 +143,40 @@ test('the operator guide no longer says each loop needs its own worktree', () =>
   assert.match(instruction, /per-task worktree/, 'and why that is safe');
 });
 
-test('the two places agree about where a loop starts', () => {
-  // The acceptance criterion, stated as a property rather than as prose: no
-  // document may tell the operator to start a loop inside a worktree.
-  for (const [file, label] of [[SKILL, 'the skill'], [DOC, 'the operator guide']]) {
+test('no document tells you to start a loop inside a worktree', () => {
+  // The acceptance criterion, stated as a property rather than as prose.
+  //
+  // The first version of this required the literal words "each loop", so it
+  // sailed straight past `**Every loop runs in its own worktree.**` sitting in
+  // the Guardrails list of the very file it was checking — the sentence this
+  // whole ticket exists to retire. A test whose wording is narrower than the
+  // rule it guards is not a guard. Caught in review, not by the test.
+  //
+  // THREE files, because the retired instruction was in three. loop-spec's
+  // step 4 was the third and nobody had looked.
+  const forbidden = /(?:each|every)\s+loop\b[^.\n]{0,60}in its own worktree/i;
+  const files = [
+    [SKILL, 'the loop-build skill'],
+    [SPEC, 'the loop-spec skill'],
+    [DOC, 'the operator guide'],
+  ];
+  for (const [file, label] of files) {
     const text = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(
-      text,
-      /(?:run|start)[^.\n]{0,40}each loop[^.\n]{0,40}in its own worktree/i,
-      `${label} must not tell you to start a loop in a worktree`
-    );
+    // The operator guide keeps ONE quotation of the old wording, as the
+    // history attached to the rule. Strip the sentence that introduces it.
+    const live = text.replace(/This bullet used to say[\s\S]*?came from\./g, '')
+      .replace(/This paragraph used to say[\s\S]*?#368\)\./g, '');
+    assert.doesNotMatch(live, forbidden, `${label} must not tell you to start a loop in a worktree`);
   }
+});
+
+test('the guardrails list says what actually keeps builds apart', () => {
+  // The bullet an operator skimming for "why is this safe" lands on. It has to
+  // agree with "How to run it" further down the same file, or the doc
+  // contradicts itself and criterion 1 is not met.
+  const doc = fs.readFileSync(DOC, 'utf8');
+  const bullet = doc.slice(doc.indexOf('- **Every TASK is built in its own worktree'), doc.indexOf('- **Every build passes the full gate set'));
+  assert.ok(bullet.length > 50, 'the rewritten bullet must be findable');
+  assert.match(bullet, /per-task folder that matters/i, 'it names what actually does the work');
+  assert.match(bullet, /started anywhere/i, 'and agrees with How to run it');
 });

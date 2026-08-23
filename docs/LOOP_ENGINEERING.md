@@ -440,9 +440,13 @@ is different, so the loops have guardrails baked in:
   conflict. It exists because on 2026-08-20 three tickets you had already
   approved sat unmerged for hours waiting for a human to notice: the
   checkpoint was doing its job, the delay after it was pure friction.
-- **Every loop runs in its own worktree.** Two agents in one folder clobber
-  each other's files — the single most common way this repo breaks. The build
-  skill creates a fresh worktree per task automatically.
+- **Every TASK is built in its own worktree**, created automatically — that is
+  what keeps two builds off each other's files, the single most common way this
+  repo breaks. It is the per-task folder that matters, not where the loop
+  session itself was started: the loops never edit the folder they run in, so
+  they can be started anywhere (see "How to run it"). This bullet used to say
+  "every loop runs in its own worktree", which is where the contradiction
+  described in that section came from.
 - **Every build passes the full gate set before a PR opens** — `typecheck`,
   the builder tests, the conventions check, the syntax check, and the rebuild
   command for any generated file. A task that can't pass gets marked

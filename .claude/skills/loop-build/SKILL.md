@@ -170,6 +170,7 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
 
    ```bash
    MAIN="$(node "$(git rev-parse --show-toplevel)/scripts/lib/main_checkout.mjs")" && \
+     [ -n "$MAIN" ] || { echo "main checkout came back empty — do not build"; exit 1; } && \
      REPO="$(node -e "console.log(require('$MAIN/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
      [ -n "$REPO" ] || { echo "repoHome returned empty — do not build"; exit 1; } && \
      git -C "$REPO" fetch origin --quiet && \

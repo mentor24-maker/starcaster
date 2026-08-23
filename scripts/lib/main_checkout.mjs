@@ -13,6 +13,8 @@
 // checkout; in the main checkout it points at that checkout's own `.git`.
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { realpathSync } from 'node:fs';
 
 export function mainCheckoutDir(fallbackDir) {
   try {
@@ -39,6 +41,29 @@ export function mainCheckoutDir(fallbackDir) {
 // as well, which is the bug: it means "the folder I am in", so a loop started
 // inside a worktree nested its per-task worktrees inside that one. Two
 // spellings of "where is the main checkout" would drift apart, so there is one.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// "Was this file RUN, or imported?" — and there are two separate ways to get
+// that comparison wrong, both of which make this block silently not run. The
+// caller then gets an empty string and dies further down naming nothing
+// useful; it fails closed rather than building in the wrong place, but a guard
+// whose failure mode is a blank answer is worth spelling correctly.
+//
+//   1. A hand-built `file://${argv[1]}` does no percent-encoding, so any path
+//      containing a space never matches.
+//   2. `import.meta.url` is the REAL path; `argv[1]` is the path as typed. On
+//      macOS `/tmp` is a symlink to `/private/tmp`, so running this from
+//      anywhere under /tmp compares two spellings of the same file.
+//
+// Fixing only the first still fails under /tmp — measured, not assumed.
+function isRunDirectly() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false; // the entry path vanished; not our file
+  }
+}
+
+if (isRunDirectly()) {
   process.stdout.write(`${mainCheckoutDir(process.cwd())}\n`);
 }
