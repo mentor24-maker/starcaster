@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — Every shared block now says what it is (#PR)
+## 2026-08-22 — Every shared block now says what it is (#387)
 
 The Builder lets one section be shared across many pages: you build a menu
 banner once, and every page that uses it follows along. The trouble was that
