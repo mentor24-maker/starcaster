@@ -56,6 +56,7 @@ import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
 import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
+import taskRepo from './builder/taskRepo.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
 const { mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker } = mergeOnComment;
 const {
@@ -63,6 +64,7 @@ const {
   readyToLaunchGate, isReadyToLaunch,
 } = loopTrail;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
+const { resolveTaskRepo } = taskRepo;
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -180,7 +182,8 @@ function usage(code = 2) {
   console.error('                                             same --operator-asked rule as `task` for urgent');
   console.error('  chat --channel <id> --body-file <file|->');
   console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
-  console.error('                                             id <TAB> status <TAB> priority <TAB> created <TAB> name');
+  console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name');
+  console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
   console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
@@ -553,6 +556,18 @@ if (cmd === 'whoami') {
   console.log(`  status:      ${t.status?.status}`);
   console.log(`  priority:    ${t.priority?.priority ?? '(none)'}`);
   console.log(`  description: ${chars} characters`);
+  // Tags are load-bearing now (loop-spec routes a task to its repo by a
+  // repo:<name> tag) and a dropped one reads as starcaster and looks fine —
+  // so verify they landed, same discipline as the body/status read-back.
+  if (tags && tags.length) {
+    const landed = new Set((t.tags || []).map((x) => String(x.name || '').toLowerCase()));
+    const missing = tags.filter((want) => !landed.has(want.toLowerCase()));
+    console.log(`  tags:        ${(t.tags || []).map((x) => x.name).join(', ') || '(none)'}`);
+    if (missing.length) {
+      console.error(`\n  TAGS DID NOT STICK: asked for [${missing.join(', ')}] — a repo:<name> tag dropped here routes the task to the wrong repo.`);
+      process.exit(1);
+    }
+  }
   if (chars === 0) {
     console.error('\n  BODY IS EMPTY — the description did not save. Task exists but is a shell.');
     process.exit(1);
@@ -588,7 +603,13 @@ if (cmd === 'whoami') {
     || Number(a.date_created) - Number(b.date_created));
   for (const t of wanted) {
     const created = new Date(Number(t.date_created)).toISOString().slice(0, 10);
-    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', created, t.name].join('\t'));
+    // The repo a task declares (Charter: a task declares its repo). A loop
+    // reads this to decide WHICH checkout to build in — '?<name>' marks a tag
+    // that resolves to nothing known, so the loop escalates rather than
+    // building it in the wrong place.
+    const r = resolveTaskRepo(t.tags);
+    const repoCol = r.action === 'escalate' ? `?${r.repo ?? 'ambiguous'}` : r.repo;
+    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name].join('\t'));
   }
   console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
   if (res) reportLimits(res);
@@ -605,6 +626,8 @@ if (cmd === 'whoami') {
   console.log(`priority: ${t.priority?.priority ?? 'none'}`);
   console.log(`assigned: ${assigneeNames(t)}`);
   console.log(`list:     ${t.list?.name} (${t.list?.id})`);
+  const r = resolveTaskRepo(t.tags);
+  console.log(`repo:     ${r.action === 'escalate' ? `ESCALATE — ${r.reason}` : `${r.repo} (${r.reason})`}`);
   console.log(`url:      ${t.url}`);
   console.log('---');
   console.log(t.markdown_description || t.description || '(no body)');
