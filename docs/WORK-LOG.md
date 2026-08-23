@@ -14,6 +14,34 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The always-on Mac Mini is no longer a blind spot (#400)
+
+There is a command here whose job is to ask "does the written-down map of my
+machines still match reality?" It had a gap: it would prove the Mac Mini was
+awake and reachable, and then decline to check anything actually living on it,
+reporting those things as "cannot tell" rather than checking them.
+
+Saying "cannot tell" instead of "fine" is the right instinct and it stays. But
+once the Mini has answered the door, we can look — and the first thing that
+turned up hiding in that gap was a container runtime that had been fatally
+broken since the day the Mini was set up, with nothing able to report it. The
+gap was also set to widen, since every new job the Mini takes on became one
+more thing nobody could verify.
+
+Now, when a machine is reachable, the checks for things living there run there.
+They ask exactly the same questions as before; only the location changes. Three
+rules keep it honest: it knocks once per machine rather than reconnecting for
+every item; a sleeping or closed machine is reported as "could not check" in
+the words it always used and never as a problem; and — the important one —
+"the Mini is asleep" and "colima is installed but will not start" are told
+apart, so only the second one raises an alarm.
+
+Proving this normally takes two machines, and the machine it was built on can
+only reach the other one in one direction. So it is covered by tests that stand
+in a pretend second machine, exercising both directions the work called for:
+awake-and-broken must raise an alarm, asleep must not. Both halves were then
+broken on purpose to confirm the tests genuinely catch it.
+
 ## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
 
 Until today, if a piece of work changed how a page *looks*, the only way to
