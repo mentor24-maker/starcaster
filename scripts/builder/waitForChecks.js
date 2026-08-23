@@ -127,7 +127,16 @@ function waitForChecks({
       if (!nudged && typeof nudge === 'function') {
         let pushed = false;
         try {
-          pushed = nudge() !== false;
+          // Boolean(), not `!== false`. The contract above says a nudge returns
+          // FALSY when the push could not be made, and `!== false` honours only
+          // one of the falsy values -- a nudge that returns undefined (an
+          // ordinary `function nudge() { ... }` with no return, which is what a
+          // future caller writes by accident) would be recorded as a successful
+          // push. Ship would then tell the operator to go check whether Actions
+          // is enabled, about a push that never happened. Ship's own nudge
+          // returns explicit booleans, so nothing is broken today; this is a
+          // trap laid for the next caller.
+          pushed = Boolean(nudge());
         } catch (_) {
           pushed = false;
         }

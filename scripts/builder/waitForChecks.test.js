@@ -155,10 +155,41 @@ test('no nudge available → the old behaviour, unchanged', () => {
 });
 
 test('a nudge that fails or throws stops right there — it never reads as success', () => {
-  for (const nudge of [() => false, () => { throw new Error('push rejected'); }]) {
+  // EVERY falsy return, not just `false`. The contract is "return falsy (or
+  // throw) if the push could not be made", and the check used to be
+  // `nudge() !== false`, which honoured exactly one of those values. A nudge
+  // written as an ordinary `function nudge() { ...; }` with no return statement
+  // — the shape a future caller writes by accident — came back `undefined` and
+  // was recorded as a SUCCESSFUL push, so ship would tell the operator to go
+  // check whether Actions is enabled about a push that never happened.
+  const failures = [
+    () => false,
+    () => undefined,
+    () => { /* no return at all, which is the accident */ },
+    () => null,
+    () => 0,
+    () => '',
+    () => { throw new Error('push rejected'); },
+  ];
+  for (const nudge of failures) {
     const { outcome } = harness([none], { appearGraceMs: 60 * 1000, pollIntervalMs: 20 * 1000, nudge });
     assert.equal(outcome.outcome, 'never_appeared');
     assert.equal(outcome.nudged, false, 'a failed push must not be reported as nudged');
+  }
+});
+
+test('a nudge that reports success IS recorded as a push', () => {
+  // The other half of the boundary: tightening the falsy check must not make
+  // every nudge read as a failure. A truthy return still counts.
+  for (const nudge of [() => true, () => 'pushed', () => 1]) {
+    const { outcome } = harness([none], {
+      appearGraceMs: 60 * 1000,
+      nudgeGraceMs: 60 * 1000,
+      pollIntervalMs: 20 * 1000,
+      nudge,
+    });
+    assert.equal(outcome.outcome, 'never_appeared');
+    assert.equal(outcome.nudged, true, 'a push that WAS made must be reported as nudged');
   }
 });
 

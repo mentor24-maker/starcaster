@@ -55,6 +55,15 @@ npm run clickup -- describe --task <id> --body-file -                        # R
 
 ## The two columns — which one you are writing to
 
+**`describe` REPLACES the description — it does not append.** The spec and the
+acceptance criteria live there, and a build pass that writes its outcome with
+`describe` destroys the very thing the next reviewer checks the work against.
+That happened on 86bbjv61n (2026-08-23): the reviewer had to reconstruct the
+acceptance criteria from the outcome writeup that had overwritten them. **An
+outcome report is a `comment`.** Reach for `describe` only to change what the
+task IS — narrowing a scope the operator sliced, correcting a spec — and when
+you do, keep the spec above whatever you add.
+
 ClickUp shows the description on the **left**, wide, and comments on the
 **right**, narrow. Detail goes left. The right column carries the PR URL and the
 operator card, nothing else.
