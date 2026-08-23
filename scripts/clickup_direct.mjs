@@ -18,6 +18,15 @@
  * comments. The rules live in scripts/builder/busRelayPlan.js (tested);
  * this file is only the plumbing that carries them out.
  *
+ * Since 2026-08-21 (task 86bbjd5nn) it does the same for the other end: a
+ * comment on a "ready to launch" ticket that is EXACTLY a merge command,
+ * from the operator's own user id, merges the PR — after checking that
+ * loop-review passed it, the PR is open, its checks are green and it does
+ * not conflict. That is not a loop authorizing its own merge: the
+ * authorization is his, and this is only the hour of waiting removed. The
+ * decisions live in scripts/builder/mergeOnComment.js (tested, every refusal
+ * path included); runMergeStep below is the plumbing.
+ *
  * WHY THIS EXISTS (2026-08-17, extended 2026-08-18). The connector enforces a
  * rolling budget shared by every agent session at once. When it is spent,
  * requests fail with junk wait times ("NaN minutes", "207 minutes"), which
@@ -41,8 +50,19 @@
 
 import { readFileSync } from 'node:fs';
 import { writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import busRelayPlan from './builder/busRelayPlan.js';
-const { defaultWatches, handbackTarget } = busRelayPlan;
+import mergeOnComment from './builder/mergeOnComment.js';
+import loopTrail from './builder/loopTrail.js';
+import operatorCard from './builder/operatorCard.js';
+import nodeRoles from '../lib/nodeRoles.js';
+const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
+const { mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker } = mergeOnComment;
+const {
+  prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
+  readyToLaunchGate, isReadyToLaunch,
+} = loopTrail;
+const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -67,6 +87,19 @@ const BUS_RELAY_OPEN_STATUSES = ['pending response', 'responding'];
 // "already relayed" — checked by prefix, not just presence-of-any-reply, so
 // a human reply to Dane's comment can never be mistaken for our own marker.
 const BUS_RELAY_MARKER = '[bus-relay]';
+// The merge path's OWN dedup marker, separate from the relay's on purpose.
+// The relay marks a comment the moment it reaches the bus; the merge path
+// must only mark a comment once it has reached an answer (merged, handed to
+// a human, or refused with a reason on the ticket). "Checks are still
+// running" writes no marker, so the next hourly pass picks the same
+// authorization up instead of losing it.
+//
+// Not every marker is final. Since task 86bbjt18r a REFUSAL marker records
+// its reason and is re-decided on every later pass, so an approval refused
+// for a reason that has since been fixed goes through without the operator
+// having to say "merge" a second time. MERGE_MARKER and the parser that
+// reads it back both live in mergeOnComment.js — imported above, never
+// re-declared here, so the shape cannot drift between writer and reader.
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -155,14 +188,38 @@ function usage(code = 2) {
   console.error('                                             machine statuses auto-clear; --if-status makes it a safe claim;');
   console.error('                                             status AND assignees verified from the write response');
   console.error('  comment --task <id> --body-file <file|->   add a comment, verified by reading the comments back');
+  console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
+  console.error('                                             record the PR on the ticket in the ONE shape the merge step');
+  console.error('                                             can read. Refuses first if the PR body carries no link back');
+  console.error('                                             to the ticket, then verifies the comment by parsing it back.');
+  console.error('  verdict --task <id> --pass|--fail [--body-file <file|->]');
+  console.error('                                             record loop-review\'s verdict in the ONE shape the merge step');
+  console.error('                                             and the Ready-to-launch gate can read, verified by read-back.');
+  console.error('                                             A ticket cannot reach Ready to launch without a PASS on it.');
+  console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
+  console.error('                                             long detail belongs. Verified by reading it back.');
+  console.error('  ask --task <id> --body-file <file|-> [--status "Needs your input"|"Ready to launch"] [--no-move]');
+  console.error('                                             hand the ticket to the operator: post an operator card, then');
+  console.error('                                             move the status (he is auto-assigned). --no-move posts the');
+  console.error('                                             card and leaves the status alone. The card body uses');
+  console.error(`                                             @@ASKED / @@WHEN / @@CONTEXT / @@NEEDED; @@CONTEXT must be`);
+  console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. Checked before anything is sent.`);
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
-  console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run]');
+  console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run] [--no-merge]');
   console.error('                                             relay the operator\'s new comments on open tasks to the bus.');
   console.error('                                             With no flags it watches Agent Response (notify-only) AND the');
   console.error('                                             Loop Queue: an answer on "needs your input" hands the ticket');
-  console.error('                                             back to Queued; "ready to launch" is notify-only (it waits on');
-  console.error('                                             a merge, not a reply). --list/--statuses = that one list,');
-  console.error('                                             notify-only; --dry-run prints without posting or moving');
+  console.error('                                             back to Queued; on "ready to launch" a comment that is exactly');
+  console.error(`                                             a merge command (${MERGE_PHRASES.join(' / ')}) from the`);
+  console.error('                                             operator MERGES the PR — but only if loop-review passed it,');
+  console.error('                                             the PR is open, green and conflict-free; then the ticket goes');
+  console.error('                                             Live. Conflicts are handed to a human, never resolved here.');
+  console.error('                                             --list/--statuses = that one list, notify-only and no merging;');
+  console.error('                                             --no-merge disables merging everywhere; --dry-run reads GitHub');
+  console.error('                                             and ClickUp and prints the decision, writing nothing at all;');
+  console.error('                                             --only-task <id> confines the whole pass to one ticket.');
+  console.error('                                             ONE machine relays (lib/nodeRoles.js); on any other it');
+  console.error('                                             says so and exits 0. npm run node:whoami names this one');
   console.error('  task-open --task <id>                      exit 0 if the task is still open (status.type), 1 if closed/done');
   console.error('                                             or gone — used by `npm run thread`/`tidy` (Task-closes-thread)');
   process.exit(code);
@@ -196,6 +253,244 @@ async function fetchAllTasks(list) {
 
 function assigneeNames(t) {
   return (t.assignees || []).map((a) => `${a.username} (${a.id})`).join(', ') || '(nobody)';
+}
+
+/** Run `gh` and report honestly. gh carries its OWN GitHub credentials; no
+ *  ClickUp token is ever passed to it, and nothing here prints either. */
+function gh(args) {
+  const out = spawnSync('gh', args, { encoding: 'utf8' });
+  if (out.error) {
+    const why = out.error.code === 'ENOENT'
+      ? 'the `gh` command is not installed on this machine'
+      : String(out.error.message);
+    return { ok: false, stdout: '', stderr: why };
+  }
+  return {
+    ok: out.status === 0,
+    stdout: String(out.stdout || ''),
+    stderr: String(out.stderr || out.stdout || '').trim(),
+  };
+}
+
+/** Post to the party line. Returns ok/why so a caller can report a failure
+ *  rather than assume the operator was told. */
+async function postToBus(channel, content) {
+  const out = await call('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`, {
+    type: 'message', content, content_format: 'text/md',
+  });
+  return { ok: out.res.ok, why: out.res.ok ? '' : `HTTP ${out.res.status}` };
+}
+
+/** Write the merge path's dedup marker as a threaded reply on the operator's
+ *  own comment, and verify it stuck — an unverified marker means the next
+ *  pass may act on the same authorization again, which must be reported, not
+ *  assumed away (DOCTRINE 3.10). */
+async function markMergeHandled(commentId, task, unchecked, what) {
+  // `what` carries the KIND as well as the words: a string starting
+  // "refused:" parses back as a re-decidable refusal, anything else as
+  // terminal. See mergeOnComment.parseMergeMarker for the format.
+  const text = `${MERGE_MARKER} ${what} — ${new Date().toISOString()}`;
+  const out = await call('POST', `/api/v2/comment/${commentId}/reply`, { comment_text: text });
+  if (!out.res.ok) {
+    unchecked.push(`${task.id} comment ${commentId}: acted on the merge command (${what}) but could not write the dedup marker — the NEXT pass will see this authorization as unhandled`);
+    return;
+  }
+  const verify = await call('GET', `/api/v2/comment/${commentId}/reply`);
+  const stuck = verify.res.ok && (verify.json.comments || verify.json.replies || [])
+    .some((r) => (r.comment_text || '').startsWith(MERGE_MARKER));
+  if (!stuck) {
+    unchecked.push(`${task.id} comment ${commentId}: merge marker did not verify — the NEXT pass may act on this authorization again`);
+  }
+}
+
+/**
+ * The merge path: the operator commented "merge" on a Ready-to-launch ticket
+ * and this pass is his hands (task 86bbjd5nn). Every decision that can be
+ * made without the network is made in scripts/builder/mergeOnComment.js and
+ * tested there; this function is only the plumbing that carries one out.
+ *
+ * Contract with the caller: it returns a small outcome record, and pushes any
+ * step it could not verify onto `unchecked` (DOCTRINE 3.11). It writes the
+ * MERGE_MARKER only on a TERMINAL outcome — merged, or refused with the
+ * reason on the ticket — so "checks are still running" is retried on the next
+ * pass instead of being silently lost.
+ */
+async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked }) {
+  const decision = mergeDecision({
+    status: task.status?.status,
+    comments,
+    operatorId: OPERATOR_ID,
+    handled: mergeHandled,
+    refused: mergeRefused,
+  });
+  if (decision.act === 'ignore') return { outcome: 'none' };
+
+  const label = `"${task.name}" (${task.id})`;
+
+  // Terminal answer: say why on the ticket and on the bus, then mark the
+  // authorizing comment handled so the same refusal is never posted twice.
+  const refuse = async (why, plainEnglish) => {
+    console.error(`  MERGE REFUSED on ${label}: ${why}`);
+    if (dryRun) return { outcome: 'would-refuse', reason: why };
+    const body = `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n**Your approval is still standing — you do not have to say "merge" again.** Every later pass re-checks this ticket, so the moment the reason above is dealt with it goes through on its own. You will only hear from this step again if the answer changes.\n\n(Automatic: your comment ${decision.commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`;
+    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body });
+    if (!cOut.res.ok) {
+      unchecked.push(`${task.id}: merge refused (${why}) but the explanation comment FAILED to post — the operator has not been told`);
+      return { outcome: 'refused', reason: why };
+    }
+    const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`);
+    if (!bus.ok) unchecked.push(`${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})`);
+    await markMergeHandled(decision.commentId, task, unchecked, `refused: ${why}`);
+    return { outcome: 'refused', reason: why };
+  };
+
+  if (decision.act === 'refuse') {
+    return refuse(decision.reason, 'This ticket is not in a state a script may merge from.');
+  }
+
+  const pr = decision.pr;
+  const repo = `${pr.owner}/${pr.repo}`;
+  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,headRefName,title,url,statusCheckRollup';
+  const view = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
+  if (!view.ok) {
+    // A read that failed is not a red PR — it is a PR nobody checked. Say so
+    // and try again next pass rather than guessing in either direction.
+    unchecked.push(`${task.id}: could not read PR #${pr.number} from GitHub (${view.stderr.slice(0, 200)}) — merge authorization still pending`);
+    console.error(`  MERGE WAITING on ${label}: could not read PR #${pr.number}`);
+    return { outcome: 'waiting', reason: 'could not read the PR' };
+  }
+  let prJson;
+  try {
+    prJson = JSON.parse(view.stdout);
+  } catch {
+    unchecked.push(`${task.id}: gh returned unparseable JSON for PR #${pr.number} — merge authorization still pending`);
+    return { outcome: 'waiting', reason: 'unparseable gh output' };
+  }
+
+  let gate = githubGate(prJson);
+
+  // Behind main: catch the branch up, then stop for this pass. The push
+  // restarts CI, so merging on the checks just read would be merging on a
+  // result that no longer describes the branch.
+  if (gate.action === 'update-branch') {
+    if (dryRun) {
+      console.error(`  DRY RUN — would update PR #${pr.number} from main, then wait for CI`);
+      return { outcome: 'would-update-branch', pr: pr.number };
+    }
+    const upd = gh(['pr', 'update-branch', String(pr.number), '--repo', repo]);
+    if (!upd.ok) {
+      // update-branch fails on a genuine conflict too — treat that as the
+      // conflict hand-off rather than retrying it forever.
+      gate = { action: 'conflict', reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
+    } else {
+      console.error(`  MERGE WAITING on ${label}: branch updated from main, CI restarting`);
+      return { outcome: 'waiting', reason: 'branch updated from main; waiting for CI' };
+    }
+  }
+
+  // A script never resolves a merge conflict (task 86bbjd5nn, binding).
+  if (gate.action === 'conflict') {
+    console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}`);
+    if (dryRun) return { outcome: 'would-hand-off', reason: gate.reason };
+    const body = `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. A session will merge main into the branch, sort out the overlap and re-run the checks — then your merge still stands and this goes through.\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${decision.commentId}.)`;
+    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body });
+    if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
+    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and re-run CI. Ticket left in Ready to launch.\n\n${pr.url}`);
+    if (!bus.ok) unchecked.push(`${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})`);
+    await markMergeHandled(decision.commentId, task, unchecked, `conflict hand-off on PR #${pr.number}`);
+    return { outcome: 'handed-off', reason: gate.reason };
+  }
+
+  // Not terminal: no marker, no comment, no noise. The next pass looks again.
+  if (gate.action === 'wait') {
+    console.error(`  MERGE WAITING on ${label}: ${gate.reason}`);
+    return { outcome: 'waiting', reason: gate.reason };
+  }
+
+  if (gate.action === 'refuse') {
+    return refuse(gate.reason, `PR #${pr.number} is not in a state that can be merged safely.`);
+  }
+
+  if (dryRun) {
+    console.error(`  DRY RUN — would merge PR #${pr.number} (${gate.reason}) and set ${label} to Live`);
+    return { outcome: 'would-merge', pr: pr.number };
+  }
+
+  // --squash to match every other merge in this repo; never --admin and
+  // never a force of any kind (DOCTRINE 6.6 — a convenience command does not
+  // get to route around a standing decision).
+  const merged = gh(['pr', 'merge', String(pr.number), '--repo', repo, '--squash', '--delete-branch']);
+  if (!merged.ok) {
+    return refuse(`the merge command itself failed (${merged.stderr.slice(0, 300)})`, `PR #${pr.number} could not be merged.`);
+  }
+  const mergedAt = new Date().toISOString();
+  console.error(`  MERGED PR #${pr.number} for ${label}`);
+
+  // Marker first, now that the irreversible thing has happened: if the next
+  // two writes fail, the worst case is a ticket that needs a hand, not a
+  // second merge attempt against an already-merged PR.
+  await markMergeHandled(decision.commentId, task, unchecked, `merged PR #${pr.number} at ${mergedAt}`);
+
+  const record = `Merged: PR #${pr.number} (${pr.url}) squash-merged into main at ${mergedAt}, merged on operator comment ${decision.commentId}. Checks were green and the branch was up to date at merge time; the branch has been deleted. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`;
+  const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: record });
+  if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} MERGED, but the record comment failed to post`);
+
+  // Live is a closed status: the ticket leaves the open view here. Assignees
+  // clear in the same write — the handoff rule, same as every other machine
+  // status (loop-build SKILL.md, "Assignment is the handoff signal").
+  const rem = (task.assignees || []).map((a) => a.id);
+  const moveOut = await call('PUT', `/api/v2/task/${task.id}`, { status: 'Live', assignees: { add: [], rem } });
+  if (!moveOut.res.ok) {
+    unchecked.push(`${task.id}: PR #${pr.number} MERGED but the ticket did NOT move to Live — move it by hand`);
+  } else {
+    const now = moveOut.json.status?.status ?? '?';
+    if (now.toLowerCase() !== 'live') {
+      unchecked.push(`${task.id}: PR #${pr.number} MERGED but the move to Live did not stick (came back "${now}")`);
+    } else {
+      const leftover = (moveOut.json.assignees || []).map((a) => a.id);
+      if (leftover.length) unchecked.push(`${task.id}: moved to Live but assignees did not clear ([${leftover.join(', ')}])`);
+    }
+  }
+
+  const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGED on Dane's say-so: ${label} — PR #${pr.number} squash-merged into main, ticket set to Live. main auto-deploys.\n\n${pr.url}`);
+  if (!bus.ok) unchecked.push(`${task.id}: PR #${pr.number} merged and ticket moved, but the bus post failed (${bus.why})`);
+
+  return { outcome: 'merged', pr: pr.number };
+}
+
+/**
+ * The `Ready to launch` gate (task 86bbjt18r). That status is the operator's
+ * "safe to merge" signal, and on 2026-08-22 two tickets reached it with no
+ * passing review recorded on them at all — he approved both in good faith.
+ * Refusing here, in the one place every loop's status write passes through,
+ * closes the path rather than adding another rule to a skill file.
+ *
+ * Returns true when the caller should stop. Runs BEFORE any write, so a
+ * refusal leaves the ticket exactly where it was.
+ */
+async function readyToLaunchRefused(task, status) {
+  if (!isReadyToLaunch(status)) return false;
+  if (flag('operator-asked')) {
+    console.error('Review gate bypassed on your say-so (--operator-asked). Recorded in this transcript.');
+    return false;
+  }
+  const out = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!out.res.ok) {
+    // Could not check is not the same as passed (DOCTRINE 3.11).
+    console.error('\nCould not read this ticket\'s comments, so the review check could NOT be run.');
+    console.error('Nothing was moved. Try again, or pass --operator-asked if you have checked by eye.\n');
+    return true;
+  }
+  const gate = readyToLaunchGate(out.json.comments || []);
+  if (gate.ok) return false;
+  console.error(`\n"Ready to launch" is the operator's safe-to-merge signal, and ${gate.why}.\n`);
+  console.error('Nothing was moved — the ticket is where you left it.\n');
+  console.error('If review really did pass, record the verdict first, then move it:');
+  console.error(`  npm run clickup -- verdict --task ${task} --pass --body-file -\n`);
+  console.error('If it did not pass, it belongs back in Queued with notes, not in his inbox.');
+  console.error('To override anyway, add --operator-asked — that flag is your written claim');
+  console.error('that a human checked this, visible in the transcript.\n');
+  return true;
 }
 
 const cmd = process.argv[2];
@@ -343,6 +638,32 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
+  // Handing a ticket to the operator means saying what you need from him.
+  // Before 2026-08-22 those were two separate commands, so the status could
+  // move on its own and routinely did — Sync 7/7 sat in his inbox for a day
+  // wearing a red "Needs your input" badge with no answerable question
+  // anywhere on it. `ask` does both together; this refuses the half of it
+  // that produces that state. Runs BEFORE any network call: a refusal must
+  // leave the ticket exactly where it was.
+  if (OPERATOR_STATUSES.includes(status.toLowerCase()) && !flag('no-card')) {
+    console.error(`\n"${status}" is a handoff to the operator, not just a status.\n`);
+    console.error('Use `ask` instead — it posts the operator card and moves the status together:');
+    console.error(`  npm run clickup -- ask --task ${task} --status "${status}" --body-file -\n`);
+    console.error('The card body is four sections, and the check runs before anything is sent:');
+    console.error('  @@ASKED    his own words that caused this ticket, verbatim');
+    console.error('  @@WHEN     optional — when and where he said it');
+    console.error(`  @@CONTEXT  the problem and the fix in plain English, ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words`);
+    console.error('  @@NEEDED   the specific ask ("Nothing right now" is fine — say it out loud)\n');
+    console.error('If this really is a status move with no ask attached, pass --no-card. That flag is');
+    console.error('your written claim that a card is not owed here, visible in the transcript.\n');
+    process.exit(2);
+  }
+
+  // A ticket may not reach "Ready to launch" without a passing review on it.
+  // `status --no-card` is the other door into that status, so the gate has to
+  // stand on both (task 86bbjt18r).
+  if (await readyToLaunchRefused(task, status)) process.exit(2);
+
   // One read up front: it powers the --if-status claim guard, the
   // clear-assignees list, and the was→now line in the report.
   const before = await call('GET', `/api/v2/task/${task}`);
@@ -462,6 +783,279 @@ if (cmd === 'whoami') {
   console.log(`Comment ${newId} added to task ${task} (${found.comment_text.length} characters, verified by reading it back).`);
   reportLimits(check.res);
 
+} else if (cmd === 'pr-opened') {
+  // The build loop's audit trail, made into a command (task 86bbjt18r).
+  // Until now step 7 of loop-build said "add the PR URL as a ClickUp
+  // comment" in prose, and on 2026-08-22 four Ready-to-launch tickets had no
+  // such comment at all — the merge step then correctly refused to guess
+  // which PR they meant, and the approvals went quiet. Prose is followed
+  // most of the time; a command is followed every time, and this one fails
+  // loudly rather than leaving a trail nothing can read.
+  const task = arg('task'), prArg = arg('pr');
+  if (!task || !prArg) usage();
+
+  const before = await call('GET', `/api/v2/task/${task}`);
+  if (!before.res.ok) die('read the task', before);
+  const taskUrl = before.json.url || `https://app.clickup.com/t/${task}`;
+
+  // Accept a full URL or a bare number with --repo, because both are what a
+  // session actually has to hand after `gh pr create`.
+  const urlMatch = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/.exec(prArg.trim());
+  let repo = arg('repo'), prNumber, prUrl;
+  if (urlMatch) {
+    repo = repo || `${urlMatch[1]}/${urlMatch[2]}`;
+    prNumber = Number(urlMatch[3]);
+    prUrl = `https://github.com/${repo}/pull/${prNumber}`;
+  } else if (/^\d+$/.test(prArg.trim())) {
+    if (!repo) {
+      console.error('--pr got a bare number, so --repo owner/name is needed to know which repository.');
+      process.exit(2);
+    }
+    prNumber = Number(prArg.trim());
+    prUrl = `https://github.com/${repo}/pull/${prNumber}`;
+  } else {
+    console.error(`--pr got "${prArg}", which is neither a GitHub pull-request URL nor a number.`);
+    process.exit(2);
+  }
+
+  // The link the OTHER way round. Two of those four PRs also shipped with no
+  // ClickUp link in the body, so ticket and PR could only be matched by
+  // reading titles. Checked before the comment is posted: a PR that cannot be
+  // traced back to its ticket is not a finished hand-off, and fixing the body
+  // afterwards is a step nobody remembers.
+  const view = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'body,url,title,number']);
+  if (!view.ok) {
+    console.error(`Could not read PR #${prNumber} from ${repo}: ${view.stderr.slice(0, 300)}`);
+    console.error('Nothing was written to the ticket.');
+    process.exit(1);
+  }
+  let prJson;
+  try { prJson = JSON.parse(view.stdout); } catch {
+    console.error(`gh returned output that is not JSON for PR #${prNumber}. Nothing was written.`);
+    process.exit(1);
+  }
+  if (!prBodyCarriesTicket(prJson.body, task, taskUrl)) {
+    console.error(`\nPR #${prNumber} has no link back to this ticket in its body, so nothing was written.`);
+    console.error('The trail has to run both ways: the ticket names the PR, the PR names the ticket.');
+    console.error('Otherwise the only way to pair them later is by reading titles and guessing.\n');
+    console.error('Add the line to the PR body and run this again:');
+    console.error(`  ClickUp: ${taskUrl}\n`);
+    process.exit(4);
+  }
+
+  const text = prOpenedComment(prUrl, arg('body-file') ? readBody(arg('body-file')) : '');
+  const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
+  if (!out.res.ok) die('post the "PR opened" comment', out);
+
+  // Read it back and parse it with the SAME function the merge step uses.
+  // "The write returned 200" is not the question; "can the merge step find
+  // this PR tomorrow" is (DOCTRINE 3.10).
+  const check = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!check.res.ok) {
+    console.error(`WARNING: the comment posted but reading it back FAILED, so the trail is UNVERIFIED.`);
+    console.error('Check the ticket by eye before treating this task as handed off.');
+    process.exit(1);
+  }
+  const landed = prTrailLanded(check.json.comments || [], prNumber);
+  if (!landed.ok) {
+    console.error(`\nThe "PR opened" trail did NOT land: ${landed.why}.`);
+    console.error('The merge step will refuse this ticket, and the operator\'s approval will sit');
+    console.error('there doing nothing. Fix the comment by hand before handing this to review.\n');
+    process.exit(1);
+  }
+  console.log(`Task ${task}: PR #${prNumber} recorded (${prUrl}), read back and parsed by the merge step's own reader.`);
+  reportLimits(check.res);
+
+} else if (cmd === 'verdict') {
+  // loop-review's verdict, made into a command for the same reason as
+  // pr-opened (task 86bbjt18r). The merge step has always required a PASS
+  // verdict comment, but nothing ever required loop-review to WRITE one, so
+  // tickets reached Ready to launch with no verdict at all. One shape, one
+  // writer, one reader.
+  const task = arg('task');
+  const passed = flag('pass'), failed = flag('fail');
+  if (!task || passed === failed) {
+    console.error('verdict needs --task <id> and exactly one of --pass or --fail.');
+    process.exit(2);
+  }
+  const note = arg('body-file') ? readBody(arg('body-file')).trim() : '';
+  const text = verdictComment(passed, note);
+  const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
+  if (!out.res.ok) die('post the review verdict', out);
+  const newId = String(out.json.id ?? '');
+
+  const check = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!check.res.ok) {
+    console.error('WARNING: the verdict posted but reading it back FAILED — it is UNVERIFIED.');
+    process.exit(1);
+  }
+  const stored = (check.json.comments || []).find((c) => String(c.id) === newId);
+  if (!stored || !(stored.comment_text || '').trim()) {
+    console.error(`The verdict did NOT land: id ${newId || '(none)'} ${stored ? 'saved empty' : 'not found'}.`);
+    process.exit(1);
+  }
+  // Parse it back through the gate itself, not through a second copy of the
+  // rule — the point of the read-back is to answer "will the gate accept
+  // this", and only the gate can answer that.
+  const gate = readyToLaunchGate(check.json.comments || []);
+  if (passed && !gate.ok) {
+    console.error(`\nThe PASS verdict posted but does NOT read back as a pass: ${gate.why}.`);
+    console.error('Moving this ticket to Ready to launch would be refused. Check the comment by eye.\n');
+    process.exit(1);
+  }
+  if (!passed && gate.ok) {
+    console.error('\nA send-back verdict posted, but the newest verdict on this ticket still reads');
+    console.error('as a PASS. Nothing else was changed — check the ticket by eye.\n');
+    process.exit(1);
+  }
+  console.log(`Task ${task}: verdict ${passed ? 'PASSED' : 'sent back'} recorded as comment ${newId}, verified through the Ready-to-launch gate itself.`);
+  reportLimits(check.res);
+
+} else if (cmd === 'describe') {
+  // The left column. Until 2026-08-22 this script could write a comment but
+  // not a description, so every loop put its reasoning in the narrow
+  // right-hand column and the roomy left one kept a machine-shaped spec.
+  // That is the wrong way round, and it is what stalled Sync 6/7 and 7/7.
+  const task = arg('task'), bodyFile = arg('body-file');
+  if (!task || !bodyFile) usage();
+  const sent = readBody(bodyFile);
+  if (!sent.trim()) {
+    console.error('Refusing to write an empty description — that replaces the whole left column with nothing.');
+    console.error('If you really mean to blank it, do it in the ClickUp UI where you can see what you are erasing.');
+    process.exit(2);
+  }
+
+  // ClickUp deletes blockquote lines from descriptions too, not just comments
+  // (found live 2026-08-22 — the "## Dane asked for" section of the first
+  // rewritten ticket came back with the quoted instruction gone). Refuse
+  // before sending: a partial description is worse than none, because it looks
+  // finished.
+  const quoted = operatorCard.findBlockquoteLines(sent);
+  if (quoted.length) {
+    console.error(`\nThis body uses "> " blockquotes (line ${quoted.join(', ')}), and ClickUp DELETES them.`);
+    console.error('They do not arrive unformatted — they arrive not at all, and the write still returns 200.\n');
+    console.error('Use plain text, **bold**, or a fenced block. A "> " inside a ``` fence is fine.\n');
+    process.exit(2);
+  }
+
+  const out = await call('PUT', `/api/v2/task/${task}`, { markdown_content: sent });
+  if (!out.res.ok) die('set description', out);
+
+  // Read it back. A description write that normalizes to nothing returns a
+  // clean 200 (DOCTRINE 3.10) — and this one replaces the whole field, so a
+  // silent truncation loses the previous text too.
+  const back = await call('GET', `/api/v2/task/${task}?include_markdown_description=true`);
+  if (!back.res.ok) {
+    console.error('WARNING: description written, but reading it back failed — verify by eye before trusting it.');
+    process.exit(1);
+  }
+  const saved = back.json.markdown_description ?? back.json.description ?? '';
+  if (!saved.trim()) {
+    console.error(`Description did NOT land: task ${task} reads back empty. The left column has been wiped.`);
+    console.error('Restore it from your source file before doing anything else.');
+    process.exit(1);
+  }
+  // ClickUp normalizes markdown on save, so an exact match is the wrong test.
+  // A large shortfall is not normalization, it is loss.
+  if (saved.length < sent.trim().length * 0.6) {
+    console.error(`Description looks TRUNCATED: sent ${sent.trim().length} characters, read back ${saved.length}.`);
+    console.error('Open the task and compare before trusting it.');
+    process.exit(1);
+  }
+  console.log(`Task ${task}: description replaced (${sent.trim().length} characters sent, ${saved.length} read back).`);
+  reportLimits(back.res);
+
+} else if (cmd === 'ask') {
+  // The ONE way a loop hands a ticket to the operator. It posts the card and
+  // moves the status together, so the two can never come apart — a status
+  // change with no card is a ticket in his inbox with no stated ask, which
+  // is exactly how Sync 7/7 sat there for a day (2026-08-22).
+  const task = arg('task'), bodyFile = arg('body-file');
+  if (!task || !bodyFile) usage();
+  // --no-move posts the card and leaves the status alone. For a ticket that
+  // stays in a machine status but is still worth explaining — a Queued ticket
+  // whose ask is genuinely "nothing right now" reads far better with a card on
+  // it than with a bare status, and it is not a handoff.
+  const noMove = flag('no-move');
+  const status = arg('status') || 'Needs your input';
+  if (!noMove && !OPERATOR_STATUSES.includes(status.toLowerCase())) {
+    console.error(`\`ask\` hands work to the operator, so --status must be one of: ${OPERATOR_STATUSES.join(', ')}.`);
+    console.error(`Got "${status}". For a machine status use \`status\`, or --no-move to post a card without moving.`);
+    process.exit(2);
+  }
+
+  // A ticket may not reach "Ready to launch" without a passing review on it
+  // (task 86bbjt18r). Checked before the card is posted, so a refusal leaves
+  // no half-done handoff — the same discipline as the card shape check below.
+  if (!noMove && await readyToLaunchRefused(task, status)) process.exit(2);
+
+  // Shape first, network second: a card that fails the check must not leave
+  // a half-done handoff behind.
+  let rendered, card;
+  try {
+    ({ rendered, card } = buildCard(readBody(bodyFile)));
+  } catch (err) {
+    console.error(`\n${err.message}\n`);
+    process.exit(2);
+  }
+
+  const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered });
+  if (!posted.res.ok) die('post the operator card', posted);
+  const cardId = String(posted.json.id ?? '');
+
+  // Read the card back and confirm the operator's own words are in it. This
+  // check is not hypothetical: it is how the blockquote bug was found (see the
+  // note at the top of operatorCard.js). ClickUp returned a healthy 200 and a
+  // long comment with his instruction silently deleted out of the middle.
+  const readBack = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!readBack.res.ok) {
+    console.error(`WARNING: card ${cardId} posted, but reading it back failed — check it by eye.`);
+    process.exit(1);
+  }
+  const stored = (readBack.json.comments || []).find((c) => String(c.id) === cardId);
+  if (!stored || !(stored.comment_text || '').trim()) {
+    console.error(`The card did NOT land: id ${cardId || '(none)'} ${stored ? 'saved empty' : 'not found'}.`);
+    console.error('The status has NOT been moved — the ticket is where you left it.');
+    process.exit(1);
+  }
+  const lost = operatorCard.cardSurvived(card, stored.comment_text);
+  if (lost) {
+    console.error(`\n${lost}\n`);
+    console.error(`Comment ${cardId} is on the task. The status has NOT been moved.`);
+    process.exit(1);
+  }
+
+  if (noMove) {
+    console.log(`Task ${task}: card ${cardId} posted (status untouched, --no-move).`);
+    reportLimits(readBack.res);
+    process.exit(0);
+  }
+
+  const before = await call('GET', `/api/v2/task/${task}`);
+  if (!before.res.ok) die('read task before handoff', before);
+  const was = before.json.status?.status ?? '?';
+
+  const moved = await call('PUT', `/api/v2/task/${task}`, {
+    status,
+    assignees: { add: [OPERATOR_ID], rem: [] },
+  });
+  if (!moved.res.ok) {
+    console.error(`The card posted (comment ${cardId}) but the status did NOT move.`);
+    die('set status', moved);
+  }
+  const now = moved.json.status?.status ?? '?';
+  if (now.toLowerCase() !== status.toLowerCase()) {
+    console.error(`Card posted (comment ${cardId}), but the status did NOT stick: asked "${status}", got "${now}".`);
+    process.exit(1);
+  }
+  if (!(moved.json.assignees || []).some((a) => a.id === OPERATOR_ID)) {
+    console.error(`Card posted and status moved to "${now}", but the operator is NOT assigned.`);
+    console.error('Assignment is how he finds this — the handoff is incomplete until it sticks.');
+    process.exit(1);
+  }
+  console.log(`Task ${task}: card ${cardId} posted, "${was}" -> "${now}", assigned: ${assigneeNames(moved.json)}.`);
+  reportLimits(moved.res);
+
 } else if (cmd === 'lists') {
   // Exists because of 2026-08-18: 90146476303 (the Starcaster SPACE) was
   // written down where a LIST id belonged, and ClickUp answers that mistake
@@ -483,6 +1077,26 @@ if (cmd === 'whoami') {
   reportLimits(folders.res);
 
 } else if (cmd === 'bus-relay') {
+  // Exactly one machine relays. Two of them can both read "this comment has
+  // not been relayed yet" in the same minute and both post it before either
+  // writes its marker back, and the operator sees his own message twice.
+  // Who that machine is lives in lib/nodeRoles.js — the same table db:refresh
+  // and the loop skills read, so nothing here can hold a second opinion.
+  //
+  // Not the owner is a NORMAL outcome for a poller running on a timer, so it
+  // says which machine owns the job and exits 0 rather than failing. But a
+  // machine we cannot IDENTIFY is a different thing entirely: quietly doing
+  // nothing there is how a relay stops relaying for a week with nobody the
+  // wiser, so that one exits loudly (DOCTRINE 3.11).
+  const guard = nodeRoles.checkRole('bus-relay');
+  if (!guard.owned) {
+    console.error(guard.message);
+    console.error(guard.verdict === 'other-node'
+      ? 'bus-relay: 0 relayed, 0 handed back — not this machine\'s job.'
+      : 'bus-relay: nothing was checked, and this is a FAILURE, not a quiet no-op.');
+    process.exit(guard.verdict === 'other-node' ? 0 : 1);
+  }
+
   const channel = arg('channel', BUS_CHANNEL);
   const dryRun = flag('dry-run');
 
@@ -497,10 +1111,24 @@ if (cmd === 'whoami') {
         statuses: (arg('statuses') || BUS_RELAY_OPEN_STATUSES.join(','))
           .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
         handback: {},
+        merge: false,
       }]
     : defaultWatches({ agentResponseList: AGENT_RESPONSE_LIST, loopQueueList: LOOP_QUEUE_LIST });
 
+  // The escape hatch: --no-merge runs the relay exactly as it behaved before
+  // 2026-08-21, notify-only everywhere. Nothing depends on it, but a job that
+  // can perform a merge should have an off switch that is not "edit the code".
+  const mergingAllowed = !flag('no-merge');
+
+  // Scope a pass to ONE ticket. This is how the merge path gets exercised
+  // for real without touching anything else: a fixture ticket, a real run,
+  // real writes, and every other ticket in the list provably untouched
+  // because it was never looked at. Also the first thing anyone will want
+  // when a single ticket misbehaves at 2am.
+  const onlyTask = arg('only-task');
+
   let relayed = 0, skipped = 0, handedBack = 0;
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
@@ -510,7 +1138,9 @@ if (cmd === 'whoami') {
   for (const watch of watches) {
     const { tasks, res: listRes } = await fetchAllTasks(watch.list);
     if (listRes) lastRes = listRes;
-    const open = tasks.filter((t) => watch.statuses.includes((t.status?.status ?? '').toLowerCase()));
+    const open = tasks
+      .filter((t) => watch.statuses.includes((t.status?.status ?? '').toLowerCase()))
+      .filter((t) => !onlyTask || String(t.id) === String(onlyTask));
     console.error(`${watch.label}: ${open.length} open task(s) of ${tasks.length} total in list ${watch.list} (statuses: ${watch.statuses.join(', ')})`);
 
     for (const t of open) {
@@ -523,11 +1153,34 @@ if (cmd === 'whoami') {
       // trigger: only a comment that actually reached the bus counts, so a
       // failed post can never move a ticket its answer never left.
       let fresh = 0;
+      // Merge commands this pass must NOT act on: either terminally acted on
+      // (merged, or handed to a human for a conflict), or unknowable because
+      // the reply read failed. The second case is deliberate — a comment
+      // whose history could not be read is a comment that might already have
+      // merged its PR, and acting on what you could not check is the failure
+      // DOCTRINE 3.11 names.
+      const mergeHandled = new Set();
+      // Commands previously REFUSED, and the reason each refusal gave. These
+      // are re-decided every pass (task 86bbjt18r): a refusal is a snapshot
+      // of a moment, not a verdict on the ticket, and the reason may well
+      // have been fixed since. The recorded reason is what keeps the
+      // re-decide quiet — the same answer twice says nothing new.
+      const mergeRefused = new Map();
 
       for (const c of fromOperator) {
         const repliesOut = await call('GET', `/api/v2/comment/${c.id}/reply`);
-        if (!repliesOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: could not read replies`); continue; }
+        if (!repliesOut.res.ok) {
+          unchecked.push(`${t.id} comment ${c.id}: could not read replies — not relayed, and NOT eligible to merge this pass`);
+          mergeHandled.add(String(c.id));
+          continue;
+        }
         const replies = repliesOut.json.comments || repliesOut.json.replies || [];
+        // The NEWEST merge marker decides: terminal means spent forever,
+        // refused means "look again, and stay quiet only if the same reason
+        // still holds".
+        const marker = latestMergeMarker(replies);
+        if (marker && marker.kind === 'refused') mergeRefused.set(String(c.id), marker.reason);
+        else if (marker) mergeHandled.add(String(c.id));
         const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
         if (already) { skipped++; continue; }
 
@@ -560,6 +1213,24 @@ if (cmd === 'whoami') {
         fresh++;
       }
 
+      // Comment-driven MERGE (task 86bbjd5nn): the other thing an operator
+      // comment can be. Deliberately after the relay, so his words reach the
+      // bus whatever the merge decision turns out to be — and deliberately
+      // NOT gated on `fresh`, because an authorization relayed on an earlier
+      // pass (or one whose bus post failed) is still an authorization. Its
+      // own marker, checked above, is what stops it firing twice.
+      if (mergingAllowed && mergeEnabled(watch)) {
+        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, dryRun, channel, unchecked });
+        if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
+        else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
+        else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
+        else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch') merges.waiting++;
+        // A merged ticket is now Live, which is not a status this watch
+        // handles — skip the handback check rather than acting on a status
+        // this pass itself just changed.
+        if (m.outcome === 'merged') continue;
+      }
+
       // Comment-driven handback (task 86bbh9g7k): a fresh answer from the
       // operator on a "needs your input" ticket releases it back to the
       // machine. His comment is the authorization; no fresh comment, no
@@ -588,7 +1259,10 @@ if (cmd === 'whoami') {
     }
   }
 
-  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was posted or moved)' : ''}`);
+  const mergeLine = mergingAllowed
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks`
+    : ', merging disabled (--no-merge)';
+  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
   if (unchecked.length) {
     console.error('\nCould not fully verify:');
     for (const line of unchecked) console.error(`  - ${line}`);
