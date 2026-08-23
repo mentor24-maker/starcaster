@@ -29,15 +29,21 @@ function defaultWatches({ agentResponseList, loopQueueList }) {
       statuses: ['pending response', 'responding'],
       // Notify-only, as it has been since PR #340.
       handback: {},
+      merge: false,
     },
     {
       list: loopQueueList,
       label: 'Loop Queue',
       statuses: ['needs your input', 'ready to launch'],
       // An answer on "needs your input" returns the ticket to the machine.
-      // "ready to launch" is deliberately absent: that status waits on a
-      // MERGE, not a reply — a comment there is relayed but moves nothing.
+      // "ready to launch" is deliberately absent from the handback table:
+      // that status waits on a MERGE, not a reply, so no comment moves it
+      // by handback. Since 2026-08-21 (task 86bbjd5nn) a comment there CAN
+      // still end the wait — but only by being an explicit merge command
+      // from the operator himself, and only through the merge path below,
+      // which checks the PR is open, reviewed and green first.
       handback: { 'needs your input': 'Queued' },
+      merge: true,
     },
   ];
 }
@@ -52,4 +58,11 @@ function handbackTarget(watch, taskStatus, freshRelayed) {
   return byStatus[String(taskStatus || '').toLowerCase()] || null;
 }
 
-module.exports = { defaultWatches, handbackTarget };
+/** May this watch act on a merge command? Ad-hoc `--list` runs are
+ *  notify-only by construction (see clickup_direct.mjs), so a hand-typed
+ *  list id can never merge anything — same reasoning as handback. */
+function mergeEnabled(watch) {
+  return Boolean(watch && watch.merge);
+}
+
+module.exports = { defaultWatches, handbackTarget, mergeEnabled };
