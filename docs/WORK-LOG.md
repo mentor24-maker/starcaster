@@ -49,6 +49,35 @@ read as "nothing left to do". Every branch and folder it passes over is now
 named, with the reason. All the safety rules are untouched: work you have not
 committed, a folder you are standing in, and anything it cannot confirm are all
 still left strictly alone, and every deletion still writes down how to undo it.
+## 2026-08-23 — Groundwork for downloading a YouTube video, not just reading it (#392)
+
+The Acquire screen can already pull a YouTube video's title, description and
+transcript. What it has never been able to do is keep the video itself — the
+.mp4 and the .mp3. That work was written back in July and then sat on a shelf
+as one large piece: a screen, a download service, a database change and a
+deployment, all tangled together. It has now been split into four smaller
+pieces that can each be finished and checked on their own. This is the first
+of them.
+
+This piece is the plumbing behind the screen, and it deliberately does nothing
+visible yet. It adds the two web addresses the screen will call — one to start
+a download, one to ask how it is going — plus a new entry under Settings >
+APIs where the download service's address and password will eventually go, and
+the database change that will remember where each finished file ended up.
+
+The important part is what happens while the rest is still missing. Asking for
+a download today gets a plain "the media worker is not configured — add its
+URL and shared secret under Settings > APIs" rather than an error page or a
+spinner that never stops. Adding the video's files to an ordinary acquire is
+opt-in, and if that half fails it is reported alongside the title and
+transcript rather than throwing them away — you keep what you already paid
+for. And because the database change has not been run yet, the code treats a
+not-yet-existing column as "cannot save this, carry on" instead of letting it
+break every other thing the video list does.
+
+Still to come: the screen itself, the download service, and then running the
+database change and deploying — that last one needs Dane's hands, because it
+involves a password only he should ever see.
 ## 2026-08-23 — The job that listens for your answers moved to the machine that stays awake (#410)
 
 When you reply on a ticket, a job called the relay is what carries your answer
