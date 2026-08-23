@@ -14,6 +14,30 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — Abandoned bug-report screenshots now clean themselves up (#PR)
+
+When somebody reports a bug on one of your sites, they can attach a screenshot.
+The picture has to be uploaded the moment they pick it, before they press Send,
+because of a size limit on how much can travel in one go. That works — but it
+means anyone who picks a screenshot and then wanders off leaves the picture
+behind: a file sitting on public storage, and a row in the database, that
+nothing will ever look at again. They accumulate, quietly, forever.
+
+There is now a job that collects them. Once a day it looks for screenshots that
+are more than a day old and that no bug report actually points at, and deletes
+the file and the record together. You can also run it by hand and it will show
+you the list without touching anything, so you can see what it is about to do
+before it does it.
+
+The care is all in what it refuses to do. It never deletes a picture some report
+still points at, even one where the "attach" step failed and the screenshot was
+left looking abandoned. If it cannot read the list of reports for any reason, it
+stops entirely and deletes nothing, rather than concluding that everything is
+unwanted. It deletes the file first and the record second, so it can never leave
+a picture on public storage with nothing left to find it by — and if the file
+will not delete, it keeps the record and says so out loud instead of reporting
+a clean run. Anything it could not remove is named individually.
+
 ## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
 
 Until today, if a piece of work changed how a page *looks*, the only way to
