@@ -41,6 +41,79 @@ the thing you are told to read before starting a piece of work, so it is the
 thing that was giving bad advice. A test now builds a throwaway repository with
 one empty branch, one already-shipped branch and one branch with live work in
 it, and fails if the map ever again calls the empty one shipped.
+## 2026-08-22 — Three picture animations that were built but hidden are now on the menu (#369)
+
+The Image module has a dropdown of movements a picture can make — Bounce,
+Spin, Cruise, Tumbleweed. Behind the scenes there were five more that had been
+fully written years ago and simply never added to that list, so the only way to
+use one was to hand-edit a page's saved settings. Dane went through them and
+picked three to bring out: **Slide** (crosses the page), **Axis Rotate**
+(turns on the spot like a card revolving on a string, so you see its edge and
+its back) and **Flips** (turns and hops in place at the same time). He
+deliberately left **Cartwheels** out — it is Tumbleweed under a different name
+— and **Parkour** is a bigger job of its own, still to come.
+
+Bringing Slide out then showed that **Cruise was the same animation under a
+second name** — the two were identical down to the last line of styling. Dane's
+call: "wherever you see Cruise, consolidate it into Slide." So the menu now
+offers Slide and no longer offers Cruise. Any page already using Cruise keeps
+working exactly as before and needs no attention — the old name quietly points
+at Slide wherever it turns up. Nothing on a live site changes; there is simply
+one fewer thing on the menu that did the same job twice.
+
+Two things needed real work rather than just flipping a switch. Axis Rotate is
+the first thing on the site that turns on a *different axis*, which needs the
+browser to be told to draw depth — without that it reads as the picture being
+squashed side to side rather than turning. And Flips had to turn and hop at the
+same moment; Tumbleweed does that using a hidden extra layer, and it turned out
+Flips does not need one, because the layer only exists to make room for the
+travelling motion Flips does not have. Each of the three now takes the existing
+Speed, Rotation Rate, Bounce Height and Direction controls, so there is nothing
+new to learn.
+
+Round-3 review fixes: the Frequency dropdown now shows bare counts (it read
+"per crossing", which is wrong for Flips, which counts hops per turn), and the
+Slide effect on a floating image no longer loses its position and size — old
+leftover layout rules were forcing it to the far left and full width.
+
+After review, the automated visual check was strengthened. The general check
+only asked "is anything moving?", which could not catch a real hazard: the old
+retired animations still sit in the regenerated stylesheet under the same
+names, so if a new effect's real rule ever broke, the picture would keep
+moving on the OLD rule — ignoring every setting — and the check would stay
+green. Each of the three effects now has a check that names the exact
+animation it must run; breaking the rule on purpose makes that check fail
+(proven), so a future stylesheet regeneration cannot silently gut them.
+
+A second review round then caught something worse, and it is worth
+understanding because it is the kind of fault that hides in plain sight. All
+three new effects were animating perfectly — and every one of their settings
+was being thrown away. The operator could open Slide, choose a Speed, save it,
+watch the toast say it saved, and the picture would carry on at its built-in
+speed forever. Same for Axis Rotate's Rotation Rate and all three of Flips'
+controls. Seven dead controls, no error anywhere, and a picture moving on
+screen the whole time, which is precisely why every check stayed green.
+
+The cause was two halves of the program disagreeing. One half decides which
+controls to SHOW for a given effect; a second half decides which ones to KEEP
+on the way to the page — and the second half worked off a hand-written list of
+effect names that the three new ones were never added to. They now read the
+same rule, so showing a control and honouring it can no longer come apart, and
+the next effect added cannot repeat it.
+
+Two new safety nets went in behind that, both broken on purpose first to prove
+they can actually fail: a test that checks every effect on the menu keeps
+exactly the controls its own panel offers, and four browser checks that move a
+real slider on a real page and fail if the picture does not change. That second
+kind matters most — the previous round's checks all asked whether the picture
+was moving, and the answer was yes the entire time it was ignoring everything
+it was told.
+
+One thing worth knowing: **Slide and Cruise are the same movement.** Nothing is
+wrong with either, and both work — but a picture set to Slide and a picture set
+to Cruise will look identical and offer identical settings, which is exactly the
+reason Cartwheels was left out. Whether Slide stays on the menu is Dane's call;
+removing it later is a one-line change.
 ## 2026-08-22 — Three ways an approved ticket quietly never shipped, closed (#388)
 
 Saying "merge" on a ticket now actually merges it, which works — but clearing
