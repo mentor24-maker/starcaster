@@ -14,7 +14,13 @@ const { classifyChecks, waitForChecks } = require('./waitForChecks');
 // A fake clock + queue so the whole thing is deterministic and instant: each
 // sleep advances "now" by the poll interval, and queryChecks returns the next
 // scripted list.
-function harness(script, { appearGraceMs = 3 * 60 * 1000, totalBudgetMs = 20 * 60 * 1000, pollIntervalMs = 20 * 1000 } = {}) {
+function harness(script, {
+  appearGraceMs = 3 * 60 * 1000,
+  totalBudgetMs = 20 * 60 * 1000,
+  pollIntervalMs = 20 * 1000,
+  nudge,
+  nudgeGraceMs,
+} = {}) {
   let clock = 0;
   let i = 0;
   const polled = [];
@@ -22,6 +28,8 @@ function harness(script, { appearGraceMs = 3 * 60 * 1000, totalBudgetMs = 20 * 6
     appearGraceMs,
     totalBudgetMs,
     pollIntervalMs,
+    nudge,
+    nudgeGraceMs,
     now: () => clock,
     sleep: (ms) => { clock += ms; },
     queryChecks: () => {
@@ -104,4 +112,62 @@ test('it validates its injected dependencies rather than failing obscurely later
   assert.throws(() => waitForChecks({ sleep() {}, now() { return 0; } }), /queryChecks/);
   assert.throws(() => waitForChecks({ queryChecks() {}, now() { return 0; } }), /sleep/);
   assert.throws(() => waitForChecks({ queryChecks() {}, sleep() {} }), /now/);
+});
+
+/**
+ * THE 2026-08-23 BUG (PRs #387 and #389): a second push landing ~15s after
+ * `gh pr create` left the PR with no runs at all — not the `opened` one, not
+ * the push's own. Nothing arrives later on its own, so "wait a bit longer" and
+ * "run ship again" are both wrong advice: only a NEW push makes GitHub create
+ * a run. These tests pin the recovery.
+ */
+
+test('checks never appear → it nudges ONCE, and a run that then shows up is honored', () => {
+  let nudges = 0;
+  // grace 60s, poll 20s: none at 0/20/40s, the 60s poll spends the grace and
+  // nudges; the next poll finds the run the nudge created.
+  const { outcome } = harness(
+    [none, none, none, none, pass],
+    { appearGraceMs: 60 * 1000, pollIntervalMs: 20 * 1000, nudge: () => { nudges += 1; return true; } },
+  );
+  assert.equal(outcome.outcome, 'passed');
+  assert.equal(outcome.nudged, true);
+  assert.equal(nudges, 1, 'exactly one nudge — a push per poll would spam the branch');
+});
+
+test('nudged and STILL no run → never_appeared, and it says the push was made', () => {
+  let nudges = 0;
+  const { outcome } = harness([none], {
+    appearGraceMs: 60 * 1000,
+    nudgeGraceMs: 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    nudge: () => { nudges += 1; return true; },
+  });
+  assert.equal(outcome.outcome, 'never_appeared');
+  assert.equal(outcome.nudged, true);
+  assert.equal(nudges, 1, 'it does not keep pushing once the extra window is spent either');
+});
+
+test('no nudge available → the old behaviour, unchanged', () => {
+  const { outcome } = harness([none], { appearGraceMs: 60 * 1000, pollIntervalMs: 20 * 1000 });
+  assert.equal(outcome.outcome, 'never_appeared');
+  assert.equal(outcome.nudged, false);
+});
+
+test('a nudge that fails or throws stops right there — it never reads as success', () => {
+  for (const nudge of [() => false, () => { throw new Error('push rejected'); }]) {
+    const { outcome } = harness([none], { appearGraceMs: 60 * 1000, pollIntervalMs: 20 * 1000, nudge });
+    assert.equal(outcome.outcome, 'never_appeared');
+    assert.equal(outcome.nudged, false, 'a failed push must not be reported as nudged');
+  }
+});
+
+test('a check that appears on its own is never nudged for', () => {
+  let nudges = 0;
+  const { outcome } = harness([none, pass], {
+    appearGraceMs: 60 * 1000, pollIntervalMs: 20 * 1000, nudge: () => { nudges += 1; return true; },
+  });
+  assert.equal(outcome.outcome, 'passed');
+  assert.equal(nudges, 0);
+  assert.equal(outcome.nudged, false);
 });

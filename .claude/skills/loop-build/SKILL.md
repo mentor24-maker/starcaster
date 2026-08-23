@@ -254,6 +254,16 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      line of its own — this is not optional), a plain-language summary, the
      task's "How to test" steps, and a note that a Vercel preview will be
      attached. End with the Generated-with trailer.
+   - **Then check the PR actually has checks, and do not push in the seconds
+     right after opening it.** A push landing ~15 seconds after `gh pr create`
+     makes GitHub drop BOTH the `opened` run and that push's run, and nothing
+     arrives later on its own — the PR is checkless forever, this step waits on
+     nothing, and the merge gate refuses it (#387, #389; see
+     `docs/LOOP_ENGINEERING.md` → "A build node must be able to make GitHub run
+     its checks"). So: if the work-log entry needs the PR number, wait until
+     `gh pr checks <pr>` lists a run before pushing it. If none has appeared
+     after a couple of minutes, only a new commit can create one —
+     `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
 
 8. **Record the PR on the ticket — with the command, and check what it says.**
 

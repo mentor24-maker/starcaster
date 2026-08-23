@@ -53,7 +53,7 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
-const { pickPullRequestCommit, REPIN_SUBJECT } = require('./builder/pullRequestCommit');
+const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
 const { waitForChecks } = require('./builder/waitForChecks');
 
 const args = process.argv.slice(2);
@@ -299,11 +299,49 @@ heading(`Waiting for the checks (up to ${CI_TIMEOUT_MIN} minutes)`);
 const prUrl = `https://github.com/mentor24-maker/starcaster/pull/${prNumber}`;
 let lastReport = '';
 
+/**
+ * Push an empty commit so GitHub creates a check run.
+ *
+ * A PR can be born with no runs at all: open it with `gh pr create` and push
+ * again within ~15 seconds and BOTH the `opened` run and the second push's run
+ * go missing (PRs #387 and #389, 2026-08-23). Nothing arrives later on its own,
+ * because a run only exists if an event created one — so the branch stays
+ * checkless forever, ship waits on nothing, and the merge gate refuses it.
+ * A new head SHA fires `synchronize`, which is the only thing that fixes it.
+ *
+ * Deliberately NOT `--no-verify`: an empty commit gives the hooks nothing to
+ * object to, and a convenience path does not get to route around them. If the
+ * hooks re-pin an asset the commit stops being empty, which is equally fine —
+ * all that matters is that the head SHA moves.
+ */
+function nudgeChecks() {
+  say('    Still nothing after the grace window. Waiting longer cannot help: with no new');
+  say('    push GitHub never creates a run. Pushing an empty commit to trigger one.');
+  const message =
+    `${NUDGE_SUBJECT}\n\n` +
+    'GitHub registered no check run for this pull request. That happens when a\n' +
+    'push lands within seconds of the PR being opened. Only a new head SHA can\n' +
+    'make a run; this commit is that SHA and carries no changes.';
+  const committed = quiet('git', ['commit', '--allow-empty', '-m', message]);
+  if (!committed.ok) {
+    say(`    Could not make the commit:\n${committed.out}`);
+    return false;
+  }
+  const pushed = quiet('git', pushArgs);
+  if (!pushed.ok) {
+    say(`    Could not push it:\n${pushed.out}`);
+    return false;
+  }
+  say('    Pushed. Watching for the run it should create.');
+  return true;
+}
+
 const wait = waitForChecks({
   totalBudgetMs: CI_TIMEOUT_MIN * 60 * 1000,
   now: () => Date.now(),
   sleep: sleepMs,
   queryChecks: () => queryPullRequestChecks(prNumber),
+  nudge: nudgeChecks,
   onPoll: (state, list, elapsed) => {
     // One honest progress line per poll, only when the picture changes, so a
     // 20-minute wait does not scroll — and "none yet" never reads as trouble.
@@ -323,10 +361,19 @@ const wait = waitForChecks({
 
 if (wait.outcome === 'never_appeared') {
   fail(
-    `No checks ever appeared on the branch — they usually show within seconds, so this is\n` +
-    `almost always a GitHub delay rather than anything wrong. Nothing was merged; the work\n` +
-    `is safe on the branch. Run \`npm run ship\` again in a moment.\n\n` +
-    `Look at: ${prUrl}`
+    wait.nudged
+      ? `No checks appeared on this pull request, and pushing an extra commit did not produce\n` +
+        `one either. That is not a delay — something is stopping GitHub Actions from running\n` +
+        `on this branch. Nothing was merged; the work is safe. Check that Actions is enabled\n` +
+        `for the repository and that the workflow file is present on the branch.\n\n` +
+        `Look at: ${prUrl}`
+      // The nudge is only skipped when it could not be made — a failed commit or
+      // a rejected push, both already printed above.
+      : `No checks ever appeared on the branch, and the extra push that would have created\n` +
+        `one could not be made (see the reason above). Nothing was merged; the work is safe\n` +
+        `on the branch. Re-running \`npm run ship\` on its own will NOT help — the branch\n` +
+        `needs a new commit before GitHub will make a run.\n\n` +
+        `Look at: ${prUrl}`
   );
 }
 if (wait.outcome === 'timed_out_pending') {
