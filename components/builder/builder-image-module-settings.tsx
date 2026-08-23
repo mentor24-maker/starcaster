@@ -336,7 +336,7 @@ export function BuilderImageModuleSettings({
               // Only Tumbleweed leaves the midline, so only Tumbleweed can be
               // asked how often (D9: gated field beside what gates it).
               visibleWhen: (settings) => imageEffectBounces(settings.effect),
-              rendersVia: "getImageEffectStageStyle"
+              rendersVia: "getImageEffectStageStyle (Tumbleweed) / getImageEffectStyle (Flips)"
             }
           ],
           [
@@ -350,7 +350,7 @@ export function BuilderImageModuleSettings({
               // How high, under how often — the pair reads as one idea, and
               // both are gated by the same effect (D9).
               visibleWhen: (settings) => imageEffectBounces(settings.effect),
-              rendersVia: "getImageEffectStageStyle"
+              rendersVia: "getImageEffectStageStyle (Tumbleweed) / getImageEffectStyle (Flips)"
             }
           ],
           [

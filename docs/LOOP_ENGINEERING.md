@@ -66,16 +66,162 @@ npm run clickup -- queue --list 901418546619 --status Queued   # first line = th
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
-npm run clickup -- status --task <id> --status "Needs your input"            # auto-assigns Dane
-npm run clickup -- comment --task <id> --body-file -           # body on stdin
+npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
+npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
+npm run clickup -- verdict --task <id> --pass|--fail --body-file -  # record the review verdict (loop-review step 4)
+npm run clickup -- comment --task <id> --body-file -           # a plain note (progress, context)
+npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 ```
 
-`status` enforces the handoff rule by itself: moving into `Needs your input`
-or `Ready to launch` assigns Dane automatically, moving into any machine
-status clears assignees, and both halves of the write are verified from the
-response. `--if-status` makes a claim safe against a parallel loop: it exits
-code 3 without writing if the task has already moved.
+`status` enforces the handoff rule by itself: moving into any machine status
+clears assignees, and both halves of the write are verified from the response.
+`--if-status` makes a claim safe against a parallel loop: it exits code 3
+without writing if the task has already moved. It **refuses** to move a ticket
+into `Needs your input` or `Ready to launch` — see the next section.
+
+### The two traces a ticket must carry (added 2026-08-22, task 86bbjt18r)
+
+`pr-opened` and `verdict` are not politer spellings of `comment`. Each writes
+one exact shape, and each **reads it back through the same parser its consumer
+uses** — so a comment that the merge step could not act on is a comment these
+commands refuse to call written. Both exit non-zero when the trace does not
+land, and a non-zero exit fails the loop run.
+
+They exist because both traces used to be prose in a skill file, and prose is
+followed most of the time. Draining the Ready-to-launch backlog on 2026-08-22
+found what the other times cost:
+
+- **Four approved tickets had no `PR opened:` comment**, so the merge step
+  correctly refused to guess which PR they meant — and two of those PRs also
+  shipped with no ClickUp link in the body, so ticket and PR could only be
+  paired by reading titles. `pr-opened` now checks the PR body FIRST (exit 4
+  if the link is missing) and only then writes the ticket side.
+- **Two tickets reached `Ready to launch` with no passing review on them.**
+  That status is the operator's "safe to merge" signal; he approved both in
+  good faith. `ask` and `status` now both refuse to set it unless the newest
+  verdict on the ticket is a PASS. `--operator-asked` overrides, and says in
+  the transcript that a human took responsibility for it.
+
+**What the gate does NOT cover, stated out loud.** `status` and `ask` in
+`scripts/clickup_direct.mjs` are the only two writers of that status anywhere
+in this repo — `scripts/reconcile_clickup_github.cjs` treats operator statuses
+as read-only and never sets them — so every loop path is now closed. Two doors
+remain open that code here cannot reach: the ClickUp **web UI** (a person
+dragging a card), and the claude.ai **ClickUp connector** (`clickup_update_task`),
+which any agent session can call directly without passing through this script.
+If an unreviewed ticket turns up in `Ready to launch` again, look there first
+— and the loops should keep using `npm run clickup`, which is the only door
+with a lock on it.
+
+### A refusal is not a verdict on the ticket
+
+The merge step marks an authorization it has acted on, so the same answer is
+never posted twice. Until task 86bbjt18r that marker was permanent even for a
+**refusal**, which meant a refused ticket was never looked at again. On
+2026-08-22 two tickets were refused for "no PR opened: comment", the comment
+was added by hand minutes later, and the next three passes did not re-read
+them: they simply dropped out of the run. Dane's approval was still there,
+still valid, and only a human audit would ever have found it.
+
+Refusal markers now record their reason and are **re-decided on every pass**.
+Nothing extra is posted while the reason still holds — the same answer twice
+says nothing new — but the moment it changes, or goes away, the ticket goes
+through with no second word from him. Markers for a completed merge or a
+conflict hand-off stay terminal, because re-deciding a merged PR is the one
+mistake that cannot be undone.
+
+## The two columns, and the operator card (ratified 2026-08-22)
+
+ClickUp puts the task description on the **left**, wide, and the comment stream
+on the **right**, narrow. Until 2026-08-22 the loops had that backwards: the
+description held a spec written for a machine, and every piece of human-facing
+reasoning went into a comment — so it reached Dane as a wall of text in the
+skinniest part of the screen.
+
+Two tickets stalled on it the same day. **Sync 6/7** (`86bbev0g3`) carried a
+long comment offering three ways to slice the work; Dane answered "build the
+chip display", the relay handed the ticket back to `Queued` still wearing its
+original wide scope, and the next unattended build pass would have built the
+half he had just deferred — the one that rewrites ~35 live tenant pages.
+**Sync 7/7** (`86bbev0gx`) sat in his inbox for a day under a red *Needs your
+input* badge with no answerable question anywhere on it; it was not blocked on
+him at all, it was blocked on 6/7.
+
+So:
+
+**Detail goes left.** `describe --task <id> --body-file -` replaces the whole
+description, refuses an empty body, and reads the result back (a description
+write that normalizes to nothing returns a clean 200 — DOCTRINE 3.10). The
+description shape lives in `loop-spec`'s SKILL.md and now opens with
+**## Dane asked for** — his own words, verbatim, that caused the ticket to
+exist. If it descends from a standing decision instead, say so and name it.
+Never invent a quote.
+
+**The right column carries the operator card, and nothing else.** One command
+posts it and moves the status together, so the two can never come apart:
+
+```bash
+npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
+npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -
+```
+
+The body is four sections. The check runs **before** the first network call, so
+a card that fails the shape leaves the ticket exactly where it was:
+
+```
+@@ASKED
+build the chip display
+@@WHEN
+2026-08-22 10:56am, on this ticket          (optional)
+@@CONTEXT
+The problem and the fix in plain English. 50-100 words — enforced, not
+suggested. Under 50 it stops carrying enough for him to act on without opening
+anything else; over 100 it becomes the wall of text this replaces.
+@@NEEDED
+The specific ask. "Nothing right now" is a good answer and a useful one, but it
+has to be written down rather than left blank.
+```
+
+`@@NEEDED` renders under a banner he can find without reading:
+
+```
+#############################
+NEEDED FROM DANE: 
+#############################
+```
+
+The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
+(`scripts/builder/operatorCard.test.js`), not a convention an agent has to
+remember. `status --status "Needs your input"` refuses on its own and prints
+the `ask` form; `--no-card` is the escape hatch, and like `--operator-asked`
+above it is a written claim in the transcript, not a permission check.
+
+### ClickUp deletes `> ` blockquotes — from comments AND descriptions
+
+Found live while building the above, on 2026-08-22. A body posted with
+`> quoted words` comes back with those lines **gone** — not unformatted, not
+escaped, absent — and the write returns a clean 200 with a healthy-looking
+character count. The first two operator cards ever posted lost Dane's own
+words that way, which is the one part of a card nobody can reconstruct later.
+
+A probe of six forms against the live API (scratch task `86bbgm68r`) settled
+which are safe:
+
+| Form | Survives? |
+|---|---|
+| `> blockquote` | **no — deleted entirely** |
+| ` ``` ` fenced block | yes |
+| `***bold italic***` | yes |
+| four-space indent | yes |
+| `"plain quotation marks"` | yes |
+| `**— bold with a dash**` | yes |
+
+So verbatim text goes in a fence, which is also the only form that leaves its
+contents uninterpreted. `describe` refuses a body containing a blockquote
+before it sends; `ask` refuses one in any card section, and after posting reads
+the card back and confirms Dane's words are actually in it. A `>` inside a
+fence is fine and is not flagged.
 
 **Urgent is the human lane (ratified 2026-08-18).** The queue sorts
 priority-then-age, so an Urgent flag is a human override that outranks

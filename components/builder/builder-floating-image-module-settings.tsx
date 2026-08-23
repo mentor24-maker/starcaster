@@ -347,7 +347,7 @@ export function BuilderFloatingImageModuleSettings({
               options: IMAGE_EFFECT_FREQUENCY_OPTIONS,
               fallback: DEFAULT_IMAGE_EFFECT_FREQUENCY,
               visibleWhen: (settings) => imageEffectBounces(settings.effect),
-              rendersVia: "getImageEffectStageStyle"
+              rendersVia: "getImageEffectStageStyle (Tumbleweed) / getImageEffectStyle (Flips)"
             },
             {
               key: "effectBounceHeight",
@@ -357,7 +357,7 @@ export function BuilderFloatingImageModuleSettings({
               options: IMAGE_EFFECT_BOUNCE_HEIGHT_OPTIONS,
               fallback: DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
               visibleWhen: (settings) => imageEffectBounces(settings.effect),
-              rendersVia: "getImageEffectStageStyle"
+              rendersVia: "getImageEffectStageStyle (Tumbleweed) / getImageEffectStyle (Flips)"
             },
             {
               key: "effectDelay",
