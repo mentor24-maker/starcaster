@@ -1,3 +1,26 @@
+## 2026-08-23 — The relay stops crying wolf about merge conflicts
+
+Twelve times in one day, the robot that merges your approved work gave up and
+said "this branch conflicts with main, a human needs to sort it out". Every
+single time, it merged here with nothing to sort out. Each false alarm parked a
+merge you had already said yes to.
+
+The cause is a quirk worth knowing. Four of our HTML files carry little version
+stamps that change every time anything is rebuilt, so any two branches collide
+there even when neither touched a word of the actual page. We wrote a small
+tool that fixes those automatically — but git flatly refuses to run a tool like
+that from a downloaded copy of a project, for good security reasons, so it only
+exists on our own machines. **GitHub cannot run it.** GitHub sees two different
+version stamps on one line, calls it a conflict, and the relay believed it.
+
+So the relay now asks the machine it is standing on instead of taking GitHub's
+word. It tries the merge for real, in a scratch folder that touches nothing. If
+it comes out clean, the branch is caught up and the checks re-run. If anything
+genuinely overlaps, it hands over exactly as before — and now says which file,
+so nobody has to work that out again.
+
+It still never resolves a conflict, and it still never force-pushes. (#PR)
+
 # Work Log
 
 Plain-English record of work shipped through the development loop
