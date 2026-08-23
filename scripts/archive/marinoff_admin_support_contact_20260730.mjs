@@ -41,9 +41,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mainCheckoutDir } from '../lib/main_checkout.mjs';
 import { createRequire } from 'node:module';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
 const { createClient } = require('@supabase/supabase-js');
 
@@ -63,7 +64,7 @@ const APPLY = process.argv.includes('--apply');
 const ALLOW_LOCAL = process.argv.includes('--allow-local');
 const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
-const MAIN_CHECKOUT = '/Users/mentor/WebApps/starcaster';
+const MAIN_CHECKOUT = mainCheckoutDir(ROOT);
 const ENV_CANDIDATES = [
   process.env.STARCASTER_ENV_FILE,
   path.join(ROOT, '.env.local.cloud-backup'),

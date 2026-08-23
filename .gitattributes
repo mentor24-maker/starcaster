@@ -22,3 +22,26 @@ public/explore.html         merge=asset-pins
 # same commit. public/explore.html shipped in #301 without this line and the
 # very next branch that touched styling hit exactly the conflict this file
 # exists to prevent.
+
+# The plain-English work log. Every loop-built PR prepends one dated entry to
+# the top of this file, so any two branches open at the same time collide here
+# even though neither touched the other's entry — and both entries are always
+# keepers. On 2026-08-22 a single merge turned 17 of 23 open PRs from clean to
+# conflicting on this file alone, one after another, because each merge
+# re-conflicts every branch still waiting.
+#
+# `union` is git's BUILT-IN driver: on a conflicting hunk it keeps both sides'
+# lines instead of writing markers. That is exactly right for a prepend-only
+# log — both new entries land at the top, newest-first order is preserved, and
+# nothing is dropped. Verified before adding this line: merging main into the
+# `main-guard` branch went from one conflicted file to zero, with every heading
+# from BOTH sides present in the result.
+#
+# Unlike the asset-pins driver above, this one needs no registration in
+# .git/config and no install step, because git ships it. That also means GitHub
+# honours it server-side, so "Update branch" on a pull request stops conflicting.
+#
+# A genuine edit to the SAME entry by two branches would still be merged by
+# keeping both lines rather than flagging it — acceptable here, because entries
+# are append-only history that nobody goes back and rewrites.
+docs/WORK-LOG.md merge=union
