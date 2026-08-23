@@ -39,6 +39,8 @@ import {
   RENDER_DIFFERENTIALS,
   effectClassesInCss,
   effectSweepModule,
+  floatingImageModule,
+  imageEffectClassMapFromSource,
   imageEffectOptionsFromSource,
 } from './render-contracts.mjs';
 
@@ -490,6 +492,65 @@ try {
     }
   }
   /*
+   * SLIDE ON A FLOATING IMAGE LANDS WHERE THE OTHER TRAVELLER DOES.
+   *
+   * Slide collapsed a floating image's overlay shell to 0px wide — the picture
+   * vanished — because its class matched the buried effect's dead `!important`
+   * overlay-LAYOUT rules still carried in the regenerated base stylesheet
+   * (`:has(.starcaster-effect-slide)`).
+   *
+   * The reference used to be Cruise. Cruise was RETIRED on 2026-08-22 (it was
+   * Slide under a second name) and `cruise` now normalizes TO `slide` — so the
+   * old comparison would have rendered the same effect twice and compared it to
+   * itself. That is an assertion that cannot fail, which this repo has shipped
+   * twice before; Tumbleweed is the reference now. It is the other effect that
+   * travels the full corridor, and it never had the legacy `:has()` rules, so
+   * its shell is what "correct" looks like.
+   *
+   * Every OTHER image contract uses an inline `image`, whose shell is a
+   * different element the dead rules do not touch — which is exactly why 8/8
+   * green missed this twice. A FLOATING image is the only place it shows.
+   *
+   * BREAK-ON-PURPOSE: point getImageEffectClassName('slide') back at
+   * `starcaster-effect-slide`, rebuild CSS — Slide's shell measures 0-wide and
+   * the assertion below fails. (Round-4 fix, task 86bbh8zc5.)
+   */
+  const SHELL = '.builder-preview-image-shell-overlay';
+  await render(page, documentFor(floatingImageModule('tumbleweed')));
+  const referenceShell = await sample(page, SHELL, [], SETTLE_MS);
+  await render(page, documentFor(floatingImageModule('slide')));
+  const slideShell = await sample(page, SHELL, [], SETTLE_MS);
+
+  if (!referenceShell.found || !referenceShell.box.width || !referenceShell.box.height) {
+    // The harness could not render a floating overlay shell at all. Do NOT let
+    // that pass as if Slide were fine — report it loudly (DOCTRINE §3.11) so a
+    // harness gap can never masquerade as a verified Slide.
+    notices.push(
+      'floating-image-slide-shell: could not measure a floating overlay shell for Tumbleweed ' +
+      `(found=${referenceShell.found}, box=${referenceShell.box ? `${referenceShell.box.width}x${referenceShell.box.height}` : 'n/a'}). ` +
+      'The Slide shell comparison DID NOT RUN — treat Slide on a floating image as unverified here.'
+    );
+  } else {
+    sweepsRun += 2;
+    if (!slideShell.found || !slideShell.box.width || !slideShell.box.height) {
+      failures.push(
+        `floating-image-slide-shell: Slide's overlay shell measured ` +
+        `${slideShell.box ? `${slideShell.box.width}x${slideShell.box.height}` : 'nothing'} — it collapsed ` +
+        `instead of landing where Tumbleweed's (${referenceShell.box.width}x${referenceShell.box.height}) does. ` +
+        'The live class is matching the buried effect\'s dead `!important` layout rules again.'
+      );
+    } else if (Math.abs(slideShell.box.width - referenceShell.box.width) > 2 ||
+               Math.abs(slideShell.box.height - referenceShell.box.height) > 2) {
+      failures.push(
+        `floating-image-slide-shell: Slide's shell is ${slideShell.box.width}x${slideShell.box.height} but ` +
+        `Tumbleweed's is ${referenceShell.box.width}x${referenceShell.box.height} — both travel the same ` +
+        'corridor, so their floating shells must land in the same place.'
+      );
+    }
+  }
+
+  /*
+   * THE OPPOSITE GAP, REPORTED RATHER THAN FAILED.  /*
    * THE OPPOSITE GAP, REPORTED RATHER THAN FAILED.
    *
    * The dead Tumbleweed was a panel option with no stylesheet rule. The mirror
@@ -505,7 +566,11 @@ try {
     await readFile(path.join(ROOT, 'src/css/_builder-react-overrides.css'), 'utf8'),
   ].join('\n');
   const styled = effectClassesInCss(cssText);
-  const orphans = [...styled].filter((name) => !offered.includes(name)).sort();
+  // Compare against the class each effect EMITS, not its raw value: Slide's
+  // class is `slide-motion`, so `offered.includes('slide-motion')` is false and
+  // the rename would otherwise read as an unstyled orphan.
+  const classToEffect = imageEffectClassMapFromSource(effectsSource);
+  const orphans = [...styled].filter((name) => !offered.includes(classToEffect.get(name) || name)).sort();
   if (orphans.length) {
     notices.push(
       `${orphans.length} effect(s) have keyframes in the stylesheet and appear in NO panel: ` +

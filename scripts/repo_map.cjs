@@ -99,9 +99,17 @@ if (!hasMain) {
     const { state, fresh } = classifyBranch(branch, base);
 
     if (state === 'empty') {
+      // A branch with no commits is a workspace somebody just PREPARED —
+      // `npm run thread` has already spent an npm ci and a full build on the
+      // folder it names. This used to read "already shipped, safe to delete"
+      // whenever the map was run from anywhere but that branch, which is the
+      // normal case: you set the folder up from the main folder and read the
+      // map from the main folder. The classification was right, the sentence
+      // was not (DOCTRINE.md 2.1 — a confident wrong message is worse than a
+      // bare one). Neither wording may say "shipped" or "safe to delete".
       const note = branch.name === current
         ? 'nothing committed here yet.'
-        : 'already shipped, safe to delete.';
+        : `a prepared workspace — nothing committed yet, nothing to ship (${branch.where}).`;
       out.push(bullet(`${branch.name} — ${note}${here}`));
       return;
     }
