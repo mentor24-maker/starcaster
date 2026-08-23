@@ -123,6 +123,30 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    so a parallel build loop that got there first shows up as exit code 3 —
    take the next task instead of proceeding.
 
+   **Then, BEFORE creating a branch, ask whether one already exists:**
+
+   ```bash
+   npm run clickup -- build-start --task <id>
+   ```
+
+   *   **exit 0** — no PR, or its PR is closed/merged. A fresh branch is right;
+       carry on to step 2.
+   *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
+       second branch. Check that one out, read the send-back that returned the
+       ticket to `Queued`, fix what it named, and push to the SAME PR. The
+       command prints the branch.
+   *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
+       branch on a guess; that is the failure this step exists to prevent,
+       arriving through the check meant to catch it.
+
+   The claim in the line above and this check answer DIFFERENT questions, and
+   conflating them cost two duplicate PRs on 2026-08-23 (#407 beside the still
+   open #349, #408 beside #350). `--if-status Queued` asks *"is anyone else
+   starting this right now"* — it was working perfectly. Nothing asked *"was
+   this already started and handed back"*, and a sent-back ticket is genuinely
+   `Queued` with its PR genuinely still open. Reading the comments would have
+   shown it; a pass that must remember to read is a pass that will forget.
+
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
    Two of them belong to the operator and no loop may set or clear them except

@@ -44,6 +44,32 @@ then waits again. If they still do not appear it says clearly that this is no
 longer a delay and something is genuinely wrong. The rule a new build machine
 has to satisfy, and how to test it in advance, is now written down so the third
 machine does not rediscover any of this.
+## 2026-08-23 — The job that listens for your answers moved to the machine that stays awake (#410)
+
+When you reply on a ticket, a job called the relay is what carries your answer
+forward — it reads your comment, posts it to the party line, and hands the
+ticket back to the machines so work resumes. It is the only automatic path from
+"Dane replied" to "the loop carries on".
+
+That job was running on the laptop. The laptop closes. So on the morning of the
+23rd you answered two tickets at 06:19, and at 15:30 both were still sitting in
+"Needs your input" — one of them with every blocker already cleared. Nothing had
+broken and nothing had errored. Your answers had simply landed somewhere nothing
+was listening.
+
+The relay now lives on the Mac Mini, which does not close, alongside the two
+loops that were moved there for the same reason last week. It still runs in
+exactly one place — two copies would post your messages to the party line twice
+— and the register that decides which machine that is now records why, so the
+next person to wonder does not have to work it out from scratch.
+
+Two smaller things came with it. The schedule used to exist only as something
+somebody had typed by hand on one Mac, written down nowhere, so "is it still
+running on the old machine?" could only be answered by going and looking; there
+is now a single command that installs it, removes it, or reports what it finds.
+And because nobody sits at the Mini, nothing there was ever pulling down new
+code — the relay now brings its own copy up to date before each run, carefully,
+never touching work in progress.
 
 ---
 
