@@ -50,11 +50,15 @@
 
 import { readFileSync } from 'node:fs';
 import { writeFileSync } from 'node:fs';
+import loopNoteLib from './builder/loopNote.js';
+const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
 import busRelayPlan from './builder/busRelayPlan.js';
 import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
 import operatorCard from './builder/operatorCard.js';
+import nodeRoles from '../lib/nodeRoles.js';
+import taskRepo from './builder/taskRepo.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
 const { mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker } = mergeOnComment;
 const {
@@ -62,6 +66,7 @@ const {
   readyToLaunchGate, isReadyToLaunch,
 } = loopTrail;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
+const { resolveTaskRepo } = taskRepo;
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -177,9 +182,13 @@ function usage(code = 2) {
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
+  console.error('  loop-note --task <id> --transition claimed|pr-open|verified|sent-back|merged|escalated [--pr N]');
+  console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent');
+  console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
   console.error('  chat --channel <id> --body-file <file|->');
   console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
-  console.error('                                             id <TAB> status <TAB> priority <TAB> created <TAB> name');
+  console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name');
+  console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
   console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
@@ -216,7 +225,11 @@ function usage(code = 2) {
   console.error('                                             --list/--statuses = that one list, notify-only and no merging;');
   console.error('                                             --no-merge disables merging everywhere; --dry-run reads GitHub');
   console.error('                                             and ClickUp and prints the decision, writing nothing at all;');
-  console.error('                                             --only-task <id> confines the whole pass to one ticket');
+  console.error('                                             --only-task <id> confines the whole pass to one ticket.');
+  console.error('                                             ONE machine relays (lib/nodeRoles.js); on any other it');
+  console.error('                                             says so and exits 0. npm run node:whoami names this one');
+  console.error('  task-open --task <id>                      exit 0 if the task is still open (status.type), 1 if closed/done');
+  console.error('                                             or gone — used by `npm run thread`/`tidy` (Task-closes-thread)');
   process.exit(code);
 }
 
@@ -548,6 +561,18 @@ if (cmd === 'whoami') {
   console.log(`  status:      ${t.status?.status}`);
   console.log(`  priority:    ${t.priority?.priority ?? '(none)'}`);
   console.log(`  description: ${chars} characters`);
+  // Tags are load-bearing now (loop-spec routes a task to its repo by a
+  // repo:<name> tag) and a dropped one reads as starcaster and looks fine —
+  // so verify they landed, same discipline as the body/status read-back.
+  if (tags && tags.length) {
+    const landed = new Set((t.tags || []).map((x) => String(x.name || '').toLowerCase()));
+    const missing = tags.filter((want) => !landed.has(want.toLowerCase()));
+    console.log(`  tags:        ${(t.tags || []).map((x) => x.name).join(', ') || '(none)'}`);
+    if (missing.length) {
+      console.error(`\n  TAGS DID NOT STICK: asked for [${missing.join(', ')}] — a repo:<name> tag dropped here routes the task to the wrong repo.`);
+      process.exit(1);
+    }
+  }
   if (chars === 0) {
     console.error('\n  BODY IS EMPTY — the description did not save. Task exists but is a shell.');
     process.exit(1);
@@ -583,7 +608,13 @@ if (cmd === 'whoami') {
     || Number(a.date_created) - Number(b.date_created));
   for (const t of wanted) {
     const created = new Date(Number(t.date_created)).toISOString().slice(0, 10);
-    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', created, t.name].join('\t'));
+    // The repo a task declares (Charter: a task declares its repo). A loop
+    // reads this to decide WHICH checkout to build in — '?<name>' marks a tag
+    // that resolves to nothing known, so the loop escalates rather than
+    // building it in the wrong place.
+    const r = resolveTaskRepo(t.tags);
+    const repoCol = r.action === 'escalate' ? `?${r.repo ?? 'ambiguous'}` : r.repo;
+    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name].join('\t'));
   }
   console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
   if (res) reportLimits(res);
@@ -600,6 +631,8 @@ if (cmd === 'whoami') {
   console.log(`priority: ${t.priority?.priority ?? 'none'}`);
   console.log(`assigned: ${assigneeNames(t)}`);
   console.log(`list:     ${t.list?.name} (${t.list?.id})`);
+  const r = resolveTaskRepo(t.tags);
+  console.log(`repo:     ${r.action === 'escalate' ? `ESCALATE — ${r.reason}` : `${r.repo} (${r.reason})`}`);
   console.log(`url:      ${t.url}`);
   console.log('---');
   console.log(t.markdown_description || t.description || '(no body)');
@@ -1072,6 +1105,26 @@ if (cmd === 'whoami') {
   reportLimits(folders.res);
 
 } else if (cmd === 'bus-relay') {
+  // Exactly one machine relays. Two of them can both read "this comment has
+  // not been relayed yet" in the same minute and both post it before either
+  // writes its marker back, and the operator sees his own message twice.
+  // Who that machine is lives in lib/nodeRoles.js — the same table db:refresh
+  // and the loop skills read, so nothing here can hold a second opinion.
+  //
+  // Not the owner is a NORMAL outcome for a poller running on a timer, so it
+  // says which machine owns the job and exits 0 rather than failing. But a
+  // machine we cannot IDENTIFY is a different thing entirely: quietly doing
+  // nothing there is how a relay stops relaying for a week with nobody the
+  // wiser, so that one exits loudly (DOCTRINE 3.11).
+  const guard = nodeRoles.checkRole('bus-relay');
+  if (!guard.owned) {
+    console.error(guard.message);
+    console.error(guard.verdict === 'other-node'
+      ? 'bus-relay: 0 relayed, 0 handed back — not this machine\'s job.'
+      : 'bus-relay: nothing was checked, and this is a FAILURE, not a quiet no-op.');
+    process.exit(guard.verdict === 'other-node' ? 0 : 1);
+  }
+
   const channel = arg('channel', BUS_CHANNEL);
   const dryRun = flag('dry-run');
 
@@ -1245,6 +1298,127 @@ if (cmd === 'whoami') {
   if (lastRes) reportLimits(lastRes);
   if (unchecked.length) process.exit(1);
 
+} else if (cmd === 'loop-note') {
+  // Stamp the "Loop note" custom field with a plain-language transition line
+  // (Queue visibility). CANNOT STAMP loudly if the field does not exist — the
+  // field must be created once in the ClickUp UI (the API cannot create it);
+  // a missing field is reported, never silently skipped (DOCTRINE 3.11). This
+  // is ONE write per real transition — not per pass, not per queued ticket.
+  const task = arg('task'), transition = arg('transition');
+  if (!task || !transition) usage();
+  let text;
+  try {
+    text = loopNote(transition, { at: nowClock(), pr: arg('pr') });
+  } catch (e) {
+    console.error(`\nloop-note: ${e.message}`);
+    process.exit(2);
+  }
+  await stampLoopNote(task, text);
+
+} else if (cmd === 'loop-heartbeat') {
+  // One write per loop pass, onto the pinned "Loop heartbeat" ticket, so the
+  // list shows the pipeline is alive and what is next. Target ticket id from
+  // --task or CLICKUP_HEARTBEAT_TASK (created once in the UI, like the field).
+  const task = arg('task', process.env.CLICKUP_HEARTBEAT_TASK);
+  if (!task) {
+    console.error('\nloop-heartbeat: no heartbeat ticket — pass --task <id> or set CLICKUP_HEARTBEAT_TASK.');
+    console.error('Create one ticket in the Loop Queue named "Loop heartbeat" once, then use its id.');
+    process.exit(2);
+  }
+  const text = heartbeatNote({ at: nowClock(), inLine: Number(arg('in-line', '0')), nextUp: arg('next', '') });
+  await stampLoopNote(task, text);
+} else if (cmd === 'task-open') {
+  // Charter Q1 (Task-closes-thread): a thread should only exist while its
+  // ClickUp task is open. ClickUp's own status.type is the general signal —
+  // 'closed' or 'done' means the task is finished (however that list's
+  // workflow spells its terminal status: "Live", "Done", "Cancelled", ...),
+  // anything else ('open' or a workflow 'custom' status) means it is still
+  // in flight. This is deliberately NOT a status-NAME allowlist: npm run
+  // thread is used against arbitrary ClickUp lists, not only the Loop Queue.
+  //
+  // Exit codes are the contract callers rely on to decide whether to DELETE
+  // something, so a transient failure must never look the same as a
+  // confirmed "closed" — three-way, not two-way:
+  //   0 = confirmed open        1 = confirmed closed/done/gone
+  //   3 = could not tell (network, auth, rate limit — NOT a "safe to delete")
+  const task = arg('task');
+  if (!task) usage();
+  // A REJECTED fetch (offline, DNS, TLS) would otherwise throw out of here and
+  // node would exit 1 — indistinguishable from "confirmed closed", which is
+  // the one thing this contract must never let happen (a caller deletes on 1).
+  // Catch it and route to the exit-3 "cannot tell" path with the reason.
+  let out;
+  try {
+    out = await call('GET', `/api/v2/task/${task}`);
+  } catch (err) {
+    console.error(`\ncheck task ${task}: could not reach ClickUp — ${err.message}`);
+    console.error('This is NOT a "closed" result — treat it as "unknown", never "safe to delete".');
+    process.exit(3);
+  }
+  if (out.res.status === 404) {
+    console.log(`task:   ${task}`);
+    console.log('status: (not found)');
+    console.log('type:   (not found)');
+    console.log('open:   false');
+    reportLimits(out.res);
+    process.exit(1);
+  }
+  if (!out.res.ok) {
+    console.error(`\ncheck task ${task}: could not determine open/closed — HTTP ${out.res.status}`);
+    console.error(out.json?.err || out.json?.error || out.text.slice(0, 500));
+    console.error('This is NOT a "closed" result — a caller deciding whether to delete something');
+    console.error('must treat this the same as "unknown", never the same as "confirmed closed".');
+    if (out.res) reportLimits(out.res);
+    process.exit(3);
+  }
+  const t = out.json;
+  const type = t.status?.type ?? '?';
+  const isOpen = type !== 'closed' && type !== 'done';
+  console.log(`task:   ${t.id}`);
+  console.log(`status: ${t.status?.status ?? '?'}`);
+  console.log(`type:   ${type}`);
+  console.log(`open:   ${isOpen}`);
+  reportLimits(out.res);
+  process.exit(isOpen ? 0 : 1);
+
 } else {
   usage();
+}
+
+/** hh:mmam local — the register the operator reads. */
+function nowClock() {
+  return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '');
+}
+
+/**
+ * Set the "Loop note" text custom field on a task and verify by read-back.
+ * Resolves the field id by NAME from the task's own custom_fields, so no id is
+ * hardcoded. Missing field → CANNOT STAMP, loud, exit 1 (never a silent pass).
+ */
+async function stampLoopNote(taskId, text) {
+  const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
+  if (!before.res.ok) die('read task for loop-note', before);
+  const field = (before.json.custom_fields || []).find(
+    (f) => String(f.name || '').trim().toLowerCase() === 'loop note'
+  );
+  if (!field) {
+    console.error('\nCANNOT STAMP — custom field "Loop note" not found on this list.');
+    console.error('Create it once in ClickUp: the list -> Columns -> + -> Create field -> Text, named "Loop note".');
+    console.error('This is reported, not skipped: the build/review pass continues; only the note is missing.');
+    process.exit(1);
+  }
+  const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
+  if (!out.res.ok) die('set loop-note field', out);
+
+  // Verify from a fresh read — a 200 is not proof the value stuck.
+  const after = await call('GET', `/api/v2/task/${taskId}`);
+  const got = after.res.ok
+    ? (after.json.custom_fields || []).find((f) => f.id === field.id)?.value
+    : undefined;
+  if (String(got ?? '') !== text) {
+    console.error(`\nLoop note did NOT stick: wrote ${JSON.stringify(text)}, read back ${JSON.stringify(got ?? null)}.`);
+    process.exit(1);
+  }
+  console.log(`Loop note on ${taskId}: ${text} (verified by reading it back).`);
+  reportLimits(out.res);
 }
