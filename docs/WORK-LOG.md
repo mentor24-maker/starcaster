@@ -14,6 +14,19 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — Rows can split into four, five, or six equal columns (#TBD)
+
+The Builder could split a row into up to three columns; now it also offers
+four, five, and six equal columns, chosen from the same row-layout control.
+Existing pages are untouched — the new layouts are additions, not changes to
+any current one. The automated render check was taught to measure a whole
+row's column layout (it could only look at single modules before), and it now
+verifies a four-column row actually lays out four equal columns; breaking the
+layout on purpose makes it fail, so a future change cannot silently collapse
+the grid.
+
+---
+
 ## 2026-08-22 — See what the loop queue is actually doing, at a glance (#370)
 
 The task list showed which stage each item was in, but not whether the

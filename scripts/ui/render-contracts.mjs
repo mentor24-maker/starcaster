@@ -223,6 +223,33 @@ export const RENDER_DIFFERENTIALS = [
 
 export const RENDER_CONTRACTS = [
   {
+    id: 'section-four-column-grid',
+    why:
+      'The 4/5/6 equal-column row layouts are section-level (an inline grid-template-columns from ' +
+      'LAYOUT_SPECS), which the module-only sweep never rendered. Assert the four-column row actually ' +
+      'lays out four EQUAL tracks — break the spec and the tracks change, so this catches a regression ' +
+      'the "does a module animate" sweep structurally could not.',
+    section: { layout: 'four-column', modules: [{ type: 'text', text: '<p>col</p>', settings: {} }] },
+    selector: '.builder-preview-section-layout-four-column',
+    read: ['gridTemplateColumns'],
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      if (tracks.length !== 4) {
+        return `four-column row rendered ${tracks.length} track(s) (${sample.styles.gridTemplateColumns || 'none'}), not 4 — the layout grid is wrong.`;
+      }
+      const widths = tracks.map((t) => parseFloat(t));
+      if (widths.some((w) => !Number.isFinite(w))) {
+        return `four-column tracks are not resolved pixel widths (${sample.styles.gridTemplateColumns}) — cannot confirm equal columns.`;
+      }
+      const spread = Math.max(...widths) - Math.min(...widths);
+      if (spread > 2) {
+        return `four-column tracks are not equal (widths ${widths.join(', ')}px, spread ${spread.toFixed(1)}px > 2px).`;
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'image-effect-actually-animates',
     why:
       'Cruise and Tumbleweed were offered in two image panels from the Normie port onward and ' +
