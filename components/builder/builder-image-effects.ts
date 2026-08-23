@@ -16,18 +16,21 @@ import type { CSSProperties } from "react";
  * The five effects that DO have keyframes but no option — flips, slide,
  * cartwheels, parkour, axis-rotate — were the other half of the same drift:
  * reachable only by hand-editing a setting, because surfacing them was a
- * design question for the operator rather than a bug fix. Three of them
- * (flips, slide, axis-rotate) were surfaced on 2026-08-22; cartwheels and
- * parkour stay unsurfaced, cartwheels because it is Tumbleweed renamed.
+ * design question for the operator rather than a bug fix. Four of them
+ * (flips, slide, axis-rotate on 2026-08-22, parkour on 2026-08-23) are now
+ * surfaced; CARTWHEELS ALONE STAYS UNSURFACED, because it is Tumbleweed
+ * renamed.
  *
  * Surfacing Slide then made Cruise redundant — see RETIRED_IMAGE_EFFECTS.
  *
  * He answered it on 2026-08-19 (ClickUp 86bbfrpbb). Slide, axis-rotate and
- * flips are offered here from 2026-08-22. CARTWHEELS IS DELIBERATELY NOT —
- * his words, "which is the same as tumbleweed, let's stick with tumbleweed" —
- * and parkour is a harder piece of work of its own. Both keep their dead
- * keyframes in `_builder-react.css`; `check:render` reports them as orphans
- * every run, which is the intended state, not an oversight to tidy away.
+ * flips are offered here from 2026-08-22, parkour from 2026-08-23 — it was
+ * held back as a harder piece of work of its own, being the only effect that
+ * turns about two axes at once. CARTWHEELS IS DELIBERATELY NOT OFFERED — his
+ * words, "which is the same as tumbleweed, let's stick with tumbleweed". It
+ * keeps its dead keyframe in `_builder-react.css`; `check:render` reports
+ * that one as an orphan every run, which is the intended state, not an
+ * oversight to tidy away.
  *
  * THREE MOTIONS, THREE PROPERTIES (2026-08-17). Travel, spin and hop each
  * needed its own rate, and three rates cannot share one `transform` — the
@@ -52,7 +55,12 @@ export const IMAGE_EFFECT_OPTIONS: { value: string; label: string }[] = [
   // separate piece of work.
   { value: "slide", label: "Slide" },
   { value: "axis-rotate", label: "Axis Rotate" },
-  { value: "flips", label: "Flips" }
+  { value: "flips", label: "Flips" },
+  // Parkour, 2026-08-23 — the fourth and last of that decision. Held back
+  // from the 08-22 batch because it is the only effect that rotates about
+  // TWO axes at once, which the individual `rotate` property cannot express
+  // (it takes one axis). See sc-effect-tumble in _builder-react-overrides.css.
+  { value: "parkour", label: "Parkour" }
 ];
 
 /**
@@ -244,6 +252,14 @@ export function getImageEffectClassName(rawEffect: string | undefined) {
   if (effect === "slide") return " starcaster-effect-slide-motion";
   if (effect === "axis-rotate") return " starcaster-effect-axis-rotate";
   if (effect === "flips") return " starcaster-effect-flips";
+  // `-parkour-MOTION`, and for exactly the reason slide's name is suffixed:
+  // the generated `_builder-react.css` still carries the buried effect's old
+  // `!important` overlay rules keyed on `:has(.starcaster-effect-parkour)`
+  // (lines ~4640, ~10867, ~10893), which pin a FLOATING image to `inset: 0`
+  // at `min-height: 240px` and re-add the fixed-duration `normie-parkour`
+  // animation that has no settings behind it. A class token they do not match
+  // is the fix that worked for slide; the same dodge, for the same rules.
+  if (effect === "parkour") return " starcaster-effect-parkour-motion";
   return "";
 }
 
@@ -259,7 +275,7 @@ export function usesHorizontalMotionClip(effect: string | undefined): boolean {
 /** The effects that cross the page — Direction applies to these. */
 export function imageEffectTravels(rawEffect: string | undefined): boolean {
   const effect = normalizeImageEffect(rawEffect);
-  return effect === "tumbleweed" || effect === "slide";
+  return effect === "tumbleweed" || effect === "slide" || effect === "parkour";
 }
 
 /** The effects Rotation Rate applies to — nothing else shows the control. */
@@ -269,14 +285,15 @@ export function imageEffectRotates(rawEffect: string | undefined): boolean {
     effect === "spin" ||
     effect === "tumbleweed" ||
     effect === "axis-rotate" ||
-    effect === "flips"
+    effect === "flips" ||
+    effect === "parkour"
   );
 }
 
 /** The effects Frequency applies to. */
 export function imageEffectBounces(rawEffect: string | undefined): boolean {
   const effect = normalizeImageEffect(rawEffect);
-  return effect === "tumbleweed" || effect === "flips";
+  return effect === "tumbleweed" || effect === "flips" || effect === "parkour";
 }
 
 /**

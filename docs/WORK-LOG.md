@@ -14,6 +14,49 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — Parkour: the last of the four picture effects you asked for (#PR)
+
+Back on 19 August you looked at a list of animations that were built into the
+Builder but that nobody could actually pick, and you chose four to bring out.
+Three of them — Slide, Axis Rotate and Flips — arrived on the 22nd. **Parkour
+is the fourth and last, and it is now in the Effect dropdown** on both the
+Image and the Floating Image panels.
+
+Parkour is the busy one. The picture travels across the page, bounces as it
+goes, and spins on two axes at the same time — turning like a clock face while
+also tumbling towards and away from you, the way a card looks when you flip it
+over end-over-end. It is the only effect that does all three things at once,
+so it is also the only one that offers every control: Direction, Speed,
+Rotation Rate, Frequency, Bounce Height, Start Delay and Repeat.
+
+Two things made this harder than its three siblings, and both are worth
+knowing because they cost time elsewhere:
+
+The first is that the tool the other effects use to rotate a picture only
+turns it about **one** axis. There is no setting for "spin and tumble at the
+same time", so parkour needed its own purpose-built piece of animation. It is
+still driven by the same Rotation Rate control as everything else, so "25
+turns a minute" means the same thing here as it does on Spin.
+
+The second is a trap this codebase has now fallen into twice. There was an old,
+abandoned version of Parkour still sitting in the stylesheet — a fixed-speed
+animation that ignores every setting, plus some layout rules that squash a
+floating picture into a fixed 240-pixel band. Slide hit exactly this and took
+three review rounds to sort out. So parkour deliberately goes by a slightly
+different internal name, which the abandoned rules do not recognise. That was
+checked in a real browser rather than assumed: under the old name the picture
+gets flattened and every setting is ignored; under the new one it behaves.
+
+Also confirmed by eye, on a real rendered page: the picture does visibly travel,
+bounce and turn on both axes together, and it stops completely for a visitor
+whose computer is set to reduce motion.
+
+Cartwheels is still deliberately absent — it is Tumbleweed under another name,
+which is what you said at the time, and there is now a test that stops a future
+tidy-up from "helpfully" adding it back.
+
+---
+
 ## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
 
 Until today, if a piece of work changed how a page *looks*, the only way to

@@ -339,20 +339,22 @@ describe("image effects", () => {
    * bug this file was opened for.
    */
 
-  it("offers the three surfaced effects and still hides the two that were not", () => {
+  it("offers the four surfaced effects and still hides the one that was refused", () => {
     const offered = IMAGE_EFFECT_OPTIONS.map((option) => option.value);
     expect(offered).toContain("slide");
     expect(offered).toContain("axis-rotate");
     expect(offered).toContain("flips");
-    // Cartwheels is Tumbleweed under another name and the operator said so in
-    // as many words; parkour is a separate piece of work. Neither is a
-    // picker entry, and this test is what keeps a future sweep from
-    // "helpfully" completing the set.
+    // Parkour joined them on 2026-08-23. It was always part of the operator's
+    // decision — it was held back only because two-axis rotation is a harder
+    // piece of work, not because he refused it.
+    expect(offered).toContain("parkour");
+    // CARTWHEELS IS THE ONE HE REFUSED: Tumbleweed under another name, and he
+    // said so in as many words. It is not a picker entry, and this assertion
+    // is what keeps a future sweep from "helpfully" completing the set.
     expect(offered).not.toContain("cartwheels");
-    expect(offered).not.toContain("parkour");
   });
 
-  it("names a class for each of the three", () => {
+  it("names a class for each of the surfaced effects", () => {
     // Slide emits `-slide-motion`, not `-slide`: the generated stylesheet's
     // dead `:has(.starcaster-effect-slide)` layout rules collapse a floating
     // image to 0px, so the live class must not match them (loop-review round 4).
@@ -435,7 +437,90 @@ describe("image effects", () => {
     expect(rule).toContain("sc-effect-hop var(--sc-effect-bounce-duration");
   });
 
-  it("stops all three for a visitor who asked for less motion", () => {
+  it("parkour travels, turns and hops all at once — so it offers every control", () => {
+    // The one effect that answers yes to all three predicates, which is what
+    // puts all seven controls on its panel. Anything less and the operator
+    // gets a control the page ignores, or a motion with no control behind it.
+    expect(imageEffectTravels("parkour")).toBe(true);
+    expect(imageEffectRotates("parkour")).toBe(true);
+    expect(imageEffectBounces("parkour")).toBe(true);
+    // It travels, so the hop rides the stage wrapper rather than the figure —
+    // the figure has already spent `translate` on the crossing.
+    expect(imageEffectBouncesInPlace("parkour")).toBe(false);
+    // And travelling means it needs the corridor, or it scrolls the page.
+    expect(usesHorizontalMotionClip("parkour")).toBe(true);
+  });
+
+  it("dodges the buried effect's selector instead of fighting it", () => {
+    // NOT `starcaster-effect-parkour`: the regenerated `_builder-react.css`
+    // still binds that exact class to `min-height: 240px` + `inset: 0
+    // !important` on a floating image, and to the settings-ignoring
+    // `normie-parkour` animation. Slide proved over three review rounds that
+    // the override cannot win those; a class token they do not match can.
+    expect(getImageEffectClassName("parkour")).toBe(" starcaster-effect-parkour-motion");
+    // Guard the dodge itself: if this ever regresses to the bare name, the
+    // dead `:has()` rules start matching again and a floating parkour
+    // collapses to nothing with no error anywhere.
+    expect(builderCss).toContain(":has(.starcaster-effect-parkour)");
+    expect(getImageEffectClassName("parkour")).not.toBe(" starcaster-effect-parkour");
+  });
+
+  it("turns parkour about two axes at once, which needs `transform` and its own keyframe", () => {
+    // The individual `rotate` property takes ONE axis, so the two-axis motion
+    // cannot be expressed by reusing sc-effect-turn or sc-effect-turn-y.
+    expect(builderCss).toContain("@keyframes sc-effect-tumble");
+    const rule = winningRule("starcaster-effect-parkour-motion");
+    expect(rule).toBeDefined();
+    // Travel on `translate`, rotation on `transform` — two animations, two
+    // properties, and the hop on a third element. None of them collide.
+    expect(rule).toContain("sc-effect-travel var(--sc-effect-travel-duration");
+    expect(rule).toContain("sc-effect-tumble var(--sc-effect-rotation-duration");
+    // Rotation Rate has to mean the same thing here as on every other
+    // rotating effect, which is what the shared variable buys. Matched on the
+    // DECLARATION rather than the bare name — the comment above the rule
+    // names `normie-parkour` too, and a substring check caught its own prose.
+    expect(rule).not.toMatch(/animation:\s*normie-/);
+    // Y rotation with no depth on an ancestor reads as a flat squash, not a
+    // turn — the same trap axis-rotate documents.
+    expect(rule).toContain("transform-style: preserve-3d");
+    expect(builderCss).toContain(
+      ".starcaster-effect-motion-clip:has(.starcaster-effect-parkour-motion)"
+    );
+  });
+
+  it("drives parkour's three motions from the settings, not from fixed durations", () => {
+    // 90 turns/min is a 0.667s turn; the crossing is Speed; the hop is the
+    // crossing divided by Frequency, and rides the stage because it travels.
+    expect(getImageEffectStyle({ effect: "parkour", effectRotationRate: "60", effectSpeed: "4" })).toEqual({
+      "--sc-effect-rotation-duration": "1s",
+      "--sc-effect-travel-duration": "4s"
+    });
+    expect(
+      getImageEffectStageStyle({ effect: "parkour", effectSpeed: "4", effectFrequency: "4", effectBounceHeight: "150" })
+    ).toEqual({
+      "--sc-effect-bounce-duration": "1s",
+      "--sc-effect-bounce": "150%"
+    });
+    // Right-to-left reverses the travel AND the tumble together, the same
+    // single keyword tumbleweed uses.
+    expect(
+      (getImageEffectStyle({ effect: "parkour", effectDirection: "rtl" }) as Record<string, string>)[
+        "--sc-effect-direction"
+      ]
+    ).toBe("reverse");
+  });
+
+  it("keeps parkour turning for the whole crossing when Repeat is Once", () => {
+    // The trap tumbleweed's rule documents: one flat iteration count would
+    // stop the tumble after a single turn and the figure would slide the rest
+    // of the way flat. 8s crossing at 2.4s a turn is 3 turns.
+    expect(imageEffectRunsOnce({ effect: "parkour", effectRepeat: "once" })).toBe(true);
+    const style = getImageEffectStyle({ effect: "parkour", effectRepeat: "once" }) as Record<string, string>;
+    expect(style["--sc-effect-travel-iterations"]).toBe("1");
+    expect(style["--sc-effect-turn-iterations"]).toBe("3");
+  });
+
+  it("stops every surfaced effect for a visitor who asked for less motion", () => {
     // R6. The reduced-motion block is one selector list, and an effect added
     // without a line in it keeps moving for exactly the people who asked it
     // not to — a silent accessibility regression with no other symptom.
@@ -448,7 +533,7 @@ describe("image effects", () => {
     // silencer line still passed. Caught by breaking it on purpose, which is
     // the only reason anyone would ever have noticed.
     expect(reducedMotionEffectSelectors, "the reduced-motion silencer block").toBeDefined();
-    for (const effect of ["slide", "axis-rotate", "flips"]) {
+    for (const effect of ["slide", "axis-rotate", "flips", "parkour"]) {
       // Derive the class (slide's is `-slide-motion`) rather than assume it
       // equals the option value — a substring check on `-slide` would pass
       // against `-slide-motion` by accident and hide a missing silencer line.

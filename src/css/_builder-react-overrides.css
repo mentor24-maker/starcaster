@@ -6069,6 +6069,81 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
 }
 
+/* ---------------------------------------------------------------------------
+   Parkour (2026-08-23)
+   ---------------------------------------------------------------------------
+   The fourth and last of the operator's 2026-08-19 decision (ClickUp
+   86bbfrpbb), and the only one held back from the 08-22 batch. It travels,
+   hops, and turns about TWO axes at once — a Z-spin and a Y-tumble together.
+
+   WHY IT NEEDS ITS OWN KEYFRAME. Every other effect here turns on the
+   individual `rotate` property, which takes ONE axis: `rotate: 1turn` is
+   about Z, `rotate: y 1turn` is about Y, and there is no form that composes
+   two independent rotations. (`rotate: 1 1 0 45deg` names a single tilted
+   axis, which tumbles diagonally — not the same motion at all.) So parkour's
+   rotation goes back onto `transform`, where the two functions compose the
+   way the reference does.
+
+   Putting it on `transform` costs nothing here, because the three-properties
+   rule that governs the rest of this file is about the three MOTIONS not
+   colliding, and they still do not: the travel owns `translate` on the
+   figure, the hop owns `translate` on the stage wrapper, and the rotation
+   owns `transform` on the figure. Three animations, three properties, no
+   two of them fighting over one.
+
+   The reference is the dead `normie-parkour` keyframe in `_builder-react.css`
+   (~line 10778): -100vw to 100vw, four -36px hops, and `rotate()` +
+   `rotateY()` advancing in lockstep to 1200deg over a fixed 8s. Its CHARACTER
+   is what is being reproduced, not its pixels — 1200deg in 8s is 2.4s a turn,
+   which is exactly what Rotation Rate's default of 25 turns/min gives, so an
+   untouched parkour turns at the reference's speed and every other rate is
+   now one dropdown away. */
+@keyframes sc-effect-tumble {
+  from {
+    transform: rotate(0turn) rotateY(0turn);
+  }
+
+  to {
+    transform: rotate(1turn) rotateY(1turn);
+  }
+}
+
+/* DEPTH LIVES ON AN ANCESTOR — the same lesson axis-rotate records. A picture
+   turning about its own Y axis with `perspective` on ITSELF stays flat and
+   reads as a horizontal squash. The motion clip is the nearest box that is
+   not itself animated, and 1600px matches what the old dead rule used. */
+.builder-react-root .starcaster-effect-motion-clip:has(.starcaster-effect-parkour-motion) {
+  perspective: 1600px;
+  perspective-origin: center center;
+}
+
+/* The class is `starcaster-effect-parkour-MOTION`, not `-parkour`, and this is
+   not a stylistic choice: the generated `_builder-react.css` still carries the
+   buried effect's old rules keyed on `:has(.starcaster-effect-parkour)`, which
+   pin a FLOATING image to `inset: 0 !important` at `min-height: 240px` and
+   reinstate the fixed-duration `normie-parkour` animation that has no settings
+   behind it. Slide hit the identical trap and three rounds of loop-review
+   proved that fighting those rules loses and dodging the selector wins; the
+   name they cannot match is the fix. getImageEffectClassName carries the
+   matching note. Those rules are LEFT WHERE THEY ARE — `_builder-react.css` is
+   regenerated wholesale (R2), so a deletion would come back on its own. */
+.builder-react-root .starcaster-effect-parkour-motion {
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  animation:
+    sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
+    sc-effect-tumble var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  /* TWO values, for the reason tumbleweed's rule spells out: a flat `1` would
+     stop the tumble after one turn and the figure would slide the rest of the
+     crossing without rotating. The renderer works out how many turns fit. */
+  animation-iteration-count:
+    var(--sc-effect-travel-iterations, infinite),
+    var(--sc-effect-turn-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
 /* R6: motion is decoration on all of these — a visitor who has asked their
    system for less of it gets the picture, standing still. */
 @media (prefers-reduced-motion: reduce) {
@@ -6077,7 +6152,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .starcaster-effect-spin,
   .builder-react-root .starcaster-effect-slide-motion,
   .builder-react-root .starcaster-effect-axis-rotate,
-  .builder-react-root .starcaster-effect-flips {
+  .builder-react-root .starcaster-effect-flips,
+  .builder-react-root .starcaster-effect-parkour-motion {
     animation: none;
   }
 }
