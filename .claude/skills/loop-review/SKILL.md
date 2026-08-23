@@ -24,10 +24,29 @@ list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
 npm run clickup -- queue --list 901418546619 --status "In review"   # FIRST LINE is the one to review
 npm run clickup -- get --task <id>                                  # the task, header + body
 npm run clickup -- comments --task <id>                             # the comments — the PR URL lives here
-npm run clickup -- status --task <id> --status "Ready to launch"    # pass (Dane auto-assigned)
+npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -   # pass: card + status together
+npm run clickup -- ask --task <id> --status "Needs your input" --body-file -  # a judgment call only he can settle
 npm run clickup -- status --task <id> --status Queued               # send back (assignees auto-cleared)
-npm run clickup -- comment --task <id> --body-file -                # body on stdin
+npm run clickup -- comment --task <id> --body-file -                # a plain note
+npm run clickup -- describe --task <id> --body-file -               # REPLACE the description (left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -        # post to the bus
+```
+
+## The two columns — which one you are writing to
+
+Detail goes **left** (the description). The **right** column carries only the
+operator card. Ratified 2026-08-22, after Sync 6/7 and 7/7 both stalled because
+the loops' reasoning arrived as walls of text in ClickUp's narrow right column.
+
+Handing a ticket to Dane is one command, not two: `status` refuses to set
+`Ready to launch` or `Needs your input` on its own and points at `ask`. The card
+body is four sections, checked before anything is sent:
+
+```
+@@ASKED     his own words that caused this ticket, verbatim — never invented
+@@WHEN      optional — when and where he said it
+@@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
+@@NEEDED    the specific ask, under a banner he can spot without reading
 ```
 
 Use the connector only if the direct script itself is broken, and say so in
@@ -66,10 +85,13 @@ the run report.
      Non-goals violated? Any generated artifact left un-rebuilt?
 
 4. **Decide.**
-   - **Pass** → set the task to `Ready to launch` **and assign Dane**. Post to
-     the operator (the ClickUp bus channel and/or a push notification) a
-     compact message: task name, PR link, Vercel preview link, the "How to
-     test" steps, and the line **"Reply/tell me to merge when you're ready."**
+   - **Pass** → `ask --status "Ready to launch"`. `@@ASKED` carries the
+     instruction the ticket came from; `@@CONTEXT` says in 50-100 words what
+     changed and what he will see; `@@NEEDED` is the merge approval, with the
+     PR link, the Vercel preview link, the exact address and clicks to check it,
+     and the line **"Tell me to merge when you're ready."** Put the full "How to
+     test" walkthrough in the description with `describe` if it runs long.
+     Also post the compact version to the bus channel.
      Do **NOT** merge — per standing rule, CC merges only on the operator's
      explicit command, and only with all checks green.
    - **Fail, and a machine can fix it** → set the task back to `Queued`,
@@ -79,10 +101,11 @@ the run report.
      check stays honest.
    - **Fail, and only a human can settle it** (the task is ambiguous, the
      acceptance criteria contradict what the code should do, or the fix is a
-     product decision) → set it to `Needs your input`, **assign Dane**, and
-     write the comment as a plain-language question for the operator. Do not
-     bounce a judgment call around the loop; that is what this status exists
-     for.
+     product decision) → `ask --status "Needs your input"`. Put the evidence in
+     the description with `describe`; keep `@@CONTEXT` to the 50-100 words he
+     needs to decide, and give `@@NEEDED` named options to choose between
+     rather than an open question. Do not bounce a judgment call around the
+     loop; that is what this status exists for.
 
 5. **Report** the task and your verdict, then finish (the `/loop` wrapper
    re-invokes you for the next one).

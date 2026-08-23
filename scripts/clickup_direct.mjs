@@ -53,8 +53,10 @@ import { writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import busRelayPlan from './builder/busRelayPlan.js';
 import mergeOnComment from './builder/mergeOnComment.js';
+import operatorCard from './builder/operatorCard.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
 const { mergeDecision, githubGate, MERGE_PHRASES } = mergeOnComment;
+const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -174,6 +176,14 @@ function usage(code = 2) {
   console.error('                                             machine statuses auto-clear; --if-status makes it a safe claim;');
   console.error('                                             status AND assignees verified from the write response');
   console.error('  comment --task <id> --body-file <file|->   add a comment, verified by reading the comments back');
+  console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
+  console.error('                                             long detail belongs. Verified by reading it back.');
+  console.error('  ask --task <id> --body-file <file|-> [--status "Needs your input"|"Ready to launch"] [--no-move]');
+  console.error('                                             hand the ticket to the operator: post an operator card, then');
+  console.error('                                             move the status (he is auto-assigned). --no-move posts the');
+  console.error('                                             card and leaves the status alone. The card body uses');
+  console.error(`                                             @@ASKED / @@WHEN / @@CONTEXT / @@NEEDED; @@CONTEXT must be`);
+  console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. Checked before anything is sent.`);
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
   console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run] [--no-merge]');
   console.error('                                             relay the operator\'s new comments on open tasks to the bus.');
@@ -565,6 +575,27 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
+  // Handing a ticket to the operator means saying what you need from him.
+  // Before 2026-08-22 those were two separate commands, so the status could
+  // move on its own and routinely did — Sync 7/7 sat in his inbox for a day
+  // wearing a red "Needs your input" badge with no answerable question
+  // anywhere on it. `ask` does both together; this refuses the half of it
+  // that produces that state. Runs BEFORE any network call: a refusal must
+  // leave the ticket exactly where it was.
+  if (OPERATOR_STATUSES.includes(status.toLowerCase()) && !flag('no-card')) {
+    console.error(`\n"${status}" is a handoff to the operator, not just a status.\n`);
+    console.error('Use `ask` instead — it posts the operator card and moves the status together:');
+    console.error(`  npm run clickup -- ask --task ${task} --status "${status}" --body-file -\n`);
+    console.error('The card body is four sections, and the check runs before anything is sent:');
+    console.error('  @@ASKED    his own words that caused this ticket, verbatim');
+    console.error('  @@WHEN     optional — when and where he said it');
+    console.error(`  @@CONTEXT  the problem and the fix in plain English, ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words`);
+    console.error('  @@NEEDED   the specific ask ("Nothing right now" is fine — say it out loud)\n');
+    console.error('If this really is a status move with no ask attached, pass --no-card. That flag is');
+    console.error('your written claim that a card is not owed here, visible in the transcript.\n');
+    process.exit(2);
+  }
+
   // One read up front: it powers the --if-status claim guard, the
   // clear-assignees list, and the was→now line in the report.
   const before = await call('GET', `/api/v2/task/${task}`);
@@ -683,6 +714,146 @@ if (cmd === 'whoami') {
   }
   console.log(`Comment ${newId} added to task ${task} (${found.comment_text.length} characters, verified by reading it back).`);
   reportLimits(check.res);
+
+} else if (cmd === 'describe') {
+  // The left column. Until 2026-08-22 this script could write a comment but
+  // not a description, so every loop put its reasoning in the narrow
+  // right-hand column and the roomy left one kept a machine-shaped spec.
+  // That is the wrong way round, and it is what stalled Sync 6/7 and 7/7.
+  const task = arg('task'), bodyFile = arg('body-file');
+  if (!task || !bodyFile) usage();
+  const sent = readBody(bodyFile);
+  if (!sent.trim()) {
+    console.error('Refusing to write an empty description — that replaces the whole left column with nothing.');
+    console.error('If you really mean to blank it, do it in the ClickUp UI where you can see what you are erasing.');
+    process.exit(2);
+  }
+
+  // ClickUp deletes blockquote lines from descriptions too, not just comments
+  // (found live 2026-08-22 — the "## Dane asked for" section of the first
+  // rewritten ticket came back with the quoted instruction gone). Refuse
+  // before sending: a partial description is worse than none, because it looks
+  // finished.
+  const quoted = operatorCard.findBlockquoteLines(sent);
+  if (quoted.length) {
+    console.error(`\nThis body uses "> " blockquotes (line ${quoted.join(', ')}), and ClickUp DELETES them.`);
+    console.error('They do not arrive unformatted — they arrive not at all, and the write still returns 200.\n');
+    console.error('Use plain text, **bold**, or a fenced block. A "> " inside a ``` fence is fine.\n');
+    process.exit(2);
+  }
+
+  const out = await call('PUT', `/api/v2/task/${task}`, { markdown_content: sent });
+  if (!out.res.ok) die('set description', out);
+
+  // Read it back. A description write that normalizes to nothing returns a
+  // clean 200 (DOCTRINE 3.10) — and this one replaces the whole field, so a
+  // silent truncation loses the previous text too.
+  const back = await call('GET', `/api/v2/task/${task}?include_markdown_description=true`);
+  if (!back.res.ok) {
+    console.error('WARNING: description written, but reading it back failed — verify by eye before trusting it.');
+    process.exit(1);
+  }
+  const saved = back.json.markdown_description ?? back.json.description ?? '';
+  if (!saved.trim()) {
+    console.error(`Description did NOT land: task ${task} reads back empty. The left column has been wiped.`);
+    console.error('Restore it from your source file before doing anything else.');
+    process.exit(1);
+  }
+  // ClickUp normalizes markdown on save, so an exact match is the wrong test.
+  // A large shortfall is not normalization, it is loss.
+  if (saved.length < sent.trim().length * 0.6) {
+    console.error(`Description looks TRUNCATED: sent ${sent.trim().length} characters, read back ${saved.length}.`);
+    console.error('Open the task and compare before trusting it.');
+    process.exit(1);
+  }
+  console.log(`Task ${task}: description replaced (${sent.trim().length} characters sent, ${saved.length} read back).`);
+  reportLimits(back.res);
+
+} else if (cmd === 'ask') {
+  // The ONE way a loop hands a ticket to the operator. It posts the card and
+  // moves the status together, so the two can never come apart — a status
+  // change with no card is a ticket in his inbox with no stated ask, which
+  // is exactly how Sync 7/7 sat there for a day (2026-08-22).
+  const task = arg('task'), bodyFile = arg('body-file');
+  if (!task || !bodyFile) usage();
+  // --no-move posts the card and leaves the status alone. For a ticket that
+  // stays in a machine status but is still worth explaining — a Queued ticket
+  // whose ask is genuinely "nothing right now" reads far better with a card on
+  // it than with a bare status, and it is not a handoff.
+  const noMove = flag('no-move');
+  const status = arg('status') || 'Needs your input';
+  if (!noMove && !OPERATOR_STATUSES.includes(status.toLowerCase())) {
+    console.error(`\`ask\` hands work to the operator, so --status must be one of: ${OPERATOR_STATUSES.join(', ')}.`);
+    console.error(`Got "${status}". For a machine status use \`status\`, or --no-move to post a card without moving.`);
+    process.exit(2);
+  }
+
+  // Shape first, network second: a card that fails the check must not leave
+  // a half-done handoff behind.
+  let rendered, card;
+  try {
+    ({ rendered, card } = buildCard(readBody(bodyFile)));
+  } catch (err) {
+    console.error(`\n${err.message}\n`);
+    process.exit(2);
+  }
+
+  const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered });
+  if (!posted.res.ok) die('post the operator card', posted);
+  const cardId = String(posted.json.id ?? '');
+
+  // Read the card back and confirm the operator's own words are in it. This
+  // check is not hypothetical: it is how the blockquote bug was found (see the
+  // note at the top of operatorCard.js). ClickUp returned a healthy 200 and a
+  // long comment with his instruction silently deleted out of the middle.
+  const readBack = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!readBack.res.ok) {
+    console.error(`WARNING: card ${cardId} posted, but reading it back failed — check it by eye.`);
+    process.exit(1);
+  }
+  const stored = (readBack.json.comments || []).find((c) => String(c.id) === cardId);
+  if (!stored || !(stored.comment_text || '').trim()) {
+    console.error(`The card did NOT land: id ${cardId || '(none)'} ${stored ? 'saved empty' : 'not found'}.`);
+    console.error('The status has NOT been moved — the ticket is where you left it.');
+    process.exit(1);
+  }
+  const lost = operatorCard.cardSurvived(card, stored.comment_text);
+  if (lost) {
+    console.error(`\n${lost}\n`);
+    console.error(`Comment ${cardId} is on the task. The status has NOT been moved.`);
+    process.exit(1);
+  }
+
+  if (noMove) {
+    console.log(`Task ${task}: card ${cardId} posted (status untouched, --no-move).`);
+    reportLimits(readBack.res);
+    process.exit(0);
+  }
+
+  const before = await call('GET', `/api/v2/task/${task}`);
+  if (!before.res.ok) die('read task before handoff', before);
+  const was = before.json.status?.status ?? '?';
+
+  const moved = await call('PUT', `/api/v2/task/${task}`, {
+    status,
+    assignees: { add: [OPERATOR_ID], rem: [] },
+  });
+  if (!moved.res.ok) {
+    console.error(`The card posted (comment ${cardId}) but the status did NOT move.`);
+    die('set status', moved);
+  }
+  const now = moved.json.status?.status ?? '?';
+  if (now.toLowerCase() !== status.toLowerCase()) {
+    console.error(`Card posted (comment ${cardId}), but the status did NOT stick: asked "${status}", got "${now}".`);
+    process.exit(1);
+  }
+  if (!(moved.json.assignees || []).some((a) => a.id === OPERATOR_ID)) {
+    console.error(`Card posted and status moved to "${now}", but the operator is NOT assigned.`);
+    console.error('Assignment is how he finds this — the handoff is incomplete until it sticks.');
+    process.exit(1);
+  }
+  console.log(`Task ${task}: card ${cardId} posted, "${was}" -> "${now}", assigned: ${assigneeNames(moved.json)}.`);
+  reportLimits(moved.res);
 
 } else if (cmd === 'lists') {
   // Exists because of 2026-08-18: 90146476303 (the Starcaster SPACE) was
