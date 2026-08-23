@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — The relay no longer stops when the chat room does (#PR)
+## 2026-08-23 — The relay no longer stops when the chat room does (#414)
 
 Yesterday the whole task pipeline sat still for sixteen hours. Every one of
 your answers had been written, read and understood — they were sitting right
