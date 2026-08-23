@@ -1,3 +1,20 @@
+## 2026-08-23 — The YouTube acquire box works again
+
+On Acquire > YouTube there used to be a box where you pasted one video's link
+and got the whole video back — details, transcript, the lot. A redesign a while
+back deleted the box from the page but left the code that drives it, so the code
+has been reaching for something that is not there. No error, no clue: the
+feature simply was not on the screen any more.
+
+It is back, rebuilt as a modern component rather than restoring the old markup —
+the old admin code is frozen to bug fixes now, and new screens are built the new
+way.
+
+One thing behaves deliberately: the .mp4/.mp3 download needs a separate worker
+service that is not switched on yet. When it is missing, you still get the
+details and the transcript, and only the file-download part says so, naming
+where to turn it on. A missing extra never costs you the part that worked. (#PR)
+
 # Work Log
 
 Plain-English record of work shipped through the development loop
