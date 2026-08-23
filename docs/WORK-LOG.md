@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — The job that listens for your answers moved to the machine that stays awake (#PR)
+## 2026-08-23 — The job that listens for your answers moved to the machine that stays awake (#410)
 
 When you reply on a ticket, a job called the relay is what carries your answer
 forward — it reads your comment, posts it to the party line, and hands the
