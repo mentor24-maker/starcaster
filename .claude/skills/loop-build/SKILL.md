@@ -208,6 +208,25 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      Needs `npm run dev` and `npm run seed:ui-fixture` first, and is **not** a
      CI gate (CI has no browsers), so nothing else will catch a regression here.
 
+5. **Photograph the change if it altered a rendering.** Charter Q5: a visual
+   change reaches Dane as before/after pictures on the ticket, so the decision
+   he is asked for is "does this look right" rather than "check out this branch".
+
+   ```
+   PORT=3058 node server.js
+   UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:shots -- --task <task-id>
+   ```
+
+   Run it on EVERY task, not only the ones you think are visual — deciding
+   that yourself is the failure it exists to prevent. It costs about ten
+   seconds when nothing under `components/`, `lib/builder-client/`, `src/css/`,
+   `public/images/` or `builder-preview.html` changed: it says so and stops
+   without opening a browser. When renders are identical it also files nothing,
+   so a non-visual PR never interrupts him.
+
+   `docs/VISUAL_REVIEW.md` covers the rest — in particular, that a green run
+   proves something changed, never that it changed correctly.
+
    If a gate fails and you cannot fix it **within the task's scope**, escalate
    with `ask` (which posts the card and assigns Dane in one move) and stop. Do
    not force a broken build through, and do not expand scope to chase an
@@ -217,7 +236,7 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    `@@NEEDED` with the specific question, and where you can, give him named
    options to pick between rather than an open question.
 
-5. **Add a plain-English work-log entry.** Prepend one dated entry to
+6. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
    explain it to a non-programmer: what changed and why it mattered, plus the
    `(#PR)` number once known. Keep it to a short paragraph. This entry is part
@@ -226,7 +245,7 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    causes a merge conflict here, it is trivial (two entries at the top); resolve
    by keeping both.
 
-6. **Commit and open the PR.**
+7. **Commit and open the PR.**
    - Inspect `git diff --cached` before committing (staging is whole-file; make
      sure no stray edits ride along). Never commit generated artifacts.
    - Commit message ends with the Co-Authored-By trailer from CLAUDE.md.
@@ -236,7 +255,7 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      task's "How to test" steps, and a note that a Vercel preview will be
      attached. End with the Generated-with trailer.
 
-7. **Record the PR on the ticket — with the command, and check what it says.**
+8. **Record the PR on the ticket — with the command, and check what it says.**
 
    ```bash
    npm run clickup -- pr-opened --task <id> --pr <pr-url>
@@ -246,7 +265,7 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    link back to the ticket, then posts the one line the merge step can read
    (`PR opened: <url>`) and **parses it back with that step's own reader**.
 
-   **A non-zero exit here fails the run.** Do not carry on to step 8, and do
+   **A non-zero exit here fails the run.** Do not carry on to step 9, and do
    not hand the ticket to review — a ticket with no readable PR trail is a
    ticket the merge step will later refuse, which strands the operator's
    approval with nobody noticing. Exit 4 means the PR body is missing the
@@ -257,13 +276,13 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    ClickUp link either, so ticket and PR could only be paired by reading
    titles. The step had been written down the whole time.
 
-8. **Hand off to review.** Set the task status to `In review` and leave it
+9. **Hand off to review.** Set the task status to `In review` and leave it
    unassigned (it is the machine's turn, not Dane's). **Do NOT merge** —
    `main` is PR-protected (the "verify" check must go green) and merges happen
    only on the operator's explicit say-so. The `loop-review` skill takes it
    from here.
 
-9. **Report** which task you built and the PR number, then finish (the `/loop`
+10. **Report** which task you built and the PR number, then finish (the `/loop`
    wrapper will re-invoke you for the next task).
 
 ## Guardrails
