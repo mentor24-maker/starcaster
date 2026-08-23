@@ -14,7 +14,7 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-23 — A new work folder can reach a database on its own (#PR)
+## 2026-08-23 — A new work folder can reach a database on its own (#406)
 
 Every piece of work here happens in its own folder — a separate copy of the
 code, so two jobs cannot corrupt each other's files. A brand-new folder came up
