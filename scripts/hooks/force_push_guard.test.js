@@ -4,6 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 
 const { findForcePush, splitCommands, inspectOne } = require('../lib/force_push_guard.cjs');
 const { subcommands, findDenyRule } = require('../lib/permission_rules.cjs');
@@ -91,12 +93,29 @@ test('the force-push guard lets ordinary work through', async (t) => {
 test('the incident command is the one the old prefix rules missed', () => {
   // Pinning the actual hole, so a future "simplification" back to prefix
   // matching fails here rather than in production at 5am.
-  assert.ok(findForcePush(INCIDENT), 'the guard must catch it');
-  assert.notEqual(
-    findDenyRule('git push --force-with-lease', __dirname),
-    null,
-    'sanity: the deny rules DO catch the plain form — the hole was only the prefix'
+  //
+  // The rule is written into a temp project rather than read off this machine:
+  // the operator's ~/.claude/settings.json does not exist on a CI runner, and
+  // an assertion that depends on it passes locally forever and fails CI
+  // forever (CLAUDE.md landmine 14, same shape).
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forcepush-'));
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, '.claude', 'settings.json'),
+    JSON.stringify({ permissions: { deny: ['Bash(git push --force*)'] } })
   );
+
+  assert.notEqual(
+    findDenyRule('git push --force-with-lease', dir),
+    null,
+    'the prefix rule DOES catch the plain form — that was never the hole'
+  );
+  assert.equal(
+    findDenyRule(INCIDENT, dir),
+    null,
+    'and it does NOT catch the incident command — this is the hole, kept visible on purpose'
+  );
+  assert.ok(findForcePush(INCIDENT), 'which is exactly what the parsing guard has to cover');
 });
 
 test('quoted config values stay one token', () => {
