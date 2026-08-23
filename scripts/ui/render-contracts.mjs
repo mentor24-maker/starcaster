@@ -80,9 +80,42 @@ export function effectClassesInCss(text) {
   return found;
 }
 
+/**
+ * classSuffix → effect value, read from getImageEffectClassName in the source.
+ *
+ * Most effects emit `starcaster-effect-<value>`, but Slide deliberately does
+ * not: its class is `starcaster-effect-slide-motion`, to dodge the buried
+ * effect's dead `:has(.starcaster-effect-slide)` layout rules. So the orphan
+ * sweep must compare the stylesheet against the CLASSES effects emit, not their
+ * raw values — otherwise a renamed-but-offered effect reads as an unstyled
+ * orphan. Parsed from the same source file as the option list so the two can
+ * never drift.
+ */
+export function imageEffectClassMapFromSource(text) {
+  const fn = text.match(/getImageEffectClassName[\s\S]*?\n\}/);
+  const body = fn ? fn[0] : text;
+  const map = new Map();
+  for (const m of body.matchAll(/effect === ["']([^"']+)["']\s*\)\s*return\s*["']\s*starcaster-effect-([a-z0-9-]+)["']/g)) {
+    map.set(m[2], m[1]); // classSuffix -> effect value
+  }
+  return map;
+}
+
 /** One image module carrying the effect under test. */
 export function effectSweepModule(effect) {
   return { type: 'image', settings: { ...PICTURE, effect, effectSpeed: '8', effectRotationRate: '30' } };
+}
+
+/**
+ * A FLOATING image carrying an effect — the one place the buried effects' dead
+ * `!important` overlay-layout rules can bite. A `floating-image` renders as
+ * section-scoped overlay decor: normalizeModuleTrigger defaults its trigger to
+ * `button`, which isSectionScopedOverlayDecor looks for, so the
+ * `.builder-preview-image-shell-overlay` shell appears with no trigger set.
+ * Used by the Slide-shell comparison in check_render.mjs.
+ */
+export function floatingImageModule(effect) {
+  return { type: 'floating-image', settings: { ...PICTURE, effect } };
 }
 
 /**
@@ -121,15 +154,58 @@ export const RENDER_DIFFERENTIALS = [
   },
   {
     id: 'image-direction',
-    module: { type: 'image', settings: { ...PICTURE, effect: 'cruise' } },
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide' } },
     setting: 'effectDirection', from: 'ltr', to: 'rtl',
     why: 'Left-to-right is the ABSENCE of a variable rather than a second keyword, which is easy to break silently.',
   },
   {
     id: 'image-delay',
-    module: { type: 'image', settings: { ...PICTURE, effect: 'cruise' } },
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide' } },
     setting: 'effectDelay', from: '0', to: '9',
     why: 'Start Delay is only written when non-zero — a conditional emit is exactly where a control goes dead.',
+  },
+  /*
+   * THE SAME FOUR CONTROLS, ON THE THREE EFFECTS ADDED 2026-08-22.
+   *
+   * Every differential above is pinned to slide, spin or tumbleweed, and that
+   * is exactly how Slide, Axis Rotate and Flips shipped a review round with
+   * SEVEN DEAD CONTROLS. `normalizeImageEffectSettings` matched effects by
+   * name, the three new names were not in its lists, and it deleted every
+   * value on the way to the page. The picture animated the whole time — at the
+   * built-in default, forever — so the "does it animate" sweep, the named
+   * animation contracts and the tumbleweed differentials were all green
+   * together while nothing the operator touched did anything.
+   *
+   * The task's own non-goal said a new effect needs no differential because
+   * the sweep already requires it to animate. That reasoning is what let this
+   * through: animating and obeying are different claims, and only the second
+   * one is what a control is for. A NEW EFFECT NEEDS A DIFFERENTIAL ON EVERY
+   * CONTROL ITS PANEL OFFERS — one per motion is enough, since the three
+   * motions are what the keep-rule is grouped by.
+   */
+  {
+    id: 'image-slide-speed',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide' } },
+    setting: 'effectSpeed', from: '8', to: '30',
+    why: 'Slide travels, so it offers Speed. It was deleted before it reached the page for a whole review round.',
+  },
+  {
+    id: 'image-axis-rotate-rotation-rate',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'axis-rotate' } },
+    setting: 'effectRotationRate', from: '25', to: '120',
+    why: 'Rotation Rate is the ONLY control Axis Rotate offers — dead, it has no working control at all.',
+  },
+  {
+    id: 'image-flips-frequency',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'flips' } },
+    setting: 'effectFrequency', from: '4', to: '14',
+    why: 'Flips hops in place, so Frequency rides the figure rather than a stage wrapper — a different path to tumbleweed.',
+  },
+  {
+    id: 'image-flips-bounce-height',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'flips' } },
+    setting: 'effectBounceHeight', from: '50', to: '400',
+    why: 'The other half of the hop, on the same in-place path; height and frequency reach the element separately.',
   },
   {
     id: 'image-border-radius',
@@ -200,6 +276,63 @@ export const RENDER_CONTRACTS = [
         return `a still image built ${sample.page.corridors} travel corridor(s); a module that does not ` +
           'travel must not break out of its column at all.';
       }
+      return null;
+    },
+  },
+
+  // ── The three effects added in this task, asserted BY ANIMATION NAME ──────
+  // Not just "something animates": the regenerated base file (_builder-react.css)
+  // still carries the OLD normie-* keyframes on these same class names, so if a
+  // settings-driven override rule breaks, the effect silently degrades to a
+  // fixed-duration normie-* animation that ignores every setting — and the
+  // generic effect sweep (any animation running) stays green. Asserting the
+  // OVERRIDE's animation name is what catches that degrade. (Break-proof: remove
+  // the override's `animation:` line, rebuild CSS, and the matching contract
+  // below fails because a normie-* name runs instead.)
+  {
+    id: 'image-effect-slide-named',
+    why: 'Slide must run the OVERRIDE animation (sc-effect-travel), not the base file\'s normie-slide fallback.',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'slide', effectSpeed: '8' } },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      if (!names.includes('sc-effect-travel')) {
+        return `slide is not running \`sc-effect-travel\` (found: ${names.join(', ') || 'none'}). ` +
+          'If a normie-* name is here instead, the override broke and slide fell back to a settings-ignoring animation.';
+      }
+      if (!sample.advanced) return `slide's animation did not advance over ${sample.settleMs}ms — it is parked.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-effect-axis-rotate-named',
+    why: 'Axis-rotate must run sc-effect-turn-y (the override), not normie-axis-rotate (the base fallback).',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'axis-rotate', effectRotationRate: '30' } },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      if (!names.includes('sc-effect-turn-y')) {
+        return `axis-rotate is not running \`sc-effect-turn-y\` (found: ${names.join(', ') || 'none'}). ` +
+          'A normie-axis-rotate here means the override broke and Rotation Rate is being ignored.';
+      }
+      if (!sample.advanced) return `axis-rotate's animation did not advance over ${sample.settleMs}ms — it is parked.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-effect-flips-named',
+    why: 'Flips must run BOTH override animations (sc-effect-turn + sc-effect-hop), not the base fallbacks.',
+    module: { type: 'image', settings: { ...PICTURE, effect: 'flips', effectRotationRate: '30', effectBounceHeight: '150' } },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      for (const required of ['sc-effect-turn', 'sc-effect-hop']) {
+        if (!names.includes(required)) {
+          return `flips is not running \`${required}\` (found: ${names.join(', ') || 'none'}). ` +
+            'A missing override name means flips degraded to a settings-ignoring fallback.';
+        }
+      }
+      if (!sample.advanced) return `flips' animations did not advance over ${sample.settleMs}ms — parked.`;
       return null;
     },
   },
