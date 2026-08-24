@@ -186,7 +186,7 @@ if (!env) {
   // worktree starts with no way to reach any database at all.
   bad(
     'This folder has no settings file, so it cannot reach any database.',
-    'cp ../../../.env.local .      (copies your settings from the main folder)',
+    'npm run env:local      (points this folder at the database on this machine)',
     envPath,
   );
 } else if (!supabaseUrl) {

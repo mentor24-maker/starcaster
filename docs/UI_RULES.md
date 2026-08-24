@@ -138,6 +138,19 @@ as a rule first, then gets a checker where one is possible.
   offset and one width down the whole list; and each title sits over the
   column it titles.
 
+  **Two markup shapes wear this declaration.** The Links list is a div grid —
+  a header band, a rows container and rows, all reading one set of CSS tracks.
+  The Table module's editor is a real `<table>`, and `check_panels` was taught
+  that shape on 8/24 (thead/tbody/tr, colspan for a spanning cell). Before
+  that, a `<table>` could not opt in at all: declaring on one failed with
+  "rendered no rows", so the only choices were to leave a spreadsheet
+  unmeasured or to rewrite it as a div grid to satisfy the checker.
+
+  A real table is the easier half of the problem, because it shares its tracks
+  BY CONSTRUCTION rather than by two containers agreeing on a width. The
+  failure below is one a `<table>` cannot have — which is worth knowing when
+  choosing a shape, not only when checking one.
+
   **What the declaration cost to learn.** The Links list had spent months
   with its header band and its rows as two separate flex containers, each
   working the columns out from a different available width — the band's own
