@@ -55,6 +55,15 @@ npm run clickup -- describe --task <id> --body-file -                        # R
 
 ## The two columns — which one you are writing to
 
+**`describe` REPLACES the description — it does not append.** The spec and the
+acceptance criteria live there, and a build pass that writes its outcome with
+`describe` destroys the very thing the next reviewer checks the work against.
+That happened on 86bbjv61n (2026-08-23): the reviewer had to reconstruct the
+acceptance criteria from the outcome writeup that had overwritten them. **An
+outcome report is a `comment`.** Reach for `describe` only to change what the
+task IS — narrowing a scope the operator sliced, correcting a spec — and when
+you do, keep the spec above whatever you add.
+
 ClickUp shows the description on the **left**, wide, and comments on the
 **right**, narrow. Detail goes left. The right column carries the PR URL and the
 operator card, nothing else.
@@ -114,6 +123,30 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    so a parallel build loop that got there first shows up as exit code 3 —
    take the next task instead of proceeding.
 
+   **Then, BEFORE creating a branch, ask whether one already exists:**
+
+   ```bash
+   npm run clickup -- build-start --task <id>
+   ```
+
+   *   **exit 0** — no PR, or its PR is closed/merged. A fresh branch is right;
+       carry on to step 2.
+   *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
+       second branch. Check that one out, read the send-back that returned the
+       ticket to `Queued`, fix what it named, and push to the SAME PR. The
+       command prints the branch.
+   *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
+       branch on a guess; that is the failure this step exists to prevent,
+       arriving through the check meant to catch it.
+
+   The claim in the line above and this check answer DIFFERENT questions, and
+   conflating them cost two duplicate PRs on 2026-08-23 (#407 beside the still
+   open #349, #408 beside #350). `--if-status Queued` asks *"is anyone else
+   starting this right now"* — it was working perfectly. Nothing asked *"was
+   this already started and handed back"*, and a sent-back ticket is genuinely
+   `Queued` with its PR genuinely still open. Reading the comments would have
+   shown it; a pass that must remember to read is a pass that will forget.
+
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
    Two of them belong to the operator and no loop may set or clear them except
@@ -169,7 +202,9 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    is skipped where the repo has no `package.json` (the vault is prose-only):
 
    ```bash
-   REPO="$(node -e "console.log(require('$(git rev-parse --show-toplevel)/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
+   MAIN="$(node "$(git rev-parse --show-toplevel)/scripts/lib/main_checkout.mjs")" && \
+     [ -n "$MAIN" ] || { echo "main checkout came back empty — do not build"; exit 1; } && \
+     REPO="$(node -e "console.log(require('$MAIN/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
      [ -n "$REPO" ] || { echo "repoHome returned empty — do not build"; exit 1; } && \
      git -C "$REPO" fetch origin --quiet && \
      git -C "$REPO" worktree add "$REPO/.claude/worktrees/<task-slug>" \
@@ -181,9 +216,17 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    The checkout is **derived, never written down**: this skill runs on more
    than one machine, and a literal path is an assumption that fails silently
    on every machine but the one it was typed on (vault `doctrine/NODES.md`,
-   principle P1). Start the loop session in the main starcaster checkout, not
-   inside an existing worktree — `--show-toplevel` locates this checkout so
-   `taskRepo.js` can be required, and `repoHome()` derives the target repo.
+   principle P1).
+
+   **It no longer matters where the loop session starts.** `--show-toplevel`
+   answers *"the folder I am in"*, and using it for the ANSWER meant a loop
+   started inside a worktree — which is what `docs/LOOP_ENGINEERING.md` used to
+   tell you to do — put its per-task worktrees **inside another worktree**.
+   Nothing errored; the work just happened somewhere nobody expected.
+   `main_checkout.mjs` asks git for `--git-common-dir`, which points at the
+   MAIN checkout's `.git` from inside a linked worktree, so the answer is the
+   same from anywhere. `--show-toplevel` survives here only to locate that
+   file, which every worktree carries, and is correct for that.
 
    `<task-slug>` = short kebab-case name from the task. Do ALL work for this
    task inside that worktree. A repo other than `starcaster` runs THAT repo's
@@ -239,11 +282,27 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
 6. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
    explain it to a non-programmer: what changed and why it mattered, plus the
-   `(#PR)` number once known. Keep it to a short paragraph. This entry is part
+   `(#PR)` number. Keep it to a short paragraph. This entry is part
    of the task's own PR, so the log lands on `main` at the same moment the work
    does — never edit `docs/WORK-LOG.md` directly on `main`. If a parallel task
    causes a merge conflict here, it is trivial (two entries at the top); resolve
    by keeping both.
+
+   **The entry needs a PR number, and you do not have one yet. Do NOT amend the
+   commit later to add it — that needs a force-push, which is a standing deny
+   rule here and is now blocked outright by a PreToolUse hook.** On 2026-08-23
+   three separate runs force-pushed for exactly this reason, using the repo's
+   own `git -c credential.helper=... push` idiom, which slipped past the deny
+   rule because that rule matches commands *starting* with `git push`.
+
+   Two orders work; pick either and never amend:
+
+   - **Commit the code first, push, open the PR, then add the work-log entry as
+     its own second commit** with the number already known. One extra commit,
+     no rewrite. (Squash-merge collapses them anyway.)
+   - **Or reserve the number first**: `gh pr create --draft` on the pushed
+     branch, read the number off it, write the entry, commit, push, then
+     `gh pr ready`.
 
 7. **Commit and open the PR.**
    - Inspect `git diff --cached` before committing (staging is whole-file; make
@@ -254,6 +313,20 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      line of its own — this is not optional), a plain-language summary, the
      task's "How to test" steps, and a note that a Vercel preview will be
      attached. End with the Generated-with trailer.
+   - **Then check the PR actually has checks, and do not push in the seconds
+     right after opening it.** A push landing ~15 seconds after `gh pr create`
+     makes GitHub drop BOTH the `opened` run and that push's run, and nothing
+     arrives later on its own — the PR is checkless forever, this step waits on
+     nothing, and the merge gate refuses it (#387, #389; see
+     `docs/LOOP_ENGINEERING.md` → "A build node must be able to make GitHub run
+     its checks"). So: if the work-log entry needs the PR number, wait until
+     `gh pr checks <pr>` lists a run before pushing it. If none has appeared
+     after a couple of minutes, only a new commit can create one —
+     `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
+   - **Only ordinary pushes.** If a push is rejected because the branch is
+     behind, merge `origin/main` in — never rebase-and-force. That is the same
+     choice `npm run ship` makes on purpose (`docs/DOCTRINE.md` §6.6): the
+     branch only ever gains commits, so an ordinary push always works.
 
 8. **Record the PR on the ticket — with the command, and check what it says.**
 

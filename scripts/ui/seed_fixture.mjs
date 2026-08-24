@@ -44,7 +44,7 @@ const supabaseUrl = String(process.env.SUPABASE_URL || '');
 if (!/localhost|127\.0\.0\.1/.test(supabaseUrl)) {
   console.error(
     `Refusing to seed: SUPABASE_URL is "${supabaseUrl || '(unset)'}", which is not local.\n` +
-    'This script writes rows and must only ever touch the local stack. Copy .env.local into the worktree first.'
+    'This script writes rows and must only ever touch the local stack. Run `npm run env:local` in this folder first.'
   );
   process.exit(1);
 }
@@ -349,6 +349,31 @@ const PANEL_CHECK_SECTION = {
           ...TUNED.navigation.settings,
           navDropdownStyle: 'mega',
           navMegaPlacement: 'menu',
+        },
+      };
+    })(),
+    // A THIRD menu, on CUSTOM sizing. The Links list grows a fifth column
+    // ("Width") only under this setting, so the two menus above render the
+    // four-column shape and a check over them says nothing at all about the
+    // five-column one. Same hole as the mega panel above it: a variant that
+    // never renders is a variant nobody is measuring. Widths that sum under
+    // 100 so the manager is not also showing its over-budget warning.
+    (() => {
+      const base = createEmptyModule('navigation', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-navigation-custom-width',
+        name: 'Top Menu (Custom Widths)',
+        settings: {
+          ...base.settings,
+          ...TUNED.navigation.settings,
+          navItemSizing: 'custom',
+          navItems: JSON.stringify([
+            { id: 'home', label: 'Home', href: '/', width: '25' },
+            { id: 'play', label: 'Play', href: '/play', width: '25' },
+            { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+            { id: 'about', label: 'About', href: '/about', width: '25' },
+          ]),
         },
       };
     })(),

@@ -57,11 +57,16 @@ import { spawnSync } from 'node:child_process';
 import busRelayPlan from './builder/busRelayPlan.js';
 import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
+import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
+import branchCatchUp from './builder/branchCatchUp.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
-const { mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker } = mergeOnComment;
+const {
+  mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
+  refusalNotice, conflictHandOffNotice, mergedNotice,
+} = mergeOnComment;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
   readyToLaunchGate, isReadyToLaunch,
@@ -214,6 +219,9 @@ function usage(code = 2) {
   console.error('                                             upload image(s) onto a task — the before/after pair');
   console.error("                                             the approval queue runs on; verified by reading the");
   console.error("                                             task's attachment list back");
+  console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
+  console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
+  console.error('                                             1 = could not tell (do NOT guess)');
   console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
@@ -355,18 +363,31 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
 
   // Terminal answer: say why on the ticket and on the bus, then mark the
   // authorizing comment handled so the same refusal is never posted twice.
+  //
+  // An answer this ticket has ALREADY been given, whose reason is still the
+  // same, is not news. mergeDecision quiets its own refusals that way; the
+  // two discovered against GitHub — checks red, and the conflict hand-off —
+  // can only be quieted out here, because that is where they are found. Skip
+  // the comment, the bus post and the marker rewrite: re-deriving the same
+  // answer costs nothing and says nothing.
+  const alreadySaid = (why) => decision.priorRefusal === why;
+
   const refuse = async (why, plainEnglish) => {
+    if (alreadySaid(why)) {
+      console.error(`  MERGE REFUSED (unchanged, nothing posted) on ${label}: ${why}`);
+      return { outcome: 'refused-quiet', reason: why };
+    }
     console.error(`  MERGE REFUSED on ${label}: ${why}`);
     if (dryRun) return { outcome: 'would-refuse', reason: why };
-    const body = `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n**Your approval is still standing — you do not have to say "merge" again.** Every later pass re-checks this ticket, so the moment the reason above is dealt with it goes through on its own. You will only hear from this step again if the answer changes.\n\n(Automatic: your comment ${decision.commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`;
-    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body });
+    const notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish });
+    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) {
       unchecked.push(`${task.id}: merge refused (${why}) but the explanation comment FAILED to post — the operator has not been told`);
       return { outcome: 'refused', reason: why };
     }
     const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`);
     if (!bus.ok) unchecked.push(`${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})`);
-    await markMergeHandled(decision.commentId, task, unchecked, `refused: ${why}`);
+    await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'refused', reason: why };
   };
 
@@ -414,16 +435,61 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     }
   }
 
-  // A script never resolves a merge conflict (task 86bbjd5nn, binding).
+  // GitHub says it conflicts. Before believing that, ask THIS machine.
+  //
+  // GitHub cannot run the asset-pins merge driver — git refuses to run a
+  // driver defined by a cloned repo, so it lives in .git/config and is
+  // registered by npm install. Every branch that touches anything bundled
+  // shifts those `?v=` pins, so GitHub reports a collision on a file that
+  // resolves cleanly here, by asset path. That produced twelve false
+  // hand-offs on 2026-08-23, each one stalling a merge Dane had authorized.
+  //
+  // This does NOT resolve a conflict. It attempts an ordinary merge in a
+  // throwaway worktree: clean means the difference was the driver and the
+  // branch is pushed so CI re-runs; anything else — including "could not
+  // tell" — falls straight through to the hand-off below, unchanged.
+  if (gate.action === 'conflict' && !dryRun) {
+    const local = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
+    if (local.ok) {
+      console.error(`  MERGE WAITING on ${label}: GitHub reported a conflict, but ${local.reason}`);
+      return { outcome: 'waiting', reason: 'false conflict resolved locally; waiting for CI' };
+    }
+    // Carry WHY into the hand-off, so the reader learns whether it was a real
+    // overlap or something that could not be checked at all.
+    gate = { ...gate, reason: gate.reason, localVerdict: local };
+  }
+
+  // A script never resolves a merge conflict (task 86bbjd5nn, binding). What
+  // it must NOT also do is eat the authorization on the way past: resolving
+  // the branch is a job for a person, saying "merge" a second time afterwards
+  // is not (task 86bbk0g4u). The marker written here is re-decidable, so the
+  // pass that runs after someone fixes the branch merges it on his original
+  // word — which is what the comment promised all along.
   if (gate.action === 'conflict') {
+    // What the local attempt found, in the operator's terms. "It really does
+    // overlap" and "I could not check" are different problems with different
+    // fixes, and reading one as the other is how a machine problem gets
+    // diagnosed as a code problem.
+    const verdict = gate.localVerdict;
+    const notice = conflictHandOffNotice({
+      commentId: decision.commentId,
+      pr,
+      localVerdict: verdict
+        ? { realConflict: verdict.code === branchCatchUp.CODES.REAL_CONFLICT, reason: verdict.reason }
+        : null,
+    });
+    const handOffReason = notice.marker.replace(/^refused:\s*/, '');
+    if (alreadySaid(handOffReason)) {
+      console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
+      return { outcome: 'handed-off-quiet', reason: gate.reason };
+    }
     console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}`);
     if (dryRun) return { outcome: 'would-hand-off', reason: gate.reason };
-    const body = `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. A session will merge main into the branch, sort out the overlap and re-run the checks — then your merge still stands and this goes through.\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${decision.commentId}.)`;
-    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body });
+    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
-    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and re-run CI. Ticket left in Ready to launch.\n\n${pr.url}`);
+    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and push. His approval still stands — once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`);
     if (!bus.ok) unchecked.push(`${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})`);
-    await markMergeHandled(decision.commentId, task, unchecked, `conflict hand-off on PR #${pr.number}`);
+    await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'handed-off', reason: gate.reason };
   }
 
@@ -455,10 +521,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   // Marker first, now that the irreversible thing has happened: if the next
   // two writes fail, the worst case is a ticket that needs a hand, not a
   // second merge attempt against an already-merged PR.
-  await markMergeHandled(decision.commentId, task, unchecked, `merged PR #${pr.number} at ${mergedAt}`);
+  const mergedRecord = mergedNotice({ commentId: decision.commentId, pr, mergedAt });
+  await markMergeHandled(decision.commentId, task, unchecked, mergedRecord.marker);
 
-  const record = `Merged: PR #${pr.number} (${pr.url}) squash-merged into main at ${mergedAt}, merged on operator comment ${decision.commentId}. Checks were green and the branch was up to date at merge time; the branch has been deleted. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`;
-  const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: record });
+  const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: mergedRecord.body });
   if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} MERGED, but the record comment failed to post`);
 
   // Live is a closed status: the ticket leaves the open view here. Assignees
@@ -885,6 +951,47 @@ if (cmd === 'whoami') {
     process.exit(1);
   }
   reportLimits(after.res);
+} else if (cmd === 'build-start') {
+  // "Is somebody already building this?" — asked BEFORE a branch is created.
+  //
+  // On 2026-08-23 a build pass opened two duplicate PRs in one session,
+  // because the atomic claim answers a different question: it stops two
+  // builders starting at once, and says nothing about work that was started
+  // days ago and handed back. A sent-back ticket is genuinely `Queued`, its
+  // PR is genuinely still open, and nothing looked.
+  const task = arg('task');
+  if (!task) usage();
+
+  const got = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!got.res.ok) die('read the task comments', got);
+
+  // gh, not the GitHub API directly: it is already the repo's authenticated
+  // path everywhere else, and a second auth story is a second thing to break.
+  const lookupPr = (number) => {
+    const out = spawnSync('gh', ['pr', 'view', String(number), '--json', 'state,headRefName'], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (out.status !== 0) return null; // could not tell — NOT "no PR"
+    try {
+      return JSON.parse(out.stdout);
+    } catch {
+      return null;
+    }
+  };
+
+  const decision = buildStart.resolveBuildStart(got.json.comments || [], { lookupPr });
+  console.log(buildStart.describeBuildStart(decision));
+  if (decision.pr) {
+    console.log(`pr:     #${decision.pr.number}${decision.pr.branch ? ` (branch ${decision.pr.branch})` : ''}`);
+    console.log(`url:    ${decision.pr.url}`);
+  }
+  reportLimits(got.res);
+
+  // Exit codes so a shell can branch on this without parsing prose, matching
+  // `node:owns`: 0 = go ahead, 3 = somebody else's work, 1 = cannot tell.
+  if (decision.action === 'continue') process.exit(3);
+  if (decision.action === 'unknown') process.exit(1);
+  process.exit(0);
 } else if (cmd === 'pr-opened') {
   // The build loop's audit trail, made into a command (task 86bbjt18r).
   // Until now step 7 of loop-build said "add the PR URL as a ClickUp
@@ -1230,7 +1337,7 @@ if (cmd === 'whoami') {
   const onlyTask = arg('only-task');
 
   let relayed = 0, skipped = 0, handedBack = 0;
-  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0 };
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
@@ -1326,6 +1433,9 @@ if (cmd === 'whoami') {
         if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
         else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
         else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
+        // Re-derived the same answer as last pass and posted nothing. Counted
+        // separately so a silent pass is legibly "still stuck", not "clean".
+        else if (m.outcome === 'refused-quiet' || m.outcome === 'handed-off-quiet') merges.unchanged++;
         else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch') merges.waiting++;
         // A merged ticket is now Live, which is not a status this watch
         // handles — skip the handback check rather than acting on a status
@@ -1362,7 +1472,7 @@ if (cmd === 'whoami') {
   }
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
     : ', merging disabled (--no-merge)';
   console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
   if (unchecked.length) {
