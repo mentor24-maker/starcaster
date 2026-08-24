@@ -68,7 +68,8 @@ npm run clickup -- comments --task <id>                        # where the PR UR
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
-npm run clickup -- verdict --task <id> --pass|--fail --body-file -  # record the review verdict (loop-review step 4)
+npm run clickup -- verdict --task <id> --pass|--fail --if-status "In review" --body-file -  # the review verdict (loop-review step 4)
+npm run clickup -- loop-note --task <id> --transition review-started        # loop-review's visible claim, before it verifies
 npm run clickup -- comment --task <id> --body-file -           # a plain note (progress, context)
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
@@ -114,6 +115,55 @@ which any agent session can call directly without passing through this script.
 If an unreviewed ticket turns up in `Ready to launch` again, look there first
 — and the loops should keep using `npm run clickup`, which is the only door
 with a lock on it.
+
+### Two passes, one ticket: claim it visibly, guard every verdict (added 2026-08-23, task 86bbjk5rw)
+
+Claiming is check-then-act — read the status, compare it, write — and there is
+no way to make that one indivisible step. `--if-status` is what makes it safe
+anyway: the write is refused, with nothing sent, if the ticket is no longer
+where you found it. `loop-build` has claimed that way since it shipped.
+`loop-review` did not, and on 2026-08-22 at 03:41 the hole opened:
+
+- **Two review passes verified PR #362 end to end at the same time.** Neither
+  could see the other, because a review in flight left no trace anywhere — the
+  ticket sits in `In review` while it is being reviewed and also while it is
+  waiting to be, and those look identical.
+- **The slower one then wrote `Ready to launch` over the faster one's FAIL
+  verdict — and over a fresh `Building` claim** — from a queue snapshot about
+  25 minutes stale. Repaired by hand on 86bbggw48. Had nobody looked, a change
+  its own reviewer had failed would have gone to the operator wearing "safe to
+  merge".
+
+The two rules that came out of it, and where each one lives:
+
+1. **A review claims its ticket before it verifies anything**, by stamping the
+   Loop note: `loop-note --transition review-started` writes
+   `🔍 being checked — a review pass started 8/23 3:41am`. Both `queue` and
+   `get` print the Loop note now, so the next pass sees the claim in the one
+   command it already runs — no extra call, nothing to remember. The note
+   carries the **date** as well as the clock, because the next pass has to be
+   able to tell a claim that is running from one that died hours ago; past
+   about 45 minutes it is abandoned and may be taken over, out loud.
+   No new status was added for this: the six are the six, and `In review` still
+   means what it meant.
+2. **Every verdict write says which status it was claimed under.**
+   `verdict --if-status "In review"` is **required** — the command refuses
+   without it (exit 2) and refuses again, writing nothing, if the ticket has
+   moved (exit 3, the same code `status --if-status` uses). The skill's
+   instruction on a refusal is one line: re-read the ticket and its comments,
+   then stand down — no verdict, no status move, take the next task.
+   `--no-guard` opts out and says so in the transcript.
+
+   The send-back path carries the same guard (`status --status Queued
+   --if-status "In review"`). The pass path needs no second guard, because
+   `ask --status "Ready to launch"` already refuses unless the newest verdict
+   is a PASS — so a verdict the guard refused blocks the status move behind it.
+
+Guarded live against scratch ticket 86bbgm68r before shipping: refused on a
+stale status (exit 3), refused with the flag missing (exit 2), allowed with a
+matching one — and the ticket's comment count moved only on the last of the
+three. `scripts/builder/reviewRaceGuard.test.js` keeps both rules in place;
+it fails on every one of its seven assertions against the pre-fix script.
 
 ### A refusal is not a verdict on the ticket
 
@@ -575,8 +625,13 @@ permanent. That is exactly the #304 failure, and why
 The Status column says which STAGE a ticket is in; the **Loop note** column
 says what is actually happening and what happens next, in plain language:
 `🔨 building — claimed 10:12am`, `🔀 PR #351 open — waiting for a review pass`,
+`🔍 being checked — a review pass started 8/23 3:41am`,
 `👀 verified — waiting on Dane to say "merge"`, `↩ returned to the line…`,
 `✅ live 8/20`. An empty note means "waiting in line" — correct, not a gap.
+The note is not decoration in one case: `🔍 being checked` is loop-review's
+**claim** on a ticket, and the next review pass reads it to decide whether to
+leave that ticket alone (see "Two passes, one ticket" above). `queue` and `get`
+both print it, as the last column and as a `loop note:` line.
 A pinned **Loop heartbeat** ticket carries one line per pass
 (`pass finished 10:48am — 33 in line, next up: "…"`) so you can tell whether
 the line is MOVING, not just how long it is.
