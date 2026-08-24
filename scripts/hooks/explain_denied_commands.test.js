@@ -97,26 +97,57 @@ test('strips leading VAR=value the way the permission system does', () => {
   assert.equal(runHook(dir, 'GIT_TRACE=1 git push --force-with-lease').code, 2);
 });
 
+/**
+ * The three tests below are about the deny-rule EXPLANATION path -- what
+ * happens when there is no rule, when the settings file is broken, and when
+ * the explanation is silenced. They used a force-push as their example
+ * command, which stopped working on 2026-08-23 when the force-push guard
+ * started refusing those before the explanation is ever reached, regardless of
+ * settings (see `scripts/hooks/force_push_guard.test.js`).
+ *
+ * So they now use `rm -rf /` instead: denied by a rule in the first test's
+ * project, and otherwise an ordinary command as far as this hook is concerned.
+ * Testing "does the explanation fire" with a command the guard blocks outright
+ * would only ever re-test the guard.
+ */
 test('no deny rules configured means it never fires', () => {
   const dir = makeProject([]);
-  assert.equal(runHook(dir, 'git push --force-with-lease').code, 0);
+  assert.equal(runHook(dir, 'rm -rf /tmp/whatever').code, 0);
 });
 
 test('a malformed settings file must not wedge every command', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'denyexplain-bad-'));
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), '{ not json');
-  assert.equal(runHook(dir, 'git push --force').code, 0);
+  assert.equal(runHook(dir, 'rm -rf /tmp/whatever').code, 0);
 });
 
 test('SKIP_DENY_EXPLAIN=1 silences the explanation', () => {
+  const dir = makeProject(['Bash(rm -rf *)']);
+  const result = spawnSync('node', [HOOK], {
+    input: JSON.stringify({ cwd: dir, tool_input: { command: 'rm -rf /tmp/whatever' } }),
+    encoding: 'utf8',
+    env: { ...process.env, SKIP_DENY_EXPLAIN: '1', HOME: dir },
+  });
+  assert.equal(result.status, 0, 'the explanation is silenced');
+});
+
+test('SKIP_DENY_EXPLAIN=1 does NOT silence the force-push guard', () => {
+  // Otherwise one environment variable would be a way around a standing rule,
+  // which is the class of hole the guard exists to close.
   const dir = makeProject(['Bash(git push --force*)']);
   const result = spawnSync('node', [HOOK], {
     input: JSON.stringify({ cwd: dir, tool_input: { command: 'git push --force' } }),
     encoding: 'utf8',
     env: { ...process.env, SKIP_DENY_EXPLAIN: '1', HOME: dir },
   });
-  assert.equal(result.status, 0);
+  assert.equal(result.status, 2);
+});
+
+test('a force-push is refused even with no deny rules readable at all', () => {
+  // "The rule file could not be read" must never read as "go ahead".
+  const dir = makeProject([]);
+  assert.equal(runHook(dir, 'git push --force-with-lease').code, 2);
 });
 
 test('unparseable hook input never blocks', () => {
