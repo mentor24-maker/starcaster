@@ -1,4 +1,4 @@
-## 2026-08-24 — The build robot stops forgetting to fill in a number (#PR)
+## 2026-08-24 — The build robot stops forgetting to fill in a number (#423)
 
 Every piece of work here gets a short plain-English note written for you, and
 each note ends with a link to the change it describes. The trouble is the note
