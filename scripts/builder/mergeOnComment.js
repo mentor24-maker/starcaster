@@ -414,16 +414,30 @@ function refusalNotice({ commentId, why, plainEnglish }) {
  * body says so, and says plainly what the person has to do first.
  *
  * `localVerdict` is what THIS machine found when it tried the merge itself:
- * `realConflict` true means the branches genuinely overlap, false means the
- * check could not be completed — different problems with different fixes,
- * and reading one as the other sends a machine problem to a code review.
+ * THREE outcomes, not two, and collapsing any pair of them sends the reader
+ * after the wrong thing:
+ *
+ *   'real-conflict' — the branches genuinely overlap. A person must decide.
+ *   'needs-rebuild' — the merge was CLEAN. It brought in a change behind a
+ *                     `?v=` asset pin, so the tree needs `npm run build`
+ *                     before it can be pushed. Mechanical, and we know the
+ *                     exact command (task 86bbk15cb).
+ *   'unknown'       — the check could not run at all.
+ *
+ * Reading 'needs-rebuild' as 'unknown' is what this fix exists to stop: it
+ * turns a one-command chore into "go and work out why CI is red".
  */
 function conflictHandOffNotice({ commentId, pr, localVerdict }) {
+  const kind = localVerdict
+    ? (localVerdict.kind || (localVerdict.realConflict ? 'real-conflict' : 'unknown'))
+    : '';
   const localLine = !localVerdict
     ? ''
-    : localVerdict.realConflict
+    : kind === 'real-conflict'
       ? `\n\nChecked on this machine too, and it is a real overlap — ${localVerdict.reason}. This one genuinely needs a person.`
-      : `\n\nWorth knowing: this could not be checked properly here either — ${localVerdict.reason}. So it may not be a real conflict at all; GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.`;
+      : kind === 'needs-rebuild'
+        ? `\n\nGood news: it is NOT a real conflict. ${localVerdict.reason}\n\nSo this is a short mechanical job, not a code decision — nobody has to work out who wins.`
+        : `\n\nWorth knowing: this could not be checked properly here either — ${localVerdict.reason}. So it may not be a real conflict at all; GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.`;
   return {
     marker: `refused: conflict hand-off on PR #${pr.number}`,
     body: `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. Someone has to merge main into the branch, sort out the overlap and push it.${localLine}\n\nThat is the only part that needs a person. ${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,

@@ -324,3 +324,171 @@ test('this script contains no force-push, in any spelling', () => {
   assert.doesNotMatch(code, /--force-with-lease/, 'no --force-with-lease anywhere');
   assert.doesNotMatch(code, /'rebase'/, 'it catches up by merging, not rebasing — that is what removes the need to force');
 });
+
+// ── Stale asset pins: the push must be authorized by builds-clean ─────────
+
+/**
+ * Task 86bbk15cb. The first version of this module pushed whatever merged
+ * cleanly, which turned three green branches red in one pass (#401, #403,
+ * #411) — all from one commit that edited `public/js/projectContext.js`.
+ *
+ * The asset-pins driver restores each `?v=` pin BY ASSET PATH. That is right
+ * when only markup moved and wrong when main changed the asset underneath: the
+ * restored pin names the pre-merge build, nothing rebuilds, and CI's
+ * clean-build check fails on a step that reads like the branch's own fault.
+ *
+ * The bug was the AUTHORIZATION. "The merge was clean" is a different question
+ * from "a clean build of this tree produces these pins".
+ */
+
+const { pinnedAssetSourcesIn, PIN_SOURCE_PATHS } = require('./branchCatchUp');
+
+test('a change behind a pinned asset is recognised', () => {
+  assert.deepEqual(
+    pinnedAssetSourcesIn(['public/js/projectContext.js']),
+    ['public/js/projectContext.js'],
+    'this exact file is what turned three branches red',
+  );
+  assert.equal(pinnedAssetSourcesIn(['src/css/_builder-react.css']).length, 1);
+  assert.equal(pinnedAssetSourcesIn(['components/builder/x.tsx']).length, 1);
+  assert.equal(pinnedAssetSourcesIn(['lib/builder-client/y.ts']).length, 1);
+  assert.equal(pinnedAssetSourcesIn(['react-entry.js']).length, 1);
+});
+
+test('a change that feeds no pinned asset is NOT flagged — the common case stays cheap', () => {
+  // AC2: a catch-up across ordinary work must behave exactly as before, with
+  // no extra cost. Flagging everything would be "safe" and would also hand
+  // every branch to a human, which is the failure this whole module removed.
+  assert.deepEqual(pinnedAssetSourcesIn([
+    'docs/WORK-LOG.md',
+    'routes/builder.js',
+    'lib/projectScope.js',
+    'scripts/builder/mergeOnComment.js',
+    'supabase/migrations/001.sql',
+  ]), []);
+});
+
+test('prefix matching does not over-reach on a lookalike path', () => {
+  // 'public/app.js' is an exact-match entry, not a prefix — 'public/app.json'
+  // and 'public/apps/x.js' must not match it.
+  assert.deepEqual(pinnedAssetSourcesIn(['public/app.json', 'public/apps/x.js']), []);
+  assert.deepEqual(pinnedAssetSourcesIn(['public/app.js']), ['public/app.js']);
+});
+
+test('malformed input does not throw', () => {
+  assert.deepEqual(pinnedAssetSourcesIn(null), []);
+  assert.deepEqual(pinnedAssetSourcesIn(['', '   ', null]), []);
+});
+
+/**
+ * The list rots the moment somebody adds a pinned asset built from somewhere
+ * new, and the failure would be silent — a branch pushed with stale pins,
+ * exactly as before. So this reads what the committed HTML ACTUALLY pins and
+ * fails if any of it maps to a source the list does not cover.
+ */
+test('every pinned asset in the committed HTML is covered by the source list', () => {
+  const repoRoot = path.join(__dirname, '../..');
+  const html = fs.readFileSync(path.join(repoRoot, 'src/layout.html'), 'utf8');
+  const urls = [...html.matchAll(/(?:src|href)="(\/[^"?#]+\.(?:js|css))\?v=/gi)].map((m) => m[1]);
+  assert.ok(urls.length > 10, `expected the layout to pin many assets, found ${urls.length}`);
+
+  // The three assets that are BUILT rather than served from source.
+  const BUILT = {
+    '/styles.css': 'src/css/',
+    '/builder-bundle.js': 'components/',
+    '/bundle.js': 'react-entry.js',
+    '/js/richtext-vendor.js': 'public/js/', // built from public/js/richtext-vendor-entry.js
+  };
+
+  const covered = (p) => PIN_SOURCE_PATHS.some((prefix) => (
+    prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
+  ));
+
+  const uncovered = [];
+  for (const url of new Set(urls)) {
+    const source = BUILT[url] || `public${url}`;
+    if (!covered(source)) uncovered.push(`${url} -> ${source}`);
+  }
+  assert.deepEqual(uncovered, [],
+    `these pinned assets map to sources PIN_SOURCE_PATHS does not cover, so a\n  catch-up across a change to them would push stale pins:\n  ${uncovered.join('\n  ')}`);
+});
+
+// ── End to end, against real git ─────────────────────────────────────────
+
+/**
+ * Same shape as buildRepo above, but main's new commit touches a file that
+ * feeds a pinned asset rather than only the markup.
+ */
+function buildRepoWithPinnedAssetChange({ touchPinnedSource }) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-pins-test-'));
+  const origin = path.join(root, 'origin.git');
+  const work = path.join(root, 'work');
+
+  git(['init', '--bare', '-b', 'main', origin], root);
+  git(['clone', origin, work], root);
+  git(['config', 'user.email', 'test@example.com'], work);
+  git(['config', 'user.name', 'Test'], work);
+  fs.mkdirSync(path.join(work, 'public', 'js'), { recursive: true });
+  fs.mkdirSync(path.join(work, 'docs'), { recursive: true });
+
+  fs.writeFileSync(path.join(work, '.gitattributes'), 'site.html merge=asset-pins\n');
+  fs.writeFileSync(path.join(work, 'site.html'),
+    '<html>\n<script src="/js/core.js?v=aaaaaaaa"></script>\n<p>shared</p>\n</html>\n');
+  fs.writeFileSync(path.join(work, 'public/js/core.js'), 'var a = 1;\n');
+  fs.writeFileSync(path.join(work, 'docs/notes.md'), 'base\n');
+  git(['add', '-A'], work);
+  git(['commit', '-m', 'base'], work);
+  git(['push', 'origin', 'main'], work);
+
+  git(['checkout', '-b', 'feature'], work);
+  fs.writeFileSync(path.join(work, 'site.html'),
+    '<html>\n<script src="/js/core.js?v=bbbbbbbb"></script>\n<p>shared</p>\n</html>\n');
+  git(['add', '-A'], work);
+  git(['commit', '-m', 'feature'], work);
+  git(['push', 'origin', 'feature'], work);
+
+  git(['checkout', 'main'], work);
+  fs.writeFileSync(path.join(work, 'site.html'),
+    '<html>\n<script src="/js/core.js?v=cccccccc"></script>\n<p>shared</p>\n</html>\n');
+  // THE DIFFERENCE: main either changed the asset behind that pin, or not.
+  if (touchPinnedSource) fs.writeFileSync(path.join(work, 'public/js/core.js'), 'var a = 2;\n');
+  else fs.writeFileSync(path.join(work, 'docs/notes.md'), 'main moved on\n');
+  git(['add', '-A'], work);
+  git(['commit', '-m', 'main moves'], work);
+  git(['push', 'origin', 'main'], work);
+
+  git(['config', 'merge.asset-pins.name', 'pins'], work);
+  git(['config', 'merge.asset-pins.driver', `node ${DRIVER} %O %A %B %P`], work);
+  return { root, work };
+}
+
+test('a merge that changed a pinned asset is NOT pushed — it hands over with the fix', (t) => {
+  const repo = buildRepoWithPinnedAssetChange({ touchPinnedSource: true });
+  t.after(() => cleanup(repo.root));
+
+  const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
+  const out = catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
+
+  assert.equal(out.code, CODES.NEEDS_REBUILD, out.reason);
+  assert.equal(out.ok, false);
+  assert.ok(out.files.includes('public/js/core.js'), `should name the file: ${JSON.stringify(out.files)}`);
+  assert.match(out.reason, /npm run build/, 'the hand-off must carry the exact next step');
+
+  git(['fetch', 'origin'], repo.work);
+  assert.equal(git(['rev-parse', 'origin/feature'], repo.work).stdout, before,
+    'a tree known to have stale pins must never be pushed');
+});
+
+test('a merge that changed no pinned asset still pushes, exactly as before', (t) => {
+  // AC2. The common case must not get slower or start needing a human.
+  const repo = buildRepoWithPinnedAssetChange({ touchPinnedSource: false });
+  t.after(() => cleanup(repo.root));
+
+  const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
+  const out = catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
+
+  assert.equal(out.code, CODES.CLEAN, out.reason);
+  git(['fetch', 'origin'], repo.work);
+  assert.notEqual(git(['rev-parse', 'origin/feature'], repo.work).stdout, before,
+    'the ordinary catch-up must still happen');
+});

@@ -58,6 +58,7 @@ const PIN_DRIVER_KEY = 'merge.asset-pins.driver';
  */
 const CODES = Object.freeze({
   CLEAN: 'clean',
+  NEEDS_REBUILD: 'needs-rebuild',
   REAL_CONFLICT: 'real-conflict',
   WRONG_REPO: 'wrong-repo',
   NO_DRIVER: 'no-driver',
@@ -66,6 +67,61 @@ const CODES = Object.freeze({
   NOT_ANCESTOR: 'not-ancestor',
   PUSH_FAILED: 'push-failed',
 });
+
+/**
+ * Paths whose contents end up INSIDE a `?v=`-pinned asset.
+ *
+ * WHY THIS LIST EXISTS (2026-08-24). The first version of this module pushed
+ * whatever merged cleanly. That is the wrong question. The asset-pins merge
+ * driver resolves a pin collision by restoring each pin BY ASSET PATH, which is
+ * exactly right when only the markup moved — and exactly wrong when `main`
+ * changed the asset underneath. The restored pin then names the pre-merge
+ * build, no rebuild ever runs, and the pushed tree's pins do not match a clean
+ * build of it. CI's "Asset pins match a clean build" step fails.
+ *
+ * It did that to three green branches in one pass (#401, #403, #411), all
+ * triggered by one commit that edited `public/js/projectContext.js`. It looks
+ * like the branch's own fault, and it costs a full CI cycle to discover.
+ *
+ * THE BUG WAS THE AUTHORIZATION, not the merge: the push was authorized by
+ * "the merge was clean", and clean-merge is a different question from
+ * builds-clean.
+ *
+ * Derived from what the committed HTML actually pins:
+ *   /js/*.js, /shared/*.js, /app.js  — served straight out of public/
+ *   /styles.css                      — built from src/css/**
+ *   /builder-bundle.js               — builder-react-entry.tsx, components/**,
+ *                                      lib/builder-client/**
+ *   /bundle.js                       — react-entry.js + campaigns components
+ *
+ * A list like this rots the moment someone adds a pinned asset with a new
+ * source, so branchCatchUp.test.js reads every pinned URL out of the committed
+ * HTML and fails if any of them maps to a path this list does not cover.
+ */
+const PIN_SOURCE_PATHS = Object.freeze([
+  'public/js/',
+  'public/shared/',
+  'public/app.js',
+  'src/css/',
+  'components/',
+  'lib/builder-client/',
+  'builder-react-entry.tsx',
+  'react-entry.js',
+]);
+
+/**
+ * Which of these changed files feed a pinned asset?
+ *
+ * Pure, so the decision is testable without a repository.
+ */
+function pinnedAssetSourcesIn(changedPaths) {
+  return (Array.isArray(changedPaths) ? changedPaths : [])
+    .map((p) => String(p || '').trim())
+    .filter(Boolean)
+    .filter((p) => PIN_SOURCE_PATHS.some((prefix) => (
+      prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
+    )));
+}
 
 function defaultRunGit(args, { cwd } = {}) {
   const out = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -194,7 +250,29 @@ function catchUpBranchLocally({
       return { code: CODES.NOT_ANCESTOR, ok: false, reason: `the merged tree does not contain ${base} — refusing to push it` };
     }
 
-    // 6. Fast-forward only, by construction. No --force, ever.
+    // 6. Did the merge bring in a change to anything a `?v=` pin hashes?
+    //    If so the pins in this tree name the PRE-merge build, and pushing it
+    //    turns a green branch red on a step that reads like the branch's own
+    //    fault. Re-pinning properly needs a real `npm ci` in this scratch
+    //    worktree — about two minutes per branch, on a pass that runs hourly —
+    //    so this detects and hands over with the exact fix instead. A named
+    //    next step beats a red check discovered twenty minutes later.
+    const broughtIn = runGit(['diff', '--name-only', `origin/${branchName}`, 'HEAD'], { cwd: tree });
+    if (broughtIn === null || !broughtIn.ok) {
+      return { code: CODES.NOT_ANCESTOR, ok: false, reason: 'could not list what the merge brought in, so could not tell whether the asset pins are stale — not pushing' };
+    }
+    const stale = pinnedAssetSourcesIn(broughtIn.stdout.split('\n'));
+    if (stale.length) {
+      const shown = stale.slice(0, 3).join(', ') + (stale.length > 3 ? `, and ${stale.length - 3} more` : '');
+      return {
+        code: CODES.NEEDS_REBUILD,
+        ok: false,
+        files: stale,
+        reason: `${base} merged cleanly, but it changed ${stale.length} file(s) behind a ?v= asset pin (${shown}), so the pins in the merged tree name the old build. Pushing it would fail CI's clean-build check. A session needs: git merge origin/${base}, npm run build, commit the changed HTML, push.`,
+      };
+    }
+
+    // 7. Fast-forward only, by construction. No --force, ever.
     const pushed = runGit(['push', 'origin', `HEAD:refs/heads/${branchName}`], { cwd: tree });
     if (!pushed.ok) {
       return {
@@ -217,6 +295,8 @@ function catchUpBranchLocally({
 module.exports = {
   CODES,
   PIN_DRIVER_KEY,
+  PIN_SOURCE_PATHS,
+  pinnedAssetSourcesIn,
   parseRepoFromRemoteUrl,
   assetPinDriverInstalled,
   catchUpBranchLocally,

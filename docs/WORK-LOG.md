@@ -1,3 +1,28 @@
+## 2026-08-24 — The catch-up stops turning green branches red (#PR)
+
+Yesterday a change was made so the merge robot stops giving up on branches that
+only *looked* like they clashed. It worked — and it introduced a smaller problem
+of its own, which showed up last night when it turned three approved, passing
+branches red.
+
+Some of our web pages carry a little stamp against each script and stylesheet, so
+browsers know when to fetch a fresh copy instead of reusing an old one. When two
+branches both change a page, those stamps collide, and we have a tool that sorts
+them out automatically. That tool is right when only the page text moved — and
+wrong when the script itself changed underneath, because it puts back the stamp
+for the *old* version of the script. Nothing rebuilds, and the safety check that
+compares the stamps against a fresh build fails.
+
+The real mistake was what the robot treated as permission to push: it asked "did
+this merge cleanly?" when the question it needed was "would a fresh build produce
+these same stamps?" Those are not the same question.
+
+It now checks whether the merge pulled in a change to anything behind one of
+those stamps. If it did, it stops and says exactly what to run, instead of
+pushing and letting the safety check discover it twenty minutes later. When
+nothing behind a stamp moved — which is most of the time — nothing changes and
+nothing gets slower. (#PR)
+
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
 When you comment "merge" on a finished ticket, a robot merges it for you within
