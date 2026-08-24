@@ -101,6 +101,53 @@ whose computer is set to reduce motion.
 Cartwheels is still deliberately absent — it is Tumbleweed under another name,
 which is what you said at the time, and there is now a test that stops a future
 tidy-up from "helpfully" adding it back.
+## 2026-08-23 — Two checkers can no longer review the same job at once (#391)
+
+The loop has a checking step: after something is built, a separate pass goes
+over it independently and says pass or fail. Last night two of those checks ran
+on the same piece of work at the same time without either one knowing. They both
+did the whole job — wasted effort — and then the slower one stamped its answer on
+top of the faster one's. The faster one had said *fail*. What reached the queue
+said "ready to merge". It was caught and put right by hand, but only because
+somebody happened to look.
+
+Two things changed. First, a checker now puts a visible flag on the ticket
+before it starts — "being checked, started 3:41am" — right in the queue list, so
+the next one sees it and moves on to something else. (If a flag is more than
+about three quarters of an hour old the check clearly died, and the next one is
+allowed to take it over and say so.) Second, when a checker writes its verdict
+it now has to name the state it thought the ticket was in. If the ticket has
+moved since — somebody else took it, or you answered something on it — the
+verdict is simply refused, nothing is written, and the checker is told to go
+read what actually happened rather than stamp a stale answer over it.
+
+Both were tried for real on a scratch ticket before shipping: refused when the
+ticket had moved, refused when the checker forgot to name the state, and allowed
+when everything lined up — with the ticket proving that the two refusals really
+did write nothing at all.
+## 2026-08-23 — Writing down how approvals actually work (#377)
+
+There is now one page, `docs/APPROVALS.md`, saying where you approve things,
+what your answer means, and how agents are expected to file so every approval
+looks the same.
+
+The first draft of this described building a separate **Approvals** list for
+you. Before writing it, we measured what that would cost: the Loop Queue's id
+is typed into 18 places across 11 files, every one assuming an approval stays
+put. Moving approvals off it means re-pointing all of them and keeping
+one-click merge working across two lists at once — an epic, in exchange for a
+tab. You chose to write the rules down instead and move nothing, so the page
+now describes the surface you already use rather than one that would have to
+be built.
+
+Two things in it were worth stating out loud because nothing else says them:
+that a **refusal** leaves your approval standing and goes through on its own
+once the reason clears, while a **conflict hand-off** spends it and needs a
+fresh "merge" from you — and that a ticket with no PR recorded on it can never
+merge at all, however many times you approve it.
+
+---
+
 ## 2026-08-23 — Shared blocks on older pages had quietly forgotten they were shared (#402)
 
 A block you save once and reuse across the site keeps a note of where it came
