@@ -469,6 +469,71 @@ is different, so the loops have guardrails baked in:
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
 
+## A build node must be able to make GitHub run its checks
+
+Every gate downstream of the build loop reads GitHub's checks. `ship` waits for
+them, the review loop re-runs them, and the merge-on-comment relay refuses a PR
+that has none ("nothing verified this branch"). So a build node that cannot get
+a check run created produces PRs that can never be merged — and nothing says so,
+because a checkless PR looks calm rather than broken.
+
+**Setting up a new node, check this before trusting it.** The credential the
+node pushes and opens PRs with has to be one whose events trigger workflows: a
+`gh auth login` user token (`gho_…`, scopes must include `repo` and `workflow`)
+or a classic PAT. A `GITHUB_TOKEN` from an Actions run, or a GitHub App
+installation token, deliberately does **not** trigger workflows — a node wired to
+one of those opens checkless PRs forever. Confirm with:
+
+```
+gh auth status                      # Token: gho_… , scopes include repo + workflow
+gh pr list --limit 5 --json number,createdAt   # then, for a PR this node opened:
+gh run list --branch <branch> --json createdAt,event
+```
+
+A healthy node's first run appears **3–4 seconds** after `gh pr create`.
+
+### The failure that is NOT the credential (2026-08-23, PRs #387 and #389)
+
+Ticket 86bbjv61n was filed as "PRs pushed from the second build node never
+trigger CI". They do: nine PRs were opened from the Mac Mini on 22–23 August and
+seven started `verify` within four seconds. The two that did not share something
+else — **a second push landing about fifteen seconds after `gh pr create`**
+(a work-log commit on #387, a force-push on #389). In both, the `opened` run and
+that second push's run are both missing from `gh run list`, and the branch then
+sat checkless for half an hour until an unrelated push finally produced one.
+
+Two things follow, and both used to be got wrong:
+
+- **A missing run does not arrive later on its own.** A run exists only because
+  an event created one. "Wait a bit longer" and "run `npm run ship` again" are
+  both useless — ship pushes nothing on a re-run, so there is no new event.
+  Only a **new head SHA** fires `synchronize` and makes GitHub create the run.
+- **So `ship` now pushes an empty commit** once its grace window is spent, and
+  gives the checks one more window (`scripts/builder/waitForChecks.js`, the
+  `nudge` hook). It does that at most once, and if a run still does not appear
+  it says plainly that this is no longer a delay.
+
+**Recovering a checkless PR by hand** — any new commit will do:
+
+```
+git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push
+```
+
+**Avoiding it in the first place:** do not push again in the seconds right after
+`gh pr create`. Open the PR, wait until `gh pr checks <pr>` lists a run, and
+only then push the work-log commit — the ordering
+`.claude/skills/loop-build/SKILL.md` step 7 spells out.
+
+This used to say the opposite: push the work-log commit *before* opening the PR.
+That advice was self-contradictory (the entry carries the PR number, so it
+cannot be written before the PR exists) and it caused the OTHER failure while
+avoiding this one. Follow it and the work-log commit is the newest
+hand-authored commit when the PR is named, so `pickPullRequestCommit` titles the
+PR after it — `SHIP_AUTHORED_SUBJECTS` skips only the re-pin and nudge subjects,
+and a work-log commit is hand-authored. Squash-merge then makes that title
+permanent. That is exactly the #304 failure, and why
+`docs/MISLABELED_MERGES.md` exists.
+
 ## Reading the queue at a glance — the Loop note
 
 The Status column says which STAGE a ticket is in; the **Loop note** column
