@@ -65,6 +65,7 @@ const CODES = Object.freeze({
   FETCH_FAILED: 'fetch-failed',
   WORKTREE_FAILED: 'worktree-failed',
   NOT_ANCESTOR: 'not-ancestor',
+  CANNOT_TELL: 'cannot-tell',
   PUSH_FAILED: 'push-failed',
 });
 
@@ -265,7 +266,7 @@ function catchUpBranchLocally({
     //    next step beats a red check discovered twenty minutes later.
     const broughtIn = runGit(['diff', '--name-only', `origin/${branchName}`, 'HEAD'], { cwd: tree });
     if (broughtIn === null || !broughtIn.ok) {
-      return { code: CODES.NOT_ANCESTOR, ok: false, reason: 'could not list what the merge brought in, so could not tell whether the asset pins are stale — not pushing' };
+      return { code: CODES.CANNOT_TELL, ok: false, reason: 'could not list what the merge brought in, so could not tell whether the asset pins are stale — not pushing' };
     }
     const stale = pinnedAssetSourcesIn(broughtIn.stdout.split('\n'));
     if (stale.length) {

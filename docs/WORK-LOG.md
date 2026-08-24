@@ -21,7 +21,7 @@ It now checks whether the merge pulled in a change to anything behind one of
 those stamps. If it did, it stops and says exactly what to run, instead of
 pushing and letting the safety check discover it twenty minutes later. When
 nothing behind a stamp moved — which is most of the time — nothing changes and
-nothing gets slower. (#PR)
+nothing gets slower.
 
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
@@ -68,7 +68,7 @@ it comes out clean, the branch is caught up and the checks re-run. If anything
 genuinely overlaps, it hands over exactly as before — and now says which file,
 so nobody has to work that out again.
 
-It still never resolves a conflict, and it still never force-pushes. (#PR)
+It still never resolves a conflict, and it still never force-pushes.
 
 # Work Log
 

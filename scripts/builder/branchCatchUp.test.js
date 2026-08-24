@@ -452,14 +452,17 @@ test('every real input of every pinned bundle is covered by the source list', as
  * otherwise slip past (review finding).
  */
 test('every directly-served pinned asset is covered too, across all pinned HTML', () => {
+  // The file list is DERIVED, not typed out. My first version listed five HTML
+  // files by hand; the pinner does not work that way — defaultHtmlTargets()
+  // takes every public/*.html on disk plus src/layout.html. Review proved the
+  // gap by dropping a public/zz-probe.html pinning an uncovered asset: the
+  // pinner scanned and pinned it, and this test passed anyway.
+  //
+  // Importing the pinner's own function is what makes the two impossible to
+  // disagree. A hand-kept copy of a derived list is the same bug as the
+  // hand-kept PIN_SOURCE_PATHS above, one layer out.
+  const { defaultHtmlTargets } = require('../pin_asset_versions.cjs');
   const repoRoot = path.join(__dirname, '../..');
-  const PIN_CARRYING_HTML = [
-    'src/layout.html',
-    'public/site.html',
-    'public/about.html',
-    'public/explore.html',
-    'public/builder-preview.html',
-  ];
 
   // The three assets that are BUILT — their inputs are covered by the metafile
   // test above, so only their existence is checked here.
@@ -469,17 +472,18 @@ test('every directly-served pinned asset is covered too, across all pinned HTML'
     prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
   ));
 
+  const targets = defaultHtmlTargets(repoRoot);
   const urls = new Set();
-  let filesRead = 0;
-  for (const rel of PIN_CARRYING_HTML) {
-    const abs = path.join(repoRoot, rel);
-    if (!fs.existsSync(abs)) continue;
-    filesRead += 1;
+  for (const abs of targets) {
     for (const m of fs.readFileSync(abs, 'utf8').matchAll(/(?:src|href)="(\/[^"?#]+\.(?:js|css))\?v=/gi)) {
       urls.add(m[1]);
     }
   }
-  assert.ok(filesRead >= 4, `expected to read the pin-carrying HTML, read ${filesRead}`);
+
+  // Sanity floors: a derivation that silently finds nothing would make this
+  // test pass by covering an empty set, which is the failure mode of every
+  // check that scans for its own inputs.
+  assert.ok(targets.length >= 4, `expected the pinner to find several HTML targets, got ${targets.length}`);
   assert.ok(urls.size > 10, `expected many pinned assets, found ${urls.size}`);
 
   const uncovered = [...urls]
