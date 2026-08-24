@@ -3,10 +3,11 @@
 Build and check things on your own machine, then push. Production stops being
 where you find out whether something works.
 
-## The two commands
+## The commands
 
 ```
 npm run doctor      # what is up, what is stale, which database am I on
+npm run env:local   # a new work folder: point it at the database on this machine
 npm run db:refresh  # make my copy match production (about two minutes)
 npm run db:use      # which database am I on? (add `local` or `cloud` to switch)
 ```
@@ -14,6 +15,40 @@ npm run db:use      # which database am I on? (add `local` or `cloud` to switch)
 `doctor` and a bare `db:use` are read-only and always safe to run. `db:refresh`
 replaces your local database and refuses to run against anything that is not
 localhost.
+
+## A brand-new work folder
+
+A worktree starts with no settings file at all - settings are deliberately not
+in git - so it cannot reach any database, and the app, the fixture seeder and
+`npm run check:panels` all fail the same shrugging way.
+
+```
+npm run env:local
+```
+
+writes this folder an `.env.local` pointed at the Supabase running on **this
+machine**, with the three values read live from `supabase status`. Run it in the
+new folder, once. Running it again is harmless: it refreshes those three lines
+and leaves everything else in the file alone.
+
+**No live credential is involved.** The local stack's keys are the development
+defaults `supabase start` prints identically on every machine - they are public,
+and they are not the production values. What the file deliberately does *not*
+carry is the eighty-odd real API keys the main folder has. A work folder does
+not need them to build, test, or look at the app; if the one feature you are on
+needs one, copy that single line across by hand.
+
+**Why it exists.** The advice used to be `cp ../../../.env.local .`, and that is
+advice an agent may not follow - agents never handle live credentials. So
+`check:panels`, the one gate CI can never run because CI has no browser, was
+also the one gate an unattended build pass could not run. Three tickets hit that
+on 2026-08-23. `env:local` removes the tension instead of trading away either
+side of it.
+
+**It does not set `PORT`.** Every worktree wants 3001, the first one started
+wins, and the rest fail quietly - which is how a browser check gets driven
+against another thread's code and reported as yours. Give this folder its own:
+`PORT=3057 node server.js`.
 
 ## Switching databases
 
@@ -52,7 +87,8 @@ about the one question the whole setup rests on.
 A normal session:
 
 ```
-npm run thread my-topic 86bbggvud   # new folder + branch, already carrying your settings
+npm run thread my-topic 86bbggvud   # new folder + branch, installed and built
+npm run env:local         # point the new folder at this machine's database
 npm run doctor            # anything to fix before starting?
 npm run dev               # http://localhost:3001
 npm run ship              # checks, pull request, merge, cleanup

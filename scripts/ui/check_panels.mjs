@@ -499,9 +499,186 @@ function assertLattice(panels, width) {
   return failures;
 }
 
+/**
+ * L6a's OTHER shape — a titled-column grid.
+ *
+ * `data-lattice-pairs` covers the manager that became one labelled block per
+ * item (Feature Cards, Social). The other legal shape has no per-row labels
+ * at all: the titles sit once in a header band and the rows are cells under
+ * them, which is what the Navigation Links list is and what a genuinely
+ * tabular manager should stay. That shape matched none of the pair selectors,
+ * so it was skipped in silence — and the Links list had spent months with its
+ * header and its rows computing their columns separately, "Slug" sitting 21px
+ * right of the field it titles at 1440.
+ *
+ * A manager opts in with `data-lattice-columns="<n>"`, n being the number of
+ * titled columns including the actions column. What is asserted:
+ *   1. it rendered rows at all (an empty manager verifies nothing)
+ *   2. every row puts n cells on its line
+ *   3. down each column, every cell starts at the same offset and is the
+ *      same width
+ *   4. each header title sits over the column it titles
+ *
+ * (3) is measured RELATIVE TO THE ROW, not to the manager, because an
+ * indented child row is a documented exemption (docs/UI_RULES.md, L8): it
+ * slides sideways as a whole and keeps its widths. Measuring absolutely
+ * would fail it for obeying a rule the operator asked for. The row's own
+ * width is checked instead, which is what "the indent is paid back" means
+ * and what would break if a child row ever started shrinking.
+ */
+function measureColumnGrids(page) {
+  return page.evaluate(() => {
+    const managers = [...document.querySelectorAll('[data-lattice-columns]')];
+    return managers.map((m, index) => {
+      const declared = Number(m.getAttribute('data-lattice-columns') || '0') || 0;
+      const name = (m.className || '').split(/\s+/)[0] || `manager ${index}`;
+      // TWO markup shapes wear this declaration.
+      //
+      // The Navigation Links list is a div grid: a header band, a rows
+      // container, and rows, all reading one set of CSS tracks. The Table
+      // module's editor is a real <table> — thead/tbody/tr/th/td — which
+      // shares its tracks by construction rather than by agreement.
+      //
+      // Teaching the check the second shape is what lets a genuinely tabular
+      // manager opt in at all. Before this, declaring on a <table> failed
+      // with "rendered no rows", so the only options were to leave it
+      // unmeasured or to rewrite a spreadsheet as a div grid.
+      const isTable = m.tagName === 'TABLE';
+      const header = isTable
+        ? m.querySelector(':scope > thead > tr')
+        : m.querySelector('.builder-nav-items-header');
+      // Every direct grid cell of a row, in visual order. `display: contents`
+      // wrappers have no box, so descend through them the same way the
+      // lattice measurement does.
+      const cellsOf = (row) => [...row.children].flatMap((child) => (
+        // A table cell is already a box; only the div grid hides cells behind
+        // `display: contents` wrappers that have none.
+        getComputedStyle(child).display === 'contents' ? [...child.children] : [child]
+      ));
+      const rect = (el) => el.getBoundingClientRect();
+      const rowsOf = (root) => (isTable
+        ? [...root.querySelectorAll(':scope > tr')]
+        : [...root.querySelectorAll(':scope > .builder-nav-item-row')]);
+      const items = isTable ? m.querySelector(':scope > tbody') : m.querySelector('.builder-nav-items');
+      const rows = items ? rowsOf(items) : [];
+      const read = (row) => {
+        const rr = rect(row);
+        return {
+          left: Math.round(rr.left),
+          width: Math.round(rr.width),
+          // A cell that spans the whole grid is its own line (the mega
+          // menu's Feature column disclosure), not one of the n columns.
+          cells: cellsOf(row)
+            // A cell that spans the whole grid is its own line (the mega
+            // menu's Feature column disclosure), not one of the n columns.
+            // In a real table the equivalent is an explicit colspan.
+            .filter((c) => (c.colSpan || 1) === 1)
+            .filter((c) => getComputedStyle(c).gridColumnStart !== '1'
+              || getComputedStyle(c).gridColumnEnd !== '-1')
+            .map((c) => ({
+              x: Math.round(rect(c).left - rr.left),
+              w: Math.round(rect(c).width)
+            }))
+        };
+      };
+      return {
+        index,
+        name,
+        declared,
+        header: header ? read(header) : null,
+        rows: rows.map(read)
+      };
+    });
+  });
+}
+
+function assertColumnGrids(managers, width) {
+  const failures = [];
+  for (const m of managers) {
+    const where = `${width}px ${m.name}`;
+
+    if (!m.rows.length) {
+      failures.push(
+        `${where}: declares data-lattice-columns but rendered no rows — nothing was measured. ` +
+        'Seed real content for this module in scripts/ui/seed_fixture.mjs; an empty manager ' +
+        'cannot verify anything.'
+      );
+      continue;
+    }
+    if (!m.header) {
+      failures.push(`${where}: declares data-lattice-columns but has no header band to title the columns`);
+      continue;
+    }
+
+    const wrong = [m.header, ...m.rows].filter((r) => r.cells.length !== m.declared);
+    if (wrong.length) {
+      failures.push(
+        `${where}: declares ${m.declared} column(s) but ${wrong.length} row(s) render ` +
+        `${[...new Set(wrong.map((r) => r.cells.length))].join('/')} cell(s) — ` +
+        'a row with an extra child is a row whose columns no longer match the others'
+      );
+      continue;
+    }
+
+    // The indent is paid back on the right (operator, 2026-08-14), so an
+    // indented row is the same WIDTH as a top-level one even though it does
+    // not start in the same place. A child row that shrank instead would be
+    // the regression this catches.
+    const widths = [...new Set([m.header, ...m.rows].map((r) => r.width))];
+    if (widths.length > 1) {
+      failures.push(
+        `${where}: rows are ${widths.length} different widths (${widths.join('/')}px) — ` +
+        'an indented row slides, it does not shrink (L8 exemption, docs/UI_RULES.md)'
+      );
+    }
+
+    for (let c = 0; c < m.declared; c += 1) {
+      const xs = [...new Set(m.rows.map((r) => r.cells[c].x))];
+      if (xs.length > 1) {
+        failures.push(
+          `${where}: column ${c + 1} starts at ${xs.length} different offsets (${xs.join('/')}px) ` +
+          'within its own row — the columns are being computed per row instead of once'
+        );
+      }
+      const ws = [...new Set(m.rows.map((r) => r.cells[c].w))];
+      if (ws.length > 1) {
+        failures.push(
+          `${where}: column ${c + 1} is ${ws.length} different widths (${ws.join('/')}px) — ` +
+          'one row is taking width from the others'
+        );
+      }
+      /*
+       * The title has to sit OVER the column it titles. This is the one the
+       * header/rows split actually broke: two flex containers dividing
+       * different available widths drifted further apart with each column,
+       * so by the third title "Slug" had wandered 21px clear of its field.
+       *
+       * Containment rather than a matching left edge, because a title is not
+       * always left-aligned: "Action" titles three icon buttons that end on
+       * the block edge, so it is right-aligned to that edge and its box
+       * legitimately starts 36px right of the column's. A title that has
+       * drifted leaves its column's span in one direction or the other, which
+       * is what this catches — and it does catch the original: every one of
+       * the three titles overhung its column's right edge.
+       */
+      const head = m.header.cells[c];
+      const cell = m.rows[0].cells[c];
+      if (head.x < cell.x - 1 || head.x + head.w > cell.x + cell.w + 1) {
+        failures.push(
+          `${where}: column ${c + 1}'s title (${head.x}..${head.x + head.w}px) is not inside the ` +
+          `column it titles (${cell.x}..${cell.x + cell.w}px) — the header and the rows are not ` +
+          'reading the same tracks'
+        );
+      }
+    }
+  }
+  return failures;
+}
+
 const allFailures = [];
 let panelsSeen = 0;
 let cardsSeen = 0;
+let columnGridsSeen = 0;
 
 for (const width of WIDTHS) {
   const { browser, page } = await launch({ width, height: 1400, headless: true });
@@ -523,6 +700,9 @@ for (const width of WIDTHS) {
     // W9 runs at every width on purpose: a ceiling is only interesting on the
     // wide end, and 1440 alone would let a 1600px-only overflow through.
     allFailures.push(...assertCeiling(await measureWidths(page), width));
+    const columnGrids = await measureColumnGrids(page);
+    columnGridsSeen += columnGrids.length;
+    allFailures.push(...assertColumnGrids(columnGrids, width));
   } finally {
     await browser.close();
   }
@@ -565,4 +745,7 @@ if (allFailures.length) {
   process.exit(1);
 }
 
-console.log(`[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) at ${WIDTHS.join('/')}px.`);
+console.log(
+  `[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) `
+  + `and ${columnGridsSeen} titled-column manager(s) at ${WIDTHS.join('/')}px.`
+);
