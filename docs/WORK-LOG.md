@@ -61,6 +61,44 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — Work handed to you now comes with a link you can click (#404)
+
+You said it on the ecosystem-map task: *"This should include a clickable link I
+can click to test... none of the 'How to test' options are clear how I actually
+do it."*
+
+The problem was real and slightly embarrassing. A "How to test" section written
+by a developer tends to read *run the generator, then open the file in a
+browser* — which is an instruction for somebody who already knows where the
+generator is. It looks like a finished piece of work, and it quietly hands the
+checking back to you at the exact moment the whole point was that it had been
+done for you.
+
+Two changes, at the two places it goes wrong.
+
+**When a task is written**, every test step must now be one of exactly two
+things: a link you can click, or an exact command to copy and paste with the
+result it should print written next to it. Nothing else counts as a step. The
+bad shapes are named outright — "open the page in a browser" is called out as
+not being a step — because a rule that says "write good steps" is just advice,
+while a rule that says "this exact sentence is not a step" is something that can
+actually be enforced.
+
+**When work is handed over for you to approve**, anything with a visible surface
+has to arrive with a web address you can open. First choice is the temporary
+preview site that every piece of work already gets built automatically — it is
+the real thing rather than a description of it. And it has to be the *page*, not
+the front door: "here is the preview" is no help on a site with 138 pages.
+Underneath it, two or three lines of what to look for, written in plain terms.
+
+If there is no link and there should be, the work goes back. And if there is
+genuinely nothing to look at — something that runs behind the scenes — it has to
+say so in one line, because otherwise you cannot tell the difference between
+"nothing to see" and "somebody forgot".
+
+Both halves are held in place by a check that fails if the rule is ever softened
+back into a polite suggestion, which is how the previous attempt at this
+disappeared.
 ## 2026-08-23 — Finished branches finally get cleaned up (#396)
 
 Some background. When a piece of work is finished here, GitHub folds all of
