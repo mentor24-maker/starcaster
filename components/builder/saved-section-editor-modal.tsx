@@ -11,6 +11,8 @@ import {
 } from "@/lib/builder-template";
 import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import { appApi } from "@/lib/adapters/starcaster-app";
+import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import { loadSavedSectionUsage, type BlockUsage } from "@/lib/shared-block-usage";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
 import { buildBuilderThemePaletteColors } from "./builder-utils";
@@ -54,6 +56,7 @@ export function SavedSectionEditorModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [builderThemes, setBuilderThemes] = useState<BuilderThemeSummary[]>([]);
+  const [usage, setUsage] = useState<BlockUsage | null>(null);
 
   // A saved section isn't bound to a page, so there's no linked theme to read
   // the palette from. Prefer the first theme that actually has colors set — a
@@ -94,12 +97,44 @@ export function SavedSectionEditorModal({
       }
     }
 
+    /**
+     * How many pages follow the section being edited here.
+     *
+     * This editor is opened from the Modules manager, which is still the
+     * vanilla screen and hands the modal a saved section and nothing else — so
+     * the count has to be fetched rather than passed down. Read-only, and it
+     * fails soft: on an error the header shows the "Original" chip with no
+     * count, which is the whole reason the lineage line treats "not counted"
+     * and "counted, zero" as different answers. Claiming "not used on any
+     * page yet" about a master that 35 pages follow is the one sentence on
+     * this screen that could get somebody to save without thinking.
+     */
+    async function loadUsage() {
+      try {
+        // builderAdminFetch, not appApi: /api/admin/pages is not a real route.
+        // It is rewritten to /api/builder/landing-pages and given the project
+        // scope headers by this adapter, which is also what the page editor
+        // calls. Reaching for the plainer helper 404s (and did).
+        // `null` back from this means "could not be counted", which is NOT the
+        // same as zero and must not become "Not used on any page yet". The
+        // branch lives in shared-block-usage.ts so a test can reach it.
+        const counted = await loadSavedSectionUsage(
+          () => builderAdminFetch("/api/admin/pages", { cache: "no-store" }),
+          savedSectionId
+        );
+        if (!cancelled) setUsage(counted);
+      } catch {
+        if (!cancelled) setUsage(null);
+      }
+    }
+
     void loadThemes();
+    void loadUsage();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [savedSectionId]);
 
   // --- Section updaters ---
 
@@ -390,6 +425,8 @@ export function SavedSectionEditorModal({
               <BuilderSectionCard
                 section={draft}
                 sectionIndex={0}
+                isCanonicalMaster
+                canonicalUsage={usage}
                 editorDevice="browser"
                 isCollapsed={isCollapsed}
                 expandedModuleIds={expandedModuleIds}

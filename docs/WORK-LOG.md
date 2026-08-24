@@ -110,6 +110,71 @@ rule. The second version ran them properly at the same time but failed
 unpredictably, because it checked something that genuinely varies. The third
 version uncovered an actual bug in the new code, which was then fixed. Only
 after that did a passing run mean anything.
+## 2026-08-22 — Every shared block now says what it is (#387)
+
+The Builder lets one section be shared across many pages: you build a menu
+banner once, and every page that uses it follows along. The trouble was that
+nothing on screen said so. A block header showed a bare "(canonical)" tag, and
+sometimes a "Changed" tag beside it, and that was the whole story — it never
+said what the block was a copy of, and it never said how many pages an edit
+would reach. The only place that lived was in Dane's head.
+
+Each block header now carries a small coloured chip and, under it, one plain
+sentence. The chip says one of four things: **Original** (this is the master —
+saving it rewrites every page that follows), **Following** (a copy that still
+takes updates), **Changed** (a copy someone edited on this page, so the next
+push will skip it unless it is overwritten on purpose), or **Independent** (not
+connected to anything). The sentence beneath names the master and counts the
+reach — `Copy of "2 - Menu Banner" · used on 35 pages` — so the blast radius of
+a save is readable before the save, not discovered after it.
+
+This is a read-only change: nothing it adds can alter a page. The chip only
+describes state that already existed, and a test pins that promise by failing
+if rendering a block header calls a single one of the editor's save paths. The
+buttons that act on these states — take the original, disconnect, reconnect —
+are the next two pieces of this work.
+
+Two things were found while building it. The block header is dark, so the new
+line had to borrow the header's own white rather than the app's normal muted
+grey, which was nearly invisible on the teal. And the test fixture had been
+storing pages in a shape the server accepts but quietly strips lineage from,
+which meant a canonical section seeded for a check came back looking
+unconnected — it now writes the shape production actually stores, so a check
+over shared sections is measuring the real thing.
+## 2026-08-23 — Two instructions that contradicted each other, quietly (#399)
+
+The automated build helper needs somewhere to work. For each task it makes a
+fresh, private copy of the project — a separate folder so two jobs can never
+tread on each other's files.
+
+Two of our own documents disagreed about where those folders should live. The
+guide you read said to start each helper *inside* one of those private copies,
+and called that the most important safety rule we have. The helper's own
+instructions worked out where to put things by asking "which folder am I
+standing in?" Put those two together and every new task folder got tucked
+*inside* the previous one — folders nested inside folders, several layers deep
+over a long run.
+
+Nothing ever went wrong loudly. Nothing errored, nothing was lost. The work
+simply happened somewhere nobody expected, which is the kind of problem that
+sits unnoticed for months.
+
+The fix turned out to be short, because a piece of code that answers this
+question properly already existed elsewhere in the project. It asks a different
+question of git — one whose answer is the main folder regardless of which copy
+you happen to be standing in. The helper now uses it, and where you start a
+session stops mattering at all.
+
+The guide now says to start them wherever is convenient, and explains why that
+is safe: neither helper edits the folder it starts in. Each makes a fresh
+folder per task and works there, so the collision the old rule was worried
+about cannot happen from that direction. The underlying rule — one folder per
+piece of work — is unchanged and still applies to the actual building. It was
+never really about where a session is launched from; that was a misreading that
+got written down.
+
+Proved rather than assumed: the check builds a real repository with real linked
+folders and confirms the answer comes back the same from either place.
 ## 2026-08-23 — A new work folder can reach a database on its own (#406)
 
 Every piece of work here happens in its own folder — a separate copy of the
