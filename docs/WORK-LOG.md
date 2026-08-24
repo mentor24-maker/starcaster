@@ -1,3 +1,31 @@
+## 2026-08-23 — The robot that reads your replies now checks every 10 minutes (#426)
+
+There is a small program on the Mac Mini whose whole job is to read your ClickUp
+tickets and act on what you wrote — most importantly, to merge a PR when you
+reply with the word "merge". It was waking up once an hour.
+
+Nothing about the job needed an hour. It is not an AI session, it costs nothing
+to run, and it finishes everything it has to do in about fourteen seconds. The
+hour was a leftover default from back when the program only sent notifications;
+when it was given the power to merge, nobody went back and asked whether the
+timer still made sense. So work you had already approved could sit waiting on a
+clock rather than on anything real. It now wakes every ten minutes.
+
+Two things were worth checking before speeding it up, and both were measured
+rather than assumed. First, whether six times the traffic would annoy ClickUp:
+a real run uses 39 of the roughly 100 requests ClickUp allows per minute, so
+there is comfortable room, and the program now reports that number on every run
+so it stays honest as the queue grows. Second, whether two runs could overlap
+and post your message to the team chat twice — a real worry at ten minutes that
+barely existed at sixty. A throwaway test job proved macOS refuses to start a
+second copy while the first is still going, so they cannot stack. Useful to
+know that the protection comes from macOS and not from our own code.
+
+One piece is still yours: the Mini's schedule file has to be regenerated with a
+single command before the change takes effect there. Every run now says out loud
+whether the machine's schedule matches what the code says, and prints the exact
+command to fix it, so this cannot drift silently.
+
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
 When you comment "merge" on a finished ticket, a robot merges it for you within
