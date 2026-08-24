@@ -16,6 +16,12 @@
 const TRANSITIONS = {
   claimed:   ({ at }) => `🔨 building — claimed ${at}`,
   'pr-open': ({ at, pr }) => `🔀 PR #${pr} open — waiting for a review pass (${at})`,
+  // A review takes many minutes and, until 2026-08-22, left no trace while it
+  // ran — so two review passes checked PR #362 at the same time and the slower
+  // one overwrote the faster one's verdict. This note IS the visible claim: it
+  // carries the date as well as the clock, because "is that review still
+  // running or did it die?" cannot be answered by a time of day alone.
+  'review-started': ({ at }) => `🔍 being checked — a review pass started ${at}`,
   verified:  ({ at }) => `👀 verified — waiting on Dane to say "merge" (${at})`,
   'sent-back': ({ at }) => `↩ returned to the line with notes for the builder (${at})`,
   merged:    ({ at }) => `✅ live ${at}`,
