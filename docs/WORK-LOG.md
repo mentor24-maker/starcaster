@@ -92,6 +92,31 @@ to open. Better to read both properly.
 Found while reviewing the block-state chips shipped earlier today, which is a
 pleasing sort of catch — the feature that tells you how far a save reaches
 turned up a case where the underlying data had stopped saying.
+## 2026-08-23 — A new work folder can reach a database on its own (#406)
+
+Every piece of work here happens in its own folder — a separate copy of the
+code, so two jobs cannot corrupt each other's files. A brand-new folder came up
+with no settings in it, and settings are what tell the app which database to
+talk to. Without them the app cannot start, cannot log in, and cannot be looked
+at. The advice on screen was to copy the settings file over from the main
+folder — but that file holds around eighty live passwords and keys, and the
+agents doing the building are not allowed to touch those. Correctly so.
+
+The consequence was narrow and expensive. One of our checks opens the site in a
+real browser and measures whether the settings panels line up properly. It is
+the only check of its kind, because the automatic system that runs on every
+change has no browser at all — it simply cannot do it. So the one check nothing
+else can perform was also the one check an unattended build could not perform.
+It came up on three tickets in a row this week, and fifteen more were queued
+behind it.
+
+There is now a single command, `npm run env:local`, that gives a new folder
+what it needs: settings pointed at the practice database running on the machine
+itself. No real password is involved at any point — the practice database uses
+the same publicly-published starter keys on every machine on earth. The three
+places that used to tell you to copy the risky file now name this command
+instead. Verified by doing it: a fresh folder, one command, and the panel check
+ran through all 657 panels.
 ## 2026-08-23 — A pull request that nothing checked no longer sits there quietly (#393)
 
 Before anything can be merged here, GitHub has to run its own checks on it —
