@@ -352,6 +352,31 @@ const PANEL_CHECK_SECTION = {
         },
       };
     })(),
+    // A THIRD menu, on CUSTOM sizing. The Links list grows a fifth column
+    // ("Width") only under this setting, so the two menus above render the
+    // four-column shape and a check over them says nothing at all about the
+    // five-column one. Same hole as the mega panel above it: a variant that
+    // never renders is a variant nobody is measuring. Widths that sum under
+    // 100 so the manager is not also showing its over-budget warning.
+    (() => {
+      const base = createEmptyModule('navigation', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-navigation-custom-width',
+        name: 'Top Menu (Custom Widths)',
+        settings: {
+          ...base.settings,
+          ...TUNED.navigation.settings,
+          navItemSizing: 'custom',
+          navItems: JSON.stringify([
+            { id: 'home', label: 'Home', href: '/', width: '25' },
+            { id: 'play', label: 'Play', href: '/play', width: '25' },
+            { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+            { id: 'about', label: 'About', href: '/about', width: '25' },
+          ]),
+        },
+      };
+    })(),
     // A SECOND proximity-effect module, on a CONTINUOUS preset. Rings is the
     // default, and Reach and Falloff are `visibleWhen: isContinuous`, so the
     // module above renders neither and the check measured a panel two fields
