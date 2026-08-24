@@ -51,7 +51,8 @@ fi
 # That is not hypothetical: it is precisely what happened when the interval was
 # shortened on 2026-08-23 (task 86bbk2fuh). Say it out loud, every pass, rather
 # than letting the schedule quietly disagree with the committed intent.
-# Fixing the config-on-one-machine problem itself is NODES Slice B (86bbh9kh2).
+# Fixing the config-on-one-machine problem itself belongs to the NODES slices
+# (closest live one: Slice D, 86bbhbaay), not here.
 want="$(sed -n 's/^INTERVAL_SECONDS=\([0-9][0-9]*\).*/\1/p' "$REPO/scripts/install_bus_relay.sh" | head -1)"
 plist="$HOME/Library/LaunchAgents/com.starcaster.bus-relay.plist"
 if [ -n "$want" ] && [ -f "$plist" ]; then

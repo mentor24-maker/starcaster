@@ -632,9 +632,13 @@ the second-machine case; the others are on whoever types the command.
 **The interval is still only on one machine.** The generated plist lives at
 `~/Library/LaunchAgents/com.starcaster.bus-relay.plist` on the Mini and is not
 in the repo, so it is invisible to everyone and lost if the machine is rebuilt.
-That is **NODES Slice B** (`86bbh9kh2`)'s job, not this one's — recording the
-number here is the stopgap, and Slice B should treat this ticket as a worked
-example of why a machine-only config is a config nobody can review.
+That belongs to the **NODES** slices, not to this ticket — recording the number
+here is the stopgap. The closest live one is **Slice D, "provision a node by
+script, not by document"** (`86bbhbaay`); treat this relay interval as a worked
+example of why a machine-only config is a config nobody can review. (Task
+86bbk2fuh cited "NODES Slice B (86bbh9kh2)" for this, but that id is
+"Make Pulse path-portable" and no Slice B ticket could be found — A, C, D and E
+exist. Verify before citing it again.)
 
 ## A build node must be able to make GitHub run its checks
 
