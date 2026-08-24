@@ -547,3 +547,111 @@ test('a still-conflicted ticket stays quiet: the reason it derives is the one it
   assert.equal(again.act, 'merge');
   assert.equal(again.priorRefusal, notice.marker.replace(/^refused:\s*/, ''));
 });
+
+// ── Merging in one pass (task 86bbk2fb5) ────────────────────────────────────
+
+/**
+ * Merging one PR is ~3 minutes of work — catch up, run CI (verify median 85s),
+ * merge — and we were achieving 1.25 merges an hour. The cost was the shape:
+ * pass N caught the branch up and left, CI finished 85 seconds later, pass N+1
+ * merged an hour after that.
+ *
+ * The rule that makes waiting safe is that running out of budget produces a
+ * WAIT — precisely what the pass returned before — and never a merge. These
+ * tests exist mostly to defend that asymmetry.
+ */
+
+const {
+  IN_PASS_WAIT_MS,
+  IN_PASS_POLL_MS,
+  MAX_IN_PASS_WAITS,
+  mayWaitInPass,
+  afterCatchUpDecision,
+} = require('./mergeOnComment.js');
+
+test('a green PR after the catch-up merges in this pass', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'merge', reason: '1 check green' }, elapsedMs: 20_000 });
+  assert.equal(out.action, 'merge');
+});
+
+test('red during the wait refuses, with the gate\'s own words', () => {
+  // No new wording: the existing refusal path handles it, unchanged.
+  const out = afterCatchUpDecision({ gate: { action: 'refuse', reason: 'checks are red: verify' }, elapsedMs: 20_000 });
+  assert.equal(out.action, 'refuse');
+  assert.equal(out.reason, 'checks are red: verify');
+});
+
+test('a conflict discovered during the wait goes to the conflict path', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'conflict', reason: 'the branch conflicts' }, elapsedMs: 1000 });
+  assert.equal(out.action, 'conflict');
+});
+
+test('still running inside the budget means ask again', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'wait', reason: 'checks still running: verify' }, elapsedMs: 30_000 });
+  assert.equal(out.action, 'poll-again');
+});
+
+test('OUT OF BUDGET IS A WAIT, never a merge', () => {
+  // The whole safety of this feature. A slow CI run must not become either a
+  // failure or an unchecked merge — it must become exactly the outcome the
+  // pass produced before this existed.
+  for (const gate of [
+    { action: 'wait', reason: 'checks still running: verify' },
+    { action: 'wait', reason: 'GitHub is still computing whether the branch merges cleanly' },
+    { action: 'unknown-future-action' },
+    {},
+  ]) {
+    const out = afterCatchUpDecision({ gate, elapsedMs: IN_PASS_WAIT_MS + 1 });
+    assert.equal(out.action, 'wait', `${JSON.stringify(gate)} must time out to wait`);
+    assert.notEqual(out.action, 'merge');
+  }
+});
+
+test('the timeout says how long it waited, so the log is readable', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'wait' }, elapsedMs: 999_999, budgetMs: 180_000 });
+  assert.match(out.reason, /180s/);
+  assert.match(out.reason, /next pass/);
+});
+
+test('the per-pass cap is enforced, and the extras fall through', () => {
+  assert.equal(mayWaitInPass(0), true);
+  assert.equal(mayWaitInPass(MAX_IN_PASS_WAITS - 1), true);
+  assert.equal(mayWaitInPass(MAX_IN_PASS_WAITS), false, 'the cap must actually stop it');
+  assert.equal(mayWaitInPass(MAX_IN_PASS_WAITS + 5), false);
+  assert.equal(mayWaitInPass(0, 0), false, 'a cap of zero disables in-pass waiting entirely');
+});
+
+test('the budget is a named constant, roughly 2x the observed median', () => {
+  // 85s median for `verify`. A literal here is how a tuned number becomes a
+  // mystery number six months later.
+  assert.equal(typeof IN_PASS_WAIT_MS, 'number');
+  assert.ok(IN_PASS_WAIT_MS >= 120_000 && IN_PASS_WAIT_MS <= 300_000,
+    `budget should be ~2x the 85s median, got ${IN_PASS_WAIT_MS}ms`);
+  assert.ok(IN_PASS_POLL_MS > 0 && IN_PASS_POLL_MS < IN_PASS_WAIT_MS);
+});
+
+test('worst case is bounded — cap x budget, not unbounded', () => {
+  const worstMs = MAX_IN_PASS_WAITS * IN_PASS_WAIT_MS;
+  assert.ok(worstMs <= 15 * 60_000,
+    `a pass could hold open for ${Math.round(worstMs / 60_000)} minutes, which is too long for an hourly job`);
+});
+
+test('the relay waits after BOTH catch-up paths, and merges the same way', () => {
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../clickup_direct.mjs'), 'utf8');
+
+  // Both the GitHub update-branch path and the local false-conflict catch-up
+  // must wait — fixing only one leaves half the backlog on the hourly cadence.
+  //
+  // Counting the NAME is not enough: a first version of this assertion counted
+  // `waitForChecksInPass(` and a break that left the identifier in place while
+  // never calling it passed cleanly. The AWAITED calls are the thing.
+  const awaited = (src.match(/await waitForChecksInPass\(/g) || []).length;
+  assert.equal(awaited, 2,
+    `expected exactly 2 awaited calls, one per catch-up path, found ${awaited}`);
+  assert.match(src, /branch updated from main —/);
+
+  // It must NOT decide mergeability itself.
+  assert.match(src, /gate: githubGate\(json\)/,
+    'the in-pass wait must re-ask the same gate, not re-implement it');
+});
