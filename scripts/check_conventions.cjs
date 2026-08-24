@@ -50,6 +50,10 @@ function stagedFiles(filter) {
 
 const GENERATED = [
   'public/app-shell.html',
+  'public/about.html',
+  'public/site.html',
+  'public/explore.html',
+  'public/builder-preview.html',
   'public/privacy-policy.html',
   'public/terms-of-service.html',
   'public/data-deletion.html',
