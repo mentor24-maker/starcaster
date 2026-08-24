@@ -18,6 +18,29 @@ throws a real customer's bug into a closed ticket nobody reads. So it only
 files something as machine-made when it sees something no human browser can
 produce, or two separate giveaways at once. One suspicious detail on its own is
 never enough. (#PR)
+## 2026-08-23 — "Your approval still stands" is now actually true (#417)
+
+When you comment "merge" on a finished ticket, a robot merges it for you within
+the hour. If the branch clashes with newer work, it stops — untangling a clash
+by guesswork is exactly how good code gets wrecked — and left you a note saying
+your approval still stood and it would go through on its own.
+
+It would not. The reminder the robot wrote to itself, right beside that note,
+said "done with this one, never look at it again". So your yes was thrown away
+at the moment you were told it was safe. On one ticket you said "merge" twice,
+four hours apart, and got the same dead end both times.
+
+Two things changed. Your approval now survives a clash: a person still has to
+untangle the branch, but once they do, the next pass merges it on the word you
+already gave. And the note you read is now written by the same piece of code as
+the reminder the robot keeps, so the two can never again promise different
+things — there is a test that walks every message this job can send you and
+fails if one says your approval carries over while the other says it does not.
+
+The tickets already stuck this way free themselves; there is nothing to run.
+A ticket that really is still clashing now goes quiet rather than repeating
+itself hourly, and shows up in the run summary as "unchanged" so a silent pass
+still reads as stuck rather than clean.
 
 ## 2026-08-23 — The relay stops crying wolf about merge conflicts
 
@@ -57,6 +80,41 @@ here — so a quiet stretch in this log means the loop was idle, not that nothin
 was built. The log starts when the loop did.
 
 ---
+
+## 2026-08-23 — The menu editor's link list lines up with its own headings (#411)
+
+Open a Navigation module and the bottom half is the list of links — a black
+heading bar reading Parent Page / Page Name / Slug / Action, and a row of
+boxes under it for each link in the menu.
+
+The headings did not sit over the boxes they name. "Page Name" was fifteen
+pixels right of the box beneath it and "Slug" twenty-one, and the drift grew
+along the row, so the further right you looked the more the list read as two
+things laid on top of each other rather than one table. The cause is the sort
+of thing that only shows up on screen: the heading bar and the rows were each
+working out their own column widths, from slightly different amounts of space,
+so they were never going to agree. They now read those widths from one place,
+which is the only way two separate strips can line up and stay lined up.
+
+The mega-menu version had a worse version of the same problem. A menu item
+that opens a panel carries a "Feature column" control, and that control was
+sharing the line with the item's three boxes — so that one row's boxes came
+out shorter than every other row's, its up/down/delete icons floated into the
+middle of the list, and the words "Feature column" ran off the right-hand edge
+of the panel entirely. It now sits on its own line under the row it belongs to,
+and every row in the list is the same shape.
+
+One thing that looks wrong and is not: a nested link still steps in from the
+left and its icons still hang past the ones above. That was your call on
+2026-08-14 and it is left exactly as it was — it is now written down as a
+deliberate exception so nobody "fixes" it later.
+
+The checker that measures these panels could not see this list at all, because
+it only knew how to read a form with a label beside every box, and this list
+has its labels once at the top. It has been taught the second shape, so the
+list is now measured on every run instead of being skipped in silence. Before
+believing the pass, the layout was broken three separate ways on purpose and
+the checker was watched to fail each time.
 
 ## 2026-08-23 — The guard against touching the live branch had a gap (#397)
 
