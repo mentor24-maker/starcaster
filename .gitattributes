@@ -12,7 +12,6 @@
 # scripts/install_git_hooks.cjs registers it, and npm `prepare` runs that on
 # every install. Without that step git silently falls back to the default
 # merge, which is the old behaviour rather than a broken one.
-src/layout.html             merge=asset-pins
 public/about.html           merge=asset-pins
 public/site.html            merge=asset-pins
 public/builder-preview.html merge=asset-pins

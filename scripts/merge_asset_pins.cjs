@@ -5,7 +5,7 @@
  * Git merge driver for the HTML files that carry `?v=` asset pins.
  *
  * THE PROBLEM IT REMOVES
- * `src/layout.html`, `public/about.html`, `public/site.html` and
+ * `public/about.html`, `public/site.html` and
  * `public/builder-preview.html` are committed, and every one of them carries
  * cache-busting hashes rebuilt from whatever CSS and JS the build produced
  * (landmine 8). So ANY two branches that touch styling or bundles change the
