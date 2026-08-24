@@ -147,7 +147,8 @@ not a way around the format.
 
 4. **Report back.** List the tasks you filed (name + risk + one-line goal) and
    the total. Remind the operator they can now start the build loop:
-   `/loop 30m loop-build` (in its own worktree).
+   `/loop 30m loop-build` — from wherever this session already is; the build
+   loop makes its own worktree per task.
 
 ## Guardrails
 
