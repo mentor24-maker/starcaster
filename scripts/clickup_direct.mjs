@@ -64,7 +64,7 @@ import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled,
-  deliveryVerdict, relayMarkerText, receiptText, busFailureBucket, RECEIPT_FINGERPRINT,
+  deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
 } = busRelayPlan;
 const { mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker } = mergeOnComment;
 const {
@@ -329,44 +329,65 @@ async function postToBus(channel, content) {
  */
 async function deliverToBus(channel, content, { taskId, target, receipted } = {}) {
   const chat = await postToBus(channel, content);
-  if (chat.ok) return { ...deliveryVerdict({ chatOk: true }), why: '' };
+  // `why` is always the chat failure (the report quotes it on the success
+  // path too); `reason` is deliveryVerdict's honest account of why nothing was
+  // delivered. Keeping them apart is the whole of review finding 1: the old
+  // spread put the verdict's reason in `why` and then overwrote it.
+  const answer = (verdict) => ({ ok: verdict.ok, via: verdict.via, why: chat.why, reason: verdict.why || '' });
+  if (chat.ok) return { ok: true, via: 'chat', why: '', reason: '' };
 
   // No handback target means nothing on this watch reads the ticket, so a
   // receipt there delivers nothing (busRelayPlan.deliveryVerdict says why).
   // Do not even post one: this watch retries every pass until the bus takes
   // it, and a receipt per pass would pile identical notes onto the ticket
   // forever while still losing the bus message.
-  if (!taskId || !target) {
-    return { ...deliveryVerdict({ chatOk: false, receiptOk: false }), why: chat.why };
+  const handsBack = Boolean(taskId && target);
+  if (!handsBack) {
+    return answer(deliveryVerdict({ chatOk: false, handsBack: false, receiptAttempted: false }));
   }
 
   // One receipt per TICKET per pass, not per comment. Three of Dane's
-  // comments during an outage otherwise leave three identical notes.
+  // comments during an outage otherwise leave three identical notes. The map
+  // remembers whether that receipt was VERIFIED, so a second comment on the
+  // same ticket inherits the first one's verdict rather than an assumed pass.
   if (receipted && receipted.has(String(taskId))) {
-    return { ...deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: true }), why: chat.why };
+    return answer(deliveryVerdict({
+      chatOk: false, handsBack: true, receiptAttempted: true,
+      receiptPosted: true, receiptOk: receipted.get(String(taskId)),
+    }));
   }
 
-  const body = receiptText({ why: chat.why, target });
+  const at = new Date().toISOString();
+  const body = receiptText({ why: chat.why, target, at });
   const out = await call('POST', `/api/v2/task/${taskId}/comment`, { comment_text: body });
+  const posted = Boolean(out.res.ok);
 
   // Read it back before trusting it. Every other comment write in this file
   // does (DOCTRINE 3.10), and this one now unlocks both the dedup marker and
   // the ticket move — a 200 that did not stick would move the ticket with the
-  // acknowledgement existing nowhere.
+  // acknowledgement existing nowhere. busRelayPlan.isThisReceipt matches THIS
+  // write by its id and its timestamp, never by the constant fingerprint: a
+  // leftover receipt from an earlier outage would otherwise satisfy the very
+  // check that exists to catch a POST that did not stick.
   let stuck = false;
-  if (out.res.ok) {
+  if (posted) {
     const back = await call('GET', `/api/v2/task/${taskId}/comment`);
     stuck = Boolean(back.res.ok && (back.json.comments || []).some(
-      (c) => String(c.comment_text || '').includes(RECEIPT_FINGERPRINT)
+      (c) => isThisReceipt(c, { id: out.json && out.json.id, at })
     ));
   }
-  if (stuck && receipted) receipted.add(String(taskId));
 
-  const verdict = deliveryVerdict({ chatOk: false, receiptOk: stuck, handsBack: true });
-  const why = out.res.ok
-    ? (stuck ? chat.why : `${chat.why}; the fallback receipt reported HTTP 200 but could not be read back`)
-    : `${chat.why}; the fallback receipt comment also failed (HTTP ${out.res.status})`;
-  return { ...verdict, why };
+  // Record the ticket as soon as the POST lands, NOT only when the read-back
+  // succeeded: a transient GET failure otherwise leaves the ticket unrecorded
+  // and the next comment in the same pass posts a second identical note —
+  // which is the pile-up this map was added to prevent. Whether it verified
+  // travels in the value, so nothing is assumed away.
+  if (posted && receipted) receipted.set(String(taskId), stuck);
+
+  return answer(deliveryVerdict({
+    chatOk: false, handsBack: true, receiptAttempted: true,
+    receiptPosted: posted, receiptOk: stuck, receiptStatus: out.res.status,
+  }));
 }
 
 /**
@@ -1391,10 +1412,13 @@ if (cmd === 'whoami') {
   // write returned 400 for sixteen hours and the whole pipeline stopped
   // behind it, though every answer was sitting on its ticket the entire time.
   const busSkipped = [];
-  // Tickets already receipted THIS pass. One acknowledgement per ticket, not
-  // one per comment — three answers during an outage otherwise leave three
-  // identical notes on the same ticket (review finding, 2026-08-23).
-  const receipted = new Set();
+  // Tickets already receipted THIS pass, mapped to whether that receipt was
+  // read back successfully. One acknowledgement per ticket, not one per
+  // comment — three answers during an outage otherwise leave three identical
+  // notes on the same ticket (review finding, 2026-08-23). The VALUE matters
+  // too: a second comment on the same ticket inherits the first receipt's
+  // verdict, so an unverified receipt never hands anything back by proxy.
+  const receipted = new Map();
   let lastRes = null;
 
   for (const watch of watches) {
@@ -1462,7 +1486,13 @@ if (cmd === 'whoami') {
           receipted,
         });
         if (!delivery.ok) {
-          unchecked.push(`${t.id} comment ${c.id}: could not deliver anywhere — the party line failed and so did the receipt comment (${delivery.why}). NOT marked relayed (will retry next run)`);
+          // The reason is deliveryVerdict's, not this line's. It used to hard-code a
+          // claim that the fallback receipt had failed as well — even on a notify-only
+          // watch, where no receipt is ever attempted — telling the reader that task
+          // comments were failing too, which during a chat outage is the opposite of
+          // the truth and points the diagnosis in exactly the wrong direction.
+          const failedWhy = [`the party line failed (${delivery.why})`, delivery.reason].filter(Boolean).join(', and ');
+          unchecked.push(`${t.id} comment ${c.id}: could not deliver anywhere — ${failedWhy}. NOT marked relayed (will retry next run)`);
           continue;
         }
         if (delivery.via === 'ticket') {
@@ -1543,7 +1573,11 @@ if (cmd === 'whoami') {
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.
   if (busSkipped.length) {
-    console.error(`\nParty line unavailable — ${busSkipped.length} message(s) receipted on their tickets instead:`);
+    // Not all of these are receipts: the merge step's three posts write their
+    // real explanation onto the ticket themselves, so they land here with no
+    // receipt comment. The heading names what is true of all of them — the
+    // record is on the ticket, one way or the other.
+    console.error(`\nParty line unavailable — ${busSkipped.length} bus post(s) skipped; the record is on the ticket in each case:`);
     for (const line of busSkipped) console.error(`  - ${line}`);
   }
   if (unchecked.length) {

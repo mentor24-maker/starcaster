@@ -468,11 +468,28 @@ now a chain, not a single call (`deliverToBus` in `scripts/clickup_direct.mjs`,
 decisions in `scripts/builder/busRelayPlan.js`):
 
 1. Post to the party line.
-2. If that fails, post a short **receipt comment** on the ticket the message
-   concerns — task comments were the one write that kept working throughout.
-   It is a receipt, not a re-quote: his words are already on that ticket one
-   comment up; what was missing was the acknowledgement they were read.
+2. If that fails — **and only on a watch that hands the ticket back** — post a
+   short **receipt comment** on the ticket the message concerns. Task comments
+   were the one write that kept working throughout. It is a receipt, not a
+   re-quote: his words are already on that ticket one comment up; what was
+   missing was the acknowledgement they were read.
 3. The handback fires if **either** landed.
+
+**That carve-out in step 2 is the most important line here.** Of the three
+watched cases only one hands a ticket back (`needs your input` in the Loop
+Queue). On the other two — the Agent Response list, and `ready to launch` —
+**nothing reads the ticket**: the party line IS the delivery. So no receipt is
+written there at all, the message stays undelivered, it lands in "Could not
+fully verify", and it retries every pass until the bus takes it. Counting a
+receipt there would post a note to Dane on a ticket he is already looking at,
+write the permanent dedup marker, and lose the bus message for good once chat
+recovered — turning a self-healing retry into silent permanent loss.
+
+The receipt is **read back before it is trusted**, and it is identified by the
+comment id ClickUp returned plus the ISO instant folded into its signature line
+— never by its wording. A receipt's wording is a constant, so matching on that
+would let a leftover receipt from an earlier outage "verify" a fresh write that
+never stuck, which is the exact case the read-back exists to catch.
 
 The dedup marker records which surface carried it — `[bus-relay] sent to
 channel X at …` versus `[bus-relay] chat unavailable, receipted on the ticket
@@ -480,15 +497,51 @@ at …` — behind the same prefix the "already relayed" check reads, so the tra
 stays legible without changing how it is parsed.
 
 A chat failure that was covered this way is **not a run failure**. It prints
-under its own heading (*"Party line unavailable — N message(s) receipted on
-their tickets instead"*) and the pass still exits 0. The same goes for the
-merge step's three bus posts: each of those writes its real explanation onto
-the ticket first, so a failed bus post there was only ever cosmetic and should
-never have stopped a pass.
+under its own heading (*"Party line unavailable — N bus post(s) skipped; the
+record is on the ticket in each case"*) and the pass still exits 0. The same
+goes for the merge step's three bus posts: each of those writes its real
+explanation onto the ticket first, so a failed bus post there was only ever
+cosmetic and should never have stopped a pass. Those merge-step entries carry
+**no receipt comment** — their record is the explanation the merge step already
+wrote — which is why the heading says "the record is on the ticket" rather than
+naming receipts.
 
 What did **not** change: a message that reached neither surface is still
 undelivered, still lands in "Could not fully verify", still exits 1, and still
 moves no ticket. The gate was re-pointed, not weakened.
+
+### Running the relay by hand
+
+`bus-relay` belongs to the Mac Mini (`lib/nodeRoles.js`), so every hand-run of
+it happens over `ssh` — and a non-interactive `ssh` shell has neither `doppler`
+nor `node` on its `PATH`. Export it first or the command fails with a bare
+"command not found" that looks nothing like a relay problem:
+
+```bash
+export PATH=/opt/homebrew/bin:$PATH
+
+npm run clickup -- bus-relay --dry-run              # says what it would do, writes nothing
+npm run clickup -- bus-relay --only-task <task-id>  # one ticket, real writes
+```
+
+To exercise the fallback deliberately rather than waiting for the next outage,
+point the pass at a channel id that does not exist:
+
+```bash
+npm run clickup -- bus-relay --only-task <task-id> --channel 0000-nonexistent
+```
+
+Green is: **exit 0**, a receipt comment on the ticket, the ticket moved to
+`Queued`, and the skipped bus post named under *"Party line unavailable"*
+rather than under *"Could not fully verify"*.
+
+That test needs a **fresh, un-relayed comment from the operator** — the relay
+filters on `OPERATOR_ID` and skips anything already carrying a `[bus-relay]`
+marker. The cheap way to make one is to ask Dane to comment on any parked
+ticket; it costs him ten seconds. `CLICKUP_OPERATOR_ID` is an env override, so
+a scratch ticket plus a comment of your own works too. Do **not** delete an
+existing `[bus-relay]` marker to manufacture one — that is destructive, and the
+run will then send his real answer to a dead channel.
 
 ## Reading the queue at a glance — the Loop note
 

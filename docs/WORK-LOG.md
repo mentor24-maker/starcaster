@@ -70,6 +70,23 @@ move, and the run still reports a failure. The safety check was re-aimed at a
 sturdier target, not switched off. A chat outage is now a line in the report
 rather than a stopped pipeline.
 
+A second pass tightened three places where the job was telling small untruths —
+which matters more than it sounds, because these messages are what someone
+reads at 2am while trying to work out what broke. It used to report "the chat
+failed and so did the note on the ticket" even in the cases where it had never
+tried writing a note at all, pointing the reader at a problem that did not
+exist. It checked its own note had really been saved by looking for the words
+it always uses — so an old note left over from a previous outage would happily
+vouch for a new one that never saved. And if that check hit a hiccup, the job
+forgot it had written the note and wrote a second identical one on the same
+ticket. All three now say exactly what happened and nothing more.
+
+The safety rule itself is untouched. It was tested by breaking the chat room on
+purpose — pointing the job at a channel that does not exist — on a throwaway
+ticket, three times over: chat working, chat broken with a note written, and
+chat broken where writing a note would be pointless. Each behaved as intended,
+and the throwaway tickets were deleted afterwards.
+
 ## 2026-08-23 — The guard against touching the live branch had a gap (#397)
 
 There is a rule here that an automated helper must never edit files directly in

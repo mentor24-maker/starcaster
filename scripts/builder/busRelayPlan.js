@@ -84,9 +84,21 @@ function mergeEnabled(watch) {
  *  "already relayed" check that READS it can never drift apart. */
 const BUS_RELAY_MARKER = '[bus-relay]';
 
-/** What counts as delivered, given how each surface answered. Chat is still
- *  preferred — the fallback is a fallback, not a second channel. */
-function deliveryVerdict({ chatOk, receiptOk, handsBack } = {}) {
+/** What counts as delivered, given how each surface answered, and — when the
+ *  answer is "not delivered" — the honest one-line reason WHY, which the
+ *  caller prints verbatim.
+ *
+ *  That `why` is a decision, not a string: review finding, 2026-08-24. The
+ *  caller used to hard-code "the party line failed and so did the receipt
+ *  comment" for every undelivered case, including the case where no receipt
+ *  was ever attempted. During a real outage that line appeared for every
+ *  Agent Response comment and told the reader task comments were failing too
+ *  — the opposite of the truth, and the opposite of what this very file's
+ *  outage write-up says to conclude. Chat is still preferred; the fallback is
+ *  a fallback, not a second channel. */
+function deliveryVerdict({
+  chatOk, handsBack, receiptAttempted, receiptPosted, receiptOk, receiptStatus,
+} = {}) {
   if (chatOk) return { ok: true, via: 'chat' };
 
   // A ticket receipt only DELIVERS on a watch that hands the ticket back.
@@ -108,9 +120,22 @@ function deliveryVerdict({ chatOk, receiptOk, handsBack } = {}) {
   // Before this feature those two cases retried every pass until the bus took
   // them. Turning a self-healing retry into silent permanent loss is the exact
   // shape of bug this ticket exists to remove, so: no handback, no delivery.
-  if (receiptOk && handsBack) return { ok: true, via: 'ticket' };
-  if (receiptOk) return { ok: false, via: 'none', why: 'receipted, but this watch hands nothing back — only the party line delivers here' };
-  return { ok: false, via: 'none' };
+  if (!handsBack) {
+    return {
+      ok: false,
+      via: 'none',
+      why: receiptAttempted
+        ? 'a receipt was written, but this watch hands nothing back — only the party line delivers here'
+        : 'no receipt was attempted, because this watch hands nothing back — only the party line delivers here',
+    };
+  }
+
+  if (receiptOk) return { ok: true, via: 'ticket' };
+  if (!receiptAttempted) return { ok: false, via: 'none', why: 'no receipt was attempted' };
+  if (!receiptPosted) {
+    return { ok: false, via: 'none', why: `the fallback receipt comment also failed (HTTP ${receiptStatus == null ? '?' : receiptStatus})` };
+  }
+  return { ok: false, via: 'none', why: 'the fallback receipt reported HTTP 200 but could not be read back' };
 }
 
 /** The dedup marker's text. Same PREFIX whichever surface was used, so the
@@ -129,7 +154,7 @@ function relayMarkerText({ via, channel, at } = {}) {
  *  the acknowledgement that they were read and acted on. */
 const RECEIPT_FINGERPRINT = 'Your answer was read and picked up.';
 
-function receiptText({ why, target } = {}) {
+function receiptText({ why, target, at } = {}) {
   // Past tense for what is certain, present for what is under way — never the
   // future. Review finding, 2026-08-23: the first version announced "this
   // ticket is going back to Queued" BEFORE the move was attempted, so a failed
@@ -142,7 +167,31 @@ function receiptText({ why, target } = {}) {
   const move = target ? ` This ticket is being returned to ${target}.` : '';
   return `${RECEIPT_FINGERPRINT}${move} The party line is unavailable right now (${why || 'reason unknown'}), so this note is the record instead.
 
-(Automatic — bus-relay.)`;
+${receiptSignature(at)}`;
+}
+
+/** The receipt's own signature line, carrying the moment it was written.
+ *
+ *  The timestamp is not decoration — it is what makes ONE receipt findable.
+ *  Review finding, 2026-08-24: the read-back searched every comment on the
+ *  task for RECEIPT_FINGERPRINT, which is a constant, so a leftover receipt
+ *  from an earlier outage "verified" a fresh POST that never stuck — the exact
+ *  case the read-back was added to catch. */
+function receiptSignature(at) {
+  return at ? `(Automatic — bus-relay, ${at}.)` : '(Automatic — bus-relay.)';
+}
+
+/** Is this comment the receipt we just wrote — not merely *a* receipt?
+ *
+ *  Two independent handles, either of which is enough: the id ClickUp returned
+ *  from the POST, and the ISO instant folded into the signature line. The id is
+ *  exact; the timestamp survives a response shape that carries no id. Both are
+ *  unique to this write, which a bare fingerprint never was. */
+function isThisReceipt(comment, { id, at } = {}) {
+  if (!comment) return false;
+  if (id != null && String(comment.id) === String(id)) return true;
+  const text = String(comment.comment_text || '');
+  return Boolean(at && text.includes(RECEIPT_FINGERPRINT) && text.includes(receiptSignature(at)));
 }
 
 /**
@@ -166,6 +215,8 @@ module.exports = {
   mergeEnabled,
   BUS_RELAY_MARKER,
   RECEIPT_FINGERPRINT,
+  receiptSignature,
+  isThisReceipt,
   deliveryVerdict,
   relayMarkerText,
   receiptText,

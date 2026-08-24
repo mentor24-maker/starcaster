@@ -64,13 +64,15 @@ const {
   relayMarkerText,
   receiptText,
   RECEIPT_FINGERPRINT,
+  receiptSignature,
+  isThisReceipt,
   busFailureBucket,
 } = require('./busRelayPlan.js');
 
 const AT = '2026-08-23T22:04:00.000Z';
 
 test('delivered via chat: the party line worked, nothing else was needed', () => {
-  const v = deliveryVerdict({ chatOk: true, receiptOk: false });
+  const v = deliveryVerdict({ chatOk: true, receiptOk: false, handsBack: true });
   assert.deepEqual(v, { ok: true, via: 'chat' });
   assert.equal(
     relayMarkerText({ ...v, channel: '2kydhxeu-474', at: AT }),
@@ -79,11 +81,13 @@ test('delivered via chat: the party line worked, nothing else was needed', () =>
 });
 
 test('chat winning is not conditional on the receipt — it is preferred, not a tie', () => {
-  assert.deepEqual(deliveryVerdict({ chatOk: true, receiptOk: true }), { ok: true, via: 'chat' });
+  assert.deepEqual(deliveryVerdict({ chatOk: true, receiptOk: true, handsBack: true }), { ok: true, via: 'chat' });
 });
 
 test('delivered via the fallback: chat failed, the ticket receipt landed', () => {
-  const v = deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: true });
+  const v = deliveryVerdict({
+    chatOk: false, handsBack: true, receiptAttempted: true, receiptPosted: true, receiptOk: true,
+  });
   assert.deepEqual(v, { ok: true, via: 'ticket' });
   assert.equal(
     relayMarkerText({ ...v, channel: '2kydhxeu-474', at: AT }),
@@ -92,8 +96,12 @@ test('delivered via the fallback: chat failed, the ticket receipt landed', () =>
 });
 
 test('delivered by neither: not delivered, no marker, and so no handback', () => {
-  const v = deliveryVerdict({ chatOk: false, receiptOk: false });
-  assert.deepEqual(v, { ok: false, via: 'none' });
+  const v = deliveryVerdict({
+    chatOk: false, handsBack: true, receiptAttempted: true, receiptPosted: false, receiptStatus: 401,
+  });
+  assert.equal(v.ok, false);
+  assert.equal(v.via, 'none');
+  assert.match(v.why, /receipt comment also failed \(HTTP 401\)/);
   // Nothing to mark — a comment nobody received is retried next pass.
   assert.equal(relayMarkerText({ ...v, channel: 'X', at: AT }), null);
   // And the gate holds: fresh counts only delivered comments, so this task
@@ -109,7 +117,7 @@ test('every marker starts with the shared prefix, so "already relayed" still mat
 });
 
 test('the receipt is a receipt, not a re-quote of his words', () => {
-  const text = receiptText({ why: 'HTTP 400', target: 'Queued' });
+  const text = receiptText({ why: 'HTTP 400', target: 'Queued', at: AT });
   assert.match(text, /Your answer was read/);
   assert.match(text, /being returned to Queued/);
   assert.match(text, /HTTP 400/);
@@ -160,7 +168,7 @@ test('a bus failure nobody was told about is still "could not fully verify"', ()
  * which is the exact bug this whole ticket exists to remove.
  */
 test('a receipt on a watch that hands nothing back is NOT delivery', () => {
-  const v = deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: false });
+  const v = deliveryVerdict({ chatOk: false, receiptAttempted: true, receiptOk: true, handsBack: false });
   assert.equal(v.ok, false, 'nothing reads this ticket — the party line was the delivery');
   assert.equal(v.via, 'none');
   assert.match(v.why, /hands nothing back/);
@@ -168,11 +176,11 @@ test('a receipt on a watch that hands nothing back is NOT delivery', () => {
 
 test('handsBack omitted is treated as no handback, not as yes', () => {
   // The safe default, because the failure is silent in one direction only.
-  assert.equal(deliveryVerdict({ chatOk: false, receiptOk: true }).ok, false);
+  assert.equal(deliveryVerdict({ chatOk: false, receiptAttempted: true, receiptPosted: true, receiptOk: true }).ok, false);
 });
 
 test('and so no marker is written for it — it retries next pass', () => {
-  const v = deliveryVerdict({ chatOk: false, receiptOk: true, handsBack: false });
+  const v = deliveryVerdict({ chatOk: false, receiptAttempted: true, receiptOk: true, handsBack: false });
   assert.equal(relayMarkerText({ ...v, channel: 'c', at: AT }), null,
     'a marker here would make the "already relayed" check skip it forever');
 });
@@ -210,6 +218,91 @@ test('the receipt still names why the party line was skipped', () => {
   assert.match(receiptText({ target: 'Queued' }), /reason unknown/);
 });
 
+// ── The undelivered reason is a decision, not a sentence in the caller ────
+
+/**
+ * Review finding, 2026-08-24, hit verbatim in a real run. The caller printed
+ * "the party line failed and so did the receipt comment" for EVERY undelivered
+ * case — including the notify-only watches, where no receipt is ever attempted.
+ * During a chat outage that line appears against every Agent Response comment
+ * and tells the reader task comments are failing too, which is the opposite of
+ * what is true and the opposite of what LOOP_ENGINEERING says to conclude.
+ */
+test('no handback, no receipt attempted: the reason says exactly that', () => {
+  const v = deliveryVerdict({ chatOk: false, handsBack: false, receiptAttempted: false });
+  assert.equal(v.ok, false);
+  assert.match(v.why, /no receipt was attempted/);
+  assert.match(v.why, /hands nothing back/);
+  // The wrong sentence, made unsayable.
+  assert.doesNotMatch(v.why, /also failed/);
+});
+
+test('the receipt POST failing names the status it actually got', () => {
+  const v = deliveryVerdict({
+    chatOk: false, handsBack: true, receiptAttempted: true, receiptPosted: false, receiptStatus: 503,
+  });
+  assert.equal(v.ok, false);
+  assert.match(v.why, /receipt comment also failed \(HTTP 503\)/);
+});
+
+test('a 200 that did not stick is reported as unread-back, not as a failed post', () => {
+  const v = deliveryVerdict({
+    chatOk: false, handsBack: true, receiptAttempted: true, receiptPosted: true, receiptOk: false,
+  });
+  assert.equal(v.ok, false, 'an unverified receipt is not delivery');
+  assert.match(v.why, /could not be read back/);
+  assert.doesNotMatch(v.why, /also failed/);
+});
+
+test('a delivered verdict carries no reason to print', () => {
+  for (const v of [
+    deliveryVerdict({ chatOk: true }),
+    deliveryVerdict({ chatOk: false, handsBack: true, receiptAttempted: true, receiptPosted: true, receiptOk: true }),
+  ]) {
+    assert.equal(v.ok, true);
+    assert.equal(v.why, undefined, 'nothing failed, so there is nothing to explain');
+  }
+});
+
+// ── Telling THIS receipt from a receipt ───────────────────────────────────
+
+/**
+ * Review finding, 2026-08-24. The read-back searched every comment on the task
+ * for RECEIPT_FINGERPRINT, a constant. A ticket that took a receipt during one
+ * outage, went back to Queued, later returned to "Needs your input" and hit a
+ * second outage would have its new 200-that-did-not-stick "verified" by the
+ * leftover from the first — the precise case the read-back was added to catch.
+ */
+test('the receipt carries the instant it was written', () => {
+  const text = receiptText({ why: 'HTTP 400', target: 'Queued', at: AT });
+  assert.ok(text.includes(receiptSignature(AT)));
+  assert.match(text, /2026-08-23T22:04:00\.000Z/);
+});
+
+test('an older receipt on the same ticket does NOT verify a newer write', () => {
+  const older = { id: 111, comment_text: receiptText({ why: 'HTTP 400', target: 'Queued', at: '2026-08-01T00:00:00.000Z' }) };
+  assert.equal(isThisReceipt(older, { id: 222, at: AT }), false,
+    'a leftover receipt must not stand in for one that never stuck');
+});
+
+test('the id from the POST identifies it', () => {
+  assert.equal(isThisReceipt({ id: 222, comment_text: 'anything' }, { id: 222, at: AT }), true);
+  assert.equal(isThisReceipt({ id: '222', comment_text: '' }, { id: 222 }), true, 'ids compare as strings');
+});
+
+test('the timestamp identifies it when the response carried no id', () => {
+  const mine = { id: 999, comment_text: receiptText({ why: 'HTTP 400', target: 'Queued', at: AT }) };
+  assert.equal(isThisReceipt(mine, { id: undefined, at: AT }), true);
+});
+
+test('a comment that is not a receipt at all never matches', () => {
+  assert.equal(isThisReceipt({ id: 1, comment_text: 'Dane: go ahead' }, { id: 2, at: AT }), false);
+  assert.equal(isThisReceipt(null, { id: 2, at: AT }), false);
+  // And with nothing to match on, nothing matches — an unverifiable write is
+  // reported, never assumed.
+  assert.equal(isThisReceipt({ id: 1, comment_text: receiptText({ why: 'x', target: 'Queued', at: AT }) }, {}), false);
+});
+
 // ── The plumbing side of the two review findings ──────────────────────────
 
 /**
@@ -224,25 +317,53 @@ const RELAY_SRC = require('node:fs').readFileSync(
 
 test('the receipt is read back before it is trusted', () => {
   const post = RELAY_SRC.indexOf('comment_text: body });');
-  const readBack = RELAY_SRC.indexOf('RECEIPT_FINGERPRINT');
   assert.ok(post > -1, 'the receipt POST moved — re-point this test');
-  assert.ok(RELAY_SRC.includes('could not be read back'),
-    'a 200 that did not stick must be reported, not treated as delivery');
-  assert.ok(readBack > -1, 'nothing searches for the receipt after writing it');
+  assert.ok(RELAY_SRC.includes('isThisReceipt(c, { id: out.json && out.json.id, at })'),
+    'the read-back must identify THIS write, by id or by its timestamp');
   // The verdict must be built from the read-back, never from the POST status.
-  assert.match(RELAY_SRC, /deliveryVerdict\(\{ chatOk: false, receiptOk: stuck, handsBack: true \}\)/,
-    'the verdict must use the read-back result, not out.res.ok');
+  assert.match(RELAY_SRC, /receiptPosted: posted, receiptOk: stuck/,
+    'the verdict must use the read-back result, not out.res.ok, as the delivery');
+});
+
+test('the read-back does not search for the bare fingerprint', () => {
+  // Review finding, 2026-08-24. RECEIPT_FINGERPRINT is a constant, so every
+  // receipt ever written to a ticket looks identical to it: a leftover from an
+  // earlier outage would "verify" a fresh POST that never stuck, which is the
+  // precise case the read-back exists to catch.
+  assert.ok(!RELAY_SRC.includes('RECEIPT_FINGERPRINT'),
+    'matching on the constant fingerprint cannot tell this receipt from an old one');
 });
 
 test('a watch with no handback target never posts a receipt at all', () => {
   // Not merely "does not count it" — does not write it. This watch retries
   // every pass until the bus accepts, so a receipt per pass would pile
   // identical notes onto the ticket forever while still losing the message.
-  assert.match(RELAY_SRC, /if \(!taskId \|\| !target\) \{/,
+  assert.match(RELAY_SRC, /if \(!handsBack\) \{/,
     'deliverToBus must bail out before the receipt when nothing hands back');
 });
 
-test('the receipt is deduped per ticket, not per comment', () => {
+test('the undelivered line quotes the verdict, it does not invent a reason', () => {
+  // Review finding, 2026-08-24: the line hard-coded "and so did the receipt
+  // comment" even where no receipt was ever attempted, telling the reader task
+  // comments were failing too — the opposite of the truth, during exactly the
+  // outage the reader is trying to diagnose.
+  assert.ok(!RELAY_SRC.includes('and so did the receipt comment'),
+    'the caller must not assert a receipt attempt it knows nothing about');
+  assert.match(RELAY_SRC, /delivery\.reason/,
+    'the printed reason must come from deliveryVerdict');
+  // ...and `reason` must survive: the original bug was spreading the verdict
+  // and then overwriting its `why` with the chat failure.
+  assert.match(RELAY_SRC, /reason: verdict\.why \|\| ''/,
+    'the verdict reason and the chat reason must be separate fields');
+});
+
+test('the receipt is deduped per ticket, and remembers whether it verified', () => {
   assert.match(RELAY_SRC, /receipted\.has\(String\(taskId\)\)/);
-  assert.match(RELAY_SRC, /const receipted = new Set\(\)/);
+  assert.match(RELAY_SRC, /const receipted = new Map\(\)/,
+    'a Set cannot carry the verified flag a repeat comment needs');
+  // Review finding, 2026-08-24: recording only on a successful read-back left
+  // a transient GET failure unrecorded, so the next comment in the same pass
+  // posted a second identical note — the pile-up the dedup exists to prevent.
+  assert.match(RELAY_SRC, /if \(posted && receipted\) receipted\.set\(String\(taskId\), stuck\)/,
+    'the ticket is recorded once the POST lands; verification travels in the value');
 });
