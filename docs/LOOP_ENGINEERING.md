@@ -282,6 +282,17 @@ operator asked for Urgent, sitting in shell history and the session
 transcript where it can be checked later. Loop-filed tasks (`loop-spec`) are
 High or below by default; Urgent only on the operator's explicit word.
 
+## The Approvals surface
+
+Visual/content before-after sign-offs arrive **on the Loop Queue ticket
+itself**, as images attached by `npm run check:shots` — see
+**`docs/APPROVALS.md`** for what Dane's answer means and how agents file.
+
+A separate Approvals list was specified on 2026-08-18 and declined on 08-23:
+this list's id is hard-coded in 18 places across 11 files, so moving approvals
+off it is its own epic, and it buys a tab. A saved view does the same job with
+nothing moved.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
