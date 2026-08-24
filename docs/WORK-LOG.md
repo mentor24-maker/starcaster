@@ -16,6 +16,54 @@ columns that had come adrift. Then it was put back.
 
 Worth saying plainly: the panel was fine all along. What changed is that we can
 now tell — before, a green result on this panel was silence, not approval.
+## 2026-08-24 — Approved work merges in minutes instead of hours (#424)
+
+When you comment "merge" on a finished piece of work, a robot picks it up and
+merges it. Merging one takes about three minutes of actual work: bring the
+branch up to date with everything that landed since, run the checks (about
+ninety seconds), merge.
+
+It was managing roughly one an hour, and sitting idle for the other
+fifty-seven minutes.
+
+The reason was the shape of the thing, not the work. It took two visits to
+merge one item: the first visit brought the branch up to date and left, the
+checks finished a minute and a half later, and the second visit — an hour after
+that — did the merge. A three-minute job took two hours.
+
+That gets worse the more work is waiting, not better: every merge makes every
+other waiting branch out of date, so with two dozen queued, each merge creates
+twenty-three more to bring up to date. The robot could fall behind its own
+previous visit.
+
+It now waits the ninety seconds and finishes the job, rather than coming back
+next hour. It waits for a bounded time, for at most a few items per visit, and
+if the checks are still running when its patience runs out it simply leaves it
+for next time — exactly what it did before. It will never merge something whose
+checks it did not see finish.
+## 2026-08-24 — The build robot stops piling up work nobody can merge (#425)
+
+There is a safety rule on this project that a branch has to be completely up to
+date with the live code before it can be merged. That rule is right — it means
+the tests that passed ran against exactly what goes live, and going live here
+means going straight onto client sites.
+
+It has a hidden cost, though, and the cost grows fast. Every merge makes every
+*other* waiting branch out of date. With two dozen pieces of work waiting, a
+single merge leaves twenty-three of them needing to be brought up to date
+again — and each one needs its checks re-run. Yesterday the merge robot spent
+most of its time refreshing branches that had already gone stale again before
+it could use them.
+
+Which means the obvious fix — build faster, run more builders — makes things
+*worse*, not better. Work built beyond the rate things can actually be merged
+does not arrive sooner. It just sits there going stale, and going stale costs
+real work.
+
+So the builder now stops claiming new work once five pieces are already
+waiting. It says so plainly and finishes the run normally — this is not an
+error, it is the system telling the truth about where the queue actually is.
+Five things genuinely in flight is honest. Two dozen half-finished is not.
 
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
@@ -80,6 +128,55 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The video pipeline's to-do list (#405)
+
+Second of eight pieces in the Studio work. This one is the list that remembers
+which videos still need processing, hands each job to a worker, and — the part
+that matters — takes the job back if that worker dies.
+
+It keeps its list in a plain file on the Mini rather than in the main database.
+That is a deliberate choice with a scar behind it: this list gets written to
+thousands of times per video, and on 16 August the main database ran out of its
+daily capacity and took every client site offline for two and a half hours.
+Nothing precious is stored here — delete the file and the pipeline works its
+list out again from scratch.
+
+Two ideas do most of the work.
+
+The first is that handing out a job has to happen in **one** step. Looking for a
+free job and then marking it as taken are two separate steps, and two workers
+can both finish looking before either one marks — which is how the same video
+gets processed twice. Doing it in one motion makes that impossible rather than
+unlikely.
+
+The second is that a worker **borrows** a job for a while rather than locking
+it. A lock is given up when a program finishes, which is precisely what a crash
+does not do — a crashed worker would hold its lock forever. A borrowed job
+simply comes back when the loan runs out, with nobody woken up to fix it. That
+is the whole point on a machine nobody is watching at three in the morning.
+
+There are two ways a job can go badly, and they are counted separately — which
+took a review pass to get right. A job can **fail**: the worker ran it and it
+did not work. Or the worker can simply **stop responding**, usually because the
+machine went to sleep. The first version counted both together, and that single
+number was wrong in both directions at once. A job that crashed its worker every
+time looped forever without anyone being told, and four laptop naps could send a
+perfectly healthy job to the scrapheap on its first genuine failure.
+
+Now a job that keeps failing waits twice as long before each retry and stops
+after five, and a job that keeps taking its worker down with it stops too — on a
+separate, more generous count. Either way it stops in a state that **keeps the
+reason**, and says which of the two it was, rather than quietly vanishing from
+the list.
+
+Worth recording how the test for the "two workers never get the same job" rule
+went, because it took three attempts to become real. The first version ran the
+two workers one after the other, so the first took everything and the second
+took nothing — the test passed for a reason that had nothing to do with the
+rule. The second version ran them properly at the same time but failed
+unpredictably, because it checked something that genuinely varies. The third
+version uncovered an actual bug in the new code, which was then fixed. Only
+after that did a passing run mean anything.
 ## 2026-08-23 — Work handed to you now comes with a link you can click (#404)
 
 You said it on the ecosystem-map task: *"This should include a clickable link I

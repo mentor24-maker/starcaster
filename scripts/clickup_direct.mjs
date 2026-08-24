@@ -62,6 +62,7 @@ import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
+import wipCap from './builder/wipCap.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
@@ -225,6 +226,9 @@ function usage(code = 2) {
   console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
   console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
   console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
+  console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
+  console.error('                                             Reads only; a capped pass writes nothing.');
   console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
@@ -369,7 +373,44 @@ async function markMergeHandled(commentId, task, unchecked, what) {
  * reason on the ticket — so "checks are still running" is retried on the next
  * pass instead of being silently lost.
  */
-async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked }) {
+/**
+ * After a catch-up push: wait for the check run rather than going away for an
+ * hour (task 86bbk2fb5). Bounded by a budget and a per-pass cap; on timeout it
+ * returns exactly the `waiting` the pass used to return immediately.
+ *
+ * Re-reads the PR and hands the answer to githubGate — nothing here decides
+ * whether a PR may merge.
+ */
+async function waitForChecksInPass({ pr, repo, label, fields, budget }) {
+  if (!budget || !mergeOnComment.mayWaitInPass(budget.used, budget.cap)) {
+    return { action: 'wait', reason: 'the in-pass wait cap for this run is already spent' };
+  }
+  budget.used += 1;
+
+  const startedAt = Date.now();
+  const budgetMs = mergeOnComment.IN_PASS_WAIT_MS;
+  console.error(`  waiting up to ${Math.round(budgetMs / 1000)}s for CI on PR #${pr.number} (${label})`);
+
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, mergeOnComment.IN_PASS_POLL_MS));
+
+    const again = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
+    if (!again.ok) return { action: 'wait', reason: 'could not re-read the PR while waiting' };
+    let json;
+    try { json = JSON.parse(again.stdout); } catch {
+      return { action: 'wait', reason: 'gh returned unparseable JSON while waiting' };
+    }
+
+    const next = mergeOnComment.afterCatchUpDecision({
+      gate: githubGate(json),
+      elapsedMs: Date.now() - startedAt,
+      budgetMs,
+    });
+    if (next.action !== 'poll-again') return { ...next, prJson: json };
+  }
+}
+
+async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked, inPassBudget }) {
   const decision = mergeDecision({
     status: task.status?.status,
     comments,
@@ -450,8 +491,15 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
       // conflict hand-off rather than retrying it forever.
       gate = { action: 'conflict', reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
     } else {
-      console.error(`  MERGE WAITING on ${label}: branch updated from main, CI restarting`);
-      return { outcome: 'waiting', reason: 'branch updated from main; waiting for CI' };
+      // Do not go away for an hour: CI takes ~85s and the whole merge is
+      // three minutes of work.
+      const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
+      if (after.action === 'wait') {
+        console.error(`  MERGE WAITING on ${label}: branch updated from main — ${after.reason}`);
+        return { outcome: 'waiting', reason: after.reason };
+      }
+      gate = { action: after.action, reason: after.reason };
+      if (after.prJson) prJson = after.prJson;
     }
   }
 
@@ -471,12 +519,19 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   if (gate.action === 'conflict' && !dryRun) {
     const local = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
     if (local.ok) {
-      console.error(`  MERGE WAITING on ${label}: GitHub reported a conflict, but ${local.reason}`);
-      return { outcome: 'waiting', reason: 'false conflict resolved locally; waiting for CI' };
+      console.error(`  ${label}: GitHub reported a conflict, but ${local.reason}`);
+      const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
+      if (after.action === 'wait') {
+        console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
+        return { outcome: 'waiting', reason: after.reason };
+      }
+      gate = { action: after.action, reason: after.reason };
+      if (after.prJson) prJson = after.prJson;
+    } else {
+      // Carry WHY into the hand-off, so the reader learns whether it was a
+      // real overlap or something that could not be checked at all.
+      gate = { ...gate, reason: gate.reason, localVerdict: local };
     }
-    // Carry WHY into the hand-off, so the reader learns whether it was a real
-    // overlap or something that could not be checked at all.
-    gate = { ...gate, reason: gate.reason, localVerdict: local };
   }
 
   // A script never resolves a merge conflict (task 86bbjd5nn, binding). What
@@ -693,6 +748,34 @@ if (cmd === 'whoami') {
   if (!out.res.ok) die('send chat message', out);
   console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
   reportLimits(out.res);
+
+} else if (cmd === 'wip-check') {
+  // Is the merge side already full? Exit codes mirror `node:owns`:
+  //   0 = room to claim   3 = capped, a normal decline   1 = could not tell
+  //
+  // Reads only. A capped pass must leave the queue exactly as it found it, so
+  // nothing here writes to ClickUp — no status, no comment, no Loop note.
+  const cap = wipCap.resolveCap(process.env);
+  const repoArg = arg('repo') || '';
+  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state'];
+  if (repoArg) listArgs.push('--repo', repoArg);
+
+  const out = gh(listArgs);
+  if (!out.ok) {
+    const undecided = wipCap.undeterminedDecision(out.stderr.slice(0, 200) || 'gh failed');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+  let prs;
+  try { prs = JSON.parse(out.stdout); } catch {
+    const undecided = wipCap.undeterminedDecision('gh returned output that is not JSON');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+
+  const decision = wipCap.wipDecision({ prs, cap });
+  console.log(decision.message);
+  process.exit(decision.code);
 
 } else if (cmd === 'queue') {
   const list = arg('list');
@@ -1393,6 +1476,10 @@ if (cmd === 'whoami') {
   const onlyTask = arg('only-task');
 
   let relayed = 0, skipped = 0, handedBack = 0;
+  // How many tickets may hold this pass open waiting for CI. Worst case is
+  // cap x budget, which is what keeps an hourly pass from becoming unbounded
+  // and stops one stuck PR starving the rest (task 86bbk2fb5).
+  const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
   const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
@@ -1485,7 +1572,7 @@ if (cmd === 'whoami') {
       // pass (or one whose bus post failed) is still an authorization. Its
       // own marker, checked above, is what stops it firing twice.
       if (mergingAllowed && mergeEnabled(watch)) {
-        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, dryRun, channel, unchecked });
+        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, dryRun, channel, unchecked, inPassBudget });
         if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
         else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
         else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
