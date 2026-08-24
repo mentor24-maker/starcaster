@@ -133,13 +133,6 @@ App.projectContext = (function projectContextModule() {
     applyFavicon();
   }
 
-  function faviconVersionKey(project, faviconUrl) {
-    const id = String(project?.id || '').trim();
-    const url = String(faviconUrl || '').trim();
-    if (!id || !url) return '';
-    return `${id}_${url.length}_${url.slice(-32)}`;
-  }
-
   function replaceDocumentFaviconLinks(href) {
     const nextHref = String(href || '').trim() || DEFAULT_FAVICON_URL;
     document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]').forEach((node) => {
@@ -159,17 +152,29 @@ App.projectContext = (function projectContextModule() {
     document.head.appendChild(apple);
   }
 
+  /**
+   * The admin app's browser tab always shows the Alphire icon — never the
+   * active project's.
+   *
+   * This file runs in ONE place: `app-shell.html`, which `routes/publicSitePages.js`
+   * serves only when the request host resolves to no tenant. That is
+   * starcaster.pro. A tenant's own domain gets `site.html` instead, whose
+   * favicon comes from `buildFaviconHeadTags(project)` server-side — so the
+   * client's icon still appears on the client's site, which is where it
+   * belongs.
+   *
+   * It used to swap the tab to the selected project's favicon "per active
+   * workspace" (a6d48508, 2026-06-25). That was deliberate, and it was wrong:
+   * it meant starcaster.pro wore whichever client happened to be selected, so
+   * the one tab that should always say Alphire never did. Dane, on this
+   * ticket: "It used to show the starcaster icon when on starcaster.pro and
+   * the client favicon only on the client's site."
+   *
+   * Choosing a project favicon in Settings still works and still matters —
+   * it is what the published tenant site uses. Only the admin tab stops
+   * borrowing it.
+   */
   function applyFavicon() {
-    const sessionProject = getSessionProject();
-    const faviconUrl = getProjectFaviconDataUrl(sessionProject);
-    const projectId = String(sessionProject?.id || '').trim();
-    if (faviconUrl && projectId) {
-      const version = encodeURIComponent(faviconVersionKey(sessionProject, faviconUrl));
-      replaceDocumentFaviconLinks(
-        `/api/projects/active/favicon?project=${encodeURIComponent(projectId)}&v=${version}`
-      );
-      return;
-    }
     replaceDocumentFaviconLinks(DEFAULT_FAVICON_URL);
   }
 
