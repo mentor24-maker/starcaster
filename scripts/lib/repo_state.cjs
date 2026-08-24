@@ -100,23 +100,154 @@ function branchInventory() {
 }
 
 /**
+ * Does this branch hold any CONTENT that main does not already have?
+ *
+ * The question `git cherry` cannot answer. Take every path the branch touched
+ * since the merge base, then compare those paths between main and the branch
+ * tip. Empty diff means main already carries everything the branch did, by
+ * whatever route and under whatever commit ids.
+ *
+ * Comparing only the touched paths is what makes this usable: main has moved on
+ * with other people's work, so a whole-tree comparison is never empty and would
+ * call every branch active.
+ *
+ * Conservative in one direction on purpose. If main later changed one of those
+ * paths differently, the diff is non-empty and the branch reads as active — so
+ * the error is "left a stale branch alone", never "deleted live work".
+ *
+ * Returns true (shipped), false (has unique content), or null (could not tell).
+ */
+function branchContentIsInMain(branch, base = mergeBase(), cwd = root) {
+  // `null` as the failure value, never a string. `git()` returns its fallback
+  // verbatim when the command fails, and any string fallback is
+  // indistinguishable from a real answer once `lines()` has trimmed it -- a
+  // whitespace sentinel read as "the branch touched no files", which this
+  // function reports as SHIPPED. That is a failed probe authorizing a delete,
+  // which is the one outcome nothing here may ever produce.
+  const mergeBaseSha = git(['merge-base', base, branch.ref], null, cwd);
+  if (!mergeBaseSha) return null;
+
+  const touchedRaw = git(['diff', '--name-only', mergeBaseSha, branch.ref], null, cwd);
+  if (touchedRaw === null) return null;
+
+  const touched = lines(touchedRaw);
+  if (!touched.length) return true; // the branch changed no files at all
+
+  const diff = git(['diff', base, branch.ref, '--', ...touched], null, cwd);
+  if (diff === null) return null;
+  return diff === '';
+}
+
+/**
+ * Has GitHub already merged a pull request for this branch?
+ *
+ * Definitive when it answers, because it is independent of merge strategy — a
+ * squash, a rebase and a merge commit all leave the same merged PR behind.
+ * Returns true, false, or null when GitHub could not be reached (not
+ * authenticated, offline, rate-limited), which must never be read as false.
+ */
+function branchHasMergedPr(branchName, runGh = defaultGh) {
+  const out = runGh(['pr', 'list', '--head', branchName, '--state', 'merged', '--json', 'number']);
+  if (out === null) return null;
+  try {
+    const parsed = JSON.parse(out || '[]');
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return null;
+  }
+}
+
+function defaultGh(args) {
+  try {
+    return execFileSync('gh', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 15000,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Is this branch's work already on main?
  *
- * `git cherry` marks a commit "-" when the same change already exists upstream
- * under a different commit id. That is the ONLY correct test here, because
- * squash-merging rewrites the commit: `git branch -d` looks at a shipped branch
- * and refuses, which is precisely why nobody ever deleted anything.
+ * THREE signals, and a single NEGATIVE one is never enough to call a branch
+ * unshipped — that asymmetry is the whole fix.
  *
- * Returns { state: 'empty' | 'shipped' | 'active', fresh: string[] }.
+ * 2026-08-22: the `ecosystem-svg` worktree survived four `tidy` runs even
+ * though its PR had merged hours before. `git cherry` compares patch-ids one
+ * to one, and a squash-merge of a branch with N >= 2 commits produces ONE
+ * commit on main matching none of the N — so cherry reported "+" (unshipped)
+ * for every commit, forever. A one-commit branch squashes to a matching
+ * patch-id, which is exactly why nobody noticed: the common case works.
+ *
+ * Order is cheapest-first, and the network is only consulted when the local
+ * signals are about to leave a branch alone — which is precisely when a wrong
+ * answer costs something:
+ *
+ *   1. `git cherry`  — no fresh commits, cheap, correct for the common case.
+ *   2. content       — does the branch hold anything main lacks?
+ *   3. GitHub        — is there a merged PR? Definitive, and strategy-blind.
+ *
+ * Returns { state, fresh, reason, signals }, where state is:
+ *   'empty'   — no commits yet (a prepared workspace, not shipped work)
+ *   'shipped' — at least one signal says main already has this
+ *   'active'  — every signal that COULD run says the work is still unique
+ *   'unknown' — neither the content probe nor GitHub could answer. Callers
+ *               must leave the branch alone AND say so: a skip that does not
+ *               report is how a sweep gives a false all-clear (DOCTRINE 3.11).
  */
-function classifyBranch(branch, base = mergeBase()) {
-  const cherry = lines(git(['cherry', base, branch.ref], ''));
-  if (!cherry.length) return { state: 'empty', fresh: [] };
+function classifyBranch(branch, base = mergeBase(), { runGh = defaultGh, cwd = root } = {}) {
+  const cherry = lines(git(['cherry', base, branch.ref], '', cwd));
+  if (!cherry.length) return { state: 'empty', fresh: [], reason: 'no commits yet', signals: {} };
 
   const fresh = cherry.filter((line) => line.startsWith('+'));
-  if (!fresh.length) return { state: 'shipped', fresh: [] };
+  if (!fresh.length) {
+    return { state: 'shipped', fresh: [], reason: 'every commit is already on main', signals: { cherry: true } };
+  }
 
-  return { state: 'active', fresh };
+  const content = branchContentIsInMain(branch, base, cwd);
+  if (content === true) {
+    return {
+      state: 'shipped',
+      fresh: [],
+      reason: 'main already carries everything this branch changed (squash-merged)',
+      signals: { cherry: false, content: true },
+    };
+  }
+
+  // Only now is it worth a network call — and it is asked even when the branch
+  // is GONE from GitHub, which is the normal state of a merged branch: GitHub
+  // deletes the head branch on merge but keeps the pull request. Skipping the
+  // lookup for a branch that is no longer on GitHub would disable the primary
+  // signal in precisely the case this whole check exists for.
+  const merged = branchHasMergedPr(branch.name, runGh);
+  if (merged === true) {
+    return {
+      state: 'shipped',
+      fresh: [],
+      reason: 'GitHub has a merged pull request for this branch',
+      signals: { cherry: false, content, github: true },
+    };
+  }
+
+  if (content === null && merged === null) {
+    return {
+      state: 'unknown',
+      fresh,
+      reason: 'could not confirm — neither the content check nor GitHub could answer',
+      signals: { cherry: false, content: null, github: null },
+    };
+  }
+
+  return {
+    state: 'active',
+    fresh,
+    reason: 'has commits main does not have',
+    signals: { cherry: false, content, github: merged },
+  };
 }
 
 /** Every worktree, with the facts that decide whether it is safe to remove. */
@@ -205,6 +336,8 @@ module.exports = {
   mergeBase,
   branchInventory,
   classifyBranch,
+  branchContentIsInMain,
+  branchHasMergedPr,
   worktreeInventory,
   mainWorktree,
   isTaskOpen,

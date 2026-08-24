@@ -23,6 +23,7 @@ const { uploadAssetFile, isConfigured: isAssetStorageConfigured } = require('../
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
+const { sweepBugReportOrphans } = require('../lib/bugReportOrphanSweep');
 
 /** Matches routes/assets.js, so a screenshot that uploads there uploads here. */
 const MAX_UPLOAD_BASE64_CHARS = 9_000_000;
@@ -234,6 +235,42 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, result.status || 500, result.error || 'Failed to read support requests'), true;
     }
     return sendOk(res, 200, result.data, { supportRequests: result.data }, { total: result.data.length }), true;
+  }
+
+  // GET|POST /api/support/bug-reports/sweep-orphans — the scheduled sweep.
+  //
+  // Bug-report screenshots upload BEFORE the report is submitted, so an
+  // abandoned form leaves a row and a public file behind forever. This is the
+  // job that collects them, and it is the ONLY caller in production that runs
+  // with dryRun false on a schedule.
+  //
+  // CRON ONLY, on purpose. `req.cronPublish` is set in routes/index.js and is
+  // true only for a path in CRON_PATHS carrying Vercel's own header or the
+  // CRON_SECRET bearer token — it is the generic "an authorised scheduler sent
+  // this" flag despite the publish-era name. A session is deliberately NOT
+  // enough: this deletes tenant data across every project at once, and the
+  // person who wants that has `npm run sweep:bug-report-orphans:apply`, which
+  // shows them the list first.
+  //
+  // Vercel's scheduler sends GET, so GET has to be accepted even though the
+  // effect is destructive (the same compromise /publish-due already makes).
+  if (pathname === '/api/support/bug-reports/sweep-orphans' && (method === 'GET' || method === 'POST')) {
+    if (!req.cronPublish) {  // scripts/builder/bugReportOrphanSweep.test.js proves a session cannot pass this
+      return sendErr(res, 403, 'This sweep runs on a schedule only', { code: 'CRON_ONLY' }), true;
+    }
+    const result = await sweepBugReportOrphans({ dryRun: false });
+    if (!result.data) {
+      console.error(`[support.bug-reports] sweep REFUSED: ${result.error}`);
+      return sendErr(res, result.status || 500, result.error || 'The sweep could not run'), true;
+    }
+    const { scanned, deleted, notDeleted, kept } = result.data;
+    // Logged on every run, including the quiet ones: "nothing to do" and
+    // "never ran" are indistinguishable in an empty log.
+    console.log(`[support.bug-reports] sweep scanned=${scanned} kept=${kept.length} deleted=${deleted.length} could_not_delete=${notDeleted.length}`);
+    for (const item of notDeleted) {
+      console.error(`[support.bug-reports] ORPHAN NOT DELETED (${item.code}) asset=${item.id} project=${item.projectId} ${item.location}: ${item.error}`);
+    }
+    return sendOk(res, 200, result.data, result.data), true;
   }
 
   return false;

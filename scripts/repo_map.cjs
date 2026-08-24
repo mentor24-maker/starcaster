@@ -120,6 +120,18 @@ if (!hasMain) {
       return;
     }
 
+    if (state === 'unknown') {
+      // Neither the content check nor GitHub could answer. Saying "unshipped
+      // changes" here would be a confident wrong message (DOCTRINE 2.1) —
+      // exactly the register this map already avoids for a prepared workspace.
+      out.push(bullet(
+        `${branch.name} — could not confirm whether this is shipped, `
+        + `so it is being left alone (${branch.where}).${here}`
+      ));
+      out.push(indent('(GitHub was unreachable and the content check could not run.)'));
+      return;
+    }
+
     out.push(bullet(
       `${branch.name} — ${plural(fresh.length, 'unshipped change')}, `
       + `last touched ${age(branch.ref)}, ${branch.where}.${here}`
