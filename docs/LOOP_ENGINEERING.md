@@ -72,6 +72,7 @@ npm run clickup -- verdict --task <id> --pass|--fail --body-file -  # record the
 npm run clickup -- comment --task <id> --body-file -           # a plain note (progress, context)
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
+npm run clickup -- attach --task <id> --file a.png --file b.png             # before/after pictures
 ```
 
 `status` enforces the handoff rule by itself: moving into any machine status
@@ -127,9 +128,47 @@ still valid, and only a human audit would ever have found it.
 Refusal markers now record their reason and are **re-decided on every pass**.
 Nothing extra is posted while the reason still holds — the same answer twice
 says nothing new — but the moment it changes, or goes away, the ticket goes
-through with no second word from him. Markers for a completed merge or a
-conflict hand-off stay terminal, because re-deciding a merged PR is the one
-mistake that cannot be undone.
+through with no second word from him. A completed **merge** stays terminal,
+because re-deciding a merged PR is the one mistake that cannot be undone.
+
+### A conflict hand-off is not one either (2026-08-23, task 86bbk0g4u)
+
+A conflict hand-off used to be terminal alongside the merge, and the comment
+posted beside it said the opposite in so many words: *"then your merge still
+stands and this goes through."* It did not. Nothing looked at that
+authorization again, ever.
+
+On 2026-08-23 eleven `Ready to launch` tickets were sitting on a spent
+approval from a conflict that was not even real — GitHub cannot run our
+asset-pin merge driver, so clean branches read as conflicting (fixed
+separately by `branchCatchUp.js` in #415). Dane had approved every one of
+them, been told his approval still stood, and been given nothing. On one
+ticket he said "merge" twice, four hours apart, and hit the same dead end
+both times.
+
+Two things changed:
+
+- **A conflict hand-off is re-decidable.** Resolving the branch is a job for
+  a person; saying "merge" a second time afterwards is not. Once someone
+  merges `main` into the branch and CI goes green, the next relay pass merges
+  it on his original word. A genuinely still-conflicted ticket stays silent
+  in the meantime — the pass re-derives the same answer and posts nothing —
+  and shows up in the run summary as *unchanged since last pass* rather than
+  vanishing from the count.
+- **The comment and the marker are now built together**, by one function per
+  outcome in `scripts/builder/mergeOnComment.js` that returns both. A test
+  walks every notice the merge path can post and fails if a body promises the
+  approval carries over while its marker says otherwise. They drifted because
+  they were written in two different files; now they cannot.
+
+**The eleven fixed themselves.** There is no `unstick` command to remember to
+run: `parseMergeMarker` reads the pre-2026-08-23 hand-off marker
+(`conflict hand-off on PR #N`, no `refused:` prefix) back as re-decidable, so
+every stuck ticket healed on the first pass after this shipped. A merged
+marker does not match that shape, and `githubGate` refuses an already-merged
+PR regardless, so the migration cannot reach anything irreversible. A ticket
+whose PR was merged by hand during the stall gets one truthful comment saying
+so instead.
 
 ## The two columns, and the operator card (ratified 2026-08-22)
 
@@ -306,9 +345,11 @@ Two rules keep it honest:
   If the branch is merely behind `main`, the relay catches it up and waits
   for CI to re-run rather than merging on a stale green. If it **conflicts**,
   the relay stops, says so on the ticket in plain language and on the bus,
-  and leaves the ticket where it is: a script never resolves a conflict. Any
-  other refusal is written on the ticket with the reason. Nothing is ever
-  half-moved, and no refusal is posted twice.
+  and leaves the ticket where it is: a script never resolves a conflict — but
+  it no longer spends your approval on the way past, so once a session fixes
+  the branch it merges on its own (see *A conflict hand-off is not one
+  either*, above). Any other refusal is written on the ticket with the
+  reason. Nothing is ever half-moved, and no refusal is posted twice.
 
 `Live` is configured as a **closed**-type status in ClickUp, not merely the
 last active one. That is what makes finished work disappear from the open
@@ -382,6 +423,19 @@ offers every status in the workspace at once. Assignment sidesteps all of it.
 
 If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
+
+## Visual changes come to you as pictures
+
+A ticket that changes what a page *renders* arrives with before/after
+screenshots attached, so the question you are asked is "does this look right"
+rather than "check out this branch and run it". The build loop runs
+`npm run check:shots --task <ticket>`, which builds the code as it is on `main`,
+builds the branch, photographs six pages through both, and attaches every pair
+that differs.
+
+If the two pictures are identical, nothing is attached and nothing interrupts
+you. Full details, including why the comparison has no tolerance and what a
+green run does *not* prove: **`docs/VISUAL_REVIEW.md`**.
 
 ## The work log — a plain-English record
 

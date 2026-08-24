@@ -2074,13 +2074,83 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* --- Navigation panel: the Links list -------------------------------- */
 
+/* ONE definition of the columns, read by both the header and every row.
+   L6a's first shape is a titled-column grid, and "clean" is the word it
+   uses; this list was not one. The header and the rows were two separate
+   FLEX containers working out three `1fr`-ish columns each from a
+   different available width — the header carries its own 8px side padding
+   and its "Action" title is narrower than the three icon buttons beneath
+   it. The columns therefore disagreed, and the error accumulated across
+   the row: at 1440 "Page Name" sat 15px right of the field it titles and
+   "Slug" 21px. Two containers cannot share a track width by computing it
+   twice; they share it by reading it from one place, which is what this
+   custom property is.
+
+   The rows stay separate boxes rather than becoming `display: contents`
+   children of one grid because a child row has to slide sideways as a
+   whole (see the indent below), and only a box can do that.
+
+   --nav-link-action-col is the three icon buttons at their fixed 26px,
+   stated once so the header's title track and the row's button track
+   cannot drift apart. --nav-link-width-col holds the 64px Width input
+   plus its "%" — it only appears under custom sizing. */
+.builder-react-root .builder-nav-items-manager {
+  --nav-link-action-col: 78px;
+  --nav-link-width-col: 82px;
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager[data-nav-width-col="true"] {
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-width-col) var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header,
+.builder-react-root .builder-nav-items-manager .builder-nav-item-row {
+  display: grid;
+  grid-template-columns: var(--nav-link-cols);
+  align-items: center;
+  gap: 8px;
+}
+
+/* W0's mechanism, applied to a titled-column grid: the wrapper has no box
+   of its own, so the selects and inputs inside it land directly on the
+   row's tracks. Without this the whole group would take ONE track and the
+   columns would be back to being decided by a nested flex box. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-fields {
+  display: contents;
+}
+
+/* The three action buttons keep their own row, right-aligned so the ✕ sits
+   on the block edge (L8) rather than wherever three 26px buttons happen to
+   end. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The mega menu's "Feature column" disclosure was the row's THIRD flex
+   child, so on a parent row it shared the line with the fields and took
+   width from them: at 1440 that row's fields rendered 341px against every
+   other row's 384px, its icons floated into the middle of the row, and the
+   summary text ran off the right edge of the panel. It spans the full grid
+   instead, which puts it on its own line under the row it belongs to and
+   gives every row in the list the same three columns. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-feature {
+  grid-column: 1 / -1;
+}
+
 /* Children indent one step per level while KEEPING a top-level row's
    field widths: the indent is paid back on the right, so the row slides
    right instead of shrinking, and a child's action icons deliberately
    sit beyond the top-level ones (operator, 2026-08-14). The header row
    and top-level rows carry no depth, so the var falls back to 0. The
    cell panel is overflow: visible, so the overhang draws rather than
-   clips. */
+   clips.
+
+   This is a NAMED EXEMPTION from L8's single right edge, recorded in
+   docs/UI_RULES.md — an indented row deliberately overhangs, and the
+   equal-and-opposite margins keep its track widths identical to a
+   top-level row's rather than shrinking them. */
 .builder-react-root .builder-nav-item-row {
   margin-left: calc(var(--nav-item-depth, 0) * 26px);
   margin-right: calc(var(--nav-item-depth, 0) * -26px);
@@ -2091,11 +2161,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    used to be 11px muted mini-caps that read as hints, not headers
    (operator, 2026-08-14: "make proper headers out of these"). Tokens
    rather than the literal hexes _tables.css predates: --ink-primary is
-   the canonical black, --bg-surface the canonical white. The 8px side
-   padding lines the header text up with the text inside the selects
-   below, which carry about the same internal inset. */
+   the canonical black, --bg-surface the canonical white.
+
+   The 8px that lines a title up with the text inside the select below it
+   is now carried by the title CELLS, not by the band. On the band it
+   narrowed the header's content box by 16px against the rows', which is
+   half of why the columns disagreed; on the cells it does the same job to
+   the eye and leaves both grids the same width to divide up. */
 .builder-react-root .builder-nav-items-header {
-  padding: 5px 8px;
+  padding: 5px 0;
   border-radius: 6px;
   background: var(--ink-primary, #18324a);
   color: var(--bg-surface, #ffffff);
@@ -2104,6 +2178,19 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-transform: none;
   letter-spacing: 0;
   margin-bottom: 6px;
+}
+
+/* Each title sits over its own column, inset by the same 8px the select
+   under it insets its text. "Action" is the exception: the buttons it
+   titles have no internal inset and their ✕ sits on the block edge, so the
+   title is right-aligned to that edge. */
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header .builder-nav-item-fields > span {
+  padding-left: 8px;
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header-action {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 /* --- Navigation panel: the mega menu's extra column -------------------- */
@@ -6148,6 +6235,225 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-module-palette-breadcrumb-current {
   color: var(--ink-primary, #000);
   font-weight: 600;
+}
+
+/* ==============================================================
+   BUG REPORT MODULE (task 4/5) — a floating trigger + a popup.
+   Rendered by components/builder/builder-bug-report-module.tsx.
+
+   Two renderings, one set of classes:
+   - `.is-floating`: the live tenant site. Portaled onto <body> so that
+     `position: fixed` means the window (DOCTRINE §5.17 — inside a builder
+     column, any ancestor filter captures it).
+   - `.is-inline`: builder preview / editor. Same size, same colours, in the
+     module's own box, so the operator sees what they are placing and
+     check:render can measure it.
+   Size, colours and corner are CSS variables the component writes from the
+   settings; the stylesheet never hardcodes a value a setting controls.
+   ============================================================== */
+.builder-bug-report-inline-host {
+  display: flex;
+  justify-content: flex-start;
+  padding: 6px 0;
+}
+
+.builder-bug-report-trigger {
+  --bug-report-size: 40px;
+  --bug-report-icon-color: var(--btn-text);
+  --bug-report-block-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bug-report-size);
+  min-width: var(--bug-report-size);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bug-report-icon-color);
+  cursor: pointer;
+  font: 600 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.builder-bug-report-trigger.has-label {
+  padding: 0 14px 0 0;
+}
+.builder-bug-report-trigger.is-block {
+  background: var(--bug-report-block-color);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+.builder-bug-report-trigger:hover,
+.builder-bug-report-trigger:focus-visible {
+  filter: brightness(1.08);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+.builder-bug-report-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bug-report-size);
+  height: var(--bug-report-size);
+}
+.builder-bug-report-glyph svg {
+  width: 60%;
+  height: 60%;
+}
+.builder-bug-report-trigger.is-floating {
+  position: fixed;
+  bottom: 18px;
+  z-index: 9990;
+}
+.builder-bug-report-trigger.is-floating.builder-bug-report-trigger--bottom-right { right: 18px; }
+.builder-bug-report-trigger.is-floating.builder-bug-report-trigger--bottom-left { left: 18px; }
+
+/* The popup */
+.builder-bug-report-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9991;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 20, 30, 0.5);
+}
+.builder-bug-report-dialog {
+  /* D7: a dialog sizes to its content — a floor, not a cap. */
+  width: max-content;
+  min-width: min(440px, 100%);
+  max-width: min(75vw, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.builder-bug-report-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+.builder-bug-report-dialog-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+.builder-bug-report-close {
+  border: 0;
+  background: transparent;
+  font-size: var(--text-xl);
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+.builder-bug-report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.builder-bug-report-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+}
+.builder-bug-report-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+.builder-bug-report-shot-list {
+  margin: 6px 0 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.builder-bug-report-shot-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.builder-bug-report-shot-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.builder-bug-report-shot-remove {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  font-size: 1.1em;
+  color: var(--ink-muted);
+}
+.builder-bug-report-shot-remove:hover { color: var(--ink-primary); }
+.builder-bug-report-shot-list .is-error { color: var(--ink-primary); }
+.builder-bug-report-shot-list .is-uploading { color: var(--ink-muted); }
+.builder-bug-report-error {
+  margin: 0;
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+.builder-bug-report-thanks {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.builder-bug-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.builder-bug-report-cancel,
+.builder-bug-report-submit {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  width: fit-content;
+}
+.builder-bug-report-cancel {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+}
+.builder-bug-report-submit {
+  border: 0;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+}
+.builder-bug-report-submit[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The read-only caps note in the settings panel */
+.builder-react-root .builder-bug-report-settings-note {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: normal;
 }
 
 /* Canonical-provenance badges (section AND module cards share these classes:

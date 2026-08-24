@@ -1,3 +1,50 @@
+## 2026-08-23 — "Your approval still stands" is now actually true (#417)
+
+When you comment "merge" on a finished ticket, a robot merges it for you within
+the hour. If the branch clashes with newer work, it stops — untangling a clash
+by guesswork is exactly how good code gets wrecked — and left you a note saying
+your approval still stood and it would go through on its own.
+
+It would not. The reminder the robot wrote to itself, right beside that note,
+said "done with this one, never look at it again". So your yes was thrown away
+at the moment you were told it was safe. On one ticket you said "merge" twice,
+four hours apart, and got the same dead end both times.
+
+Two things changed. Your approval now survives a clash: a person still has to
+untangle the branch, but once they do, the next pass merges it on the word you
+already gave. And the note you read is now written by the same piece of code as
+the reminder the robot keeps, so the two can never again promise different
+things — there is a test that walks every message this job can send you and
+fails if one says your approval carries over while the other says it does not.
+
+The tickets already stuck this way free themselves; there is nothing to run.
+A ticket that really is still clashing now goes quiet rather than repeating
+itself hourly, and shows up in the run summary as "unchanged" so a silent pass
+still reads as stuck rather than clean.
+
+## 2026-08-23 — The relay stops crying wolf about merge conflicts
+
+Twelve times in one day, the robot that merges your approved work gave up and
+said "this branch conflicts with main, a human needs to sort it out". Every
+single time, it merged here with nothing to sort out. Each false alarm parked a
+merge you had already said yes to.
+
+The cause is a quirk worth knowing. Four of our HTML files carry little version
+stamps that change every time anything is rebuilt, so any two branches collide
+there even when neither touched a word of the actual page. We wrote a small
+tool that fixes those automatically — but git flatly refuses to run a tool like
+that from a downloaded copy of a project, for good security reasons, so it only
+exists on our own machines. **GitHub cannot run it.** GitHub sees two different
+version stamps on one line, calls it a conflict, and the relay believed it.
+
+So the relay now asks the machine it is standing on instead of taking GitHub's
+word. It tries the merge for real, in a scratch folder that touches nothing. If
+it comes out clean, the branch is caught up and the checks re-run. If anything
+genuinely overlaps, it hands over exactly as before — and now says which file,
+so nobody has to work that out again.
+
+It still never resolves a conflict, and it still never force-pushes. (#PR)
+
 # Work Log
 
 Plain-English record of work shipped through the development loop
@@ -38,6 +85,249 @@ have seen before.
 Also fixed a wrong signpost: when the checker finds no panels at all it told
 you to go look at a list of module types that does not exist anywhere in the
 codebase. It now names the real thing.
+## 2026-08-23 — The menu editor's link list lines up with its own headings (#411)
+
+Open a Navigation module and the bottom half is the list of links — a black
+heading bar reading Parent Page / Page Name / Slug / Action, and a row of
+boxes under it for each link in the menu.
+
+The headings did not sit over the boxes they name. "Page Name" was fifteen
+pixels right of the box beneath it and "Slug" twenty-one, and the drift grew
+along the row, so the further right you looked the more the list read as two
+things laid on top of each other rather than one table. The cause is the sort
+of thing that only shows up on screen: the heading bar and the rows were each
+working out their own column widths, from slightly different amounts of space,
+so they were never going to agree. They now read those widths from one place,
+which is the only way two separate strips can line up and stay lined up.
+
+The mega-menu version had a worse version of the same problem. A menu item
+that opens a panel carries a "Feature column" control, and that control was
+sharing the line with the item's three boxes — so that one row's boxes came
+out shorter than every other row's, its up/down/delete icons floated into the
+middle of the list, and the words "Feature column" ran off the right-hand edge
+of the panel entirely. It now sits on its own line under the row it belongs to,
+and every row in the list is the same shape.
+
+One thing that looks wrong and is not: a nested link still steps in from the
+left and its icons still hang past the ones above. That was your call on
+2026-08-14 and it is left exactly as it was — it is now written down as a
+deliberate exception so nobody "fixes" it later.
+
+The checker that measures these panels could not see this list at all, because
+it only knew how to read a form with a label beside every box, and this list
+has its labels once at the top. It has been taught the second shape, so the
+list is now measured on every run instead of being skipped in silence. Before
+believing the pass, the layout was broken three separate ways on purpose and
+the checker was watched to fail each time.
+
+## 2026-08-23 — The guard against touching the live branch had a gap (#397)
+
+There is a rule here that an automated helper must never edit files directly in
+the main folder — the one wired to the live site. There is a guard enforcing it,
+and tonight something slipped past.
+
+What happened: a build session was working in its own private copy, as it should
+be. Between one command and the next, its working folder silently reverted to
+the main one. The next command used a short filename, so an edit intended for
+the private copy landed in the live folder instead. It was spotted immediately
+and undone; the folder was clean again within a minute, nothing was sent
+anywhere and the live site never saw it. No harm done. **The guard staying
+silent is the part worth fixing.**
+
+The reason is almost embarrassing in hindsight. There are many ways to write a
+file, and the guard recognised only a few of them. It knew the ones that look
+like classic command-line plumbing, and it did not know the one that was used —
+a perfectly ordinary way to make a multi-line edit that simply was not on its
+list. Nor several close relatives. Each is the same act spelled differently, and
+the guard knew only the spellings someone had happened to think of.
+
+That is the second time in one night the same shape of bug has turned up: a
+guard built out of *patterns*, protecting a rule that is really about *meaning*.
+The other one let an automated helper overwrite branch history despite four
+rules forbidding it. Both are now closed.
+
+There was a comic second half. When the problem was written up as a ticket, the
+guard **refused to let the ticket be written** — because the ticket quoted an
+example of a forbidden command as documentation. It could not tell an
+instruction from a description of one. That is fixed too, by paying attention to
+who a block of text is actually being handed to: text given to a program is
+treated as a program, text being saved as notes is treated as notes. Writing
+about a rule should never trip the rule, or people quietly stop writing the
+examples down.
+
+One deliberate restraint: the ticket argued for making the guard far more
+suspicious — refuse anything that mentions a filename near anything that writes.
+On reading the surrounding code that looked like the wrong trade, and it was not
+done. There is a second, stronger check that runs before anything can reach the
+live site, and tonight's incident is evidence for that arrangement rather than
+against it: the damage was zero precisely because that later step never
+happened. The specific gaps are closed; the guard has not been turned into
+something that cries wolf.
+## 2026-08-23 — starcaster.pro wears its own icon again (#409)
+
+You reported that starcaster.pro was showing the favicon of whichever client you
+happened to have selected, rather than the Starcaster one.
+
+There are really two websites here. There is your admin app, which lives at
+starcaster.pro, and there is each client's published site, which lives on that
+client's own domain. Their tab icons should differ — yours should always be
+Alphire's, theirs should always be their own — and the two had collapsed into a
+single answer.
+
+The admin app was deliberately swapping its tab icon to match the selected
+project. That went in back in June, described at the time as showing the icon
+"per active workspace", which sounds sensible right up until you notice where
+the admin app actually runs: only ever at starcaster.pro. A client's domain is
+served entirely different files. So the swap was never correct anywhere — it
+simply meant the one tab that should always say Alphire wore whichever client
+was open.
+
+It now always shows the Starcaster icon.
+
+Nothing changed for clients. Their sites get their icons by a completely
+separate route on the server, and there is now a check exercising that, because
+breaking the client side while fixing yours is the obvious way to get this
+wrong. Choosing a favicon for a project in Settings still works and still
+matters — that picture is what their published site uses. Only your admin tab
+stops borrowing it.
+## 2026-08-23 — The rule against force-pushing now actually holds (#394)
+
+Some background first. "Force-pushing" means overwriting the history of a
+branch — replacing what is stored with a different version, rather than adding
+to it. It is the one git operation that can destroy work, so you long ago told
+the system never to do it, and wrote four rules saying so.
+
+Overnight, three unattended build runs did it anyway. Nothing was lost — each
+one was rewriting its own branch, seconds old, that nobody else had touched.
+But the rule not holding is the finding, and the only reason anyone knew is
+that all three runs owned up to it afterwards.
+
+Here is why it slipped. Your rules describe commands that *start* with the words
+"git push". The way anything in this project actually pushes starts with a
+short bit of setup first — a setting that tells git where to find the GitHub
+password, which it cannot otherwise reach from an automated session. So the
+command began with that setup rather than with "git push", and every one of the
+four rules looked straight past it. Nobody invented that as a way around you;
+it is simply how this repo has always pushed. The house habit walked through
+the house rule.
+
+Three other ways in turned out to be open too, including one where the command
+contains no "force" anywhere — a single "+" character does the same job.
+
+The fix stops matching the words and reads the command instead. It takes the
+command apart, sets the settings and options aside, and asks two plain
+questions: is this a push, and does anything in it overwrite? There is no
+wording to word around, so the same gap cannot reopen in a new spelling. It
+also refuses even when the rule file cannot be read at all — "I could not
+check" must never come out as "go ahead" — and the one switch that used to
+quiet these warnings can no longer quiet this one.
+
+The last piece removes the temptation entirely. All three runs wanted to
+force-push for the same small reason: they wrote this very log entry, opened
+the pull request, then went back to stamp its number into the entry — and
+changing something already sent means overwriting it. The build instructions
+now say to add the log entry afterwards as its own separate step, with the
+number already in hand. This entry was written that way.
+## 2026-08-23 — Groundwork for downloading a YouTube video, not just reading it (#392)
+
+The Acquire screen can already pull a YouTube video's title, description and
+transcript. What it has never been able to do is keep the video itself — the
+.mp4 and the .mp3. That work was written back in July and then sat on a shelf
+as one large piece: a screen, a download service, a database change and a
+deployment, all tangled together. It has now been split into four smaller
+pieces that can each be finished and checked on their own. This is the first
+of them.
+
+This piece is the plumbing behind the screen, and it deliberately does nothing
+visible yet. It adds the two web addresses the screen will call — one to start
+a download, one to ask how it is going — plus a new entry under Settings >
+APIs where the download service's address and password will eventually go, and
+the database change that will remember where each finished file ended up.
+
+The important part is what happens while the rest is still missing. Asking for
+a download today gets a plain "the media worker is not configured — add its
+URL and shared secret under Settings > APIs" rather than an error page or a
+spinner that never stops. Adding the video's files to an ordinary acquire is
+opt-in, and if that half fails it is reported alongside the title and
+transcript rather than throwing them away — you keep what you already paid
+for. And because the database change has not been run yet, the code treats a
+not-yet-existing column as "cannot save this, carry on" instead of letting it
+break every other thing the video list does.
+
+Still to come: the screen itself, the download service, and then running the
+database change and deploying — that last one needs Dane's hands, because it
+involves a password only he should ever see.
+## 2026-08-23 — The job that listens for your answers moved to the machine that stays awake (#410)
+
+When you reply on a ticket, a job called the relay is what carries your answer
+forward — it reads your comment, posts it to the party line, and hands the
+ticket back to the machines so work resumes. It is the only automatic path from
+"Dane replied" to "the loop carries on".
+
+That job was running on the laptop. The laptop closes. So on the morning of the
+23rd you answered two tickets at 06:19, and at 15:30 both were still sitting in
+"Needs your input" — one of them with every blocker already cleared. Nothing had
+broken and nothing had errored. Your answers had simply landed somewhere nothing
+was listening.
+
+The relay now lives on the Mac Mini, which does not close, alongside the two
+loops that were moved there for the same reason last week. It still runs in
+exactly one place — two copies would post your messages to the party line twice
+— and the register that decides which machine that is now records why, so the
+next person to wonder does not have to work it out from scratch.
+
+Two smaller things came with it. The schedule used to exist only as something
+somebody had typed by hand on one Mac, written down nowhere, so "is it still
+running on the old machine?" could only be answered by going and looking; there
+is now a single command that installs it, removes it, or reports what it finds.
+And because nobody sits at the Mini, nothing there was ever pulling down new
+code — the relay now brings its own copy up to date before each run, carefully,
+never touching work in progress.
+
+---
+
+## 2026-08-22 — You now see what a change looks like, without checking anything out (#379)
+
+Until today, if a piece of work changed how a page *looks*, the only way to
+judge it was to check out the branch, start a server and open a browser. That
+is a real ask, so in practice it did not happen — and nothing else could catch
+it, because none of the automatic checks here can tell a page that looks right
+from one that does not. They test wiring, not appearance.
+
+There is now a command that takes the pictures for you. It builds the site
+twice — once with the code as it stands on the live branch, once with the
+change — photographs six representative pages through both, and compares them
+pixel by pixel. Any page that came out different gets attached to the ticket as
+a before-and-after pair, so the question waiting for you is simply "does this
+look right", answerable from your phone.
+
+If a change alters nothing you could see, nothing is attached and nothing
+interrupts you. That is the half worth stating plainly: it stays silent by
+default, and only speaks when there is genuinely something to look at.
+
+Two details that decide whether the thing is trustworthy. The comparison has no
+"close enough" — one differing pixel counts — because a tolerance would hide
+exactly the changes worth a human eye: a border that lost a hair, a colour two
+shades off. And before it compares anything, it photographs the same page twice
+against identical code and demands the two shots be perfectly identical. If
+they are not, it reports nothing at all rather than showing you differences
+that were never real.
+
+---
+
+## 2026-08-22 — Rows can split into four, five, or six equal columns (#TBD)
+
+The Builder could split a row into up to three columns; now it also offers
+four, five, and six equal columns, chosen from the same row-layout control.
+Existing pages are untouched — the new layouts are additions, not changes to
+any current one. The automated render check was taught to measure a whole
+row's column layout (it could only look at single modules before), and it now
+verifies a four-column row actually lays out four equal columns; breaking the
+layout on purpose makes it fail, so a future change cannot silently collapse
+the grid.
+
+---
+
 ## 2026-08-22 — See what the loop queue is actually doing, at a glance (#370)
 
 The task list showed which stage each item was in, but not whether the
@@ -436,6 +726,36 @@ one server setting (CLICKUP_API_TOKEN) and a redeploy before it works live.
 
 ---
 
+## 2026-08-18 — Bug Report 4/5: the button visitors actually click (#365)
+
+Fourth of five pieces of the in-app Bug Report tool, and the first one
+anyone can see: a "Bug Report" module in the Builder. Drop it on a page and
+a small bug icon floats in a corner of every visitor's screen; clicking it
+opens a popup where they describe the problem, attach screenshots (when that
+piece is live), and send — then a short thank-you and the popup closes. The
+module's settings choose who can see the icon (everyone, signed-in clients,
+or staff only), which icon and how big, which corner, its colours, an
+optional label, and the popup's words. Behind the scenes the icon floats
+from the very top of the page rather than from inside its column, because
+a column's styling can quietly pin a "fixed" element to the wrong spot — a
+trap this site has already fallen into once. Hiding the icon is a
+convenience, not security: the server re-checks who is signed in before it
+trusts any claim.
+
+Review caught one real problem before this shipped, and it took four rounds
+to kill properly. The module worked out whether it was on a real published
+page by looking around at the page it had landed in — but at the instant it
+asks, the page around it does not exist yet, because the browser builds the
+whole page in memory and only puts it on screen afterwards. So the answer was
+always "no", and for a single frame every visitor — including one who should
+never see it — got a flash of a staff-only "Report a problem" button sitting
+in the middle of the text, which then vanished and jumped to the corner. The
+fix stops it guessing: the page now simply tells the module where it is. The
+tests were part of why this survived three rounds — they had been building a
+fake page shape the real site never has, so they cheerfully passed on the
+broken code. They now build the real shape and check the very first frame a
+visitor would see. One small extra: the "who is looking at this?" request now
+has the same rate limit as its two neighbours, so nobody can hammer it.
 ## 2026-08-19 — The loop queue can now carry work for more than one repo (#366)
 
 The build/review loops assumed every task was starcaster work and always built

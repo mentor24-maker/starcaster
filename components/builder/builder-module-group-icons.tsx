@@ -133,6 +133,14 @@ export const MODULE_GROUP_ICONS: Partial<Record<ModulePaletteGroup, ReactNode>> 
       <rect x="7" y="15" width="6" height="2.5" rx="1.25" />
     </Icon>
   ),
+  // A bug: a body with legs and antennae.
+  "bug-report": (
+    <Icon>
+      <ellipse cx="12" cy="13.5" rx="5" ry="6" />
+      <path d="M12 9.5v10M7 13.5H3.5M20.5 13.5H17M8.2 9.5 5.5 7M15.8 9.5 18.5 7M8.2 17.5 5.5 20M15.8 17.5 18.5 20" />
+      <path d="M9.5 8.5a2.5 2.5 0 0 1 5 0" />
+    </Icon>
+  ),
   // A contact record: person on a card.
   "crm-form": (
     <Icon>

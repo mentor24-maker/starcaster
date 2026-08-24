@@ -298,6 +298,19 @@ const buildTuned = (ids) => ({
       dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
     },
   },
+  // Bug Report module (task 4/5): the floating icon + popup. Every setting
+  // non-default and nothing visibleWhen-gated except the block colour, which
+  // is ON here so the Frame strip renders its full width. The label text is
+  // the longest control on the Content axis and sets that track.
+  'bug-report': {
+    name: 'Bug Report (floating, staff only)',
+    settings: {
+      visibility: 'staff', icon: 'ladybug', corner: 'bottom-left', iconSize: '55',
+      iconBlock: 'true', blockColor: '#7a1f3d', iconColor: '#fff4e6', labelText: 'Report a problem',
+      popupTitle: 'Tell us what broke', promptPlaceholder: 'What happened, and what did you expect?',
+      thankYouMessage: 'Got it — thank you for helping us fix this.',
+    },
+  },
 
   // ---------------------------------------------------------------------
   // The rest of the sweep (2026-08-22). Everything below was previously
@@ -832,6 +845,31 @@ const buildPanelCheckSection = (ids) => {
           ...TUNED.navigation.settings,
           navDropdownStyle: 'mega',
           navMegaPlacement: 'menu',
+        },
+      };
+    })(),
+    // A THIRD menu, on CUSTOM sizing. The Links list grows a fifth column
+    // ("Width") only under this setting, so the two menus above render the
+    // four-column shape and a check over them says nothing at all about the
+    // five-column one. Same hole as the mega panel above it: a variant that
+    // never renders is a variant nobody is measuring. Widths that sum under
+    // 100 so the manager is not also showing its over-budget warning.
+    (() => {
+      const base = createEmptyModule('navigation', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-navigation-custom-width',
+        name: 'Top Menu (Custom Widths)',
+        settings: {
+          ...base.settings,
+          ...TUNED.navigation.settings,
+          navItemSizing: 'custom',
+          navItems: JSON.stringify([
+            { id: 'home', label: 'Home', href: '/', width: '25' },
+            { id: 'play', label: 'Play', href: '/play', width: '25' },
+            { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+            { id: 'about', label: 'About', href: '/about', width: '25' },
+          ]),
         },
       };
     })(),

@@ -446,13 +446,31 @@ Before reporting a task complete, run and state the results of:
    two assertions that could not fail, including one where the check was
    comparing a setting to itself.
 
+8. **`npm run check:shots` on every task, not only the visual-looking ones.**
+   It builds `main`'s code and this branch's code, photographs six pages
+   through both, and attaches every pair that differs to the ClickUp ticket —
+   so a change to what a page renders reaches the operator as pictures rather
+   than as a branch to check out (charter Q5). Deciding for yourself that a
+   change "is not visual" is the failure it exists to prevent, and it costs
+   about ten seconds to say so and stop when no watched file changed.
+
+   ```
+   PORT=3058 node server.js
+   UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:shots -- --task <clickup-id>
+   ```
+
+   Its comparison is exact — one differing pixel counts — which is only
+   affordable because it proves its own instrument before trusting a reading.
+   If that control ever fails, fix the scene, never the comparison.
+   `docs/VISUAL_REVIEW.md`.
+
 `npm run check:css` is deliberately absent from this list: CI runs it on
 every pull request, so it is the one visual gate nobody has to remember.
 What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
 §5.14 — read that before treating a green run as proof a page looks right.
 Neither of them can tell a bounce from a wobble.
 
-8. **Say where you looked at it.** Not a command — a sentence naming the
+9. **Say where you looked at it.** Not a command — a sentence naming the
    screen you opened and what you saw. Every gate above can pass on a change
    that is visibly broken: nothing here tests CSS, and the panel bugs of
    2026-08-12, 08-13 and 08-16 all reached the operator green. The local app
