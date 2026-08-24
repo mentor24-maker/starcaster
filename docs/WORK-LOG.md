@@ -96,6 +96,37 @@ read as "nothing left to do". Every branch and folder it passes over is now
 named, with the reason. All the safety rules are untouched: work you have not
 committed, a folder you are standing in, and anything it cannot confirm are all
 still left strictly alone, and every deletion still writes down how to undo it.
+## 2026-08-23 — Shared blocks on older pages had quietly forgotten they were shared (#402)
+
+A block you save once and reuse across the site keeps a note of where it came
+from. That note is what lets the Builder tell you a block is a copy, name the
+original, and warn you that saving it will reach every page following it.
+
+Pages are stored in the database in two slightly different arrangements — a
+newer one, and an older one still used by pages built some time ago. Both open
+and display identically, which is exactly why nobody spotted this.
+
+Opening a page temporarily sets a few of those notes aside and then puts them
+back. The code doing the putting-back recognised the newer arrangement and not
+the older one. So on an older page it quietly put nothing back at all.
+
+The page still opened. Every block was there, and looked right. They had simply
+lost all memory of being copies — so a shared block appeared as a standalone
+one, and its header cheerfully promised that saving it would affect nothing
+else, at the exact moment that saving it would have reached every page
+following it. A confident, wrong answer, which is worse than no answer.
+
+Nothing was lost on disk; the notes were always in the database. They just were
+not being read on the way in. Older pages now read the same as newer ones.
+
+The alternative was to make the system reject the older arrangement outright and
+say so loudly. That was considered and rejected: those pages exist right now,
+and refusing them would have turned a quiet problem into customer sites failing
+to open. Better to read both properly.
+
+Found while reviewing the block-state chips shipped earlier today, which is a
+pleasing sort of catch — the feature that tells you how far a save reaches
+turned up a case where the underlying data had stopped saying.
 ## 2026-08-22 — Every shared block now says what it is (#387)
 
 The Builder lets one section be shared across many pages: you build a menu
