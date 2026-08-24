@@ -1252,7 +1252,32 @@ export function BuilderNavigationModuleSettings({
           onToggle={() => setLinksCollapsed((c) => !c)}
         />
         {!linksCollapsed && (
-          <>
+          /*
+           * The Links list is L6a's FIRST shape — a titled-column grid. It
+           * stays one rather than becoming a labelled block per item because
+           * it is genuinely tabular: a real menu runs to a dozen links, and
+           * four labelled rows each would make the manager longer than the
+           * whole Style block above it.
+           *
+           * "Clean" is the word L6a uses, and it was not one. The header and
+           * the rows were two separate flex containers, so their columns were
+           * computed twice from different widths — the header's own 8px
+           * padding and an "Action" title narrower than the three icon
+           * buttons under it. The titles drifted further right with each
+           * column: "Page Name" 15px off its field at 1440, "Slug" 21px. This
+           * wrapper owns the ONE track definition both of them read
+           * (`--nav-link-cols`), so there is a single place the columns are
+           * decided rather than two that have to be kept in agreement.
+           *
+           * `data-lattice-columns` puts the list under `check_panels` the way
+           * `data-lattice-pairs` does for a labelled manager — the count is
+           * the number of titled columns, Action included.
+           */
+          <div
+            className="builder-nav-items-manager"
+            data-lattice-columns={module.settings.navItemSizing === "custom" ? "5" : "4"}
+            data-nav-width-col={module.settings.navItemSizing === "custom" ? "true" : "false"}
+          >
             <div className="builder-nav-items-header builder-nav-item-row">
               <div className="builder-nav-item-fields">
                 <span>Parent Page</span>
@@ -1432,7 +1457,7 @@ export function BuilderNavigationModuleSettings({
                 onClose={closeFeaturePalette}
               />
             )}
-          </>
+          </div>
         )}
       </div>
     </>
