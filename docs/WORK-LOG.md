@@ -1,4 +1,4 @@
-## 2026-08-24 — The machine that fetches YouTube video files (#PR)
+## 2026-08-24 — The machine that fetches YouTube video files (#419)
 
 Getting a video's title and captions is easy and happens on the website itself.
 Actually downloading the video and audio files is not: the service the website
