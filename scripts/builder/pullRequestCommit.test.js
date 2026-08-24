@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-const { pickPullRequestCommit, REPIN_SUBJECT } = require('./pullRequestCommit');
+const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT, SEP } = require('./pullRequestCommit');
 
 /**
  * Naming the pull request after the WORK, against a real repository.
@@ -144,4 +144,24 @@ test('ship asks the picker for the title and writes the re-pin under the shared 
     'the title must not come straight from the newest commit again'
   );
   assert.match(source, /'-m', REPIN_SUBJECT/, 'the re-pin commit must use the shared subject the picker filters on');
+});
+
+test('the CI nudge commit can never become the pull request title', () => {
+  // ship pushes an empty commit when GitHub made no check run (#387/#389). It is
+  // written after the PR exists so it cannot steal a title today, but a re-run on
+  // a branch whose PR was closed asks the picker again — and that is exactly how
+  // #304 landed named after a `.gitattributes` chore.
+  const log = [
+    ['aaa1', NUDGE_SUBJECT],
+    ['aaa2', REPIN_SUBJECT],
+    ['aaa3', 'The actual work this branch is for'],
+  ].map((parts) => parts.join(SEP)).join('\n');
+  const picked = pickPullRequestCommit((args) => (args[0] === 'log' && args[1] !== '-1' ? log : ''));
+  assert.equal(picked.subject, 'The actual work this branch is for');
+});
+
+test('ship writes the nudge under the subject the picker filters on', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'ship_thread.cjs'), 'utf8');
+  assert.match(source, /\$\{NUDGE_SUBJECT\}/, 'the nudge commit must use the shared subject');
+  assert.match(source, /nudge: nudgeChecks/, 'the wait must actually be given the nudge');
 });

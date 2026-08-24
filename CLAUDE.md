@@ -183,6 +183,7 @@ Production is not where you find out whether something works. Full guide:
 
 ```
 npm run doctor        # what is up, what is stale, which database am I on
+npm run env:local     # a NEW worktree: point it at this machine's database
 npm run db:refresh    # make this copy match production (about two minutes)
 npm run db:use        # which database am I on? add local/cloud to switch
 npm run schema:check  # has production's structure moved away from the record?
@@ -192,6 +193,14 @@ The admin app carries a strip across the top saying which database it is
 talking to, `npm run dev` refuses to start against the live one without
 `ALLOW_CLOUD_DEV=1`, and all three read the same classifier
 (`lib/environmentBanner.js`) so they cannot disagree.
+
+**A fresh worktree has no settings file, so run `npm run env:local` in it
+first.** It writes one pointed at the Supabase on this machine, using the
+development defaults `supabase status` prints — no live credential is involved,
+so an agent may run it. This is what makes `check:panels` runnable in a
+worktree; the old advice (`cp ../../../.env.local .`) was a live-secret copy an
+agent may not perform, which left the one gate CI cannot run also unrunnable by
+an unattended pass.
 
 **`db:refresh` costs production disk IO.** Six runs in one day exhausted the
 budget and left every tenant site down on 2026-08-17 (`docs/DOCTRINE.md` §1.5).

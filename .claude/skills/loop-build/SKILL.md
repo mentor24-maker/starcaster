@@ -55,6 +55,15 @@ npm run clickup -- describe --task <id> --body-file -                        # R
 
 ## The two columns — which one you are writing to
 
+**`describe` REPLACES the description — it does not append.** The spec and the
+acceptance criteria live there, and a build pass that writes its outcome with
+`describe` destroys the very thing the next reviewer checks the work against.
+That happened on 86bbjv61n (2026-08-23): the reviewer had to reconstruct the
+acceptance criteria from the outcome writeup that had overwritten them. **An
+outcome report is a `comment`.** Reach for `describe` only to change what the
+task IS — narrowing a scope the operator sliced, correcting a spec — and when
+you do, keep the spec above whatever you add.
+
 ClickUp shows the description on the **left**, wide, and comments on the
 **right**, narrow. Detail goes left. The right column carries the PR URL and the
 operator card, nothing else.
@@ -263,11 +272,27 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
 6. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
    explain it to a non-programmer: what changed and why it mattered, plus the
-   `(#PR)` number once known. Keep it to a short paragraph. This entry is part
+   `(#PR)` number. Keep it to a short paragraph. This entry is part
    of the task's own PR, so the log lands on `main` at the same moment the work
    does — never edit `docs/WORK-LOG.md` directly on `main`. If a parallel task
    causes a merge conflict here, it is trivial (two entries at the top); resolve
    by keeping both.
+
+   **The entry needs a PR number, and you do not have one yet. Do NOT amend the
+   commit later to add it — that needs a force-push, which is a standing deny
+   rule here and is now blocked outright by a PreToolUse hook.** On 2026-08-23
+   three separate runs force-pushed for exactly this reason, using the repo's
+   own `git -c credential.helper=... push` idiom, which slipped past the deny
+   rule because that rule matches commands *starting* with `git push`.
+
+   Two orders work; pick either and never amend:
+
+   - **Commit the code first, push, open the PR, then add the work-log entry as
+     its own second commit** with the number already known. One extra commit,
+     no rewrite. (Squash-merge collapses them anyway.)
+   - **Or reserve the number first**: `gh pr create --draft` on the pushed
+     branch, read the number off it, write the entry, commit, push, then
+     `gh pr ready`.
 
 7. **Commit and open the PR.**
    - Inspect `git diff --cached` before committing (staging is whole-file; make
@@ -278,6 +303,20 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      line of its own — this is not optional), a plain-language summary, the
      task's "How to test" steps, and a note that a Vercel preview will be
      attached. End with the Generated-with trailer.
+   - **Then check the PR actually has checks, and do not push in the seconds
+     right after opening it.** A push landing ~15 seconds after `gh pr create`
+     makes GitHub drop BOTH the `opened` run and that push's run, and nothing
+     arrives later on its own — the PR is checkless forever, this step waits on
+     nothing, and the merge gate refuses it (#387, #389; see
+     `docs/LOOP_ENGINEERING.md` → "A build node must be able to make GitHub run
+     its checks"). So: if the work-log entry needs the PR number, wait until
+     `gh pr checks <pr>` lists a run before pushing it. If none has appeared
+     after a couple of minutes, only a new commit can create one —
+     `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
+   - **Only ordinary pushes.** If a push is rejected because the branch is
+     behind, merge `origin/main` in — never rebase-and-force. That is the same
+     choice `npm run ship` makes on purpose (`docs/DOCTRINE.md` §6.6): the
+     branch only ever gains commits, so an ordinary push always works.
 
 8. **Record the PR on the ticket — with the command, and check what it says.**
 
