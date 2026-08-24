@@ -61,8 +61,13 @@ import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
+import branchCatchUp from './builder/branchCatchUp.js';
+import wipCap from './builder/wipCap.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
-const { mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker } = mergeOnComment;
+const {
+  mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
+  refusalNotice, conflictHandOffNotice, mergedNotice,
+} = mergeOnComment;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
   readyToLaunchGate, isReadyToLaunch,
@@ -197,12 +202,15 @@ function usage(code = 2) {
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
-  console.error('  loop-note --task <id> --transition claimed|pr-open|verified|sent-back|merged|escalated [--pr N]');
-  console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent');
+  console.error('  loop-note --task <id> --transition claimed|pr-open|review-started|verified|sent-back|merged|escalated [--pr N]');
+  console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent.');
+  console.error('                                             review-started is loop-review\'s VISIBLE CLAIM — stamp it before verifying, and');
+  console.error('                                             stand down if `queue`/`get` already shows one that is not stale');
   console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
   console.error('  chat --channel <id> --body-file <file|->');
   console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
-  console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name');
+  console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name <TAB> loop note');
+  console.error('                                             the loop note is what a pass in flight looks like (e.g. a review already running)');
   console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
@@ -218,14 +226,19 @@ function usage(code = 2) {
   console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
   console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
   console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
+  console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
+  console.error('                                             Reads only; a capped pass writes nothing.');
   console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
   console.error('                                             to the ticket, then verifies the comment by parsing it back.');
-  console.error('  verdict --task <id> --pass|--fail [--body-file <file|->]');
+  console.error('  verdict --task <id> --pass|--fail --if-status "In review" [--body-file <file|->] [--no-guard]');
   console.error('                                             record loop-review\'s verdict in the ONE shape the merge step');
   console.error('                                             and the Ready-to-launch gate can read, verified by read-back.');
   console.error('                                             A ticket cannot reach Ready to launch without a PASS on it.');
+  console.error('                                             --if-status is REQUIRED: exit 3, nothing written, if the ticket');
+  console.error('                                             moved while you reviewed. --no-guard opts out, on the record.');
   console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
   console.error('                                             long detail belongs. Verified by reading it back.');
   console.error('  ask --task <id> --body-file <file|-> [--status "Needs your input"|"Ready to launch"] [--no-move]');
@@ -283,6 +296,21 @@ async function fetchAllTasks(list) {
 
 function assigneeNames(t) {
   return (t.assignees || []).map((a) => `${a.username} (${a.id})`).join(', ') || '(nobody)';
+}
+
+/**
+ * The "Loop note" custom field's text, or '' if the list has no such field.
+ * `queue` and `get` both print it, because it is the ONLY place a pass in
+ * flight is visible: a review that has claimed a ticket stamps
+ * `🔍 being checked — a review pass started …` there, and a second reviewer
+ * must be able to see that from the one command it already runs. Resolved by
+ * NAME, like stampLoopNote, so no field id is hardcoded.
+ */
+function loopNoteOf(t) {
+  const f = (t.custom_fields || []).find(
+    (x) => String(x.name || '').trim().toLowerCase() === 'loop note'
+  );
+  return String(f?.value ?? '').trim();
 }
 
 /** Run `gh` and report honestly. gh carries its OWN GitHub credentials; no
@@ -359,18 +387,31 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
 
   // Terminal answer: say why on the ticket and on the bus, then mark the
   // authorizing comment handled so the same refusal is never posted twice.
+  //
+  // An answer this ticket has ALREADY been given, whose reason is still the
+  // same, is not news. mergeDecision quiets its own refusals that way; the
+  // two discovered against GitHub — checks red, and the conflict hand-off —
+  // can only be quieted out here, because that is where they are found. Skip
+  // the comment, the bus post and the marker rewrite: re-deriving the same
+  // answer costs nothing and says nothing.
+  const alreadySaid = (why) => decision.priorRefusal === why;
+
   const refuse = async (why, plainEnglish) => {
+    if (alreadySaid(why)) {
+      console.error(`  MERGE REFUSED (unchanged, nothing posted) on ${label}: ${why}`);
+      return { outcome: 'refused-quiet', reason: why };
+    }
     console.error(`  MERGE REFUSED on ${label}: ${why}`);
     if (dryRun) return { outcome: 'would-refuse', reason: why };
-    const body = `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n**Your approval is still standing — you do not have to say "merge" again.** Every later pass re-checks this ticket, so the moment the reason above is dealt with it goes through on its own. You will only hear from this step again if the answer changes.\n\n(Automatic: your comment ${decision.commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`;
-    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body });
+    const notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish });
+    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) {
       unchecked.push(`${task.id}: merge refused (${why}) but the explanation comment FAILED to post — the operator has not been told`);
       return { outcome: 'refused', reason: why };
     }
     const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`);
     if (!bus.ok) unchecked.push(`${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})`);
-    await markMergeHandled(decision.commentId, task, unchecked, `refused: ${why}`);
+    await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'refused', reason: why };
   };
 
@@ -418,16 +459,61 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     }
   }
 
-  // A script never resolves a merge conflict (task 86bbjd5nn, binding).
+  // GitHub says it conflicts. Before believing that, ask THIS machine.
+  //
+  // GitHub cannot run the asset-pins merge driver — git refuses to run a
+  // driver defined by a cloned repo, so it lives in .git/config and is
+  // registered by npm install. Every branch that touches anything bundled
+  // shifts those `?v=` pins, so GitHub reports a collision on a file that
+  // resolves cleanly here, by asset path. That produced twelve false
+  // hand-offs on 2026-08-23, each one stalling a merge Dane had authorized.
+  //
+  // This does NOT resolve a conflict. It attempts an ordinary merge in a
+  // throwaway worktree: clean means the difference was the driver and the
+  // branch is pushed so CI re-runs; anything else — including "could not
+  // tell" — falls straight through to the hand-off below, unchanged.
+  if (gate.action === 'conflict' && !dryRun) {
+    const local = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
+    if (local.ok) {
+      console.error(`  MERGE WAITING on ${label}: GitHub reported a conflict, but ${local.reason}`);
+      return { outcome: 'waiting', reason: 'false conflict resolved locally; waiting for CI' };
+    }
+    // Carry WHY into the hand-off, so the reader learns whether it was a real
+    // overlap or something that could not be checked at all.
+    gate = { ...gate, reason: gate.reason, localVerdict: local };
+  }
+
+  // A script never resolves a merge conflict (task 86bbjd5nn, binding). What
+  // it must NOT also do is eat the authorization on the way past: resolving
+  // the branch is a job for a person, saying "merge" a second time afterwards
+  // is not (task 86bbk0g4u). The marker written here is re-decidable, so the
+  // pass that runs after someone fixes the branch merges it on his original
+  // word — which is what the comment promised all along.
   if (gate.action === 'conflict') {
+    // What the local attempt found, in the operator's terms. "It really does
+    // overlap" and "I could not check" are different problems with different
+    // fixes, and reading one as the other is how a machine problem gets
+    // diagnosed as a code problem.
+    const verdict = gate.localVerdict;
+    const notice = conflictHandOffNotice({
+      commentId: decision.commentId,
+      pr,
+      localVerdict: verdict
+        ? { realConflict: verdict.code === branchCatchUp.CODES.REAL_CONFLICT, reason: verdict.reason }
+        : null,
+    });
+    const handOffReason = notice.marker.replace(/^refused:\s*/, '');
+    if (alreadySaid(handOffReason)) {
+      console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
+      return { outcome: 'handed-off-quiet', reason: gate.reason };
+    }
     console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}`);
     if (dryRun) return { outcome: 'would-hand-off', reason: gate.reason };
-    const body = `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. A session will merge main into the branch, sort out the overlap and re-run the checks — then your merge still stands and this goes through.\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${decision.commentId}.)`;
-    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body });
+    const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
-    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and re-run CI. Ticket left in Ready to launch.\n\n${pr.url}`);
+    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and push. His approval still stands — once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`);
     if (!bus.ok) unchecked.push(`${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})`);
-    await markMergeHandled(decision.commentId, task, unchecked, `conflict hand-off on PR #${pr.number}`);
+    await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'handed-off', reason: gate.reason };
   }
 
@@ -459,10 +545,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   // Marker first, now that the irreversible thing has happened: if the next
   // two writes fail, the worst case is a ticket that needs a hand, not a
   // second merge attempt against an already-merged PR.
-  await markMergeHandled(decision.commentId, task, unchecked, `merged PR #${pr.number} at ${mergedAt}`);
+  const mergedRecord = mergedNotice({ commentId: decision.commentId, pr, mergedAt });
+  await markMergeHandled(decision.commentId, task, unchecked, mergedRecord.marker);
 
-  const record = `Merged: PR #${pr.number} (${pr.url}) squash-merged into main at ${mergedAt}, merged on operator comment ${decision.commentId}. Checks were green and the branch was up to date at merge time; the branch has been deleted. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`;
-  const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: record });
+  const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: mergedRecord.body });
   if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} MERGED, but the record comment failed to post`);
 
   // Live is a closed status: the ticket leaves the open view here. Assignees
@@ -612,6 +698,34 @@ if (cmd === 'whoami') {
   console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
   reportLimits(out.res);
 
+} else if (cmd === 'wip-check') {
+  // Is the merge side already full? Exit codes mirror `node:owns`:
+  //   0 = room to claim   3 = capped, a normal decline   1 = could not tell
+  //
+  // Reads only. A capped pass must leave the queue exactly as it found it, so
+  // nothing here writes to ClickUp — no status, no comment, no Loop note.
+  const cap = wipCap.resolveCap(process.env);
+  const repoArg = arg('repo') || '';
+  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state'];
+  if (repoArg) listArgs.push('--repo', repoArg);
+
+  const out = gh(listArgs);
+  if (!out.ok) {
+    const undecided = wipCap.undeterminedDecision(out.stderr.slice(0, 200) || 'gh failed');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+  let prs;
+  try { prs = JSON.parse(out.stdout); } catch {
+    const undecided = wipCap.undeterminedDecision('gh returned output that is not JSON');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+
+  const decision = wipCap.wipDecision({ prs, cap });
+  console.log(decision.message);
+  process.exit(decision.code);
+
 } else if (cmd === 'queue') {
   const list = arg('list');
   if (!list) usage();
@@ -636,7 +750,9 @@ if (cmd === 'whoami') {
     // building it in the wrong place.
     const r = resolveTaskRepo(t.tags);
     const repoCol = r.action === 'escalate' ? `?${r.repo ?? 'ambiguous'}` : r.repo;
-    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name].join('\t'));
+    // The Loop note last, so anything already reading the first six columns
+    // keeps working. It is what says "a pass is already running on this one".
+    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name, loopNoteOf(t)].join('\t'));
   }
   console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
   if (res) reportLimits(res);
@@ -650,6 +766,7 @@ if (cmd === 'whoami') {
   console.log(`id:       ${t.id}`);
   console.log(`name:     ${t.name}`);
   console.log(`status:   ${t.status?.status ?? '?'}`);
+  console.log(`loop note:${loopNoteOf(t) ? ` ${loopNoteOf(t)}` : ' (none)'}`);
   console.log(`priority: ${t.priority?.priority ?? 'none'}`);
   console.log(`assigned: ${assigneeNames(t)}`);
   console.log(`list:     ${t.list?.name} (${t.list?.id})`);
@@ -1025,6 +1142,39 @@ if (cmd === 'whoami') {
     console.error('verdict needs --task <id> and exactly one of --pass or --fail.');
     process.exit(2);
   }
+  // THE RACE GUARD (task 86bbjk5rw). A review takes many minutes, so the queue
+  // snapshot it started from is stale by the time it decides. On 2026-08-22 two
+  // review passes verified PR #362 at the same time, and the slower one wrote
+  // its verdict over the faster one's FAIL — and over a fresh `Building` claim
+  // — from a snapshot ~25 minutes old. A verdict is only a statement about the
+  // ticket you actually reviewed, so the write is refused when the ticket moved
+  // underneath you. --no-guard is the written claim that you meant to skip it.
+  const ifStatus = arg('if-status');
+  if (!ifStatus && !flag('no-guard')) {
+    console.error('\nverdict needs --if-status "<the status you claimed>" — normally --if-status "In review".');
+    console.error('It refuses to write if the ticket moved while you were reviewing, which is how one');
+    console.error("review pass overwrote another's verdict on 2026-08-22.\n");
+    console.error(`  npm run clickup -- verdict --task ${task} ${passed ? '--pass' : '--fail'} --if-status "In review" --body-file -\n`);
+    console.error('If this verdict genuinely is not being written from a review claim, pass --no-guard.');
+    console.error('That flag is your written claim, visible in the transcript.\n');
+    process.exit(2);
+  }
+  if (ifStatus) {
+    const before = await call('GET', `/api/v2/task/${task}`);
+    if (!before.res.ok) die('read the task before the verdict', before);
+    const was = before.json.status?.status ?? '?';
+    if (was.toLowerCase() !== ifStatus.toLowerCase()) {
+      console.error(`\nNOTHING WRITTEN: expected "${ifStatus}", the ticket is now "${was}".`);
+      console.error('It moved while you were reviewing — another loop or the operator has it now,');
+      console.error('and your verdict is about a state that no longer exists.\n');
+      console.error('Stand down. Do not write this verdict and do not move the status. Re-read first:');
+      console.error(`  npm run clickup -- comments --task ${task}`);
+      console.error(`  npm run clickup -- get --task ${task}`);
+      console.error('Then take the next task in the queue.\n');
+      process.exit(3);
+    }
+  }
+
   const note = arg('body-file') ? readBody(arg('body-file')).trim() : '';
   const text = verdictComment(passed, note);
   const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
@@ -1275,7 +1425,7 @@ if (cmd === 'whoami') {
   const onlyTask = arg('only-task');
 
   let relayed = 0, skipped = 0, handedBack = 0;
-  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0 };
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
@@ -1371,6 +1521,9 @@ if (cmd === 'whoami') {
         if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
         else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
         else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
+        // Re-derived the same answer as last pass and posted nothing. Counted
+        // separately so a silent pass is legibly "still stuck", not "clean".
+        else if (m.outcome === 'refused-quiet' || m.outcome === 'handed-off-quiet') merges.unchanged++;
         else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch') merges.waiting++;
         // A merged ticket is now Live, which is not a status this watch
         // handles — skip the handback check rather than acting on a status
@@ -1407,7 +1560,7 @@ if (cmd === 'whoami') {
   }
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
     : ', merging disabled (--no-merge)';
   console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
   if (unchecked.length) {
@@ -1427,7 +1580,13 @@ if (cmd === 'whoami') {
   if (!task || !transition) usage();
   let text;
   try {
-    text = loopNote(transition, { at: nowClock(), pr: arg('pr') });
+    // The review claim carries the DATE as well as the clock: the next
+    // reviewer reads it to decide "is that pass still running, or did it die
+    // hours ago?", and a bare time of day cannot tell today's claim from
+    // yesterday's abandoned one. Every other transition is read live and a
+    // clock is enough.
+    const at = transition === 'review-started' ? nowDateClock() : nowClock();
+    text = loopNote(transition, { at, pr: arg('pr') });
   } catch (e) {
     console.error(`\nloop-note: ${e.message}`);
     process.exit(2);
@@ -1507,6 +1666,13 @@ if (cmd === 'whoami') {
 /** hh:mmam local — the register the operator reads. */
 function nowClock() {
   return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '');
+}
+
+/** m/d hh:mmam local — the same register, dated, for notes whose staleness
+ *  has to be judgeable a day later (the review claim). */
+function nowDateClock() {
+  const d = new Date();
+  return `${d.getMonth() + 1}/${d.getDate()} ${nowClock()}`;
 }
 
 /**

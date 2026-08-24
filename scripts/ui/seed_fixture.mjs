@@ -44,7 +44,7 @@ const supabaseUrl = String(process.env.SUPABASE_URL || '');
 if (!/localhost|127\.0\.0\.1/.test(supabaseUrl)) {
   console.error(
     `Refusing to seed: SUPABASE_URL is "${supabaseUrl || '(unset)'}", which is not local.\n` +
-    'This script writes rows and must only ever touch the local stack. Copy .env.local into the worktree first.'
+    'This script writes rows and must only ever touch the local stack. Run `npm run env:local` in this folder first.'
   );
   process.exit(1);
 }
@@ -352,6 +352,31 @@ const PANEL_CHECK_SECTION = {
         },
       };
     })(),
+    // A THIRD menu, on CUSTOM sizing. The Links list grows a fifth column
+    // ("Width") only under this setting, so the two menus above render the
+    // four-column shape and a check over them says nothing at all about the
+    // five-column one. Same hole as the mega panel above it: a variant that
+    // never renders is a variant nobody is measuring. Widths that sum under
+    // 100 so the manager is not also showing its over-budget warning.
+    (() => {
+      const base = createEmptyModule('navigation', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-navigation-custom-width',
+        name: 'Top Menu (Custom Widths)',
+        settings: {
+          ...base.settings,
+          ...TUNED.navigation.settings,
+          navItemSizing: 'custom',
+          navItems: JSON.stringify([
+            { id: 'home', label: 'Home', href: '/', width: '25' },
+            { id: 'play', label: 'Play', href: '/play', width: '25' },
+            { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+            { id: 'about', label: 'About', href: '/about', width: '25' },
+          ]),
+        },
+      };
+    })(),
     // A SECOND proximity-effect module, on a CONTINUOUS preset. Rings is the
     // default, and Reach and Falloff are `visibleWhen: isContinuous`, so the
     // module above renders neither and the check measured a panel two fields
@@ -394,6 +419,58 @@ const PANEL_CHECK_SECTION = {
   ],
 };
 
+/**
+ * A SHARED SECTION AND ITS COPIES — so the block-state chip has something to
+ * be, on screen, where a check and a person can both see it.
+ *
+ * Three of the chip's four states need real data behind them: a master to
+ * follow, a copy whose content matches it, and a copy whose content does not.
+ * Without this the fixture holds nothing canonical at all and every header in
+ * it reads "Independent" — a clean pass over the one state that needs no data
+ * to get right, which is the same hole that let two panels ship measured-but-
+ * unseen (see PANEL_CHECK_SECTION above).
+ *
+ * The master and the Following copy are built from ONE function so their
+ * content is byte-identical. `hasSectionDrifted` compares
+ * `JSON.stringify(getSectionContent(...))`, so key ORDER decides the answer —
+ * two hand-written literals that merely look alike would read as drifted.
+ */
+const SHARED_SECTION_ID = 'saved-section-fixture-menu-banner';
+const SHARED_SECTION_NAME = '2 - Menu Banner';
+const SHARED_SECTION_TEXT = '<p>Book a court, join a clinic, or meet the pros.</p>';
+
+function sharedSectionBody(text) {
+  return {
+    title: 'Menu Banner',
+    layout: 'single',
+    locked: false,
+    alignment: 'left',
+    widthMode: 'contained',
+    modules: [
+      {
+        ...createEmptyModule('text', 'main'),
+        id: 'module-shared-banner-text',
+        name: 'Banner copy',
+        text,
+      },
+    ],
+  };
+}
+
+/** A copy on a page. `canonical: true` is what makes it Following. */
+function sharedSectionCopy(id, text) {
+  return { id, savedSectionId: SHARED_SECTION_ID, canonical: true, ...sharedSectionBody(text) };
+}
+
+const SHARED_SECTION_MASTER = { id: SHARED_SECTION_ID, ...sharedSectionBody(SHARED_SECTION_TEXT) };
+
+/** Chip: Independent. Same shape, linked to nothing. */
+const UNLINKED_SECTION = {
+  id: 'section-independent-copy',
+  ...sharedSectionBody('<p>This block belongs to this page and nothing else.</p>'),
+  title: 'Local Notice',
+};
+
 /** Content chosen to break layouts, not to look plausible. */
 const PAGES = [
   ['Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray',
@@ -406,6 +483,16 @@ const PAGES = [
   ['Short', 's'],
   ['Court Fees', 'course-fees'],
   ['Panel Lattice Check', 'panel-lattice-check', [PANEL_CHECK_SECTION]],
+  // Two pages follow the same master, so the lineage line reads "2 pages" and
+  // exercises the plural path rather than the "1 page" special case.
+  ['Block States', 'block-states', [
+    sharedSectionCopy('section-following-copy', SHARED_SECTION_TEXT),
+    sharedSectionCopy('section-changed-copy', '<p>Hand-edited here, on this page only.</p>'),
+    UNLINKED_SECTION,
+  ]],
+  ['Block States (second follower)', 'block-states-second', [
+    sharedSectionCopy('section-following-copy-2', SHARED_SECTION_TEXT),
+  ]],
 ];
 
 async function findOwnerUserId() {
@@ -445,6 +532,7 @@ if (!project) {
 }
 
 const pagesTable = tableConfig().builderPages;
+const savedSectionsTable = tableConfig().builderSavedSections;
 const existing = must(
   await sbQuery({
     method: 'GET', table: pagesTable,
@@ -461,6 +549,60 @@ if (CLEAN) {
   process.exit(0);
 }
 
+/**
+ * The saved-section master the Block States page follows.
+ *
+ * Rewritten on every seed for the same reason the check page is: a master
+ * somebody hand-edited locally would make the Following copy read as Changed,
+ * and the fixture would then be measuring the opposite of what it claims.
+ *
+ * BOTH project_id and owner_user_id are stamped — a tenant-scoped table that
+ * carries only one of them takes rows with no tenant at all (CLAUDE.md
+ * landmine 12), and this table has both columns precisely so it does not.
+ */
+async function seedSharedSectionMaster() {
+  const row = {
+    id: SHARED_SECTION_ID,
+    name: SHARED_SECTION_NAME,
+    section: SHARED_SECTION_MASTER,
+    project_id: project.id,
+    owner_user_id: userId,
+    updated_at: new Date().toISOString(),
+  };
+  const found = await sbQuery({
+    method: 'GET', table: savedSectionsTable,
+    query: `select=id&id=eq.${encodeURIComponent(SHARED_SECTION_ID)}&limit=1`,
+  });
+  if (!found.ok) {
+    console.error(`  failed to look up the shared section master: ${found.error}`);
+    return false;
+  }
+  const res = (found.data || []).length
+    ? await sbQuery({
+        method: 'PATCH', table: savedSectionsTable,
+        query: `id=eq.${encodeURIComponent(SHARED_SECTION_ID)}`, body: row,
+      })
+    : await sbQuery({ method: 'POST', table: savedSectionsTable, body: row });
+  if (!res.ok) {
+    console.error(`  failed to seed the shared section master: ${res.error}`);
+    return false;
+  }
+  return true;
+}
+
+const sharedSectionSeeded = await seedSharedSectionMaster();
+
+/**
+ * Pages are written as `{ sections: [...] }`, NOT as a bare array.
+ *
+ * Both shapes load and render, which is what makes the bare one dangerous:
+ * `coerceLayoutInput` (lib/builder/document.js) only rescues the fields
+ * `normalizeLayoutSections` whitelists away — `savedSectionId`, `canonical`,
+ * `locked`, the saved-module links — when the input is the wrapped shape.
+ * Seeded as a bare array, a section written here as a canonical copy comes
+ * back from the server with no lineage at all and every block header reads
+ * "Independent". The fixture has to be the shape production actually stores.
+ */
 const bySlug = new Map(existing.map((r) => [r.slug, r]));
 let created = 0;
 let refreshed = 0;
@@ -475,7 +617,7 @@ for (const [name, slug, sections = []] of PAGES) {
     if (!sections.length) continue;
     const res = await sbQuery({
       method: 'PATCH', table: pagesTable, query: `id=eq.${row.id}`,
-      body: { layout_sections: sections, updated_at: new Date().toISOString() },
+      body: { layout_sections: { sections }, updated_at: new Date().toISOString() },
     });
     if (!res.ok) { console.error(`  failed to refresh ${slug}: ${res.error}`); continue; }
     refreshed += 1;
@@ -485,7 +627,7 @@ for (const [name, slug, sections = []] of PAGES) {
     method: 'POST', table: pagesTable, query: 'select=id',
     body: {
       name, slug, project_id: project.id, template_kind: 'modular',
-      is_published: true, layout_sections: sections, updated_at: new Date().toISOString(),
+      is_published: true, layout_sections: { sections }, updated_at: new Date().toISOString(),
     },
     headers: { Prefer: 'return=representation' },
   });
@@ -496,5 +638,12 @@ for (const [name, slug, sections = []] of PAGES) {
 console.log(
   `fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ` +
   `${refreshed} refreshed, ${existing.length} already present.`
+);
+// Said out loud rather than swallowed: without the master, the Block States
+// page shows three Independent headers and a check over it proves nothing.
+console.log(
+  sharedSectionSeeded
+    ? `shared section "${SHARED_SECTION_NAME}" seeded — Block States shows Following / Changed / Independent.`
+    : 'WARNING: the shared section master was NOT seeded; every block header will read Independent.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

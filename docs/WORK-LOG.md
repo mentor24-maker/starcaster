@@ -16,6 +16,76 @@ And if it cannot read those pages, it does not send. "I could not tell" is not
 the same as "yes" — the report is already saved and already in the queue either
 way, so the safe thing to do with an unanswerable question is nothing, loudly
 logged. (#PR)
+## 2026-08-24 — The build robot stops piling up work nobody can merge (#425)
+
+There is a safety rule on this project that a branch has to be completely up to
+date with the live code before it can be merged. That rule is right — it means
+the tests that passed ran against exactly what goes live, and going live here
+means going straight onto client sites.
+
+It has a hidden cost, though, and the cost grows fast. Every merge makes every
+*other* waiting branch out of date. With two dozen pieces of work waiting, a
+single merge leaves twenty-three of them needing to be brought up to date
+again — and each one needs its checks re-run. Yesterday the merge robot spent
+most of its time refreshing branches that had already gone stale again before
+it could use them.
+
+Which means the obvious fix — build faster, run more builders — makes things
+*worse*, not better. Work built beyond the rate things can actually be merged
+does not arrive sooner. It just sits there going stale, and going stale costs
+real work.
+
+So the builder now stops claiming new work once five pieces are already
+waiting. It says so plainly and finishes the run normally — this is not an
+error, it is the system telling the truth about where the queue actually is.
+Five things genuinely in flight is honest. Two dozen half-finished is not.
+
+## 2026-08-23 — "Your approval still stands" is now actually true (#417)
+
+When you comment "merge" on a finished ticket, a robot merges it for you within
+the hour. If the branch clashes with newer work, it stops — untangling a clash
+by guesswork is exactly how good code gets wrecked — and left you a note saying
+your approval still stood and it would go through on its own.
+
+It would not. The reminder the robot wrote to itself, right beside that note,
+said "done with this one, never look at it again". So your yes was thrown away
+at the moment you were told it was safe. On one ticket you said "merge" twice,
+four hours apart, and got the same dead end both times.
+
+Two things changed. Your approval now survives a clash: a person still has to
+untangle the branch, but once they do, the next pass merges it on the word you
+already gave. And the note you read is now written by the same piece of code as
+the reminder the robot keeps, so the two can never again promise different
+things — there is a test that walks every message this job can send you and
+fails if one says your approval carries over while the other says it does not.
+
+The tickets already stuck this way free themselves; there is nothing to run.
+A ticket that really is still clashing now goes quiet rather than repeating
+itself hourly, and shows up in the run summary as "unchanged" so a silent pass
+still reads as stuck rather than clean.
+
+## 2026-08-23 — The relay stops crying wolf about merge conflicts
+
+Twelve times in one day, the robot that merges your approved work gave up and
+said "this branch conflicts with main, a human needs to sort it out". Every
+single time, it merged here with nothing to sort out. Each false alarm parked a
+merge you had already said yes to.
+
+The cause is a quirk worth knowing. Four of our HTML files carry little version
+stamps that change every time anything is rebuilt, so any two branches collide
+there even when neither touched a word of the actual page. We wrote a small
+tool that fixes those automatically — but git flatly refuses to run a tool like
+that from a downloaded copy of a project, for good security reasons, so it only
+exists on our own machines. **GitHub cannot run it.** GitHub sees two different
+version stamps on one line, calls it a conflict, and the relay believed it.
+
+So the relay now asks the machine it is standing on instead of taking GitHub's
+word. It tries the merge for real, in a scratch folder that touches nothing. If
+it comes out clean, the branch is caught up and the checks re-run. If anything
+genuinely overlaps, it hands over exactly as before — and now says which file,
+so nobody has to work that out again.
+
+It still never resolves a conflict, and it still never force-pushes. (#PR)
 
 # Work Log
 
@@ -33,6 +103,454 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The video pipeline's to-do list (#405)
+
+Second of eight pieces in the Studio work. This one is the list that remembers
+which videos still need processing, hands each job to a worker, and — the part
+that matters — takes the job back if that worker dies.
+
+It keeps its list in a plain file on the Mini rather than in the main database.
+That is a deliberate choice with a scar behind it: this list gets written to
+thousands of times per video, and on 16 August the main database ran out of its
+daily capacity and took every client site offline for two and a half hours.
+Nothing precious is stored here — delete the file and the pipeline works its
+list out again from scratch.
+
+Two ideas do most of the work.
+
+The first is that handing out a job has to happen in **one** step. Looking for a
+free job and then marking it as taken are two separate steps, and two workers
+can both finish looking before either one marks — which is how the same video
+gets processed twice. Doing it in one motion makes that impossible rather than
+unlikely.
+
+The second is that a worker **borrows** a job for a while rather than locking
+it. A lock is given up when a program finishes, which is precisely what a crash
+does not do — a crashed worker would hold its lock forever. A borrowed job
+simply comes back when the loan runs out, with nobody woken up to fix it. That
+is the whole point on a machine nobody is watching at three in the morning.
+
+There are two ways a job can go badly, and they are counted separately — which
+took a review pass to get right. A job can **fail**: the worker ran it and it
+did not work. Or the worker can simply **stop responding**, usually because the
+machine went to sleep. The first version counted both together, and that single
+number was wrong in both directions at once. A job that crashed its worker every
+time looped forever without anyone being told, and four laptop naps could send a
+perfectly healthy job to the scrapheap on its first genuine failure.
+
+Now a job that keeps failing waits twice as long before each retry and stops
+after five, and a job that keeps taking its worker down with it stops too — on a
+separate, more generous count. Either way it stops in a state that **keeps the
+reason**, and says which of the two it was, rather than quietly vanishing from
+the list.
+
+Worth recording how the test for the "two workers never get the same job" rule
+went, because it took three attempts to become real. The first version ran the
+two workers one after the other, so the first took everything and the second
+took nothing — the test passed for a reason that had nothing to do with the
+rule. The second version ran them properly at the same time but failed
+unpredictably, because it checked something that genuinely varies. The third
+version uncovered an actual bug in the new code, which was then fixed. Only
+after that did a passing run mean anything.
+## 2026-08-23 — Work handed to you now comes with a link you can click (#404)
+
+You said it on the ecosystem-map task: *"This should include a clickable link I
+can click to test... none of the 'How to test' options are clear how I actually
+do it."*
+
+The problem was real and slightly embarrassing. A "How to test" section written
+by a developer tends to read *run the generator, then open the file in a
+browser* — which is an instruction for somebody who already knows where the
+generator is. It looks like a finished piece of work, and it quietly hands the
+checking back to you at the exact moment the whole point was that it had been
+done for you.
+
+Two changes, at the two places it goes wrong.
+
+**When a task is written**, every test step must now be one of exactly two
+things: a link you can click, or an exact command to copy and paste with the
+result it should print written next to it. Nothing else counts as a step. The
+bad shapes are named outright — "open the page in a browser" is called out as
+not being a step — because a rule that says "write good steps" is just advice,
+while a rule that says "this exact sentence is not a step" is something that can
+actually be enforced.
+
+**When work is handed over for you to approve**, anything with a visible surface
+has to arrive with a web address you can open. First choice is the temporary
+preview site that every piece of work already gets built automatically — it is
+the real thing rather than a description of it. And it has to be the *page*, not
+the front door: "here is the preview" is no help on a site with 138 pages.
+Underneath it, two or three lines of what to look for, written in plain terms.
+
+If there is no link and there should be, the work goes back. And if there is
+genuinely nothing to look at — something that runs behind the scenes — it has to
+say so in one line, because otherwise you cannot tell the difference between
+"nothing to see" and "somebody forgot".
+
+Both halves are held in place by a check that fails if the rule is ever softened
+back into a polite suggestion, which is how the previous attempt at this
+disappeared.
+## 2026-08-23 — Finished branches finally get cleaned up (#396)
+
+Some background. When a piece of work is finished here, GitHub folds all of
+its changes into a single entry on the main line — a tidy habit that keeps the
+history readable. Separately, a housekeeping command goes round afterwards
+deleting the leftover copies of work that has already shipped.
+
+Those two things did not agree, and the housekeeping has been quietly failing
+for months. It decided whether a branch was finished by comparing its changes
+one at a time against the main line. If the work arrived as a single change, the
+comparison matched and the leftover got cleaned up. If it arrived as **two or
+more**, the fold left one entry matching none of them individually — so the
+housekeeping concluded that none of that work had ever shipped, and left the
+leftovers behind. Permanently.
+
+Measured on this repository: **35 branches were sitting in that state, every
+one of them finished and merged.** That is the whole explanation for the pile-up
+of stale copies. The overview command was equally confused — it was listing 54
+branches as unfinished work; the true number is 19.
+
+It now asks three different ways, and one "no" is no longer enough. It compares
+the changes as before; it checks whether the files that branch touched still
+differ from the main line at all; and it asks GitHub outright whether the work
+was merged. Only when every question that can be answered says "not finished"
+is a branch left alone. There is also a fourth answer now — "could not tell" —
+for when the checks cannot reach GitHub. That leaves the branch alone and says
+so, rather than pretending to know.
+
+The second half of the bug was quieter and arguably worse. When the
+housekeeping passed a branch over, it printed **nothing at all** — so the
+folder that survived four cleanup runs was never once mentioned, and the report
+read as "nothing left to do". Every branch and folder it passes over is now
+named, with the reason. All the safety rules are untouched: work you have not
+committed, a folder you are standing in, and anything it cannot confirm are all
+still left strictly alone, and every deletion still writes down how to undo it.
+## 2026-08-23 — Abandoned bug-report screenshots now clean themselves up (#398)
+
+When somebody reports a bug on one of your sites, they can attach a screenshot.
+The picture has to be uploaded the moment they pick it, before they press Send,
+because of a size limit on how much can travel in one go. That works — but it
+means anyone who picks a screenshot and then wanders off leaves the picture
+behind: a file sitting on public storage, and a row in the database, that
+nothing will ever look at again. They accumulate, quietly, forever.
+
+There is now a job that collects them. Once a day it looks for screenshots that
+are more than a day old and that no bug report actually points at, and deletes
+the file and the record together. You can also run it by hand and it will show
+you the list without touching anything, so you can see what it is about to do
+before it does it.
+
+The care is all in what it refuses to do. It never deletes a picture some report
+still points at, even one where the "attach" step failed and the screenshot was
+left looking abandoned. If it cannot read the list of reports for any reason, it
+stops entirely and deletes nothing, rather than concluding that everything is
+unwanted. It deletes the file first and the record second, so it can never leave
+a picture on public storage with nothing left to find it by — and if the file
+will not delete, it keeps the record and says so out loud instead of reporting
+a clean run. Anything it could not remove is named individually.
+## 2026-08-23 — Two checkers can no longer review the same job at once (#391)
+
+The loop has a checking step: after something is built, a separate pass goes
+over it independently and says pass or fail. Last night two of those checks ran
+on the same piece of work at the same time without either one knowing. They both
+did the whole job — wasted effort — and then the slower one stamped its answer on
+top of the faster one's. The faster one had said *fail*. What reached the queue
+said "ready to merge". It was caught and put right by hand, but only because
+somebody happened to look.
+
+Two things changed. First, a checker now puts a visible flag on the ticket
+before it starts — "being checked, started 3:41am" — right in the queue list, so
+the next one sees it and moves on to something else. (If a flag is more than
+about three quarters of an hour old the check clearly died, and the next one is
+allowed to take it over and say so.) Second, when a checker writes its verdict
+it now has to name the state it thought the ticket was in. If the ticket has
+moved since — somebody else took it, or you answered something on it — the
+verdict is simply refused, nothing is written, and the checker is told to go
+read what actually happened rather than stamp a stale answer over it.
+
+Both were tried for real on a scratch ticket before shipping: refused when the
+ticket had moved, refused when the checker forgot to name the state, and allowed
+when everything lined up — with the ticket proving that the two refusals really
+did write nothing at all.
+## 2026-08-23 — Writing down how approvals actually work (#377)
+
+There is now one page, `docs/APPROVALS.md`, saying where you approve things,
+what your answer means, and how agents are expected to file so every approval
+looks the same.
+
+The first draft of this described building a separate **Approvals** list for
+you. Before writing it, we measured what that would cost: the Loop Queue's id
+is typed into 18 places across 11 files, every one assuming an approval stays
+put. Moving approvals off it means re-pointing all of them and keeping
+one-click merge working across two lists at once — an epic, in exchange for a
+tab. You chose to write the rules down instead and move nothing, so the page
+now describes the surface you already use rather than one that would have to
+be built.
+
+Two things in it were worth stating out loud because nothing else says them:
+that a **refusal** leaves your approval standing and goes through on its own
+once the reason clears, while a **conflict hand-off** spends it and needs a
+fresh "merge" from you — and that a ticket with no PR recorded on it can never
+merge at all, however many times you approve it.
+
+---
+
+## 2026-08-23 — Shared blocks on older pages had quietly forgotten they were shared (#402)
+
+A block you save once and reuse across the site keeps a note of where it came
+from. That note is what lets the Builder tell you a block is a copy, name the
+original, and warn you that saving it will reach every page following it.
+
+Pages are stored in the database in two slightly different arrangements — a
+newer one, and an older one still used by pages built some time ago. Both open
+and display identically, which is exactly why nobody spotted this.
+
+Opening a page temporarily sets a few of those notes aside and then puts them
+back. The code doing the putting-back recognised the newer arrangement and not
+the older one. So on an older page it quietly put nothing back at all.
+
+The page still opened. Every block was there, and looked right. They had simply
+lost all memory of being copies — so a shared block appeared as a standalone
+one, and its header cheerfully promised that saving it would affect nothing
+else, at the exact moment that saving it would have reached every page
+following it. A confident, wrong answer, which is worse than no answer.
+
+Nothing was lost on disk; the notes were always in the database. They just were
+not being read on the way in. Older pages now read the same as newer ones.
+
+The alternative was to make the system reject the older arrangement outright and
+say so loudly. That was considered and rejected: those pages exist right now,
+and refusing them would have turned a quiet problem into customer sites failing
+to open. Better to read both properly.
+
+Found while reviewing the block-state chips shipped earlier today, which is a
+pleasing sort of catch — the feature that tells you how far a save reaches
+turned up a case where the underlying data had stopped saying.
+## 2026-08-22 — Every shared block now says what it is (#387)
+
+The Builder lets one section be shared across many pages: you build a menu
+banner once, and every page that uses it follows along. The trouble was that
+nothing on screen said so. A block header showed a bare "(canonical)" tag, and
+sometimes a "Changed" tag beside it, and that was the whole story — it never
+said what the block was a copy of, and it never said how many pages an edit
+would reach. The only place that lived was in Dane's head.
+
+Each block header now carries a small coloured chip and, under it, one plain
+sentence. The chip says one of four things: **Original** (this is the master —
+saving it rewrites every page that follows), **Following** (a copy that still
+takes updates), **Changed** (a copy someone edited on this page, so the next
+push will skip it unless it is overwritten on purpose), or **Independent** (not
+connected to anything). The sentence beneath names the master and counts the
+reach — `Copy of "2 - Menu Banner" · used on 35 pages` — so the blast radius of
+a save is readable before the save, not discovered after it.
+
+This is a read-only change: nothing it adds can alter a page. The chip only
+describes state that already existed, and a test pins that promise by failing
+if rendering a block header calls a single one of the editor's save paths. The
+buttons that act on these states — take the original, disconnect, reconnect —
+are the next two pieces of this work.
+
+Two things were found while building it. The block header is dark, so the new
+line had to borrow the header's own white rather than the app's normal muted
+grey, which was nearly invisible on the teal. And the test fixture had been
+storing pages in a shape the server accepts but quietly strips lineage from,
+which meant a canonical section seeded for a check came back looking
+unconnected — it now writes the shape production actually stores, so a check
+over shared sections is measuring the real thing.
+## 2026-08-23 — Two instructions that contradicted each other, quietly (#399)
+
+The automated build helper needs somewhere to work. For each task it makes a
+fresh, private copy of the project — a separate folder so two jobs can never
+tread on each other's files.
+
+Two of our own documents disagreed about where those folders should live. The
+guide you read said to start each helper *inside* one of those private copies,
+and called that the most important safety rule we have. The helper's own
+instructions worked out where to put things by asking "which folder am I
+standing in?" Put those two together and every new task folder got tucked
+*inside* the previous one — folders nested inside folders, several layers deep
+over a long run.
+
+Nothing ever went wrong loudly. Nothing errored, nothing was lost. The work
+simply happened somewhere nobody expected, which is the kind of problem that
+sits unnoticed for months.
+
+The fix turned out to be short, because a piece of code that answers this
+question properly already existed elsewhere in the project. It asks a different
+question of git — one whose answer is the main folder regardless of which copy
+you happen to be standing in. The helper now uses it, and where you start a
+session stops mattering at all.
+
+The guide now says to start them wherever is convenient, and explains why that
+is safe: neither helper edits the folder it starts in. Each makes a fresh
+folder per task and works there, so the collision the old rule was worried
+about cannot happen from that direction. The underlying rule — one folder per
+piece of work — is unchanged and still applies to the actual building. It was
+never really about where a session is launched from; that was a misreading that
+got written down.
+
+Proved rather than assumed: the check builds a real repository with real linked
+folders and confirms the answer comes back the same from either place.
+## 2026-08-23 — A new work folder can reach a database on its own (#406)
+
+Every piece of work here happens in its own folder — a separate copy of the
+code, so two jobs cannot corrupt each other's files. A brand-new folder came up
+with no settings in it, and settings are what tell the app which database to
+talk to. Without them the app cannot start, cannot log in, and cannot be looked
+at. The advice on screen was to copy the settings file over from the main
+folder — but that file holds around eighty live passwords and keys, and the
+agents doing the building are not allowed to touch those. Correctly so.
+
+The consequence was narrow and expensive. One of our checks opens the site in a
+real browser and measures whether the settings panels line up properly. It is
+the only check of its kind, because the automatic system that runs on every
+change has no browser at all — it simply cannot do it. So the one check nothing
+else can perform was also the one check an unattended build could not perform.
+It came up on three tickets in a row this week, and fifteen more were queued
+behind it.
+
+There is now a single command, `npm run env:local`, that gives a new folder
+what it needs: settings pointed at the practice database running on the machine
+itself. No real password is involved at any point — the practice database uses
+the same publicly-published starter keys on every machine on earth. The three
+places that used to tell you to copy the risky file now name this command
+instead. Verified by doing it: a fresh folder, one command, and the panel check
+ran through all 657 panels.
+## 2026-08-23 — A pull request that nothing checked no longer sits there quietly (#393)
+
+Before anything can be merged here, GitHub has to run its own checks on it —
+that is the safety net that stops a broken change reaching the live site. Twice
+this week a pull request was created and GitHub simply never ran them. Nothing
+looked wrong: the page showed no red, no failure, no warning. It just showed
+nothing at all, and because the merge step quite rightly refuses anything
+unchecked, both pieces of work sat stuck for half an hour until something else
+happened to jog it loose.
+
+The suspicion was that the second computer doing the building had the wrong kind
+of login and GitHub was ignoring its work. That turned out to be wrong, and it
+is worth saying so plainly: of the nine pull requests that machine opened over
+two days, seven had their checks running within four seconds. The two that
+failed had something else in common — a second small change was pushed about
+fifteen seconds after the request was opened, and GitHub lost track of both.
+
+The important discovery is that this never fixes itself. The checks are not
+"late"; they were never scheduled, and nothing that waits, retries or reruns
+will summon them. The only thing that works is sending up one more change, which
+gives GitHub a fresh reason to look. Our own tooling had been advising the
+opposite — "this is probably just a delay, try again shortly" — which is why
+both cases stalled rather than being rescued in a minute.
+
+So the shipping tool now does that itself: if the checks have not appeared after
+a reasonable wait, it sends up a harmless empty change to wake them, once, and
+then waits again. If they still do not appear it says clearly that this is no
+longer a delay and something is genuinely wrong. The rule a new build machine
+has to satisfy, and how to test it in advance, is now written down so the third
+machine does not rediscover any of this.
+## 2026-08-23 — The menu editor's link list lines up with its own headings (#411)
+
+Open a Navigation module and the bottom half is the list of links — a black
+heading bar reading Parent Page / Page Name / Slug / Action, and a row of
+boxes under it for each link in the menu.
+
+The headings did not sit over the boxes they name. "Page Name" was fifteen
+pixels right of the box beneath it and "Slug" twenty-one, and the drift grew
+along the row, so the further right you looked the more the list read as two
+things laid on top of each other rather than one table. The cause is the sort
+of thing that only shows up on screen: the heading bar and the rows were each
+working out their own column widths, from slightly different amounts of space,
+so they were never going to agree. They now read those widths from one place,
+which is the only way two separate strips can line up and stay lined up.
+
+The mega-menu version had a worse version of the same problem. A menu item
+that opens a panel carries a "Feature column" control, and that control was
+sharing the line with the item's three boxes — so that one row's boxes came
+out shorter than every other row's, its up/down/delete icons floated into the
+middle of the list, and the words "Feature column" ran off the right-hand edge
+of the panel entirely. It now sits on its own line under the row it belongs to,
+and every row in the list is the same shape.
+
+One thing that looks wrong and is not: a nested link still steps in from the
+left and its icons still hang past the ones above. That was your call on
+2026-08-14 and it is left exactly as it was — it is now written down as a
+deliberate exception so nobody "fixes" it later.
+
+The checker that measures these panels could not see this list at all, because
+it only knew how to read a form with a label beside every box, and this list
+has its labels once at the top. It has been taught the second shape, so the
+list is now measured on every run instead of being skipped in silence. Before
+believing the pass, the layout was broken three separate ways on purpose and
+the checker was watched to fail each time.
+
+## 2026-08-23 — The guard against touching the live branch had a gap (#397)
+
+There is a rule here that an automated helper must never edit files directly in
+the main folder — the one wired to the live site. There is a guard enforcing it,
+and tonight something slipped past.
+
+What happened: a build session was working in its own private copy, as it should
+be. Between one command and the next, its working folder silently reverted to
+the main one. The next command used a short filename, so an edit intended for
+the private copy landed in the live folder instead. It was spotted immediately
+and undone; the folder was clean again within a minute, nothing was sent
+anywhere and the live site never saw it. No harm done. **The guard staying
+silent is the part worth fixing.**
+
+The reason is almost embarrassing in hindsight. There are many ways to write a
+file, and the guard recognised only a few of them. It knew the ones that look
+like classic command-line plumbing, and it did not know the one that was used —
+a perfectly ordinary way to make a multi-line edit that simply was not on its
+list. Nor several close relatives. Each is the same act spelled differently, and
+the guard knew only the spellings someone had happened to think of.
+
+That is the second time in one night the same shape of bug has turned up: a
+guard built out of *patterns*, protecting a rule that is really about *meaning*.
+The other one let an automated helper overwrite branch history despite four
+rules forbidding it. Both are now closed.
+
+There was a comic second half. When the problem was written up as a ticket, the
+guard **refused to let the ticket be written** — because the ticket quoted an
+example of a forbidden command as documentation. It could not tell an
+instruction from a description of one. That is fixed too, by paying attention to
+who a block of text is actually being handed to: text given to a program is
+treated as a program, text being saved as notes is treated as notes. Writing
+about a rule should never trip the rule, or people quietly stop writing the
+examples down.
+
+One deliberate restraint: the ticket argued for making the guard far more
+suspicious — refuse anything that mentions a filename near anything that writes.
+On reading the surrounding code that looked like the wrong trade, and it was not
+done. There is a second, stronger check that runs before anything can reach the
+live site, and tonight's incident is evidence for that arrangement rather than
+against it: the damage was zero precisely because that later step never
+happened. The specific gaps are closed; the guard has not been turned into
+something that cries wolf.
+## 2026-08-23 — starcaster.pro wears its own icon again (#409)
+
+You reported that starcaster.pro was showing the favicon of whichever client you
+happened to have selected, rather than the Starcaster one.
+
+There are really two websites here. There is your admin app, which lives at
+starcaster.pro, and there is each client's published site, which lives on that
+client's own domain. Their tab icons should differ — yours should always be
+Alphire's, theirs should always be their own — and the two had collapsed into a
+single answer.
+
+The admin app was deliberately swapping its tab icon to match the selected
+project. That went in back in June, described at the time as showing the icon
+"per active workspace", which sounds sensible right up until you notice where
+the admin app actually runs: only ever at starcaster.pro. A client's domain is
+served entirely different files. So the swap was never correct anywhere — it
+simply meant the one tab that should always say Alphire wore whichever client
+was open.
+
+It now always shows the Starcaster icon.
+
+Nothing changed for clients. Their sites get their icons by a completely
+separate route on the server, and there is now a check exercising that, because
+breaking the client side while fixing yours is the obvious way to get this
+wrong. Choosing a favicon for a project in Settings still works and still
+matters — that picture is what their published site uses. Only your admin tab
+stops borrowing it.
 ## 2026-08-23 — The rule against force-pushing now actually holds (#394)
 
 Some background first. "Force-pushing" means overwriting the history of a
