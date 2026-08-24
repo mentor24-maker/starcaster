@@ -1,4 +1,4 @@
-## 2026-08-24 — The Table editor is finally being checked (#PR)
+## 2026-08-24 — The Table editor is finally being checked (#427)
 
 There is an automatic check that opens every settings panel in a real browser
 and measures whether the labels and fields line up in proper columns. It has
