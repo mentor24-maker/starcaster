@@ -86,6 +86,64 @@ which tells a member of the public nothing they can act on. And the tests that
 cover this module used to check the "send" path while pretending to be in
 preview, which is exactly the confusion that hid the bug; they now run against
 a real page, with separate tests holding the preview side down.
+## 2026-08-23 — Finished branches finally get cleaned up (#396)
+
+Some background. When a piece of work is finished here, GitHub folds all of
+its changes into a single entry on the main line — a tidy habit that keeps the
+history readable. Separately, a housekeeping command goes round afterwards
+deleting the leftover copies of work that has already shipped.
+
+Those two things did not agree, and the housekeeping has been quietly failing
+for months. It decided whether a branch was finished by comparing its changes
+one at a time against the main line. If the work arrived as a single change, the
+comparison matched and the leftover got cleaned up. If it arrived as **two or
+more**, the fold left one entry matching none of them individually — so the
+housekeeping concluded that none of that work had ever shipped, and left the
+leftovers behind. Permanently.
+
+Measured on this repository: **35 branches were sitting in that state, every
+one of them finished and merged.** That is the whole explanation for the pile-up
+of stale copies. The overview command was equally confused — it was listing 54
+branches as unfinished work; the true number is 19.
+
+It now asks three different ways, and one "no" is no longer enough. It compares
+the changes as before; it checks whether the files that branch touched still
+differ from the main line at all; and it asks GitHub outright whether the work
+was merged. Only when every question that can be answered says "not finished"
+is a branch left alone. There is also a fourth answer now — "could not tell" —
+for when the checks cannot reach GitHub. That leaves the branch alone and says
+so, rather than pretending to know.
+
+The second half of the bug was quieter and arguably worse. When the
+housekeeping passed a branch over, it printed **nothing at all** — so the
+folder that survived four cleanup runs was never once mentioned, and the report
+read as "nothing left to do". Every branch and folder it passes over is now
+named, with the reason. All the safety rules are untouched: work you have not
+committed, a folder you are standing in, and anything it cannot confirm are all
+still left strictly alone, and every deletion still writes down how to undo it.
+## 2026-08-23 — Abandoned bug-report screenshots now clean themselves up (#398)
+
+When somebody reports a bug on one of your sites, they can attach a screenshot.
+The picture has to be uploaded the moment they pick it, before they press Send,
+because of a size limit on how much can travel in one go. That works — but it
+means anyone who picks a screenshot and then wanders off leaves the picture
+behind: a file sitting on public storage, and a row in the database, that
+nothing will ever look at again. They accumulate, quietly, forever.
+
+There is now a job that collects them. Once a day it looks for screenshots that
+are more than a day old and that no bug report actually points at, and deletes
+the file and the record together. You can also run it by hand and it will show
+you the list without touching anything, so you can see what it is about to do
+before it does it.
+
+The care is all in what it refuses to do. It never deletes a picture some report
+still points at, even one where the "attach" step failed and the screenshot was
+left looking abandoned. If it cannot read the list of reports for any reason, it
+stops entirely and deletes nothing, rather than concluding that everything is
+unwanted. It deletes the file first and the record second, so it can never leave
+a picture on public storage with nothing left to find it by — and if the file
+will not delete, it keeps the record and says so out loud instead of reporting
+a clean run. Anything it could not remove is named individually.
 ## 2026-08-23 — Two checkers can no longer review the same job at once (#391)
 
 The loop has a checking step: after something is built, a separate pass goes
