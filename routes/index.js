@@ -140,6 +140,7 @@ const CRON_PATHS = new Set([
   '/api/engage/youtube-comment-agents/run-due',
   '/api/promote/social/posts/publish-due',
   '/api/engage/social/posts/publish-due',
+  '/api/support/bug-reports/sweep-orphans',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {
