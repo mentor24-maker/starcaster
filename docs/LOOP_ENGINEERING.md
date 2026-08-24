@@ -68,7 +68,8 @@ npm run clickup -- comments --task <id>                        # where the PR UR
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
-npm run clickup -- verdict --task <id> --pass|--fail --body-file -  # record the review verdict (loop-review step 4)
+npm run clickup -- verdict --task <id> --pass|--fail --if-status "In review" --body-file -  # the review verdict (loop-review step 4)
+npm run clickup -- loop-note --task <id> --transition review-started        # loop-review's visible claim, before it verifies
 npm run clickup -- comment --task <id> --body-file -           # a plain note (progress, context)
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
@@ -114,6 +115,55 @@ which any agent session can call directly without passing through this script.
 If an unreviewed ticket turns up in `Ready to launch` again, look there first
 — and the loops should keep using `npm run clickup`, which is the only door
 with a lock on it.
+
+### Two passes, one ticket: claim it visibly, guard every verdict (added 2026-08-23, task 86bbjk5rw)
+
+Claiming is check-then-act — read the status, compare it, write — and there is
+no way to make that one indivisible step. `--if-status` is what makes it safe
+anyway: the write is refused, with nothing sent, if the ticket is no longer
+where you found it. `loop-build` has claimed that way since it shipped.
+`loop-review` did not, and on 2026-08-22 at 03:41 the hole opened:
+
+- **Two review passes verified PR #362 end to end at the same time.** Neither
+  could see the other, because a review in flight left no trace anywhere — the
+  ticket sits in `In review` while it is being reviewed and also while it is
+  waiting to be, and those look identical.
+- **The slower one then wrote `Ready to launch` over the faster one's FAIL
+  verdict — and over a fresh `Building` claim** — from a queue snapshot about
+  25 minutes stale. Repaired by hand on 86bbggw48. Had nobody looked, a change
+  its own reviewer had failed would have gone to the operator wearing "safe to
+  merge".
+
+The two rules that came out of it, and where each one lives:
+
+1. **A review claims its ticket before it verifies anything**, by stamping the
+   Loop note: `loop-note --transition review-started` writes
+   `🔍 being checked — a review pass started 8/23 3:41am`. Both `queue` and
+   `get` print the Loop note now, so the next pass sees the claim in the one
+   command it already runs — no extra call, nothing to remember. The note
+   carries the **date** as well as the clock, because the next pass has to be
+   able to tell a claim that is running from one that died hours ago; past
+   about 45 minutes it is abandoned and may be taken over, out loud.
+   No new status was added for this: the six are the six, and `In review` still
+   means what it meant.
+2. **Every verdict write says which status it was claimed under.**
+   `verdict --if-status "In review"` is **required** — the command refuses
+   without it (exit 2) and refuses again, writing nothing, if the ticket has
+   moved (exit 3, the same code `status --if-status` uses). The skill's
+   instruction on a refusal is one line: re-read the ticket and its comments,
+   then stand down — no verdict, no status move, take the next task.
+   `--no-guard` opts out and says so in the transcript.
+
+   The send-back path carries the same guard (`status --status Queued
+   --if-status "In review"`). The pass path needs no second guard, because
+   `ask --status "Ready to launch"` already refuses unless the newest verdict
+   is a PASS — so a verdict the guard refused blocks the status move behind it.
+
+Guarded live against scratch ticket 86bbgm68r before shipping: refused on a
+stale status (exit 3), refused with the flag missing (exit 2), allowed with a
+matching one — and the ticket's comment count moved only on the last of the
+three. `scripts/builder/reviewRaceGuard.test.js` keeps both rules in place;
+it fails on every one of its seven assertions against the pre-fix script.
 
 ### A refusal is not a verdict on the ticket
 
@@ -282,6 +332,17 @@ operator asked for Urgent, sitting in shell history and the session
 transcript where it can be checked later. Loop-filed tasks (`loop-spec`) are
 High or below by default; Urgent only on the operator's explicit word.
 
+## The Approvals surface
+
+Visual/content before-after sign-offs arrive **on the Loop Queue ticket
+itself**, as images attached by `npm run check:shots` — see
+**`docs/APPROVALS.md`** for what Dane's answer means and how agents file.
+
+A separate Approvals list was specified on 2026-08-18 and declined on 08-23:
+this list's id is hard-coded in 18 places across 11 files, so moving approvals
+off it is its own epic, and it buys a tab. A saved view does the same job with
+nothing moved.
+
 ## The six statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
@@ -374,16 +435,37 @@ settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
 
 ## How to run it
 
-Two commands, each in **its own worktree** (a separate folder + branch so the
-loops never step on each other — this is the #1 safety rule):
+Two commands, each in **its own session**:
 
 ```
-# In session/worktree A:
+# In session A:
 /loop 30m loop-build
 
-# In session/worktree B:
+# In session B:
 /loop 30m loop-review
 ```
+
+**Start them wherever you like — the main checkout is the natural place.**
+Neither loop edits the folder it is started in: `loop-build` creates a
+per-task worktree and works there, `loop-review` checks a PR out into one.
+The main checkout stays on `main` and stays clean, so the collision that
+"one worktree per thread" guards against — two sessions sharing one HEAD and
+one set of uncommitted edits — is not reachable here.
+
+This paragraph used to say each loop needed **its own worktree**, and called
+that the #1 safety rule. It contradicted `loop-build`'s own step 2, which
+derived its checkout with `git rev-parse --show-toplevel` — *"the folder I am
+in"*. Follow the old advice and the loop nested its per-task worktrees inside
+the worktree it was started in. Nothing errored; the work simply happened
+somewhere nobody expected. Step 2 now asks `scripts/lib/main_checkout.mjs`
+instead, which answers the same from anywhere, so where you start no longer
+matters — but two documents giving different instructions is the part that
+had to stop (2026-08-22, after NODES Slice A #368).
+
+The "one worktree per thread" rule in `CLAUDE.md` is untouched and still
+applies to **building**: every piece of work gets its own folder and branch.
+That is what the loops do for each task. It was never about where a loop
+session is launched from.
 
 `/loop 30m X` means "run X, then run it again every 30 minutes." Build drains
 the `Queued` pile into PRs; review drains the `In review` pile into
@@ -459,9 +541,13 @@ is different, so the loops have guardrails baked in:
   conflict. It exists because on 2026-08-20 three tickets you had already
   approved sat unmerged for hours waiting for a human to notice: the
   checkpoint was doing its job, the delay after it was pure friction.
-- **Every loop runs in its own worktree.** Two agents in one folder clobber
-  each other's files — the single most common way this repo breaks. The build
-  skill creates a fresh worktree per task automatically.
+- **Every TASK is built in its own worktree**, created automatically — that is
+  what keeps two builds off each other's files, the single most common way this
+  repo breaks. It is the per-task folder that matters, not where the loop
+  session itself was started: the loops never edit the folder they run in, so
+  they can be started anywhere (see "How to run it"). This bullet used to say
+  "every loop runs in its own worktree", which is where the contradiction
+  described in that section came from.
 - **Every build passes the full gate set before a PR opens** — `typecheck`,
   the builder tests, the conventions check, the syntax check, and the rebuild
   command for any generated file. A task that can't pass gets marked
@@ -469,13 +555,83 @@ is different, so the loops have guardrails baked in:
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
 
+## A build node must be able to make GitHub run its checks
+
+Every gate downstream of the build loop reads GitHub's checks. `ship` waits for
+them, the review loop re-runs them, and the merge-on-comment relay refuses a PR
+that has none ("nothing verified this branch"). So a build node that cannot get
+a check run created produces PRs that can never be merged — and nothing says so,
+because a checkless PR looks calm rather than broken.
+
+**Setting up a new node, check this before trusting it.** The credential the
+node pushes and opens PRs with has to be one whose events trigger workflows: a
+`gh auth login` user token (`gho_…`, scopes must include `repo` and `workflow`)
+or a classic PAT. A `GITHUB_TOKEN` from an Actions run, or a GitHub App
+installation token, deliberately does **not** trigger workflows — a node wired to
+one of those opens checkless PRs forever. Confirm with:
+
+```
+gh auth status                      # Token: gho_… , scopes include repo + workflow
+gh pr list --limit 5 --json number,createdAt   # then, for a PR this node opened:
+gh run list --branch <branch> --json createdAt,event
+```
+
+A healthy node's first run appears **3–4 seconds** after `gh pr create`.
+
+### The failure that is NOT the credential (2026-08-23, PRs #387 and #389)
+
+Ticket 86bbjv61n was filed as "PRs pushed from the second build node never
+trigger CI". They do: nine PRs were opened from the Mac Mini on 22–23 August and
+seven started `verify` within four seconds. The two that did not share something
+else — **a second push landing about fifteen seconds after `gh pr create`**
+(a work-log commit on #387, a force-push on #389). In both, the `opened` run and
+that second push's run are both missing from `gh run list`, and the branch then
+sat checkless for half an hour until an unrelated push finally produced one.
+
+Two things follow, and both used to be got wrong:
+
+- **A missing run does not arrive later on its own.** A run exists only because
+  an event created one. "Wait a bit longer" and "run `npm run ship` again" are
+  both useless — ship pushes nothing on a re-run, so there is no new event.
+  Only a **new head SHA** fires `synchronize` and makes GitHub create the run.
+- **So `ship` now pushes an empty commit** once its grace window is spent, and
+  gives the checks one more window (`scripts/builder/waitForChecks.js`, the
+  `nudge` hook). It does that at most once, and if a run still does not appear
+  it says plainly that this is no longer a delay.
+
+**Recovering a checkless PR by hand** — any new commit will do:
+
+```
+git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push
+```
+
+**Avoiding it in the first place:** do not push again in the seconds right after
+`gh pr create`. Open the PR, wait until `gh pr checks <pr>` lists a run, and
+only then push the work-log commit — the ordering
+`.claude/skills/loop-build/SKILL.md` step 7 spells out.
+
+This used to say the opposite: push the work-log commit *before* opening the PR.
+That advice was self-contradictory (the entry carries the PR number, so it
+cannot be written before the PR exists) and it caused the OTHER failure while
+avoiding this one. Follow it and the work-log commit is the newest
+hand-authored commit when the PR is named, so `pickPullRequestCommit` titles the
+PR after it — `SHIP_AUTHORED_SUBJECTS` skips only the re-pin and nudge subjects,
+and a work-log commit is hand-authored. Squash-merge then makes that title
+permanent. That is exactly the #304 failure, and why
+`docs/MISLABELED_MERGES.md` exists.
+
 ## Reading the queue at a glance — the Loop note
 
 The Status column says which STAGE a ticket is in; the **Loop note** column
 says what is actually happening and what happens next, in plain language:
 `🔨 building — claimed 10:12am`, `🔀 PR #351 open — waiting for a review pass`,
+`🔍 being checked — a review pass started 8/23 3:41am`,
 `👀 verified — waiting on Dane to say "merge"`, `↩ returned to the line…`,
 `✅ live 8/20`. An empty note means "waiting in line" — correct, not a gap.
+The note is not decoration in one case: `🔍 being checked` is loop-review's
+**claim** on a ticket, and the next review pass reads it to decide whether to
+leave that ticket alone (see "Two passes, one ticket" above). `queue` and `get`
+both print it, as the last column and as a `loop note:` line.
 A pinned **Loop heartbeat** ticket carries one line per pass
 (`pass finished 10:48am — 33 in line, next up: "…"`) so you can tell whether
 the line is MOVING, not just how long it is.

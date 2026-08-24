@@ -62,6 +62,7 @@ import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
+import wipCap from './builder/wipCap.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
@@ -201,12 +202,15 @@ function usage(code = 2) {
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
-  console.error('  loop-note --task <id> --transition claimed|pr-open|verified|sent-back|merged|escalated [--pr N]');
-  console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent');
+  console.error('  loop-note --task <id> --transition claimed|pr-open|review-started|verified|sent-back|merged|escalated [--pr N]');
+  console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent.');
+  console.error('                                             review-started is loop-review\'s VISIBLE CLAIM — stamp it before verifying, and');
+  console.error('                                             stand down if `queue`/`get` already shows one that is not stale');
   console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
   console.error('  chat --channel <id> --body-file <file|->');
   console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
-  console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name');
+  console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name <TAB> loop note');
+  console.error('                                             the loop note is what a pass in flight looks like (e.g. a review already running)');
   console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
@@ -222,14 +226,19 @@ function usage(code = 2) {
   console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
   console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
   console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
+  console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
+  console.error('                                             Reads only; a capped pass writes nothing.');
   console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
   console.error('                                             to the ticket, then verifies the comment by parsing it back.');
-  console.error('  verdict --task <id> --pass|--fail [--body-file <file|->]');
+  console.error('  verdict --task <id> --pass|--fail --if-status "In review" [--body-file <file|->] [--no-guard]');
   console.error('                                             record loop-review\'s verdict in the ONE shape the merge step');
   console.error('                                             and the Ready-to-launch gate can read, verified by read-back.');
   console.error('                                             A ticket cannot reach Ready to launch without a PASS on it.');
+  console.error('                                             --if-status is REQUIRED: exit 3, nothing written, if the ticket');
+  console.error('                                             moved while you reviewed. --no-guard opts out, on the record.');
   console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
   console.error('                                             long detail belongs. Verified by reading it back.');
   console.error('  ask --task <id> --body-file <file|-> [--status "Needs your input"|"Ready to launch"] [--no-move]');
@@ -287,6 +296,21 @@ async function fetchAllTasks(list) {
 
 function assigneeNames(t) {
   return (t.assignees || []).map((a) => `${a.username} (${a.id})`).join(', ') || '(nobody)';
+}
+
+/**
+ * The "Loop note" custom field's text, or '' if the list has no such field.
+ * `queue` and `get` both print it, because it is the ONLY place a pass in
+ * flight is visible: a review that has claimed a ticket stamps
+ * `🔍 being checked — a review pass started …` there, and a second reviewer
+ * must be able to see that from the one command it already runs. Resolved by
+ * NAME, like stampLoopNote, so no field id is hardcoded.
+ */
+function loopNoteOf(t) {
+  const f = (t.custom_fields || []).find(
+    (x) => String(x.name || '').trim().toLowerCase() === 'loop note'
+  );
+  return String(f?.value ?? '').trim();
 }
 
 /** Run `gh` and report honestly. gh carries its OWN GitHub credentials; no
@@ -674,6 +698,34 @@ if (cmd === 'whoami') {
   console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
   reportLimits(out.res);
 
+} else if (cmd === 'wip-check') {
+  // Is the merge side already full? Exit codes mirror `node:owns`:
+  //   0 = room to claim   3 = capped, a normal decline   1 = could not tell
+  //
+  // Reads only. A capped pass must leave the queue exactly as it found it, so
+  // nothing here writes to ClickUp — no status, no comment, no Loop note.
+  const cap = wipCap.resolveCap(process.env);
+  const repoArg = arg('repo') || '';
+  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state'];
+  if (repoArg) listArgs.push('--repo', repoArg);
+
+  const out = gh(listArgs);
+  if (!out.ok) {
+    const undecided = wipCap.undeterminedDecision(out.stderr.slice(0, 200) || 'gh failed');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+  let prs;
+  try { prs = JSON.parse(out.stdout); } catch {
+    const undecided = wipCap.undeterminedDecision('gh returned output that is not JSON');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+
+  const decision = wipCap.wipDecision({ prs, cap });
+  console.log(decision.message);
+  process.exit(decision.code);
+
 } else if (cmd === 'queue') {
   const list = arg('list');
   if (!list) usage();
@@ -698,7 +750,9 @@ if (cmd === 'whoami') {
     // building it in the wrong place.
     const r = resolveTaskRepo(t.tags);
     const repoCol = r.action === 'escalate' ? `?${r.repo ?? 'ambiguous'}` : r.repo;
-    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name].join('\t'));
+    // The Loop note last, so anything already reading the first six columns
+    // keeps working. It is what says "a pass is already running on this one".
+    console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name, loopNoteOf(t)].join('\t'));
   }
   console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
   if (res) reportLimits(res);
@@ -712,6 +766,7 @@ if (cmd === 'whoami') {
   console.log(`id:       ${t.id}`);
   console.log(`name:     ${t.name}`);
   console.log(`status:   ${t.status?.status ?? '?'}`);
+  console.log(`loop note:${loopNoteOf(t) ? ` ${loopNoteOf(t)}` : ' (none)'}`);
   console.log(`priority: ${t.priority?.priority ?? 'none'}`);
   console.log(`assigned: ${assigneeNames(t)}`);
   console.log(`list:     ${t.list?.name} (${t.list?.id})`);
@@ -1087,6 +1142,39 @@ if (cmd === 'whoami') {
     console.error('verdict needs --task <id> and exactly one of --pass or --fail.');
     process.exit(2);
   }
+  // THE RACE GUARD (task 86bbjk5rw). A review takes many minutes, so the queue
+  // snapshot it started from is stale by the time it decides. On 2026-08-22 two
+  // review passes verified PR #362 at the same time, and the slower one wrote
+  // its verdict over the faster one's FAIL — and over a fresh `Building` claim
+  // — from a snapshot ~25 minutes old. A verdict is only a statement about the
+  // ticket you actually reviewed, so the write is refused when the ticket moved
+  // underneath you. --no-guard is the written claim that you meant to skip it.
+  const ifStatus = arg('if-status');
+  if (!ifStatus && !flag('no-guard')) {
+    console.error('\nverdict needs --if-status "<the status you claimed>" — normally --if-status "In review".');
+    console.error('It refuses to write if the ticket moved while you were reviewing, which is how one');
+    console.error("review pass overwrote another's verdict on 2026-08-22.\n");
+    console.error(`  npm run clickup -- verdict --task ${task} ${passed ? '--pass' : '--fail'} --if-status "In review" --body-file -\n`);
+    console.error('If this verdict genuinely is not being written from a review claim, pass --no-guard.');
+    console.error('That flag is your written claim, visible in the transcript.\n');
+    process.exit(2);
+  }
+  if (ifStatus) {
+    const before = await call('GET', `/api/v2/task/${task}`);
+    if (!before.res.ok) die('read the task before the verdict', before);
+    const was = before.json.status?.status ?? '?';
+    if (was.toLowerCase() !== ifStatus.toLowerCase()) {
+      console.error(`\nNOTHING WRITTEN: expected "${ifStatus}", the ticket is now "${was}".`);
+      console.error('It moved while you were reviewing — another loop or the operator has it now,');
+      console.error('and your verdict is about a state that no longer exists.\n');
+      console.error('Stand down. Do not write this verdict and do not move the status. Re-read first:');
+      console.error(`  npm run clickup -- comments --task ${task}`);
+      console.error(`  npm run clickup -- get --task ${task}`);
+      console.error('Then take the next task in the queue.\n');
+      process.exit(3);
+    }
+  }
+
   const note = arg('body-file') ? readBody(arg('body-file')).trim() : '';
   const text = verdictComment(passed, note);
   const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
@@ -1492,7 +1580,13 @@ if (cmd === 'whoami') {
   if (!task || !transition) usage();
   let text;
   try {
-    text = loopNote(transition, { at: nowClock(), pr: arg('pr') });
+    // The review claim carries the DATE as well as the clock: the next
+    // reviewer reads it to decide "is that pass still running, or did it die
+    // hours ago?", and a bare time of day cannot tell today's claim from
+    // yesterday's abandoned one. Every other transition is read live and a
+    // clock is enough.
+    const at = transition === 'review-started' ? nowDateClock() : nowClock();
+    text = loopNote(transition, { at, pr: arg('pr') });
   } catch (e) {
     console.error(`\nloop-note: ${e.message}`);
     process.exit(2);
@@ -1572,6 +1666,13 @@ if (cmd === 'whoami') {
 /** hh:mmam local — the register the operator reads. */
 function nowClock() {
   return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '');
+}
+
+/** m/d hh:mmam local — the same register, dated, for notes whose staleness
+ *  has to be judgeable a day later (the review claim). */
+function nowDateClock() {
+  const d = new Date();
+  return `${d.getMonth() + 1}/${d.getDate()} ${nowClock()}`;
 }
 
 /**
