@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# What the hourly schedule actually runs. Two steps: bring the checkout up to
-# date with main, then relay.
+# What the schedule (every 10 minutes) actually runs. Two steps: bring the
+# checkout up to date with main, then relay.
 #
 # WHY THE UPDATE STEP EXISTS
 # The relay reads WHO MAY RUN IT out of lib/nodeRoles.js in this checkout, at
@@ -36,6 +36,33 @@ elif ! git merge --ff-only origin/main 2>&1; then
   echo "update: skipped — main has diverged from origin and only a person should sort that out."
 else
   echo "update: checkout is at $(git rev-parse --short HEAD)"
+fi
+
+# DOES THE MACHINE STILL AGREE WITH THE REPO ABOUT HOW OFTEN TO WAKE?
+#
+# The interval lives in two places and only one of them is reviewable:
+# INTERVAL_SECONDS in scripts/install_bus_relay.sh (in git, where it can be
+# read and changed by anyone) and StartInterval in the generated plist (on one
+# machine, where it actually takes effect). Changing the repo does NOT change
+# the machine — that needs the installer re-run — so the two drift apart
+# silently, and a relay still waking hourly looks exactly like one waking every
+# ten minutes until you go and read a log.
+#
+# That is not hypothetical: it is precisely what happened when the interval was
+# shortened on 2026-08-23 (task 86bbk2fuh). Say it out loud, every pass, rather
+# than letting the schedule quietly disagree with the committed intent.
+# Fixing the config-on-one-machine problem itself is NODES Slice B (86bbh9kh2).
+want="$(sed -n 's/^INTERVAL_SECONDS=\([0-9][0-9]*\).*/\1/p' "$REPO/scripts/install_bus_relay.sh" | head -1)"
+plist="$HOME/Library/LaunchAgents/com.starcaster.bus-relay.plist"
+if [ -n "$want" ] && [ -f "$plist" ]; then
+  have="$(grep -A1 '<key>StartInterval</key>' "$plist" | sed -n 's/.*<integer>\([0-9][0-9]*\)<\/integer>.*/\1/p' | head -1)"
+  if [ -n "$have" ] && [ "$have" != "$want" ]; then
+    echo "interval: MISMATCH — this machine wakes every ${have}s, the repo says ${want}s."
+    echo "interval: the schedule is stale; re-run the installer from the main checkout to fix it:"
+    echo "interval:   cd $REPO && ./scripts/install_bus_relay.sh"
+  else
+    echo "interval: every ${have:-?}s, matching the repo"
+  fi
 fi
 
 npm run --silent clickup -- bus-relay

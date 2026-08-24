@@ -476,15 +476,15 @@ Your day:
 2. **During the day:** the loops build and review. You get a message per
    `Ready to launch` PR with a preview link and test steps.
 3. **When you're ready:** reply **`merge`** on the ticket — just that word.
-   Within one bus-relay cycle (hourly) it is merged and the ticket closes as
-   `Live`, provided the PR is still open, green and conflict-free. Telling a
+   Within one bus-relay cycle (every 10 minutes) it is merged and the ticket
+   closes as `Live`, provided the PR is still open, green and conflict-free. Telling a
    CC session "merge PR #NN" still works and is faster if one is open; the
    comment is the version that works when nobody is watching. Either way the
    decision is yours — see Safety.
 4. **When a ticket asks you a question** (`Needs your input`): answer it as a
-   comment on the ticket. Within one bus-relay cycle (hourly) your answer is
-   posted to the bus and the ticket goes back to `Queued` for a build loop to
-   pick up — the comment alone is enough, no status clicking.
+   comment on the ticket. Within one bus-relay cycle (every 10 minutes) your
+   answer is posted to the bus and the ticket goes back to `Queued` for a build
+   loop to pick up — the comment alone is enough, no status clicking.
 
 ### The one place to check: Assigned to me
 
@@ -535,8 +535,8 @@ is different, so the loops have guardrails baked in:
 - **`main` auto-deploys to production.** So no loop ever merges on its own. The
   review loop can only mark a PR `Ready to launch`; **you** authorize the merge.
   Since 2026-08-21 that authorization can be a one-word comment on the ticket
-  and the hourly relay carries it out (task 86bbjd5nn) — which moves the
-  *hands*, not the *decision*. The relay merges nothing you did not name, on a
+  and the relay carries it out within 10 minutes (task 86bbjd5nn) — which
+  moves the *hands*, not the *decision*. The relay merges nothing you did not name, on a
   ticket no independent review passed, or on a branch that is red or in
   conflict. It exists because on 2026-08-20 three tickets you had already
   approved sat unmerged for hours waiting for a human to notice: the
@@ -554,6 +554,87 @@ is different, so the loops have guardrails baked in:
   `Needs your input` for a human instead of shipping broken.
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
+
+## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
+
+The relay runs **every 10 minutes** (`StartInterval` 600). It was hourly until
+2026-08-23. The interval lives in `scripts/install_bus_relay.sh`
+(`INTERVAL_SECONDS`), which generates the launchd plist — so it is changed by
+editing the repo and re-running the installer, never by hand-editing the plist
+on the machine.
+
+**Why it moved.** Hourly was a fair default while the relay only *notified*.
+On 2026-08-21 it started **merging** (task 86bbjd5nn), which made it the
+consumer for the whole pipeline, and the default was never revisited. Nothing
+about the work justified an hour: a pass costs **no tokens at all** — it is a
+plain Node script, not a Claude session — and finishes the entire job in about
+**14 seconds**. So an approved PR could sit up to an hour waiting on the
+*interval*, not on any work. That was the ceiling, and it is the one thing this
+change removed.
+
+**What it costs, measured.** ClickUp allows roughly **100 requests per minute**.
+A steady pass, measured on 2026-08-23 against a queue of 15 open tickets
+carrying 22 already-relayed operator comments, used **39 requests** — leaving
+**61 requests of headroom**, about 61%. The relay prints this itself now, on
+every pass:
+
+```
+requests this pass: 39 (ClickUp allows ~100/minute)
+```
+
+Two things about that number are worth keeping straight:
+
+- **The interval does not multiply it.** ClickUp's budget resets every minute,
+  and a 14-second pass every 10 minutes never shares a minute with the next
+  one. Peak usage is one pass, whatever the interval. Going 3600 → 600 raised
+  requests *per hour* from 39 to 234, and ClickUp does not meter per hour.
+- **Queue size does multiply it.** The count is roughly `2 list reads + 1 per
+  open ticket + 1 per operator comment on those tickets`, so it grows with how
+  much work is open, not with how often the relay runs. Reaching 100 would take
+  roughly 2.5× the current open queue. This is also the real shape of the 429
+  on 2026-08-23 that reported six tasks as "could not read comments": that was
+  a 24-comment backlog drain, a *volume* problem wearing a rate-limit hat, and
+  shortening the interval does not make it likelier. **If "requests this pass"
+  starts creeping toward 100, the fix is a cheaper pass — not a longer
+  interval.**
+
+**Overlap: what actually prevents a double-post.** At 10 minutes a slow pass
+overlapping the next is far likelier than at 60, so this was verified rather
+than assumed. It matters because the relay's own dedup guard would *not*
+survive an overlap: "has this comment been relayed?" is a read, a comparison,
+then a write against a remote API, and two passes can both read "no" before
+either writes its marker. The code says so itself, about two machines.
+
+**launchd is the guard, and it holds.** A launchd job is one instance per
+`Label`: it will not start a second copy while the first is still running.
+Probed directly on the Mini — a scratch job with `StartInterval` 10 running a
+25-second script, which would overlap 2–3 deep if overlap were possible:
+
+```
+START pid=2550 23:32:15    END pid=2550 23:32:41
+START pid=3013 23:32:51    END pid=3013 23:33:16
+START pid=3165 23:33:26    END pid=3165 23:33:51
+START pid=3832 23:34:01
+```
+
+Never two STARTs before an END. Note the second finding in that data: each run
+begins 10 seconds after the previous one **ended**, not 10 seconds after it
+began — launchd restarts the countdown from exit. So the true cadence is
+*interval + pass duration* (~10 minutes 14 seconds here), and a pass that ran
+long would simply push the next one later. It can never stack.
+
+The consequence worth remembering: **overlap safety comes entirely from
+launchd, not from the relay's code.** Anything that runs the relay outside that
+schedule — a second machine, a hand-run pass alongside the timer, a future
+wrapper that backgrounds it — loses the guarantee. `lib/nodeRoles.js` covers
+the second-machine case; the others are on whoever types the command.
+
+**The interval is still only on one machine.** The generated plist lives at
+`~/Library/LaunchAgents/com.starcaster.bus-relay.plist` on the Mini and is not
+in the repo, so it is invisible to everyone and lost if the machine is rebuilt.
+That is **NODES Slice B** (`86bbh9kh2`)'s job, not this one's — recording the
+number here is the stopgap, and Slice B should treat this ticket as a worked
+example of why a machine-only config is a config nobody can review.
 
 ## A build node must be able to make GitHub run its checks
 

@@ -153,7 +153,18 @@ function reportLimits(res) {
   console.error(`  ClickUp's own limit: ${remaining ?? '?'} of ${limit ?? '?'} left this minute${resetTxt}`);
 }
 
+/**
+ * Every HTTP request this process makes goes through `call`, so counting here
+ * counts the whole pass. bus-relay reports the total at the end (task
+ * 86bbk2fuh): the poll interval is only safe if a pass fits inside ClickUp's
+ * ~100-requests-per-minute allowance, and "it feels like plenty" is not a
+ * number anybody can check later. The count grows with the size of the open
+ * queue, so it is worth re-reading whenever the interval is shortened again.
+ */
+let requestCount = 0;
+
 async function call(method, path, body) {
+  requestCount += 1;
   const res = await fetch(`https://api.clickup.com${path}`, {
     method,
     headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
@@ -1535,6 +1546,13 @@ if (cmd === 'whoami') {
     console.error('\nCould not fully verify:');
     for (const line of unchecked) console.error(`  - ${line}`);
   }
+  // What this pass COST, in the same units ClickUp throttles on. The poll
+  // interval and this number are one decision, not two: at 10-minute polling
+  // (task 86bbk2fuh) a pass gets a fresh ~100-request minute every time, so
+  // the headroom to watch is per-pass, not per-hour. If this creeps toward
+  // 100 the answer is a cheaper pass, not a longer interval — the relay is
+  // the pipeline's consumer and slowing it down is what the ticket undid.
+  console.error(`  requests this pass: ${requestCount} (ClickUp allows ~100/minute)`);
   if (lastRes) reportLimits(lastRes);
   if (unchecked.length) process.exit(1);
 
