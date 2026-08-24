@@ -107,6 +107,13 @@ function byDateNewestFirst(comments) {
 const MERGE_MARKER = '[merge-on-comment]';
 
 /**
+ * The exact shape of a conflict hand-off marker written before 2026-08-23,
+ * when hand-offs were terminal by accident rather than by intent. Anchored
+ * whole-string so nothing else can drift into the migration path.
+ */
+const LEGACY_HAND_OFF_RE = /^conflict hand-off on PR #\d+$/i;
+
+/**
  * Read one marker reply back into a decision.
  *
  * WHY THIS EXISTS (2026-08-22, task 86bbjt18r). Until now every marker meant
@@ -144,6 +151,21 @@ function parseMergeMarker(text) {
   }
   if (/^refused\s*:/i.test(rest)) {
     return { kind: 'refused', reason: rest.replace(/^refused\s*:\s*/i, '').trim(), at };
+  }
+  // MIGRATION (2026-08-23, task 86bbk0g4u). Conflict hand-offs written before
+  // this change carry no "refused:" prefix, so they parsed as TERMINAL and
+  // spent the authorization — while the comment posted beside them promised
+  // the exact opposite ("then your merge still stands and this goes through").
+  // Eleven Ready-to-launch tickets sat dead that way, one of them approved
+  // twice four hours apart. Reading the old shape back as re-decidable heals
+  // every one of them on the next pass, with no second "merge" from the
+  // operator and nothing to remember to run by hand.
+  //
+  // Safe in the only direction that matters: a `merged PR #N at ...` marker
+  // does not match this, so a merged PR is still never re-decided — and even
+  // if one somehow were, githubGate refuses an already-merged PR outright.
+  if (LEGACY_HAND_OFF_RE.test(rest)) {
+    return { kind: 'refused', reason: rest, at, legacy: true };
   }
   return { kind: 'terminal', reason: rest, at };
 }
@@ -207,14 +229,23 @@ function mergeDecision({ status, comments, operatorId, handled, refused }) {
   );
   if (!authorization) return { act: 'ignore', reason: 'no unhandled merge command from the operator' };
 
-  const base = { commentId: String(authorization.id), commentDate: commentDate(authorization) };
+  // The reason a previous pass refused THIS authorization, carried out to the
+  // caller as well as used below. The plumbing needs it because two of the
+  // three refusal reasons are only discovered later, against GitHub (checks
+  // red, branch conflicts) — mergeDecision cannot quiet those on its own, and
+  // without it a permanent conflict would post an identical comment hourly.
+  const base = {
+    commentId: String(authorization.id),
+    commentDate: commentDate(authorization),
+    priorRefusal: priorRefusals.get(String(authorization.id)),
+  };
 
   // A refusal we have already given, whose reason is still true, is not news.
   // Saying it again on every hourly pass would bury the ticket in identical
   // comments, so it goes quiet — but it goes quiet by RE-DERIVING the same
   // answer, not by being permanently struck off. The moment the reason
   // changes (or disappears), the next pass acts.
-  const wasRefusedFor = priorRefusals.get(base.commentId);
+  const wasRefusedFor = base.priorRefusal;
   const refuse = (reason) => (
     reason === wasRefusedFor
       ? { ...base, act: 'ignore', reason: `already refused for the same reason: ${reason}` }
@@ -331,6 +362,86 @@ function githubGate(pr) {
   return { action: 'merge', reason: `open, ${checks.total} check(s) green, no conflicts` };
 }
 
+/**
+ * WHAT THE COMMENT PROMISES AND WHAT THE MARKER DOES, BUILT TOGETHER
+ * (2026-08-23, task 86bbk0g4u).
+ *
+ * The merge path posts a comment to the operator and writes a marker for
+ * itself, and until now those were written in two different places with
+ * nothing tying them together. They drifted, in the worst possible
+ * direction: the conflict hand-off told him "then your merge still stands
+ * and this goes through" while writing a marker that no later pass would
+ * ever look at again. He read that promise on eleven tickets and every one
+ * of them was dead.
+ *
+ * So every notice is built by a function here that returns the body AND the
+ * marker as one object. The marker's kind decides which promise the body is
+ * allowed to make, and a test asserts that pairing for every notice there
+ * is — which is only possible because they are no longer written apart.
+ */
+const APPROVAL_CARRIES_OVER = '**Your approval is still standing — you do not have to say "merge" again.** Every later pass re-checks this ticket, so the moment the reason above is dealt with it goes through on its own. You will only hear from this step again if the answer changes.';
+
+// There is deliberately NO "your approval is spent" wording here. The ticket
+// offered two fixes — say the spent thing truthfully, or stop spending it —
+// and this takes the second. Every notice below either carries the approval
+// over or is the merge itself, so a sentence telling him to say "merge" twice
+// would have nothing left to describe. If a future outcome IS terminal and
+// not a merge, it needs that sentence written back, and the test at the
+// bottom of mergeOnComment.test.js is what will notice.
+
+/** The kind a marker string parses back as, without the timestamp tail. */
+function markerKind(what) {
+  const parsed = parseMergeMarker(`${MERGE_MARKER} ${what}`);
+  return parsed ? parsed.kind : 'terminal';
+}
+
+/**
+ * A precondition failed, or GitHub says the PR cannot be merged safely. The
+ * marker is re-decidable, so the promise is the truthful one: the reason may
+ * be fixed later and this goes through on its own.
+ */
+function refusalNotice({ commentId, why, plainEnglish }) {
+  return {
+    marker: `refused: ${why}`,
+    body: `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n${APPROVAL_CARRIES_OVER}\n\n(Automatic: your comment ${commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`,
+  };
+}
+
+/**
+ * The branch conflicts and a script never resolves a conflict blind — but a
+ * human resolving it does not need a second authorization. The marker is
+ * re-decidable (see LEGACY_HAND_OFF_RE for why it used not to be), so the
+ * body says so, and says plainly what the person has to do first.
+ *
+ * `localVerdict` is what THIS machine found when it tried the merge itself:
+ * `realConflict` true means the branches genuinely overlap, false means the
+ * check could not be completed — different problems with different fixes,
+ * and reading one as the other sends a machine problem to a code review.
+ */
+function conflictHandOffNotice({ commentId, pr, localVerdict }) {
+  const localLine = !localVerdict
+    ? ''
+    : localVerdict.realConflict
+      ? `\n\nChecked on this machine too, and it is a real overlap — ${localVerdict.reason}. This one genuinely needs a person.`
+      : `\n\nWorth knowing: this could not be checked properly here either — ${localVerdict.reason}. So it may not be a real conflict at all; GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.`;
+  return {
+    marker: `refused: conflict hand-off on PR #${pr.number}`,
+    body: `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. Someone has to merge main into the branch, sort out the overlap and push it.${localLine}\n\nThat is the only part that needs a person. ${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
+  };
+}
+
+/**
+ * The one genuinely terminal outcome. Re-deciding a merged PR is the single
+ * mistake that cannot be undone, so this marker stays spent forever and the
+ * body makes no promise about a next pass — there is not going to be one.
+ */
+function mergedNotice({ commentId, pr, mergedAt }) {
+  return {
+    marker: `merged PR #${pr.number} at ${mergedAt}`,
+    body: `Merged: PR #${pr.number} (${pr.url}) squash-merged into main at ${mergedAt}, merged on operator comment ${commentId}. Checks were green and the branch was up to date at merge time; the branch has been deleted. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`,
+  };
+}
+
 module.exports = {
   MERGE_PHRASES,
   MERGE_MARKER,
@@ -344,4 +455,9 @@ module.exports = {
   mergeDecision,
   checkState,
   githubGate,
+  markerKind,
+  refusalNotice,
+  conflictHandOffNotice,
+  mergedNotice,
+  APPROVAL_CARRIES_OVER,
 };
