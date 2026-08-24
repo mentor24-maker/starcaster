@@ -558,21 +558,40 @@ test('a bad date is refused on the way in too, on both stores', async () => {
   } finally { restore(); }
 });
 
-test('a content hash round-trips at one length, whichever path wrote it', async () => {
-  // It was capped at 200 on create and 1000 on update, so the same value came
-  // back differently depending on how it got there.
-  const { sessions, sources, restore } = withDb();
+test('a content hash is STORED at one length, whichever path wrote it', async () => {
+  // It was capped at 200 on create and 1000 on update, so the same value was
+  // stored differently depending on how it got there.
+  //
+  // This test asserts against the row in the database, not against what the
+  // stores hand back. The first version compared updateSource's return value
+  // to createSource's, and both of those have already been through
+  // rowToSource, which truncates content_hash to probeLimit('contentHash') on
+  // the way OUT. A 400-character write and a 200-character write therefore
+  // read back identical and the assertion held either way — review reinstated
+  // the exact bug and this test still reported a pass while the stored value
+  // went from 200 characters to 400. An assertion that cannot fail is worse
+  // than no test on a column the per-project dedupe index is built on.
+  const { db, sessions, sources, restore } = withDb();
   try {
+    const limit = sources.probeLimit('contentHash');
     const session = await seedSession(sessions);
-    const long = 'h'.repeat(400);
+    const long = 'h'.repeat(limit * 2);
+
     const created = await sources.createSource(
       { sessionId: session.id, layerRole: 'reference', contentHash: long }, SCOPE_A);
     assert.equal(created.ok, true, created.error);
 
+    const storedRow = () => db.data.get('video_sources')
+      .find((row) => row.id === created.data.id);
+
+    assert.equal(storedRow().content_hash.length, limit,
+      'createSource must store the hash capped at the declared length');
+
     const updated = await sources.updateSource(created.data.id, { contentHash: long }, SCOPE_A);
     assert.equal(updated.ok, true, updated.error);
-    assert.equal(updated.data.contentHash, created.data.contentHash,
-      'create and update must store the same value for the same input');
+
+    assert.equal(storedRow().content_hash.length, limit,
+      'updateSource must store the hash capped at the SAME declared length');
   } finally { restore(); }
 });
 
