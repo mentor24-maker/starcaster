@@ -10,7 +10,7 @@ import type {
   BuilderTemplateSection
 } from "@/lib/builder-template";
 import { repositoryEditingSessionKeyFromFocus } from "@/lib/builder-repository-save-session";
-import { describeUsage, type BlockUsage } from "@/lib/shared-block-usage";
+import { describeUsage, EMPTY_USAGE, type BlockUsage } from "@/lib/shared-block-usage";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createDefaultBackgroundSettings, createEmptyModule, normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -1537,6 +1537,18 @@ function SavedSectionsTable({
                             cellModules={cellModules}
                             editorDevice="browser"
                             expandedModuleIds={editingSectionExpandedModuleIds}
+                            isCanonicalMaster
+                            // `?? EMPTY_USAGE` because the index only creates an
+                            // entry for a section it actually FOUND on a page,
+                            // so a master nothing follows comes back undefined.
+                            // Undefined means "not counted" further down, which
+                            // renders the alarming "saving rewrites this section
+                            // on every page that follows it" -- while the Used In
+                            // column in the same table row says "Not used yet".
+                            // Here the index really was built from every page,
+                            // so undefined genuinely means zero, and saying zero
+                            // is the honest answer.
+                            canonicalUsage={savedSectionUsage.get(section.id) ?? EMPTY_USAGE}
                             isCollapsed={editingSectionCollapsed}
                             key={editingSection.id}
                             products={products}

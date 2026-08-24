@@ -6555,3 +6555,91 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   background: var(--warn-notice-bg, #fdf0d5);
   color: var(--warn-notice-text, #8a5a00);
 }
+
+/* ==============================================================
+   BLOCK STATE CHIP + LINEAGE LINE (Sync 6a)
+   ==============================================================
+   The block header used to answer "what is this thing a copy of?" in
+   fragments — a "(canonical)" tag, a "Changed" tag beside it, an "Unlinked"
+   tag somewhere else — and never answered "how far does saving it reach?"
+   at all. One chip and one line replace all of that.
+
+   The header title becomes two stacked rows rather than one, so the chip can
+   change width (Following / Changed / Independent / Original are four
+   different strings) without the lineage line beneath it moving. The chip is
+   ALSO given one width for every state, because a header that twitches when
+   a section drifts reads as a bug even when it is telling the truth. */
+.builder-react-root .builder-section-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  /* Without this a long master name in the lineage line refuses to shrink and
+     pushes the section's action buttons off the right edge. */
+  min-width: 0;
+}
+
+.builder-react-root .builder-section-title-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-block-state-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 92px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+/* The original is the thing everything else follows, so it is the one state
+   that reads as a claim rather than a status. */
+.builder-react-root .builder-block-state-chip-original {
+  background: var(--accent-subtle, #e6effa);
+  color: var(--accent-strong, #24527f);
+}
+
+.builder-react-root .builder-block-state-chip-following {
+  background: var(--ok-notice-bg, #e6f4ea);
+  color: var(--ok-notice-text, #1f6b3a);
+}
+
+/* Changed is the only state a push silently skips, so it is the only one
+   allowed to look like a warning. */
+.builder-react-root .builder-block-state-chip-changed {
+  background: var(--warn-notice-bg, #fdf0d5);
+  color: var(--warn-notice-text, #8a5a00);
+}
+
+.builder-react-root .builder-block-state-chip-independent {
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-block-lineage {
+  max-width: 100%;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 500;
+  line-height: 1.4;
+  /* The section header is dark in BOTH its collapsed and expanded states — its
+     title renders white either way — so the muted INK token is the wrong
+     family here and left the line nearly invisible on the teal. This is the
+     same value the edit hint beside the title already uses. */
+  color: rgba(255, 255, 255, 0.82);
+  /* Truncate rather than wrap: a second wrapped line would change the header's
+     height per section and stagger the whole workspace (UI_RULES T10). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
