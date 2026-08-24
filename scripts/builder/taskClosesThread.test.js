@@ -89,19 +89,54 @@ test('repo_tidy imports and actually calls isTaskOpen', () => {
 });
 
 test('a closed task can override the shipped-only worktree gate, an unknown one cannot', () => {
-  // The two decision lines: worktree removal, then branch deletion.
+  // The two decision lines: worktree removal, then branch deletion. Matched on
+  // the `!closedTask &&` guard rather than on the whole line, because both
+  // gates gained a `skipped.push(...)` on 2026-08-23 (they used to `continue`
+  // silently) and the shape will keep moving. What must not move is that a
+  // closed task can still get past a not-shipped state.
   assert.match(
     repoTidyCode,
-    /if \(!closedTask && \(!state \|\| state\.state !== 'shipped'\)\) continue;/,
+    /if \(!closedTask && \(!state \|\| state\.state !== 'shipped'\)\)/,
     'closedTask must be able to pass the gate even when state is not shipped'
   );
   assert.match(
     repoTidyCode,
-    /if \(!closedTask && \(!state \|\| state\.state === 'active'\)\) continue;/,
+    /if \(!closedTask && \(!state \|\| state\.state === 'active'/,
     'closedTask must be able to pass the branch-delete gate even when state is active (unshipped)'
   );
   // 'unknown' must never satisfy `=== 'closed'`, so it can never take either path.
   assert.match(repoTidyCode, /taskStates\.get\([\w.]+\)\s*===\s*'closed'/);
+});
+
+test('neither gate skips silently — every branch it passes over is named', () => {
+  // DOCTRINE 3.11: a skip that does not report is how a sweep gives a false
+  // all-clear. On 2026-08-22 the ecosystem-svg worktree was passed over four
+  // times and never once appeared in the output, so "Left alone: <other
+  // things>" read as "nothing left to do".
+  // A fixed window after each gate, not `[^}]+` — a template literal in the
+  // message body carries its own `}` and would cut the window short.
+  const starts = [...repoTidyCode.matchAll(/if \(!closedTask && \(!state/g)].map((m) => m.index);
+  assert.equal(starts.length, 2, 'the two decision gates should both be found');
+  for (const start of starts) {
+    const gate = repoTidyCode.slice(start, start + 500);
+    assert.match(gate, /skipped\.push/, 'a gate that passes a branch over must say why');
+    assert.match(gate, /state\.reason/, 'and the reason comes from the classifier, not a guess');
+    assert.doesNotMatch(
+      gate.slice(0, gate.indexOf('skipped.push')),
+      /continue;/,
+      'nothing may `continue` before the report is pushed'
+    );
+  }
+});
+
+test("an 'unknown' branch state can never be deleted", () => {
+  // 'unknown' means no signal could answer. Leaving it alone is the only safe
+  // reading — 'active' would merely be wrong, 'shipped' would delete work.
+  assert.match(
+    repoTidyCode,
+    /state\.state === 'unknown'/,
+    'the branch-delete gate must exclude unknown explicitly'
+  );
 });
 
 test('a closed-task deletion is logged distinctly from an ordinary shipped one', () => {
