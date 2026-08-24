@@ -35,6 +35,35 @@ npm run node:owns -- loop-build
     safe. The message says exactly what to type to fix it (one line, once per
     machine). `npm run node:whoami` shows the whole picture.
 
+## Then: is the merge side already full?
+
+Branch protection is `strict: true`, so a branch must be current with `main` to
+merge — which means **every merge invalidates every other open branch**. With N
+PRs open, each merge dates N-1 branches, each needing its own catch-up and its
+own CI run. On 2026-08-23 with 24 open, a single merge dated 23 branches and
+the relay spent most of its work re-catching-up branches that went stale again
+before it could use them.
+
+So building faster than the merge side can absorb does not ship anything
+sooner. It just rots, and rotting costs real work.
+
+```bash
+npm run clickup -- wip-check
+```
+
+*   **exit 0** — room to claim. Carry on.
+*   **exit 3** — the cap is reached. **Claim nothing.** Report the line it
+    printed and finish the pass **successfully** — this is a normal outcome,
+    the same shape as `node:owns` saying another machine owns the job. Write
+    NOTHING to ClickUp: no status, no comment, no Loop note. A capped pass
+    leaves the queue exactly as it found it, and says so once, not per ticket.
+*   **exit 1** — the count could not be read. It proceeds deliberately rather
+    than stopping all work on a transient `gh` failure, but the pass is
+    unbounded by the cap — say so in the run report.
+
+The cap is `DEFAULT_WIP_CAP` in `scripts/builder/wipCap.js`, with the reasoning
+beside it. `CLAUDE_LOOP_WIP_CAP` overrides it for experiments.
+
 ## ClickUp access: use the direct script, not the connector
 
 Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
