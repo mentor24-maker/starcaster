@@ -16,6 +16,50 @@ And if it cannot read those pages, it does not send. "I could not tell" is not
 the same as "yes" — the report is already saved and already in the queue either
 way, so the safe thing to do with an unanswerable question is nothing, loudly
 logged. (#PR)
+## 2026-08-24 — The catch-up stops turning green branches red (#420)
+
+Yesterday a change was made so the merge robot stops giving up on branches that
+only *looked* like they clashed. It worked — and it introduced a smaller problem
+of its own, which showed up last night when it turned three approved, passing
+branches red.
+
+Some of our web pages carry a little stamp against each script and stylesheet, so
+browsers know when to fetch a fresh copy instead of reusing an old one. When two
+branches both change a page, those stamps collide, and we have a tool that sorts
+them out automatically. That tool is right when only the page text moved — and
+wrong when the script itself changed underneath, because it puts back the stamp
+for the *old* version of the script. Nothing rebuilds, and the safety check that
+compares the stamps against a fresh build fails.
+
+The real mistake was what the robot treated as permission to push: it asked "did
+this merge cleanly?" when the question it needed was "would a fresh build produce
+these same stamps?" Those are not the same question.
+
+It now checks whether the merge pulled in a change to anything behind one of
+those stamps. If it did, it stops and says exactly what to run, instead of
+pushing and letting the safety check discover it twenty minutes later. When
+nothing behind a stamp moved — which is most of the time — nothing changes and
+nothing gets slower.
+## 2026-08-24 — The build robot stops forgetting to fill in a number (#423)
+
+Every piece of work here gets a short plain-English note written for you, and
+each note ends with a link to the change it describes. The trouble is the note
+gets written *before* that change has a number — so it goes in with a
+placeholder, and somebody has to come back and fill it in afterwards.
+
+Three times yesterday, nobody did. Each time the safety check caught it and
+turned the build red, which cost a full round of checks and a review that
+reported nothing about the actual work.
+
+The check was doing its job. The order of operations was wrong. Filling the
+number in was a step that had to be *remembered*, at the exact moment the
+interesting work is finished and everything feels done — and a step that has to
+be remembered is a step that gets missed.
+
+It now happens automatically, at the one moment the number first exists. It
+only ever touches the newest note, so a note belonging to somebody else's
+unfinished work is never stamped with the wrong number, and it commits that one
+file rather than sweeping up whatever else happens to be sitting in the folder.
 ## 2026-08-24 — The Table editor is finally being checked (#427)
 
 There is an automatic check that opens every settings panel in a real browser
@@ -128,7 +172,7 @@ it comes out clean, the branch is caught up and the checks re-run. If anything
 genuinely overlaps, it hands over exactly as before — and now says which file,
 so nobody has to work that out again.
 
-It still never resolves a conflict, and it still never force-pushes. (#PR)
+It still never resolves a conflict, and it still never force-pushes.
 
 # Work Log
 
