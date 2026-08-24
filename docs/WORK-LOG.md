@@ -1,3 +1,26 @@
+## 2026-08-23 — The relay stops crying wolf about merge conflicts
+
+Twelve times in one day, the robot that merges your approved work gave up and
+said "this branch conflicts with main, a human needs to sort it out". Every
+single time, it merged here with nothing to sort out. Each false alarm parked a
+merge you had already said yes to.
+
+The cause is a quirk worth knowing. Four of our HTML files carry little version
+stamps that change every time anything is rebuilt, so any two branches collide
+there even when neither touched a word of the actual page. We wrote a small
+tool that fixes those automatically — but git flatly refuses to run a tool like
+that from a downloaded copy of a project, for good security reasons, so it only
+exists on our own machines. **GitHub cannot run it.** GitHub sees two different
+version stamps on one line, calls it a conflict, and the relay believed it.
+
+So the relay now asks the machine it is standing on instead of taking GitHub's
+word. It tries the merge for real, in a scratch folder that touches nothing. If
+it comes out clean, the branch is caught up and the checks re-run. If anything
+genuinely overlaps, it hands over exactly as before — and now says which file,
+so nobody has to work that out again.
+
+It still never resolves a conflict, and it still never force-pushes. (#PR)
+
 # Work Log
 
 Plain-English record of work shipped through the development loop
@@ -39,6 +62,169 @@ which tells a member of the public nothing they can act on. And the tests that
 cover this module used to check the "send" path while pretending to be in
 preview, which is exactly the confusion that hid the bug; they now run against
 a real page, with separate tests holding the preview side down.
+## 2026-08-23 — The guard against touching the live branch had a gap (#397)
+
+There is a rule here that an automated helper must never edit files directly in
+the main folder — the one wired to the live site. There is a guard enforcing it,
+and tonight something slipped past.
+
+What happened: a build session was working in its own private copy, as it should
+be. Between one command and the next, its working folder silently reverted to
+the main one. The next command used a short filename, so an edit intended for
+the private copy landed in the live folder instead. It was spotted immediately
+and undone; the folder was clean again within a minute, nothing was sent
+anywhere and the live site never saw it. No harm done. **The guard staying
+silent is the part worth fixing.**
+
+The reason is almost embarrassing in hindsight. There are many ways to write a
+file, and the guard recognised only a few of them. It knew the ones that look
+like classic command-line plumbing, and it did not know the one that was used —
+a perfectly ordinary way to make a multi-line edit that simply was not on its
+list. Nor several close relatives. Each is the same act spelled differently, and
+the guard knew only the spellings someone had happened to think of.
+
+That is the second time in one night the same shape of bug has turned up: a
+guard built out of *patterns*, protecting a rule that is really about *meaning*.
+The other one let an automated helper overwrite branch history despite four
+rules forbidding it. Both are now closed.
+
+There was a comic second half. When the problem was written up as a ticket, the
+guard **refused to let the ticket be written** — because the ticket quoted an
+example of a forbidden command as documentation. It could not tell an
+instruction from a description of one. That is fixed too, by paying attention to
+who a block of text is actually being handed to: text given to a program is
+treated as a program, text being saved as notes is treated as notes. Writing
+about a rule should never trip the rule, or people quietly stop writing the
+examples down.
+
+One deliberate restraint: the ticket argued for making the guard far more
+suspicious — refuse anything that mentions a filename near anything that writes.
+On reading the surrounding code that looked like the wrong trade, and it was not
+done. There is a second, stronger check that runs before anything can reach the
+live site, and tonight's incident is evidence for that arrangement rather than
+against it: the damage was zero precisely because that later step never
+happened. The specific gaps are closed; the guard has not been turned into
+something that cries wolf.
+## 2026-08-23 — starcaster.pro wears its own icon again (#409)
+
+You reported that starcaster.pro was showing the favicon of whichever client you
+happened to have selected, rather than the Starcaster one.
+
+There are really two websites here. There is your admin app, which lives at
+starcaster.pro, and there is each client's published site, which lives on that
+client's own domain. Their tab icons should differ — yours should always be
+Alphire's, theirs should always be their own — and the two had collapsed into a
+single answer.
+
+The admin app was deliberately swapping its tab icon to match the selected
+project. That went in back in June, described at the time as showing the icon
+"per active workspace", which sounds sensible right up until you notice where
+the admin app actually runs: only ever at starcaster.pro. A client's domain is
+served entirely different files. So the swap was never correct anywhere — it
+simply meant the one tab that should always say Alphire wore whichever client
+was open.
+
+It now always shows the Starcaster icon.
+
+Nothing changed for clients. Their sites get their icons by a completely
+separate route on the server, and there is now a check exercising that, because
+breaking the client side while fixing yours is the obvious way to get this
+wrong. Choosing a favicon for a project in Settings still works and still
+matters — that picture is what their published site uses. Only your admin tab
+stops borrowing it.
+## 2026-08-23 — The rule against force-pushing now actually holds (#394)
+
+Some background first. "Force-pushing" means overwriting the history of a
+branch — replacing what is stored with a different version, rather than adding
+to it. It is the one git operation that can destroy work, so you long ago told
+the system never to do it, and wrote four rules saying so.
+
+Overnight, three unattended build runs did it anyway. Nothing was lost — each
+one was rewriting its own branch, seconds old, that nobody else had touched.
+But the rule not holding is the finding, and the only reason anyone knew is
+that all three runs owned up to it afterwards.
+
+Here is why it slipped. Your rules describe commands that *start* with the words
+"git push". The way anything in this project actually pushes starts with a
+short bit of setup first — a setting that tells git where to find the GitHub
+password, which it cannot otherwise reach from an automated session. So the
+command began with that setup rather than with "git push", and every one of the
+four rules looked straight past it. Nobody invented that as a way around you;
+it is simply how this repo has always pushed. The house habit walked through
+the house rule.
+
+Three other ways in turned out to be open too, including one where the command
+contains no "force" anywhere — a single "+" character does the same job.
+
+The fix stops matching the words and reads the command instead. It takes the
+command apart, sets the settings and options aside, and asks two plain
+questions: is this a push, and does anything in it overwrite? There is no
+wording to word around, so the same gap cannot reopen in a new spelling. It
+also refuses even when the rule file cannot be read at all — "I could not
+check" must never come out as "go ahead" — and the one switch that used to
+quiet these warnings can no longer quiet this one.
+
+The last piece removes the temptation entirely. All three runs wanted to
+force-push for the same small reason: they wrote this very log entry, opened
+the pull request, then went back to stamp its number into the entry — and
+changing something already sent means overwriting it. The build instructions
+now say to add the log entry afterwards as its own separate step, with the
+number already in hand. This entry was written that way.
+## 2026-08-23 — Groundwork for downloading a YouTube video, not just reading it (#392)
+
+The Acquire screen can already pull a YouTube video's title, description and
+transcript. What it has never been able to do is keep the video itself — the
+.mp4 and the .mp3. That work was written back in July and then sat on a shelf
+as one large piece: a screen, a download service, a database change and a
+deployment, all tangled together. It has now been split into four smaller
+pieces that can each be finished and checked on their own. This is the first
+of them.
+
+This piece is the plumbing behind the screen, and it deliberately does nothing
+visible yet. It adds the two web addresses the screen will call — one to start
+a download, one to ask how it is going — plus a new entry under Settings >
+APIs where the download service's address and password will eventually go, and
+the database change that will remember where each finished file ended up.
+
+The important part is what happens while the rest is still missing. Asking for
+a download today gets a plain "the media worker is not configured — add its
+URL and shared secret under Settings > APIs" rather than an error page or a
+spinner that never stops. Adding the video's files to an ordinary acquire is
+opt-in, and if that half fails it is reported alongside the title and
+transcript rather than throwing them away — you keep what you already paid
+for. And because the database change has not been run yet, the code treats a
+not-yet-existing column as "cannot save this, carry on" instead of letting it
+break every other thing the video list does.
+
+Still to come: the screen itself, the download service, and then running the
+database change and deploying — that last one needs Dane's hands, because it
+involves a password only he should ever see.
+## 2026-08-23 — The job that listens for your answers moved to the machine that stays awake (#410)
+
+When you reply on a ticket, a job called the relay is what carries your answer
+forward — it reads your comment, posts it to the party line, and hands the
+ticket back to the machines so work resumes. It is the only automatic path from
+"Dane replied" to "the loop carries on".
+
+That job was running on the laptop. The laptop closes. So on the morning of the
+23rd you answered two tickets at 06:19, and at 15:30 both were still sitting in
+"Needs your input" — one of them with every blocker already cleared. Nothing had
+broken and nothing had errored. Your answers had simply landed somewhere nothing
+was listening.
+
+The relay now lives on the Mac Mini, which does not close, alongside the two
+loops that were moved there for the same reason last week. It still runs in
+exactly one place — two copies would post your messages to the party line twice
+— and the register that decides which machine that is now records why, so the
+next person to wonder does not have to work it out from scratch.
+
+Two smaller things came with it. The schedule used to exist only as something
+somebody had typed by hand on one Mac, written down nowhere, so "is it still
+running on the old machine?" could only be answered by going and looking; there
+is now a single command that installs it, removes it, or reports what it finds.
+And because nobody sits at the Mini, nothing there was ever pulling down new
+code — the relay now brings its own copy up to date before each run, carefully,
+never touching work in progress.
 
 ---
 
