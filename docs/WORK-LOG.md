@@ -1,3 +1,27 @@
+## 2026-08-23 — "Your approval still stands" is now actually true (#417)
+
+When you comment "merge" on a finished ticket, a robot merges it for you within
+the hour. If the branch clashes with newer work, it stops — untangling a clash
+by guesswork is exactly how good code gets wrecked — and left you a note saying
+your approval still stood and it would go through on its own.
+
+It would not. The reminder the robot wrote to itself, right beside that note,
+said "done with this one, never look at it again". So your yes was thrown away
+at the moment you were told it was safe. On one ticket you said "merge" twice,
+four hours apart, and got the same dead end both times.
+
+Two things changed. Your approval now survives a clash: a person still has to
+untangle the branch, but once they do, the next pass merges it on the word you
+already gave. And the note you read is now written by the same piece of code as
+the reminder the robot keeps, so the two can never again promise different
+things — there is a test that walks every message this job can send you and
+fails if one says your approval carries over while the other says it does not.
+
+The tickets already stuck this way free themselves; there is nothing to run.
+A ticket that really is still clashing now goes quiet rather than repeating
+itself hourly, and shows up in the run summary as "unchanged" so a silent pass
+still reads as stuck rather than clean.
+
 ## 2026-08-23 — The relay stops crying wolf about merge conflicts
 
 Twelve times in one day, the robot that merges your approved work gave up and
