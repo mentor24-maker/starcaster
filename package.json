@@ -82,6 +82,7 @@
     "sql:handoff": "node scripts/sql_handoff.cjs",
     "db:refresh": "doppler run --project starcaster --config dev --no-check-version -- node scripts/db_refresh.mjs",
     "db:use": "node scripts/db_use.mjs",
+    "env:local": "node scripts/db_use.mjs local",
     "node:whoami": "node scripts/node_role.mjs whoami",
     "node:owns": "node scripts/node_role.mjs owns",
     "schema:snapshot": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs snapshot",
