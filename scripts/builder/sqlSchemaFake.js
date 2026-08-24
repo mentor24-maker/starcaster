@@ -246,6 +246,81 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     return picked;
   }
 
+  /**
+   * Apply `order` the way PostgREST does.
+   *
+   * WHY THIS EXISTS (2026-08-24). The fake parsed `order` into its params and
+   * then never used it. So every ordering assertion built on this fake was
+   * asserting nothing: review pointed `listSourcesForSession` at
+   * `order=no_such_column.asc` — which real PostgREST rejects with a 400 — and
+   * all 20 tests still passed. Reversing asc to desc also still passed.
+   *
+   * Nothing was broken in production, because real PostgREST does order
+   * correctly. It matters because this fake is deliberately reusable
+   * infrastructure for Studio slices 2/8-8/8, and a later slice with a
+   * genuinely wrong sort would have shipped green.
+   *
+   * Syntax: `col[.asc|.desc][.nullsfirst|.nullslast]`, comma-separated.
+   * Null placement follows Postgres when unstated — ASC puts nulls last,
+   * DESC puts them first.
+   */
+  function parseOrder(tableName, spec) {
+    const table = schema.tables.get(tableName);
+    const keys = [];
+    for (const part of decodeURIComponent(String(spec || '')).split(',')) {
+      const clean = part.trim();
+      if (!clean) continue;
+      const bits = clean.split('.');
+      const column = bits.shift();
+      if (!table.columns.has(column)) {
+        // Real PostgREST refuses rather than silently ignoring — and silently
+        // ignoring is exactly how this hole stayed open.
+        return { error: `column "${column}" does not exist` };
+      }
+      let dir = 'asc';
+      let nulls = '';
+      for (const bit of bits) {
+        const b = bit.toLowerCase();
+        if (b === 'asc' || b === 'desc') dir = b;
+        else if (b === 'nullsfirst' || b === 'nullslast') nulls = b;
+        else return { error: `unknown order option "${bit}"` };
+      }
+      if (!nulls) nulls = dir === 'asc' ? 'nullslast' : 'nullsfirst';
+      keys.push({ column, dir, nulls });
+    }
+    return { keys };
+  }
+
+  function compareValues(a, b) {
+    if (typeof a === 'number' && typeof b === 'number') return a - b;
+    const sa = String(a);
+    const sb = String(b);
+    return sa < sb ? -1 : sa > sb ? 1 : 0;
+  }
+
+  function orderRows(rows, keys) {
+    // Stable: a tie falls back to the original order, matching a real query
+    // with no further sort key.
+    return rows
+      .map((row, index) => ({ row, index }))
+      .sort((x, y) => {
+        for (const { column, dir, nulls } of keys) {
+          const a = x.row[column];
+          const b = y.row[column];
+          const aNull = a === null || a === undefined;
+          const bNull = b === null || b === undefined;
+          if (aNull || bNull) {
+            if (aNull && bNull) continue;
+            return (aNull ? 1 : -1) * (nulls === 'nullslast' ? 1 : -1);
+          }
+          const cmp = compareValues(a, b);
+          if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
+        }
+        return x.index - y.index;
+      })
+      .map(({ row }) => row);
+  }
+
   function filterRows(tableName, params) {
     let rows = data.get(tableName).slice();
     for (const [key, value] of params.get('filters') || []) {
@@ -254,6 +329,15 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       rows = rows.filter((row) => String(row[key]) === match[1]);
     }
     if (params.has('or')) rows = rows.filter((row) => matchesOr(row, params.get('or')));
+
+    // Order BEFORE limit, as SQL does — limiting first would return a
+    // different set of rows, not merely a differently-sorted one.
+    if (params.has('order')) {
+      const parsed = parseOrder(tableName, params.get('order'));
+      if (parsed.error) return { error: parsed.error };
+      rows = orderRows(rows, parsed.keys);
+    }
+
     const limit = Number(params.get('limit'));
     if (Number.isFinite(limit) && limit > 0) rows = rows.slice(0, limit);
     return rows;
@@ -269,6 +353,9 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
 
     if (method === 'GET') {
       const rows = filterRows(tableName, params);
+      // An unknown order column is a 400 from real PostgREST, not an ignored
+      // parameter — the whole point of the fix.
+      if (rows && rows.error) return { ok: false, status: 400, error: rows.error };
       const projected = [];
       for (const row of rows) {
         const picked = selectColumns(tableName, row, params.get('select'));
@@ -306,6 +393,7 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
 
     if (method === 'PATCH') {
       const rows = filterRows(tableName, params);
+      if (rows && rows.error) return { ok: false, status: 400, error: rows.error };
       const updated = [];
       for (const row of rows) {
         for (const key of Object.keys(body || {})) {
