@@ -62,14 +62,62 @@ ${bold('npm run db:use')}          ${dim('- just say which one I am on.')}
 `);
 }
 
-function readEnv() {
+/**
+ * The settings a brand-new work folder needs, and NOTHING else.
+ *
+ * WHY THIS IS NOT A COPY OF THE MAIN FOLDER'S FILE
+ * That file carries eighty-odd live API keys. Copying it is the advice this
+ * script used to give, and it is advice an agent may not follow: agents never
+ * handle live credentials. So the one gate CI cannot run - `check:panels`,
+ * which needs a logged-in app, which needs a database - was also the one gate
+ * an unattended pass could not run. Three tickets hit that on 2026-08-23.
+ *
+ * The three Supabase lines are filled in by `localSettings()` from
+ * `supabase status`, so they are the development defaults printed on every
+ * machine. They are not secrets and they are not the production values.
+ *
+ * A folder that later needs one real key gets that ONE line copied across by
+ * hand, by the operator. Never the whole file.
+ */
+function seedTemplate() {
+  return `# Local development settings for this work folder.
+#
+# Written by \`npm run env:local\`. Everything below points at the Supabase
+# running on THIS machine. Its keys are the development defaults that
+# \`supabase start\` prints identically on every machine - not secrets, and not
+# the production values. Nothing here reaches production, and .gitignore keeps
+# this file out of git.
+#
+# Deliberately absent: the live API keys the main folder carries. A work folder
+# does not need them to build, test, or look at the app. If the one feature you
+# are on needs one, copy that single line across by hand.
+
+# Which database this folder talks to. \`npm run db:use\` switches it, and the
+# strip across the top of the app says which one is live.
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_KEY=
+
+# Production scopes every query to one tenant. Match it, or a bug that only
+# shows up under scoping will not show up here.
+STRICT_PROJECT_SCOPE=true
+
+# Where the app believes it is served from.
+PUBLIC_APP_ORIGIN=http://localhost:3001
+
+# PORT is deliberately unset. Every worktree wants 3001, the first one started
+# wins, and the rest fail quietly - which is how a browser check gets driven
+# against another thread's code. Give this folder its own:
+#     PORT=3057 node server.js
+`;
+}
+
+/** The file as it stands, or null if this folder has never had one. */
+function readEnvOrNull() {
   try {
     return fs.readFileSync(ENV_FILE, 'utf8');
   } catch (_) {
-    die(
-      'This folder has no .env.local, so there is nothing to switch.',
-      'cp ../../../.env.local .      (copies your settings from the main folder)',
-    );
+    return null;
   }
 }
 
@@ -164,7 +212,26 @@ function confirm(question) {
 }
 
 const target = String(process.argv[2] || '').toLowerCase();
-const text = readEnv();
+let text = readEnvOrNull();
+// A folder with no settings file at all is a THIRD state, not a failure of the
+// switch. Which of the three things you asked for decides what it means.
+const bootstrapping = text === null && target === 'local';
+if (text === null) {
+  if (bootstrapping) {
+    text = seedTemplate();
+  } else if (!target) {
+    // "Which database am I on?" has a true answer here: none.
+    process.stdout.write(`\n  Currently on: ${LABELS.unknown()}\n`);
+    process.stdout.write(`  ${yellow('Fix:')} npm run env:local   ${dim('- writes one pointed at this machine')}\n`);
+    usage();
+    process.exit(0);
+  } else {
+    die(
+      'This folder has no .env.local, so there is nothing to point at the live database.',
+      'npm run env:local      (writes one pointed at the database on this machine)',
+    );
+  }
+}
 const current = describe(valueOf(text, 'SUPABASE_URL'));
 
 if (!target) {
@@ -202,6 +269,10 @@ if (after.kind !== target) {
   die(`Wrote the settings, but this folder still reads as ${after.kind}. Nothing is switched.`);
 }
 
+if (bootstrapping) {
+  process.stdout.write(`\n  ${green('Wrote .env.local')} ${dim('- this folder can reach a database now.')}\n`);
+  process.stdout.write(`  ${dim('No live credential is in it. See the comments at the top of the file.')}\n`);
+}
 process.stdout.write(`\n  Now on: ${after.label}\n`);
 process.stdout.write(`  ${dim(values.SUPABASE_URL)}\n\n`);
 if (target === 'local') {
