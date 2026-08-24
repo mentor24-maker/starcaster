@@ -163,5 +163,27 @@ test('the gate runs BEFORE anything is written, on both doors', () => {
 test('the merge marker has exactly one definition, shared by writer and reader', () => {
   const declared = SCRIPT.match(/const MERGE_MARKER = /g) || [];
   assert.equal(declared.length, 0, 'clickup_direct.mjs must import MERGE_MARKER, not re-declare it');
-  assert.match(SCRIPT, /MERGE_MARKER, latestMergeMarker \} = mergeOnComment/);
+  // Matched against the destructuring BLOCK rather than one literal line: the
+  // import grew to several lines when the notice builders joined it, and a
+  // regex pinned to the old one-line shape failed on a change that was purely
+  // formatting. What must stay true is that the name comes FROM mergeOnComment.
+  const imported = /\}\s*=\s*mergeOnComment;/.exec(SCRIPT);
+  assert.ok(imported, 'clickup_direct.mjs must destructure from mergeOnComment');
+  const block = SCRIPT.slice(SCRIPT.lastIndexOf('const {', imported.index), imported.index);
+  for (const name of ['MERGE_MARKER', 'latestMergeMarker']) {
+    assert.ok(block.includes(name), `${name} must be imported from mergeOnComment`);
+  }
+});
+
+test('every comment the merge path posts is built beside its marker, not inline', () => {
+  // Task 86bbk0g4u: the hand-off body and the marker it was written with made
+  // opposite promises for a month because they lived in two different files.
+  // The bodies now come from mergeOnComment, where a test can compare them.
+  for (const builder of ['refusalNotice', 'conflictHandOffNotice', 'mergedNotice']) {
+    assert.ok(SCRIPT.includes(builder), `${builder} must be used by the merge step`);
+  }
+  assert.ok(
+    !/Your approval is still standing/.test(SCRIPT),
+    'the approval promise must not be typed inline in clickup_direct.mjs — it belongs with the marker',
+  );
 });
