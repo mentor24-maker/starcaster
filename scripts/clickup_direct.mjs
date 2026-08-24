@@ -62,6 +62,7 @@ import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
+import wipCap from './builder/wipCap.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
@@ -225,6 +226,9 @@ function usage(code = 2) {
   console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
   console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
   console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
+  console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
+  console.error('                                             Reads only; a capped pass writes nothing.');
   console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
@@ -693,6 +697,34 @@ if (cmd === 'whoami') {
   if (!out.res.ok) die('send chat message', out);
   console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
   reportLimits(out.res);
+
+} else if (cmd === 'wip-check') {
+  // Is the merge side already full? Exit codes mirror `node:owns`:
+  //   0 = room to claim   3 = capped, a normal decline   1 = could not tell
+  //
+  // Reads only. A capped pass must leave the queue exactly as it found it, so
+  // nothing here writes to ClickUp — no status, no comment, no Loop note.
+  const cap = wipCap.resolveCap(process.env);
+  const repoArg = arg('repo') || '';
+  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state'];
+  if (repoArg) listArgs.push('--repo', repoArg);
+
+  const out = gh(listArgs);
+  if (!out.ok) {
+    const undecided = wipCap.undeterminedDecision(out.stderr.slice(0, 200) || 'gh failed');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+  let prs;
+  try { prs = JSON.parse(out.stdout); } catch {
+    const undecided = wipCap.undeterminedDecision('gh returned output that is not JSON');
+    console.error(undecided.message);
+    process.exit(undecided.code);
+  }
+
+  const decision = wipCap.wipDecision({ prs, cap });
+  console.log(decision.message);
+  process.exit(decision.code);
 
 } else if (cmd === 'queue') {
   const list = arg('list');

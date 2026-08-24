@@ -1,3 +1,27 @@
+## 2026-08-24 — The build robot stops piling up work nobody can merge (#PR)
+
+There is a safety rule on this project that a branch has to be completely up to
+date with the live code before it can be merged. That rule is right — it means
+the tests that passed ran against exactly what goes live, and going live here
+means going straight onto client sites.
+
+It has a hidden cost, though, and the cost grows fast. Every merge makes every
+*other* waiting branch out of date. With two dozen pieces of work waiting, a
+single merge leaves twenty-three of them needing to be brought up to date
+again — and each one needs its checks re-run. Yesterday the merge robot spent
+most of its time refreshing branches that had already gone stale again before
+it could use them.
+
+Which means the obvious fix — build faster, run more builders — makes things
+*worse*, not better. Work built beyond the rate things can actually be merged
+does not arrive sooner. It just sits there going stale, and going stale costs
+real work.
+
+So the builder now stops claiming new work once five pieces are already
+waiting. It says so plainly and finishes the run normally — this is not an
+error, it is the system telling the truth about where the queue actually is.
+Five things genuinely in flight is honest. Two dozen half-finished is not.
+
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
 When you comment "merge" on a finished ticket, a robot merges it for you within
