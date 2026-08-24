@@ -1,4 +1,4 @@
-## 2026-08-24 — Approved work merges in minutes instead of hours (#PR)
+## 2026-08-24 — Approved work merges in minutes instead of hours (#424)
 
 When you comment "merge" on a finished piece of work, a robot picks it up and
 merges it. Merging one takes about three minutes of actual work: bring the
