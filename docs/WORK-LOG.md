@@ -92,6 +92,37 @@ to open. Better to read both properly.
 Found while reviewing the block-state chips shipped earlier today, which is a
 pleasing sort of catch — the feature that tells you how far a save reaches
 turned up a case where the underlying data had stopped saying.
+## 2026-08-22 — Every shared block now says what it is (#387)
+
+The Builder lets one section be shared across many pages: you build a menu
+banner once, and every page that uses it follows along. The trouble was that
+nothing on screen said so. A block header showed a bare "(canonical)" tag, and
+sometimes a "Changed" tag beside it, and that was the whole story — it never
+said what the block was a copy of, and it never said how many pages an edit
+would reach. The only place that lived was in Dane's head.
+
+Each block header now carries a small coloured chip and, under it, one plain
+sentence. The chip says one of four things: **Original** (this is the master —
+saving it rewrites every page that follows), **Following** (a copy that still
+takes updates), **Changed** (a copy someone edited on this page, so the next
+push will skip it unless it is overwritten on purpose), or **Independent** (not
+connected to anything). The sentence beneath names the master and counts the
+reach — `Copy of "2 - Menu Banner" · used on 35 pages` — so the blast radius of
+a save is readable before the save, not discovered after it.
+
+This is a read-only change: nothing it adds can alter a page. The chip only
+describes state that already existed, and a test pins that promise by failing
+if rendering a block header calls a single one of the editor's save paths. The
+buttons that act on these states — take the original, disconnect, reconnect —
+are the next two pieces of this work.
+
+Two things were found while building it. The block header is dark, so the new
+line had to borrow the header's own white rather than the app's normal muted
+grey, which was nearly invisible on the teal. And the test fixture had been
+storing pages in a shape the server accepts but quietly strips lineage from,
+which meant a canonical section seeded for a check came back looking
+unconnected — it now writes the shape production actually stores, so a check
+over shared sections is measuring the real thing.
 ## 2026-08-23 — Two instructions that contradicted each other, quietly (#399)
 
 The automated build helper needs somewhere to work. For each task it makes a
