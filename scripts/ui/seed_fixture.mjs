@@ -46,7 +46,7 @@ const supabaseUrl = String(process.env.SUPABASE_URL || '');
 if (!/localhost|127\.0\.0\.1/.test(supabaseUrl)) {
   console.error(
     `Refusing to seed: SUPABASE_URL is "${supabaseUrl || '(unset)'}", which is not local.\n` +
-    'This script writes rows and must only ever touch the local stack. Copy .env.local into the worktree first.'
+    'This script writes rows and must only ever touch the local stack. Run `npm run env:local` in this folder first.'
   );
   process.exit(1);
 }
