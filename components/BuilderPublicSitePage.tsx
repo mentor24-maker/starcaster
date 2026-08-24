@@ -411,6 +411,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           applyThemePageMargins={false}
           suppressShellBackground
           projectId={projectId}
+          liveSite
         />
       </BuilderViewportShellLayout>
     </>

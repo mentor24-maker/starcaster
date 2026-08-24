@@ -44,6 +44,7 @@ import {
   publicFormFields
 } from "../lib/crmFormStyles.js";
 import { resolveCrmFormStyleSnapshot } from "./builder/builder-crm-form-module-settings";
+import { BugReportModule } from "./builder/builder-bug-report-module";
 import {
   ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
@@ -155,6 +156,13 @@ type BuilderTemplatePreviewProps = {
   emailPreview?: boolean;
   /** When true (Builder /preview), speech bubbles with game/on-load triggers do not auto-fire. */
   previewMode?: boolean;
+  /**
+   * True only when this tree IS a published tenant page (BuilderPublicSitePage).
+   * Modules that render differently on the live site read this instead of
+   * sniffing the DOM for an ancestor class — a child cannot query for an
+   * ancestor that is in its own not-yet-committed render pass.
+   */
+  liveSite?: boolean;
   /** Project ID for contact form submissions on live landing pages. */
   projectId?: string;
   /** When false, page margins are applied by an outer public-site wrapper instead. */
@@ -1215,6 +1223,7 @@ export function BuilderTemplatePreview({
   showShell = true,
   emailPreview = false,
   previewMode = false,
+  liveSite = false,
   projectId = "",
   applyThemePageMargins = true,
   suppressShellBackground = false
@@ -1339,6 +1348,7 @@ export function BuilderTemplatePreview({
       key={section.id}
       overlapsHero={overlapSectionIds.has(section.id)}
       previewMode={previewMode}
+      liveSite={liveSite}
       section={
         joined
           ? { ...section, background: createDefaultBackgroundSettings(), widthMode: "contained" }
@@ -1396,6 +1406,7 @@ export function BuilderTemplatePreview({
               emailPreview={emailPreview}
               key={section.id}
               previewMode={previewMode}
+              liveSite={liveSite}
               projectId={projectId}
               section={section}
               sitePlayerRegistered={sitePlayerRegistered}
@@ -1422,6 +1433,7 @@ function BuilderSectionPreview({
   section,
   emailPreview = false,
   previewMode = false,
+  liveSite = false,
   projectId = "",
   sitePlayerRegistered = false,
   theme,
@@ -1435,6 +1447,7 @@ function BuilderSectionPreview({
   section: BuilderTemplateSection;
   emailPreview?: boolean;
   previewMode?: boolean;
+  liveSite?: boolean;
   projectId?: string;
   sitePlayerRegistered?: boolean;
   theme?: import("@/lib/builder-template").BuilderTheme;
@@ -1755,6 +1768,7 @@ function BuilderSectionPreview({
                     module={module}
                     overlayFlowDecor={isPageOverlayFlowModule || isSectionOverlayModule}
                     previewMode={previewMode}
+                    liveSite={liveSite}
                     projectId={projectId}
                     sitePlayerRegistered={sitePlayerRegistered}
                     theme={theme}
@@ -1776,6 +1790,7 @@ function BuilderModulePreview({
   emailPreview = false,
   overlayFlowDecor = false,
   previewMode = false,
+  liveSite = false,
   projectId = "",
   sitePlayerRegistered = false,
   theme,
@@ -1788,6 +1803,7 @@ function BuilderModulePreview({
   /** Floating image in a full-page overlay row — always visible on the live site. */
   overlayFlowDecor?: boolean;
   previewMode?: boolean;
+  liveSite?: boolean;
   projectId?: string;
   sitePlayerRegistered?: boolean;
   theme?: import("@/lib/builder-template").BuilderTheme;
@@ -2156,6 +2172,10 @@ function BuilderModulePreview({
 
   if (module.type === "admin-nav-link") {
     return <AdminNavLinkPreview settings={module.settings} />;
+  }
+
+  if (module.type === "bug-report") {
+    return <BugReportModule settings={module.settings} previewMode={previewMode} liveSite={liveSite} projectId={projectId} />;
   }
 
   return null;

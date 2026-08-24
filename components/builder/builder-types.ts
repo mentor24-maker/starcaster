@@ -128,6 +128,7 @@ export const modulePaletteGroups: Array<{
   { value: "button", label: "Buttons", icon: "B", description: "Calls to action and navigation links." },
   { value: "contact-form", label: "Contact Forms", icon: "CF", description: "Lead capture forms with simple presets." },
   { value: "crm-form", label: "CRM", icon: "CRM", description: "CRM lead-capture forms linked to the project's contact table." },
+  { value: "bug-report", label: "Bug Report", icon: "🐞", description: "A small floating icon visitors click to report a problem on the page." },
   { value: "player-portal", label: "Player Portal", icon: "PP", description: "Player login and registration on any page." },
   { value: "previous-results", label: "Previous Results", icon: "PR", description: "Only the live previous-poll results panel." },
   { value: "current-poll", label: "Polls", icon: "P?", description: "The current live poll with vote actions." },
@@ -1096,6 +1097,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Admin Login",
     icon: "🔐",
     description: "Login form for project admin team members. Validates credentials and redirects to /admin on success.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "bug-report-default",
+    type: "bug-report",
+    group: "bug-report",
+    label: "Bug Report",
+    icon: "🐞",
+    description: "Floats a small bug icon in a page corner; clicking opens a popup where a visitor describes the problem and attaches screenshots. Visibility can be limited to signed-in clients or staff.",
     name: "",
     text: "",
     settings: {}

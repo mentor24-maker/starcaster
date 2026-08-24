@@ -54,6 +54,7 @@ const { execFileSync, spawnSync } = require('child_process');
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
 const { pickPullRequestCommit, REPIN_SUBJECT } = require('./builder/pullRequestCommit');
+const { waitForChecks } = require('./builder/waitForChecks');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -85,6 +86,44 @@ function run(cmd, argv, { cwd = root, allowFail = false } = {}) {
 function quiet(cmd, argv, { cwd = root } = {}) {
   const result = spawnSync(cmd, argv, { cwd, encoding: 'utf8' });
   return { ok: result.status === 0, out: `${result.stdout || ''}${result.stderr || ''}`.trim() };
+}
+
+/** Block for ms without a busy loop — the CI poll is the only place this runs. */
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+const bucketOf = (check) => String((check && check.bucket) || '').toLowerCase();
+
+/**
+ * The current check list for a PR, as an array (empty = none reported yet).
+ * `--json` gives a stable machine list and, crucially, returns an empty array
+ * rather than a non-zero exit when there are no checks — so "none yet" arrives
+ * here as `[]`, never as a thrown failure. A genuinely broken `gh` call (auth,
+ * network) is different: it stops ship rather than being read as "no checks".
+ */
+function queryPullRequestChecks(prNumber) {
+  const result = spawnSync('gh', ['pr', 'checks', String(prNumber), '--json', 'bucket,name,state'], {
+    cwd: root, encoding: 'utf8',
+  });
+  const stdout = (result.stdout || '').trim();
+  const stderr = (result.stderr || '').trim();
+  // gh exits non-zero when checks are pending or failing, and (older gh) when
+  // there are none at all — but with --json it still prints the list (or `[]`).
+  // So parse stdout first and trust it; only treat a call with NO parseable
+  // output as a real error.
+  if (stdout) {
+    try {
+      const parsed = JSON.parse(stdout);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) { /* fall through to the error path */ }
+  }
+  if (/no checks reported/i.test(stderr)) return [];
+  fail(
+    `Could not read the checks from GitHub (\`gh pr checks\`). Nothing was merged.\n` +
+    `${stderr || 'gh returned no output.'}`
+  );
+  return []; // unreachable; fail() exits.
 }
 
 let step = 0;
@@ -247,15 +286,61 @@ if (DRY) {
 
 /* ------------------------------------------------------------ 6. wait for CI */
 
+// WHY THIS IS A POLL AND NOT `gh pr checks --watch`:
+// `--watch` returns non-zero the instant a branch has ZERO checks — which is
+// exactly the state a branch is in for the first few seconds after a push,
+// before GitHub has registered its workflows. Ship used to read that as a
+// failure and stop, and the operator read "The checks did not pass" for a thing
+// that had not run yet (PRs #356/#358, 2026-08-20). So we wait for the checks to
+// APPEAR (a short grace window) and only then for them to finish, and we never
+// call absence a failure. Decision logic lives in scripts/builder/waitForChecks.
 heading(`Waiting for the checks (up to ${CI_TIMEOUT_MIN} minutes)`);
-const checks = spawnSync('gh', ['pr', 'checks', prNumber, '--watch', '--interval', '20'], {
-  stdio: 'inherit',
-  timeout: CI_TIMEOUT_MIN * 60 * 1000,
+
+const prUrl = `https://github.com/mentor24-maker/starcaster/pull/${prNumber}`;
+let lastReport = '';
+
+const wait = waitForChecks({
+  totalBudgetMs: CI_TIMEOUT_MIN * 60 * 1000,
+  now: () => Date.now(),
+  sleep: sleepMs,
+  queryChecks: () => queryPullRequestChecks(prNumber),
+  onPoll: (state, list, elapsed) => {
+    // One honest progress line per poll, only when the picture changes, so a
+    // 20-minute wait does not scroll — and "none yet" never reads as trouble.
+    const mins = Math.round(elapsed / 60000);
+    let line;
+    if (state === 'none') {
+      line = `    No checks on GitHub yet — this is normal right after a push, still watching (${mins}m).`;
+    } else {
+      const pass = list.filter((c) => bucketOf(c) === 'pass' || bucketOf(c) === 'skipping').length;
+      const pend = list.filter((c) => bucketOf(c) === 'pending').length;
+      const bad = list.filter((c) => bucketOf(c) === 'fail' || bucketOf(c) === 'cancel').length;
+      line = `    Checks: ${pass} passed, ${pend} running, ${bad} failed (${mins}m).`;
+    }
+    if (line !== lastReport) { say(line); lastReport = line; }
+  },
 });
-if (checks.status !== 0) {
+
+if (wait.outcome === 'never_appeared') {
+  fail(
+    `No checks ever appeared on the branch — they usually show within seconds, so this is\n` +
+    `almost always a GitHub delay rather than anything wrong. Nothing was merged; the work\n` +
+    `is safe on the branch. Run \`npm run ship\` again in a moment.\n\n` +
+    `Look at: ${prUrl}`
+  );
+}
+if (wait.outcome === 'timed_out_pending') {
+  fail(
+    `The checks were still running after ${CI_TIMEOUT_MIN} minutes, so nothing was merged.\n` +
+    `They have not failed — they just have not finished. The work is safe on the branch;\n` +
+    `run \`npm run ship\` again once they go green.\n\n` +
+    `Look at: ${prUrl}`
+  );
+}
+if (wait.outcome === 'failed') {
   fail(
     `The checks did not pass, so nothing was merged. The work is safe on the branch.\n` +
-    `Look at: https://github.com/mentor24-maker/starcaster/pull/${prNumber}`
+    `Look at: ${prUrl}`
   );
 }
 

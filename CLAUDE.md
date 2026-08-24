@@ -167,6 +167,14 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     success. Spread the page (`{ ...page, layoutSections: next }`) so
     `pageBackground` and `theme` are not reset, and read the page back after
     writing before you touch the next one.
+14. **A vitest test must not require a generated server lib.** CI runs
+    `npx vitest run` BEFORE `npm run build`, so anything under `lib/builder/`
+    (`template.js`, `document.js` → `./template`, …) does not exist at vitest
+    time — a test reaching it passes locally forever and fails CI forever
+    (PR #343). vitest (`components/**`, `lib/builder-client/**`) tests TS
+    sources only; a test needing a generated lib goes in the node suite
+    (`scripts/builder/*.test.js`, run after the build). Enforced by
+    `check_vitest_generated_lib.cjs`; full story in `docs/DOCTRINE.md` §5.18.
 
 ## Working locally
 
@@ -188,6 +196,31 @@ talking to, `npm run dev` refuses to start against the live one without
 **`db:refresh` costs production disk IO.** Six runs in one day exhausted the
 budget and left every tenant site down on 2026-08-17 (`docs/DOCTRINE.md` §1.5).
 Weekly is the rhythm; `doctor` says when you have drifted.
+
+## Some jobs run on exactly one machine
+
+There is more than one machine now, and three jobs are not safe to run twice
+at once: **`bus-relay`** (two relays both post the same comment), **`db:refresh`**
+(Supabase disk IO is one budget for the whole company — six runs in a day took
+every client site down on 2026-08-17) and **the loop skills** (claiming a
+ticket is check-then-act, which is only sound with a single claimant).
+
+Which machine owns which job is a committed table in **`lib/nodeRoles.js`**,
+and every one of those jobs asks it first. Moving a job to another machine is
+a one-line edit there plus a commit — deliberately reviewable, rather than a
+setting somebody flips on one machine at 2am.
+
+```
+npm run node:whoami          # which machine is this, and what may it run
+npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
+```
+
+Each machine says who it is in `~/.alphire-node` (one short line:
+`macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
+which is a guess — rename the Mac and the guess changes. **A machine whose
+name is not recognised does not quietly skip; it refuses out loud**, because
+"another machine is doing it" and "nobody is doing it" look identical
+otherwise, and only one of them is safe.
 
 ## One thread, one topic, one session
 
@@ -245,11 +278,24 @@ Give every thread its own worktree — a separate folder with its own branch,
 sharing the same repo history. **Use the command, not the raw git:**
 
 ```
-npm run thread <topic>     # tidy first, branch off CURRENT origin/main, npm ci, build
+npm run thread <topic> <clickup-task-id>   # tidy first, branch off CURRENT origin/main, npm ci, build
 npm run ship               # catch up, verify, push, PR, wait for CI, merge, tidy
 npm run map                # what exists, what is shipped, what is still live work
 npm run tidy               # delete shipped branches, remove finished worktrees
 ```
+
+**A thread exists only while its ClickUp task is open** (Charter Q1,
+2026-08-18). The task id is required, not optional — `npm run thread` stamps
+it onto the branch (`git config branch.<topic>.clickup-task <id>`, the same
+`branch.<name>.*` namespace git/VS Code already use for per-branch metadata)
+and refuses to create a thread for a task that is not confirmed open. `npm
+run tidy` reads the stamp back and cleans up a thread whose task has since
+closed — branch deleted, worktree removed, logged to `tidy-restore.log` —
+**even if its commits never shipped**, which the older shipped-only check
+could never reach (an abandoned thread's commits are legitimately "active" by
+`git cherry`, and would otherwise sit there forever). A branch whose ClickUp
+status can't be determined (network, auth, rate limit) is never treated as
+closed — only a clean, confirmed read authorizes a delete.
 
 `npm run ship` is the other end of `thread`: the nine hand-run steps between
 "the work is done" and "it is live", in order, with the state checked between
@@ -400,13 +446,31 @@ Before reporting a task complete, run and state the results of:
    two assertions that could not fail, including one where the check was
    comparing a setting to itself.
 
+8. **`npm run check:shots` on every task, not only the visual-looking ones.**
+   It builds `main`'s code and this branch's code, photographs six pages
+   through both, and attaches every pair that differs to the ClickUp ticket —
+   so a change to what a page renders reaches the operator as pictures rather
+   than as a branch to check out (charter Q5). Deciding for yourself that a
+   change "is not visual" is the failure it exists to prevent, and it costs
+   about ten seconds to say so and stop when no watched file changed.
+
+   ```
+   PORT=3058 node server.js
+   UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:shots -- --task <clickup-id>
+   ```
+
+   Its comparison is exact — one differing pixel counts — which is only
+   affordable because it proves its own instrument before trusting a reading.
+   If that control ever fails, fix the scene, never the comparison.
+   `docs/VISUAL_REVIEW.md`.
+
 `npm run check:css` is deliberately absent from this list: CI runs it on
 every pull request, so it is the one visual gate nobody has to remember.
 What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
 §5.14 — read that before treating a green run as proof a page looks right.
 Neither of them can tell a bounce from a wobble.
 
-8. **Say where you looked at it.** Not a command — a sentence naming the
+9. **Say where you looked at it.** Not a command — a sentence naming the
    screen you opened and what you saw. Every gate above can pass on a change
    that is visibly broken: nothing here tests CSS, and the panel bugs of
    2026-08-12, 08-13 and 08-16 all reached the operator green. The local app
