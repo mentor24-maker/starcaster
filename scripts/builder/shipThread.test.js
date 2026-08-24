@@ -165,3 +165,62 @@ test('the comment-stripper does not defeat the test it feeds', () => {
   assert.ok(!code.includes('force-push buried inside'), 'block comments were stripped');
   assert.ok(code.length > 2000, 'stripping left a plausible amount of code');
 });
+
+test('a failed nudge says WHICH step failed, because the advice is opposite', () => {
+  // `nudgeChecks` returns false for two different situations. If the commit
+  // failed, the branch really does need a new one. If the commit SUCCEEDED and
+  // only the push failed, the commit is sitting on the branch locally and an
+  // ordinary `git push` sends it. One message served both, and in the push case
+  // it told the operator "re-running ship will NOT help" — the exact opposite
+  // of the truth, in a script whose whole purpose is making these messages true.
+  assert.match(source, /nudgeFailedAt/, 'the failing step has to be recorded somewhere');
+
+  const nudge = source.slice(source.indexOf('function nudgeChecks'));
+  const body = nudge.slice(0, nudge.indexOf('\n}\n'));
+  assert.match(body, /nudgeFailedAt = 'commit'/, 'a failed commit is recorded as such');
+  assert.match(body, /nudgeFailedAt = 'push'/, 'a failed push is recorded as such');
+
+  const neverAppeared = source.slice(source.indexOf("outcome === 'never_appeared'"));
+  const message = neverAppeared.slice(0, 1800);
+  assert.match(message, /nudgeFailedAt === 'push'/, 'the message must branch on which step failed');
+
+  // The push case must offer the recovery, not forbid it.
+  const pushBranch = message.slice(message.indexOf("nudgeFailedAt === 'push'"));
+  const pushCase = pushBranch.slice(0, pushBranch.indexOf(': `No checks ever appeared'));
+  assert.match(pushCase, /git push/, 'the push case names the command that recovers it');
+  assert.doesNotMatch(
+    pushCase,
+    /will NOT help/,
+    'the push case must not repeat the commit-failed advice — re-running ship DOES help here'
+  );
+});
+
+test('LOOP_ENGINEERING no longer advises the ordering that steals the PR title', () => {
+  // docs/LOOP_ENGINEERING.md used to say the work-log commit "is written and
+  // pushed BEFORE the PR is opened". Follow that and the work-log commit is the
+  // newest hand-authored commit when the PR is named, so pickPullRequestCommit
+  // titles the PR after it — SHIP_AUTHORED_SUBJECTS skips only the re-pin and
+  // nudge subjects. Squash-merge makes that permanent: the #304 failure, and
+  // why docs/MISLABELED_MERGES.md exists. It also contradicted
+  // loop-build/SKILL.md step 7 in the very same pull request.
+  const doc = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'LOOP_ENGINEERING.md'), 'utf8');
+  const section = doc.slice(doc.indexOf('Avoiding it in the first place'));
+  const advice = section.slice(0, 1200);
+
+  assert.doesNotMatch(
+    advice,
+    /pushed \*?before\*? the PR is opened/,
+    'the advice that causes the stolen title must not come back'
+  );
+  assert.match(advice, /gh pr checks/, 'it points at the ordering that avoids BOTH failures');
+  assert.match(advice, /SKILL\.md/, 'and names where that ordering is written down');
+
+  // A work-log commit is hand-authored, so nothing in ship skips it. If that
+  // ever changes, this doc guidance can be revisited — until then it stands.
+  const picker = fs.readFileSync(path.join(__dirname, 'pullRequestCommit.js'), 'utf8');
+  assert.doesNotMatch(
+    picker,
+    /Work log/i,
+    'ship does not skip work-log commits, which is why the ordering matters'
+  );
+});
