@@ -88,6 +88,24 @@ only reach the other one in one direction. So it is covered by tests that stand
 in a pretend second machine, exercising both directions the work called for:
 awake-and-broken must raise an alarm, asleep must not. Both halves were then
 broken on purpose to confirm the tests genuinely catch it.
+
+Review caught three ways it would have cried wolf, all now fixed. The important
+one: when you ask another Mac to run a command over the network, it starts in a
+stripped-down environment that cannot find most of the software installed on it
+— so the check would have looked at a perfectly healthy Mini and announced that
+colima and Docker were both missing. Every remote question is now asked through
+a proper login session, which is the same thing that happens when you open a
+Terminal window yourself, so the machine can find its own tools. The other two
+were smaller versions of the same fault: a machine that accepted the connection
+and then stalled was reported as broken rather than unreachable, and a
+connection that dropped halfway through the Docker check was reported as
+"Docker is not installed there". Both now say "could not check", which is the
+honest answer.
+
+That distinction is the whole point. A check that raises false alarms is worse
+than no check, because you stop reading it — and this one would have raised
+several, about a machine with nothing wrong with it, the first time it ran.
+
 ## 2026-08-23 — The menu editor's link list lines up with its own headings (#411)
 
 Open a Navigation module and the bottom half is the list of links — a black

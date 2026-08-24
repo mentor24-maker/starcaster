@@ -18,7 +18,7 @@
  * This module is the "where does this one-liner run" seam. The probes keep
  * asking exactly the questions they asked before; only the location changes.
  *
- * Three rules it exists to enforce:
+ * Four rules it exists to enforce:
  *
  *   1. ONE ssh connection per machine, not one per object. Reachability is
  *      established once and memoised; every later probe reuses that verdict.
@@ -30,6 +30,17 @@
  *      "colima is installed but will not start" is drift; "the Mini is asleep"
  *      is not. SSH gives us that distinction for free: exit status 255 is the
  *      connection failing, anything else is the remote command's own verdict.
+ *   4. A remote probe runs in the environment the probed thing actually runs
+ *      in. `ssh host 'cmd'` is a NON-login shell, and sshd hands it a PATH of
+ *      /usr/bin:/bin:/usr/sbin:/sbin — no /opt/homebrew/bin, no /usr/local/bin.
+ *      Probing a Homebrew-installed tool that way reports it missing, so the
+ *      check would call a perfectly healthy machine drift, simultaneously,
+ *      about every tool Homebrew put there. That is worse than the blind spot
+ *      it replaces: a check that cries wolf gets ignored. Measured on the Mini
+ *      2026-08-24 — `colima` is /opt/homebrew/bin/colima and `docker` is
+ *      /usr/local/bin/docker, neither reachable from the sshd PATH, while a
+ *      login bash resolves both. So EVERY remote command goes through a login
+ *      shell, wrapped once here where no caller can forget it.
  *
  * `run` is injected so the tests never open a socket — see remoteProbe.test.js,
  * which exercises both directions (reachable-but-broken, and unreachable).
@@ -43,6 +54,51 @@ const SSH_OPTS = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=4'];
 // timed out, no usable key. Any other status came back FROM the remote host,
 // which means the connection worked and the command has an opinion.
 const SSH_CONNECTION_FAILED = 255;
+
+// The shell a remote command is wrapped in. `-l` is the whole point: it reads
+// the login profile, which on macOS runs path_helper and puts Homebrew back on
+// PATH. bash rather than zsh because /bin/bash is always present and its login
+// profile (/etc/profile) is the one path_helper lives in.
+const LOGIN_SHELL = 'bash';
+const LOGIN_SHELL_FLAGS = '-lc';
+
+/**
+ * Quote a string so a remote shell sees it as ONE argument.
+ *
+ * ssh does not take an argv — it joins everything after the destination with
+ * spaces and hands the result to the remote login shell. So `['bash','-lc',cmd]`
+ * would arrive word-split and run only the first word of `cmd`. The command has
+ * to be quoted here, into a single string, before ssh ever sees it.
+ */
+function singleQuote(s) {
+  return `'${String(s).replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The exact string handed to ssh for a remote one-liner. Exported so the tests
+ * can assert the login shell is present rather than trusting that it is.
+ */
+function loginShellCommand(command) {
+  return `${LOGIN_SHELL} ${LOGIN_SHELL_FLAGS} ${singleQuote(command)}`;
+}
+
+/**
+ * Did this child_process error come from the timeout, rather than from the
+ * command itself failing?
+ *
+ * This lives here, and is tested against a REAL timeout, because `shell()`
+ * below leans on it to tell a hung connection (COULD NOT CHECK) from a remote
+ * command that answered "no" (DRIFT). The obvious spelling — `err.killed` —
+ * is wrong on Node: execFileSync leaves `killed` undefined on a timeout and
+ * reports it as `code: 'ETIMEDOUT'` with `signal: 'SIGTERM'`. Keying off
+ * `killed` alone made the guard permanently false, so a machine that accepted
+ * the connection and then stalled was reported as drift.
+ *
+ * `killed` is still honoured: it costs nothing and other runtimes do set it.
+ */
+function isTimeout(err) {
+  return err != null && (err.killed === true || err.code === 'ETIMEDOUT');
+}
 
 /**
  * A place to run read-only shell one-liners: this machine, or another one over
@@ -101,7 +157,8 @@ function createExecutor({ run, hereId = null, sshTarget = (id) => id }) {
     if (!reachable.reachable) return { ran: false, why: reachable.why };
 
     const target = reachable.target ?? sshTarget(machineId);
-    const r = run('ssh', [...SSH_OPTS, target, command], timeoutMs);
+    // Rule 4: a login shell, always, centrally — never the bare command.
+    const r = run('ssh', [...SSH_OPTS, target, loginShellCommand(command)], timeoutMs);
 
     // The host answered a moment ago but the connection has since dropped —
     // that is still "could not check", never drift. Rule 3, cautious direction:
@@ -119,4 +176,12 @@ function createExecutor({ run, hereId = null, sshTarget = (id) => id }) {
   return { reach, shell, isHere };
 }
 
-module.exports = { createExecutor, SSH_OPTS, SSH_CONNECTION_FAILED };
+module.exports = {
+  createExecutor,
+  loginShellCommand,
+  isTimeout,
+  SSH_OPTS,
+  SSH_CONNECTION_FAILED,
+  LOGIN_SHELL,
+  LOGIN_SHELL_FLAGS,
+};

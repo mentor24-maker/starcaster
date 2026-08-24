@@ -37,7 +37,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { load: parseYaml } = require('js-yaml');
-const { createExecutor } = require(path.join(__dirname, 'builder', 'remoteProbe.js'));
+const { createExecutor, isTimeout } = require(path.join(__dirname, 'builder', 'remoteProbe.js'));
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -72,7 +72,9 @@ function run(cmd, args, timeoutMs = 8000) {
     return {
       ok: false,
       missing: err.code === 'ENOENT',
-      timedOut: err.killed === true,
+      // Not `err.killed` — see isTimeout's note. That spelling is always
+      // false here, which left the hung-connection guard dead.
+      timedOut: isTimeout(err),
       code: typeof err.status === 'number' ? err.status : null,
       err,
     };
@@ -324,7 +326,17 @@ const probes = {
       // The daemon said no. Installed-but-dead and never-installed are
       // different disagreements, so ask which one it is.
       const installed = exec.shell(m.id, 'command -v docker');
-      reportDocker(obj.id, m.id, m.id, installed.ran && installed.ok ? 'down' : 'absent');
+      if (!installed.ran) {
+        // The link dropped between the two probes. We know the daemon did not
+        // answer but not why, and "no docker binary is installed there" would
+        // be drift invented about a machine that just went to sleep. Rule 2.
+        cannot.push({
+          what: `${obj.id} on ${m.id}`,
+          why: `the docker daemon did not answer and ${installed.why} — cannot tell whether it is absent or merely down`,
+        });
+        continue;
+      }
+      reportDocker(obj.id, m.id, m.id, installed.ok ? 'down' : 'absent');
     }
   },
 
