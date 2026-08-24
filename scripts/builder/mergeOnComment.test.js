@@ -418,6 +418,49 @@ test('EVERY notice the merge path posts says truthfully whether the approval sur
   );
 });
 
+test('a needs-rebuild hand-off says it is NOT a conflict, and names the command', () => {
+  // Task 86bbk15cb. The merge was clean; it just brought in a change behind a
+  // ?v= pin. Describing that as "could not be checked" turns a one-command
+  // chore into an investigation of why CI is red.
+  const notice = conflictHandOffNotice({
+    commentId: '77',
+    pr: SOME_PR,
+    localVerdict: { kind: 'needs-rebuild', reason: 'main merged cleanly, but it changed 1 file(s) behind a ?v= asset pin (public/js/core.js). A session needs: git merge origin/main, npm run build, commit the changed HTML, push.' },
+  });
+  // Wording follows main's rewrite (#421); what is asserted is the meaning.
+  assert.match(notice.body, /behind a `\?v=` asset pin/);
+  assert.match(notice.body, /short mechanical job/);
+  assert.match(notice.body, /npm run build/, 'the exact next step must reach the reader');
+  assert.doesNotMatch(notice.body, /could not check whether that is true/,
+    'this WAS checked, and the answer is known');
+  assert.doesNotMatch(notice.body, /both changed the same lines/,
+    'it is not an overlap and must not be described as one');
+});
+
+test('the three hand-off kinds say three different things', () => {
+  const of = (localVerdict) => conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict }).body;
+  const real = of({ kind: 'real-conflict', reason: 'both touched routes/index.js' });
+  const rebuild = of({ kind: 'needs-rebuild', reason: 'a pinned asset moved; run npm run build' });
+  const unknown = of({ kind: 'unknown', reason: 'the driver is not registered here' });
+  assert.notEqual(real, rebuild);
+  assert.notEqual(rebuild, unknown);
+  assert.notEqual(real, unknown);
+  assert.match(real, /both changed the same lines/);
+  assert.match(real, /never resolve one blind/);
+  assert.match(rebuild, /short mechanical job/);
+  assert.match(unknown, /could not check whether that is true/);
+});
+
+test('an old-style realConflict verdict still reads correctly', () => {
+  // Belt and braces: the boolean shape predates `kind`, and a caller that has
+  // not been updated must not silently fall through to "unknown".
+  const body = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'overlap' },
+  }).body;
+  assert.match(body, /both changed the same lines/,
+    'the pre-`kind` boolean shape must still read as a real overlap');
+});
+
 test('THE BUG: the hand-off told him his merge still stood, then threw it away', () => {
   // Verbatim from the 2026-08-23 record: the comment said "then your merge
   // still stands and this goes through", and the marker beside it parsed as
