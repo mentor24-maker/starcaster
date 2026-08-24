@@ -492,9 +492,18 @@ function refusalNotice({ commentId, why, plainEnglish }) {
  * body says so, and says plainly what the person has to do first.
  *
  * `localVerdict` is what THIS machine found when it tried the merge itself:
- * `realConflict` true means the branches genuinely overlap, false means the
- * check could not be completed — different problems with different fixes,
- * and reading one as the other sends a machine problem to a code review.
+ * THREE outcomes, not two, and collapsing any pair of them sends the reader
+ * after the wrong thing:
+ *
+ *   'real-conflict' — the branches genuinely overlap. A person must decide.
+ *   'needs-rebuild' — the merge was CLEAN. It brought in a change behind a
+ *                     `?v=` asset pin, so the tree needs `npm run build`
+ *                     before it can be pushed. Mechanical, and we know the
+ *                     exact command (task 86bbk15cb).
+ *   'unknown'       — the check could not run at all.
+ *
+ * Reading 'needs-rebuild' as 'unknown' is what this fix exists to stop: it
+ * turns a one-command chore into "go and work out why CI is red".
  */
 function conflictHandOffNotice({ commentId, pr, localVerdict }) {
   // Two different situations wear the same GitHub answer, and only one of them
@@ -502,15 +511,30 @@ function conflictHandOffNotice({ commentId, pr, localVerdict }) {
   // the same shape of untrue promise this whole ticket family exists to
   // remove — so the two get different sentences, and the difference comes from
   // the localVerdict rather than from a guess.
-  const realOverlap = Boolean(localVerdict && localVerdict.realConflict);
+  //
+  // THREE situations, since 86bbk15cb. A catch-up can merge cleanly and still
+  // be unpushable, because it brought in a change behind a `?v=` asset pin and
+  // the tree's pins now name the pre-merge build. That is neither an overlap
+  // nor an unknown: it is a one-command chore, and describing it as "could not
+  // check" sends the reader after why CI is red instead of telling them what
+  // to run.
+  const kind = localVerdict
+    ? (localVerdict.kind || (localVerdict.realConflict ? 'real-conflict' : 'unknown'))
+    : '';
+  const realOverlap = kind === 'real-conflict';
+  const needsRebuild = kind === 'needs-rebuild';
   const because = realOverlap
     ? `this branch and \`main\` have both changed the same lines — ${localVerdict.reason}`
-    : localVerdict
-      ? `GitHub called it a conflict, and this machine could not check whether that is true — ${localVerdict.reason}`
-      : 'GitHub reported that the branch conflicts with newer work on `main`';
+    : needsRebuild
+      ? `it merged cleanly but the merge changed a file behind a \`?v=\` asset pin — ${localVerdict.reason}`
+      : localVerdict
+        ? `GitHub called it a conflict, and this machine could not check whether that is true — ${localVerdict.reason}`
+        : 'GitHub reported that the branch conflicts with newer work on `main`';
   const whatHappensNext = realOverlap
     ? 'Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. It will merge on a later run, once the branch is caught up and its checks are green.'
-    : 'It will be merged on the next run, unless something else is in the way by then. GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.';
+    : needsRebuild
+      ? 'That is a short mechanical job rather than a code decision — nobody has to work out who wins. Once the rebuild is committed and pushed, it will merge on a later run.'
+      : 'It will be merged on the next run, unless something else is in the way by then. GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.';
   return {
     marker: `refused: conflict hand-off on PR #${pr.number}`,
     body: `This task was not able to merge on the last attempt, because ${because}.\n\n${whatHappensNext}\n\n${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,

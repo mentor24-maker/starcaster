@@ -306,7 +306,7 @@ const TUNED = {
   'bug-report': {
     name: 'Bug Report (floating, staff only)',
     settings: {
-      visibility: 'staff', icon: 'ladybug', corner: 'bottom-left', iconSize: '55',
+      visibility: 'staff', emailReports: 'true', icon: 'ladybug', corner: 'bottom-left', iconSize: '55',
       iconBlock: 'true', blockColor: '#7a1f3d', iconColor: '#fff4e6', labelText: 'Report a problem',
       popupTitle: 'Tell us what broke', promptPlaceholder: 'What happened, and what did you expect?',
       thankYouMessage: 'Got it — thank you for helping us fix this.',
