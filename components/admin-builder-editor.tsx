@@ -2995,6 +2995,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                           const canonicalSourceName = canonicalMaster?.name;
                           const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
                             && hasSectionDrifted(section, canonicalMaster!.section);
+                          const canonicalUsage = sectionAny.savedSectionId
+                            ? savedSectionUsage.get(sectionAny.savedSectionId)
+                            : undefined;
                           return (
                           <Fragment key={section.id}>
                           {renderSectionGapDropZone(sectionIndex)}
@@ -3011,6 +3014,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
                             hasDrifted={hasDrifted}
+                            canonicalUsage={canonicalUsage}
                             themeColors={rteThemeColors}
                             themeStyle={getThemeRootVars(canvasTheme)}
                             themeBackgroundColor={activeTheme?.backgroundColor}
@@ -3078,6 +3082,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                       const canonicalSourceName = canonicalMaster?.name;
                       const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
                         && hasSectionDrifted(section, canonicalMaster!.section);
+                      const canonicalUsage = sectionAny.savedSectionId
+                        ? savedSectionUsage.get(sectionAny.savedSectionId)
+                        : undefined;
                       return (
                       <Fragment key={section.id}>
                       {renderSectionGapDropZone(sectionIndex)}
@@ -3094,6 +3101,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
                         hasDrifted={hasDrifted}
+                        canonicalUsage={canonicalUsage}
                         themeColors={rteThemeColors}
                         themeStyle={getThemeRootVars(canvasTheme)}
                         themeBackgroundColor={activeTheme?.backgroundColor}
