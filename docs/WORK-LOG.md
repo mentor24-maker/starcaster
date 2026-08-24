@@ -1,3 +1,30 @@
+## 2026-08-23 — Somewhere to write down what footage exists (#422)
+
+The video Studio needs a filing cabinet before it can have a workshop: a record
+of which recording sessions exist and which files belong to each one. This is
+that cabinet, and nothing else — nothing downloads, nothing processes video,
+there is no screen to look at yet. Those come in the next seven pieces.
+
+The care here went into two mistakes that have already cost this project real
+money. The first is a table that forgets which client it belongs to: there are
+two columns that decide that, and if a table carries only one of them, the code
+that fills them in quietly gives up and fills in neither. Nothing errors. Rows
+just land belonging to nobody, and you find out weeks later — 550 rows sat that
+way in August. Both tables here carry both columns, and a test fails if anyone
+removes one.
+
+The second is deciding a file is a duplicate across every client at once. The
+same footage handed to two clients is genuinely two things, and a rule that says
+otherwise locks the second client out of their own file forever. That has
+happened here before, with topic names. So "we already have this one" is asked
+per client, never globally.
+
+The tests are unusual in a way worth mentioning: they read the database design
+straight out of the file that creates it, rather than keeping their own copy.
+A copy stays right while the original goes wrong, which is exactly how the
+forgotten-client bug survives being tested. To prove that works, the design was
+broken three separate ways on purpose and the right tests failed each time.
+
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
 When you comment "merge" on a finished ticket, a robot merges it for you within
