@@ -99,6 +99,40 @@ say so in one line, because otherwise you cannot tell the difference between
 Both halves are held in place by a check that fails if the rule is ever softened
 back into a polite suggestion, which is how the previous attempt at this
 disappeared.
+## 2026-08-23 — Two instructions that contradicted each other, quietly (#399)
+
+The automated build helper needs somewhere to work. For each task it makes a
+fresh, private copy of the project — a separate folder so two jobs can never
+tread on each other's files.
+
+Two of our own documents disagreed about where those folders should live. The
+guide you read said to start each helper *inside* one of those private copies,
+and called that the most important safety rule we have. The helper's own
+instructions worked out where to put things by asking "which folder am I
+standing in?" Put those two together and every new task folder got tucked
+*inside* the previous one — folders nested inside folders, several layers deep
+over a long run.
+
+Nothing ever went wrong loudly. Nothing errored, nothing was lost. The work
+simply happened somewhere nobody expected, which is the kind of problem that
+sits unnoticed for months.
+
+The fix turned out to be short, because a piece of code that answers this
+question properly already existed elsewhere in the project. It asks a different
+question of git — one whose answer is the main folder regardless of which copy
+you happen to be standing in. The helper now uses it, and where you start a
+session stops mattering at all.
+
+The guide now says to start them wherever is convenient, and explains why that
+is safe: neither helper edits the folder it starts in. Each makes a fresh
+folder per task and works there, so the collision the old rule was worried
+about cannot happen from that direction. The underlying rule — one folder per
+piece of work — is unchanged and still applies to the actual building. It was
+never really about where a session is launched from; that was a misreading that
+got written down.
+
+Proved rather than assumed: the check builds a real repository with real linked
+folders and confirms the answer comes back the same from either place.
 ## 2026-08-23 — A new work folder can reach a database on its own (#406)
 
 Every piece of work here happens in its own folder — a separate copy of the
