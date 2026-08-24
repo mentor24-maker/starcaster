@@ -1,3 +1,22 @@
+## 2026-08-24 — The Table editor is finally being checked (#PR)
+
+There is an automatic check that opens every settings panel in a real browser
+and measures whether the labels and fields line up in proper columns. It has
+been quietly skipping the Table module's row-and-column editor entirely.
+
+Not because anything was wrong with it — because the checker only knew one way
+of building a grid, and the Table editor is built the other way, as an actual
+table. Trying to enrol it produced "this has no rows", so the only options were
+to leave it unchecked or to rebuild a spreadsheet as something it isn't.
+
+The checker has been taught the second shape, and the Table editor is now
+enrolled. To be sure that means something, the alignment was deliberately
+broken first: the check failed, at all three screen widths, naming the exact
+columns that had come adrift. Then it was put back.
+
+Worth saying plainly: the panel was fine all along. What changed is that we can
+now tell — before, a green result on this panel was silence, not approval.
+
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
 When you comment "merge" on a finished ticket, a robot merges it for you within
