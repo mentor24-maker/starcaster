@@ -497,14 +497,23 @@ function refusalNotice({ commentId, why, plainEnglish }) {
  * and reading one as the other sends a machine problem to a code review.
  */
 function conflictHandOffNotice({ commentId, pr, localVerdict }) {
-  const localLine = !localVerdict
-    ? ''
-    : localVerdict.realConflict
-      ? `\n\nChecked on this machine too, and it is a real overlap — ${localVerdict.reason}. This one genuinely needs a person.`
-      : `\n\nWorth knowing: this could not be checked properly here either — ${localVerdict.reason}. So it may not be a real conflict at all; GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.`;
+  // Two different situations wear the same GitHub answer, and only one of them
+  // retries usefully. Saying "it will merge next run" about a real overlap is
+  // the same shape of untrue promise this whole ticket family exists to
+  // remove — so the two get different sentences, and the difference comes from
+  // the localVerdict rather than from a guess.
+  const realOverlap = Boolean(localVerdict && localVerdict.realConflict);
+  const because = realOverlap
+    ? `this branch and \`main\` have both changed the same lines — ${localVerdict.reason}`
+    : localVerdict
+      ? `GitHub called it a conflict, and this machine could not check whether that is true — ${localVerdict.reason}`
+      : 'GitHub reported that the branch conflicts with newer work on `main`';
+  const whatHappensNext = realOverlap
+    ? 'Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. It will merge on a later run, once the branch is caught up and its checks are green.'
+    : 'It will be merged on the next run, unless something else is in the way by then. GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.';
   return {
     marker: `refused: conflict hand-off on PR #${pr.number}`,
-    body: `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. Someone has to merge main into the branch, sort out the overlap and push it.${localLine}\n\nThat is the only part that needs a person. ${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
+    body: `This task was not able to merge on the last attempt, because ${because}.\n\n${whatHappensNext}\n\n${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
   };
 }
 

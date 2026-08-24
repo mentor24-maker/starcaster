@@ -424,8 +424,45 @@ test('THE BUG: the hand-off told him his merge still stood, then threw it away',
   // terminal, so no later pass ever looked again.
   const notice = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
   assert.equal(markerKind(notice.marker), 'refused');
-  assert.match(notice.body, /needs a hand/i);
+  // The opening line says what happened, in the operator's own requested
+  // shape (2026-08-24). It used to open "Needs a hand", which read as a
+  // request for him to do something in a lane where the only thing he owes
+  // is the merge word he had already given.
+  assert.match(notice.body, /was not able to merge on the last attempt/i);
   assert.ok(notice.body.includes(APPROVAL_CARRIES_OVER));
+});
+
+test('the hand-off never asks the operator for a person, or for anything at all', () => {
+  // He reads this comment in Ready to launch, which is HIS lane: the only
+  // thing owed there is his merge word, and he has already given it. Wording
+  // that reads as a request sends him looking for an action that does not
+  // exist — he said so on 2026-08-24, about this exact comment.
+  for (const localVerdict of [
+    null,
+    { realConflict: true, reason: 'both touched routes/index.js' },
+    { realConflict: false, reason: 'the catch-up could not be pushed' },
+  ]) {
+    const { body } = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict });
+    assert.doesNotMatch(body, /needs a person|needs a hand/i, `asks for a person: ${body}`);
+  }
+});
+
+test('only a REAL overlap is denied the "next run" promise', () => {
+  // The whole family of bugs behind this ticket is the machine promising an
+  // outcome it cannot deliver. A real overlap will hit the same wall next
+  // pass, so it must not say the next run merges it; anything else retries
+  // usefully and must say so, or he is left wondering whether to act.
+  const real = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' },
+  }).body;
+  assert.doesNotMatch(real, /on the next run/i);
+  assert.match(real, /on a later run/i);
+  assert.match(real, /both changed the same lines/i);
+
+  for (const localVerdict of [null, { realConflict: false, reason: 'the catch-up could not be pushed' }]) {
+    const { body } = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict });
+    assert.match(body, /merged on the next run/i, `no retry promise: ${body}`);
+  }
 });
 
 test('the hand-off marker and the reason the plumbing compares are the SAME string', () => {
