@@ -16,6 +16,49 @@ And if it cannot read those pages, it does not send. "I could not tell" is not
 the same as "yes" — the report is already saved and already in the queue either
 way, so the safe thing to do with an unanswerable question is nothing, loudly
 logged. (#PR)
+## 2026-08-24 — The Table editor is finally being checked (#427)
+
+There is an automatic check that opens every settings panel in a real browser
+and measures whether the labels and fields line up in proper columns. It has
+been quietly skipping the Table module's row-and-column editor entirely.
+
+Not because anything was wrong with it — because the checker only knew one way
+of building a grid, and the Table editor is built the other way, as an actual
+table. Trying to enrol it produced "this has no rows", so the only options were
+to leave it unchecked or to rebuild a spreadsheet as something it isn't.
+
+The checker has been taught the second shape, and the Table editor is now
+enrolled. To be sure that means something, the alignment was deliberately
+broken first: the check failed, at all three screen widths, naming the exact
+columns that had come adrift. Then it was put back.
+
+Worth saying plainly: the panel was fine all along. What changed is that we can
+now tell — before, a green result on this panel was silence, not approval.
+## 2026-08-24 — Approved work merges in minutes instead of hours (#424)
+
+When you comment "merge" on a finished piece of work, a robot picks it up and
+merges it. Merging one takes about three minutes of actual work: bring the
+branch up to date with everything that landed since, run the checks (about
+ninety seconds), merge.
+
+It was managing roughly one an hour, and sitting idle for the other
+fifty-seven minutes.
+
+The reason was the shape of the thing, not the work. It took two visits to
+merge one item: the first visit brought the branch up to date and left, the
+checks finished a minute and a half later, and the second visit — an hour after
+that — did the merge. A three-minute job took two hours.
+
+That gets worse the more work is waiting, not better: every merge makes every
+other waiting branch out of date, so with two dozen queued, each merge creates
+twenty-three more to bring up to date. The robot could fall behind its own
+previous visit.
+
+It now waits the ninety seconds and finishes the job, rather than coming back
+next hour. It waits for a bounded time, for at most a few items per visit, and
+if the checks are still running when its patience runs out it simply leaves it
+for next time — exactly what it did before. It will never merge something whose
+checks it did not see finish.
 ## 2026-08-24 — The build robot stops piling up work nobody can merge (#425)
 
 There is a safety rule on this project that a branch has to be completely up to
