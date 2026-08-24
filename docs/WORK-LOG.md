@@ -1,4 +1,4 @@
-## 2026-08-24 — Our own tests stop filing bug reports at you (#PR)
+## 2026-08-24 — Our own tests stop filing bug reports at you (#418)
 
 Three bug reports landed in your queue looking exactly like customer
 complaints, and you closed all three by hand and asked what you were meant to
@@ -17,7 +17,7 @@ in one direction costs you one interruption; getting it wrong in the other
 throws a real customer's bug into a closed ticket nobody reads. So it only
 files something as machine-made when it sees something no human browser can
 produce, or two separate giveaways at once. One suspicious detail on its own is
-never enough. (#PR)
+never enough.
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
 When you comment "merge" on a finished ticket, a robot merges it for you within
@@ -63,7 +63,7 @@ it comes out clean, the branch is caught up and the checks re-run. If anything
 genuinely overlaps, it hands over exactly as before — and now says which file,
 so nobody has to work that out again.
 
-It still never resolves a conflict, and it still never force-pushes. (#PR)
+It still never resolves a conflict, and it still never force-pushes.
 
 # Work Log
 
