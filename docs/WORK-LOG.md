@@ -92,6 +92,71 @@ to open. Better to read both properly.
 Found while reviewing the block-state chips shipped earlier today, which is a
 pleasing sort of catch — the feature that tells you how far a save reaches
 turned up a case where the underlying data had stopped saying.
+## 2026-08-23 — A pull request that nothing checked no longer sits there quietly (#393)
+
+Before anything can be merged here, GitHub has to run its own checks on it —
+that is the safety net that stops a broken change reaching the live site. Twice
+this week a pull request was created and GitHub simply never ran them. Nothing
+looked wrong: the page showed no red, no failure, no warning. It just showed
+nothing at all, and because the merge step quite rightly refuses anything
+unchecked, both pieces of work sat stuck for half an hour until something else
+happened to jog it loose.
+
+The suspicion was that the second computer doing the building had the wrong kind
+of login and GitHub was ignoring its work. That turned out to be wrong, and it
+is worth saying so plainly: of the nine pull requests that machine opened over
+two days, seven had their checks running within four seconds. The two that
+failed had something else in common — a second small change was pushed about
+fifteen seconds after the request was opened, and GitHub lost track of both.
+
+The important discovery is that this never fixes itself. The checks are not
+"late"; they were never scheduled, and nothing that waits, retries or reruns
+will summon them. The only thing that works is sending up one more change, which
+gives GitHub a fresh reason to look. Our own tooling had been advising the
+opposite — "this is probably just a delay, try again shortly" — which is why
+both cases stalled rather than being rescued in a minute.
+
+So the shipping tool now does that itself: if the checks have not appeared after
+a reasonable wait, it sends up a harmless empty change to wake them, once, and
+then waits again. If they still do not appear it says clearly that this is no
+longer a delay and something is genuinely wrong. The rule a new build machine
+has to satisfy, and how to test it in advance, is now written down so the third
+machine does not rediscover any of this.
+## 2026-08-23 — The menu editor's link list lines up with its own headings (#411)
+
+Open a Navigation module and the bottom half is the list of links — a black
+heading bar reading Parent Page / Page Name / Slug / Action, and a row of
+boxes under it for each link in the menu.
+
+The headings did not sit over the boxes they name. "Page Name" was fifteen
+pixels right of the box beneath it and "Slug" twenty-one, and the drift grew
+along the row, so the further right you looked the more the list read as two
+things laid on top of each other rather than one table. The cause is the sort
+of thing that only shows up on screen: the heading bar and the rows were each
+working out their own column widths, from slightly different amounts of space,
+so they were never going to agree. They now read those widths from one place,
+which is the only way two separate strips can line up and stay lined up.
+
+The mega-menu version had a worse version of the same problem. A menu item
+that opens a panel carries a "Feature column" control, and that control was
+sharing the line with the item's three boxes — so that one row's boxes came
+out shorter than every other row's, its up/down/delete icons floated into the
+middle of the list, and the words "Feature column" ran off the right-hand edge
+of the panel entirely. It now sits on its own line under the row it belongs to,
+and every row in the list is the same shape.
+
+One thing that looks wrong and is not: a nested link still steps in from the
+left and its icons still hang past the ones above. That was your call on
+2026-08-14 and it is left exactly as it was — it is now written down as a
+deliberate exception so nobody "fixes" it later.
+
+The checker that measures these panels could not see this list at all, because
+it only knew how to read a form with a label beside every box, and this list
+has its labels once at the top. It has been taught the second shape, so the
+list is now measured on every run instead of being skipped in silence. Before
+believing the pass, the layout was broken three separate ways on purpose and
+the checker was watched to fail each time.
+
 ## 2026-08-23 — The guard against touching the live branch had a gap (#397)
 
 There is a rule here that an automated helper must never edit files directly in
