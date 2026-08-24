@@ -105,6 +105,12 @@ const PIN_SOURCE_PATHS = Object.freeze([
   'src/css/',
   'components/',
   'lib/builder-client/',
+  // Plain lib/ files that components import, so esbuild compiles them into
+  // public/builder-bundle.js. Found by the metafile guard in
+  // branchCatchUp.test.js, not by reading imports — the list is only as good
+  // as the thing that checks it, and reading imports by hand is how this one
+  // was already stale on the day it was written.
+  'lib/crmFormStyles.js',
   'builder-react-entry.tsx',
   'react-entry.js',
 ]);

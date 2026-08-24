@@ -1,4 +1,4 @@
-## 2026-08-24 — The catch-up stops turning green branches red (#PR)
+## 2026-08-24 — The catch-up stops turning green branches red (#420)
 
 Yesterday a change was made so the merge robot stops giving up on branches that
 only *looked* like they clashed. It worked — and it introduced a smaller problem

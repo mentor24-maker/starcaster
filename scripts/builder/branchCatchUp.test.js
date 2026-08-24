@@ -386,31 +386,107 @@ test('malformed input does not throw', () => {
  * exactly as before. So this reads what the committed HTML ACTUALLY pins and
  * fails if any of it maps to a source the list does not cover.
  */
-test('every pinned asset in the committed HTML is covered by the source list', () => {
+/**
+ * The guard, rebuilt after review.
+ *
+ * MY FIRST VERSION COULD NOT FAIL IN THE WAY THAT MATTERS. It mapped each
+ * pinned URL to ONE representative source (`/builder-bundle.js` -> `components/`)
+ * and asked whether that path was covered. So it could notice a brand-new
+ * pinned URL, and could never notice A BUNDLE GAINING AN IMPORT FROM A NEW
+ * DIRECTORY — which is how this list actually rots, and how it was ALREADY
+ * stale when I wrote it: `lib/crmFormStyles.js` is compiled into
+ * public/builder-bundle.js via two components, and nothing in the list covered
+ * plain `lib/`.
+ *
+ * So the question is asked of the real dependency graph instead. esbuild's
+ * metafile lists every input it actually compiled; every one of those outside
+ * node_modules must be covered, or a commit touching it slips a stale pin past
+ * the catch-up — precisely the bug this ticket is about.
+ *
+ * Node-suite test, so requiring node_modules and esbuild is fine here
+ * (landmine 14 applies to vitest, which runs before the build).
+ */
+test('every real input of every pinned bundle is covered by the source list', async () => {
+  const esbuild = require('esbuild');
   const repoRoot = path.join(__dirname, '../..');
-  const html = fs.readFileSync(path.join(repoRoot, 'src/layout.html'), 'utf8');
-  const urls = [...html.matchAll(/(?:src|href)="(\/[^"?#]+\.(?:js|css))\?v=/gi)].map((m) => m[1]);
-  assert.ok(urls.length > 10, `expected the layout to pin many assets, found ${urls.length}`);
 
-  // The three assets that are BUILT rather than served from source.
-  const BUILT = {
-    '/styles.css': 'src/css/',
-    '/builder-bundle.js': 'components/',
-    '/bundle.js': 'react-entry.js',
-    '/js/richtext-vendor.js': 'public/js/', // built from public/js/richtext-vendor-entry.js
-  };
+  const BUNDLES = [
+    { entry: 'builder-react-entry.tsx', loader: { '.js': 'jsx' }, jsx: 'automatic', tsconfig: 'tsconfig.json' },
+    { entry: 'react-entry.js', loader: { '.js': 'jsx' } },
+  ];
+
+  const inputs = new Set();
+  for (const b of BUNDLES) {
+    const result = await esbuild.build({
+      entryPoints: [path.join(repoRoot, b.entry)],
+      bundle: true,
+      write: false,
+      metafile: true,
+      preserveSymlinks: true,
+      absWorkingDir: repoRoot,
+      loader: b.loader,
+      ...(b.jsx ? { jsx: b.jsx } : {}),
+      ...(b.tsconfig ? { tsconfig: path.join(repoRoot, b.tsconfig) } : {}),
+      logLevel: 'silent',
+    });
+    for (const file of Object.keys(result.metafile.inputs)) inputs.add(file);
+  }
 
   const covered = (p) => PIN_SOURCE_PATHS.some((prefix) => (
     prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
   ));
 
-  const uncovered = [];
-  for (const url of new Set(urls)) {
-    const source = BUILT[url] || `public${url}`;
-    if (!covered(source)) uncovered.push(`${url} -> ${source}`);
-  }
+  const uncovered = [...inputs]
+    .filter((f) => !f.startsWith('node_modules/'))
+    .filter((f) => !covered(f))
+    .sort();
+
   assert.deepEqual(uncovered, [],
-    `these pinned assets map to sources PIN_SOURCE_PATHS does not cover, so a\n  catch-up across a change to them would push stale pins:\n  ${uncovered.join('\n  ')}`);
+    'these files are compiled INTO a ?v=-pinned bundle but PIN_SOURCE_PATHS does not\n' +
+    '  cover them, so a commit touching one would push a stale pin:\n  ' + uncovered.join('\n  '));
+});
+
+/**
+ * The directly-served side of the same question, across ALL the pin-carrying
+ * HTML rather than one file — a pin added to public/site.html alone would
+ * otherwise slip past (review finding).
+ */
+test('every directly-served pinned asset is covered too, across all pinned HTML', () => {
+  const repoRoot = path.join(__dirname, '../..');
+  const PIN_CARRYING_HTML = [
+    'src/layout.html',
+    'public/site.html',
+    'public/about.html',
+    'public/explore.html',
+    'public/builder-preview.html',
+  ];
+
+  // The three assets that are BUILT — their inputs are covered by the metafile
+  // test above, so only their existence is checked here.
+  const BUILT = new Set(['/styles.css', '/builder-bundle.js', '/bundle.js']);
+
+  const covered = (p) => PIN_SOURCE_PATHS.some((prefix) => (
+    prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
+  ));
+
+  const urls = new Set();
+  let filesRead = 0;
+  for (const rel of PIN_CARRYING_HTML) {
+    const abs = path.join(repoRoot, rel);
+    if (!fs.existsSync(abs)) continue;
+    filesRead += 1;
+    for (const m of fs.readFileSync(abs, 'utf8').matchAll(/(?:src|href)="(\/[^"?#]+\.(?:js|css))\?v=/gi)) {
+      urls.add(m[1]);
+    }
+  }
+  assert.ok(filesRead >= 4, `expected to read the pin-carrying HTML, read ${filesRead}`);
+  assert.ok(urls.size > 10, `expected many pinned assets, found ${urls.size}`);
+
+  const uncovered = [...urls]
+    .filter((u) => !BUILT.has(u))
+    .filter((u) => !covered(`public${u}`))
+    .sort();
+  assert.deepEqual(uncovered, [], `pinned assets whose source is not covered:\n  ${uncovered.join('\n  ')}`);
 });
 
 // ── End to end, against real git ─────────────────────────────────────────
