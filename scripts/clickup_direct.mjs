@@ -50,7 +50,7 @@
 
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync } from 'node:fs';
 import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
@@ -63,6 +63,7 @@ import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
+import workLogPlaceholder from './builder/workLogPlaceholder.js';
 const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
@@ -550,7 +551,14 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
       commentId: decision.commentId,
       pr,
       localVerdict: verdict
-        ? { realConflict: verdict.code === branchCatchUp.CODES.REAL_CONFLICT, reason: verdict.reason }
+        ? {
+            kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT
+              ? 'real-conflict'
+              : verdict.code === branchCatchUp.CODES.NEEDS_REBUILD
+                ? 'needs-rebuild'
+                : 'unknown',
+            reason: verdict.reason,
+          }
         : null,
     });
     const handOffReason = notice.marker.replace(/^refused:\s*/, '');
@@ -1179,6 +1187,51 @@ if (cmd === 'whoami') {
     process.exit(1);
   }
   console.log(`Task ${task}: PR #${prNumber} recorded (${prUrl}), read back and parsed by the merge step's own reader.`);
+
+  // Now the number exists, so fill it into the work-log entry that was written
+  // before it did. This is the whole point of doing it HERE: it is the one
+  // moment where the PR number is known and the pass has not moved on yet.
+  // Three branches went red in one day on the unfilled placeholder (task
+  // 86bbk1r7w) — not because the guard is wrong, but because "go back and fill
+  // it in" is a step that has to be remembered.
+  //
+  // Nothing to fill is the ordinary case and says nothing. A failure to record
+  // it is NOT ordinary: leaving the PR link on the ticket while the placeholder
+  // still ships is precisely the state this exists to prevent, so it exits
+  // non-zero and names what is unfilled.
+  try {
+    const logPath = 'docs/WORK-LOG.md';
+    const abs = new URL(`../${logPath}`, import.meta.url).pathname;
+    const repoDir = new URL('..', import.meta.url).pathname;
+    if (existsSync(abs)) {
+      const before = readFileSync(abs, 'utf8');
+      const filled = workLogPlaceholder.fillNewestPlaceholder(before, prNumber);
+      if (filled.changed) {
+        const runGit = (args, { cwd } = {}) => {
+          const out = spawnSync('git', args, { cwd, encoding: 'utf8' });
+          return { ok: out.status === 0, stdout: String(out.stdout || '').trim(), stderr: String(out.stderr || '').trim() };
+        };
+        const already = runGit(['diff', '--name-only', '--', logPath], { cwd: repoDir });
+        if (already.ok && already.stdout) {
+          console.error(`NOTE: ${logPath} already had uncommitted changes, so the (#PR) placeholder was NOT filled in.`);
+          console.error(`Fill it by hand: change (#PR) to (#${prNumber}) in the newest entry, then commit and push.`);
+          process.exit(1);
+        }
+        writeFileSync(abs, filled.text);
+        const done = workLogPlaceholder.commitAndPushWorkLog({ runGit, cwd: repoDir, relPath: logPath, prNumber });
+        if (!done.ok) {
+          console.error(`\nThe work-log placeholder was NOT recorded: ${done.why}`);
+          console.error(`CI will go red on it. Change (#PR) to (#${prNumber}) in the newest entry, then commit and push.\n`);
+          process.exit(1);
+        }
+        console.log(done.why);
+      }
+    }
+  } catch (e) {
+    console.error(`NOTE: could not fill the work-log PR number (${e.message}). Check docs/WORK-LOG.md for a leftover (#PR).`);
+    process.exit(1);
+  }
+
   reportLimits(check.res);
 
 } else if (cmd === 'verdict') {
