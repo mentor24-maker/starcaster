@@ -297,9 +297,8 @@ test('a refusal marker keeps its reason, em-dash and all', () => {
   assert.equal(parsed.at, '2026-08-22T04:00:00.000Z');
 });
 
-test('a merge and a conflict hand-off are terminal, and stay terminal', () => {
+test('a MERGE is terminal, and stays terminal', () => {
   assert.equal(parseMergeMarker(`${MERGE_MARKER} merged PR #372 at 2026-08-22T04:00:00.000Z — 2026-08-22T04:00:01.000Z`).kind, 'terminal');
-  assert.equal(parseMergeMarker(`${MERGE_MARKER} conflict hand-off on PR #380 — 2026-08-22T04:00:00.000Z`).kind, 'terminal');
 });
 
 test('markers written before this change still parse (nothing needs migrating)', () => {
@@ -367,4 +366,147 @@ test('a TERMINAL marker is still spent forever — a merged PR is never re-merge
     refused: new Map(),
   });
   assert.equal(out.act, 'ignore');
+});
+
+// ---------- the comment must not promise what the marker does not do (86bbk0g4u)
+
+const {
+  markerKind,
+  refusalNotice,
+  conflictHandOffNotice,
+  mergedNotice,
+  APPROVAL_CARRIES_OVER,
+} = require('./mergeOnComment.js');
+
+const SOME_PR = { number: 380, url: PR_URL };
+
+/**
+ * THE INVARIANT, asserted over every notice the merge path can post.
+ *
+ * A 'refused' marker is re-decided on later passes, so its body MAY promise
+ * the approval carries over. A 'terminal' marker is spent forever, so its
+ * body MUST NOT — that promise is exactly the lie the conflict hand-off told
+ * eleven tickets on 2026-08-23. Building body and marker in one function is
+ * what makes this checkable at all; before, they lived in different files.
+ */
+function assertPromiseMatchesMarker(notice, label) {
+  const kind = markerKind(notice.marker);
+  const promises = notice.body.includes(APPROVAL_CARRIES_OVER);
+  if (kind === 'terminal') {
+    assert.equal(promises, false, `${label}: terminal marker (${notice.marker}) must not promise the approval carries over`);
+  } else {
+    assert.equal(promises, true, `${label}: re-decidable marker (${notice.marker}) should say so`);
+  }
+}
+
+test('EVERY notice the merge path posts says truthfully whether the approval survives', () => {
+  assertPromiseMatchesMarker(
+    refusalNotice({ commentId: '77', why: 'checks are red: verify (FAILURE)', plainEnglish: 'x' }),
+    'refusal',
+  );
+  assertPromiseMatchesMarker(
+    conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null }),
+    'hand-off, unchecked locally',
+  );
+  assertPromiseMatchesMarker(
+    conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' } }),
+    'hand-off, real overlap',
+  );
+  assertPromiseMatchesMarker(
+    mergedNotice({ commentId: '77', pr: SOME_PR, mergedAt: '2026-08-23T10:00:00.000Z' }),
+    'merged',
+  );
+});
+
+test('THE BUG: the hand-off told him his merge still stood, then threw it away', () => {
+  // Verbatim from the 2026-08-23 record: the comment said "then your merge
+  // still stands and this goes through", and the marker beside it parsed as
+  // terminal, so no later pass ever looked again.
+  const notice = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
+  assert.equal(markerKind(notice.marker), 'refused');
+  assert.match(notice.body, /needs a hand/i);
+  assert.ok(notice.body.includes(APPROVAL_CARRIES_OVER));
+});
+
+test('the hand-off marker and the reason the plumbing compares are the SAME string', () => {
+  // The quieting in clickup_direct.mjs compares the reason a previous pass
+  // recorded against the one it just derived. If those two ever differ by a
+  // character, a permanently-conflicting ticket gets an identical comment
+  // every hour instead of going silent.
+  const notice = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
+  const derived = notice.marker.replace(/^refused:\s*/, '');
+  const readBack = parseMergeMarker(`${MERGE_MARKER} ${notice.marker} — 2026-08-23T10:00:00.000Z`);
+  assert.equal(readBack.kind, 'refused');
+  assert.equal(readBack.reason, derived);
+});
+
+test('MIGRATION: the eleven already-stuck hand-offs read back as re-decidable', () => {
+  // Written before this change, so no "refused:" prefix. They must now heal
+  // themselves on the next pass rather than needing a command run by hand.
+  const legacy = parseMergeMarker(`${MERGE_MARKER} conflict hand-off on PR #380 — 2026-08-23T04:00:00.000Z`);
+  assert.equal(legacy.kind, 'refused');
+  assert.equal(legacy.legacy, true);
+  assert.equal(legacy.reason, 'conflict hand-off on PR #380');
+
+  // ...and the reason it yields is byte-identical to what a NEW hand-off
+  // records, so a ticket that is still genuinely conflicted stays quiet
+  // instead of being re-announced once per pass.
+  const fresh = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
+  assert.equal(fresh.marker.replace(/^refused:\s*/, ''), legacy.reason);
+});
+
+test('MIGRATION does not reach a merged marker — that stays spent forever', () => {
+  for (const spent of [
+    'merged PR #380 at 2026-08-22T04:00:00.000Z',
+    'conflict hand-off on PR #380 and then some',
+    'handed off',
+  ]) {
+    assert.equal(parseMergeMarker(`${MERGE_MARKER} ${spent} — 2026-08-23T04:00:00.000Z`).kind, 'terminal', spent);
+  }
+});
+
+test('AC2: a conflict cleared since the hand-off merges on the next pass, unprompted', () => {
+  const cmd = c(3, OPERATOR, 'merge');
+  const comments = [reviewPassed(1), prOpened(2), cmd];
+
+  // Pass 1 reached 'merge' on the ClickUp side and then hit a conflict at the
+  // GitHub gate. Rebuild what bus-relay records: the hand-off marker, parsed
+  // back off the reply thread exactly as the live pass does.
+  const first = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments });
+  assert.equal(first.act, 'merge');
+  assert.equal(
+    githubGate({ state: 'OPEN', mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }).action,
+    'conflict',
+  );
+  const notice = conflictHandOffNotice({ commentId: first.commentId, pr: SOME_PR, localVerdict: null });
+  const parsed = latestMergeMarker([marker(4, notice.marker)]);
+  const refused = new Map([[first.commentId, parsed.reason]]);
+
+  // Someone merges main into the branch and pushes. Next pass: the SAME
+  // authorization is still live — under the old terminal marker it was in
+  // `handled` and this decision was never reached at all.
+  const second = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments, refused });
+  assert.equal(second.act, 'merge');
+  assert.equal(second.pr.number, 362);
+  assert.equal(second.priorRefusal, 'conflict hand-off on PR #380');
+  assert.equal(
+    githubGate({
+      state: 'OPEN', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
+      statusCheckRollup: [{ name: 'verify', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+    }).action,
+    'merge',
+  );
+});
+
+test('a still-conflicted ticket stays quiet: the reason it derives is the one it recorded', () => {
+  const cmd = c(3, OPERATOR, 'merge');
+  const comments = [reviewPassed(1), prOpened(2), cmd];
+  const notice = conflictHandOffNotice({ commentId: String(cmd.id), pr: SOME_PR, localVerdict: null });
+  const refused = new Map([[String(cmd.id), notice.marker.replace(/^refused:\s*/, '')]]);
+  const again = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments, refused });
+  // mergeDecision cannot know about the conflict — it lives at the GitHub
+  // gate — so it correctly still says 'merge' and hands the plumbing the
+  // reason to compare against.
+  assert.equal(again.act, 'merge');
+  assert.equal(again.priorRefusal, notice.marker.replace(/^refused:\s*/, ''));
 });
