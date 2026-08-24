@@ -18,6 +18,7 @@ const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
 const { forwardBugReport } = require('../lib/bugReportForward');
+const { emailBugReport } = require('../lib/bugReportEmail');
 const {
   storeBugReportScreenshot,
   verifyBugReportScreenshots,
@@ -360,11 +361,19 @@ async function handle(req, res, pathname, method) {
     // the function once the response goes out.
     const forward = await forwardBugReport(result.data, scope);
 
+    // Same contract again, and independent of the forward above: whether the
+    // ClickUp task landed has no bearing on whether the operator asked to be
+    // emailed. Awaited for the same freeze reason; cannot throw, cannot fail
+    // the reporter's request, and never trusts the request body for the
+    // toggle (lib/bugReportEmail.js, rule 4).
+    const emailed = await emailBugReport(result.data, scope);
+
     return respondJson(res, req, 201, {
       ok: true,
       data: {
         ...result.data,
         status: forward.ok ? 'forwarded' : 'failed_forward',
+        emailed: emailed.sent,
         screenshots: screenshots.data.assets,
       },
     }), true;
