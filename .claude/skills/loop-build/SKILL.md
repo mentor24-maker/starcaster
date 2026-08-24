@@ -202,7 +202,9 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    is skipped where the repo has no `package.json` (the vault is prose-only):
 
    ```bash
-   REPO="$(node -e "console.log(require('$(git rev-parse --show-toplevel)/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
+   MAIN="$(node "$(git rev-parse --show-toplevel)/scripts/lib/main_checkout.mjs")" && \
+     [ -n "$MAIN" ] || { echo "main checkout came back empty — do not build"; exit 1; } && \
+     REPO="$(node -e "console.log(require('$MAIN/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
      [ -n "$REPO" ] || { echo "repoHome returned empty — do not build"; exit 1; } && \
      git -C "$REPO" fetch origin --quiet && \
      git -C "$REPO" worktree add "$REPO/.claude/worktrees/<task-slug>" \
@@ -214,9 +216,17 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    The checkout is **derived, never written down**: this skill runs on more
    than one machine, and a literal path is an assumption that fails silently
    on every machine but the one it was typed on (vault `doctrine/NODES.md`,
-   principle P1). Start the loop session in the main starcaster checkout, not
-   inside an existing worktree — `--show-toplevel` locates this checkout so
-   `taskRepo.js` can be required, and `repoHome()` derives the target repo.
+   principle P1).
+
+   **It no longer matters where the loop session starts.** `--show-toplevel`
+   answers *"the folder I am in"*, and using it for the ANSWER meant a loop
+   started inside a worktree — which is what `docs/LOOP_ENGINEERING.md` used to
+   tell you to do — put its per-task worktrees **inside another worktree**.
+   Nothing errored; the work just happened somewhere nobody expected.
+   `main_checkout.mjs` asks git for `--git-common-dir`, which points at the
+   MAIN checkout's `.git` from inside a linked worktree, so the answer is the
+   same from anywhere. `--show-toplevel` survives here only to locate that
+   file, which every worktree carries, and is correct for that.
 
    `<task-slug>` = short kebab-case name from the task. Do ALL work for this
    task inside that worktree. A repo other than `starcaster` runs THAT repo's
