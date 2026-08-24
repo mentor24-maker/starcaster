@@ -670,7 +670,22 @@ export function BuilderTableModuleSettings({
 
       <div className="builder-schema-group-title">Content</div>
       <div className="builder-table-editor-scroll">
-        <table className="builder-table-editor builder-table-editor-modules">
+        {/* L6a, titled-column grid shape. This manager IS a spreadsheet — the
+            column titles are the operator's own table headers — so one
+            labelled block per item would be absurd for it. `data-lattice-
+            columns` puts it under check_panels the way the Navigation Links
+            list is: n counts every titled column including the Row actions
+            column, and the check then holds it to rendering rows, putting n
+            cells on each line, one offset and one width per column, and each
+            title sitting over the column it titles.
+
+            Being a real <table>, it shares its tracks by construction rather
+            than by two containers agreeing — which is the failure the Links
+            list spent months with. */}
+        <table
+          className="builder-table-editor builder-table-editor-modules"
+          data-lattice-columns={td.headers.length + 1}
+        >
           <thead>
             <tr>
               <th className="builder-table-row-action-heading">Row</th>
