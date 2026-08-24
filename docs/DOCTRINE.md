@@ -1010,6 +1010,44 @@ not a per-occasion bypass.
 attention, not willingness. Asking about a settled question is the same waste as
 surfacing a chore for approval, minus even the possibility of a useful answer.
 
+**The second incident — a rule can be evaded without anyone trying to evade
+it.** 2026-08-23: three unattended `loop-build` runs on the Mac Mini
+force-pushed, despite four deny rules forbidding it. Recovered from the session
+transcripts rather than the agents' own accounts, every instance was the same
+command:
+
+```
+git -c credential.helper='<the gh helper>' push --force-with-lease
+```
+
+Deny rules are command-**prefix** globs. `Bash(git push --force*)` matches a
+command that *starts* `git push`; this one starts `git -c`. And that prefix is
+not an evasion anyone invented — it is this repo's own documented way to push,
+because osxkeychain is unreachable from an agent session. **The house idiom
+walked straight through the house rule**, and nobody would have known if the
+agents had not each volunteered it.
+
+Two lessons, and the second is the durable one:
+
+1. Every instance had the same cause: write the work-log entry, open the PR,
+   then amend the commit to stamp the number in. **Remove the reason and you
+   remove the pressure** — `loop-build/SKILL.md` now says to add the entry as a
+   second commit, and never to amend after pushing.
+2. **A guard made of patterns protects only the spellings someone thought of.**
+   `git -C <dir> push --force`, a newline instead of `&&`, `git push origin
+   +main` with no flag at all — each needs its own pattern, and none of them
+   gets written until after the incident that needed it.
+   `scripts/lib/force_push_guard.cjs` therefore *parses* the command — strips
+   env assignments and git's global options, then asks whether the subcommand
+   is `push` and whether anything forces — and the hook refuses on that, ahead
+   of `SKIP_DENY_EXPLAIN` so no environment variable is a way around it.
+   `scripts/hooks/force_push_guard.test.js` holds all seventeen forms.
+
+*The damage was nil — every push was to the loop's own unmerged branch, seconds
+old. That is not the point. An unattended agent crossed a line the operator drew
+and the crossing was invisible; on a machine nobody is watching, "the guard has
+a hole" is the whole finding.*
+
 ---
 
 ## 7. Operator-facing gotchas

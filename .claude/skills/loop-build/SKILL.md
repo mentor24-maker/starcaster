@@ -114,6 +114,30 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    so a parallel build loop that got there first shows up as exit code 3 —
    take the next task instead of proceeding.
 
+   **Then, BEFORE creating a branch, ask whether one already exists:**
+
+   ```bash
+   npm run clickup -- build-start --task <id>
+   ```
+
+   *   **exit 0** — no PR, or its PR is closed/merged. A fresh branch is right;
+       carry on to step 2.
+   *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
+       second branch. Check that one out, read the send-back that returned the
+       ticket to `Queued`, fix what it named, and push to the SAME PR. The
+       command prints the branch.
+   *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
+       branch on a guess; that is the failure this step exists to prevent,
+       arriving through the check meant to catch it.
+
+   The claim in the line above and this check answer DIFFERENT questions, and
+   conflating them cost two duplicate PRs on 2026-08-23 (#407 beside the still
+   open #349, #408 beside #350). `--if-status Queued` asks *"is anyone else
+   starting this right now"* — it was working perfectly. Nothing asked *"was
+   this already started and handed back"*, and a sent-back ticket is genuinely
+   `Queued` with its PR genuinely still open. Reading the comments would have
+   shown it; a pass that must remember to read is a pass that will forget.
+
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
    Two of them belong to the operator and no loop may set or clear them except
@@ -239,11 +263,27 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
 6. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
    explain it to a non-programmer: what changed and why it mattered, plus the
-   `(#PR)` number once known. Keep it to a short paragraph. This entry is part
+   `(#PR)` number. Keep it to a short paragraph. This entry is part
    of the task's own PR, so the log lands on `main` at the same moment the work
    does — never edit `docs/WORK-LOG.md` directly on `main`. If a parallel task
    causes a merge conflict here, it is trivial (two entries at the top); resolve
    by keeping both.
+
+   **The entry needs a PR number, and you do not have one yet. Do NOT amend the
+   commit later to add it — that needs a force-push, which is a standing deny
+   rule here and is now blocked outright by a PreToolUse hook.** On 2026-08-23
+   three separate runs force-pushed for exactly this reason, using the repo's
+   own `git -c credential.helper=... push` idiom, which slipped past the deny
+   rule because that rule matches commands *starting* with `git push`.
+
+   Two orders work; pick either and never amend:
+
+   - **Commit the code first, push, open the PR, then add the work-log entry as
+     its own second commit** with the number already known. One extra commit,
+     no rewrite. (Squash-merge collapses them anyway.)
+   - **Or reserve the number first**: `gh pr create --draft` on the pushed
+     branch, read the number off it, write the entry, commit, push, then
+     `gh pr ready`.
 
 7. **Commit and open the PR.**
    - Inspect `git diff --cached` before committing (staging is whole-file; make
@@ -254,6 +294,10 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      line of its own — this is not optional), a plain-language summary, the
      task's "How to test" steps, and a note that a Vercel preview will be
      attached. End with the Generated-with trailer.
+   - **Only ordinary pushes.** If a push is rejected because the branch is
+     behind, merge `origin/main` in — never rebase-and-force. That is the same
+     choice `npm run ship` makes on purpose (`docs/DOCTRINE.md` §6.6): the
+     branch only ever gains commits, so an ordinary push always works.
 
 8. **Record the PR on the ticket — with the command, and check what it says.**
 

@@ -61,13 +61,13 @@ test('normalising is forgiving about how a name is written, not about which name
 // --- the guard --------------------------------------------------------------
 
 test('the owning machine may run its job', () => {
-  const verdict = checkRole('bus-relay', { node: { name: 'macbook-pro', source: 'file', file: MISSING } });
+  const verdict = checkRole('db-refresh', { node: { name: 'macbook-pro', source: 'file', file: MISSING } });
   assert.equal(verdict.verdict, 'owned');
   assert.equal(verdict.owned, true);
 });
 
 test('a known machine that is not the owner is told who owns it, and it is not an error', () => {
-  const verdict = checkRole('bus-relay', { node: { name: 'mac-mini', source: 'file', file: MISSING } });
+  const verdict = checkRole('db-refresh', { node: { name: 'mac-mini', source: 'file', file: MISSING } });
   assert.equal(verdict.verdict, 'other-node');
   assert.equal(verdict.owned, false);
   assert.match(verdict.message, /macbook-pro/);
@@ -115,7 +115,7 @@ test('an unregistered job is refused even against a stand-in table', () => {
 });
 
 test('role lookup ignores case and stray whitespace', () => {
-  assert.equal(roleOwner('  Bus-Relay '), 'macbook-pro');
+  assert.equal(roleOwner('  Bus-Relay '), 'mac-mini');
   assert.equal(roleOwner('nope'), null);
 });
 
@@ -156,4 +156,19 @@ test('db-refresh has exactly one owner — the disk-IO budget is one meter', () 
   const owner = roleOwner('db-refresh');
   assert.notEqual(owner, ANY);
   assert.ok(isKnownNode(owner));
+});
+
+// The jobs that carry the operator's own instructions forward have to live on
+// the machine that is awake. On 2026-08-23 the relay sat on the laptop, Dane
+// answered two tickets at 06:19, and both were still waiting nine hours later
+// — nothing errored, the answers just landed where nothing was listening.
+// Moving one of these back to a machine with a lid should fail here first.
+test('the jobs that carry Dane\'s answers forward live on the always-on machine', () => {
+  for (const role of ['bus-relay', 'loop-build', 'loop-review']) {
+    assert.equal(
+      roleOwner(role),
+      'mac-mini',
+      `${role} moves the operator's instructions along; on a machine that sleeps, it stops`,
+    );
+  }
 });
