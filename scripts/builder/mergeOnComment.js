@@ -363,6 +363,84 @@ function githubGate(pr) {
 }
 
 /**
+ * WAITING FOR CI INSIDE ONE PASS (2026-08-24, task 86bbk2fb5).
+ *
+ * Merging one PR is about three minutes of real work — catch the branch up,
+ * run CI (`verify` median 85 seconds), merge. We were achieving 1.25 merges an
+ * hour, with the pipeline idle roughly 95% of the time.
+ *
+ * The cost was the SHAPE, not the work. It took two passes to merge one PR:
+ * pass N caught the branch up and returned `waiting`; CI finished 85 seconds
+ * later; pass N+1 merged it an hour after that. A three-minute job took two
+ * hours.
+ *
+ * It gets worse as the queue grows, not better. Branch protection is
+ * `strict: true`, so a branch must be current with main to merge — meaning
+ * EVERY merge invalidates every other open branch. At 24 open PRs each merge
+ * leaves 23 needing catch-up, and a catch-up done an hour ago is stale before
+ * the next pass reaches it. The two-pass shape can lose a race with its own
+ * previous pass.
+ *
+ * So after a catch-up push, the pass waits for the check run rather than
+ * going away for an hour. Three rules keep that bounded:
+ *
+ *   - A BUDGET, not patience. ~2x the observed median. When it runs out the
+ *     answer is `wait` — exactly what the pass returned before — never a
+ *     merge and never a failure. A slow CI run is not a broken one.
+ *   - A CAP per pass, so one stuck PR cannot starve the rest. Beyond the cap
+ *     everything falls through to `wait` and the next pass takes it.
+ *   - The SAME gate. Nothing here decides whether a PR may merge; it only
+ *     decides whether to ask again. Red is refused by the existing path, with
+ *     the existing wording.
+ */
+
+/** ~2x the observed 85s median for `verify`. Named, not a literal. */
+const IN_PASS_WAIT_MS = 180_000;
+
+/** How often to re-ask GitHub inside that budget. */
+const IN_PASS_POLL_MS = 10_000;
+
+/**
+ * How many tickets may hold a pass open. Worst case is CAP x BUDGET, so this
+ * is the number that keeps an hourly pass from becoming an unbounded one.
+ */
+const MAX_IN_PASS_WAITS = 3;
+
+/** Has this pass already spent its in-pass waits? */
+function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
+  return Number(waitsUsed || 0) < cap;
+}
+
+/**
+ * Given a freshly re-read gate and how long we have been waiting, what next?
+ *
+ * Deliberately does NOT re-implement the gate. `merge`, `refuse` and
+ * `conflict` are handed straight back to the paths that already handle them,
+ * so there is exactly one place that decides whether something may merge.
+ *
+ * @returns {{ action: 'merge'|'refuse'|'conflict'|'wait'|'poll-again', reason?: string }}
+ */
+function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS } = {}) {
+  const action = String(gate?.action || '');
+
+  // Terminal answers go back to the existing paths untouched.
+  if (action === 'merge' || action === 'refuse' || action === 'conflict') {
+    return { action, reason: gate.reason };
+  }
+
+  // Anything else means "not resolved yet". Out of budget is a WAIT — the
+  // same outcome the pass used to return immediately — never a merge.
+  if (Number(elapsedMs) >= Number(budgetMs)) {
+    return {
+      action: 'wait',
+      reason: `CI was still running after ${Math.round(Number(budgetMs) / 1000)}s; the next pass will pick it up`,
+    };
+  }
+
+  return { action: 'poll-again', reason: gate?.reason || 'checks still running' };
+}
+
+/**
  * WHAT THE COMMENT PROMISES AND WHAT THE MARKER DOES, BUILT TOGETHER
  * (2026-08-23, task 86bbk0g4u).
  *
@@ -457,6 +535,11 @@ function mergedNotice({ commentId, pr, mergedAt }) {
 }
 
 module.exports = {
+  IN_PASS_WAIT_MS,
+  IN_PASS_POLL_MS,
+  MAX_IN_PASS_WAITS,
+  mayWaitInPass,
+  afterCatchUpDecision,
   MERGE_PHRASES,
   MERGE_MARKER,
   parseMergeMarker,
