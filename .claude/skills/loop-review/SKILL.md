@@ -48,11 +48,12 @@ list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
 npm run clickup -- queue --list 901418546619 --status "In review"   # FIRST LINE is the one to review
 npm run clickup -- get --task <id>                                  # the task, header + body
 npm run clickup -- comments --task <id>                             # the comments — the PR URL lives here
-npm run clickup -- verdict --task <id> --pass --body-file -                   # RECORD THE VERDICT FIRST — the gate reads this
-npm run clickup -- verdict --task <id> --fail --body-file -                   # ... or the send-back, same shape
+npm run clickup -- loop-note --task <id> --transition review-started           # CLAIM THE REVIEW — do this before you verify
+npm run clickup -- verdict --task <id> --pass --if-status "In review" --body-file -   # RECORD THE VERDICT FIRST — the gate reads this
+npm run clickup -- verdict --task <id> --fail --if-status "In review" --body-file -   # ... or the send-back, same shape
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -   # pass: card + status together
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -  # a judgment call only he can settle
-npm run clickup -- status --task <id> --status Queued               # send back (assignees auto-cleared)
+npm run clickup -- status --task <id> --status Queued --if-status "In review" # send back (assignees auto-cleared)
 npm run clickup -- comment --task <id> --body-file -                # a plain note
 npm run clickup -- describe --task <id> --body-file -               # REPLACE the description (left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -        # post to the bus
@@ -108,11 +109,13 @@ time"*) rather than leaving him to wonder whether a link was forgotten.
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
 
-## Loop note — stamp your verdict (queue visibility)
+## Loop note — your claim, then your verdict (queue visibility)
 
-When you decide, stamp the ticket's **Loop note** so the queue shows it:
+The **Loop note** is the only place a review IN FLIGHT is visible. `queue` and
+`get` both print it, so one command answers "is somebody already on this?":
 
 ```bash
+npm run clickup -- loop-note --task <id> --transition review-started  # CLAIM — before you verify anything
 npm run clickup -- loop-note --task <id> --transition verified    # PASS -> Ready to launch
 npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back to Queued
 ```
@@ -122,11 +125,34 @@ npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back
 
 ## Workflow
 
-1. **Claim the next task.** Find the oldest task with status `In review` in the
-   **Loop Queue** list (id `901418546619`) — the queue command's first line.
-   If none, report "nothing to review" and stop. Read the task
-   (`get`), then read its comments (`comments`) to find the PR URL the build
-   loop posted there.
+1. **Claim the next task — visibly, before you verify anything.** Find the
+   oldest task with status `In review` in the **Loop Queue** list (id
+   `901418546619`) — the queue command's first line. If none, report "nothing
+   to review" and stop. Read the task (`get`), then read its comments
+   (`comments`) to find the PR URL the build loop posted there.
+
+   **Read the Loop note column before you take one.** A ticket reading
+   `🔍 being checked — a review pass started 8/23 3:41am` already has a review
+   running on it: skip it, take the next one. There is no "reviewing" status to
+   move a ticket into — the note IS the claim, and it is printed by both
+   `queue` and `get`, so seeing it costs nothing extra.
+
+   Then claim the one you took, before you check anything out:
+
+   ```bash
+   npm run clickup -- loop-note --task <id> --transition review-started
+   ```
+
+   A claim more than about **45 minutes** old is an abandoned pass, not a
+   running one — a review is minutes, not hours. Taking one over is allowed and
+   ordinary: re-stamp it with your own claim so the next pass sees a fresh time,
+   and say in your run report that you did it and how old the claim was. (The
+   claim carries the date as well as the clock precisely so you can tell today's
+   from yesterday's.)
+
+   Why any of this: on 2026-08-22 two review passes verified PR #362 end to end
+   at the same time — neither could see the other — and the second one then
+   overwrote the first one's verdict. See step 4 for the other half of the fix.
 
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
@@ -162,8 +188,24 @@ npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back
 4. **Decide — and record the verdict BEFORE you move anything.**
 
    ```bash
-   npm run clickup -- verdict --task <id> --pass --body-file -   # or --fail
+   npm run clickup -- verdict --task <id> --pass --if-status "In review" --body-file -   # or --fail
    ```
+
+   **`--if-status` is required, and it is the guard that matters.** A review
+   takes many minutes, so by the time you decide, the queue snapshot you started
+   from is old news. If the ticket has moved — another pass took it, the
+   operator answered something, a rebuild claimed it — the command writes
+   **nothing** and exits 3. When that happens: **re-read and stand down.** Read
+   the comments (`comments --task <id>`) and the ticket (`get --task <id>`) to
+   see what actually happened, do not write the verdict, do not move the status,
+   report what you found, and take the next task. Your verdict was about a state
+   that no longer exists; writing it anyway is precisely the 2026-08-22 failure.
+
+   The same guard belongs on every status write that follows a review, so the
+   send-back in this step carries `--if-status "In review"` too. The pass path
+   needs no separate guard: `ask --status "Ready to launch"` refuses unless the
+   newest verdict on the ticket is a PASS, so a refused verdict already blocks
+   the status move behind it.
 
    `Ready to launch` is the operator's "safe to merge" signal, and since task
    86bbjt18r `ask` and `status` both **refuse** to set it unless the newest
@@ -184,7 +226,8 @@ npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back
      Also post the compact version to the bus channel.
      Do **NOT** merge — per standing rule, CC merges only on the operator's
      explicit command, and only with all checks green.
-   - **Fail, and a machine can fix it** → `verdict --fail` first, then set the task back to `Queued`,
+   - **Fail, and a machine can fix it** → `verdict --fail` first, then set the
+     task back to `Queued` (`status --status Queued --if-status "In review"`),
      **clear its assignees**, and add a ClickUp comment listing precisely what
      to fix and why. The `loop-build` skill will pick it up again. Do not fix
      it yourself inside the review step — keep build and review separate so the
@@ -215,6 +258,10 @@ npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back
   `Needs your input`.** Putting a task into one of those two is handing it to
   him; taking it back out is his call, not a loop's.
 - **Independence is the whole point.** Re-run everything; don't rubber-stamp.
+- **Claim before you verify, and never write a verdict past a refused guard.**
+  Two passes reviewing one ticket is wasted work; two passes *writing verdicts*
+  on one ticket is a wrong answer reaching the operator. If `--if-status`
+  refuses, that is the system working — re-read, stand down, move on.
 - If the PR has merge conflicts with main, send it back to `Queued` with a note
   to rebase — don't resolve conflicts blind.
 - Keep review comments plain-language and specific enough that the next build
