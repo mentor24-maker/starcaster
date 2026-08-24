@@ -61,6 +61,36 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — A pull request that nothing checked no longer sits there quietly (#393)
+
+Before anything can be merged here, GitHub has to run its own checks on it —
+that is the safety net that stops a broken change reaching the live site. Twice
+this week a pull request was created and GitHub simply never ran them. Nothing
+looked wrong: the page showed no red, no failure, no warning. It just showed
+nothing at all, and because the merge step quite rightly refuses anything
+unchecked, both pieces of work sat stuck for half an hour until something else
+happened to jog it loose.
+
+The suspicion was that the second computer doing the building had the wrong kind
+of login and GitHub was ignoring its work. That turned out to be wrong, and it
+is worth saying so plainly: of the nine pull requests that machine opened over
+two days, seven had their checks running within four seconds. The two that
+failed had something else in common — a second small change was pushed about
+fifteen seconds after the request was opened, and GitHub lost track of both.
+
+The important discovery is that this never fixes itself. The checks are not
+"late"; they were never scheduled, and nothing that waits, retries or reruns
+will summon them. The only thing that works is sending up one more change, which
+gives GitHub a fresh reason to look. Our own tooling had been advising the
+opposite — "this is probably just a delay, try again shortly" — which is why
+both cases stalled rather than being rescued in a minute.
+
+So the shipping tool now does that itself: if the checks have not appeared after
+a reasonable wait, it sends up a harmless empty change to wake them, once, and
+then waits again. If they still do not appear it says clearly that this is no
+longer a delay and something is genuinely wrong. The rule a new build machine
+has to satisfy, and how to test it in advance, is now written down so the third
+machine does not rediscover any of this.
 ## 2026-08-23 — The menu editor's link list lines up with its own headings (#411)
 
 Open a Navigation module and the bottom half is the list of links — a black
