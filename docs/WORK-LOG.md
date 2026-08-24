@@ -37,21 +37,29 @@ was built. The log starts when the loop did.
 
 ---
 
-## 2026-08-22 — A defined shape for the Approvals surface (#377)
+## 2026-08-23 — Writing down how approvals actually work (#377)
 
-Sets out how visual/content changes get approved: each arrives as a task with
-a before and an after picture, and Dane approves or rejects it in one word.
-This writes down the shape — where the list lives, what every approval task
-carries (the two images, the summary, the links), how one-click approve/reject
-works, and how it stays separate from the merge queue and the questions inbox
-so it does not become a second version of either. It is a proposal to live
-with before any custom screens get built; the list itself is a 30-second
-one-time creation in ClickUp (its own daily surface, so Dane makes it, not an
-automated pass). No code yet — this is the convention every agent will follow.
+There is now one page, `docs/APPROVALS.md`, saying where you approve things,
+what your answer means, and how agents are expected to file so every approval
+looks the same.
+
+The first draft of this described building a separate **Approvals** list for
+you. Before writing it, we measured what that would cost: the Loop Queue's id
+is typed into 18 places across 11 files, every one assuming an approval stays
+put. Moving approvals off it means re-pointing all of them and keeping
+one-click merge working across two lists at once — an epic, in exchange for a
+tab. You chose to write the rules down instead and move nothing, so the page
+now describes the surface you already use rather than one that would have to
+be built.
+
+Two things in it were worth stating out loud because nothing else says them:
+that a **refusal** leaves your approval standing and goes through on its own
+once the reason clears, while a **conflict hand-off** spends it and needs a
+fresh "merge" from you — and that a ticket with no PR recorded on it can never
+merge at all, however many times you approve it.
 
 ---
 
-## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 ## 2026-08-23 — starcaster.pro wears its own icon again (#409)
 
 You reported that starcaster.pro was showing the favicon of whichever client you
