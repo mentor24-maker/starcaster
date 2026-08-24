@@ -153,7 +153,14 @@ if (!branchesOnly) {
     // start.
     const state = classified.get(tree.branch);
     const closedTask = taskStates.get(tree.branch) === 'closed';
-    if (!closedTask && (!state || state.state !== 'shipped')) continue;
+    if (!closedTask && (!state || state.state !== 'shipped')) {
+      // Say WHY. A skip that does not report is how a sweep gives a false
+      // all-clear (DOCTRINE 3.11): on 2026-08-22 the ecosystem-svg worktree
+      // survived four tidy runs and was never once named in the output, so
+      // "Left alone: (nothing about it)" read as "nothing left to do".
+      skipped.push(`${path.basename(tree.path)} — ${state ? state.reason : 'branch state unknown'}`);
+      continue;
+    }
 
     if (!dryRun) {
       try {
@@ -191,7 +198,12 @@ for (const branch of branches) {
   const closedTask = taskStates.get(branch.name) === 'closed';
   // Shipped/empty branches always qualified; a closed task now ALSO
   // qualifies an 'active' (unshipped) branch — the abandoned-thread case.
-  if (!closedTask && (!state || state.state === 'active')) continue;
+  // 'unknown' never qualifies: it means no signal could answer, which is the
+  // one case where deleting would be a guess.
+  if (!closedTask && (!state || state.state === 'active' || state.state === 'unknown')) {
+    skipped.push(`branch ${branch.name} — ${state ? state.reason : 'branch state unknown'}`);
+    continue;
+  }
 
   const abandonedForClosedTask = state?.state === 'active' && closedTask;
   const sha = git(['rev-parse', branch.name], '');

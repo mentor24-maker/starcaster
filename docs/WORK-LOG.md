@@ -87,6 +87,175 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The video pipeline's to-do list (#405)
+
+Second of eight pieces in the Studio work. This one is the list that remembers
+which videos still need processing, hands each job to a worker, and — the part
+that matters — takes the job back if that worker dies.
+
+It keeps its list in a plain file on the Mini rather than in the main database.
+That is a deliberate choice with a scar behind it: this list gets written to
+thousands of times per video, and on 16 August the main database ran out of its
+daily capacity and took every client site offline for two and a half hours.
+Nothing precious is stored here — delete the file and the pipeline works its
+list out again from scratch.
+
+Two ideas do most of the work.
+
+The first is that handing out a job has to happen in **one** step. Looking for a
+free job and then marking it as taken are two separate steps, and two workers
+can both finish looking before either one marks — which is how the same video
+gets processed twice. Doing it in one motion makes that impossible rather than
+unlikely.
+
+The second is that a worker **borrows** a job for a while rather than locking
+it. A lock is given up when a program finishes, which is precisely what a crash
+does not do — a crashed worker would hold its lock forever. A borrowed job
+simply comes back when the loan runs out, with nobody woken up to fix it. That
+is the whole point on a machine nobody is watching at three in the morning.
+
+There are two ways a job can go badly, and they are counted separately — which
+took a review pass to get right. A job can **fail**: the worker ran it and it
+did not work. Or the worker can simply **stop responding**, usually because the
+machine went to sleep. The first version counted both together, and that single
+number was wrong in both directions at once. A job that crashed its worker every
+time looped forever without anyone being told, and four laptop naps could send a
+perfectly healthy job to the scrapheap on its first genuine failure.
+
+Now a job that keeps failing waits twice as long before each retry and stops
+after five, and a job that keeps taking its worker down with it stops too — on a
+separate, more generous count. Either way it stops in a state that **keeps the
+reason**, and says which of the two it was, rather than quietly vanishing from
+the list.
+
+Worth recording how the test for the "two workers never get the same job" rule
+went, because it took three attempts to become real. The first version ran the
+two workers one after the other, so the first took everything and the second
+took nothing — the test passed for a reason that had nothing to do with the
+rule. The second version ran them properly at the same time but failed
+unpredictably, because it checked something that genuinely varies. The third
+version uncovered an actual bug in the new code, which was then fixed. Only
+after that did a passing run mean anything.
+## 2026-08-23 — Work handed to you now comes with a link you can click (#404)
+
+You said it on the ecosystem-map task: *"This should include a clickable link I
+can click to test... none of the 'How to test' options are clear how I actually
+do it."*
+
+The problem was real and slightly embarrassing. A "How to test" section written
+by a developer tends to read *run the generator, then open the file in a
+browser* — which is an instruction for somebody who already knows where the
+generator is. It looks like a finished piece of work, and it quietly hands the
+checking back to you at the exact moment the whole point was that it had been
+done for you.
+
+Two changes, at the two places it goes wrong.
+
+**When a task is written**, every test step must now be one of exactly two
+things: a link you can click, or an exact command to copy and paste with the
+result it should print written next to it. Nothing else counts as a step. The
+bad shapes are named outright — "open the page in a browser" is called out as
+not being a step — because a rule that says "write good steps" is just advice,
+while a rule that says "this exact sentence is not a step" is something that can
+actually be enforced.
+
+**When work is handed over for you to approve**, anything with a visible surface
+has to arrive with a web address you can open. First choice is the temporary
+preview site that every piece of work already gets built automatically — it is
+the real thing rather than a description of it. And it has to be the *page*, not
+the front door: "here is the preview" is no help on a site with 138 pages.
+Underneath it, two or three lines of what to look for, written in plain terms.
+
+If there is no link and there should be, the work goes back. And if there is
+genuinely nothing to look at — something that runs behind the scenes — it has to
+say so in one line, because otherwise you cannot tell the difference between
+"nothing to see" and "somebody forgot".
+
+Both halves are held in place by a check that fails if the rule is ever softened
+back into a polite suggestion, which is how the previous attempt at this
+disappeared.
+## 2026-08-23 — Finished branches finally get cleaned up (#396)
+
+Some background. When a piece of work is finished here, GitHub folds all of
+its changes into a single entry on the main line — a tidy habit that keeps the
+history readable. Separately, a housekeeping command goes round afterwards
+deleting the leftover copies of work that has already shipped.
+
+Those two things did not agree, and the housekeeping has been quietly failing
+for months. It decided whether a branch was finished by comparing its changes
+one at a time against the main line. If the work arrived as a single change, the
+comparison matched and the leftover got cleaned up. If it arrived as **two or
+more**, the fold left one entry matching none of them individually — so the
+housekeeping concluded that none of that work had ever shipped, and left the
+leftovers behind. Permanently.
+
+Measured on this repository: **35 branches were sitting in that state, every
+one of them finished and merged.** That is the whole explanation for the pile-up
+of stale copies. The overview command was equally confused — it was listing 54
+branches as unfinished work; the true number is 19.
+
+It now asks three different ways, and one "no" is no longer enough. It compares
+the changes as before; it checks whether the files that branch touched still
+differ from the main line at all; and it asks GitHub outright whether the work
+was merged. Only when every question that can be answered says "not finished"
+is a branch left alone. There is also a fourth answer now — "could not tell" —
+for when the checks cannot reach GitHub. That leaves the branch alone and says
+so, rather than pretending to know.
+
+The second half of the bug was quieter and arguably worse. When the
+housekeeping passed a branch over, it printed **nothing at all** — so the
+folder that survived four cleanup runs was never once mentioned, and the report
+read as "nothing left to do". Every branch and folder it passes over is now
+named, with the reason. All the safety rules are untouched: work you have not
+committed, a folder you are standing in, and anything it cannot confirm are all
+still left strictly alone, and every deletion still writes down how to undo it.
+## 2026-08-23 — Abandoned bug-report screenshots now clean themselves up (#398)
+
+When somebody reports a bug on one of your sites, they can attach a screenshot.
+The picture has to be uploaded the moment they pick it, before they press Send,
+because of a size limit on how much can travel in one go. That works — but it
+means anyone who picks a screenshot and then wanders off leaves the picture
+behind: a file sitting on public storage, and a row in the database, that
+nothing will ever look at again. They accumulate, quietly, forever.
+
+There is now a job that collects them. Once a day it looks for screenshots that
+are more than a day old and that no bug report actually points at, and deletes
+the file and the record together. You can also run it by hand and it will show
+you the list without touching anything, so you can see what it is about to do
+before it does it.
+
+The care is all in what it refuses to do. It never deletes a picture some report
+still points at, even one where the "attach" step failed and the screenshot was
+left looking abandoned. If it cannot read the list of reports for any reason, it
+stops entirely and deletes nothing, rather than concluding that everything is
+unwanted. It deletes the file first and the record second, so it can never leave
+a picture on public storage with nothing left to find it by — and if the file
+will not delete, it keeps the record and says so out loud instead of reporting
+a clean run. Anything it could not remove is named individually.
+## 2026-08-23 — Two checkers can no longer review the same job at once (#391)
+
+The loop has a checking step: after something is built, a separate pass goes
+over it independently and says pass or fail. Last night two of those checks ran
+on the same piece of work at the same time without either one knowing. They both
+did the whole job — wasted effort — and then the slower one stamped its answer on
+top of the faster one's. The faster one had said *fail*. What reached the queue
+said "ready to merge". It was caught and put right by hand, but only because
+somebody happened to look.
+
+Two things changed. First, a checker now puts a visible flag on the ticket
+before it starts — "being checked, started 3:41am" — right in the queue list, so
+the next one sees it and moves on to something else. (If a flag is more than
+about three quarters of an hour old the check clearly died, and the next one is
+allowed to take it over and say so.) Second, when a checker writes its verdict
+it now has to name the state it thought the ticket was in. If the ticket has
+moved since — somebody else took it, or you answered something on it — the
+verdict is simply refused, nothing is written, and the checker is told to go
+read what actually happened rather than stamp a stale answer over it.
+
+Both were tried for real on a scratch ticket before shipping: refused when the
+ticket had moved, refused when the checker forgot to name the state, and allowed
+when everything lined up — with the ticket proving that the two refusals really
+did write nothing at all.
 ## 2026-08-23 — Writing down how approvals actually work (#377)
 
 There is now one page, `docs/APPROVALS.md`, saying where you approve things,
