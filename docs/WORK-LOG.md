@@ -85,6 +85,29 @@ Both were tried for real on a scratch ticket before shipping: refused when the
 ticket had moved, refused when the checker forgot to name the state, and allowed
 when everything lined up — with the ticket proving that the two refusals really
 did write nothing at all.
+## 2026-08-23 — Writing down how approvals actually work (#377)
+
+There is now one page, `docs/APPROVALS.md`, saying where you approve things,
+what your answer means, and how agents are expected to file so every approval
+looks the same.
+
+The first draft of this described building a separate **Approvals** list for
+you. Before writing it, we measured what that would cost: the Loop Queue's id
+is typed into 18 places across 11 files, every one assuming an approval stays
+put. Moving approvals off it means re-pointing all of them and keeping
+one-click merge working across two lists at once — an epic, in exchange for a
+tab. You chose to write the rules down instead and move nothing, so the page
+now describes the surface you already use rather than one that would have to
+be built.
+
+Two things in it were worth stating out loud because nothing else says them:
+that a **refusal** leaves your approval standing and goes through on its own
+once the reason clears, while a **conflict hand-off** spends it and needs a
+fresh "merge" from you — and that a ticket with no PR recorded on it can never
+merge at all, however many times you approve it.
+
+---
+
 ## 2026-08-23 — Shared blocks on older pages had quietly forgotten they were shared (#402)
 
 A block you save once and reuse across the site keeps a note of where it came
