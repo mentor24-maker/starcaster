@@ -551,7 +551,14 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
       commentId: decision.commentId,
       pr,
       localVerdict: verdict
-        ? { realConflict: verdict.code === branchCatchUp.CODES.REAL_CONFLICT, reason: verdict.reason }
+        ? {
+            kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT
+              ? 'real-conflict'
+              : verdict.code === branchCatchUp.CODES.NEEDS_REBUILD
+                ? 'needs-rebuild'
+                : 'unknown',
+            reason: verdict.reason,
+          }
         : null,
     });
     const handOffReason = notice.marker.replace(/^refused:\s*/, '');

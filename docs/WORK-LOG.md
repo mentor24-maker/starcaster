@@ -1,3 +1,27 @@
+## 2026-08-24 — The catch-up stops turning green branches red (#420)
+
+Yesterday a change was made so the merge robot stops giving up on branches that
+only *looked* like they clashed. It worked — and it introduced a smaller problem
+of its own, which showed up last night when it turned three approved, passing
+branches red.
+
+Some of our web pages carry a little stamp against each script and stylesheet, so
+browsers know when to fetch a fresh copy instead of reusing an old one. When two
+branches both change a page, those stamps collide, and we have a tool that sorts
+them out automatically. That tool is right when only the page text moved — and
+wrong when the script itself changed underneath, because it puts back the stamp
+for the *old* version of the script. Nothing rebuilds, and the safety check that
+compares the stamps against a fresh build fails.
+
+The real mistake was what the robot treated as permission to push: it asked "did
+this merge cleanly?" when the question it needed was "would a fresh build produce
+these same stamps?" Those are not the same question.
+
+It now checks whether the merge pulled in a change to anything behind one of
+those stamps. If it did, it stops and says exactly what to run, instead of
+pushing and letting the safety check discover it twenty minutes later. When
+nothing behind a stamp moved — which is most of the time — nothing changes and
+nothing gets slower.
 ## 2026-08-24 — The build robot stops forgetting to fill in a number (#423)
 
 Every piece of work here gets a short plain-English note written for you, and
@@ -130,7 +154,7 @@ it comes out clean, the branch is caught up and the checks re-run. If anything
 genuinely overlaps, it hands over exactly as before — and now says which file,
 so nobody has to work that out again.
 
-It still never resolves a conflict, and it still never force-pushes. (#PR)
+It still never resolves a conflict, and it still never force-pushes.
 
 # Work Log
 
