@@ -1,4 +1,4 @@
-## 2026-08-24 — The build robot stops piling up work nobody can merge (#PR)
+## 2026-08-24 — The build robot stops piling up work nobody can merge (#425)
 
 There is a safety rule on this project that a branch has to be completely up to
 date with the live code before it can be merged. That rule is right — it means
