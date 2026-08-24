@@ -128,9 +128,47 @@ still valid, and only a human audit would ever have found it.
 Refusal markers now record their reason and are **re-decided on every pass**.
 Nothing extra is posted while the reason still holds — the same answer twice
 says nothing new — but the moment it changes, or goes away, the ticket goes
-through with no second word from him. Markers for a completed merge or a
-conflict hand-off stay terminal, because re-deciding a merged PR is the one
-mistake that cannot be undone.
+through with no second word from him. A completed **merge** stays terminal,
+because re-deciding a merged PR is the one mistake that cannot be undone.
+
+### A conflict hand-off is not one either (2026-08-23, task 86bbk0g4u)
+
+A conflict hand-off used to be terminal alongside the merge, and the comment
+posted beside it said the opposite in so many words: *"then your merge still
+stands and this goes through."* It did not. Nothing looked at that
+authorization again, ever.
+
+On 2026-08-23 eleven `Ready to launch` tickets were sitting on a spent
+approval from a conflict that was not even real — GitHub cannot run our
+asset-pin merge driver, so clean branches read as conflicting (fixed
+separately by `branchCatchUp.js` in #415). Dane had approved every one of
+them, been told his approval still stood, and been given nothing. On one
+ticket he said "merge" twice, four hours apart, and hit the same dead end
+both times.
+
+Two things changed:
+
+- **A conflict hand-off is re-decidable.** Resolving the branch is a job for
+  a person; saying "merge" a second time afterwards is not. Once someone
+  merges `main` into the branch and CI goes green, the next relay pass merges
+  it on his original word. A genuinely still-conflicted ticket stays silent
+  in the meantime — the pass re-derives the same answer and posts nothing —
+  and shows up in the run summary as *unchanged since last pass* rather than
+  vanishing from the count.
+- **The comment and the marker are now built together**, by one function per
+  outcome in `scripts/builder/mergeOnComment.js` that returns both. A test
+  walks every notice the merge path can post and fails if a body promises the
+  approval carries over while its marker says otherwise. They drifted because
+  they were written in two different files; now they cannot.
+
+**The eleven fixed themselves.** There is no `unstick` command to remember to
+run: `parseMergeMarker` reads the pre-2026-08-23 hand-off marker
+(`conflict hand-off on PR #N`, no `refused:` prefix) back as re-decidable, so
+every stuck ticket healed on the first pass after this shipped. A merged
+marker does not match that shape, and `githubGate` refuses an already-merged
+PR regardless, so the migration cannot reach anything irreversible. A ticket
+whose PR was merged by hand during the stall gets one truthful comment saying
+so instead.
 
 ## The two columns, and the operator card (ratified 2026-08-22)
 
@@ -318,9 +356,11 @@ Two rules keep it honest:
   If the branch is merely behind `main`, the relay catches it up and waits
   for CI to re-run rather than merging on a stale green. If it **conflicts**,
   the relay stops, says so on the ticket in plain language and on the bus,
-  and leaves the ticket where it is: a script never resolves a conflict. Any
-  other refusal is written on the ticket with the reason. Nothing is ever
-  half-moved, and no refusal is posted twice.
+  and leaves the ticket where it is: a script never resolves a conflict — but
+  it no longer spends your approval on the way past, so once a session fixes
+  the branch it merges on its own (see *A conflict hand-off is not one
+  either*, above). Any other refusal is written on the ticket with the
+  reason. Nothing is ever half-moved, and no refusal is posted twice.
 
 `Live` is configured as a **closed**-type status in ClickUp, not merely the
 last active one. That is what makes finished work disappear from the open
@@ -439,6 +479,71 @@ is different, so the loops have guardrails baked in:
   `Needs your input` for a human instead of shipping broken.
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
+
+## A build node must be able to make GitHub run its checks
+
+Every gate downstream of the build loop reads GitHub's checks. `ship` waits for
+them, the review loop re-runs them, and the merge-on-comment relay refuses a PR
+that has none ("nothing verified this branch"). So a build node that cannot get
+a check run created produces PRs that can never be merged — and nothing says so,
+because a checkless PR looks calm rather than broken.
+
+**Setting up a new node, check this before trusting it.** The credential the
+node pushes and opens PRs with has to be one whose events trigger workflows: a
+`gh auth login` user token (`gho_…`, scopes must include `repo` and `workflow`)
+or a classic PAT. A `GITHUB_TOKEN` from an Actions run, or a GitHub App
+installation token, deliberately does **not** trigger workflows — a node wired to
+one of those opens checkless PRs forever. Confirm with:
+
+```
+gh auth status                      # Token: gho_… , scopes include repo + workflow
+gh pr list --limit 5 --json number,createdAt   # then, for a PR this node opened:
+gh run list --branch <branch> --json createdAt,event
+```
+
+A healthy node's first run appears **3–4 seconds** after `gh pr create`.
+
+### The failure that is NOT the credential (2026-08-23, PRs #387 and #389)
+
+Ticket 86bbjv61n was filed as "PRs pushed from the second build node never
+trigger CI". They do: nine PRs were opened from the Mac Mini on 22–23 August and
+seven started `verify` within four seconds. The two that did not share something
+else — **a second push landing about fifteen seconds after `gh pr create`**
+(a work-log commit on #387, a force-push on #389). In both, the `opened` run and
+that second push's run are both missing from `gh run list`, and the branch then
+sat checkless for half an hour until an unrelated push finally produced one.
+
+Two things follow, and both used to be got wrong:
+
+- **A missing run does not arrive later on its own.** A run exists only because
+  an event created one. "Wait a bit longer" and "run `npm run ship` again" are
+  both useless — ship pushes nothing on a re-run, so there is no new event.
+  Only a **new head SHA** fires `synchronize` and makes GitHub create the run.
+- **So `ship` now pushes an empty commit** once its grace window is spent, and
+  gives the checks one more window (`scripts/builder/waitForChecks.js`, the
+  `nudge` hook). It does that at most once, and if a run still does not appear
+  it says plainly that this is no longer a delay.
+
+**Recovering a checkless PR by hand** — any new commit will do:
+
+```
+git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push
+```
+
+**Avoiding it in the first place:** do not push again in the seconds right after
+`gh pr create`. Open the PR, wait until `gh pr checks <pr>` lists a run, and
+only then push the work-log commit — the ordering
+`.claude/skills/loop-build/SKILL.md` step 7 spells out.
+
+This used to say the opposite: push the work-log commit *before* opening the PR.
+That advice was self-contradictory (the entry carries the PR number, so it
+cannot be written before the PR exists) and it caused the OTHER failure while
+avoiding this one. Follow it and the work-log commit is the newest
+hand-authored commit when the PR is named, so `pickPullRequestCommit` titles the
+PR after it — `SHIP_AUTHORED_SUBJECTS` skips only the re-pin and nudge subjects,
+and a work-log commit is hand-authored. Squash-merge then makes that title
+permanent. That is exactly the #304 failure, and why
+`docs/MISLABELED_MERGES.md` exists.
 
 ## Reading the queue at a glance — the Loop note
 
