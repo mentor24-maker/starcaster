@@ -1,3 +1,29 @@
+## 2026-08-24 — Approved work merges in minutes instead of hours (#PR)
+
+When you comment "merge" on a finished piece of work, a robot picks it up and
+merges it. Merging one takes about three minutes of actual work: bring the
+branch up to date with everything that landed since, run the checks (about
+ninety seconds), merge.
+
+It was managing roughly one an hour, and sitting idle for the other
+fifty-seven minutes.
+
+The reason was the shape of the thing, not the work. It took two visits to
+merge one item: the first visit brought the branch up to date and left, the
+checks finished a minute and a half later, and the second visit — an hour after
+that — did the merge. A three-minute job took two hours.
+
+That gets worse the more work is waiting, not better: every merge makes every
+other waiting branch out of date, so with two dozen queued, each merge creates
+twenty-three more to bring up to date. The robot could fall behind its own
+previous visit.
+
+It now waits the ninety seconds and finishes the job, rather than coming back
+next hour. It waits for a bounded time, for at most a few items per visit, and
+if the checks are still running when its patience runs out it simply leaves it
+for next time — exactly what it did before. It will never merge something whose
+checks it did not see finish.
+
 ## 2026-08-23 — "Your approval still stands" is now actually true (#417)
 
 When you comment "merge" on a finished ticket, a robot merges it for you within
