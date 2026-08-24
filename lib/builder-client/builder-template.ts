@@ -3489,6 +3489,10 @@ export function createEmptyModule(
                             // read by BugReportModule (builder-bug-report-module.tsx)
                             // and edited by builder-bug-report-module-settings.tsx.
                             visibility: "public",
+                            // 5/5: off by default. Turning it on emails the
+                            // project's Support Email address on every report;
+                            // the server reads THIS value, never the request.
+                            emailReports: "false",
                             icon: "bug",
                             corner: "bottom-right",
                             iconSize: "40",
