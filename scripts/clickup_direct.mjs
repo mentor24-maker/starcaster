@@ -286,11 +286,25 @@ if (!TOKEN) {
 
 /** Every page of a list's open tasks. The endpoint caps at 100 per page and
  *  a first-page-only read silently starves everything past it (DOCTRINE 5.12). */
-async function fetchAllTasks(list) {
+async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {}) {
+  // includeClosed: ClickUp's v2 list endpoint DROPS closed-type statuses by
+  // default, so `Live` tickets are invisible without it — 36 tasks come back
+  // where 66 Live ones exist (measured 2026-08-25). Opt-in rather than global:
+  // the `queue` command wants only open work, and flipping it there would put
+  // 66 shipped tickets in front of the loop.
+  //
+  // fatal:false — die() ends in process.exit(1), so a caller that WANTS to
+  // handle a failed read cannot: its try/catch never runs and loop-build reads
+  // exit 1 as "proceed, unbounded by the cap". That inverted the wip-check
+  // safety property outright (task 86bbm4zwd, review round 1).
   const tasks = [];
+  const closedParam = includeClosed ? '&include_closed=true' : '';
   for (let page = 0; page < 50; page++) {
-    const out = await call('GET', `/api/v2/list/${list}/task?archived=false&page=${page}`);
-    if (!out.res.ok) die('list tasks', out);
+    const out = await call('GET', `/api/v2/list/${list}/task?archived=false${closedParam}&page=${page}`);
+    if (!out.res.ok) {
+      if (!fatal) return { tasks: null, res: out.res, failed: `HTTP ${out.res.status}` };
+      die('list tasks', out);
+    }
     tasks.push(...out.json.tasks);
     if (out.json.last_page !== false || out.json.tasks.length === 0) {
       return { tasks, res: out.res };
@@ -876,16 +890,18 @@ if (cmd === 'whoami') {
   // wipDecision falls back to counting every open PR — the older, MORE
   // restrictive reading. Failing toward the cap costs idle time; failing away
   // from it costs the churn the cap exists to prevent.
+  //
+  // include_closed:true is REQUIRED here — a zombie PR's ticket is `Live`, and
+  // without it the ticket is simply absent from the map and the PR reports as
+  // "no ticket found", sending the reader after drift that does not exist.
+  //
+  // fatal:false is REQUIRED here — see fetchAllTasks. With the default, a
+  // routine ClickUp 429 exits 1, which loop-build reads as "proceed, uncapped".
   let ticketStatusById;
-  try {
-    const { tasks } = await fetchAllTasks(LOOP_QUEUE_LIST);
-    if (Array.isArray(tasks) && tasks.length) {
-      ticketStatusById = Object.create(null);
-      for (const t of tasks) ticketStatusById[String(t.id)] = t.status?.status ?? '';
-    }
-  } catch {
-    // Deliberately swallowed: the fallback above is the safe answer, and the
-    // message says which reading was used.
+  const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+  if (Array.isArray(listed.tasks) && listed.tasks.length) {
+    ticketStatusById = Object.create(null);
+    for (const t of listed.tasks) ticketStatusById[String(t.id)] = t.status?.status ?? '';
   }
 
   const decision = wipCap.wipDecision({ prs, cap, ticketStatusById });

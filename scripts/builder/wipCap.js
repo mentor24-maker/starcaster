@@ -68,8 +68,20 @@ function resolveCap(env = process.env) {
  * `Queued` is deliberately NOT here: a queued ticket with an open PR is rework
  * waiting to be claimed, and counting it is what caused the deadlock. `Live`
  * is not here either — the work shipped; the PR is a leftover.
+ *
+ * `Needs your input` IS here (review round 1). It is operator-held, exactly
+ * like `Ready to launch` which was never in doubt: a ticket parked on Dane
+ * with an open PR is real work occupying the merge pipeline, and its branch
+ * still needs catching up every time something lands. Counting it is also the
+ * honest answer — if his inbox is full, the pipeline genuinely is full, and a
+ * cap that hid that would be lying in the more dangerous direction.
  */
-const IN_FLIGHT_STATUSES = Object.freeze(['building', 'in review', 'ready to launch']);
+const IN_FLIGHT_STATUSES = Object.freeze([
+  'building', 'in review', 'ready to launch', 'needs your input',
+]);
+
+/** Statuses that mean the work is finished and the PR is a leftover. */
+const TERMINAL_STATUSES = Object.freeze(['live', 'complete', 'closed', 'done']);
 
 /**
  * The ClickUp task id a pull request declares in its body.
@@ -103,7 +115,11 @@ function classifyPrs({ prs, ticketStatusById } = {}) {
     if (!id || !status) groups.unknown.push(pr.number);
     else if (IN_FLIGHT_STATUSES.includes(status)) groups.inFlight.push(pr.number);
     else if (status === 'queued') groups.queued.push(pr.number);
-    else groups.live.push(pr.number);
+    else if (TERMINAL_STATUSES.includes(status)) groups.live.push(pr.number);
+    // A status nobody anticipated: not counted, and NOT called "live" — that
+    // label is a claim about the work having shipped, and a wrong claim here
+    // is what this ticket exists to stop.
+    else groups.unknown.push(pr.number);
   }
   return groups;
 }
@@ -206,6 +222,7 @@ module.exports = {
   DEFAULT_WIP_CAP,
   CAP_ENV,
   IN_FLIGHT_STATUSES,
+  TERMINAL_STATUSES,
   resolveCap,
   ticketIdFromPrBody,
   classifyPrs,

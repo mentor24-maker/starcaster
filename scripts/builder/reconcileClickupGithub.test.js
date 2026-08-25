@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   checkMergedTasks,
@@ -385,4 +387,51 @@ test('a terminal task whose PR state cannot be read is unchecked, never assumed 
   assert.equal(repaired.length, 0);
   assert.equal(unchecked.length, 1, 'DOCTRINE 3.11 — could not check is never folded into all clear');
   assert.match(unchecked[0], /could not be read/);
+});
+
+test('THE REAL SHAPE: a Live ticket linking an open leftover AND a newer merged PR', async () => {
+  // Review round 1. The first version took only the NEWEST linked PR and
+  // skipped when it was not open — so on the exact 2026-08-25 case (86bbjk5rw
+  // linked #374, left open, then #391 which shipped it) the newest was merged
+  // and the check returned silently. It must inspect EVERY linked PR.
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Race-safe verdicts', 'live', 'closed')], clean, repaired, unchecked, {
+    getComments: comments(
+      'PR opened: https://github.com/org/repo/pull/374',
+      'PR opened: https://github.com/org/repo/pull/391',
+    ),
+    // distinctPrs yields the number as a STRING (it comes straight out of the
+    // URL regex), so compare numerically — a === against a literal silently
+    // matches nothing and the test passes for the wrong reason.
+    prState: (o, r, number) => ({ state: Number(number) === 374 ? 'OPEN' : 'MERGED' }),
+    isLive: false,
+  });
+  assert.equal(repaired.length, 1, 'the open leftover must be found behind the newer merged PR');
+  assert.match(repaired[0], /#374 is still OPEN/);
+  assert.doesNotMatch(repaired[0], /#391/, 'the merged one is not a contradiction');
+});
+
+test('reconcile asks for closed tasks, or the leftover-PR scan cannot fire', () => {
+  // Review round 1, measured: without include_closed the fetch returned 36
+  // tasks and ZERO terminal ones, so tasks.filter(isTerminal) iterated an
+  // empty set and the whole check was decoration. With it: 98 terminal tasks.
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /listTasks\(LOOP_QUEUE_LIST, \{ includeClosed: true \}\)/);
+  const lib = fs.readFileSync(path.join(__dirname, '../lib/clickup.cjs'), 'utf8');
+  assert.match(lib, /include_closed=true/, 'and listTasks must actually send it');
+});
+
+test('the leftover-PR scan is bounded — the terminal set only grows', () => {
+  // One comment read plus one gh call per terminal task, per run, over a set
+  // that is already 98 and grows every time work ships.
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  // Assert the cap is APPLIED, not merely declared — the first version of this
+  // test checked only that the constant existed, and passed happily with
+  // `const scanned = terminal;` substituted in.
+  assert.match(src, /const scanned = terminal\.slice\(0, TERMINAL_SCAN_MAX\);/,
+    'the cap must actually slice the set the scan iterates');
+  assert.match(src, /sort\(\(a, b\) => Number\(b\.date_updated \|\| 0\) - Number\(a\.date_updated \|\| 0\)\)/,
+    'and take the most recently updated, so the cap keeps the useful end');
+  assert.match(src, /scanning the \$\{scanned\.length\} most recently updated of \$\{terminal\.length\}/,
+    'and say how many it skipped — a silent cap is a check that quietly stops covering things');
 });

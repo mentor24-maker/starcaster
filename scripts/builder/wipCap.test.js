@@ -235,9 +235,62 @@ test('no ticket statuses at all falls back to the OLD, stricter counting', () =>
   assert.match(d.message, /statuses were NOT available/i);
 });
 
-test('an unknown status is treated as not-in-flight, not as in-flight', () => {
-  // A status nobody anticipated must not silently consume cap.
+test('an unknown status is not counted AND is not mislabelled as live', () => {
+  // A status nobody anticipated must not silently consume cap — and must not
+  // be reported as "already live" either. UPDATED after review round 1: the
+  // first version bucketed everything unrecognised as live, which is a claim
+  // that the work SHIPPED. A wrong claim there is the exact thing this ticket
+  // exists to stop.
   const g = classifyPrs({ prs: [pr(9, 'x')], ticketStatusById: { x: 'Some New Status' } });
   assert.deepEqual(g.inFlight, []);
-  assert.deepEqual(g.live, [9], 'anything not in-flight and not queued falls to the shipped/leftover bucket');
+  assert.deepEqual(g.live, []);
+  assert.deepEqual(g.unknown, [9], 'unrecognised means unknown, not shipped');
+});
+
+test('Needs your input counts as in flight — it is operator-held, like Ready to launch', () => {
+  // Review round 1 caught this reported as "already live", which is false.
+  // Decided: it counts. A ticket parked on Dane with an open PR is real work
+  // occupying the merge pipeline, its branch still needs catching up on every
+  // merge, and if his inbox is full the pipeline genuinely IS full. Ready to
+  // launch is operator-held and was never in doubt; this is the same category.
+  const g = classifyPrs({ prs: [pr(7, 'n')], ticketStatusById: { n: 'Needs your input' } });
+  assert.deepEqual(g.inFlight, [7]);
+  assert.deepEqual(g.live, []);
+});
+
+// ── The wiring, pinned at source ──────────────────────────────────────────
+// clickup_direct.mjs has no harness, and review round 1 showed exactly why
+// that matters: the include-closed and non-fatal options are invisible to a
+// unit test that injects task objects, and BOTH were wrong in ways that made
+// the feature silently not work. Breaking either must fail here.
+
+const CD = fs.readFileSync(path.join(__dirname, '../clickup_direct.mjs'), 'utf8');
+
+test('wip-check asks ClickUp for closed tasks, or Live tickets are invisible', () => {
+  // Without include_closed the v2 list endpoint drops closed-type statuses:
+  // 36 tasks come back where 66 Live ones exist. A zombie PR's ticket is then
+  // simply absent, and it reports as "no ticket found" — sending the reader
+  // after drift that does not exist.
+  assert.match(CD, /fetchAllTasks\(LOOP_QUEUE_LIST, \{ includeClosed: true, fatal: false \}\)/,
+    'wip-check must pass includeClosed:true AND fatal:false');
+  assert.match(CD, /include_closed=true/, 'and fetchAllTasks must actually send it');
+});
+
+test('the failed-read path cannot exit the process — that inverted the safety property', () => {
+  // fetchAllTasks calls die() -> process.exit(1) on a bad response. loop-build
+  // reads exit 1 as "proceed, unbounded by the cap", so a routine ClickUp 429
+  // UNCAPPED the loop instead of capping it. The non-fatal mode must return
+  // rather than die.
+  assert.match(CD, /if \(!fatal\) return \{ tasks: null, res: out\.res, failed:/,
+    'a non-fatal read must RETURN on failure, never die()');
+  assert.doesNotMatch(CD, /try \{\s*const \{ tasks \} = await fetchAllTasks\(LOOP_QUEUE_LIST\);/,
+    'the old unreachable try/catch around a die()-ing call must be gone');
+});
+
+test('a failed read falls back to the STRICTER counting, never to uncapped', () => {
+  // The property the inverted fallback broke, asserted on the decision itself.
+  const prs = [1, 2, 3, 4, 5, 6].map((n) => pr(n, `t${n}`));
+  const d = wipDecision({ prs, cap: 5 });
+  assert.equal(d.claim, false, 'no ticket data must mean MORE restrictive, not less');
+  assert.equal(d.code, 3, 'and a normal decline, never exit 1 which means "proceed uncapped"');
 });
