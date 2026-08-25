@@ -739,6 +739,14 @@
         </div>
 
         <div class="acquire-youtube-hero-row-pair">
+        <!-- React island: paste one YouTube URL, acquire the whole video.
+             Mounted from react-entry.js; see components/acquire/. Replaces the
+             old youtubeAcquireForm, whose markup was deleted in a redesign
+             while its binding stayed in public/js/youtube.js — the form has
+             been dead since. public/js/ is frozen, so this comes back as
+             React rather than as restored vanilla markup. -->
+        <div id="youtubeVideoAcquireRoot" class="acquire-youtube-hero-form"></div>
+
         <form id="youtubeResearchForm" class="acquire-youtube-hero-form">
           <div class="acquire-youtube-hero-shell">
             <div class="acquire-youtube-hero-row">
