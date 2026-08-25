@@ -402,6 +402,39 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+  {
+    id: 'image-effect-parkour-named',
+    why:
+      'Parkour must run BOTH override animations (sc-effect-travel for the crossing + sc-effect-tumble ' +
+      'for the two-axis rotation). The base file still carries `normie-parkour`, a single fixed-duration ' +
+      '8s keyframe that ignores Speed, Rotation Rate, Frequency and Bounce Height alike — and it is bound ' +
+      'to `.starcaster-effect-parkour`, which is exactly why the emitted class is `-parkour-motion`. If ' +
+      'that dodge is ever undone, a normie-parkour name shows up here and this contract fails.',
+    module: {
+      type: 'image',
+      settings: {
+        ...PICTURE,
+        effect: 'parkour',
+        effectSpeed: '8',
+        effectRotationRate: '30',
+        effectFrequency: '4',
+        effectBounceHeight: '150',
+      },
+    },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      for (const required of ['sc-effect-travel', 'sc-effect-tumble']) {
+        if (!names.includes(required)) {
+          return `parkour is not running \`${required}\` (found: ${names.join(', ') || 'none'}). ` +
+            'A normie-parkour name here means the class dodge or the override rule broke, and every ' +
+            'setting on the panel is being ignored.';
+        }
+      }
+      if (!sample.advanced) return `parkour's animations did not advance over ${sample.settleMs}ms — parked.`;
+      return null;
+    },
+  },
 
   {
     id: 'image-never-renders-larger-than-its-file',

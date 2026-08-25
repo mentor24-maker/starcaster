@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import ActiveCampaignsList from './components/campaigns/ActiveCampaignsList';
 import AssociationsPanelHost from './components/associations/associations-panel';
+import YoutubeVideoAcquirePanel from './components/acquire/youtube-video-acquire-panel';
 import AssetRenditionsPanel from './components/assets/asset-renditions-panel';
 import InvitationsPanel from './components/invitations/invitations-panel';
 import AiSpendPanel from './components/observe/ai-spend-panel';
@@ -52,4 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!host) return;
     createRoot(host).render(<AssociationsPanelHost hostId={hostId} />);
   });
+
+  const youtubeAcquireHost = document.getElementById('youtubeVideoAcquireRoot');
+
+  if (youtubeAcquireHost) {
+    createRoot(youtubeAcquireHost).render(<YoutubeVideoAcquirePanel />);
+  }
 });
