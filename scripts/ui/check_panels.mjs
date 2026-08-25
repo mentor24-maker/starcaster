@@ -184,7 +184,16 @@ function measure(page, nonStretch) {
       // that Structure and Placement match, which the rule deliberately does
       // not ask for. Chrome outside any axis column is its own group.
       const groups = [...panel.querySelectorAll('.builder-schema-panel-column')];
-      const loose = [...panel.querySelectorAll('.builder-module-chrome .builder-module-field-strip')];
+      // The chrome's OWN strip, by direct child (2026-08-25, ticket
+      // 86bbjt1aq). It used to be any descendant strip, which read as the
+      // safer selector and was the looser one in the way that matters: the
+      // background picker brings a strip of its own, so `Background` was
+      // measured as a group of one — a group of one always agrees with
+      // itself — instead of as a row of the chrome. Its label sat 55px left
+      // of every other chrome control for weeks and this reported a clean
+      // pass the whole time. As a direct child the group is the whole chrome
+      // and the background's rows are inside it, where they can disagree.
+      const loose = [...panel.querySelectorAll('.builder-module-chrome > .builder-module-field-strip')];
       // An item manager running its own lattice (L6a) opts in by declaring
       // how many label/field pairs it puts on a row. It is measured like any
       // other group — this check reported a clean pass on the Feature Cards

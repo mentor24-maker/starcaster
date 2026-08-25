@@ -189,8 +189,15 @@ const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "carousel", "program-l
  * track for every row above it.
  */
 const MODULE_NUDGE_SIDES = [
-  { key: "horizontalOffset", label: "Horizontal Offset", hint: "Positive moves right; negative moves left." },
-  { key: "verticalOffset", label: "Vertical Offset", hint: "Positive moves up; negative moves down." }
+  // "H Offset" / "V Offset" rather than the words spelled out (2026-08-25).
+  // They sit directly under `V Margin` and `H Margin`, which have taught that
+  // convention since 8/15, and a label never wraps — it is shortened instead
+  // (components/CLAUDE.md). Spelled out, "Horizontal Offset" was the longest
+  // label in the chrome by 60px, so it alone set the label track for the
+  // whole column and pushed every chrome control 60px right of the settings
+  // column below it. The hint keeps the direction unambiguous on hover.
+  { key: "horizontalOffset", label: "H Offset", hint: "Positive moves right; negative moves left." },
+  { key: "verticalOffset", label: "V Offset", hint: "Positive moves up; negative moves down." }
 ] as const;
 
 type BuilderModuleCardProps = {
@@ -3098,22 +3105,65 @@ export function BuilderModuleCard({
       isAdminSiteSettingsModule ||
       isAdminSupportFormModule;
 
+    /**
+     * The module's internal name. Rendered in ONE of two places and never
+     * both: inside the chrome strip when this module has chrome, and on its
+     * own strip above the panel when it does not — see `showsSharedChrome`.
+     *
+     * Hoisted out of the JSX on 2026-08-25 (ticket 86bbjt1aq). It used to be
+     * a strip of its own ABOVE the chrome, which made it a second grid with
+     * its own label track: the operator's screenshot of the image panel that
+     * day showed three label tracks stacked above the axes — Label's at one
+     * x, Background's at another, and the Alignment/margin strip's at a
+     * third. Two of the three were `display: contents` members of grids that
+     * simply were not the same grid (W0).
+     */
+    const moduleLabelField = (
+      <BuilderModuleField label="Label" width="text-md">
+        <input
+          type="text"
+          value={module.name}
+          onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
+          // W0: the field is the standard width, so the placeholder is
+          // written to fit it. This used to run the other way round —
+          // the copy set the width and the row went its own length.
+          placeholder="Internal label"
+        />
+      </BuilderModuleField>
+    );
+
+    /**
+     * Social and Blog Post List name the module inside their own editors, so
+     * a second box here would be two controls for one setting (E6).
+     */
+    const showsLabelField = module.type !== "social" && module.type !== "blog-post-list";
+
     const sharedModuleChrome = (
       <div className="builder-module-chrome">
-        {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
-            the standard modal's gradient/image/style modes are no-ops on a bubble. */}
-        {module.type !== "speech-bubble" ? (
-          <BuilderBackgroundControls
-            label="Background"
-            background={getModuleBackgroundSettings(module.settings)}
-            horizontal
-            onChange={onUpdateModuleBackground}
-            themeBackgroundColor={themeBackgroundColor}
-            themeColors={themeColors}
-            themePrimaryColor={themePrimaryColor}
-          />
-        ) : null}
+        {/* ONE strip, and therefore one grid: every chrome row — the label,
+            the background, the alignment, the margins, the nudge — measures
+            against the same two tracks. Background used to sit outside this
+            strip as a sibling of it, so the chrome laid itself out as two
+            ragged sub-columns: the background block at the panel's left edge
+            and the whole margin stack floating to its right. That is what
+            `.builder-module-editor--feature-cards .builder-module-chrome`
+            was already stacking around for its own two-column editor; this
+            fixes the cause rather than the two panels that noticed. */}
         <BuilderModuleFieldStrip>
+          {showsLabelField ? moduleLabelField : null}
+          {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
+              the standard modal's gradient/image/style modes are no-ops on a bubble. */}
+          {module.type !== "speech-bubble" ? (
+            <BuilderBackgroundControls
+              label="Background"
+              background={getModuleBackgroundSettings(module.settings)}
+              horizontal
+              onChange={onUpdateModuleBackground}
+              themeBackgroundColor={themeBackgroundColor}
+              themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
+            />
+          ) : null}
           <BuilderModuleField label="Alignment" width="align">
             <BuilderAlignmentIconGroup
               value={moduleAlignment}
@@ -3210,6 +3260,168 @@ export function BuilderModuleCard({
         </BuilderModuleFieldStrip>
       </div>
     );
+    /**
+     * The module's own settings editor, chosen once. It is the shared
+     * chrome for every module that never grew an editor of its own — and
+     * naming it here is what lets the Label row above know whether that
+     * chrome is going to render, so the two can never both put a Label on
+     * the panel (E6) and the chrome-less modules never lose theirs.
+     *
+     * Hoisted out of the JSX 2026-08-25 (ticket 86bbjt1aq). The identity
+     * test below is the point of the hoist: the alternative was restating
+     * the forty conditions of the ternary as a boolean, which is a second
+     * copy of a list that grows every time a module gets an editor.
+     */
+    const moduleSettingsEditor =
+      module.type !== "button" ? (
+            isCurrentPollModule ? (
+              <BuilderCurrentPollModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+            ) : isConfettiModule ? (
+              <BuilderConfettiModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isTractorNavModule ? (
+              <BuilderTractorNavModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBreadcrumbModule ? (
+              <BuilderBreadcrumbModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostListModule ? (
+              <BuilderBlogPostListModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostCardModule ? (
+              <BuilderBlogPostCardModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogAuthorBioModule ? (
+              <BuilderBlogAuthorBioModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogTocModule ? (
+              <BuilderBlogTocModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogNewsletterModule ? (
+              <BuilderBlogNewsletterSubscribeModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogRelatedPostsModule ? (
+              <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogCategoryFilterModule ? (
+              <BuilderBlogCategoryFilterModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostModule ? (
+              <BuilderBlogPostModuleSettings module={module} onUpdateModule={onUpdateModule} richTextGallery={richTextGalleryProps} />
+            ) : isBlogTagCloudModule ? (
+              <BuilderBlogTagCloudModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostTagsModule ? (
+              <BuilderBlogPostTagsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostCreateModule ? (
+              <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogPostManagerModule ? (
+              <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogCategoryManagerModule ? (
+              <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogCardManagerModule ? (
+              <BuilderBlogCardManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogSearchModule ? (
+              <BuilderBlogSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isBlogSearchResultsModule ? (
+              <BuilderBlogSearchResultsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isSiteSearchModule ? (
+              <BuilderSiteSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isSiteSearchResultsModule ? (
+              <BuilderSiteSearchResultsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isMessagingTopicListModule ? (
+              <BuilderMessagingTopicListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isMessagingTagListModule ? (
+              <BuilderMessagingTagListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isCrmContactsTableModule ? (
+              <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isCrmFormModule ? (
+              <BuilderCrmFormModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+            ) : isAdminTeamUsersModule ? (
+              <BuilderAdminTeamUsersModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminModulesModule ? (
+              <BuilderAdminModulesModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminLoginModule ? (
+              <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBugReportModule ? (
+              <BuilderBugReportModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminNavLinkModule ? (
+              <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminSiteSettingsModule ? (
+              <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminSupportFormModule ? (
+              <BuilderAdminSupportFormModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isSocialModule ? (
+              <BuilderSocialModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                onOpenGallery={onOpenSocialIconGallery}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+            ) : module.type === "heading" ? (
+              <div className="builder-heading-module-chrome">
+                <BuilderBackgroundControls
+                  label="Background"
+                  background={getModuleBackgroundSettings(module.settings)}
+                  horizontal
+                  onChange={onUpdateModuleBackground}
+                  themeBackgroundColor={themeBackgroundColor}
+                  themeColors={themeColors}
+                  themePrimaryColor={themePrimaryColor}
+                />
+                <BuilderSettingRow label="Alignment" fullWidth>
+                  <BuilderAlignmentIconGroup
+                    value={moduleAlignment}
+                    onChange={(alignment) =>
+                      onUpdateModule((current) => ({
+                        ...current,
+                        settings: { ...current.settings, alignment }
+                      }))
+                    }
+                  />
+                </BuilderSettingRow>
+              </div>
+            ) : isRichTextModule ? (
+              <BuilderTextModuleSettings
+                module={module}
+                onUpdateModule={onUpdateModule}
+                onUpdateModuleBackground={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+            ) : isNavigationModule ? null : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
+              <div className="builder-floating-image-module-chrome">
+                <BuilderBackgroundControls
+                  background={getModuleBackgroundSettings(module.settings)}
+                  horizontal
+                  label="Background"
+                  onChange={onUpdateModuleBackground}
+                  themeBackgroundColor={themeBackgroundColor}
+                  themeColors={themeColors}
+                  themePrimaryColor={themePrimaryColor}
+                />
+              </div>
+            ) : (
+              sharedModuleChrome
+            )
+      ) : null;
+
+    /**
+     * Whether the shared chrome is on the panel — inline as this module's
+     * whole editor, or restored underneath one that swallowed it (F13).
+     * Never in the mobile pane, which renders its own overrides instead.
+     */
+    const showsSharedChrome =
+      editorDevice !== "mobile" &&
+      (moduleSettingsEditor === sharedModuleChrome || needsRestoredChrome);
+
   return (
     <div
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
@@ -3350,22 +3562,13 @@ export function BuilderModuleCard({
           {TWO_COLUMN_EDITOR_TYPES.has(module.type) ? (
             <div className="builder-cards-panel-heading">Settings</div>
           ) : null}
-          {module.type !== "social" && module.type !== "blog-post-list" ? (
-            // Content-sized, not full-panel — this row tops every module,
-            // so master rule W1 applies here with maximum leverage.
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Label" width="text-md">
-                <input
-                  type="text"
-                  value={module.name}
-                  onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
-                  // W0: the field is the standard width, so the placeholder is
-                  // written to fit it. This used to run the other way round —
-                  // the copy set the width and the row went its own length.
-                  placeholder="Internal label"
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
+          {/* Only when this module has no chrome to put it in. A module WITH
+              chrome renders the same field as the chrome strip's first row,
+              so it shares that grid's tracks instead of measuring its own.
+              Content-sized, not full-panel — this row tops every module, so
+              master rule W1 applies here with maximum leverage. */}
+          {showsLabelField && !showsSharedChrome ? (
+            <BuilderModuleFieldStrip>{moduleLabelField}</BuilderModuleFieldStrip>
           ) : null}
 
           {editorDevice === "mobile" ? (
@@ -3433,145 +3636,7 @@ export function BuilderModuleCard({
           {showModuleTriggerSettings ? (
             <BuilderModuleTriggerSettings module={module} onUpdateModule={onUpdateModule} />
           ) : null}
-          {module.type !== "button" ? (
-            isCurrentPollModule ? (
-              <BuilderCurrentPollModuleSettings
-                module={module}
-                onUpdateModule={onUpdateModule}
-                onUpdateModuleBackground={onUpdateModuleBackground}
-                themeBackgroundColor={themeBackgroundColor}
-                themeColors={themeColors}
-                themePrimaryColor={themePrimaryColor}
-              />
-            ) : isConfettiModule ? (
-              <BuilderConfettiModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isTractorNavModule ? (
-              <BuilderTractorNavModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBreadcrumbModule ? (
-              <BuilderBreadcrumbModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogPostListModule ? (
-              <BuilderBlogPostListModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isBlogPostCardModule ? (
-              <BuilderBlogPostCardModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isBlogAuthorBioModule ? (
-              <BuilderBlogAuthorBioModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isBlogTocModule ? (
-              <BuilderBlogTocModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogNewsletterModule ? (
-              <BuilderBlogNewsletterSubscribeModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogRelatedPostsModule ? (
-              <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isBlogCategoryFilterModule ? (
-              <BuilderBlogCategoryFilterModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogPostModule ? (
-              <BuilderBlogPostModuleSettings module={module} onUpdateModule={onUpdateModule} richTextGallery={richTextGalleryProps} />
-            ) : isBlogTagCloudModule ? (
-              <BuilderBlogTagCloudModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogPostTagsModule ? (
-              <BuilderBlogPostTagsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogPostCreateModule ? (
-              <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogPostManagerModule ? (
-              <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogCategoryManagerModule ? (
-              <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogCardManagerModule ? (
-              <BuilderBlogCardManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isBlogSearchModule ? (
-              <BuilderBlogSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isBlogSearchResultsModule ? (
-              <BuilderBlogSearchResultsModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isSiteSearchModule ? (
-              <BuilderSiteSearchModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isSiteSearchResultsModule ? (
-              <BuilderSiteSearchResultsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isMessagingTopicListModule ? (
-              <BuilderMessagingTopicListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isMessagingTagListModule ? (
-              <BuilderMessagingTagListModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
-            ) : isCrmContactsTableModule ? (
-              <BuilderCrmContactsTableModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isCrmFormModule ? (
-              <BuilderCrmFormModuleSettings
-                module={module}
-                onUpdateModule={onUpdateModule}
-                onUpdateModuleBackground={onUpdateModuleBackground}
-                themeBackgroundColor={themeBackgroundColor}
-                themeColors={themeColors}
-                themePrimaryColor={themePrimaryColor}
-              />
-            ) : isAdminTeamUsersModule ? (
-              <BuilderAdminTeamUsersModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isAdminModulesModule ? (
-              <BuilderAdminModulesModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isAdminLoginModule ? (
-              <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isBugReportModule ? (
-              <BuilderBugReportModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isAdminNavLinkModule ? (
-              <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isAdminSiteSettingsModule ? (
-              <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isAdminSupportFormModule ? (
-              <BuilderAdminSupportFormModuleSettings module={module} onUpdateModule={onUpdateModule} />
-            ) : isSocialModule ? (
-              <BuilderSocialModuleSettings
-                module={module}
-                onUpdateModule={onUpdateModule}
-                onUpdateModuleBackground={onUpdateModuleBackground}
-                onOpenGallery={onOpenSocialIconGallery}
-                themeBackgroundColor={themeBackgroundColor}
-                themeColors={themeColors}
-                themePrimaryColor={themePrimaryColor}
-              />
-            ) : module.type === "heading" ? (
-              <div className="builder-heading-module-chrome">
-                <BuilderBackgroundControls
-                  label="Background"
-                  background={getModuleBackgroundSettings(module.settings)}
-                  horizontal
-                  onChange={onUpdateModuleBackground}
-                  themeBackgroundColor={themeBackgroundColor}
-                  themeColors={themeColors}
-                  themePrimaryColor={themePrimaryColor}
-                />
-                <BuilderSettingRow label="Alignment" fullWidth>
-                  <BuilderAlignmentIconGroup
-                    value={moduleAlignment}
-                    onChange={(alignment) =>
-                      onUpdateModule((current) => ({
-                        ...current,
-                        settings: { ...current.settings, alignment }
-                      }))
-                    }
-                  />
-                </BuilderSettingRow>
-              </div>
-            ) : isRichTextModule ? (
-              <BuilderTextModuleSettings
-                module={module}
-                onUpdateModule={onUpdateModule}
-                onUpdateModuleBackground={onUpdateModuleBackground}
-                themeBackgroundColor={themeBackgroundColor}
-                themeColors={themeColors}
-                themePrimaryColor={themePrimaryColor}
-              />
-            ) : isNavigationModule ? null : isPollCategoryListModule ? null : isReminderModule ? null : isCrmFormModule ? null : isTableModule ? null : isFloatingImage ? (
-              <div className="builder-floating-image-module-chrome">
-                <BuilderBackgroundControls
-                  background={getModuleBackgroundSettings(module.settings)}
-                  horizontal
-                  label="Background"
-                  onChange={onUpdateModuleBackground}
-                  themeBackgroundColor={themeBackgroundColor}
-                  themeColors={themeColors}
-                  themePrimaryColor={themePrimaryColor}
-                />
-              </div>
-            ) : (
-              sharedModuleChrome
-            )
-          ) : null}
+          {moduleSettingsEditor}
 
           {/* F13: the chrome the settings-editor ternary above swallowed —
               rendered here for modules whose renderer honours background and
