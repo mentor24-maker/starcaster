@@ -1,3 +1,37 @@
+## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
+
+You said you needed an emergency shutdown that clears the decks so you can run
+a priority job through yourself. What was actually missing was a *lane*: there
+was the slow, careful one — spec, build, independent review, your merge, about
+a day — and there was nothing else. So whenever something was urgent, the only
+way to move was to step outside the whole system, into the one place where none
+of the safety rules apply.
+
+There is now a switch. `npm run pipeline pause` tells every machine to stop
+taking new work, and then **waits** for anything already half-built to finish
+before it tells you the decks are clear — it never just yanks the plug, because
+a job killed halfway through leaves its ticket stuck in a place nothing ever
+looks at again. That has already happened twice this month. If you do not want
+to wait, `--now` stops instantly and names exactly what it left running, and
+when you resume, anything that got stranded is put back in the line with a note
+for whoever picks it up.
+
+The important part is who listens. A pause the robots respected but people
+ignored would not have prevented the thing that caused this: that was an
+ordinary working session, not a robot, and it would never have thought to
+check. So the switch lives in ClickUp, where everything already looks, and the
+instruction to check it is written into the file every session reads when it
+starts. If the switch cannot be read at all — ClickUp down, network out — the
+answer is "paused", deliberately: working while you have the deck can wreck
+what you are doing, while stopping when you have not costs some idle time and a
+message on screen.
+
+Anyone can pause the line, because stopping is a safety move. Only you can
+start it again. And if a pause is still on after two hours it says so on the
+party line and keeps saying so every hour, because a pipeline that is paused
+and a pipeline that is broken look identical from the outside — which is
+exactly the confusion that cost most of today.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp
