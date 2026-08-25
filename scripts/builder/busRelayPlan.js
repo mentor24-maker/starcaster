@@ -65,4 +65,160 @@ function mergeEnabled(watch) {
   return Boolean(watch && watch.merge);
 }
 
-module.exports = { defaultWatches, handbackTarget, mergeEnabled };
+/**
+ * DELIVERY (2026-08-23, task 86bbjxew2). The handback gate above is right:
+ * a ticket must not move on an answer that was never delivered. But it used
+ * to be wired to a single chat POST, and on 2026-08-23 every chat write in
+ * the workspace returned HTTP 400 for sixteen hours. The answers themselves
+ * were never at risk — they are comments on the tickets, which is where the
+ * loops read them from — but the RECEIPT was unavailable, so nothing moved:
+ * 23 comments and 5 handbacks parked behind one surface.
+ *
+ * So the gate stays and the target moves. "Delivered" now means the message
+ * reached somewhere durable: the party line, or failing that a short receipt
+ * comment on the ticket the message concerns. Task comments were the most
+ * reliable write in this API throughout that outage.
+ */
+
+/** The dedup marker prefix. Exported so the text a pass WRITES and the
+ *  "already relayed" check that READS it can never drift apart. */
+const BUS_RELAY_MARKER = '[bus-relay]';
+
+/** What counts as delivered, given how each surface answered, and — when the
+ *  answer is "not delivered" — the honest one-line reason WHY, which the
+ *  caller prints verbatim.
+ *
+ *  That `why` is a decision, not a string: review finding, 2026-08-24. The
+ *  caller used to hard-code "the party line failed and so did the receipt
+ *  comment" for every undelivered case, including the case where no receipt
+ *  was ever attempted. During a real outage that line appeared for every
+ *  Agent Response comment and told the reader task comments were failing too
+ *  — the opposite of the truth, and the opposite of what this very file's
+ *  outage write-up says to conclude. Chat is still preferred; the fallback is
+ *  a fallback, not a second channel. */
+function deliveryVerdict({
+  chatOk, handsBack, receiptAttempted, receiptPosted, receiptOk, receiptStatus,
+} = {}) {
+  if (chatOk) return { ok: true, via: 'chat' };
+
+  // A ticket receipt only DELIVERS on a watch that hands the ticket back.
+  //
+  // Review finding, 2026-08-23, and it is the one that matters. Of the three
+  // watches, only one has a handback target:
+  //
+  //   Agent Response, fresh comment   -> no target
+  //   Loop Queue, "ready to launch"   -> no target
+  //   Loop Queue, "needs your input"  -> Queued        <- the only one
+  //
+  // The ticket's own reasoning for the fallback — "the answer is already a
+  // comment on the ticket, which is where every loop reads it from" — is only
+  // true for that last one. On the other two NOTHING reads the ticket: the
+  // party line IS the delivery. Counting a receipt there would post a note to
+  // Dane on a ticket he is already looking at, write the permanent dedup
+  // marker, and drop the bus message for good once chat recovered.
+  //
+  // Before this feature those two cases retried every pass until the bus took
+  // them. Turning a self-healing retry into silent permanent loss is the exact
+  // shape of bug this ticket exists to remove, so: no handback, no delivery.
+  if (!handsBack) {
+    return {
+      ok: false,
+      via: 'none',
+      why: receiptAttempted
+        ? 'a receipt was written, but this watch hands nothing back — only the party line delivers here'
+        : 'no receipt was attempted, because this watch hands nothing back — only the party line delivers here',
+    };
+  }
+
+  if (receiptOk) return { ok: true, via: 'ticket' };
+  if (!receiptAttempted) return { ok: false, via: 'none', why: 'no receipt was attempted' };
+  if (!receiptPosted) {
+    return { ok: false, via: 'none', why: `the fallback receipt comment also failed (HTTP ${receiptStatus == null ? '?' : receiptStatus})` };
+  }
+  return { ok: false, via: 'none', why: 'the fallback receipt reported HTTP 200 but could not be read back' };
+}
+
+/** The dedup marker's text. Same PREFIX whichever surface was used, so the
+ *  existing "already relayed" check still matches either one; the words
+ *  after it differ so a human reading the trail later can see which surface
+ *  carried the message. Nothing delivered means nothing to mark — null, and
+ *  the comment is retried next pass. */
+function relayMarkerText({ via, channel, at } = {}) {
+  if (via === 'chat') return `${BUS_RELAY_MARKER} sent to channel ${channel} at ${at}`;
+  if (via === 'ticket') return `${BUS_RELAY_MARKER} chat unavailable, receipted on the ticket at ${at}`;
+  return null;
+}
+
+/** The fallback comment itself. A RECEIPT, not a re-quote: Dane's words are
+ *  already on this ticket, one comment up. What is missing without this is
+ *  the acknowledgement that they were read and acted on. */
+const RECEIPT_FINGERPRINT = 'Your answer was read and picked up.';
+
+function receiptText({ why, target, at } = {}) {
+  // Past tense for what is certain, present for what is under way — never the
+  // future. Review finding, 2026-08-23: the first version announced "this
+  // ticket is going back to Queued" BEFORE the move was attempted, so a failed
+  // PUT left the ticket sitting in "Needs your input" carrying a comment
+  // saying otherwise. The failure was always reported in `unchecked`, but the
+  // untrue note stayed on the ticket.
+  //
+  // A receipt is only ever written on a watch that hands the ticket back, so
+  // `target` is always set by the time this is called.
+  const move = target ? ` This ticket is being returned to ${target}.` : '';
+  return `${RECEIPT_FINGERPRINT}${move} The party line is unavailable right now (${why || 'reason unknown'}), so this note is the record instead.
+
+${receiptSignature(at)}`;
+}
+
+/** The receipt's own signature line, carrying the moment it was written.
+ *
+ *  The timestamp is not decoration — it is what makes ONE receipt findable.
+ *  Review finding, 2026-08-24: the read-back searched every comment on the
+ *  task for RECEIPT_FINGERPRINT, which is a constant, so a leftover receipt
+ *  from an earlier outage "verified" a fresh POST that never stuck — the exact
+ *  case the read-back was added to catch. */
+function receiptSignature(at) {
+  return at ? `(Automatic — bus-relay, ${at}.)` : '(Automatic — bus-relay.)';
+}
+
+/** Is this comment the receipt we just wrote — not merely *a* receipt?
+ *
+ *  Two independent handles, either of which is enough: the id ClickUp returned
+ *  from the POST, and the ISO instant folded into the signature line. The id is
+ *  exact; the timestamp survives a response shape that carries no id. Both are
+ *  unique to this write, which a bare fingerprint never was. */
+function isThisReceipt(comment, { id, at } = {}) {
+  if (!comment) return false;
+  if (id != null && String(comment.id) === String(id)) return true;
+  const text = String(comment.comment_text || '');
+  return Boolean(at && text.includes(RECEIPT_FINGERPRINT) && text.includes(receiptSignature(at)));
+}
+
+/**
+ * Where a failed bus post gets reported. Two buckets, and the difference is
+ * whether anybody was actually told:
+ *
+ *   'skipped'   — cosmetic. The message reached a durable surface anyway, or
+ *                 (merge step) its real explanation was already written onto
+ *                 the ticket by the caller. Gets its own summary heading and
+ *                 does NOT fail the run.
+ *   'unchecked' — nobody was told. Still "could not fully verify", still
+ *                 exits 1. The gate is re-pointed, never weakened.
+ */
+function busFailureBucket({ delivered, cosmetic } = {}) {
+  return delivered || cosmetic ? 'skipped' : 'unchecked';
+}
+
+module.exports = {
+  defaultWatches,
+  handbackTarget,
+  mergeEnabled,
+  BUS_RELAY_MARKER,
+  RECEIPT_FINGERPRINT,
+  receiptSignature,
+  isThisReceipt,
+  deliveryVerdict,
+  relayMarkerText,
+  receiptText,
+  busFailureBucket,
+};

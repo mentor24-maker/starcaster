@@ -100,10 +100,16 @@ jobs:
       - name: Build output references only in-repo paths
         run: node scripts/check_build_paths.cjs
 
-      - name: Asset pins match a clean build
+      # Was "Asset pins match a clean build" — narrowed to '*.html' because
+      # committed HTML used to carry ?v= pins the build rewrote in place.
+      # Those pins left git on 2026-08-24 (task 86bbkh288), so the check is
+      # now the stronger, general form: a clean build must not modify ANY
+      # tracked file. A build that dirties the tree is hiding a committed
+      # artifact or an in-place rewrite, and both classes have bitten here.
+      - name: A clean build leaves the tree clean
         run: |
-          if ! git diff --exit-code -- '*.html'; then
-            echo "::error::Committed ?v= asset pins are stale (see diff above). Fix: run 'npm run build' locally and commit the updated HTML shells."
+          if ! git diff --exit-code; then
+            echo "::error::npm run build modified tracked files (see diff above). Generated output belongs in gitignored paths, never rewritten into committed ones."
             exit 1
           fi
 
