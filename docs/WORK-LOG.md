@@ -226,6 +226,31 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — Trying the "Report a problem" button while you build no longer files a real report (#403)
+
+The Bug Report module puts a little bug icon on a tenant's page; a visitor
+clicks it, describes what went wrong, and the report lands in the queue. The
+obvious thing to do after dropping that module onto a page is to click it
+yourself and see what happens — and until today, doing that filed a genuine
+report. Inside the Builder, where the site you are editing is already known,
+the row went in for real. Once the piece that turns reports into ClickUp tasks
+goes live, that same curious click would have put a task in your queue.
+
+Now the button behaves differently depending on where it is. On a published
+tenant page, nothing has changed at all — a real report, exactly as before.
+Anywhere else, which means the Builder and its preview, it still asks you to
+describe the problem, still shows the thank-you message the site owner wrote,
+and still closes itself after two seconds, so you see the whole thing a visitor
+would see. It just adds one quiet line underneath: *Preview — nothing was
+sent.* Nothing leaves the browser.
+
+Two smaller things came along with it. When a report genuinely cannot be sent,
+the visitor now reads one plain sentence instead of whatever the server said —
+some of those messages were written for a programmer and named internal fields,
+which tells a member of the public nothing they can act on. And the tests that
+cover this module used to check the "send" path while pretending to be in
+preview, which is exactly the confusion that hid the bug; they now run against
+a real page, with separate tests holding the preview side down.
 ## 2026-08-23 — Half the modules on a page didn't know which client they belonged to (#401)
 
 A published page is built from rows, and some rows float above the others as
