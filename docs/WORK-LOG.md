@@ -226,6 +226,30 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-22 — the layout checker can finally see the panels it was passing (#389)
+
+The tool that checks every settings panel for a tidy layout could only measure
+what was on screen, and most of the test page was blank. A panel that edits a
+repeating list — the Feature Cards, the Table of Contents, the breadcrumb trail
+— draws nothing at all when the list is empty, so the checker opened it, found
+nothing to measure, and reported a confident pass over an empty box. That is
+how two visibly broken panels reached you in August with a green run behind
+them.
+
+The test page now carries real content in every panel: at least two rows in
+every repeating list, every optional block switched on so its hidden controls
+actually draw, and one deliberately long piece of text per panel so the "wide
+enough for the longest label" half of the rule is tested rather than assumed.
+The two CRM panels needed a real form in the test database before they would
+draw anything at all, so the setup script now creates one. Net effect: the
+checker measures 660 panel columns instead of 648, and 1,065 label-and-field
+pairs instead of 1,009 — and, most of the point, the CRM Form panel turned out
+to be visibly staggered the moment it had something in it, which nobody could
+have seen before.
+
+Also fixed a wrong signpost: when the checker finds no panels at all it told
+you to go look at a list of module types that does not exist anywhere in the
+codebase. It now names the real thing.
 ## 2026-08-23 — The relay no longer stops when the chat room does (#414)
 
 Yesterday the whole task pipeline sat still for sixteen hours. Every one of
