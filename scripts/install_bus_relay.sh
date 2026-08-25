@@ -115,7 +115,7 @@ install() {
   fi
   if ! command -v doppler >/dev/null; then
     echo "Cannot find doppler on this machine. The relay reads its ClickUp token through" >&2
-    echo "Doppler, so the schedule would install and then fail every hour." >&2
+    echo "Doppler, so the schedule would install and then fail on every pass." >&2
     exit 1
   fi
 

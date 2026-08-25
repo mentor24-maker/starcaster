@@ -617,11 +617,22 @@ START pid=3165 23:33:26    END pid=3165 23:33:51
 START pid=3832 23:34:01
 ```
 
-Never two STARTs before an END. Note the second finding in that data: each run
-begins 10 seconds after the previous one **ended**, not 10 seconds after it
-began — launchd restarts the countdown from exit. So the true cadence is
-*interval + pass duration* (~10 minutes 14 seconds here), and a pass that ran
-long would simply push the next one later. It can never stack.
+Never two STARTs before an END — which is the load-bearing finding, and it was
+confirmed a second time by an independent 16-run probe in review.
+
+Note what the timings do *not* prove. Each run begins 10 seconds after the
+previous one **ended**, and it is tempting to read that as launchd restarting
+the countdown from exit. Apple documents `StartInterval` as a plain periodic
+timer whose firings are **coalesced** when the job is still running — several
+missed firings collapse into a single start. With a 25-second job on a
+10-second interval those two mechanisms produce identical logs, so this data
+cannot tell them apart, and coalescing is the documented one. The practical
+consequence is the same either way and is what actually matters: **a pass
+that runs long never stacks — it swallows the firings it overran.** The cost
+of a long pass is therefore a delay, not a double-post: approvals arriving
+while it runs wait on work already in flight. That is why the merge pass's
+worst case is pinned below one interval in
+`scripts/builder/mergeOnComment.test.js`.
 
 The consequence worth remembering: **overlap safety comes entirely from
 launchd, not from the relay's code.** Anything that runs the relay outside that
@@ -678,8 +689,39 @@ Round 1 of review fixed the check; round 2 caught what the check cannot see.
 `INTERVAL_SECONDS` and the plist are the two copies that *take effect*, and the
 drift check compares those. But the number is also stated in prose, and prose
 that says "hourly" after the machine stopped being hourly is wrong in exactly
-the way nobody notices — it never fails, it just misinforms. Every place that
-had to change with it, so the next change to this number knows where to look:
+the way nobody notices — it never fails, it just misinforms.
+
+**Do not trust a list here to be complete — run the search.** The list below
+was published in review round 2 under the heading "every place that had to
+change", and round 3 found it short by eight: the same stale word sitting in
+code comments and in one line of operator-visible stderr. A hand-maintained
+inventory of a scattered fact is itself a scattered fact. The check is one
+command and it is the only thing that actually answers the question:
+
+```
+git grep -niE "hourly|every hour"
+```
+
+Search for the **outgoing** wording, not the incoming one — the stale copies are
+the ones still saying the old thing. And search for the number spelled out as
+well as in digits: two of the six records above say "every **ten** minutes", so
+a future change away from 10 minutes wants
+`git grep -niE "ten minutes|10 minutes"` and would miss half the list without
+the words.
+
+Three families come back, and only the first needs touching:
+
+1. **States the current cadence** — the rows below. These go stale on a change.
+2. **Describes the past on purpose** — `scripts/bus_relay_interval.sh`,
+   `scripts/install_bus_relay.sh` (the `INTERVAL_SECONDS` history note), the
+   "it was hourly until 2026-08-23" sentences in this file, and every dated
+   entry in `docs/WORK-LOG.md`. Correct as they stand; changing them would
+   falsify the record. The work log in particular is a record of what was true
+   on a date and must never be back-edited to match today.
+3. **A different feature entirely** — `lib/builderPageRevisionsStore.js` and
+   its tests use "hourly" about page-revision bucketing. Unrelated; never touch.
+
+The places that state the cadence, and why each one matters:
 
 | Where | Why it matters |
 |---|---|
@@ -688,7 +730,18 @@ had to change with it, so the next change to this number knows where to look:
 | `docs/ecosystem/inventory.yaml` → `job-bus-relay` | **published** — `build_ecosystem_html.mjs` and `ecosystemNotes.js` render it, so a stale value ships to the page people read |
 | `docs/APPROVALS.md` | the operator-facing description of the one-word merge flow; a faster merge is the whole visible point of the change |
 | `.claude/skills/loop-review/SKILL.md` | tells the review loop what happens after `Ready to launch` |
+| `scripts/install_bus_relay.sh` install-time stderr | a person reads this one, on the machine, when doppler is missing |
+| code comments in `scripts/clickup_direct.mjs` and `scripts/builder/mergeOnComment.js` (+ its test) | they explain *why* a guard exists; a wrong cadence there misleads the next person to change the guard |
 | this file | the reasoning, the measurement, and the table you are reading |
+
+**Most of those comments no longer name a cadence at all.** Where the sentence
+only meant "on every pass" — dedup markers, quieted repeat comments, "ask again
+next time" — it now says exactly that, and is immune to the next change. Only
+the places where the *number itself* is load-bearing still carry one, and the
+one that matters most (the merge pass's worst-case bound) no longer states it
+in prose either: `scripts/builder/mergeOnComment.test.js` reads
+`INTERVAL_SECONDS` and asserts a pass cannot outlast one interval, so shortening
+the cadence again fails a test instead of quietly permitting an overrun.
 
 **Nothing checks the prose, and one thing nearly could.**
 `scripts/check_ecosystem_drift.cjs` probes the bus-relay job with its

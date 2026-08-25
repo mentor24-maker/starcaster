@@ -88,7 +88,20 @@ test('a missing plist is reported out loud, not by staying silent', () => {
   assert.strictEqual(code, 1);
   assert.match(out, /CANNOT TELL/);
   assert.ok(out.trim().length > 0, 'silence reads as all-clear; it must say something');
-  assert.match(out, /may not be running the relay on a schedule/);
+  assert.match(out, /nothing schedules the relay on this machine/);
+});
+
+test('the missing-plist advice names a next step, not a way to re-ask', () => {
+  // `--status` is one of the two callers of this check. Advising it here sent
+  // a machine with no relay installed round in a circle: --status printed "not
+  // installed", then told you to run --status. A CANNOT TELL branch exists to
+  // move someone forward, so it must name an action, never another question.
+  const { out } = run('', { plistExists: false });
+  assert.doesNotMatch(out, /--status/,
+    `must not send the reader back to a caller of this check: ${out}`);
+  // Both ways of being here, because they need opposite actions.
+  assert.match(out, /install_bus_relay\.sh/, 'names how to install it');
+  assert.match(out, /nodeRoles\.js/, 'names how to learn this machine should NOT run it');
 });
 
 test('both callers use the shared check rather than their own copy', () => {

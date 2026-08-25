@@ -64,12 +64,33 @@ if [ -z "$want" ]; then
 fi
 
 if [ ! -f "$PLIST" ]; then
+  # Name the NEXT STEP, not another way of asking the same question. This used
+  # to say "check with ./scripts/install_bus_relay.sh --status" — but --status
+  # is one of the two things that CALLS this check, so on a machine with no
+  # relay installed it printed "not installed" and then advised running the
+  # command that had just printed it. Advice that loops back on itself reads as
+  # a dead end, which is the opposite of what a CANNOT TELL is for.
+  #
+  # There are exactly two ways to be here, and they need opposite actions, so
+  # say both rather than guessing which machine this is.
   say "CANNOT TELL — no plist at $PLIST;"
-  say "  this machine may not be running the relay on a schedule at all. Check with:"
-  say "  cd $(main_checkout) && ./scripts/install_bus_relay.sh --status"
+  say "  nothing schedules the relay on this machine. Two possibilities:"
+  say "  - this machine SHOULD run it — install the schedule:"
+  say "      cd $(main_checkout) && ./scripts/install_bus_relay.sh"
+  say "  - it should not — then nothing is wrong. lib/nodeRoles.js says which"
+  say "      machine owns the job:  npm run node:owns -- bus-relay"
   exit 1
 fi
 
+# Why not `plutil -extract StartInterval raw`? It is format-agnostic (it would
+# also read a BINARY plist, which the parse below reports as CANNOT TELL) and
+# it would retire this regex. Deliberately not used: plutil is macOS-only, and
+# the node suite that pins this file runs on ubuntu in CI — so the plutil path
+# could never be exercised by the gate that is supposed to protect it, and a
+# check that silently does not run is the failure mode this whole file exists
+# to avoid. The installer only ever writes XML, and a binary plist's answer
+# today is CANNOT TELL, which is the safe one. Revisit if CI ever runs macOS.
+#
 # A plist is XML, not a line-oriented file — launchd accepts the whole <dict>
 # on a single line, and other keys (Nice, ThrottleInterval) carry <integer>
 # values of their own. So match the integer that FOLLOWS the StartInterval key,

@@ -16,6 +16,22 @@ const {
 const OPERATOR = 48012725;
 const AGENT = 99999999;
 
+/**
+ * How often the relay actually wakes, read from the one file that decides it.
+ * `INTERVAL_SECONDS` in scripts/install_bus_relay.sh generates the launchd
+ * plist, so it is the source of truth; copying the number into this test would
+ * just create a second place for it to be wrong.
+ */
+function relayIntervalSeconds() {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'install_bus_relay.sh'), 'utf8');
+  const m = src.match(/^INTERVAL_SECONDS=(\d+)/m);
+  assert.ok(m, 'install_bus_relay.sh must declare INTERVAL_SECONDS');
+  return Number(m[1]);
+}
+
 /** Comment factory: t is a relative timestamp so ordering is readable. */
 let nextId = 1;
 function c(t, userId, text) {
@@ -491,7 +507,7 @@ test('the hand-off marker and the reason the plumbing compares are the SAME stri
   // The quieting in clickup_direct.mjs compares the reason a previous pass
   // recorded against the one it just derived. If those two ever differ by a
   // character, a permanently-conflicting ticket gets an identical comment
-  // every hour instead of going silent.
+  // on every pass instead of going silent.
   const notice = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
   const derived = notice.marker.replace(/^refused:\s*/, '');
   const readBack = parseMergeMarker(`${MERGE_MARKER} ${notice.marker} — 2026-08-23T10:00:00.000Z`);
@@ -647,22 +663,32 @@ test('the budget is a named constant, roughly 2x the observed median', () => {
   // 85s median for `verify`. A literal here is how a tuned number becomes a
   // mystery number six months later.
   assert.equal(typeof IN_PASS_WAIT_MS, 'number');
+  // This range is about the MEDIAN, not about the schedule. The tighter of the
+  // two constraints is the next test: cap x budget must stay under the relay's
+  // interval, which at cap 3 and a 600s interval means a budget under 200s.
   assert.ok(IN_PASS_WAIT_MS >= 120_000 && IN_PASS_WAIT_MS <= 300_000,
     `budget should be ~2x the 85s median, got ${IN_PASS_WAIT_MS}ms`);
   assert.ok(IN_PASS_POLL_MS > 0 && IN_PASS_POLL_MS < IN_PASS_WAIT_MS);
 });
 
-test('worst case is bounded — cap x budget, not unbounded', () => {
-  // The relay wakes every 10 minutes, and launchd restarts that countdown from
-  // the previous pass's EXIT, so a pass running longer than the interval does
-  // not stack — it just pushes the next one later. The bound is therefore
-  // about the queue going stale, not about overlap: hold the pass open for
-  // much past a couple of intervals and approvals that arrive meanwhile wait
-  // on work already in flight.
+test('worst case is bounded — a pass cannot outlast its own interval', () => {
+  // launchd runs one instance per Label and COALESCES the firings it misses
+  // while a pass is still running, so a long pass can never stack. What it can
+  // do is swallow the firing it overran: approvals that arrived meanwhile then
+  // wait on work already in flight instead of being picked up next time round.
+  //
+  // So the bound is the relay's own interval — read from the source of truth
+  // rather than written down a second time here. A literal would be a number
+  // that stops agreeing with the schedule the moment either one moves, which
+  // is exactly what happened to the 15-minute bound this replaces: it was
+  // picked when the relay ran hourly, and it survived the change to 10 minutes
+  // still permitting a pass 1.5x longer than the whole interval.
+  const intervalMs = relayIntervalSeconds() * 1000;
   const worstMs = MAX_IN_PASS_WAITS * IN_PASS_WAIT_MS;
-  assert.ok(worstMs <= 15 * 60_000,
-    `a pass could hold open for ${Math.round(worstMs / 60_000)} minutes — more than a ` +
-    `couple of 10-minute intervals, so later approvals queue behind it`);
+  assert.ok(worstMs < intervalMs,
+    `a pass could hold open for ${Math.round(worstMs / 60_000)} minutes, which is not ` +
+    `shorter than the ${Math.round(intervalMs / 60_000)}-minute relay interval — it would ` +
+    `swallow its own next firing and delay approvals that arrive while it runs`);
 });
 
 test('the relay waits after BOTH catch-up paths, and merges the same way', () => {

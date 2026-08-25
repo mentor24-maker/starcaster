@@ -108,7 +108,7 @@ const { BUS_RELAY_MARKER } = busRelayPlan;
 // The relay marks a comment the moment it reaches the bus; the merge path
 // must only mark a comment once it has reached an answer (merged, handed to
 // a human, or refused with a reason on the ticket). "Checks are still
-// running" writes no marker, so the next hourly pass picks the same
+// running" writes no marker, so the next pass picks the same
 // authorization up instead of losing it.
 //
 // Not every marker is final. Since task 86bbjt18r a REFUSAL marker records
@@ -1634,7 +1634,7 @@ if (cmd === 'whoami') {
 
   let relayed = 0, skipped = 0, handedBack = 0;
   // How many tickets may hold this pass open waiting for CI. Worst case is
-  // cap x budget, which is what keeps an hourly pass from becoming unbounded
+  // cap x budget, which is what keeps a pass from becoming unbounded
   // and stops one stuck PR starving the rest (task 86bbk2fb5).
   const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
   const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0 };

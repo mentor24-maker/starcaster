@@ -1,4 +1,4 @@
-## 2026-08-23 — The robot that reads your replies now checks every 10 minutes (#426)
+## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp
 tickets and act on what you wrote — most importantly, to merge a PR when you
@@ -49,6 +49,31 @@ instructions. All three now say ten minutes. Worth naming the pattern — the
 number lives in six places, only two of which make anything happen, and nothing
 checks the other four. They are now listed in one table so the next person to
 change it knows where to look.
+
+A third review round then made the neatest point of the three: that table said
+"every place" and was short by eight. The word "hourly" was still sitting in a
+handful of code comments explaining why various safety guards exist, and in one
+message printed on screen to whoever installs the program. None of it breaks
+anything — it just quietly misinforms the next person, which is the same
+failure the previous round was sent back for, moved one layer down. All eight
+are fixed, and most of them no longer name a schedule at all: where the sentence
+only ever meant "every time it runs", it now says that, so it cannot go stale
+again. The table has stopped claiming to be complete and instead hands you the
+one-line search that actually is — with a note that the number is written out as
+"ten minutes" in some places and "10" in others, which is exactly how half a
+list like this gets missed.
+
+Two smaller things came out of the same round. There was a limit in the code
+meant to stop a single run dragging on forever, set to fifteen minutes back when
+the program ran hourly — so after the speed-up it was permitting a run half
+again as long as the entire gap between runs. It is no longer a number anyone
+typed: the test now reads the real schedule and insists a run must finish inside
+it, so if the timer is ever shortened again this fails loudly instead of
+silently allowing an overrun. And the "I could not read it" message had been
+telling you to check by running the very command that had just printed it — a
+circle. It now names the two things that could actually be true and what to do
+about each. Both are pinned by tests, and I broke each on purpose first to
+confirm the tests can fail rather than trusting a green run.
 
 ## 2026-08-25 — The top of every module panel lines up now, and images can cast a shadow
 
