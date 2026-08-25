@@ -349,6 +349,36 @@ Vertical margin and mobile/desktop visibility come from the shared module
 chrome. A per-type editor that adds its own produces two controls for one
 setting, and the operator learns that changing the wrong one does nothing.
 
+#### E6b. The chrome is ONE lattice column `[auto]` *(added 2026-08-25)*
+
+Every shared row at the top of a panel — Label, Background, Alignment, the
+margins, the nudge, Width — is a row of the **same** grid: one label track,
+one control track, measured over all of them together. Nothing beside it,
+nothing above it in a strip of its own.
+
+*Incident:* the strip that holds most of those rows was already the grid, and
+two of the rows were not in it. `Label` was a strip of its own above the
+chrome, and `Background` was a sibling of the strip rather than a member — so
+a panel opened with **three** label tracks stacked above the axis columns,
+each sized to its own content. Measured on the image module at 1600px: their
+controls started at x=182, x=237 and x=552. The operator photographed exactly
+that on 2026-08-25 and said the image module had "drifted away from our module
+UI standards", which it had — the module is the reference implementation for
+everything *below* the chrome, and the chrome was never in the picture.
+
+Two things had hidden it. `--feature-cards` and `--carousel` carried a rule
+stacking their chrome vertically, which treated the symptom in the two panels
+narrow enough to show it. And `check_panels` measured the chrome by
+`.builder-module-chrome .builder-module-field-strip` — any DESCENDANT strip —
+so the background picker's own strip was scored as a group of one, and a group
+of one always agrees with itself. Both are gone: the rows are one strip in
+`builder-module-card.tsx`, and the check takes the chrome's strip by direct
+child so the background's rows are inside the group where they can disagree.
+
+**Checked by:** `npm run check:panels`. Prove it: make
+`.builder-background-controls-horizontal` anything but `display: contents`
+inside the chrome and watch every chrome row report a slipped cell.
+
 #### E7. No dead controls, and no invisible settings `[eye]`
 
 A control that changes a setting nothing renders is a bug wearing a feature's
