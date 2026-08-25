@@ -90,9 +90,15 @@ write any code here. You produce well-formed tasks.
    - [ ] Concrete, checkable outcomes. The build loop is done when all are met.
 
    ## How to test
-   - Steps a human (or the review loop) follows to confirm it works: the exact
-     address to open, the exact clicks, and what should appear. "Open the page
-     in a browser" is not a step.
+   - Steps **the operator** can follow, not steps a developer can follow.
+     Every step is one of exactly two things:
+       1. **a link he can click**, or
+       2. **an exact command to copy and paste**, with the output it should
+          print written next to it.
+     No step may assume the reader knows where to go or what "right" looks
+     like. "Open the page in a browser" is not a step. Neither is "run the
+     generator and open the SVG" — that is a developer's instruction wearing
+     a test's clothes.
 
    ## Risk
    low | medium | high — and one line on the blast radius.
@@ -159,6 +165,17 @@ not a way around the format.
   refactor, say so and propose how to slice it, rather than filing one giant
   task.
 - Never file a task whose acceptance criteria you couldn't verify yourself.
+- **Read your own "How to test" back as Dane.** He said it plainly on task
+  86bbh7qer:
+
+  > This should include a clickable link I can click to test... none of the "How to test" options are clear how I actually do it.
+
+  A step he
+  cannot act on without asking a follow-up question is not a test step, and a
+  ticket full of them hands the verifying back to him at the exact moment the
+  loop was supposed to have done it. If the work has a visible surface and you
+  cannot name a link, say so in the ticket — that is a scoping problem worth
+  seeing, not a formatting one to paper over.
 
 ## First-time setup
 

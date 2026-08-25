@@ -8,33 +8,30 @@
  * merged locally with nothing to resolve. Each hand-off stalls a merge the
  * operator had already authorized.
  *
- * The cause is in this repo's own .gitattributes. Four committed HTML files
- * carry `?v=` cache-busting pins rebuilt from whatever the build produced, so
- * any two branches touching anything bundled collide there even when neither
- * edited a word of markup. `scripts/merge_asset_pins.cjs` resolves them by
- * asset path — but git refuses to run a merge driver defined by a cloned repo,
- * so it lives in .git/config and `scripts/install_git_hooks.cjs` registers it
- * on every install. GITHUB THEREFORE CANNOT RUN IT. GitHub does a plain merge,
- * sees two different hashes on one line, and reports a conflict.
+ * The original cause was `?v=` asset pins committed inside HTML files, merged
+ * by a local driver GitHub could not run — retired on 2026-08-24 (tasks
+ * 86bbkh1nn, 86bbkh288): no committed file carries a pin any more, so that
+ * whole class of phantom conflict is gone, along with the driver itself and
+ * this module's driver check and stale-pin detection.
  *
- * (The WORK-LOG.md `union` driver in the same file is git's own built-in, so
- * GitHub does honour that one. Only asset-pins is invisible to it.)
+ * The module stays, because it still earns its keep two ways: GitHub's
+ * mergeability answer lags reality (it reports stale state for minutes after a
+ * push), and a BEHIND branch needs catching up regardless. An ordinary local
+ * merge remains the honest way to ask "does this branch really conflict?" and
+ * the safe way to catch it up when it does not.
  *
- * The relay was right to refuse — resolving a conflict blind is exactly what a
- * script must never do (task 86bbjd5nn, binding). It was asking the wrong
- * machine. It runs on a node that HAS the driver, so it can find out for real
- * instead of taking GitHub's word.
+ * The relay is right to refuse on a real conflict — resolving one blind is
+ * exactly what a script must never do (task 86bbjd5nn, binding).
  *
  * WHAT THIS IS NOT. It does not resolve conflicts. It attempts an ordinary
  * merge and reports what happened. If anything conflicts, it aborts, cleans up
  * and says so — the hand-off proceeds exactly as before. The only case it
- * changes is the one where the merge is CLEAN here and GitHub said it was not,
- * and nothing but the missing driver can explain that difference.
+ * changes is the one where the merge is CLEAN here and GitHub said it was not — usually because GitHub's answer is stale.
  *
  * THE FAILURE RULE. Every outcome that is not a proven-clean merge is a
- * hand-off. Wrong repo, missing driver, failed fetch, failed push, a merge that
- * somehow does not contain main — all of them hand over. A check that could not
- * run reports "cannot tell", never a pass (DOCTRINE 3.11).
+ * hand-off. Wrong repo, failed fetch, failed push, a merge that somehow does
+ * not contain main — all of them hand over. A check that could not run
+ * reports "cannot tell", never a pass (DOCTRINE 3.11).
  *
  * AND IT NEVER FORCE-PUSHES. The push is a fast-forward of the branch onto a
  * merge commit that already contains it, so an ordinary push always works. If
@@ -49,18 +46,17 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
-/** The driver .gitattributes names for the pin files. Absent = we are blind. */
-const PIN_DRIVER_KEY = 'merge.asset-pins.driver';
-
 /**
  * Outcomes. Only `clean` authorizes a push; everything else hands over, and
  * `reason` is written for the operator, not for a log grep.
+ *
+ * NEEDS_REBUILD, NO_DRIVER and CANNOT_TELL were retired on 2026-08-24
+ * (task 86bbkh288) with the committed asset pins that made them necessary.
  */
 const CODES = Object.freeze({
   CLEAN: 'clean',
   REAL_CONFLICT: 'real-conflict',
   WRONG_REPO: 'wrong-repo',
-  NO_DRIVER: 'no-driver',
   FETCH_FAILED: 'fetch-failed',
   WORKTREE_FAILED: 'worktree-failed',
   NOT_ANCESTOR: 'not-ancestor',
@@ -88,19 +84,6 @@ function parseRepoFromRemoteUrl(url) {
   return m ? `${m[1]}/${m[2]}` : '';
 }
 
-/**
- * Is the pin driver actually registered on this machine?
- *
- * This matters more than it looks. Without it git falls back to the default
- * merge SILENTLY — the same answer GitHub gives — so a "conflict" here would
- * prove nothing at all. Asking the config is the only honest test; the file
- * existing on disk is not one.
- */
-function assetPinDriverInstalled(runGit = defaultRunGit, cwd = process.cwd()) {
-  const res = runGit(['config', '--get', PIN_DRIVER_KEY], { cwd });
-  return Boolean(res.ok && res.stdout);
-}
-
 /** Which files git left with conflict markers. */
 function conflictedFiles(runGit, cwd) {
   const res = runGit(['diff', '--name-only', '--diff-filter=U'], { cwd });
@@ -113,8 +96,7 @@ function conflictedFiles(runGit, cwd) {
  *
  * Isolated on purpose: a detached worktree in a temp directory touches no
  * existing checkout, switches nobody's branch, and cannot pick up another
- * thread's uncommitted edits. (.git/config is shared across worktrees, which
- * is exactly why the driver is available inside it.)
+ * thread's uncommitted edits.
  *
  * @returns {{ code: string, ok: boolean, reason: string, files?: string[] }}
  *   `ok` is true only for CLEAN.
@@ -146,16 +128,7 @@ function catchUpBranchLocally({
     };
   }
 
-  // 2. Without the driver we would just be reproducing GitHub's answer.
-  if (!assetPinDriverInstalled(runGit, cwd)) {
-    return {
-      code: CODES.NO_DRIVER,
-      ok: false,
-      reason: `the ${PIN_DRIVER_KEY} merge driver is not registered on this machine, so a local merge proves nothing GitHub has not already said — run "npm install" here`,
-    };
-  }
-
-  // 3. Fresh refs, or we would be merging a stale main into a stale branch and
+  // 2. Fresh refs, or we would be merging a stale main into a stale branch and
   //    calling the result current.
   const fetched = runGit(['fetch', 'origin', branchName, base], { cwd });
   if (!fetched.ok) {
@@ -172,7 +145,7 @@ function catchUpBranchLocally({
     }
     added = true;
 
-    // 4. An ordinary merge. Never a rebase: the branch may only ever gain
+    // 3. An ordinary merge. Never a rebase: the branch may only ever gain
     //    commits, so the push below stays a fast-forward.
     const merged = runGit(['merge', `origin/${base}`, '--no-edit'], { cwd: tree });
     if (!merged.ok) {
@@ -188,13 +161,13 @@ function catchUpBranchLocally({
       };
     }
 
-    // 5. Prove the result actually contains main before pushing it anywhere.
+    // 4. Prove the result actually contains main before pushing it anywhere.
     const contains = runGit(['merge-base', '--is-ancestor', `origin/${base}`, 'HEAD'], { cwd: tree });
     if (!contains.ok) {
       return { code: CODES.NOT_ANCESTOR, ok: false, reason: `the merged tree does not contain ${base} — refusing to push it` };
     }
 
-    // 6. Fast-forward only, by construction. No --force, ever.
+    // 5. Fast-forward only, by construction. No --force, ever.
     const pushed = runGit(['push', 'origin', `HEAD:refs/heads/${branchName}`], { cwd: tree });
     if (!pushed.ok) {
       return {
@@ -216,8 +189,6 @@ function catchUpBranchLocally({
 
 module.exports = {
   CODES,
-  PIN_DRIVER_KEY,
   parseRepoFromRemoteUrl,
-  assetPinDriverInstalled,
   catchUpBranchLocally,
 };

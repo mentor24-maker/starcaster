@@ -18,6 +18,7 @@ const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
 const { forwardBugReport } = require('../lib/bugReportForward');
+const { emailBugReport } = require('../lib/bugReportEmail');
 const {
   storeBugReportScreenshot,
   verifyBugReportScreenshots,
@@ -56,10 +57,15 @@ async function resolveBugReportProject(req, projectIdInput) {
   const bind = await assertProjectIdAllowedOnHost(req, projectId);
   if (!bind.ok) return { ok: false, status: bind.status || 403, error: bind.error, code: bind.code };
   if (bind.projectId) return { ok: true, projectId: String(bind.projectId) };
-  if (!projectId) return { ok: false, status: 400, error: 'projectId is required', code: 'VALIDATION_ERROR' };
+  // Plain language, not `projectId is required` / `Unknown project`: these two
+  // are the only messages from this resolver a member of the public can read,
+  // and both mean the same thing to them — the form on this page is not wired
+  // to a site. Developer-speak in a visitor-facing dialog tells them nothing
+  // they can act on. The `code` still carries the detail for the logs.
+  if (!projectId) return { ok: false, status: 400, error: 'This report form is not connected to a site, so nothing could be sent.', code: 'VALIDATION_ERROR' };
   const project = await getPublicProjectById(projectId);
   if (!project.ok || !project.data) {
-    return { ok: false, status: 404, error: 'Unknown project', code: 'PROJECT_NOT_FOUND' };
+    return { ok: false, status: 404, error: 'This report form points to a site we do not recognise.', code: 'PROJECT_NOT_FOUND' };
   }
   return { ok: true, projectId: String(project.data.id) };
 }
@@ -360,11 +366,19 @@ async function handle(req, res, pathname, method) {
     // the function once the response goes out.
     const forward = await forwardBugReport(result.data, scope);
 
+    // Same contract again, and independent of the forward above: whether the
+    // ClickUp task landed has no bearing on whether the operator asked to be
+    // emailed. Awaited for the same freeze reason; cannot throw, cannot fail
+    // the reporter's request, and never trusts the request body for the
+    // toggle (lib/bugReportEmail.js, rule 4).
+    const emailed = await emailBugReport(result.data, scope);
+
     return respondJson(res, req, 201, {
       ok: true,
       data: {
         ...result.data,
         status: forward.ok ? 'forwarded' : 'failed_forward',
+        emailed: emailed.sent,
         screenshots: screenshots.data.assets,
       },
     }), true;

@@ -1349,6 +1349,15 @@ export function BuilderTemplatePreview({
       overlapsHero={overlapSectionIds.has(section.id)}
       previewMode={previewMode}
       liveSite={liveSite}
+      // The overlay path below has always passed this; ordinary rows did not,
+      // so a module in a normal row got projectId="" while the SAME module in
+      // an overlay row got the real id. It has gone unnoticed because on a
+      // custom domain the server resolves the project from the request host,
+      // which covers the empty value — the gap only shows where the host binds
+      // no project (previews, system hosts, local dev), and there the request
+      // 400s. Found in review round 5 of the Bug Report module (PR #365),
+      // where it fired `?projectId=` empty.
+      projectId={projectId}
       section={
         joined
           ? { ...section, background: createDefaultBackgroundSettings(), widthMode: "contained" }

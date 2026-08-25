@@ -9,9 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const {
   CODES,
-  PIN_DRIVER_KEY,
   parseRepoFromRemoteUrl,
-  assetPinDriverInstalled,
   catchUpBranchLocally,
 } = require('./branchCatchUp');
 
@@ -20,10 +18,10 @@ const {
  * not conflicts. This module lets it ask the machine it is running on instead
  * of taking GitHub's word.
  *
- * The premise is a factual claim about git — "the asset-pin driver turns a
- * conflicting merge into a clean one, and GitHub cannot run it" — so the
- * centrepiece here is a REAL git repository, not a mock. A mocked git would
- * happily confirm any premise I wrote into it, including a wrong one.
+ * The centrepiece is a REAL git repository, not a mock — a mocked git would
+ * happily confirm any premise written into it. (The original premise test,
+ * that the asset-pin driver turned a conflicting merge clean, retired with
+ * the pins themselves on 2026-08-24, task 86bbkh288.)
  *
  * The mocked tests cover the decision table around that: every way the check
  * can fail must hand over, and none of them may report clean.
@@ -36,14 +34,12 @@ function git(args, cwd) {
   return { ok: out.status === 0, stdout: String(out.stdout || '').trim(), stderr: String(out.stderr || '').trim() };
 }
 
-const DRIVER = path.resolve(__dirname, '../merge_asset_pins.cjs');
-
 /**
- * A bare "origin" plus a working clone, with one pin-carrying HTML file that
- * two branches both change — which is precisely the collision .gitattributes
- * exists for.
+ * A bare "origin" plus a working clone. The branch and main each add their own
+ * file (a clean catch-up); with alsoConflictForReal they both edit the same
+ * line of the same file (a genuine conflict a script must hand over).
  */
-function buildRepo({ installDriver, alsoConflictForReal = false }) {
+function buildRepo({ alsoConflictForReal = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-catchup-test-'));
   const origin = path.join(root, 'origin.git');
   const work = path.join(root, 'work');
@@ -53,36 +49,28 @@ function buildRepo({ installDriver, alsoConflictForReal = false }) {
   git(['config', 'user.email', 'test@example.com'], work);
   git(['config', 'user.name', 'Test'], work);
 
-  fs.writeFileSync(path.join(work, '.gitattributes'), 'site.html merge=asset-pins\n');
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/bundle.js?v=aaaaaaaa"></script>\n<p>shared</p>\n</html>\n');
+  fs.writeFileSync(path.join(work, 'site.html'), '<html>\n<p>shared</p>\n</html>\n');
   fs.writeFileSync(path.join(work, 'other.txt'), 'base\n');
   git(['add', '-A'], work);
   git(['commit', '-m', 'base'], work);
   git(['push', 'origin', 'main'], work);
 
-  // The branch: a different pin, and its own file.
+  // The branch: its own file.
   git(['checkout', '-b', 'feature'], work);
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/bundle.js?v=bbbbbbbb"></script>\n<p>shared</p>\n</html>\n');
+  fs.writeFileSync(path.join(work, 'feature.txt'), 'feature work\n');
   if (alsoConflictForReal) fs.writeFileSync(path.join(work, 'other.txt'), 'branch version\n');
   git(['add', '-A'], work);
   git(['commit', '-m', 'feature'], work);
   git(['push', 'origin', 'feature'], work);
 
-  // main moves on: a THIRD pin on the same line.
+  // main moves on: its own file too, so the branch is BEHIND but clean.
   git(['checkout', 'main'], work);
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/bundle.js?v=cccccccc"></script>\n<p>shared</p>\n</html>\n');
+  fs.writeFileSync(path.join(work, 'main.txt'), 'main moved\n');
   if (alsoConflictForReal) fs.writeFileSync(path.join(work, 'other.txt'), 'main version\n');
   git(['add', '-A'], work);
   git(['commit', '-m', 'main moves'], work);
   git(['push', 'origin', 'main'], work);
 
-  if (installDriver) {
-    git(['config', 'merge.asset-pins.name', 'pins'], work);
-    git(['config', 'merge.asset-pins.driver', `node ${DRIVER} %O %A %B %P`], work);
-  }
   return { root, origin, work };
 }
 
@@ -90,27 +78,8 @@ function cleanup(root) {
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
-test('THE PREMISE: without the driver the pin merge conflicts, with it it does not', (t) => {
-  const bare = buildRepo({ installDriver: false });
-  t.after(() => cleanup(bare.root));
-
-  // No driver — this is what GitHub sees.
-  git(['checkout', 'feature'], bare.work);
-  const plain = git(['merge', 'main', '--no-edit'], bare.work);
-  assert.equal(plain.ok, false, 'without the driver, the pins must collide — otherwise this whole module is solving nothing');
-  const stuck = git(['diff', '--name-only', '--diff-filter=U'], bare.work);
-  assert.match(stuck.stdout, /site\.html/);
-  git(['merge', '--abort'], bare.work);
-
-  // Same repository, same commits, driver registered — this is what we see.
-  git(['config', 'merge.asset-pins.name', 'pins'], bare.work);
-  git(['config', 'merge.asset-pins.driver', `node ${DRIVER} %O %A %B %P`], bare.work);
-  const driven = git(['merge', 'main', '--no-edit'], bare.work);
-  assert.equal(driven.ok, true, 'with the driver the same merge is clean — that difference IS the false conflict');
-});
-
-test('a false conflict is caught up and pushed', (t) => {
-  const repo = buildRepo({ installDriver: true });
+test('a branch that is merely behind is caught up and pushed', (t) => {
+  const repo = buildRepo();
   t.after(() => cleanup(repo.root));
 
   const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
@@ -129,7 +98,7 @@ test('a false conflict is caught up and pushed', (t) => {
 });
 
 test('the push is a fast-forward — the branch only ever gains commits', (t) => {
-  const repo = buildRepo({ installDriver: true });
+  const repo = buildRepo();
   t.after(() => cleanup(repo.root));
 
   const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
@@ -144,7 +113,7 @@ test('the push is a fast-forward — the branch only ever gains commits', (t) =>
 });
 
 test('a REAL conflict is refused, named, and leaves the branch untouched', (t) => {
-  const repo = buildRepo({ installDriver: true, alsoConflictForReal: true });
+  const repo = buildRepo({ alsoConflictForReal: true });
   t.after(() => cleanup(repo.root));
 
   const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
@@ -153,29 +122,18 @@ test('a REAL conflict is refused, named, and leaves the branch untouched', (t) =
   assert.equal(out.code, CODES.REAL_CONFLICT);
   assert.equal(out.ok, false);
   assert.ok(out.files.includes('other.txt'), `should name the overlapping file, got ${JSON.stringify(out.files)}`);
-  assert.ok(!out.files.includes('site.html'), 'the pin file was resolved by the driver and is not the conflict');
 
   git(['fetch', 'origin'], repo.work);
   assert.equal(git(['rev-parse', 'origin/feature'], repo.work).stdout, before, 'nothing may be pushed on a real conflict');
 });
 
 test('the scratch worktree is always cleaned up, conflict or not', (t) => {
-  const repo = buildRepo({ installDriver: true, alsoConflictForReal: true });
+  const repo = buildRepo({ alsoConflictForReal: true });
   t.after(() => cleanup(repo.root));
 
   catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
   const list = git(['worktree', 'list'], repo.work).stdout;
   assert.equal(list.split('\n').filter(Boolean).length, 1, `only the main worktree should remain:\n${list}`);
-});
-
-test('without the driver registered it refuses rather than reproducing GitHub', (t) => {
-  const repo = buildRepo({ installDriver: false });
-  t.after(() => cleanup(repo.root));
-
-  const out = catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
-  assert.equal(out.code, CODES.NO_DRIVER);
-  assert.equal(out.ok, false);
-  assert.match(out.reason, /npm install/, 'the message must say how to fix it');
 });
 
 // ── The decision table, with git stubbed out ──────────────────────────────
@@ -281,15 +239,6 @@ test('NO failure path ever reports ok — the whole safety rule, in one assertio
     assert.ok(out.reason, `${f.label} must say why`);
   }
 });
-
-test('a missing driver config is detected, not assumed present', () => {
-  assert.equal(assetPinDriverInstalled(() => ({ ok: false, stdout: '', stderr: '' }), '/x'), false);
-  assert.equal(assetPinDriverInstalled(() => ({ ok: true, stdout: '', stderr: '' }), '/x'), false);
-  assert.equal(assetPinDriverInstalled(() => ({ ok: true, stdout: 'node d.cjs', stderr: '' }), '/x'), true);
-  assert.equal(PIN_DRIVER_KEY, 'merge.asset-pins.driver');
-});
-
-// ── The relay must actually call it, and only where it is safe ────────────
 
 test('the relay asks locally before handing a conflict over', () => {
   const src = fs.readFileSync(path.join(__dirname, '../clickup_direct.mjs'), 'utf8');
