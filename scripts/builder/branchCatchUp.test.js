@@ -9,9 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const {
   CODES,
-  PIN_DRIVER_KEY,
   parseRepoFromRemoteUrl,
-  assetPinDriverInstalled,
   catchUpBranchLocally,
 } = require('./branchCatchUp');
 
@@ -20,10 +18,10 @@ const {
  * not conflicts. This module lets it ask the machine it is running on instead
  * of taking GitHub's word.
  *
- * The premise is a factual claim about git — "the asset-pin driver turns a
- * conflicting merge into a clean one, and GitHub cannot run it" — so the
- * centrepiece here is a REAL git repository, not a mock. A mocked git would
- * happily confirm any premise I wrote into it, including a wrong one.
+ * The centrepiece is a REAL git repository, not a mock — a mocked git would
+ * happily confirm any premise written into it. (The original premise test,
+ * that the asset-pin driver turned a conflicting merge clean, retired with
+ * the pins themselves on 2026-08-24, task 86bbkh288.)
  *
  * The mocked tests cover the decision table around that: every way the check
  * can fail must hand over, and none of them may report clean.
@@ -36,14 +34,12 @@ function git(args, cwd) {
   return { ok: out.status === 0, stdout: String(out.stdout || '').trim(), stderr: String(out.stderr || '').trim() };
 }
 
-const DRIVER = path.resolve(__dirname, '../merge_asset_pins.cjs');
-
 /**
- * A bare "origin" plus a working clone, with one pin-carrying HTML file that
- * two branches both change — which is precisely the collision .gitattributes
- * exists for.
+ * A bare "origin" plus a working clone. The branch and main each add their own
+ * file (a clean catch-up); with alsoConflictForReal they both edit the same
+ * line of the same file (a genuine conflict a script must hand over).
  */
-function buildRepo({ installDriver, alsoConflictForReal = false }) {
+function buildRepo({ alsoConflictForReal = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-catchup-test-'));
   const origin = path.join(root, 'origin.git');
   const work = path.join(root, 'work');
@@ -53,36 +49,28 @@ function buildRepo({ installDriver, alsoConflictForReal = false }) {
   git(['config', 'user.email', 'test@example.com'], work);
   git(['config', 'user.name', 'Test'], work);
 
-  fs.writeFileSync(path.join(work, '.gitattributes'), 'site.html merge=asset-pins\n');
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/bundle.js?v=aaaaaaaa"></script>\n<p>shared</p>\n</html>\n');
+  fs.writeFileSync(path.join(work, 'site.html'), '<html>\n<p>shared</p>\n</html>\n');
   fs.writeFileSync(path.join(work, 'other.txt'), 'base\n');
   git(['add', '-A'], work);
   git(['commit', '-m', 'base'], work);
   git(['push', 'origin', 'main'], work);
 
-  // The branch: a different pin, and its own file.
+  // The branch: its own file.
   git(['checkout', '-b', 'feature'], work);
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/bundle.js?v=bbbbbbbb"></script>\n<p>shared</p>\n</html>\n');
+  fs.writeFileSync(path.join(work, 'feature.txt'), 'feature work\n');
   if (alsoConflictForReal) fs.writeFileSync(path.join(work, 'other.txt'), 'branch version\n');
   git(['add', '-A'], work);
   git(['commit', '-m', 'feature'], work);
   git(['push', 'origin', 'feature'], work);
 
-  // main moves on: a THIRD pin on the same line.
+  // main moves on: its own file too, so the branch is BEHIND but clean.
   git(['checkout', 'main'], work);
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/bundle.js?v=cccccccc"></script>\n<p>shared</p>\n</html>\n');
+  fs.writeFileSync(path.join(work, 'main.txt'), 'main moved\n');
   if (alsoConflictForReal) fs.writeFileSync(path.join(work, 'other.txt'), 'main version\n');
   git(['add', '-A'], work);
   git(['commit', '-m', 'main moves'], work);
   git(['push', 'origin', 'main'], work);
 
-  if (installDriver) {
-    git(['config', 'merge.asset-pins.name', 'pins'], work);
-    git(['config', 'merge.asset-pins.driver', `node ${DRIVER} %O %A %B %P`], work);
-  }
   return { root, origin, work };
 }
 
@@ -90,27 +78,8 @@ function cleanup(root) {
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
-test('THE PREMISE: without the driver the pin merge conflicts, with it it does not', (t) => {
-  const bare = buildRepo({ installDriver: false });
-  t.after(() => cleanup(bare.root));
-
-  // No driver — this is what GitHub sees.
-  git(['checkout', 'feature'], bare.work);
-  const plain = git(['merge', 'main', '--no-edit'], bare.work);
-  assert.equal(plain.ok, false, 'without the driver, the pins must collide — otherwise this whole module is solving nothing');
-  const stuck = git(['diff', '--name-only', '--diff-filter=U'], bare.work);
-  assert.match(stuck.stdout, /site\.html/);
-  git(['merge', '--abort'], bare.work);
-
-  // Same repository, same commits, driver registered — this is what we see.
-  git(['config', 'merge.asset-pins.name', 'pins'], bare.work);
-  git(['config', 'merge.asset-pins.driver', `node ${DRIVER} %O %A %B %P`], bare.work);
-  const driven = git(['merge', 'main', '--no-edit'], bare.work);
-  assert.equal(driven.ok, true, 'with the driver the same merge is clean — that difference IS the false conflict');
-});
-
-test('a false conflict is caught up and pushed', (t) => {
-  const repo = buildRepo({ installDriver: true });
+test('a branch that is merely behind is caught up and pushed', (t) => {
+  const repo = buildRepo();
   t.after(() => cleanup(repo.root));
 
   const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
@@ -129,7 +98,7 @@ test('a false conflict is caught up and pushed', (t) => {
 });
 
 test('the push is a fast-forward — the branch only ever gains commits', (t) => {
-  const repo = buildRepo({ installDriver: true });
+  const repo = buildRepo();
   t.after(() => cleanup(repo.root));
 
   const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
@@ -144,7 +113,7 @@ test('the push is a fast-forward — the branch only ever gains commits', (t) =>
 });
 
 test('a REAL conflict is refused, named, and leaves the branch untouched', (t) => {
-  const repo = buildRepo({ installDriver: true, alsoConflictForReal: true });
+  const repo = buildRepo({ alsoConflictForReal: true });
   t.after(() => cleanup(repo.root));
 
   const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
@@ -153,29 +122,18 @@ test('a REAL conflict is refused, named, and leaves the branch untouched', (t) =
   assert.equal(out.code, CODES.REAL_CONFLICT);
   assert.equal(out.ok, false);
   assert.ok(out.files.includes('other.txt'), `should name the overlapping file, got ${JSON.stringify(out.files)}`);
-  assert.ok(!out.files.includes('site.html'), 'the pin file was resolved by the driver and is not the conflict');
 
   git(['fetch', 'origin'], repo.work);
   assert.equal(git(['rev-parse', 'origin/feature'], repo.work).stdout, before, 'nothing may be pushed on a real conflict');
 });
 
 test('the scratch worktree is always cleaned up, conflict or not', (t) => {
-  const repo = buildRepo({ installDriver: true, alsoConflictForReal: true });
+  const repo = buildRepo({ alsoConflictForReal: true });
   t.after(() => cleanup(repo.root));
 
   catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
   const list = git(['worktree', 'list'], repo.work).stdout;
   assert.equal(list.split('\n').filter(Boolean).length, 1, `only the main worktree should remain:\n${list}`);
-});
-
-test('without the driver registered it refuses rather than reproducing GitHub', (t) => {
-  const repo = buildRepo({ installDriver: false });
-  t.after(() => cleanup(repo.root));
-
-  const out = catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
-  assert.equal(out.code, CODES.NO_DRIVER);
-  assert.equal(out.ok, false);
-  assert.match(out.reason, /npm install/, 'the message must say how to fix it');
 });
 
 // ── The decision table, with git stubbed out ──────────────────────────────
@@ -282,15 +240,6 @@ test('NO failure path ever reports ok — the whole safety rule, in one assertio
   }
 });
 
-test('a missing driver config is detected, not assumed present', () => {
-  assert.equal(assetPinDriverInstalled(() => ({ ok: false, stdout: '', stderr: '' }), '/x'), false);
-  assert.equal(assetPinDriverInstalled(() => ({ ok: true, stdout: '', stderr: '' }), '/x'), false);
-  assert.equal(assetPinDriverInstalled(() => ({ ok: true, stdout: 'node d.cjs', stderr: '' }), '/x'), true);
-  assert.equal(PIN_DRIVER_KEY, 'merge.asset-pins.driver');
-});
-
-// ── The relay must actually call it, and only where it is safe ────────────
-
 test('the relay asks locally before handing a conflict over', () => {
   const src = fs.readFileSync(path.join(__dirname, '../clickup_direct.mjs'), 'utf8');
   const ask = src.indexOf('catchUpBranchLocally');
@@ -323,252 +272,4 @@ test('this script contains no force-push, in any spelling', () => {
   }
   assert.doesNotMatch(code, /--force-with-lease/, 'no --force-with-lease anywhere');
   assert.doesNotMatch(code, /'rebase'/, 'it catches up by merging, not rebasing — that is what removes the need to force');
-});
-
-// ── Stale asset pins: the push must be authorized by builds-clean ─────────
-
-/**
- * Task 86bbk15cb. The first version of this module pushed whatever merged
- * cleanly, which turned three green branches red in one pass (#401, #403,
- * #411) — all from one commit that edited `public/js/projectContext.js`.
- *
- * The asset-pins driver restores each `?v=` pin BY ASSET PATH. That is right
- * when only markup moved and wrong when main changed the asset underneath: the
- * restored pin names the pre-merge build, nothing rebuilds, and CI's
- * clean-build check fails on a step that reads like the branch's own fault.
- *
- * The bug was the AUTHORIZATION. "The merge was clean" is a different question
- * from "a clean build of this tree produces these pins".
- */
-
-const { pinnedAssetSourcesIn, PIN_SOURCE_PATHS } = require('./branchCatchUp');
-
-test('a change behind a pinned asset is recognised', () => {
-  assert.deepEqual(
-    pinnedAssetSourcesIn(['public/js/projectContext.js']),
-    ['public/js/projectContext.js'],
-    'this exact file is what turned three branches red',
-  );
-  assert.equal(pinnedAssetSourcesIn(['src/css/_builder-react.css']).length, 1);
-  assert.equal(pinnedAssetSourcesIn(['components/builder/x.tsx']).length, 1);
-  assert.equal(pinnedAssetSourcesIn(['lib/builder-client/y.ts']).length, 1);
-  assert.equal(pinnedAssetSourcesIn(['react-entry.js']).length, 1);
-});
-
-test('a change that feeds no pinned asset is NOT flagged — the common case stays cheap', () => {
-  // AC2: a catch-up across ordinary work must behave exactly as before, with
-  // no extra cost. Flagging everything would be "safe" and would also hand
-  // every branch to a human, which is the failure this whole module removed.
-  assert.deepEqual(pinnedAssetSourcesIn([
-    'docs/WORK-LOG.md',
-    'routes/builder.js',
-    'lib/projectScope.js',
-    'scripts/builder/mergeOnComment.js',
-    'supabase/migrations/001.sql',
-  ]), []);
-});
-
-test('prefix matching does not over-reach on a lookalike path', () => {
-  // 'public/app.js' is an exact-match entry, not a prefix — 'public/app.json'
-  // and 'public/apps/x.js' must not match it.
-  assert.deepEqual(pinnedAssetSourcesIn(['public/app.json', 'public/apps/x.js']), []);
-  assert.deepEqual(pinnedAssetSourcesIn(['public/app.js']), ['public/app.js']);
-});
-
-test('malformed input does not throw', () => {
-  assert.deepEqual(pinnedAssetSourcesIn(null), []);
-  assert.deepEqual(pinnedAssetSourcesIn(['', '   ', null]), []);
-});
-
-/**
- * The list rots the moment somebody adds a pinned asset built from somewhere
- * new, and the failure would be silent — a branch pushed with stale pins,
- * exactly as before. So this reads what the committed HTML ACTUALLY pins and
- * fails if any of it maps to a source the list does not cover.
- */
-/**
- * The guard, rebuilt after review.
- *
- * MY FIRST VERSION COULD NOT FAIL IN THE WAY THAT MATTERS. It mapped each
- * pinned URL to ONE representative source (`/builder-bundle.js` -> `components/`)
- * and asked whether that path was covered. So it could notice a brand-new
- * pinned URL, and could never notice A BUNDLE GAINING AN IMPORT FROM A NEW
- * DIRECTORY — which is how this list actually rots, and how it was ALREADY
- * stale when I wrote it: `lib/crmFormStyles.js` is compiled into
- * public/builder-bundle.js via two components, and nothing in the list covered
- * plain `lib/`.
- *
- * So the question is asked of the real dependency graph instead. esbuild's
- * metafile lists every input it actually compiled; every one of those outside
- * node_modules must be covered, or a commit touching it slips a stale pin past
- * the catch-up — precisely the bug this ticket is about.
- *
- * Node-suite test, so requiring node_modules and esbuild is fine here
- * (landmine 14 applies to vitest, which runs before the build).
- */
-test('every real input of every pinned bundle is covered by the source list', async () => {
-  const esbuild = require('esbuild');
-  const repoRoot = path.join(__dirname, '../..');
-
-  const BUNDLES = [
-    { entry: 'builder-react-entry.tsx', loader: { '.js': 'jsx' }, jsx: 'automatic', tsconfig: 'tsconfig.json' },
-    { entry: 'react-entry.js', loader: { '.js': 'jsx' } },
-  ];
-
-  const inputs = new Set();
-  for (const b of BUNDLES) {
-    const result = await esbuild.build({
-      entryPoints: [path.join(repoRoot, b.entry)],
-      bundle: true,
-      write: false,
-      metafile: true,
-      preserveSymlinks: true,
-      absWorkingDir: repoRoot,
-      loader: b.loader,
-      ...(b.jsx ? { jsx: b.jsx } : {}),
-      ...(b.tsconfig ? { tsconfig: path.join(repoRoot, b.tsconfig) } : {}),
-      logLevel: 'silent',
-    });
-    for (const file of Object.keys(result.metafile.inputs)) inputs.add(file);
-  }
-
-  const covered = (p) => PIN_SOURCE_PATHS.some((prefix) => (
-    prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
-  ));
-
-  const uncovered = [...inputs]
-    .filter((f) => !f.startsWith('node_modules/'))
-    .filter((f) => !covered(f))
-    .sort();
-
-  assert.deepEqual(uncovered, [],
-    'these files are compiled INTO a ?v=-pinned bundle but PIN_SOURCE_PATHS does not\n' +
-    '  cover them, so a commit touching one would push a stale pin:\n  ' + uncovered.join('\n  '));
-});
-
-/**
- * The directly-served side of the same question, across ALL the pin-carrying
- * HTML rather than one file — a pin added to public/site.html alone would
- * otherwise slip past (review finding).
- */
-test('every directly-served pinned asset is covered too, across all pinned HTML', () => {
-  // The file list is DERIVED, not typed out. My first version listed five HTML
-  // files by hand; the pinner does not work that way — defaultHtmlTargets()
-  // takes every public/*.html on disk plus src/layout.html. Review proved the
-  // gap by dropping a public/zz-probe.html pinning an uncovered asset: the
-  // pinner scanned and pinned it, and this test passed anyway.
-  //
-  // Importing the pinner's own function is what makes the two impossible to
-  // disagree. A hand-kept copy of a derived list is the same bug as the
-  // hand-kept PIN_SOURCE_PATHS above, one layer out.
-  const { defaultHtmlTargets } = require('../pin_asset_versions.cjs');
-  const repoRoot = path.join(__dirname, '../..');
-
-  // The three assets that are BUILT — their inputs are covered by the metafile
-  // test above, so only their existence is checked here.
-  const BUILT = new Set(['/styles.css', '/builder-bundle.js', '/bundle.js']);
-
-  const covered = (p) => PIN_SOURCE_PATHS.some((prefix) => (
-    prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
-  ));
-
-  const targets = defaultHtmlTargets(repoRoot);
-  const urls = new Set();
-  for (const abs of targets) {
-    for (const m of fs.readFileSync(abs, 'utf8').matchAll(/(?:src|href)="(\/[^"?#]+\.(?:js|css))\?v=/gi)) {
-      urls.add(m[1]);
-    }
-  }
-
-  // Sanity floors: a derivation that silently finds nothing would make this
-  // test pass by covering an empty set, which is the failure mode of every
-  // check that scans for its own inputs.
-  assert.ok(targets.length >= 4, `expected the pinner to find several HTML targets, got ${targets.length}`);
-  assert.ok(urls.size > 10, `expected many pinned assets, found ${urls.size}`);
-
-  const uncovered = [...urls]
-    .filter((u) => !BUILT.has(u))
-    .filter((u) => !covered(`public${u}`))
-    .sort();
-  assert.deepEqual(uncovered, [], `pinned assets whose source is not covered:\n  ${uncovered.join('\n  ')}`);
-});
-
-// ── End to end, against real git ─────────────────────────────────────────
-
-/**
- * Same shape as buildRepo above, but main's new commit touches a file that
- * feeds a pinned asset rather than only the markup.
- */
-function buildRepoWithPinnedAssetChange({ touchPinnedSource }) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-pins-test-'));
-  const origin = path.join(root, 'origin.git');
-  const work = path.join(root, 'work');
-
-  git(['init', '--bare', '-b', 'main', origin], root);
-  git(['clone', origin, work], root);
-  git(['config', 'user.email', 'test@example.com'], work);
-  git(['config', 'user.name', 'Test'], work);
-  fs.mkdirSync(path.join(work, 'public', 'js'), { recursive: true });
-  fs.mkdirSync(path.join(work, 'docs'), { recursive: true });
-
-  fs.writeFileSync(path.join(work, '.gitattributes'), 'site.html merge=asset-pins\n');
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/js/core.js?v=aaaaaaaa"></script>\n<p>shared</p>\n</html>\n');
-  fs.writeFileSync(path.join(work, 'public/js/core.js'), 'var a = 1;\n');
-  fs.writeFileSync(path.join(work, 'docs/notes.md'), 'base\n');
-  git(['add', '-A'], work);
-  git(['commit', '-m', 'base'], work);
-  git(['push', 'origin', 'main'], work);
-
-  git(['checkout', '-b', 'feature'], work);
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/js/core.js?v=bbbbbbbb"></script>\n<p>shared</p>\n</html>\n');
-  git(['add', '-A'], work);
-  git(['commit', '-m', 'feature'], work);
-  git(['push', 'origin', 'feature'], work);
-
-  git(['checkout', 'main'], work);
-  fs.writeFileSync(path.join(work, 'site.html'),
-    '<html>\n<script src="/js/core.js?v=cccccccc"></script>\n<p>shared</p>\n</html>\n');
-  // THE DIFFERENCE: main either changed the asset behind that pin, or not.
-  if (touchPinnedSource) fs.writeFileSync(path.join(work, 'public/js/core.js'), 'var a = 2;\n');
-  else fs.writeFileSync(path.join(work, 'docs/notes.md'), 'main moved on\n');
-  git(['add', '-A'], work);
-  git(['commit', '-m', 'main moves'], work);
-  git(['push', 'origin', 'main'], work);
-
-  git(['config', 'merge.asset-pins.name', 'pins'], work);
-  git(['config', 'merge.asset-pins.driver', `node ${DRIVER} %O %A %B %P`], work);
-  return { root, work };
-}
-
-test('a merge that changed a pinned asset is NOT pushed — it hands over with the fix', (t) => {
-  const repo = buildRepoWithPinnedAssetChange({ touchPinnedSource: true });
-  t.after(() => cleanup(repo.root));
-
-  const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
-  const out = catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
-
-  assert.equal(out.code, CODES.NEEDS_REBUILD, out.reason);
-  assert.equal(out.ok, false);
-  assert.ok(out.files.includes('public/js/core.js'), `should name the file: ${JSON.stringify(out.files)}`);
-  assert.match(out.reason, /npm run build/, 'the hand-off must carry the exact next step');
-
-  git(['fetch', 'origin'], repo.work);
-  assert.equal(git(['rev-parse', 'origin/feature'], repo.work).stdout, before,
-    'a tree known to have stale pins must never be pushed');
-});
-
-test('a merge that changed no pinned asset still pushes, exactly as before', (t) => {
-  // AC2. The common case must not get slower or start needing a human.
-  const repo = buildRepoWithPinnedAssetChange({ touchPinnedSource: false });
-  t.after(() => cleanup(repo.root));
-
-  const before = git(['rev-parse', 'origin/feature'], repo.work).stdout;
-  const out = catchUpBranchLocally({ repo: '', branch: 'feature', cwd: repo.work });
-
-  assert.equal(out.code, CODES.CLEAN, out.reason);
-  git(['fetch', 'origin'], repo.work);
-  assert.notEqual(git(['rev-parse', 'origin/feature'], repo.work).stdout, before,
-    'the ordinary catch-up must still happen');
 });

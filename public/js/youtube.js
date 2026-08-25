@@ -5432,6 +5432,38 @@ App.youtube = (function () {
       });
     }
 
+    // The single-video acquire form is now the React panel mounted at
+    // #youtubeVideoAcquireRoot (components/acquire/youtube-video-acquire-panel).
+    // It owns the request; this page still owns the Video Details panel and the
+    // Extract tables, so the panel hands the finished run over on this event.
+    //
+    // The markup this page used to bind to (#youtubeAcquireForm) was removed
+    // from src/pages/acquire.html in an earlier redesign, which left every
+    // reference to els.youtubeAcquireForm null and the whole acquire path dead.
+    // Those references are still below and still inert; they are left alone
+    // because this file is frozen to bugfixes and removing them is not one.
+    document.addEventListener('starcaster:youtube-acquired', function(e) {
+      var detail = (e && e.detail) || {};
+      var run = detail.run || null;
+      var result = detail.result || null;
+      if (!result) return;
+
+      currentDetailsRun = run || { video_url: safeText(result.video && result.video.url) };
+      rememberActiveVideo({
+        video_url: safeText(currentDetailsRun && currentDetailsRun.video_url),
+        title: safeText(currentDetailsRun && currentDetailsRun.title),
+        channel_name: safeText(currentDetailsRun && currentDetailsRun.channel_name),
+        channel_url: safeText(currentDetailsRun && currentDetailsRun.channel_url),
+      });
+      state.youtubeAcquireResult = result;
+      renderTopicControls();
+      renderYoutubeAcquireResult();
+      scrollToYoutubeDetails();
+      refreshYoutubeRuns().catch(function(err) {
+        notify(err.message || 'Could not refresh the YouTube repository', true);
+      });
+    });
+
     var youtubeResearchForm = document.getElementById('youtubeResearchForm');
     var youtubeResearchSubmitBtn = document.getElementById('youtubeResearchSubmitBtn');
     var youtubeResearchRefreshBtn = document.getElementById('youtubeResearchRefreshBtn');
