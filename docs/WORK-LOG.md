@@ -1,3 +1,46 @@
+## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
+
+Earlier today a pull request went straight to the live site without anyone
+reviewing it. Nothing was broken by it, but the way it happened is worth
+fixing: a second Claude window you had open ran the ordinary "merge this"
+command, and it had no way of knowing that the review lane was still waiting on
+that piece of work. The ticket jumped from "being built" to "live" without ever
+stopping at "ready to launch" for your say-so.
+
+The rule against that has always existed — it is written down, and every part
+of the automatic pipeline obeys it. But a written rule only reaches the people
+and programs that have read it. A fresh window, a terminal you forgot was open,
+or a hurried moment on your own machine are all outside it. So the rule has been
+turned into a lock: GitHub itself now runs a check on every pull request that
+looks up the work's ticket, finds the most recent review verdict on it, and
+refuses the merge unless that verdict is a pass — and a pass on the *current*
+code, not on an older version that has since been rewritten. If the ticket has
+no review at all, or the review sent the work back, or the pull request does not
+even say which ticket it belongs to, the check says no and explains in plain
+words what has to happen next.
+
+There is a deliberate escape hatch, because a rule with no way out gets worked
+around instead of used: writing `[gate-waived: reason]` in the pull request lets
+it through, and doing so announces itself on the team chat with the reason. An
+override nobody can see is not an override, it is a hole.
+
+Two honest notes. First, the check is currently a **warning, not a lock** — it
+watches and reports but blocks nothing, because switching it on is a setting in
+GitHub's own website that only you can change, and it deserves a few days of
+watching first to be sure it never says no when it should say yes. Second, it
+needs a password stored with GitHub so it can read your ClickUp tickets, and
+this project has none stored yet; that one is also yours to add. Both steps are
+written out in the project notes, and neither was guessed at or faked.
+
+One thing was caught before it could cause trouble. The obvious version of
+"has this been reviewed recently enough?" compares the review against the newest
+change on the branch. But this project keeps branches up to date by pulling in
+the latest main code, which counts as a change — so every properly reviewed
+piece of work would have looked stale the moment it was refreshed, and the whole
+pipeline would have jammed. Running the new check against the real record found
+exactly that on two recent pull requests, and the rule now ignores those
+housekeeping updates and looks only at genuine edits.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp
