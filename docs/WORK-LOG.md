@@ -1,3 +1,32 @@
+## 2026-08-25 — The top of every module panel lines up now, and images can cast a shadow
+
+You sent a picture of the image module and said it had drifted away from our
+standards. It had, though not in the image module's own settings — those were
+fine. The problem was the strip of shared controls that sits above them, the
+one every module wears: **Label**, **Background**, **Alignment**, the margins
+and the nudge.
+
+Those seven rows were being laid out by three separate mechanisms that had no
+way to agree with each other, so they lined up in three different places on the
+screen — Background stranded off to the left with the whole margin stack
+floating to its right. They are one list now, one label column and one field
+column, on every module, not just the image one.
+
+Two things had kept this hidden. Two panels had a patch that stacked their
+chrome vertically, which made the problem invisible in exactly the two places
+anyone had looked. And the automatic layout checker was scoring the Background
+row on its own, where it could only ever be compared with itself — so it passed
+the whole time. Both are fixed: the checker now measures Background inside the
+group with everything else, and it was broken on purpose first to prove it
+would catch this again.
+
+**Drop shadows on images.** New on the image module's **Frame** column, behind
+a tickbox: colour, X, Y, blur, spread and opacity. They are the same six
+controls, the same defaults and the same soft look the Carousel's pictures have
+had since August, on purpose — one picture and a row of pictures should not
+mean two different things by "Drop Shadow". Off by default, so nothing on a
+live page moves until you tick it.
+
 ## 2026-08-23 — The YouTube acquire box works again
 
 On Acquire > YouTube there used to be a box where you pasted one video's link
