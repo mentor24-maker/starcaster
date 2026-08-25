@@ -619,9 +619,18 @@ the real one, while #432 (the incident) and #419 still fail correctly.
 
 ### The waiver
 
-`[gate-waived: <reason>]` anywhere in the PR body passes the gate, including
-past the no-ticket rule — a hotfix opened by hand at 2am is what it is for. A
-reason is **required**; `[gate-waived:]` is not a waiver.
+A waiver line passes the gate, including past the no-ticket rule — a hotfix
+opened by hand at 2am is what it is for. A reason is **required**; an empty one
+is not a waiver, and neither is a placeholder pasted out of this document.
+
+**It must sit ALONE on its own line**, and that anchor is load-bearing. The
+first version matched anywhere in the body, and the first CI run caught it on
+the gate's own pull request: that PR necessarily *documents* the syntax, so the
+gate read its own documentation as a live waiver and let itself through. Any PR
+quoting the syntax — a doc change, a rules table, a discussion — would have
+bypassed the gate while looking entirely ordinary. Mentioning a waiver inside a
+sentence or a table cell is now only mentioning it, exactly as `mergeOnComment`
+anchors its verdict regexes so that prose about a rule is not the rule.
 
 Using one **posts to the party line** with the reason, the PR and who did it.
 An override nobody can see is not an override, it is a hole, so the price of

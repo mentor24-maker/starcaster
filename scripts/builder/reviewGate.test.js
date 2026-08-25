@@ -488,3 +488,67 @@ test('no commits at all is not a date, so the gate answers CANNOT TELL', () => {
   });
   assert.equal(decision.verdict, gate.CANNOT_TELL);
 });
+
+// ---------------------------------------------------------------------------
+// A waiver must be an INSTRUCTION, not a mention.
+//
+// Caught by the very first CI run of this gate, on its own pull request. The
+// PR describing the gate necessarily documents the waiver syntax — and the
+// first version of WAIVER_RE matched anywhere in the body, so the gate read
+// its own documentation as a live waiver and let itself straight through.
+// Any PR quoting the syntax would have bypassed the gate while looking
+// entirely ordinary. Same fix, and the same reasoning, as mergeOnComment
+// anchoring its verdict regexes: prose about a rule is not the rule.
+// ---------------------------------------------------------------------------
+
+test('documenting the waiver syntax does not waive the gate', () => {
+  // The real PR #433 body shape, trimmed to the parts that matter.
+  const docBody = [
+    'https://app.clickup.com/t/86bbmfbkv',
+    '',
+    '| Situation | Verdict |',
+    '|---|---|',
+    '| `[gate-waived: <reason>]` in the PR body | **pass**, announced on the bus |',
+    '',
+    'There is an escape hatch: writing `[gate-waived: reason]` lets it through.',
+  ].join('\n');
+
+  // BREAK-TEST: drop the ^...$ anchors from WAIVER_RE and this fails — which
+  // is exactly what shipped for one CI run, and the gate waived itself.
+  assert.equal(gate.findWaiver(docBody), '');
+
+  const decision = gate.reviewGateDecision({
+    prBody: docBody,
+    headCommittedAt: NOW,
+    comments: [],
+  });
+  assert.equal(decision.verdict, gate.FAIL);
+  assert.match(decision.reason, /no review verdict/);
+});
+
+test('a waiver alone on its line still works, in the shapes people actually write', () => {
+  const shapes = [
+    '[gate-waived: production is down]',
+    'Hotfix.\n\n[gate-waived: production is down]\n\nMore detail below.',
+    '- [gate-waived: production is down]',
+    '  [gate-waived: production is down]  ',
+    '> [gate-waived: production is down]',
+  ];
+  for (const body of shapes) {
+    assert.equal(gate.findWaiver(body), 'production is down', `shape: ${JSON.stringify(body)}`);
+  }
+});
+
+test('a placeholder copied out of the documentation is not a reason', () => {
+  // BREAK-TEST: remove the PLACEHOLDER_REASON_RE check and this fails — a
+  // pasted example on its own line becomes a working waiver.
+  assert.equal(gate.findWaiver('[gate-waived: <reason>]'), '');
+  assert.equal(gate.findWaiver('[gate-waived: <your reason here>]'), '');
+  // A real reason that merely contains angle brackets is still a reason.
+  assert.equal(gate.findWaiver('[gate-waived: revert <script> injection fix]'), 'revert <script> injection fix');
+});
+
+test('a waiver cannot smuggle itself in on the same line as other text', () => {
+  assert.equal(gate.findWaiver('fixes things [gate-waived: because] and ships'), '');
+  assert.equal(gate.findWaiver('[gate-waived: because] and ships'), '');
+});

@@ -50,12 +50,32 @@ const CLICKUP_LINK_RE = /https?:\/\/app\.clickup\.com\/t\/(?:\d+\/)?([a-z0-9]+)/
 /**
  * A deliberate override, e.g. `[gate-waived: hotfix, site is down]`.
  *
+ * LINE-ANCHORED, and that is not a detail. The first version of this matched
+ * anywhere in the body, and the very first CI run caught it: THIS gate's own
+ * pull request explains the waiver syntax in its description, and the gate
+ * read its own documentation as a live waiver and let itself through. Any PR
+ * that quoted the syntax — a doc change, a discussion, a table of the rules —
+ * would have bypassed the gate while looking completely ordinary.
+ *
+ * So a waiver must sit ALONE on its line, exactly as mergeOnComment anchors
+ * its verdict regexes for the same reason: a comment that merely DISCUSSES
+ * the words is prose, not an instruction. Mentioning `[gate-waived: ...]`
+ * inside a sentence, a table cell or a code fence is now mentioning it.
+ *
  * Deliberately requires a REASON — `[gate-waived:]` does not match — because
  * the whole value of an override is that it is legible afterwards. An
  * override nobody can see is not an override, it is a hole, which is why
  * using one also posts to the bus (see `waiverAnnouncement`).
  */
-const WAIVER_RE = /\[gate-waived:\s*([^\]]+?)\s*\]/i;
+const WAIVER_RE = /^[ \t>*-]*\[gate-waived:\s*([^\]\n]+?)\s*\][ \t]*$/im;
+
+/**
+ * A reason that is obviously a placeholder copied out of the documentation,
+ * not a reason. Belt and braces beside the line anchor above: an example is
+ * often written on a line of its own, which is precisely the shape a real
+ * waiver has.
+ */
+const PLACEHOLDER_REASON_RE = /^<[^>]*>$/;
 
 /** The ticket id a PR body points at, or '' if it points at none. */
 function findTicketId(prBody) {
@@ -66,7 +86,9 @@ function findTicketId(prBody) {
 /** The waiver reason a PR body carries, or '' if it carries none. */
 function findWaiver(prBody) {
   const m = WAIVER_RE.exec(String(prBody || ''));
-  return m ? m[1].trim() : '';
+  if (!m) return '';
+  const reason = m[1].trim();
+  return PLACEHOLDER_REASON_RE.test(reason) ? '' : reason;
 }
 
 /** ClickUp dates are epoch-millisecond STRINGS; git dates are ISO. */
@@ -379,6 +401,7 @@ module.exports = {
   WAIVED,
   CLICKUP_LINK_RE,
   WAIVER_RE,
+  PLACEHOLDER_REASON_RE,
   findTicketId,
   findWaiver,
   toMillis,
