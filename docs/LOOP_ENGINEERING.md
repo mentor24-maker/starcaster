@@ -555,6 +555,48 @@ is different, so the loops have guardrails baked in:
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
 
+## Pausing the pipeline — the sanctioned way to go fast (2026-08-25, task 86bbmfc15)
+
+The loop lane is deliberately slow: spec, build, independent review, your
+merge — about a day end to end. That is right for ordinary work and wrong for
+the day something is urgent. Until now the only way to go faster was to step
+outside the system entirely, into the one place where none of the guards apply,
+and that is a **missing lane** rather than anyone being careless.
+
+```bash
+npm run pipeline status                    is it running? if not, since when, who, and why
+npm run pipeline check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline pause --now               ... or don't wait, and name exactly what was left running
+npm run pipeline resume --operator-asked   hand the deck back — yours, never an agent's
+```
+
+**It drains, it does not kill.** A pass killed mid-build leaves its ticket in
+`Building` forever, because the loops only ever claim from `Queued` — that
+happened twice in the week this was built. So `pause` writes the flag (which
+stops every new claim that instant) and then waits for whatever was already
+running. `resume` sweeps any ticket that was stranded back into `Queued` with a
+note telling the next builder to look for an existing branch first.
+
+**Every actor asks, not just the loops.** The flag is a comment trail on one
+ClickUp ticket — the *Pipeline pause switch*, created the first time `pause`
+runs — because ClickUp is the one place every actor already looks. `loop-build`
+and `loop-review` check it before claiming, `bus-relay` checks it before
+merging, and `CLAUDE.md` carries it so a hand-driven session reads it on
+arrival. That last one is the point: the collision this was written for came
+from a session that was not a loop and would never have looked anywhere else.
+
+**It fails safe.** A switch that cannot be read counts as paused. Running while
+you have the deck collides with what you are doing on it; pausing when you do
+not costs idle machines and one loud message. Those are not symmetric.
+
+**Only you resume.** An agent may pause the line — stopping is a safety move
+anyone should be able to make — but handing the deck back is yours, because
+only the person standing on it knows whether he is finished. A pause that
+outlives two hours announces itself on the party line and keeps saying so
+hourly, because a pause nobody remembers looks exactly like a pipeline that has
+broken.
+
 ## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
 
 The relay runs **every 10 minutes** (`StartInterval` 600). It was hourly until

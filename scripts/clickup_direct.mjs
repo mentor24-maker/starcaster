@@ -64,6 +64,8 @@ import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
+import pipelinePause from './builder/pipelinePause.js';
+import pipelinePauseStore from './builder/pipelinePauseStore.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
@@ -97,6 +99,9 @@ const PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 };
 const AGENT_RESPONSE_LIST = process.env.CLICKUP_AGENT_RESPONSE_LIST || '901418805125';
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+// The pipeline pause switch (task 86bbmfc15). Optional: unset, the switch is
+// found by name in the Loop Queue. Set it and every check is a single GET.
+const PAUSE_TASK = process.env.CLICKUP_PAUSE_TASK || '';
 const BUS_RELAY_OPEN_STATUSES = ['pending response', 'responding'];
 // The dedup marker. A threaded reply starting with this exact prefix means
 // "already relayed" — checked by prefix, not just presence-of-any-reply, so
@@ -1623,7 +1628,26 @@ if (cmd === 'whoami') {
   // The escape hatch: --no-merge runs the relay exactly as it behaved before
   // 2026-08-21, notify-only everywhere. Nothing depends on it, but a job that
   // can perform a merge should have an off switch that is not "edit the code".
-  const mergingAllowed = !flag('no-merge');
+  const mergeSwitchOn = !flag('no-merge');
+
+  // THE PIPELINE PAUSE SWITCH (task 86bbmfc15). When the operator has taken
+  // the deck, nothing merges — a paused pipeline that still merged would put
+  // new code under him while he is working, which is most of what the pause is
+  // for. Relaying his own words CONTINUES: carrying a message is not claiming
+  // work, and a pause must never swallow the operator's instructions.
+  //
+  // Fails safe. An unreadable switch counts as paused (pipelinePause.js says
+  // why the two costs are not symmetric), so a ClickUp outage stops merging
+  // rather than merging blind.
+  const pauseSwitch = await pipelinePauseStore.readSwitch({ call, list: LOOP_QUEUE_LIST, pauseTaskId: PAUSE_TASK });
+  const pauseState = pipelinePause.pauseVerdict({
+    readable: pauseSwitch.readable,
+    why: pauseSwitch.why,
+    switchFound: pauseSwitch.switchFound,
+    comments: pauseSwitch.comments || [],
+  });
+  if (pauseState.paused) console.error(`\n${pauseState.message}\n`);
+  const mergingAllowed = mergeSwitchOn && !pauseState.paused;
 
   // Scope a pass to ONE ticket. This is how the merge path gets exercised
   // for real without touching anything else: a fixture ticket, a real run,
@@ -1805,9 +1829,49 @@ if (cmd === 'whoami') {
     }
   }
 
+  // A pause that has outlived its welcome announces itself (task 86bbmfc15,
+  // criterion 5). Two hours of silence, then hourly — because a pause nobody
+  // remembers looks exactly like a pipeline that has broken, and telling those
+  // two apart cost most of 2026-08-25. This relay is the announcer because it
+  // is the one job that already wakes on a timer on the always-on machine.
+  if (pauseState.paused && pauseState.certain && !dryRun) {
+    const trail = pipelinePause.readTrail(pauseSwitch.comments || []);
+    const nag = pipelinePause.nagDecision({
+      paused: true,
+      sinceMs: trail.state?.atMs,
+      lastNagAt: trail.lastNagAt,
+      nowMs: Date.now(),
+    });
+    if (!nag.post) {
+      console.error(`pipeline pause: saying nothing this pass — ${nag.reason}.`);
+    } else {
+      const text = pipelinePause.nagMessage({
+        by: trail.state?.by, why: trail.state?.why, sinceMs: trail.state?.atMs, nowMs: Date.now(),
+      });
+      const chat = await postToBus(channel, text);
+      // One write either way, and it is the marker as well as the fallback
+      // record: on a chat outage the announcement still lands somewhere
+      // durable, and either way the next pass knows it has already spoken.
+      const body = pipelinePause.nagRecord({ node: nodeRoles.thisNode().name, at: new Date().toISOString() })
+        + (chat.ok ? '' : `\n\nThe party line was unavailable (${chat.why}), so this is the record instead:\n\n${text}`);
+      const wrote = await call('POST', `/api/v2/task/${pauseSwitch.task.id}/comment`, { comment_text: body, notify_all: false });
+      if (!wrote.res.ok) {
+        // No marker written, so the next pass tries again rather than losing
+        // the announcement altogether.
+        unchecked.push(`pipeline pause: could not announce (chat ${chat.ok ? 'ok' : chat.why}) and could not record it on the switch (HTTP ${wrote.res.status}) — will retry next pass`);
+      } else if (chat.ok) {
+        console.error('pipeline pause: announced on the party line.');
+      } else {
+        reportBusFailure({ delivered: true, unchecked, busSkipped, line: `pipeline pause: party line unavailable (${chat.why}) — the still-paused notice was recorded on the switch ticket instead` });
+      }
+    }
+  }
+
   const mergeLine = mergingAllowed
     ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
-    : ', merging disabled (--no-merge)';
+    : pauseState.paused
+      ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
+      : ', merging disabled (--no-merge)';
   console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.
