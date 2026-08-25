@@ -6495,6 +6495,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-weight: 600;
   color: var(--ink-secondary);
 }
+/* Only ever rendered off the live site, where the submit sent nothing. Its own
+   line and a lighter weight so it reads as a note about the preview rather
+   than as part of the tenant's own thank-you wording. */
+.builder-bug-report-preview-note {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
 .builder-bug-report-actions {
   display: flex;
   justify-content: flex-end;

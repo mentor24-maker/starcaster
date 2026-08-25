@@ -7,10 +7,17 @@
  *
  *   npm run check:ecosystem-drift
  *
- * Every probe is machine-local (launchctl, docker, repo folders, installed
- * commands). That is why this is NOT a pre-commit or CI gate: on a GitHub
- * runner every probe would report "could not check" and a green run would
- * mean nothing. It is a by-hand / scheduled check, run on a real machine.
+ * Probes run on real machines (launchctl, docker, repo folders, installed
+ * commands) — this one, and any OTHER machine the inventory says is reachable
+ * over ssh, which is probed there rather than written off for being elsewhere.
+ * That is why this is NOT a pre-commit or CI gate: on a GitHub runner every
+ * probe would report "could not check" and a green run would mean nothing. It
+ * is a by-hand / scheduled check, run on a real machine.
+ *
+ * A machine that is asleep or off the network is COULD NOT CHECK, never drift —
+ * one of Dane's two machines is regularly off, and a check that cries wolf gets
+ * ignored. A remote probe that RUNS and fails is a different thing, and is
+ * reported as drift.
  *
  * Three outcomes per object, and nothing else:
  *   DRIFT            reality and inventory disagree — named, with direction.
@@ -30,9 +37,19 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { load: parseYaml } = require('js-yaml');
+const { createExecutor, isTimeout } = require(path.join(__dirname, 'builder', 'remoteProbe.js'));
 
 const ROOT = path.resolve(__dirname, '..');
-const FILE = path.join(ROOT, 'docs', 'ecosystem', 'inventory.yaml');
+
+// `--inventory <path>` points the check at a different inventory. The real run
+// never passes it; the tests do, because the remote-probe paths need a second
+// machine to aim at and only one machine exists wherever this is running.
+function argInventory() {
+  const i = process.argv.indexOf('--inventory');
+  if (i !== -1 && process.argv[i + 1]) return path.resolve(process.argv[i + 1]);
+  return path.join(ROOT, 'docs', 'ecosystem', 'inventory.yaml');
+}
+const FILE = argInventory();
 
 // ---------------------------------------------------------------- plumbing
 
@@ -55,7 +72,10 @@ function run(cmd, args, timeoutMs = 8000) {
     return {
       ok: false,
       missing: err.code === 'ENOENT',
-      timedOut: err.killed === true,
+      // Not `err.killed` — see isTimeout's note. That spelling is always
+      // false here, which left the hung-connection guard dead.
+      timedOut: isTimeout(err),
+      code: typeof err.status === 'number' ? err.status : null,
       err,
     };
   }
@@ -115,6 +135,63 @@ function repoExpectedHere(obj) {
   return relationships.some((r) => r.from === obj.id && r.to === here.id && r.kind === 'runs');
 }
 
+// ------------------------------------------------------------ remote probing
+//
+// Once ssh has proved a machine is reachable, an object that lives THERE is
+// probed there rather than landing in COULD NOT CHECK just for being elsewhere.
+// The probes ask exactly what they asked before; only the location changes.
+// The rules (one connection per machine; unreachable is never drift; a failed
+// remote probe IS drift) live in scripts/builder/remoteProbe.js.
+
+const exec = createExecutor({ run, hereId: here?.id ?? null });
+
+// Only machines the inventory says are reachable that way. macbook-pro is
+// `probe: hostname` — no ssh route is claimed for it — so nothing hosted there
+// is probed remotely, and it keeps exactly the wording it has always had.
+function sshRoute(obj) {
+  const m = hostMachine(obj);
+  if (!m || (here && m.id === here.id)) return null;
+  return m.probe === 'ssh' ? m : null;
+}
+
+// Every machine other than this one that declares an ssh route.
+const remoteMachines = machines.filter((m) => m.probe === 'ssh' && !(here && m.id === here.id));
+
+// Does the inventory claim something starts this machine's container runtime by
+// itself? `colima` carries `detail.autostart: com.starcaster.colima`. If a
+// runtime is supposed to come up unattended and the daemon is not answering,
+// reality and the inventory disagree — that is the 2026-08-21 fatal start, and
+// it is drift. Where nothing claims to start it (Docker Desktop on the laptop,
+// which a person opens), a stopped daemon stays a state, not a disagreement.
+function autostartedRuntimeOn(machineId) {
+  return objects.find(
+    (o) => o.kind === 'runtime' && o.detail?.autostart && hostMachine(o)?.id === machineId
+  ) ?? null;
+}
+
+// `launchctl list` output -> the job labels in it.
+function parseLaunchctlLabels(out) {
+  return out
+    .split('\n')
+    .slice(1)
+    .map((line) => line.trim().split(/\s+/)[2])
+    .filter(Boolean);
+}
+
+// One `launchctl list` per remote machine, shared by the per-job probe and the
+// reverse sweep below.
+const remoteLaunchctl = new Map();
+function remoteLaunchctlLabels(machineId) {
+  if (remoteLaunchctl.has(machineId)) return remoteLaunchctl.get(machineId);
+  const r = exec.shell(machineId, 'launchctl list');
+  let result;
+  if (!r.ran) result = { error: r.why, unreachable: true, list: [] };
+  else if (!r.ok) result = { error: `launchctl list did not run on ${machineId}`, unreachable: false, list: [] };
+  else result = { error: null, unreachable: false, list: parseLaunchctlLabels(r.out) };
+  remoteLaunchctl.set(machineId, result);
+  return result;
+}
+
 // ---------------------------------------------------------------- probes
 //
 // Each probe returns via drift/cannot/ok — never silently. An object whose
@@ -135,13 +212,32 @@ let dockerContainers = [];
 let launchctlLabels = null; // null = could not list
 {
   const r = run('launchctl', ['list']);
-  if (r.ok) {
-    launchctlLabels = r.out
-      .split('\n')
-      .slice(1)
-      .map((line) => line.trim().split(/\s+/)[2])
-      .filter(Boolean);
+  if (r.ok) launchctlLabels = parseLaunchctlLabels(r.out);
+}
+
+// One wording for "what is docker doing on machine X", used for this machine
+// and for remote ones. A stopped daemon is only drift where the inventory says
+// something starts the runtime unattended — that is the difference between
+// "Dane has not opened Docker Desktop" and "colima will not start".
+function reportDocker(what, machineId, where, state) {
+  const label = `${what} on ${where}`;
+  if (state === 'absent') {
+    drift.push({ what: label, why: `inventory says Docker runs on ${where} — no docker binary is installed there` });
+    return;
   }
+  if (state === 'down') {
+    const auto = machineId ? autostartedRuntimeOn(machineId) : null;
+    if (auto) {
+      drift.push({
+        what: label,
+        why: `docker is installed but the daemon is not answering, and the inventory says "${auto.id}" brings it up automatically (${auto.detail.autostart}) — installed, but will not start`,
+      });
+    } else {
+      ok.push({ what: label, how: 'docker binary installed (daemon not running right now — that is a state, not drift)' });
+    }
+    return;
+  }
+  ok.push({ what: label, how: 'docker binary installed and daemon answering' });
 }
 
 const probes = {
@@ -161,10 +257,10 @@ const probes = {
       ok.push({ what: obj.id, how: `this IS the current machine (user "${user}")` });
       return;
     }
-    const target = obj.id; // `ssh mac-mini` per detail.reachable
-    const r = run('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=4', target, 'true'], 12000);
-    if (r.ok) ok.push({ what: obj.id, how: `reachable over ssh as "${target}"` });
-    else cannot.push({ what: obj.id, why: `ssh "${target}" did not answer — asleep, off this network, or key not set up; not treated as drift` });
+    // Memoised: the probes below reuse this verdict rather than reconnecting.
+    const r = exec.reach(obj.id); // `ssh mac-mini` per detail.reachable
+    if (r.reachable) ok.push({ what: obj.id, how: `reachable over ssh as "${r.target}"` });
+    else cannot.push({ what: obj.id, why: r.why });
   },
 
   // detail.path exists and its origin remote matches detail.remote.
@@ -196,7 +292,15 @@ const probes = {
   // The object's id names an installed command (colima, doppler).
   command(obj) {
     if (!expectedHere(obj)) {
-      cannot.push({ what: obj.id, why: `hosted on ${hostMachine(obj).id}, not on this machine` });
+      const remote = sshRoute(obj);
+      if (!remote) {
+        cannot.push({ what: obj.id, why: `hosted on ${hostMachine(obj).id}, not on this machine` });
+        return;
+      }
+      const r = exec.shell(remote.id, `command -v ${obj.id}`);
+      if (!r.ran) cannot.push({ what: obj.id, why: `hosted on ${remote.id}; ${r.why}` });
+      else if (r.ok) ok.push({ what: obj.id, how: `"${obj.id}" is installed on ${remote.id} (${r.out.trim()})` });
+      else drift.push({ what: obj.id, why: `inventory says "${obj.id}" runs on ${remote.id} — the command is not installed there` });
       return;
     }
     const r = run('/bin/sh', ['-c', `command -v ${obj.id}`]);
@@ -204,11 +308,36 @@ const probes = {
     else drift.push({ what: obj.id, why: `inventory says "${obj.id}" runs here — the command is not installed` });
   },
 
+  // Docker is unpinned in the inventory — "provided by Colima on the Mini and
+  // by Docker Desktop on the MacBook" — so it is expected on EVERY machine, and
+  // is now checked on every machine we can reach rather than only this one.
   'docker-info'(obj) {
-    const state = dockerUp();
-    if (state === 'absent') drift.push({ what: obj.id, why: 'inventory says Docker is here — no docker binary is installed' });
-    else if (state === 'down') ok.push({ what: obj.id, how: 'docker binary installed (daemon not running right now — that is a state, not drift)' });
-    else ok.push({ what: obj.id, how: 'docker binary installed and daemon answering' });
+    reportDocker(obj.id, here?.id ?? null, 'this machine', dockerUp());
+    for (const m of remoteMachines) {
+      const r = exec.shell(m.id, 'docker ps -a --format "{{.Names}}"');
+      if (!r.ran) {
+        cannot.push({ what: `${obj.id} on ${m.id}`, why: r.why });
+        continue;
+      }
+      if (r.ok) {
+        reportDocker(obj.id, m.id, m.id, 'up');
+        continue;
+      }
+      // The daemon said no. Installed-but-dead and never-installed are
+      // different disagreements, so ask which one it is.
+      const installed = exec.shell(m.id, 'command -v docker');
+      if (!installed.ran) {
+        // The link dropped between the two probes. We know the daemon did not
+        // answer but not why, and "no docker binary is installed there" would
+        // be drift invented about a machine that just went to sleep. Rule 2.
+        cannot.push({
+          what: `${obj.id} on ${m.id}`,
+          why: `the docker daemon did not answer and ${installed.why} — cannot tell whether it is absent or merely down`,
+        });
+        continue;
+      }
+      reportDocker(obj.id, m.id, m.id, installed.ok ? 'down' : 'absent');
+    }
   },
 
   // Every name in detail.components exists as a container (running or not).
@@ -236,7 +365,15 @@ const probes = {
       return;
     }
     if (!expectedHere(obj)) {
-      cannot.push({ what: obj.id, why: `scheduled on ${hostMachine(obj)?.id ?? 'another machine'}, not on this machine` });
+      const remote = sshRoute(obj);
+      if (!remote) {
+        cannot.push({ what: obj.id, why: `scheduled on ${hostMachine(obj)?.id ?? 'another machine'}, not on this machine` });
+        return;
+      }
+      const labels = remoteLaunchctlLabels(remote.id);
+      if (labels.error) cannot.push({ what: obj.id, why: `scheduled on ${remote.id}; ${labels.error}${labels.unreachable ? '' : ' — cannot tell whether the job is loaded'}` });
+      else if (labels.list.includes(label)) ok.push({ what: obj.id, how: `"${label}" is loaded in launchctl on ${remote.id}` });
+      else drift.push({ what: obj.id, why: `inventory says "${label}" is scheduled on ${remote.id} — launchctl there has no such job` });
       return;
     }
     if (launchctlLabels == null) {
@@ -303,17 +440,29 @@ for (const obj of objects) {
 
 // Every com.starcaster.* / *.pulse.* job loaded here must be in the
 // inventory, hosted on this machine.
-if (launchctlLabels == null) {
-  cannot.push({ what: 'launchctl sweep', why: 'launchctl list did not run — cannot look for scheduled jobs the inventory is missing' });
-} else {
-  const ours = launchctlLabels.filter((l) => /^com\.starcaster\./.test(l) || /\.pulse\./.test(l));
+function launchctlSweep(labels, machineId, where) {
+  const ours = labels.filter((l) => /^com\.starcaster\./.test(l) || /\.pulse\./.test(l));
   const known = new Set(
-    objects.filter((o) => o.kind === 'job' && (here == null || hostMachine(o)?.id === here.id)).map((o) => o.detail?.label)
+    objects.filter((o) => o.kind === 'job' && (machineId == null || hostMachine(o)?.id === machineId)).map((o) => o.detail?.label)
   );
   for (const label of ours) {
-    if (!known.has(label)) drift.push({ what: label, why: 'loaded in launchctl on this machine but the inventory has no job with this label hosted here' });
+    if (!known.has(label)) drift.push({ what: label, why: `loaded in launchctl on ${where} but the inventory has no job with this label hosted there` });
   }
-  ok.push({ what: 'launchctl sweep', how: `${ours.length} starcaster/pulse job(s) loaded here, all accounted for or reported` });
+  ok.push({ what: `launchctl sweep (${where})`, how: `${ours.length} starcaster/pulse job(s) loaded on ${where}, all accounted for or reported` });
+}
+
+if (launchctlLabels == null) {
+  cannot.push({ what: 'launchctl sweep (this machine)', why: 'launchctl list did not run — cannot look for scheduled jobs the inventory is missing' });
+} else {
+  launchctlSweep(launchctlLabels, here?.id ?? null, 'this machine');
+}
+
+// ...and on every machine we can reach. A job running there that the inventory
+// has never heard of was invisible from this side until now.
+for (const m of remoteMachines) {
+  const labels = remoteLaunchctlLabels(m.id);
+  if (labels.error) cannot.push({ what: `launchctl sweep (${m.id})`, why: `${labels.error}${labels.unreachable ? '' : ' — cannot look for scheduled jobs the inventory is missing there'}` });
+  else launchctlSweep(labels.list, m.id, m.id);
 }
 
 // Every supabase_*_starcaster container docker has must appear in some
