@@ -226,6 +226,51 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — The always-on Mac Mini is no longer a blind spot (#400)
+
+There is a command here whose job is to ask "does the written-down map of my
+machines still match reality?" It had a gap: it would prove the Mac Mini was
+awake and reachable, and then decline to check anything actually living on it,
+reporting those things as "cannot tell" rather than checking them.
+
+Saying "cannot tell" instead of "fine" is the right instinct and it stays. But
+once the Mini has answered the door, we can look — and the first thing that
+turned up hiding in that gap was a container runtime that had been fatally
+broken since the day the Mini was set up, with nothing able to report it. The
+gap was also set to widen, since every new job the Mini takes on became one
+more thing nobody could verify.
+
+Now, when a machine is reachable, the checks for things living there run there.
+They ask exactly the same questions as before; only the location changes. Three
+rules keep it honest: it knocks once per machine rather than reconnecting for
+every item; a sleeping or closed machine is reported as "could not check" in
+the words it always used and never as a problem; and — the important one —
+"the Mini is asleep" and "colima is installed but will not start" are told
+apart, so only the second one raises an alarm.
+
+Proving this normally takes two machines, and the machine it was built on can
+only reach the other one in one direction. So it is covered by tests that stand
+in a pretend second machine, exercising both directions the work called for:
+awake-and-broken must raise an alarm, asleep must not. Both halves were then
+broken on purpose to confirm the tests genuinely catch it.
+
+Review caught three ways it would have cried wolf, all now fixed. The important
+one: when you ask another Mac to run a command over the network, it starts in a
+stripped-down environment that cannot find most of the software installed on it
+— so the check would have looked at a perfectly healthy Mini and announced that
+colima and Docker were both missing. Every remote question is now asked through
+a proper login session, which is the same thing that happens when you open a
+Terminal window yourself, so the machine can find its own tools. The other two
+were smaller versions of the same fault: a machine that accepted the connection
+and then stalled was reported as broken rather than unreachable, and a
+connection that dropped halfway through the Docker check was reported as
+"Docker is not installed there". Both now say "could not check", which is the
+honest answer.
+
+That distinction is the whole point. A check that raises false alarms is worse
+than no check, because you stop reading it — and this one would have raised
+several, about a machine with nothing wrong with it, the first time it ran.
+
 ## 2026-08-23 — Trying the "Report a problem" button while you build no longer files a real report (#403)
 
 The Bug Report module puts a little bug icon on a tenant's page; a visitor
