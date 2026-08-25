@@ -4,7 +4,10 @@
 /**
  * Pin ?v=<content-hash> on every local /path/*.js and /path/*.css reference in HTML.
  *
- * Scans all public/*.html plus src/layout.html by default — no manual file list.
+ * Scans all public/*.html by default — no manual file list. (src/layout.html
+ * is deliberately NOT scanned since 2026-08-24, task 86bbkh1nn: it is source,
+ * and its generated output public/app-shell.html is pinned instead — see
+ * defaultHtmlTargets below.)
  * Safe to run repeatedly (idempotent when artifacts are unchanged).
  *
  * Usage:

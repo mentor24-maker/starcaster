@@ -71,6 +71,18 @@ conflicts, stale pins after catch-up merges, and GitHub's phantom conflicts —
 and retired the `asset-pins` merge driver with it. CI enforces the invariant
 directly: a clean build must not modify any tracked file.
 
+**`src/layout.html` is no longer pinned** (2026-08-24, task 86bbkh1nn). Its
+asset references are bare in source; the hashes are applied to the file the
+build produces, `public/app-shell.html`, which is gitignored. Removing it from
+the pin targets left that generated shell **byte-identical**, which is the
+proof the source pins were pure redundancy — they were re-derived on the output
+every build, while making the busiest file in the repo change on every asset
+change. That is where most `?v=` merge conflicts, stale-pin CI failures and
+phantom GitHub conflicts came from. Four committed files still carry pins
+(`public/about.html`, `site.html`, `builder-preview.html`, `explore.html`);
+task 86bbkh288 removes those too, and with them the merge driver and the
+clean-build CI check.
+
 ### The other kind: committed, but regenerated wholesale
 
 The table above is gitignored artifacts, which are easy to spot. There is a
