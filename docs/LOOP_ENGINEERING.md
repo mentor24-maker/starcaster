@@ -734,6 +734,53 @@ a scratch ticket plus a comment of your own works too. Do **not** delete an
 existing `[bus-relay]` marker to manufacture one — that is destructive, and the
 run will then send his real answer to a dead channel.
 
+## The work-in-progress cap — and what it counts
+
+`loop-build` asks `npm run clickup -- wip-check` before claiming, and declines
+when too much is already in flight. Branch protection is `strict: true`, so
+every merge invalidates every other open branch: the catch-up cost is quadratic
+in open PRs, and building an eighth branch while seven rot ships nothing sooner.
+Exit 0 = room to claim, 3 = a normal decline, 1 = could not tell.
+
+**It counts work in flight, not open pull requests** (2026-08-25, task
+86bbm4zwd). A PR counts only when its ticket is `Building`, `In review` or
+`Ready to launch`. It counts **zero** when:
+
+* the ticket is **`Queued`** — that is rework the loop must be free to claim;
+* the ticket is **`Live`** — the work shipped by another route and the PR is a
+  leftover;
+* **no ticket can be found** for it — reported by number, never counted.
+
+The first version counted every open PR, and on the morning of 2026-08-25 that
+**deadlocked the build loop for four consecutive hourly passes**: seven PRs open
+against a cap of five, of which five should never have counted — three sent back
+to `Queued` for rework (so the cap blocked the only thing that could close them)
+and two zombies whose tickets were already `Live`. The queue sat at 33 while
+every pass exited 0 and did nothing.
+
+The message always names the split, never a bare total:
+
+```
+1 in flight, cap 5 — room to claim another.
+4 open PR(s) not counted: 4 queued for rework (#428, #426, #422, #419).
+```
+
+A bare "7 open, cap 5" is true and useless — it is what hid the deadlock for
+four passes.
+
+**If the queue cannot be read, it falls back to counting every open PR** — the
+older, *more* restrictive reading, and it says which reading it used. Failing
+toward the cap costs idle time; failing away from it reinstates the churn the
+cap exists to prevent.
+
+The cap itself is 5, override `CLAUDE_LOOP_WIP_CAP` for an experiment. Five is a
+starting point, not a measurement.
+
+**The matching drift check.** `npm run reconcile` now also flags the reverse
+pair — a **terminal task whose newest PR is still open**, which is how those two
+zombies survived. It is never repaired automatically: "close the PR" and "the
+task was closed too early" are both plausible, and only a person can tell which.
+
 ## Reading the queue at a glance — the Loop note
 
 The Status column says which STAGE a ticket is in; the **Loop note** column

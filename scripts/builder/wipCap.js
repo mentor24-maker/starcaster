@@ -50,6 +50,65 @@ function resolveCap(env = process.env) {
 }
 
 /**
+ * The ticket statuses that mean "this work is genuinely in flight".
+ *
+ * WHY THIS LIST AND NOT "IS THE PR OPEN" (2026-08-25, task 86bbm4zwd). The
+ * first version counted every open PR, and on the morning of 2026-08-25 that
+ * deadlocked the build loop for four consecutive hourly passes: seven PRs open
+ * against a cap of five, of which FIVE should never have counted — three whose
+ * tickets had been sent back to `Queued` for rework (so the cap was blocking
+ * the only thing that could close them) and two zombies whose tickets were
+ * already `Live`, shipped by a different PR.
+ *
+ * The cap asks "how many PRs are open?" when it means "how much work is in
+ * flight". Those are the same number only when every open PR has a ticket
+ * somebody is moving, and they diverge in two entirely ordinary situations —
+ * a send-back and an abandoned duplicate. Both were present.
+ *
+ * `Queued` is deliberately NOT here: a queued ticket with an open PR is rework
+ * waiting to be claimed, and counting it is what caused the deadlock. `Live`
+ * is not here either — the work shipped; the PR is a leftover.
+ */
+const IN_FLIGHT_STATUSES = Object.freeze(['building', 'in review', 'ready to launch']);
+
+/**
+ * The ClickUp task id a pull request declares in its body.
+ *
+ * Reliable because `pr-opened` REFUSES to record a PR whose body carries no
+ * link back to its ticket — so every PR the loops open has one by
+ * construction. A PR without one is hand-made, and is reported rather than
+ * counted (see classifyPrs).
+ */
+function ticketIdFromPrBody(body) {
+  const m = /app\.clickup\.com\/t\/(?:\d+\/)?([a-z0-9]+)/i.exec(String(body || ''));
+  return m ? m[1] : null;
+}
+
+/**
+ * Split open PRs by what their ticket says, so the message can name the split
+ * rather than a bare total. A bare total is what made the deadlock invisible
+ * for four passes: "7 open, cap 5" is true and useless.
+ *
+ * `ticketStatusById` is a plain object of id -> status string. A PR whose
+ * ticket is absent from it is `unknown` — reported, never counted.
+ */
+function classifyPrs({ prs, ticketStatusById } = {}) {
+  const byId = ticketStatusById && typeof ticketStatusById === 'object' ? ticketStatusById : {};
+  const groups = { inFlight: [], queued: [], live: [], unknown: [] };
+  for (const pr of Array.isArray(prs) ? prs : []) {
+    if (!pr || typeof pr !== 'object') continue;
+    if (String(pr.state || 'OPEN').toUpperCase() !== 'OPEN') continue;
+    const id = ticketIdFromPrBody(pr.body);
+    const status = id ? String(byId[id] || '').trim().toLowerCase() : '';
+    if (!id || !status) groups.unknown.push(pr.number);
+    else if (IN_FLIGHT_STATUSES.includes(status)) groups.inFlight.push(pr.number);
+    else if (status === 'queued') groups.queued.push(pr.number);
+    else groups.live.push(pr.number);
+  }
+  return groups;
+}
+
+/**
  * How many of these pull requests are actually in flight.
  *
  * OPEN only. Counting a merged or closed PR silently halves the effective cap
@@ -71,29 +130,51 @@ function countOpenPrs(prs) {
  * @returns {{ claim: boolean, code: 0|3, openCount: number, cap: number, message: string }}
  *   `code` mirrors the node-role guard: 0 = go ahead, 3 = a normal decline.
  */
-function wipDecision({ prs, cap } = {}) {
-  const openCount = countOpenPrs(prs);
+function wipDecision({ prs, cap, ticketStatusById } = {}) {
   const limit = Number.isInteger(cap) ? cap : DEFAULT_WIP_CAP;
 
-  if (openCount >= limit) {
+  // No ticket statuses supplied — ClickUp could not be read, or an older
+  // caller. Fall back to counting every open PR, which is the pre-2026-08-25
+  // behaviour: MORE restrictive, never less. Failing toward the cap costs some
+  // idle time; failing away from it costs the churn the cap exists to prevent.
+  if (!ticketStatusById || typeof ticketStatusById !== 'object') {
+    const openCount = countOpenPrs(prs);
+    const capped = openCount >= limit;
     return {
-      claim: false,
-      code: 3,
-      openCount,
-      cap: limit,
+      claim: !capped, code: capped ? 3 : 0, openCount, inFlight: openCount, cap: limit,
+      groups: null,
+      message: capped
+        ? `WIP cap reached — ${openCount} PR(s) open, cap ${limit}. Not claiming; the merge side is the bottleneck.\n` +
+          'This is a normal outcome, not a failure. Ticket statuses were NOT available, so every open PR was\n' +
+          `counted — the conservative reading. Raise it with ${CAP_ENV} for an experiment.`
+        : `${openCount} PR(s) open, cap ${limit} — room to claim another (ticket statuses unavailable; counted them all).`,
+    };
+  }
+
+  const groups = classifyPrs({ prs, ticketStatusById });
+  const inFlight = groups.inFlight.length;
+  const notCounted = groups.queued.length + groups.live.length + groups.unknown.length;
+
+  // The split, always — a bare total is what hid the 2026-08-25 deadlock.
+  const parts = [];
+  if (groups.queued.length) parts.push(`${groups.queued.length} queued for rework (#${groups.queued.join(', #')})`);
+  if (groups.live.length) parts.push(`${groups.live.length} whose ticket is already live (#${groups.live.join(', #')})`);
+  if (groups.unknown.length) parts.push(`${groups.unknown.length} with no ticket found (#${groups.unknown.join(', #')})`);
+  const tail = notCounted ? `\n${notCounted} open PR(s) not counted: ${parts.join('; ')}.` : '';
+
+  if (inFlight >= limit) {
+    return {
+      claim: false, code: 3, openCount: countOpenPrs(prs), inFlight, cap: limit, groups,
       message:
-        `WIP cap reached — ${openCount} PR(s) open, cap ${limit}. Not claiming; the merge side is the bottleneck.\n` +
+        `WIP cap reached — ${inFlight} in flight, cap ${limit}. Not claiming; the merge side is the bottleneck.${tail}\n` +
         'This is a normal outcome, not a failure. Work queued beyond the merge rate does not ship sooner —\n' +
         `it goes stale, and every merge re-dates every open branch. Raise it with ${CAP_ENV} for an experiment.`,
     };
   }
 
   return {
-    claim: true,
-    code: 0,
-    openCount,
-    cap: limit,
-    message: `${openCount} PR(s) open, cap ${limit} — room to claim another.`,
+    claim: true, code: 0, openCount: countOpenPrs(prs), inFlight, cap: limit, groups,
+    message: `${inFlight} in flight, cap ${limit} — room to claim another.${tail}`,
   };
 }
 
@@ -124,7 +205,10 @@ function undeterminedDecision(why) {
 module.exports = {
   DEFAULT_WIP_CAP,
   CAP_ENV,
+  IN_FLIGHT_STATUSES,
   resolveCap,
+  ticketIdFromPrBody,
+  classifyPrs,
   countOpenPrs,
   wipDecision,
   undeterminedDecision,

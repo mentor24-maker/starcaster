@@ -849,7 +849,9 @@ if (cmd === 'whoami') {
   // nothing here writes to ClickUp — no status, no comment, no Loop note.
   const cap = wipCap.resolveCap(process.env);
   const repoArg = arg('repo') || '';
-  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state'];
+  // `body` carries the ticket link every loop-opened PR must have (pr-opened
+  // refuses without one), which is how a PR is matched to its ticket status.
+  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
   if (repoArg) listArgs.push('--repo', repoArg);
 
   const out = gh(listArgs);
@@ -865,7 +867,28 @@ if (cmd === 'whoami') {
     process.exit(undecided.code);
   }
 
-  const decision = wipCap.wipDecision({ prs, cap });
+  // An open PR only counts when its TICKET says the work is in flight
+  // (task 86bbm4zwd). A ticket sent back to Queued with its PR still open is
+  // rework the loop must be free to claim; counting it deadlocked the build
+  // loop for four hourly passes on 2026-08-25.
+  //
+  // If the queue cannot be read, ticketStatusById stays undefined and
+  // wipDecision falls back to counting every open PR — the older, MORE
+  // restrictive reading. Failing toward the cap costs idle time; failing away
+  // from it costs the churn the cap exists to prevent.
+  let ticketStatusById;
+  try {
+    const { tasks } = await fetchAllTasks(LOOP_QUEUE_LIST);
+    if (Array.isArray(tasks) && tasks.length) {
+      ticketStatusById = Object.create(null);
+      for (const t of tasks) ticketStatusById[String(t.id)] = t.status?.status ?? '';
+    }
+  } catch {
+    // Deliberately swallowed: the fallback above is the safe answer, and the
+    // message says which reading was used.
+  }
+
+  const decision = wipCap.wipDecision({ prs, cap, ticketStatusById });
   console.log(decision.message);
   process.exit(decision.code);
 

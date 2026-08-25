@@ -12,6 +12,8 @@ const {
   countOpenPrs,
   wipDecision,
   undeterminedDecision,
+  ticketIdFromPrBody,
+  classifyPrs,
 } = require('./wipCap');
 
 /**
@@ -149,4 +151,93 @@ test('the build skill actually consults it before claiming', () => {
   const skill = fs.readFileSync(path.join(__dirname, '../../.claude/skills/loop-build/SKILL.md'), 'utf8');
   assert.match(skill, /wip-check/, 'SKILL.md must tell the pass to run it');
   assert.match(skill, /exit 3/i, 'and must say what a capped answer means');
+});
+
+// ── Counting work in flight, not open PRs (2026-08-25, task 86bbm4zwd) ─────
+
+const pr = (number, ticket, state = 'OPEN') => ({
+  number, state,
+  body: ticket ? `Does the thing.\n\nTicket: https://app.clickup.com/t/${ticket}\n` : 'No ticket link here.',
+});
+
+test('the ticket id is read out of the PR body', () => {
+  assert.equal(ticketIdFromPrBody('Ticket: https://app.clickup.com/t/86bbk2fuh'), '86bbk2fuh');
+  // The workspace-scoped form ClickUp hands out when you copy from the UI.
+  assert.equal(ticketIdFromPrBody('see https://app.clickup.com/t/90141423066/86bbjv681 ok'), '86bbjv681');
+  assert.equal(ticketIdFromPrBody('no link at all'), null);
+  assert.equal(ticketIdFromPrBody(undefined), null);
+});
+
+test('only in-flight tickets count; queued rework and live zombies do not', () => {
+  const prs = [pr(1, 'tBuild'), pr(2, 'tReview'), pr(3, 'tReady'), pr(4, 'tQueued'), pr(5, 'tLive'), pr(6, null)];
+  const g = classifyPrs({ prs, ticketStatusById: {
+    tBuild: 'Building', tReview: 'In review', tReady: 'Ready to launch',
+    tQueued: 'Queued', tLive: 'Live',
+  }});
+  assert.deepEqual(g.inFlight, [1, 2, 3], 'Building / In review / Ready to launch are in flight');
+  assert.deepEqual(g.queued, [4], 'a queued ticket is REWORK — counting it is what caused the deadlock');
+  assert.deepEqual(g.live, [5], 'a live ticket means the work shipped elsewhere; the PR is a leftover');
+  assert.deepEqual(g.unknown, [6], 'a PR with no ticket is reported, never counted');
+});
+
+test('THE DEADLOCK: the real 2026-08-25 state must let the loop claim', () => {
+  // Verbatim from the morning that broke it: 7 open PRs against cap 5, of
+  // which 3 were queued for rework and 2 were zombies whose tickets were Live.
+  // The old counting said "7 open, cap 5 — not claiming" for four consecutive
+  // hourly passes while only two things were genuinely in flight.
+  const prs = [
+    pr(428, 'tQ1'), pr(426, 'tQ2'), pr(419, 'tQ3'),      // sent back to Queued
+    pr(374, 'tL1'), pr(381, 'tL2'),                       // tickets already Live
+    pr(373, 'tB1'), pr(422, 'tR1'),                       // genuinely in flight
+  ];
+  const ticketStatusById = {
+    tQ1: 'Queued', tQ2: 'Queued', tQ3: 'Queued',
+    tL1: 'Live', tL2: 'Live',
+    tB1: 'Building', tR1: 'In review',
+  };
+  const d = wipDecision({ prs, cap: 5, ticketStatusById });
+  assert.equal(d.claim, true, 'the loop must claim: only 2 of the 7 are in flight');
+  assert.equal(d.code, 0);
+  assert.equal(d.inFlight, 2);
+  assert.equal(countOpenPrs(prs), 7, 'and the raw open count is still 7 — that is the whole point');
+});
+
+test('the message names the split, never a bare total', () => {
+  // A bare "7 open, cap 5" is true and useless: it hid the deadlock for four
+  // passes. Whatever the verdict, the uncounted PRs must be itemised.
+  const prs = [pr(1, 'a'), pr(2, 'b'), pr(3, 'c')];
+  const byId = { a: 'Building', b: 'Queued', c: 'Live' };
+  const { message } = wipDecision({ prs, cap: 5, ticketStatusById: byId });
+  assert.match(message, /1 in flight, cap 5/);
+  assert.match(message, /queued for rework \(#2\)/);
+  assert.match(message, /already live \(#3\)/);
+  assert.doesNotMatch(message, /3 PR\(s\) open/, 'the old bare-total phrasing must be gone');
+});
+
+test('a genuinely full pipeline still caps', () => {
+  // The cap is right and must keep working — this ticket changed WHAT it
+  // counts, not whether it counts.
+  const prs = [1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`));
+  const byId = Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`t${n}`, 'In review']));
+  const d = wipDecision({ prs, cap: 5, ticketStatusById: byId });
+  assert.equal(d.claim, false);
+  assert.equal(d.code, 3);
+  assert.match(d.message, /5 in flight, cap 5/);
+});
+
+test('no ticket statuses at all falls back to the OLD, stricter counting', () => {
+  // If ClickUp cannot be read we must fail TOWARD the cap. Failing away from
+  // it would reinstate the churn the cap exists to prevent, silently.
+  const prs = [1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`));
+  const d = wipDecision({ prs, cap: 5 });
+  assert.equal(d.claim, false, 'unreadable queue must not uncap the loop');
+  assert.equal(d.code, 3);
+  assert.match(d.message, /statuses were NOT available/i);
+});
+
+test('an unknown status is treated as not-in-flight, not as in-flight', () => {
+  // A status nobody anticipated must not silently consume cap.
+  const g = classifyPrs({ prs: [pr(9, 'x')], ticketStatusById: { x: 'Some New Status' } });
+  assert.deepEqual(g.inFlight, []);
+  assert.deepEqual(g.live, [9], 'anything not in-flight and not queued falls to the shipped/leftover bucket');
 });

@@ -72,9 +72,14 @@ test('the second run is a no-op: once a task is Live it is out of the in-flight 
   });
   assert.equal(moved.length, 1);
 
+  // UPDATED 2026-08-25 (task 86bbm4zwd): a terminal task IS now inspected —
+  // for the opposite contradiction, a PR left open under it. So its comments
+  // are read. What must still hold is that the second run CHANGES NOTHING:
+  // no move, no repair, because the merged PR under a Live task is the normal
+  // end state.
   const run2 = buckets();
-  await checkMergedTasks([task('t1', 'Widget', 'live')], run2.clean, run2.repaired, run2.unchecked, {
-    getComments: async () => { throw new Error('must not even be asked — task is no longer in-flight'); },
+  await checkMergedTasks([task('t1', 'Widget', 'live', 'closed')], run2.clean, run2.repaired, run2.unchecked, {
+    getComments: comments('https://github.com/org/repo/pull/42'),
     prState: () => ({ state: 'MERGED' }),
     updateStatus: (id, status) => moved.push([id, status]),
     isLive: true,
@@ -189,14 +194,19 @@ test('a linked PR gh could not read is UNCHECKED, never assumed merged or open',
   assert.match(unchecked[0], /could not read PR #9/);
 });
 
-test('only in-flight statuses are inspected — Queued and Live are out of scope', async () => {
+test('Queued is out of scope entirely; Live is inspected ONLY for an open PR', async () => {
+  // UPDATED 2026-08-25 (task 86bbm4zwd). Live used to be out of scope with
+  // Queued, which is exactly why a PR left open under a closed ticket was
+  // invisible — and two of those helped deadlock the build loop. Queued stays
+  // out: a queued ticket with an open PR is rework, not a contradiction.
   const { clean, repaired, unchecked } = buckets();
-  let asked = 0;
-  await checkMergedTasks([task('t1', 'A', 'queued'), task('t2', 'B', 'live')], clean, repaired, unchecked, {
-    getComments: async () => { asked += 1; return []; },
+  const asked = [];
+  await checkMergedTasks([task('t1', 'A', 'queued'), task('t2', 'B', 'live', 'closed')], clean, repaired, unchecked, {
+    getComments: async (id) => { asked.push(id); return []; },
     isLive: false,
   });
-  assert.equal(asked, 0);
+  assert.deepEqual(asked, ['t2'], 'the queued task must never be asked about; the live one must');
+  // No PR linked on t2, so nothing to contradict — still silent.
   assert.deepEqual({ clean, repaired, unchecked }, buckets());
 });
 
@@ -316,4 +326,63 @@ test('isTerminal: type wins, name is the fallback', () => {
   assert.equal(isTerminal({ status: { status: 'Done', type: 'closed' } }), true);
   assert.equal(isTerminal({ status: { status: 'In review', type: 'custom' } }), false);
   assert.equal(isTerminal({ status: { status: 'building' } }), false);
+});
+
+// ── The other direction: a terminal task keeping an open PR ───────────────
+// (2026-08-25, task 86bbm4zwd)
+
+test('a Live task whose newest PR is still OPEN is flagged', async () => {
+  // The real pair: 86bbjk5rw went Live via PR #391, but PR #374 — an earlier
+  // attempt at the same ticket — was left open. Two of these counted against
+  // the work-in-progress cap and helped deadlock the build loop for four
+  // hourly passes. checkMergedTasks only ever looked at IN-FLIGHT tasks, so
+  // this pair was invisible to it.
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Race-safe verdicts', 'live', 'closed')], clean, repaired, unchecked, {
+    getComments: comments('PR opened: https://github.com/org/repo/pull/374'),
+    prState: () => ({ state: 'OPEN' }),
+    isLive: false,
+  });
+  assert.equal(repaired.length, 1, 'the contradiction must be reported');
+  assert.match(repaired[0], /DRY RUN/);
+  assert.match(repaired[0], /open PR under a terminal task/i);
+  assert.match(repaired[0], /#374 is still OPEN/);
+  assert.match(repaired[0], /work-in-progress cap/, 'it must say why it matters, not just that it is odd');
+});
+
+test('it is never repaired automatically — only a person knows which side is wrong', async () => {
+  // "Close the PR" and "the ticket was closed too early" are both plausible,
+  // and picking wrong either discards work or reopens shipped work.
+  const { clean, repaired, unchecked } = buckets();
+  let writes = 0;
+  await checkMergedTasks([task('t1', 'Widget', 'live', 'closed')], clean, repaired, unchecked, {
+    getComments: comments('PR opened: https://github.com/org/repo/pull/374'),
+    prState: () => ({ state: 'OPEN' }),
+    updateStatus: () => { writes += 1; },
+    postBus: () => {},
+    isLive: true,
+  });
+  assert.equal(writes, 0, 'a terminal task with an open PR must never be moved automatically');
+});
+
+test('a Live task whose PR is merged is not flagged — that is the normal end state', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Widget', 'live', 'closed')], clean, repaired, unchecked, {
+    getComments: comments('PR opened: https://github.com/org/repo/pull/391'),
+    prState: () => ({ state: 'MERGED' }),
+    isLive: false,
+  });
+  assert.equal(repaired.length, 0, 'the overwhelmingly common case must stay silent');
+});
+
+test('a terminal task whose PR state cannot be read is unchecked, never assumed fine', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Widget', 'live', 'closed')], clean, repaired, unchecked, {
+    getComments: comments('PR opened: https://github.com/org/repo/pull/374'),
+    prState: () => null,
+    isLive: false,
+  });
+  assert.equal(repaired.length, 0);
+  assert.equal(unchecked.length, 1, 'DOCTRINE 3.11 — could not check is never folded into all clear');
+  assert.match(unchecked[0], /could not be read/);
 });

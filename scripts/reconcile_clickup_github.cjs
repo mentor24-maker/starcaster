@@ -151,6 +151,44 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
   const inFlight = tasks.filter(isInFlight);
   log(`[reconcile] ${inFlight.length} in-flight task(s) of ${tasks.length} total in the Loop Queue`);
 
+  // The OTHER direction (2026-08-25, task 86bbm4zwd): a task that is Live
+  // while its PR is still open. The loop below only ever looked at in-flight
+  // tasks, so this pair was invisible — and it is not harmless. Two such
+  // zombies (#374 under a Live 86bbjk5rw, #381 under a Live 86bbjk5wj, both
+  // shipped by a DIFFERENT PR) counted against the work-in-progress cap and
+  // helped deadlock the build loop for four hourly passes that morning.
+  //
+  // Never repaired automatically: the right answer is sometimes "close the
+  // PR" and sometimes "the ticket was closed too early", and only a person
+  // can tell which. Flagged, with both facts, so the choice is one command.
+  for (const task of tasks.filter(isTerminal)) {
+    const label = `task ${task.id} "${task.name}"`;
+    let comments;
+    try {
+      comments = await getComments(task.id);
+    } catch {
+      unchecked.push(`${label}: terminal, but its comments could not be read — cannot tell whether a PR is still open`);
+      continue;
+    }
+    const linked = distinctPrs(comments);
+    if (linked.length === 0) continue;
+    const newest = linked[linked.length - 1];
+    const pr = prState(newest.owner, newest.repoName, newest.number);
+    if (!pr) {
+      unchecked.push(`${label}: terminal, but the state of PR #${newest.number} could not be read`);
+      continue;
+    }
+    if (pr.state !== 'OPEN') continue;
+    await flag(
+      `contradiction:open-pr-under-terminal:${task.id}:${newest.number}`,
+      `${label} is "${task.status?.status}" but its newest PR #${newest.number} is still OPEN. ` +
+        'Either the work shipped under a different PR and this one is a leftover — which counts against the ' +
+        'work-in-progress cap and blocks the build loop — or the task was closed too early. Close the PR, or reopen the task.',
+      { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: open PR under a terminal task` }
+    );
+  }
+
+
   for (const task of inFlight) {
     const status = (task.status?.status || '').toLowerCase();
     const label = `task ${task.id} "${task.name}"`;
