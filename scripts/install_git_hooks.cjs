@@ -53,17 +53,14 @@ for (const name of HOOKS) {
  * The consequence to know: .gitattributes without this is not an error, it is
  * a silent fall back to the default merge. So this runs on every install, and
  * `npm run thread` runs a real `npm ci`.
- *
- * .git/config is shared by every worktree, so registering once covers them all.
  */
+// The asset-pins merge driver used to be registered here. Retired 2026-08-24
+// (task 86bbkh288): no committed file carries a ?v= pin any more, so there is
+// nothing left for a driver to merge. Clean up the stale config if present.
 try {
-  const driver = 'node scripts/merge_asset_pins.cjs %O %A %B %P';
-  execSync(`git config merge.asset-pins.name ${JSON.stringify('HTML files carrying ?v= asset pins')}`, { cwd: root, stdio: 'ignore' });
-  execSync(`git config merge.asset-pins.driver ${JSON.stringify(driver)}`, { cwd: root, stdio: 'ignore' });
-  console.log('[hooks] Registered merge driver → ?v= asset pins stop conflicting on every rebase.');
-} catch {
-  console.log('[hooks] Could not register the asset-pin merge driver — rebases will conflict on ?v= pins as before.');
-}
+  execSync('git config --unset merge.asset-pins.name', { cwd: root, stdio: 'ignore' });
+  execSync('git config --unset merge.asset-pins.driver', { cwd: root, stdio: 'ignore' });
+} catch { /* already absent — fine */ }
 
 console.log('[hooks] Installed pre-commit    → rebuilds pinned assets, pins ?v=, runs convention checks.');
 console.log('[hooks] Installed pre-push     → blocks branches carrying another branch\'s commits.');

@@ -29,6 +29,13 @@ type Props = {
  *
  * Icon Size steps by 5 (MODULE_UI_DOCTRINE "where the steps land"): 20–120,
  * and the default 40 sits on the grid.
+ *
+ * "Email each report" (task 5/5) sits on Content beside "Who sees it": both
+ * decide what HAPPENS to a report rather than how the trigger looks, and by
+ * D9 (blast radius descending) audience comes before destination, with the
+ * screenshot note — which is only an explanation — last. The server reads
+ * this value off the project's own pages and never off the submitted request;
+ * the reasoning is in lib/bugReportEmail.js.
  */
 const RENDERS_VIA = "BugReportModule (builder-bug-report-module.tsx)";
 
@@ -86,6 +93,16 @@ const SCHEMA: BuilderSettingsSchema = {
             options: BUG_REPORT_VISIBILITY_OPTIONS,
             fallback: "public",
             rendersVia: `${RENDERS_VIA} bugReportVisibleFor`
+          },
+          {
+            key: "emailReports",
+            label: "Email each report",
+            width: "check",
+            control: "checkbox",
+            trueValue: "true",
+            falseValue: "false",
+            fallback: "false",
+            rendersVia: "lib/bugReportEmail.js — sends to the project's Support Email"
           },
           {
             key: "screenshotNote",

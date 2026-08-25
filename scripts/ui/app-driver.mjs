@@ -89,10 +89,11 @@ const REQUIRED_ARTIFACTS = [
   {
     file: 'public/app-shell.html',
     // NO staleness check, deliberately. `npm run build` generates this from
-    // src/layout.html and THEN pin_asset_versions rewrites src/layout.html to
-    // stamp the new `?v=` hashes into it — so after any build that changes CSS
-    // or the bundle, the source is legitimately newer than the artifact and an
-    // mtime comparison reports a folder that is perfectly current as stale.
+    // src/layout.html, and a source file can legitimately be newer than the
+    // artifact (an editor save, a checkout), so an mtime comparison reports a
+    // perfectly current folder as stale. (Until 2026-08-24 the pinner also
+    // rewrote src/layout.html on every build, which made the mtime signal
+    // doubly meaningless — task 86bbkh1nn removed that.)
     //
     // That false positive fired on the very first real use of this check
     // (2026-08-15) and it is the worse failure: a guard that cries wolf after
