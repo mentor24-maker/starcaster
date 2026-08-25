@@ -640,6 +640,34 @@ example of why a machine-only config is a config nobody can review. (Task
 "Make Pulse path-portable" and no Slice B ticket could be found — A, C, D and E
 exist. Verify before citing it again.)
 
+**The drift check, and why it has three answers.** Changing
+`INTERVAL_SECONDS` in the repo does not change the machine — that needs the
+installer re-run, by hand, by a person. So `scripts/bus_relay_interval.sh`
+compares the two on every relay pass and in `install_bus_relay.sh --status`,
+and it answers one of **three** ways, never two:
+
+| | |
+|---|---|
+| `interval: every 600s, matching the repo` | both values read, and equal |
+| `interval: MISMATCH — this machine wakes every 3600s, the repo says 600s.` | both read, different — prints the installer command, pointed at the **main** checkout (the installer refuses to run from a worktree) |
+| `interval: CANNOT TELL — …` | no plist, no readable `StartInterval`, or no readable `INTERVAL_SECONDS` — it names which |
+
+The third one is the point. This check is the compensating control for the one
+thing the change could not do for itself: the installer re-run is a human step,
+and this is what keeps it from being forgotten silently forever. Its first
+version had only two answers, so an unparseable `StartInterval` printed
+`every ?s, matching the repo` — claiming a match while the `?` admitted it had
+no value — and a missing plist printed nothing at all, which reads as no news.
+Both were false all-clears in the one check whose whole job is to make silent
+drift loud (`docs/DOCTRINE.md` 3.11: *checked*, *empty* and *could not check*
+are three outcomes, and the third is never folded into the second). Caught in
+review, 2026-08-24. `scripts/builder/busRelayInterval.test.js` pins all three,
+and each was verified by reintroducing the defect and watching the test fail.
+
+**Known and not fixed here:** the launchd log now grows 6× faster with no
+rotation. It is small (a few KB per pass) but unbounded, and belongs to a
+housekeeping ticket rather than this one.
+
 ## A build node must be able to make GitHub run its checks
 
 Every gate downstream of the build loop reads GitHub's checks. `ship` waits for

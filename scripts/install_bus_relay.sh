@@ -62,6 +62,10 @@ status() {
   else
     echo "schedule: not installed on this machine"
   fi
+  # How often it actually wakes, and whether that still matches the repo.
+  # Without this line the only place drift shows up is the relay's own log,
+  # which is not where a person looks when they ask "is this running right?".
+  REPO="$REPO" BUS_RELAY_PLIST="$PLIST" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
   if launchctl list | grep -q "$LABEL"; then
     echo "loaded:   yes — $(launchctl list | grep "$LABEL")"
     echo "          (columns: PID, last exit code, label. '-' for PID means not running right now, which is normal between runs.)"
