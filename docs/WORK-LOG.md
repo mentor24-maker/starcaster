@@ -226,6 +226,43 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — Half the modules on a page didn't know which client they belonged to (#401)
+
+A published page is built from rows, and some rows float above the others as
+overlays. Every module on that page needs to know which client's site it is
+part of — a contact form has to file its enquiry somewhere, a search box has to
+search the right site.
+
+The floating rows were told. The ordinary rows were not. The very same module
+knew the answer in one position on the page and drew a blank in the other.
+
+It has never caused visible trouble, for a slightly lucky reason: on a real
+customer domain the server works out the client from the web address, which
+covers for the missing answer. It only shows up where the address does not
+name a client — previews, and while working locally — and there the request
+just fails. It was spotted while reviewing the Bug Report module, which was
+asking the server about a client whose name it had been handed as an empty
+space.
+
+The fix is a single line. What took the time was checking it, because this is
+plumbing sitting underneath half a dozen modules — the contact form, the client
+records form, site search, and the client-facing admin pages — and the ticket
+was explicit that the risk lived in the verification rather than the edit.
+
+Reading the whole chain through turned up one thing worth knowing. The
+page-serving code lets a web address *name* a client, and that naming wins over
+the domain the page was actually reached on. So a hand-edited address can serve
+client B's page while still sitting on client A's domain. Today a form on that
+page files its enquiry quietly under **A** — B's page, A's records. After this
+change the two disagree openly and the request is refused instead. That is the
+better outcome, but it is a change in behaviour rather than a pure fix, so it is
+flagged for a second pair of eyes rather than buried.
+
+Two of the ticket's acceptance criteria are deliberately left for the review
+step: proving it in a browser on a live client page, and exercising each of
+those modules there. Both need a running app connected to a real database,
+which an unattended build cannot reach for credential reasons — the fourth time
+that gap has come up today, and now a ticket of its own.
 ## 2026-08-22 — the layout checker can finally see the panels it was passing (#389)
 
 The tool that checks every settings panel for a tidy layout could only measure
