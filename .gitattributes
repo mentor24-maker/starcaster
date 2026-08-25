@@ -1,28 +1,3 @@
-# The committed HTML files that carry `?v=` cache-busting pins.
-#
-# Those hashes are rebuilt from whatever CSS and JS the build produced, so any
-# two branches that touch styling collide here even when neither one edited a
-# word of markup — it was most of the conflict traffic while shipping the Top
-# Menu work on 2026-08-11, and the fix was mechanical every single time.
-#
-# scripts/merge_asset_pins.cjs merges these by ignoring the pins and putting
-# them back per asset afterwards. A genuine markup conflict still conflicts.
-#
-# The driver itself is defined in .git/config, which is NOT committed —
-# scripts/install_git_hooks.cjs registers it, and npm `prepare` runs that on
-# every install. Without that step git silently falls back to the default
-# merge, which is the old behaviour rather than a broken one.
-src/layout.html             merge=asset-pins
-public/about.html           merge=asset-pins
-public/site.html            merge=asset-pins
-public/builder-preview.html merge=asset-pins
-public/explore.html         merge=asset-pins
-
-# Adding a committed HTML file that carries a `?v=` pin? Add it here in the
-# same commit. public/explore.html shipped in #301 without this line and the
-# very next branch that touched styling hit exactly the conflict this file
-# exists to prevent.
-
 # The plain-English work log. Every loop-built PR prepends one dated entry to
 # the top of this file, so any two branches open at the same time collide here
 # even though neither touched the other's entry — and both entries are always
@@ -37,8 +12,10 @@ public/explore.html         merge=asset-pins
 # `main-guard` branch went from one conflicted file to zero, with every heading
 # from BOTH sides present in the result.
 #
-# Unlike the asset-pins driver above, this one needs no registration in
-# .git/config and no install step, because git ships it. That also means GitHub
+# This needs no registration in .git/config and no install step, because git
+# ships it. (Unlike the retired `asset-pins` driver that used to live in this
+# file — removed 2026-08-24, task 86bbkh288, when committed HTML stopped
+# carrying ?v= pins and there was nothing left for it to merge.) GitHub
 # honours it server-side, so "Update branch" on a pull request stops conflicting.
 #
 # A genuine edit to the SAME entry by two branches would still be merged by

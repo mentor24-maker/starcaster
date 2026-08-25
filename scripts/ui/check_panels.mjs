@@ -726,9 +726,11 @@ if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
 if (panelsSeen === 0) {
   console.error(
     'No panels carrying `.is-lattice` were found.\n' +
-    'That is a FAILURE, not a pass: either the page has no modules whose type\n' +
-    'is in LATTICE_MODULE_TYPES (builder-module-card.tsx), or the navigation\n' +
-    'above stopped working. Zero assertions is never a green result.'
+    'That is a FAILURE, not a pass. The class is stamped on EVERY module\n' +
+    'editor by ModuleEditorWrapper (components/builder/builder-module-card.tsx)\n' +
+    'and on the section, cell and table-cell editors, so finding none means\n' +
+    'either the fixture page has no modules (`npm run seed:ui-fixture`) or the\n' +
+    'navigation above stopped working. Zero assertions is never a green result.'
   );
   process.exit(1);
 }

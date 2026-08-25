@@ -64,7 +64,10 @@ import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
-const { defaultWatches, handbackTarget, mergeEnabled } = busRelayPlan;
+const {
+  defaultWatches, handbackTarget, mergeEnabled,
+  deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
+} = busRelayPlan;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
   refusalNotice, conflictHandOffNotice, mergedNotice,
@@ -98,7 +101,9 @@ const BUS_RELAY_OPEN_STATUSES = ['pending response', 'responding'];
 // The dedup marker. A threaded reply starting with this exact prefix means
 // "already relayed" — checked by prefix, not just presence-of-any-reply, so
 // a human reply to Dane's comment can never be mistaken for our own marker.
-const BUS_RELAY_MARKER = '[bus-relay]';
+// Imported rather than re-declared so the text a pass WRITES and the check
+// that READS it are the same string by construction (task 86bbjxew2).
+const { BUS_RELAY_MARKER } = busRelayPlan;
 // The merge path's OWN dedup marker, separate from the relay's on purpose.
 // The relay marks a comment the moment it reaches the bus; the merge path
 // must only mark a comment once it has reached an answer (merged, handed to
@@ -340,6 +345,92 @@ async function postToBus(channel, content) {
   return { ok: out.res.ok, why: out.res.ok ? '' : `HTTP ${out.res.status}` };
 }
 
+/**
+ * Deliver a relayed message to somewhere DURABLE (task 86bbjxew2). The party
+ * line first; if that fails, a short receipt comment on the ticket the
+ * message concerns. Task comments were the one write in this API that kept
+ * working through the 2026-08-23 chat outage, and the answer itself is
+ * already a comment on that ticket — only the acknowledgement was missing.
+ *
+ * Returns { ok, via, why }: `ok` is the handback gate, `via` picks the marker
+ * text, `why` carries the chat failure for the report even on success.
+ */
+async function deliverToBus(channel, content, { taskId, target, receipted } = {}) {
+  const chat = await postToBus(channel, content);
+  // `why` is always the chat failure (the report quotes it on the success
+  // path too); `reason` is deliveryVerdict's honest account of why nothing was
+  // delivered. Keeping them apart is the whole of review finding 1: the old
+  // spread put the verdict's reason in `why` and then overwrote it.
+  const answer = (verdict) => ({ ok: verdict.ok, via: verdict.via, why: chat.why, reason: verdict.why || '' });
+  if (chat.ok) return { ok: true, via: 'chat', why: '', reason: '' };
+
+  // No handback target means nothing on this watch reads the ticket, so a
+  // receipt there delivers nothing (busRelayPlan.deliveryVerdict says why).
+  // Do not even post one: this watch retries every pass until the bus takes
+  // it, and a receipt per pass would pile identical notes onto the ticket
+  // forever while still losing the bus message.
+  const handsBack = Boolean(taskId && target);
+  if (!handsBack) {
+    return answer(deliveryVerdict({ chatOk: false, handsBack: false, receiptAttempted: false }));
+  }
+
+  // One receipt per TICKET per pass, not per comment. Three of Dane's
+  // comments during an outage otherwise leave three identical notes. The map
+  // remembers whether that receipt was VERIFIED, so a second comment on the
+  // same ticket inherits the first one's verdict rather than an assumed pass.
+  if (receipted && receipted.has(String(taskId))) {
+    return answer(deliveryVerdict({
+      chatOk: false, handsBack: true, receiptAttempted: true,
+      receiptPosted: true, receiptOk: receipted.get(String(taskId)),
+    }));
+  }
+
+  const at = new Date().toISOString();
+  const body = receiptText({ why: chat.why, target, at });
+  const out = await call('POST', `/api/v2/task/${taskId}/comment`, { comment_text: body });
+  const posted = Boolean(out.res.ok);
+
+  // Read it back before trusting it. Every other comment write in this file
+  // does (DOCTRINE 3.10), and this one now unlocks both the dedup marker and
+  // the ticket move — a 200 that did not stick would move the ticket with the
+  // acknowledgement existing nowhere. busRelayPlan.isThisReceipt matches THIS
+  // write by its id and its timestamp, never by the constant fingerprint: a
+  // leftover receipt from an earlier outage would otherwise satisfy the very
+  // check that exists to catch a POST that did not stick.
+  let stuck = false;
+  if (posted) {
+    const back = await call('GET', `/api/v2/task/${taskId}/comment`);
+    stuck = Boolean(back.res.ok && (back.json.comments || []).some(
+      (c) => isThisReceipt(c, { id: out.json && out.json.id, at })
+    ));
+  }
+
+  // Record the ticket as soon as the POST lands, NOT only when the read-back
+  // succeeded: a transient GET failure otherwise leaves the ticket unrecorded
+  // and the next comment in the same pass posts a second identical note —
+  // which is the pile-up this map was added to prevent. Whether it verified
+  // travels in the value, so nothing is assumed away.
+  if (posted && receipted) receipted.set(String(taskId), stuck);
+
+  return answer(deliveryVerdict({
+    chatOk: false, handsBack: true, receiptAttempted: true,
+    receiptPosted: posted, receiptOk: stuck, receiptStatus: out.res.status,
+  }));
+}
+
+/**
+ * Route a failed bus post to the right report bucket. The decision itself is
+ * busRelayPlan.busFailureBucket (tested); this is only the two pushes.
+ *
+ * `cosmetic` means the caller already wrote the real explanation onto the
+ * ticket, so the bus post carried nothing that was lost — a chat outage must
+ * not fail a pass that told the operator everything anyway (task 86bbjxew2).
+ */
+function reportBusFailure({ delivered, cosmetic, unchecked, busSkipped, line }) {
+  if (busFailureBucket({ delivered, cosmetic }) === 'skipped') busSkipped.push(line);
+  else unchecked.push(line);
+}
+
 /** Write the merge path's dedup marker as a threaded reply on the operator's
  *  own comment, and verify it stuck — an unverified marker means the next
  *  pass may act on the same authorization again, which must be reported, not
@@ -411,7 +502,7 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget }) {
   }
 }
 
-async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked, inPassBudget }) {
+async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked, busSkipped, inPassBudget }) {
   const decision = mergeDecision({
     status: task.status?.status,
     comments,
@@ -448,7 +539,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
       return { outcome: 'refused', reason: why };
     }
     const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`);
-    if (!bus.ok) unchecked.push(`${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})`);
+    if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})` });
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'refused', reason: why };
   };
@@ -504,14 +595,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     }
   }
 
-  // GitHub says it conflicts. Before believing that, ask THIS machine.
-  //
-  // GitHub cannot run the asset-pins merge driver — git refuses to run a
-  // driver defined by a cloned repo, so it lives in .git/config and is
-  // registered by npm install. Every branch that touches anything bundled
-  // shifts those `?v=` pins, so GitHub reports a collision on a file that
-  // resolves cleanly here, by asset path. That produced twelve false
-  // hand-offs on 2026-08-23, each one stalling a merge Dane had authorized.
+  // GitHub says it conflicts. Before believing that, ask THIS machine —
+  // GitHub's mergeability answer is often minutes stale, and on 2026-08-23 it
+  // produced twelve false hand-offs in one day, each stalling a merge Dane
+  // had authorized. (The original culprit, committed ?v= asset pins merged by
+  // a driver GitHub could not run, was retired on 2026-08-24 — task 86bbkh288.)
   //
   // This does NOT resolve a conflict. It attempts an ordinary merge in a
   // throwaway worktree: clean means the difference was the driver and the
@@ -552,11 +640,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
       pr,
       localVerdict: verdict
         ? {
-            kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT
-              ? 'real-conflict'
-              : verdict.code === branchCatchUp.CODES.NEEDS_REBUILD
-                ? 'needs-rebuild'
-                : 'unknown',
+            kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT ? 'real-conflict' : 'unknown',
             reason: verdict.reason,
           }
         : null,
@@ -571,7 +655,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
     const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and push. His approval still stands — once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`);
-    if (!bus.ok) unchecked.push(`${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})`);
+    if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'handed-off', reason: gate.reason };
   }
@@ -628,7 +712,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   }
 
   const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGED on Dane's say-so: ${label} — PR #${pr.number} squash-merged into main, ticket set to Live. main auto-deploys.\n\n${pr.url}`);
-  if (!bus.ok) unchecked.push(`${task.id}: PR #${pr.number} merged and ticket moved, but the bus post failed (${bus.why})`);
+  if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: PR #${pr.number} merged and the ticket moved and recorded, but the bus post failed (${bus.why})` });
 
   return { outcome: 'merged', pr: pr.number };
 }
@@ -1538,6 +1622,19 @@ if (cmd === 'whoami') {
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
   const unchecked = [];
+  // Bus posts that did not land but cost nothing, because the message reached
+  // a durable surface anyway (task 86bbjxew2). Reported under their own
+  // heading and deliberately NOT a run failure: on 2026-08-23 every chat
+  // write returned 400 for sixteen hours and the whole pipeline stopped
+  // behind it, though every answer was sitting on its ticket the entire time.
+  const busSkipped = [];
+  // Tickets already receipted THIS pass, mapped to whether that receipt was
+  // read back successfully. One acknowledgement per ticket, not one per
+  // comment — three answers during an outage otherwise leave three identical
+  // notes on the same ticket (review finding, 2026-08-23). The VALUE matters
+  // too: a second comment on the same ticket inherits the first receipt's
+  // verdict, so an unverified receipt never hands anything back by proxy.
+  const receipted = new Map();
   let lastRes = null;
 
   for (const watch of watches) {
@@ -1555,8 +1652,11 @@ if (cmd === 'whoami') {
         .filter((c) => Number(c.user?.id) === OPERATOR_ID);
 
       // Comments relayed on THIS run, for THIS task. This is the handback
-      // trigger: only a comment that actually reached the bus counts, so a
-      // failed post can never move a ticket its answer never left.
+      // trigger: only a comment that was actually DELIVERED counts, so a
+      // failed relay can never move a ticket its answer never left. Since
+      // task 86bbjxew2 "delivered" means the party line OR a receipt comment
+      // on the ticket — the gate is re-pointed at a durable surface, never
+      // weakened.
       let fresh = 0;
       // Merge commands this pass must NOT act on: either terminally acted on
       // (merged, or handed to a human for a conflict), or unknowable because
@@ -1594,26 +1694,44 @@ if (cmd === 'whoami') {
         if (dryRun) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; continue; }
 
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
-        const busOut = await call('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`, {
-          type: 'message', content: busBody, content_format: 'text/md',
+        // Chat, then a receipt comment on this very ticket. Only if BOTH fail
+        // is the answer genuinely undelivered.
+        const delivery = await deliverToBus(channel, busBody, {
+          taskId: t.id,
+          target: handbackTarget(watch, t.status?.status, 1),
+          receipted,
         });
-        if (!busOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: bus post failed, NOT marked relayed (will retry next run)`); continue; }
+        if (!delivery.ok) {
+          // The reason is deliveryVerdict's, not this line's. It used to hard-code a
+          // claim that the fallback receipt had failed as well — even on a notify-only
+          // watch, where no receipt is ever attempted — telling the reader that task
+          // comments were failing too, which during a chat outage is the opposite of
+          // the truth and points the diagnosis in exactly the wrong direction.
+          const failedWhy = [`the party line failed (${delivery.why})`, delivery.reason].filter(Boolean).join(', and ');
+          unchecked.push(`${t.id} comment ${c.id}: could not deliver anywhere — ${failedWhy}. NOT marked relayed (will retry next run)`);
+          continue;
+        }
+        if (delivery.via === 'ticket') {
+          reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — receipted on the ticket instead` });
+        }
 
         // Mark relayed by replying on Dane's own comment. Deliberately AFTER
-        // the bus post, not before: if this write fails, the worst case is a
+        // delivery, not before: if this write fails, the worst case is a
         // harmless duplicate relay next run — the alternative order risks
-        // marking a comment "relayed" that the bus never actually got.
-        const markerText = `${BUS_RELAY_MARKER} sent to channel ${channel} at ${new Date().toISOString()}`;
+        // marking a comment "relayed" that nobody ever actually got. The
+        // marker records WHICH surface carried it, behind the same prefix the
+        // "already relayed" check reads.
+        const markerText = relayMarkerText({ via: delivery.via, channel, at: new Date().toISOString() });
         const markOut = await call('POST', `/api/v2/comment/${c.id}/reply`, { comment_text: markerText });
-        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: relayed to bus but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; continue; }
+        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; continue; }
 
         // Verify the marker actually landed, same discipline as `comment`'s
         // read-back (DOCTRINE 3.10) — a 200 here is not proof it stuck.
         const verify = await call('GET', `/api/v2/comment/${c.id}/reply`);
         const stuck = verify.res.ok && (verify.json.comments || verify.json.replies || [])
           .some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
-        if (!stuck) unchecked.push(`${t.id} comment ${c.id}: relayed to bus but the dedup marker did not verify — will re-relay next run`);
-        console.error(`  posted to bus, marker ${stuck ? 'verified' : 'UNVERIFIED'}`);
+        if (!stuck) unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but the dedup marker did not verify — will re-relay next run`);
+        console.error(`  delivered via ${delivery.via === 'chat' ? 'the party line' : 'a receipt on the ticket'}, marker ${stuck ? 'verified' : 'UNVERIFIED'}`);
         relayed++;
         fresh++;
       }
@@ -1625,7 +1743,7 @@ if (cmd === 'whoami') {
       // pass (or one whose bus post failed) is still an authorization. Its
       // own marker, checked above, is what stops it firing twice.
       if (mergingAllowed && mergeEnabled(watch)) {
-        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, dryRun, channel, unchecked, inPassBudget });
+        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, dryRun, channel, unchecked, busSkipped, inPassBudget });
         if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
         else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
         else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
@@ -1654,7 +1772,7 @@ if (cmd === 'whoami') {
       // them in the same write, and verify BOTH halves from its response.
       const rem = (t.assignees || []).map((a) => a.id);
       const moveOut = await call('PUT', `/api/v2/task/${t.id}`, { status: target, assignees: { add: [], rem } });
-      if (!moveOut.res.ok) { unchecked.push(`${t.id}: answer is on the bus but the hand-back to "${target}" FAILED — the ticket is still parked in "${t.status?.status}"`); continue; }
+      if (!moveOut.res.ok) { unchecked.push(`${t.id}: the answer was delivered but the hand-back to "${target}" FAILED — the ticket is still parked in "${t.status?.status}"`); continue; }
       const now = moveOut.json.status?.status ?? '?';
       if (now.toLowerCase() !== target.toLowerCase()) {
         unchecked.push(`${t.id}: hand-back did not stick (asked "${target}", the write came back "${now}")`);
@@ -1670,7 +1788,17 @@ if (cmd === 'whoami') {
   const mergeLine = mergingAllowed
     ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
     : ', merging disabled (--no-merge)';
-  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
+  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
+  // Its own heading, above the failures and visibly not one of them. A chat
+  // outage is worth seeing; it is not worth stopping the pipeline for.
+  if (busSkipped.length) {
+    // Not all of these are receipts: the merge step's three posts write their
+    // real explanation onto the ticket themselves, so they land here with no
+    // receipt comment. The heading names what is true of all of them — the
+    // record is on the ticket, one way or the other.
+    console.error(`\nParty line unavailable — ${busSkipped.length} bus post(s) skipped; the record is on the ticket in each case:`);
+    for (const line of busSkipped) console.error(`  - ${line}`);
+  }
   if (unchecked.length) {
     console.error('\nCould not fully verify:');
     for (const line of unchecked) console.error(`  - ${line}`);
