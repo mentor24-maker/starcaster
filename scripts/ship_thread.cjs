@@ -179,9 +179,7 @@ if (behind === '0') {
       'Two changes genuinely disagree and a person has to choose:\n\n' +
       conflicted.split('\n').filter(Boolean).map((f) => `  · ${f}`).join('\n') +
       '\n\nThe merge has been undone, so the branch is exactly as it was.\n' +
-      'Resolve it by hand (`git merge origin/main`), then run `npm run ship` again.\n\n' +
-      'Note: the `?v=` asset pins are merged automatically (.gitattributes →\n' +
-      'scripts/merge_asset_pins.cjs), so a conflict here is a real one.'
+      'Resolve it by hand (`git merge origin/main`), then run `npm run ship` again.'
     );
   }
   say('    Merged cleanly.');
