@@ -57,10 +57,15 @@ async function resolveBugReportProject(req, projectIdInput) {
   const bind = await assertProjectIdAllowedOnHost(req, projectId);
   if (!bind.ok) return { ok: false, status: bind.status || 403, error: bind.error, code: bind.code };
   if (bind.projectId) return { ok: true, projectId: String(bind.projectId) };
-  if (!projectId) return { ok: false, status: 400, error: 'projectId is required', code: 'VALIDATION_ERROR' };
+  // Plain language, not `projectId is required` / `Unknown project`: these two
+  // are the only messages from this resolver a member of the public can read,
+  // and both mean the same thing to them — the form on this page is not wired
+  // to a site. Developer-speak in a visitor-facing dialog tells them nothing
+  // they can act on. The `code` still carries the detail for the logs.
+  if (!projectId) return { ok: false, status: 400, error: 'This report form is not connected to a site, so nothing could be sent.', code: 'VALIDATION_ERROR' };
   const project = await getPublicProjectById(projectId);
   if (!project.ok || !project.data) {
-    return { ok: false, status: 404, error: 'Unknown project', code: 'PROJECT_NOT_FOUND' };
+    return { ok: false, status: 404, error: 'This report form points to a site we do not recognise.', code: 'PROJECT_NOT_FOUND' };
   }
   return { ok: true, projectId: String(project.data.id) };
 }

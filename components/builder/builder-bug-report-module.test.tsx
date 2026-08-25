@@ -3,7 +3,7 @@ import { useLayoutEffect, type ReactNode } from "react";
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BugReportModule, bugReportVisibleFor, readBugReportSettings, BUG_REPORT_MAX_SCREENSHOT_MB } from "./builder-bug-report-module";
+import { BugReportModule, bugReportVisibleFor, readBugReportSettings, plainSubmitError, BUG_REPORT_GENERIC_ERROR, BUG_REPORT_MAX_SCREENSHOT_MB } from "./builder-bug-report-module";
 
 /**
  * Bug Report module (task 4/5): the floating trigger, the popup, the submit,
@@ -164,11 +164,18 @@ describe("BugReportModule — preview rendering", () => {
   });
 });
 
-describe("BugReportModule — popup and submit", () => {
+/**
+ * Every test in here drives the REAL submit, so every one of them renders the
+ * live-site shape. They used to render `previewMode` (shorter, and the trigger
+ * was inline) while asserting a POST went out — which is precisely the bug this
+ * file now pins: preview posted for real, and the suite was written in a way
+ * that could never have noticed.
+ */
+describe("BugReportModule — popup and submit on the live site", () => {
   it("click opens the popup; submit posts the description, page URL, tier and project; thank-you shows; closes after 2s", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { impl, calls } = fakeFetch();
-    render(<BugReportModule settings={{ popupTitle: "Tell us", thankYouMessage: "Got it!" }} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{ popupTitle: "Tell us", thankYouMessage: "Got it!" }} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
 
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
@@ -200,7 +207,7 @@ describe("BugReportModule — popup and submit", () => {
 
   it("a failed submit shows the server's message and keeps the popup open", async () => {
     const { impl } = fakeFetch({ submitStatus: 500 });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -218,7 +225,7 @@ describe("BugReportModule — popup and submit", () => {
 
   it("an empty description is refused before any request", async () => {
     const { impl, calls } = fakeFetch();
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -230,7 +237,7 @@ describe("BugReportModule — popup and submit", () => {
 
   it("the screenshot picker appears when the upload route exists (anything but 404)", async () => {
     const { impl } = fakeFetch({ screenshotRoute: 400 });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -241,7 +248,7 @@ describe("BugReportModule — popup and submit", () => {
     // The whole reason this module was held: the submit must present the token
     // the upload handed back, or 2/5's attach step refuses every picture.
     const { impl, calls } = fakeFetch({ screenshotRoute: 201, uploadAssetId: 7, uploadToken: "tok_7" });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -277,7 +284,7 @@ describe("BugReportModule — popup and submit", () => {
     // report still submits — carrying NO screenshot rather than one that 2/5
     // would reject. The report is never lost to a picture that would not attach.
     const { impl, calls } = fakeFetch({ screenshotRoute: 201, uploadStatus: 500 });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -311,7 +318,7 @@ describe("BugReportModule — popup and submit", () => {
     // picker and refused by the submit. The promise must match the enforcement.
     expect(BUG_REPORT_MAX_SCREENSHOT_MB).toBe(3);
     const { impl } = fakeFetch({ screenshotRoute: 400 });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -320,7 +327,7 @@ describe("BugReportModule — popup and submit", () => {
 
   it("hides the picker when blob storage is not configured (probe 503), not only on 404", async () => {
     const { impl } = fakeFetch({ screenshotRoute: 503 });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -329,7 +336,7 @@ describe("BugReportModule — popup and submit", () => {
 
   it("a screenshot can be removed, freeing its slot and dropping it from the submit", async () => {
     const { impl, calls } = fakeFetch({ screenshotRoute: 201, uploadAssetId: 7, uploadToken: "tok_7" });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -366,7 +373,7 @@ describe("BugReportModule — popup and submit", () => {
     // threw away the description. Stable ids fix it. This is the reviewer's
     // required break-test; revert to index-keying and it fails.
     const { impl, calls, releaseUpload } = fakeFetch({ screenshotRoute: 201, holdUpload: true, uploadAssetId: 7, uploadToken: "tok_7" });
-    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
     await flush();
     act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
     await flush();
@@ -406,6 +413,115 @@ describe("BugReportModule — popup and submit", () => {
     await flush();
     const submit = calls.find((c) => c.url.endsWith("/bug-report"));
     expect(submit!.body).toMatchObject({ screenshots: [{ id: 7, token: "tok_7" }] });
+  });
+});
+
+/**
+ * The bug this file exists to keep dead: the operator clicking their OWN
+ * "Send report" button while designing the page used to file a genuine report
+ * — and, once task 3/5 is live, a genuine ClickUp task in Dane's queue.
+ *
+ * These assert on the REQUEST, never on the absence of a row: "no row appeared"
+ * is also what a broken fake fetch looks like, and the companion live-site test
+ * above proves the same harness does send when it should.
+ */
+describe("BugReportModule — the preview must not file a real report", () => {
+  it("preview submit sends nothing, still shows the thank-you, and says nothing was sent", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { impl, calls } = fakeFetch();
+    render(<BugReportModule settings={{ thankYouMessage: "Got it!" }} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+    const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(textarea, "Just seeing what this button does");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+
+    expect(calls.filter((c) => c.url.endsWith("/bug-report"))).toHaveLength(0);
+    expect(document.body.textContent).toContain("Got it!");
+    expect(document.querySelector(".builder-bug-report-preview-note")!.textContent).toBe("Preview — nothing was sent.");
+
+    // The whole flow, auto-close included — that is the point of clicking it.
+    await act(async () => { vi.advanceTimersByTime(2100); });
+    await flush();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("a page that is neither preview nor live (no liveSite prop) also sends nothing", async () => {
+    const { impl, calls } = fakeFetch();
+    render(<BugReportModule settings={{}} projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+    const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(textarea, "Not a live page");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+    expect(calls.filter((c) => c.url.endsWith("/bug-report"))).toHaveLength(0);
+    expect(document.querySelector(".builder-bug-report-preview-note")).toBeTruthy();
+  });
+
+  it("preview still refuses an empty description — the operator sees the real validation", async () => {
+    const { impl, calls } = fakeFetch();
+    render(<BugReportModule settings={{}} previewMode projectId="proj_1" fetchImpl={impl} />);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+    expect(document.querySelector(".builder-bug-report-error")!.textContent).toContain("describe what went wrong");
+    expect(document.querySelector(".builder-bug-report-thanks")).toBeNull();
+    expect(calls.filter((c) => c.url.endsWith("/bug-report"))).toHaveLength(0);
+  });
+
+  it("the live site carries NO preview note on its thank-you", async () => {
+    const { impl, calls } = fakeFetch();
+    render(<LiveSiteTree><BugReportModule settings={{}} liveSite projectId="proj_1" fetchImpl={impl} /></LiveSiteTree>);
+    await flush();
+    act(() => document.querySelector<HTMLButtonElement>(".builder-bug-report-trigger")!.click());
+    await flush();
+    const textarea = document.querySelector<HTMLTextAreaElement>(".builder-bug-report-textarea")!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      setter.call(textarea, "A real problem on a real page");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => { document.querySelector<HTMLFormElement>(".builder-bug-report-form")!.requestSubmit(); });
+    await flush();
+    expect(calls.filter((c) => c.url.endsWith("/bug-report"))).toHaveLength(1);
+    expect(document.querySelector(".builder-bug-report-thanks")).toBeTruthy();
+    expect(document.querySelector(".builder-bug-report-preview-note")).toBeNull();
+  });
+});
+
+describe("plainSubmitError (pure)", () => {
+  it("passes task 1/5's plain messages through untouched", () => {
+    expect(plainSubmitError({ message: "That report was too long — please shorten it." }))
+      .toBe("That report was too long — please shorten it.");
+  });
+
+  it("replaces developer-speak a visitor cannot act on", () => {
+    expect(plainSubmitError({ message: "projectId is required", code: "VALIDATION_ERROR" })).toBe(BUG_REPORT_GENERIC_ERROR);
+    // The code alone is enough — a validation message is written for a developer.
+    expect(plainSubmitError({ message: "layer_role must be one of…", code: "VALIDATION_ERROR" })).toBe(BUG_REPORT_GENERIC_ERROR);
+    // And the field name alone is enough, whatever code came with it.
+    expect(plainSubmitError({ message: "missing projectId" })).toBe(BUG_REPORT_GENERIC_ERROR);
+    expect(plainSubmitError({ code: "PROJECT_NOT_FOUND", message: "Unknown project" })).toBe(BUG_REPORT_GENERIC_ERROR);
+  });
+
+  it("falls back when the server said nothing at all", () => {
+    expect(plainSubmitError(undefined)).toBe(BUG_REPORT_GENERIC_ERROR);
+    expect(plainSubmitError({ message: "   " })).toBe(BUG_REPORT_GENERIC_ERROR);
   });
 });
 

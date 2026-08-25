@@ -1,3 +1,39 @@
+## 2026-08-23 — The YouTube acquire box works again
+
+On Acquire > YouTube there used to be a box where you pasted one video's link
+and got the whole video back — details, transcript, the lot. A redesign a while
+back deleted the box from the page but left the code that drives it, so the code
+has been reaching for something that is not there. No error, no clue: the
+feature simply was not on the screen any more.
+
+It is back, rebuilt as a modern component rather than restoring the old markup —
+the old admin code is frozen to bug fixes now, and new screens are built the new
+way.
+
+One thing behaves deliberately: the .mp4/.mp3 download needs a separate worker
+service that is not switched on yet. When it is missing, you still get the
+details and the transcript, and only the file-download part says so, naming
+where to turn it on. A missing extra never costs you the part that worked. (#PR)
+## 2026-08-24 — Our own tests stop filing bug reports at you (#418)
+
+Three bug reports landed in your queue looking exactly like customer
+complaints, and you closed all three by hand and asked what you were meant to
+do with them. None of them came from a person. They came from our own test
+equipment — a robot browser checking that the bug-report button still works,
+and two automated probes checking the site was up.
+
+The awkward part is that those reports arriving *is* the proof the feature
+still works, so simply blocking them would have deleted the evidence. Instead
+the report is still made and still recorded — it just gets filed closed and
+unassigned, with a line saying which machine made it, rather than being put in
+front of you.
+
+Deciding "this wasn't a person" is done cautiously on purpose. Getting it wrong
+in one direction costs you one interruption; getting it wrong in the other
+throws a real customer's bug into a closed ticket nobody reads. So it only
+files something as machine-made when it sees something no human browser can
+produce, or two separate giveaways at once. One suspicious detail on its own is
+never enough.
 ## 2026-08-23 — Bug reports can now email you, if you ask them to
 
 The bug-report button on a tenant site already saved every report and filed it
@@ -190,6 +226,226 @@ was built. The log starts when the loop did.
 
 ---
 
+## 2026-08-23 — Parkour: the last of the four picture effects you asked for (#395)
+
+Back on 19 August you looked at a list of animations that were built into the
+Builder but that nobody could actually pick, and you chose four to bring out.
+Three of them — Slide, Axis Rotate and Flips — arrived on the 22nd. **Parkour
+is the fourth and last, and it is now in the Effect dropdown** on both the
+Image and the Floating Image panels.
+
+Parkour is the busy one. The picture travels across the page, bounces as it
+goes, and spins on two axes at the same time — turning like a clock face while
+also tumbling towards and away from you, the way a card looks when you flip it
+over end-over-end. It is the only effect that does all three things at once,
+so it is also the only one that offers every control: Direction, Speed,
+Rotation Rate, Frequency, Bounce Height, Start Delay and Repeat.
+
+Two things made this harder than its three siblings, and both are worth
+knowing because they cost time elsewhere:
+
+The first is that the tool the other effects use to rotate a picture only
+turns it about **one** axis. There is no setting for "spin and tumble at the
+same time", so parkour needed its own purpose-built piece of animation. It is
+still driven by the same Rotation Rate control as everything else, so "25
+turns a minute" means the same thing here as it does on Spin.
+
+The second is a trap this codebase has now fallen into twice. There was an old,
+abandoned version of Parkour still sitting in the stylesheet — a fixed-speed
+animation that ignores every setting, plus some layout rules that squash a
+floating picture into a fixed 240-pixel band. Slide hit exactly this and took
+three review rounds to sort out. So parkour deliberately goes by a slightly
+different internal name, which the abandoned rules do not recognise. That was
+checked in a real browser rather than assumed: under the old name the picture
+gets flattened and every setting is ignored; under the new one it behaves.
+
+Also confirmed by eye, on a real rendered page: the picture does visibly travel,
+bounce and turn on both axes together, and it stops completely for a visitor
+whose computer is set to reduce motion.
+
+Cartwheels is still deliberately absent — it is Tumbleweed under another name,
+which is what you said at the time, and there is now a test that stops a future
+tidy-up from "helpfully" adding it back.
+## 2026-08-23 — The always-on Mac Mini is no longer a blind spot (#400)
+
+There is a command here whose job is to ask "does the written-down map of my
+machines still match reality?" It had a gap: it would prove the Mac Mini was
+awake and reachable, and then decline to check anything actually living on it,
+reporting those things as "cannot tell" rather than checking them.
+
+Saying "cannot tell" instead of "fine" is the right instinct and it stays. But
+once the Mini has answered the door, we can look — and the first thing that
+turned up hiding in that gap was a container runtime that had been fatally
+broken since the day the Mini was set up, with nothing able to report it. The
+gap was also set to widen, since every new job the Mini takes on became one
+more thing nobody could verify.
+
+Now, when a machine is reachable, the checks for things living there run there.
+They ask exactly the same questions as before; only the location changes. Three
+rules keep it honest: it knocks once per machine rather than reconnecting for
+every item; a sleeping or closed machine is reported as "could not check" in
+the words it always used and never as a problem; and — the important one —
+"the Mini is asleep" and "colima is installed but will not start" are told
+apart, so only the second one raises an alarm.
+
+Proving this normally takes two machines, and the machine it was built on can
+only reach the other one in one direction. So it is covered by tests that stand
+in a pretend second machine, exercising both directions the work called for:
+awake-and-broken must raise an alarm, asleep must not. Both halves were then
+broken on purpose to confirm the tests genuinely catch it.
+
+Review caught three ways it would have cried wolf, all now fixed. The important
+one: when you ask another Mac to run a command over the network, it starts in a
+stripped-down environment that cannot find most of the software installed on it
+— so the check would have looked at a perfectly healthy Mini and announced that
+colima and Docker were both missing. Every remote question is now asked through
+a proper login session, which is the same thing that happens when you open a
+Terminal window yourself, so the machine can find its own tools. The other two
+were smaller versions of the same fault: a machine that accepted the connection
+and then stalled was reported as broken rather than unreachable, and a
+connection that dropped halfway through the Docker check was reported as
+"Docker is not installed there". Both now say "could not check", which is the
+honest answer.
+
+That distinction is the whole point. A check that raises false alarms is worse
+than no check, because you stop reading it — and this one would have raised
+several, about a machine with nothing wrong with it, the first time it ran.
+
+## 2026-08-23 — Trying the "Report a problem" button while you build no longer files a real report (#403)
+
+The Bug Report module puts a little bug icon on a tenant's page; a visitor
+clicks it, describes what went wrong, and the report lands in the queue. The
+obvious thing to do after dropping that module onto a page is to click it
+yourself and see what happens — and until today, doing that filed a genuine
+report. Inside the Builder, where the site you are editing is already known,
+the row went in for real. Once the piece that turns reports into ClickUp tasks
+goes live, that same curious click would have put a task in your queue.
+
+Now the button behaves differently depending on where it is. On a published
+tenant page, nothing has changed at all — a real report, exactly as before.
+Anywhere else, which means the Builder and its preview, it still asks you to
+describe the problem, still shows the thank-you message the site owner wrote,
+and still closes itself after two seconds, so you see the whole thing a visitor
+would see. It just adds one quiet line underneath: *Preview — nothing was
+sent.* Nothing leaves the browser.
+
+Two smaller things came along with it. When a report genuinely cannot be sent,
+the visitor now reads one plain sentence instead of whatever the server said —
+some of those messages were written for a programmer and named internal fields,
+which tells a member of the public nothing they can act on. And the tests that
+cover this module used to check the "send" path while pretending to be in
+preview, which is exactly the confusion that hid the bug; they now run against
+a real page, with separate tests holding the preview side down.
+## 2026-08-23 — Half the modules on a page didn't know which client they belonged to (#401)
+
+A published page is built from rows, and some rows float above the others as
+overlays. Every module on that page needs to know which client's site it is
+part of — a contact form has to file its enquiry somewhere, a search box has to
+search the right site.
+
+The floating rows were told. The ordinary rows were not. The very same module
+knew the answer in one position on the page and drew a blank in the other.
+
+It has never caused visible trouble, for a slightly lucky reason: on a real
+customer domain the server works out the client from the web address, which
+covers for the missing answer. It only shows up where the address does not
+name a client — previews, and while working locally — and there the request
+just fails. It was spotted while reviewing the Bug Report module, which was
+asking the server about a client whose name it had been handed as an empty
+space.
+
+The fix is a single line. What took the time was checking it, because this is
+plumbing sitting underneath half a dozen modules — the contact form, the client
+records form, site search, and the client-facing admin pages — and the ticket
+was explicit that the risk lived in the verification rather than the edit.
+
+Reading the whole chain through turned up one thing worth knowing. The
+page-serving code lets a web address *name* a client, and that naming wins over
+the domain the page was actually reached on. So a hand-edited address can serve
+client B's page while still sitting on client A's domain. Today a form on that
+page files its enquiry quietly under **A** — B's page, A's records. After this
+change the two disagree openly and the request is refused instead. That is the
+better outcome, but it is a change in behaviour rather than a pure fix, so it is
+flagged for a second pair of eyes rather than buried.
+
+Two of the ticket's acceptance criteria are deliberately left for the review
+step: proving it in a browser on a live client page, and exercising each of
+those modules there. Both need a running app connected to a real database,
+which an unattended build cannot reach for credential reasons — the fourth time
+that gap has come up today, and now a ticket of its own.
+## 2026-08-22 — the layout checker can finally see the panels it was passing (#389)
+
+The tool that checks every settings panel for a tidy layout could only measure
+what was on screen, and most of the test page was blank. A panel that edits a
+repeating list — the Feature Cards, the Table of Contents, the breadcrumb trail
+— draws nothing at all when the list is empty, so the checker opened it, found
+nothing to measure, and reported a confident pass over an empty box. That is
+how two visibly broken panels reached you in August with a green run behind
+them.
+
+The test page now carries real content in every panel: at least two rows in
+every repeating list, every optional block switched on so its hidden controls
+actually draw, and one deliberately long piece of text per panel so the "wide
+enough for the longest label" half of the rule is tested rather than assumed.
+The two CRM panels needed a real form in the test database before they would
+draw anything at all, so the setup script now creates one. Net effect: the
+checker measures 660 panel columns instead of 648, and 1,065 label-and-field
+pairs instead of 1,009 — and, most of the point, the CRM Form panel turned out
+to be visibly staggered the moment it had something in it, which nobody could
+have seen before.
+
+Also fixed a wrong signpost: when the checker finds no panels at all it told
+you to go look at a list of module types that does not exist anywhere in the
+codebase. It now names the real thing.
+## 2026-08-23 — The relay no longer stops when the chat room does (#414)
+
+Yesterday the whole task pipeline sat still for sixteen hours. Every one of
+your answers had been written, read and understood — they were sitting right
+there on the tickets — but nothing moved.
+
+Here is why. When you answer a parked ticket, an hourly job reads your answer,
+posts it to the party line (the shared chat channel everyone watches), and only
+then releases the ticket back to the machines. That last "only then" is
+deliberate: a ticket must never move on an answer nobody actually received.
+The trouble was that "received" meant exactly one thing — a message landing in
+that chat channel — and yesterday ClickUp's chat refused every single message
+we sent it, for sixteen hours, then quietly started working again. Twenty-three
+comments and five handbacks piled up behind one broken door.
+
+The first explanation was that we had hit a limit on the free plan and needed
+to pay. That turned out to be wrong, which is worth knowing: the plan was the
+same before, during and after, and chat posts work fine on it. Two commands
+proved it once the outage lifted. Paying would have fixed nothing.
+
+So the rule stays and the door moves. The job now tries the party line first;
+if chat is down, it writes a short note on the ticket itself instead — "your
+answer was read, this ticket is going back to Queued, the party line is
+unavailable so this note is the record" — and that counts as delivered. Ticket
+comments were the one thing that kept working throughout. The trail says which
+route was used, so anyone reading it later can see what happened.
+
+What has not changed is the part that matters: if a message reaches neither the
+chat room nor the ticket, it is still undelivered, the ticket still does not
+move, and the run still reports a failure. The safety check was re-aimed at a
+sturdier target, not switched off. A chat outage is now a line in the report
+rather than a stopped pipeline.
+
+A second pass tightened three places where the job was telling small untruths —
+which matters more than it sounds, because these messages are what someone
+reads at 2am while trying to work out what broke. It used to report "the chat
+failed and so did the note on the ticket" even in the cases where it had never
+tried writing a note at all, pointing the reader at a problem that did not
+exist. It checked its own note had really been saved by looking for the words
+it always uses — so an old note left over from a previous outage would happily
+vouch for a new one that never saved. And if that check hit a hiccup, the job
+forgot it had written the note and wrote a second identical one on the same
+ticket. All three now say exactly what happened and nothing more.
+
+The safety rule itself is untouched. It was tested by breaking the chat room on
+purpose — pointing the job at a channel that does not exist — on a throwaway
+ticket, three times over: chat working, chat broken with a note written, and
+chat broken where writing a note would be pointless. Each behaved as intended,
+and the throwaway tickets were deleted afterwards.
 ## 2026-08-23 — The video pipeline's to-do list (#405)
 
 Second of eight pieces in the Studio work. This one is the list that remembers
