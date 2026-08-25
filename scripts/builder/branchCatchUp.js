@@ -8,33 +8,30 @@
  * merged locally with nothing to resolve. Each hand-off stalls a merge the
  * operator had already authorized.
  *
- * The cause is in this repo's own .gitattributes. Four committed HTML files
- * carry `?v=` cache-busting pins rebuilt from whatever the build produced, so
- * any two branches touching anything bundled collide there even when neither
- * edited a word of markup. `scripts/merge_asset_pins.cjs` resolves them by
- * asset path — but git refuses to run a merge driver defined by a cloned repo,
- * so it lives in .git/config and `scripts/install_git_hooks.cjs` registers it
- * on every install. GITHUB THEREFORE CANNOT RUN IT. GitHub does a plain merge,
- * sees two different hashes on one line, and reports a conflict.
+ * The original cause was `?v=` asset pins committed inside HTML files, merged
+ * by a local driver GitHub could not run — retired on 2026-08-24 (tasks
+ * 86bbkh1nn, 86bbkh288): no committed file carries a pin any more, so that
+ * whole class of phantom conflict is gone, along with the driver itself and
+ * this module's driver check and stale-pin detection.
  *
- * (The WORK-LOG.md `union` driver in the same file is git's own built-in, so
- * GitHub does honour that one. Only asset-pins is invisible to it.)
+ * The module stays, because it still earns its keep two ways: GitHub's
+ * mergeability answer lags reality (it reports stale state for minutes after a
+ * push), and a BEHIND branch needs catching up regardless. An ordinary local
+ * merge remains the honest way to ask "does this branch really conflict?" and
+ * the safe way to catch it up when it does not.
  *
- * The relay was right to refuse — resolving a conflict blind is exactly what a
- * script must never do (task 86bbjd5nn, binding). It was asking the wrong
- * machine. It runs on a node that HAS the driver, so it can find out for real
- * instead of taking GitHub's word.
+ * The relay is right to refuse on a real conflict — resolving one blind is
+ * exactly what a script must never do (task 86bbjd5nn, binding).
  *
  * WHAT THIS IS NOT. It does not resolve conflicts. It attempts an ordinary
  * merge and reports what happened. If anything conflicts, it aborts, cleans up
  * and says so — the hand-off proceeds exactly as before. The only case it
- * changes is the one where the merge is CLEAN here and GitHub said it was not,
- * and nothing but the missing driver can explain that difference.
+ * changes is the one where the merge is CLEAN here and GitHub said it was not — usually because GitHub's answer is stale.
  *
  * THE FAILURE RULE. Every outcome that is not a proven-clean merge is a
- * hand-off. Wrong repo, missing driver, failed fetch, failed push, a merge that
- * somehow does not contain main — all of them hand over. A check that could not
- * run reports "cannot tell", never a pass (DOCTRINE 3.11).
+ * hand-off. Wrong repo, failed fetch, failed push, a merge that somehow does
+ * not contain main — all of them hand over. A check that could not run
+ * reports "cannot tell", never a pass (DOCTRINE 3.11).
  *
  * AND IT NEVER FORCE-PUSHES. The push is a fast-forward of the branch onto a
  * merge commit that already contains it, so an ordinary push always works. If
@@ -49,86 +46,22 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
-/** The driver .gitattributes names for the pin files. Absent = we are blind. */
-const PIN_DRIVER_KEY = 'merge.asset-pins.driver';
-
 /**
  * Outcomes. Only `clean` authorizes a push; everything else hands over, and
  * `reason` is written for the operator, not for a log grep.
+ *
+ * NEEDS_REBUILD, NO_DRIVER and CANNOT_TELL were retired on 2026-08-24
+ * (task 86bbkh288) with the committed asset pins that made them necessary.
  */
 const CODES = Object.freeze({
   CLEAN: 'clean',
-  NEEDS_REBUILD: 'needs-rebuild',
   REAL_CONFLICT: 'real-conflict',
   WRONG_REPO: 'wrong-repo',
-  NO_DRIVER: 'no-driver',
   FETCH_FAILED: 'fetch-failed',
   WORKTREE_FAILED: 'worktree-failed',
   NOT_ANCESTOR: 'not-ancestor',
-  CANNOT_TELL: 'cannot-tell',
   PUSH_FAILED: 'push-failed',
 });
-
-/**
- * Paths whose contents end up INSIDE a `?v=`-pinned asset.
- *
- * WHY THIS LIST EXISTS (2026-08-24). The first version of this module pushed
- * whatever merged cleanly. That is the wrong question. The asset-pins merge
- * driver resolves a pin collision by restoring each pin BY ASSET PATH, which is
- * exactly right when only the markup moved — and exactly wrong when `main`
- * changed the asset underneath. The restored pin then names the pre-merge
- * build, no rebuild ever runs, and the pushed tree's pins do not match a clean
- * build of it. CI's "Asset pins match a clean build" step fails.
- *
- * It did that to three green branches in one pass (#401, #403, #411), all
- * triggered by one commit that edited `public/js/projectContext.js`. It looks
- * like the branch's own fault, and it costs a full CI cycle to discover.
- *
- * THE BUG WAS THE AUTHORIZATION, not the merge: the push was authorized by
- * "the merge was clean", and clean-merge is a different question from
- * builds-clean.
- *
- * Derived from what the committed HTML actually pins:
- *   /js/*.js, /shared/*.js, /app.js  — served straight out of public/
- *   /styles.css                      — built from src/css/**
- *   /builder-bundle.js               — builder-react-entry.tsx, components/**,
- *                                      lib/builder-client/**
- *   /bundle.js                       — react-entry.js + campaigns components
- *
- * A list like this rots the moment someone adds a pinned asset with a new
- * source, so branchCatchUp.test.js reads every pinned URL out of the committed
- * HTML and fails if any of them maps to a path this list does not cover.
- */
-const PIN_SOURCE_PATHS = Object.freeze([
-  'public/js/',
-  'public/shared/',
-  'public/app.js',
-  'src/css/',
-  'components/',
-  'lib/builder-client/',
-  // Plain lib/ files that components import, so esbuild compiles them into
-  // public/builder-bundle.js. Found by the metafile guard in
-  // branchCatchUp.test.js, not by reading imports — the list is only as good
-  // as the thing that checks it, and reading imports by hand is how this one
-  // was already stale on the day it was written.
-  'lib/crmFormStyles.js',
-  'builder-react-entry.tsx',
-  'react-entry.js',
-]);
-
-/**
- * Which of these changed files feed a pinned asset?
- *
- * Pure, so the decision is testable without a repository.
- */
-function pinnedAssetSourcesIn(changedPaths) {
-  return (Array.isArray(changedPaths) ? changedPaths : [])
-    .map((p) => String(p || '').trim())
-    .filter(Boolean)
-    .filter((p) => PIN_SOURCE_PATHS.some((prefix) => (
-      prefix.endsWith('/') ? p.startsWith(prefix) : p === prefix
-    )));
-}
 
 function defaultRunGit(args, { cwd } = {}) {
   const out = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -151,19 +84,6 @@ function parseRepoFromRemoteUrl(url) {
   return m ? `${m[1]}/${m[2]}` : '';
 }
 
-/**
- * Is the pin driver actually registered on this machine?
- *
- * This matters more than it looks. Without it git falls back to the default
- * merge SILENTLY — the same answer GitHub gives — so a "conflict" here would
- * prove nothing at all. Asking the config is the only honest test; the file
- * existing on disk is not one.
- */
-function assetPinDriverInstalled(runGit = defaultRunGit, cwd = process.cwd()) {
-  const res = runGit(['config', '--get', PIN_DRIVER_KEY], { cwd });
-  return Boolean(res.ok && res.stdout);
-}
-
 /** Which files git left with conflict markers. */
 function conflictedFiles(runGit, cwd) {
   const res = runGit(['diff', '--name-only', '--diff-filter=U'], { cwd });
@@ -176,8 +96,7 @@ function conflictedFiles(runGit, cwd) {
  *
  * Isolated on purpose: a detached worktree in a temp directory touches no
  * existing checkout, switches nobody's branch, and cannot pick up another
- * thread's uncommitted edits. (.git/config is shared across worktrees, which
- * is exactly why the driver is available inside it.)
+ * thread's uncommitted edits.
  *
  * @returns {{ code: string, ok: boolean, reason: string, files?: string[] }}
  *   `ok` is true only for CLEAN.
@@ -209,16 +128,7 @@ function catchUpBranchLocally({
     };
   }
 
-  // 2. Without the driver we would just be reproducing GitHub's answer.
-  if (!assetPinDriverInstalled(runGit, cwd)) {
-    return {
-      code: CODES.NO_DRIVER,
-      ok: false,
-      reason: `the ${PIN_DRIVER_KEY} merge driver is not registered on this machine, so a local merge proves nothing GitHub has not already said — run "npm install" here`,
-    };
-  }
-
-  // 3. Fresh refs, or we would be merging a stale main into a stale branch and
+  // 2. Fresh refs, or we would be merging a stale main into a stale branch and
   //    calling the result current.
   const fetched = runGit(['fetch', 'origin', branchName, base], { cwd });
   if (!fetched.ok) {
@@ -235,7 +145,7 @@ function catchUpBranchLocally({
     }
     added = true;
 
-    // 4. An ordinary merge. Never a rebase: the branch may only ever gain
+    // 3. An ordinary merge. Never a rebase: the branch may only ever gain
     //    commits, so the push below stays a fast-forward.
     const merged = runGit(['merge', `origin/${base}`, '--no-edit'], { cwd: tree });
     if (!merged.ok) {
@@ -251,35 +161,13 @@ function catchUpBranchLocally({
       };
     }
 
-    // 5. Prove the result actually contains main before pushing it anywhere.
+    // 4. Prove the result actually contains main before pushing it anywhere.
     const contains = runGit(['merge-base', '--is-ancestor', `origin/${base}`, 'HEAD'], { cwd: tree });
     if (!contains.ok) {
       return { code: CODES.NOT_ANCESTOR, ok: false, reason: `the merged tree does not contain ${base} — refusing to push it` };
     }
 
-    // 6. Did the merge bring in a change to anything a `?v=` pin hashes?
-    //    If so the pins in this tree name the PRE-merge build, and pushing it
-    //    turns a green branch red on a step that reads like the branch's own
-    //    fault. Re-pinning properly needs a real `npm ci` in this scratch
-    //    worktree — about two minutes per branch, on a pass that runs hourly —
-    //    so this detects and hands over with the exact fix instead. A named
-    //    next step beats a red check discovered twenty minutes later.
-    const broughtIn = runGit(['diff', '--name-only', `origin/${branchName}`, 'HEAD'], { cwd: tree });
-    if (broughtIn === null || !broughtIn.ok) {
-      return { code: CODES.CANNOT_TELL, ok: false, reason: 'could not list what the merge brought in, so could not tell whether the asset pins are stale — not pushing' };
-    }
-    const stale = pinnedAssetSourcesIn(broughtIn.stdout.split('\n'));
-    if (stale.length) {
-      const shown = stale.slice(0, 3).join(', ') + (stale.length > 3 ? `, and ${stale.length - 3} more` : '');
-      return {
-        code: CODES.NEEDS_REBUILD,
-        ok: false,
-        files: stale,
-        reason: `${base} merged cleanly, but it changed ${stale.length} file(s) behind a ?v= asset pin (${shown}), so the pins in the merged tree name the old build. Pushing it would fail CI's clean-build check. A session needs: git merge origin/${base}, npm run build, commit the changed HTML, push.`,
-      };
-    }
-
-    // 7. Fast-forward only, by construction. No --force, ever.
+    // 5. Fast-forward only, by construction. No --force, ever.
     const pushed = runGit(['push', 'origin', `HEAD:refs/heads/${branchName}`], { cwd: tree });
     if (!pushed.ok) {
       return {
@@ -301,10 +189,6 @@ function catchUpBranchLocally({
 
 module.exports = {
   CODES,
-  PIN_DRIVER_KEY,
-  PIN_SOURCE_PATHS,
-  pinnedAssetSourcesIn,
   parseRepoFromRemoteUrl,
-  assetPinDriverInstalled,
   catchUpBranchLocally,
 };
