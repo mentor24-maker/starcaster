@@ -492,13 +492,18 @@ conflicts, the stale pins a catch-up merge restored, and GitHub's phantom
 `CONFLICTING` (it cannot run our merge driver). On 2026-08-24 that chain left
 eight already-approved tickets parked for a day.
 
-Four committed files still carry pins — `public/about.html`, `site.html`,
-`builder-preview.html`, `explore.html` — so the rest of this section still
-applies to them. Task 86bbkh288 makes those generated too, which retires the
-merge driver and CI's clean-build check along with them.
+**And on 2026-08-24 the class was closed for good** (task 86bbkh288): the four
+remaining pin-carrying files — `public/about.html`, `site.html`,
+`builder-preview.html`, `explore.html` — moved to `src/static-pages/` as bare
+sources, their `public/` outputs generated and gitignored like the app shell.
+No committed file carries a `?v=` hash, so a pin can no longer conflict, go
+stale in a merge, or make GitHub report a phantom `CONFLICTING`. The
+`asset-pins` merge driver was deleted with the case it existed for, and CI's
+"pins match a clean build" check became the stronger general rule: **a clean
+build must not modify any tracked file.**
 
-On a merge conflict in one of those four, take the incoming file and rebuild.
-Never resolve pins by hand.
+If a pin conflict ever appears again, someone has re-committed a generated
+file; fix that, never the pin.
 
 **When CI rejects pins on files your change never touched, suspect the folder
 before the change.** Run `npm run check:build-paths`.

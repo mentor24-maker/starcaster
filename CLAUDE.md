@@ -51,6 +51,7 @@ them locally.
 | Artifact | Source | Rebuild |
 |---|---|---|
 | `public/app-shell.html` | `src/layout.html` + `src/pages/**` | `npm run build:html` |
+| `public/about.html`, `site.html`, `explore.html`, `builder-preview.html` | `src/static-pages/*` | `npm run build:html` |
 | `public/privacy-policy.html`, `terms-of-service.html`, `data-deletion.html` | `src/legal/*` | `npm run build:html` |
 | `public/styles.css` | `src/css/main.css` + partials | `npm run build:css` |
 | `public/builder-bundle.js` | `builder-react-entry.tsx`, `components/**`, `lib/builder-client/**` | `npm run build:builder` |
@@ -61,8 +62,14 @@ them locally.
 | `lib/site-import/dist/*.js` | `lib/site-import/*.ts` | `npm run build:site-import` |
 | `lib/build-stamp.json` | `scripts/write_build_stamp.mjs` (records build time) | `npm run build:stamp` |
 
-`public/about.html` and `public/site.html` are hand-authored but get asset
-hashes pinned by `npm run pin:assets` — editing them is fine.
+**No committed file carries a `?v=` hash** (2026-08-24, tasks 86bbkh1nn +
+86bbkh288). Sources keep bare asset references; the build applies content
+hashes to the generated, gitignored outputs in `public/`. To edit About, Site,
+Explore or the builder preview page, edit `src/static-pages/*` and run
+`npm run build:html`. This closed the whole class of `?v=` trouble — pin merge
+conflicts, stale pins after catch-up merges, and GitHub's phantom conflicts —
+and retired the `asset-pins` merge driver with it. CI enforces the invariant
+directly: a clean build must not modify any tracked file.
 
 **`src/layout.html` is no longer pinned** (2026-08-24, task 86bbkh1nn). Its
 asset references are bare in source; the hashes are applied to the file the
@@ -112,13 +119,12 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
 6. **Never write `data/*.json` from production code paths.** Vercel's
    filesystem is read-only; writes silently vanish. Use Supabase.
 7. **Never expose `SUPABASE_SERVICE_KEY` (or any secret) to the browser.**
-8. **`?v=` asset pins come from built files, not from source.**
-   `pin_asset_versions.cjs` hashes whatever sits in `public/`, so a stale or
-   other-branch bundle pins a hash nobody can reproduce — it either ships a
-   dead cache-buster (new CSS deploys, browsers keep serving the cached old
-   one) or surfaces as "unrelated" modified HTML in someone else's commit.
-   Pre-commit now runs `npm run build:assets` first, and CI fails if a clean
-   build changes any committed HTML. Never hand-edit a `?v=` value.
+8. **`?v=` asset pins come from built files, not from source — and they only
+   exist on generated, gitignored files** (since 2026-08-24, task 86bbkh288;
+   before that they were committed, and were the largest source of phantom
+   conflicts and stale-pin CI failures in the repo's history). Never hand-edit
+   a `?v=` value, and never commit a file that carries one — CI fails if a
+   clean build modifies any tracked file.
    The same hash also breaks if the FOLDER reaches its dependencies oddly:
    esbuild stamps each bundled module's path into the output as a comment, so
    a worktree whose `node_modules` is a symlink to another checkout emitted
@@ -342,19 +348,15 @@ newest *hand-authored* commit, so if shipping turns up an unrelated fix, commit
 it BEFORE the feature (or fold it in) — otherwise the chore takes the name,
 which is exactly how #304 landed titled after a `.gitattributes` line.
 
-**The `?v=` asset pins no longer conflict.** Those four committed HTML files
-carry hashes rebuilt from whatever the build produced, so any two branches
-touching styling collide there even when neither edited a word of markup — it
-was most of the conflict traffic on 2026-08-11, and the resolution was
-mechanical every time. `.gitattributes` routes them through
-`scripts/merge_asset_pins.cjs`, which merges the markup normally and restores
-each pin by asset path. A genuine markup conflict still conflicts.
-
-The driver lives in `.git/config` (git will not run a driver defined by a
-cloned repo), so `scripts/install_git_hooks.cjs` registers it on every
-`npm install`. Without that step `.gitattributes` names a driver that does not
-exist and git falls back to the default merge **silently** — so if pins start
-conflicting again, run `npm install` before anything else.
+**The `?v=` asset pins cannot conflict any more, because they are not in git**
+(2026-08-24, task 86bbkh288). They used to live inside committed HTML, which
+made any two branches touching styling collide there — most of the conflict
+traffic on 2026-08-11 — and needed a local merge driver GitHub could not run,
+which made clean branches read as `CONFLICTING` and stalled eight approved
+merges on 2026-08-24. Now every pinned file is generated and gitignored, the
+driver is gone, and a pin conflict is structurally impossible. If a `?v=`
+value ever shows up in `git diff` again, something has re-committed a
+generated file — `check_conventions` blocks exactly that.
 
 `npm run thread` exists because each hand-rolled step had already cost time:
 branching off a stale local `main` (forces a rebase later, which is where the

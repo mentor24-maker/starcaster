@@ -595,14 +595,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     }
   }
 
-  // GitHub says it conflicts. Before believing that, ask THIS machine.
-  //
-  // GitHub cannot run the asset-pins merge driver — git refuses to run a
-  // driver defined by a cloned repo, so it lives in .git/config and is
-  // registered by npm install. Every branch that touches anything bundled
-  // shifts those `?v=` pins, so GitHub reports a collision on a file that
-  // resolves cleanly here, by asset path. That produced twelve false
-  // hand-offs on 2026-08-23, each one stalling a merge Dane had authorized.
+  // GitHub says it conflicts. Before believing that, ask THIS machine —
+  // GitHub's mergeability answer is often minutes stale, and on 2026-08-23 it
+  // produced twelve false hand-offs in one day, each stalling a merge Dane
+  // had authorized. (The original culprit, committed ?v= asset pins merged by
+  // a driver GitHub could not run, was retired on 2026-08-24 — task 86bbkh288.)
   //
   // This does NOT resolve a conflict. It attempts an ordinary merge in a
   // throwaway worktree: clean means the difference was the driver and the
@@ -643,11 +640,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
       pr,
       localVerdict: verdict
         ? {
-            kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT
-              ? 'real-conflict'
-              : verdict.code === branchCatchUp.CODES.NEEDS_REBUILD
-                ? 'needs-rebuild'
-                : 'unknown',
+            kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT ? 'real-conflict' : 'unknown',
             reason: verdict.reason,
           }
         : null,
