@@ -1,3 +1,80 @@
+## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
+
+There is a small program on the Mac Mini whose whole job is to read your ClickUp
+tickets and act on what you wrote — most importantly, to merge a PR when you
+reply with the word "merge". It was waking up once an hour.
+
+Nothing about the job needed an hour. It is not an AI session, it costs nothing
+to run, and it finishes everything it has to do in about fourteen seconds. The
+hour was a leftover default from back when the program only sent notifications;
+when it was given the power to merge, nobody went back and asked whether the
+timer still made sense. So work you had already approved could sit waiting on a
+clock rather than on anything real. It now wakes every ten minutes.
+
+Two things were worth checking before speeding it up, and both were measured
+rather than assumed. First, whether six times the traffic would annoy ClickUp:
+a real run uses 39 of the roughly 100 requests ClickUp allows per minute, so
+there is comfortable room, and the program now reports that number on every run
+so it stays honest as the queue grows. Second, whether two runs could overlap
+and post your message to the team chat twice — a real worry at ten minutes that
+barely existed at sixty. A throwaway test job proved macOS refuses to start a
+second copy while the first is still going, so they cannot stack. Useful to
+know that the protection comes from macOS and not from our own code.
+
+One piece is still yours: the Mini's schedule file has to be regenerated with a
+single command before the change takes effect there. Every run now says out loud
+whether the machine's schedule matches what the code says, and prints the exact
+command to fix it, so this cannot drift silently.
+
+Review caught that last promise not quite holding. The check had two answers —
+"matches" and "does not match" — and no way to say "I could not read it". If
+the schedule file were missing or unreadable it said nothing at all, or worse,
+printed a reassuring "matching" with a question mark where the number should
+have been. Since the whole point of that check is to stop the one manual step
+from being quietly forgotten, a check that can say everything is fine without
+knowing is worse than none. It now has a third answer that says plainly what it
+could not read. The same reading is also printed by the status command a person
+would actually run, which previously did not mention the schedule at all.
+
+A second review round found the same shape of problem twice more. The check
+could still give a fourth answer nobody asked for: it picked the number out of
+the schedule file by grabbing the last one on the line, so a file written all on
+one line would report a completely unrelated setting as the timer — wrong, and
+confident about it. It now reads the number that actually belongs to the timer.
+And the change had quietly made three other documents false, because they still
+described the program as running hourly: the ecosystem map, which is published
+and read by people; the page describing how your one-word "merge" reply works,
+where a faster merge is the entire visible point; and the reviewer's own
+instructions. All three now say ten minutes. Worth naming the pattern — the
+number lives in six places, only two of which make anything happen, and nothing
+checks the other four. They are now listed in one table so the next person to
+change it knows where to look.
+
+A third review round then made the neatest point of the three: that table said
+"every place" and was short by eight. The word "hourly" was still sitting in a
+handful of code comments explaining why various safety guards exist, and in one
+message printed on screen to whoever installs the program. None of it breaks
+anything — it just quietly misinforms the next person, which is the same
+failure the previous round was sent back for, moved one layer down. All eight
+are fixed, and most of them no longer name a schedule at all: where the sentence
+only ever meant "every time it runs", it now says that, so it cannot go stale
+again. The table has stopped claiming to be complete and instead hands you the
+one-line search that actually is — with a note that the number is written out as
+"ten minutes" in some places and "10" in others, which is exactly how half a
+list like this gets missed.
+
+Two smaller things came out of the same round. There was a limit in the code
+meant to stop a single run dragging on forever, set to fifteen minutes back when
+the program ran hourly — so after the speed-up it was permitting a run half
+again as long as the entire gap between runs. It is no longer a number anyone
+typed: the test now reads the real schedule and insists a run must finish inside
+it, so if the timer is ever shortened again this fails loudly instead of
+silently allowing an overrun. And the "I could not read it" message had been
+telling you to check by running the very command that had just printed it — a
+circle. It now names the two things that could actually be true and what to do
+about each. Both are pinned by tests, and I broke each on purpose first to
+confirm the tests can fail rather than trusting a green run.
+
 ## 2026-08-25 — The top of every module panel lines up now, and images can cast a shadow
 
 You sent a picture of the image module and said it had drifted away from our

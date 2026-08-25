@@ -37,8 +37,9 @@ On a `Ready to launch` ticket, Dane comments **one word**:
 
 Case does not matter and a trailing `!` or `.` is ignored, but the **whole
 comment** must be that phrase — a sentence containing the word "merge" is not
-an instruction, deliberately. The hourly bus-relay pass reads it, checks the
-PR, merges it, and moves the ticket to `Live`.
+an instruction, deliberately. The bus-relay pass reads it, checks the
+PR, merges it, and moves the ticket to `Live`. It runs **every ten minutes**, so
+an approval you leave is normally acted on within about that long.
 
 What it checks before merging, and none of it is skippable: the PR is open, not
 a draft, has a passing `verify` check, and does not conflict with main. A PR
