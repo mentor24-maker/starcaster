@@ -653,9 +653,16 @@ test('the budget is a named constant, roughly 2x the observed median', () => {
 });
 
 test('worst case is bounded — cap x budget, not unbounded', () => {
+  // The relay wakes every 10 minutes, and launchd restarts that countdown from
+  // the previous pass's EXIT, so a pass running longer than the interval does
+  // not stack — it just pushes the next one later. The bound is therefore
+  // about the queue going stale, not about overlap: hold the pass open for
+  // much past a couple of intervals and approvals that arrive meanwhile wait
+  // on work already in flight.
   const worstMs = MAX_IN_PASS_WAITS * IN_PASS_WAIT_MS;
   assert.ok(worstMs <= 15 * 60_000,
-    `a pass could hold open for ${Math.round(worstMs / 60_000)} minutes, which is too long for an hourly job`);
+    `a pass could hold open for ${Math.round(worstMs / 60_000)} minutes — more than a ` +
+    `couple of 10-minute intervals, so later approvals queue behind it`);
 });
 
 test('the relay waits after BOTH catch-up paths, and merges the same way', () => {
@@ -663,7 +670,8 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
     require('node:path').join(__dirname, '../clickup_direct.mjs'), 'utf8');
 
   // Both the GitHub update-branch path and the local false-conflict catch-up
-  // must wait — fixing only one leaves half the backlog on the hourly cadence.
+  // must wait — fixing only one leaves half the backlog waiting a full extra
+  // interval for no reason.
   //
   // Counting the NAME is not enough: a first version of this assertion counted
   // `waitForChecksInPass(` and a break that left the identifier in place while

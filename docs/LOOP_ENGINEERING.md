@@ -664,6 +664,45 @@ are three outcomes, and the third is never folded into the second). Caught in
 review, 2026-08-24. `scripts/builder/busRelayInterval.test.js` pins all three,
 and each was verified by reintroducing the defect and watching the test fail.
 
+Review round 2 then found a **fourth** answer hiding in the same check, and the
+worst kind: confidently wrong. A plist is XML, not a line-oriented file, so
+launchd is content with the whole `<dict>` on one line — and the value was read
+with `grep -A1` plus a greedy `sed`, which takes the **last** `<integer>` on the
+line rather than the one belonging to `StartInterval`. A single-line plist
+saying 600, with any later integer-valued key (`Nice`, `ThrottleInterval`),
+reported that other key's number as the schedule. The match is now anchored to
+the value that follows `<key>StartInterval</key>`, and the test file pins it.
+
+**The interval is written down in more places than the two that run it.**
+Round 1 of review fixed the check; round 2 caught what the check cannot see.
+`INTERVAL_SECONDS` and the plist are the two copies that *take effect*, and the
+drift check compares those. But the number is also stated in prose, and prose
+that says "hourly" after the machine stopped being hourly is wrong in exactly
+the way nobody notices — it never fails, it just misinforms. Every place that
+had to change with it, so the next change to this number knows where to look:
+
+| Where | Why it matters |
+|---|---|
+| `scripts/install_bus_relay.sh` → `INTERVAL_SECONDS` | the source of truth; generates the plist |
+| `~/Library/LaunchAgents/com.starcaster.bus-relay.plist` | what actually runs; only changes when the installer is re-run |
+| `docs/ecosystem/inventory.yaml` → `job-bus-relay` | **published** — `build_ecosystem_html.mjs` and `ecosystemNotes.js` render it, so a stale value ships to the page people read |
+| `docs/APPROVALS.md` | the operator-facing description of the one-word merge flow; a faster merge is the whole visible point of the change |
+| `.claude/skills/loop-review/SKILL.md` | tells the review loop what happens after `Ready to launch` |
+| this file | the reasoning, the measurement, and the table you are reading |
+
+**Nothing checks the prose, and one thing nearly could.**
+`scripts/check_ecosystem_drift.cjs` probes the bus-relay job with its
+`launchctl` probe, which asks only whether `detail.label` is loaded on the host
+machine — it never reads `StartInterval`, so `schedule:` in the inventory can be
+wrong forever without a single check complaining. That checker is the one place
+positioned to catch this class, since it already talks to the real machine and
+already holds the inventory's claim beside it. Teaching it to compare
+`detail.schedule` against the live plist is a **follow-up, deliberately not done
+here** — it needs a schedule vocabulary (`hourly`, `every 10 minutes`, a cron
+expression) before it can compare anything, which is a design question and not a
+one-line fix. Until then, the table above is the manual answer: this number
+changes in six places or it is wrong in some of them.
+
 **Known and not fixed here:** the launchd log now grows 6× faster with no
 rotation. It is small (a few KB per pass) but unbounded, and belongs to a
 housekeeping ticket rather than this one.

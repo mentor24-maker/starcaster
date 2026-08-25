@@ -70,8 +70,16 @@ if [ ! -f "$PLIST" ]; then
   exit 1
 fi
 
-have="$(grep -A1 '<key>StartInterval</key>' "$PLIST" \
-  | sed -n 's/.*<integer>\([0-9][0-9]*\)<\/integer>.*/\1/p' | head -1)"
+# A plist is XML, not a line-oriented file — launchd accepts the whole <dict>
+# on a single line, and other keys (Nice, ThrottleInterval) carry <integer>
+# values of their own. So match the integer that FOLLOWS the StartInterval key,
+# never just "an integer near it": flatten the newlines, then require
+# <integer> to be the very next tag after </key>. Grabbing the last integer on
+# the line is how this reported a neighbouring key's value as the schedule —
+# a fourth answer, in a check whose contract is three and never a guess.
+have="$(tr '\n' ' ' < "$PLIST" \
+  | sed -n 's/.*<key>StartInterval<\/key>[[:space:]]*<integer>\([0-9][0-9]*\)<\/integer>.*/\1/p' \
+  | head -1)"
 
 if [ -z "$have" ]; then
   say "CANNOT TELL — the plist at $PLIST has no readable StartInterval"

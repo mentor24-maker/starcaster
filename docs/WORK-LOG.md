@@ -35,6 +35,21 @@ from being quietly forgotten, a check that can say everything is fine without
 knowing is worse than none. It now has a third answer that says plainly what it
 could not read. The same reading is also printed by the status command a person
 would actually run, which previously did not mention the schedule at all.
+
+A second review round found the same shape of problem twice more. The check
+could still give a fourth answer nobody asked for: it picked the number out of
+the schedule file by grabbing the last one on the line, so a file written all on
+one line would report a completely unrelated setting as the timer — wrong, and
+confident about it. It now reads the number that actually belongs to the timer.
+And the change had quietly made three other documents false, because they still
+described the program as running hourly: the ecosystem map, which is published
+and read by people; the page describing how your one-word "merge" reply works,
+where a faster merge is the entire visible point; and the reviewer's own
+instructions. All three now say ten minutes. Worth naming the pattern — the
+number lives in six places, only two of which make anything happen, and nothing
+checks the other four. They are now listed in one table so the next person to
+change it knows where to look.
+
 ## 2026-08-25 — The top of every module panel lines up now, and images can cast a shadow
 
 You sent a picture of the image module and said it had drifted away from our

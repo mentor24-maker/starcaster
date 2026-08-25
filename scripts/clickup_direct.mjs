@@ -161,9 +161,15 @@ function reportLimits(res) {
 }
 
 /**
- * Every HTTP request this process makes goes through `call`, so counting here
- * counts the whole pass. bus-relay reports the total at the end (task
- * 86bbk2fuh): the poll interval is only safe if a pass fits inside ClickUp's
+ * Counts every HTTP request this process makes to ClickUp. Nearly all of them
+ * go through `call`; the one that does not is the multipart upload in `attach`
+ * (FormData, so it cannot share this path), which increments the counter by
+ * hand. If a third caller ever reaches for `fetch` directly it must do the
+ * same — an uncounted request makes this total quietly too low, and the total
+ * is the evidence the poll interval is safe.
+ *
+ * bus-relay reports the total at the end of each pass (task 86bbk2fuh): the
+ * poll interval is only safe if a pass fits inside ClickUp's
  * ~100-requests-per-minute allowance, and "it feels like plenty" is not a
  * number anybody can check later. The count grows with the size of the open
  * queue, so it is worth re-reading whenever the interval is shortened again.
@@ -1132,6 +1138,9 @@ if (cmd === 'whoami') {
     const bytes = readFileSync(file);
     const form = new FormData();
     form.append('attachment', new Blob([bytes]), basename(file));
+    // Not routed through `call` (multipart), so count it here or the pass
+    // total under-reports — see the note beside `requestCount`.
+    requestCount += 1;
     const res = await fetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
       method: 'POST',
       headers: { Authorization: TOKEN },

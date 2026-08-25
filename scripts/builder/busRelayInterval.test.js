@@ -98,3 +98,21 @@ test('both callers use the shared check rather than their own copy', () => {
     assert.doesNotMatch(src, /matching the repo/, `${caller} must not re-implement the verdict`);
   }
 });
+
+// A plist is XML, not a line-oriented file: launchd is perfectly happy with the
+// whole <dict> on one line, and other keys may carry <integer> values too. The
+// value that counts is the one immediately after <key>StartInterval</key> — a
+// match that just grabs an integer from the same line can report a number that
+// belongs to a different key. That is a FOURTH answer in a check whose whole
+// contract is three, and the worst kind: confidently wrong.
+test('reads the integer belonging to StartInterval, not a neighbouring key', () => {
+  const want = repoInterval();
+  const oneLine =
+    '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">' +
+    `<dict><key>StartInterval</key><integer>${want}</integer>` +
+    '<key>Nice</key><integer>5</integer></dict></plist>\n';
+  const { code, out } = run(oneLine);
+  assert.strictEqual(code, 0, `a single-line plist that agrees must exit 0, got: ${out}`);
+  assert.match(out, new RegExp(`every ${want}s, matching the repo`));
+  assert.doesNotMatch(out, /every 5s/, 'must not report another key\'s integer as the interval');
+});
