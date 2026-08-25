@@ -25,6 +25,17 @@ One piece is still yours: the Mini's schedule file has to be regenerated with a
 single command before the change takes effect there. Every run now says out loud
 whether the machine's schedule matches what the code says, and prints the exact
 command to fix it, so this cannot drift silently.
+
+Review caught that last promise not quite holding. The check had two answers —
+"matches" and "does not match" — and no way to say "I could not read it". If
+the schedule file were missing or unreadable it said nothing at all, or worse,
+printed a reassuring "matching" with a question mark where the number should
+have been. Since the whole point of that check is to stop the one manual step
+from being quietly forgotten, a check that can say everything is fine without
+knowing is worse than none. It now has a third answer that says plainly what it
+could not read. The same reading is also printed by the status command a person
+would actually run, which previously did not mention the schedule at all.
+
 ## 2026-08-23 — The YouTube acquire box works again
 
 On Acquire > YouTube there used to be a box where you pasted one video's link
