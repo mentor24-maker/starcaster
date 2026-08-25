@@ -479,7 +479,25 @@ to a file and check the real code, or the gate is theatre.
   may reference a path outside the repo), so a new build script that forgets
   the shared settings is caught even though nothing checks for the flag itself.
 
-On a merge conflict in `src/layout.html`, take the incoming file and rebuild.
+**`src/layout.html` stopped carrying pins on 2026-08-24** (task 86bbkh1nn), so
+it can no longer conflict on one. It is committed source AND the template
+`build_html.js` composes into `public/app-shell.html` — which is gitignored and
+pinned as one of `public/*.html`. Pinning the source re-derived exactly the same
+hashes onto a file humans edit and git merges: removing it from the targets left
+the generated shell **byte-identical**, and two branches that each touched a
+bundled asset then merged with zero conflicts, where before they collided there.
+
+That one file was the largest single source of the `?v=` trouble — the merge
+conflicts, the stale pins a catch-up merge restored, and GitHub's phantom
+`CONFLICTING` (it cannot run our merge driver). On 2026-08-24 that chain left
+eight already-approved tickets parked for a day.
+
+Four committed files still carry pins — `public/about.html`, `site.html`,
+`builder-preview.html`, `explore.html` — so the rest of this section still
+applies to them. Task 86bbkh288 makes those generated too, which retires the
+merge driver and CI's clean-build check along with them.
+
+On a merge conflict in one of those four, take the incoming file and rebuild.
 Never resolve pins by hand.
 
 **When CI rejects pins on files your change never touched, suspect the folder

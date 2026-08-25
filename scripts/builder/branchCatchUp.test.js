@@ -454,7 +454,8 @@ test('every real input of every pinned bundle is covered by the source list', as
 test('every directly-served pinned asset is covered too, across all pinned HTML', () => {
   // The file list is DERIVED, not typed out. My first version listed five HTML
   // files by hand; the pinner does not work that way — defaultHtmlTargets()
-  // takes every public/*.html on disk plus src/layout.html. Review proved the
+  // takes every public/*.html on disk (src/layout.html left the target list
+  // on 2026-08-24, task 86bbkh1nn). Review proved the
   // gap by dropping a public/zz-probe.html pinning an uncovered asset: the
   // pinner scanned and pinned it, and this test passed anyway.
   //
