@@ -369,7 +369,6 @@ that file is where public forms live — so it now looks at every form
 individually. Run against the old code it correctly refuses to pass, which is
 how we know it is actually looking.
 
-## 2026-08-22 — The code stops assuming it lives on one particular laptop (#PR)
 ## 2026-08-23 — Parkour: the last of the four picture effects you asked for (#395)
 
 Back on 19 August you looked at a list of animations that were built into the
