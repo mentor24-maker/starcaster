@@ -379,6 +379,47 @@ child so the background's rows are inside the group where they can disagree.
 `.builder-background-controls-horizontal` anything but `display: contents`
 inside the chrome and watch every chrome row report a slipped cell.
 
+#### E6c. The chrome and the column below it are ONE lattice `[auto]` *(added 2026-08-26)*
+
+E6b made the chrome one column. This is the other half: in a **stacked**
+multi-column editor, where a settings column sits directly under the chrome,
+the two share one label track and one control track. A chrome label and a
+settings label start on the same vertical line, and their fields end on the
+same one.
+
+*Incident:* the operator, on 2026-08-13, looking at a two-column module
+editor: *"notice in the left column how the column width varies arbitrarily
+between the Settings fields and the Layout fields."* E6b closed the Settings
+half and could not close this one, because the chrome and the panel below it
+are two boxes and **tracks cannot be shared between two grids** — each sizes
+`max-content` over its own rows and lands wherever its own longest label ends.
+Measured on Feature Cards at 1440 after #432: the chrome put its controls at
+x=125, the Layout / Card / Icons / Link groups directly beneath put theirs at
+x=158. Two label tracks, 33px apart, one under the other.
+
+**The mechanism is `subgrid`**, the same answer `.builder-schema-axis-section`
+already uses to join its column's lattice. The EDITOR owns the two tracks; the
+chrome's strip and the settings column each keep their own rows — they must
+stack, not interleave — while taking their columns from the editor. Then
+`max-content` measures the longest label and the longest control across both
+at once, which is the whole point. A subgrid keeps its OWN gutters, so each one
+restates `column-gap: 0`; forgetting that costs six invisible pixels.
+
+Reached from the React side it is the same rule: **Social has no
+`.builder-module-chrome` at all.** It renders Label, Background, Alignment and
+the margins as rows of its own Structure column, so the two already are one
+grid — which is why Social measured clean while Feature Cards did not.
+
+**Checked by:** `npm run check:panels`. It used to measure each box against
+ITSELF, which is why it passed for weeks over the bug the operator was
+pointing at — two grids that each agree internally, disagreeing with each
+other. It now collects the boxes placed on the editor's `lattice-start` line
+into one group measured against the panel, so a disagreement across the seam
+fails. Two or more boxes, never one: a lone sharer agrees with itself, which
+is the trap E6b's own check fell into. Prove it: take
+`grid-template-columns: subgrid` off the chrome strip and watch both editors
+report their fields starting at two different x-positions, at all three widths.
+
 #### E7. No dead controls, and no invisible settings `[eye]`
 
 A control that changes a setting nothing renders is a bug wearing a feature's
