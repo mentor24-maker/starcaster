@@ -1,0 +1,57 @@
+name: review-gate
+
+# WHY THIS EXISTS (2026-08-25, task 86bbmfbkv). On 2026-08-25 PR #432 was
+# merged to production with no review verdict on its ticket and no merge word
+# from Dane — by an ordinary Claude Code session running `gh pr merge`, which
+# had no way to know a review lane was waiting for it. "Loops never merge" is a
+# convention, and a convention only binds the actors that know they are loops.
+# This is that rule as something the repository checks.
+#
+# ADVISORY UNTIL THE BOX IS TICKED. Making a check *required* is a
+# branch-protection change in GitHub's settings, which is Dane's to make, not an
+# agent's. Until then this job annotates loudly and exits 0. It exits 0 rather
+# than going red on purpose: `mergeOnComment.githubGate` refuses to merge any PR
+# carrying a red check, so an "advisory" gate that went red would silently block
+# every relay merge through a rule nobody had agreed to enforce yet.
+#
+# To switch it on, both halves (see docs/LOOP_ENGINEERING.md, "The review gate"):
+#   1. Settings -> Branches -> main -> Require status checks -> add `review-gate`
+#   2. Settings -> Secrets and variables -> Actions -> Variables ->
+#      REVIEW_GATE_ENFORCING = true
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+# `edited` is in that list deliberately: adding the ticket link or a
+# `[gate-waived: ...]` line to the body is the fix for two of the refusals, and
+# a gate that could not see its own fix would send people to a re-run button.
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  review-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No `npm ci`: the gate is plain Node with no dependencies, and a
+      # dependency install would be 40 seconds spent on nothing. It runs as its
+      # own job rather than a step inside `verify` so that a red gate reads as
+      # "unreviewed", never as "the build is broken".
+      - name: Review gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The ClickUp read token. Absent -> the gate answers CANNOT TELL and
+          # never a pass. It is NOT invented here: if this secret does not
+          # exist yet, that is the operator's one-time setup step, and the
+          # gate says so in its own output rather than guessing.
+          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+          REVIEW_GATE_ENFORCING: ${{ vars.REVIEW_GATE_ENFORCING }}
+        run: node scripts/review_gate.mjs --pr "${{ github.event.pull_request.number }}"
