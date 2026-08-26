@@ -98,7 +98,9 @@ found what the other times cost:
   correctly refused to guess which PR they meant — and two of those PRs also
   shipped with no ClickUp link in the body, so ticket and PR could only be
   paired by reading titles. `pr-opened` now checks the PR body FIRST (exit 4
-  if the link is missing) and only then writes the ticket side.
+  if the link is missing) and only then writes the ticket side. That check
+  wants the **full URL** — a bare task id is not enough (see "One matcher for
+  'the PR names its ticket'" below for why the two readers had to agree).
 - **Two tickets reached `Ready to launch` with no passing review on them.**
   That status is the operator's "safe to merge" signal; he approved both in
   good faith. `ask` and `status` now both refuse to set it unless the newest
@@ -597,6 +599,7 @@ disagreed with the merge step about what a PASS is would be worse than no gate.
 | Newest verdict is a send-back | **fail** |
 | PASS older than the newest commit (sent back, fixed, pushed) | **fail** |
 | No ClickUp link in the PR body | **fail** |
+| The ticket does not record THIS PR (see below) | **CANNOT TELL** — never a pass |
 | `[gate-waived: <reason>]` in the PR body | **pass**, and announced on the bus |
 | ClickUp unreachable, or the CI token missing | **CANNOT TELL** — never a pass |
 
@@ -606,6 +609,66 @@ teaches people to route around it.
 
 **Lane A is not exempt.** Auto-merging a docs- or test-only change removes the
 *operator's word*, never the review (vault `doctrine/AUTO-MERGE-LANES.md`).
+
+### The ticket has to be THIS PR's (added 2026-08-26, task 86bbmmv7t)
+
+The gate reads the **first** ClickUp link in the PR body. That is a convention,
+not a fact, and until 2026-08-26 nothing checked it: a body that cited a related
+ticket *before* its own was judged against **that** ticket's verdict, and
+**passed** whenever that verdict happened to be newer than this PR's newest
+commit. The gate opening on a review of different work is the one failure it
+exists to prevent, and it was the only one of the four holes found in review
+that failed **open**.
+
+It never bit, purely because loop-built bodies put their own ticket on line 1 —
+which is the kind of luck this whole check exists to stop depending on. PR #433
+proves the shape is live: its body carries `86bbmfbkv` on line 1 and
+`86bbmk7pv` on line 156, and the other order would have judged it against a
+ticket it does not belong to.
+
+So before granting a PASS the gate confirms the ticket **records this PR**: the
+ticket's newest `PR opened:` line must name this PR's number. That reader is
+`loopTrail.prTrailLanded` — the same one `pr-opened` verifies its own write
+with, imported rather than re-implemented. When it cannot confirm, the answer is
+**CANNOT TELL**, never a pass, and the message names the fix.
+
+Practical effect: **`pr-opened` is no longer only bookkeeping.** A ticket
+without that line cannot pass the gate, which is the point — it is the only
+trace that pairs a ticket with a PR.
+
+### One matcher for "the PR names its ticket"
+
+`pr-opened` used to accept a **bare task id** (`ClickUp: 86bbjt18r`) while the
+gate required a full `app.clickup.com/t/<id>` URL. The direction was safe — the
+gate refused rather than passed — but once it is required, that combination
+strands a PR the very command that checked it called traceable, with a message
+saying the opposite of what the reader can see in the body.
+
+Settled on the **full URL**, and both sides now import one matcher
+(`scripts/builder/clickupTicketLink.js`) so they cannot drift again. A bare id
+cannot be recognised safely — it has the same shape as an abbreviated commit
+sha or a build hash, so matching one in prose fails *open* on a coincidence —
+and the URL is what a reader wants anyway. `loop-build` step 7 has always asked
+for the URL on a line of its own; this makes the shipped rule match the written
+one rather than the other way round.
+
+### The gate does not say "REVIEW"
+
+Its messages begin `MERGE GATE`, and that is load-bearing rather than a
+naming preference. `mergeOnComment.isReviewVerdict` reads any line starting with
+the word REVIEW as a ticket verdict. The gate's own output used to begin
+"REVIEW GATE ...", so **every message it printed** — pass, fail and CANNOT TELL
+alike — parsed as a verdict, and as a **send-back**, since none of them match
+the PASSED spelling.
+
+Nothing automated pastes those onto a ticket, so it never bit. But a refusal
+here is written to tell the reader what to do next, which makes copying it onto
+the ticket the natural next move for a person or an agent — and that one paste
+would have become the ticket's newest verdict, freezing `readyToLaunchGate`,
+`mergeDecision` and the gate itself at once, showing a send-back nobody wrote.
+The label is exported from one place so the runner cannot drift back into that
+namespace, and a test feeds every real output string through the verdict parser
+to prove none of them registers.
 
 **Freshness measures the branch's own commits, not its catch-up merges.**
 Branch protection is `strict: true` and this repo catches up by merging
