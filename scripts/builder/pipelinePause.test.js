@@ -290,7 +290,7 @@ test('the announcement says how to end it', () => {
   const m = pause.nagMessage({ by: 'Dane', why: 'launch', sinceMs: NOW - 3 * HOUR, nowMs: NOW });
   assert.match(m, /still PAUSED/);
   assert.match(m, /3 hours/);
-  assert.match(m, /npm run pipeline resume/);
+  assert.match(m, /npm run pipeline -- resume/);
 });
 
 test('the resumed message is said once and reports what was swept', () => {
@@ -387,15 +387,21 @@ test('the switch is found by name, case- and space-insensitively, and its trail 
   });
 });
 
-test('a 404 on a configured switch id is a confirmed absence; any other error is not', () => {
+test('a 404 on a configured switch id is NOT proof the switch is gone', () => {
+  // Changed in review (PR #434). The id is only a shortcut past the list walk;
+  // the switch's real identity is its NAME. Treating a 404 as a confirmed
+  // absence let a stale CLICKUP_PAUSE_TASK talk `pause` into creating a SECOND
+  // switch — two flags disagreeing, which is worse than no flag at all. So a
+  // 404 falls back to the name lookup (covered below), and a 404 with an
+  // UNREADABLE list is unreadable, never "no switch".
   const gone = fakeCall([['/task/zz', { res: { ok: false, status: 404 }, json: null }]]);
   const broken = fakeCall([['/task/zz', { res: { ok: false, status: 503 }, json: null }]]);
   return Promise.all([
     store.readSwitch({ call: gone, list: '1', pauseTaskId: 'zz' }),
     store.readSwitch({ call: broken, list: '1', pauseTaskId: 'zz' }),
   ]).then(([a, b]) => {
-    assert.equal(a.readable, true);
-    assert.equal(a.switchFound, false);
+    assert.equal(a.readable, false, 'the fallback list read failed, so nothing is confirmed');
+    assert.equal(pause.pauseVerdict(a).paused, true);
     assert.equal(b.readable, false);
     assert.equal(pause.pauseVerdict(b).paused, true);
   });
@@ -478,7 +484,7 @@ test('bus-relay is the announcer for a pause that has outlived two hours', () =>
 test('both loop skills check the pause before claiming, and neither may resume', () => {
   for (const skill of ['loop-build', 'loop-review']) {
     const text = read(`.claude/skills/${skill}/SKILL.md`);
-    assert.match(text, /npm run pipeline check/, `${skill} must run the check`);
+    assert.match(text, /npm run pipeline -- check/, `${skill} must run the check`);
     assert.match(text, /exit 3/, `${skill} must say what a paused pipeline means`);
     assert.match(text, /Never resume it/, `${skill} must say the resume is the operator's`);
   }
@@ -489,7 +495,7 @@ test('CLAUDE.md carries the check, so a fresh session in any folder reads it on 
   // actor": the session that caused this ticket was hand-driven, not a loop,
   // and would only ever have seen it here.
   const text = read('CLAUDE.md');
-  assert.match(text, /npm run pipeline check/);
+  assert.match(text, /npm run pipeline -- check/);
   assert.match(text, /before merging anything/i);
   assert.match(text, /fails safe/i);
 });
@@ -499,4 +505,249 @@ test('npm run pipeline exists and goes through Doppler like every other ClickUp 
   assert.ok(pkg.scripts.pipeline, 'the command the docs and skills name must exist');
   assert.match(pkg.scripts.pipeline, /doppler run/, 'the token is never handled by hand (DOCTRINE 4.1)');
   assert.match(pkg.scripts.pipeline, /scripts\/pipeline\.mjs/);
+});
+
+// ---------------------------------------------------------------------------
+// The trail is READ WHOLE, or it is not read at all.
+//
+// The bug this section exists for (found in review, PR #434): the state is one
+// comment on a task that ALSO collects an hourly reminder comment while it is
+// paused. ClickUp hands back ~25 comments per page, newest first. So after
+// about 25 reminders the PAUSE record scrolled off page one, an unpaged read
+// found no state, and the switch reported the pipeline RUNNING — the two
+// headline features cancelling each other out, failing OPEN, overnight, which
+// is exactly when the reminder exists.
+// ---------------------------------------------------------------------------
+
+const PAGE = 25;
+
+/** One pause followed by `nags` hourly reminders, oldest to newest. */
+function pausedTrailWithNags(nags, t0 = 1_756_000_000_000) {
+  const all = [comment(pause.pauseRecord({ by: 'Dane', at: new Date(t0).toISOString(), why: 'launch' }), t0)];
+  for (let i = 1; i <= nags; i += 1) all.push(comment(pause.nagRecord({ by: 'Dane', at: 'x' }), t0 + i * HOUR));
+  return all;
+}
+/** What ClickUp actually hands back to an unpaged read: newest 25 only. */
+function firstPageOf(all) {
+  return all.slice().sort((a, b) => Number(b.date) - Number(a.date)).slice(0, PAGE);
+}
+
+test('the WHOLE trail says paused, however many reminders sit on top of it', () => {
+  const all = pausedTrailWithNags(30);
+  const v = pause.pauseVerdict({ readable: true, switchFound: true, comments: all });
+  assert.equal(v.paused, true);
+  assert.equal(v.code, 3);
+});
+
+test('FAIL-SAFE: a truncated trail — reminders with no pause behind them — is NOT "running"', () => {
+  // This is the exact repro from the send-back. Before the fix it returned
+  // paused:false, code 0, on a pipeline that was genuinely paused.
+  const truncated = firstPageOf(pausedTrailWithNags(30));
+  assert.equal(truncated.length, PAGE, 'the fixture must be the page ClickUp really returns');
+  assert.ok(truncated.every((c) => c.comment_text.startsWith(pause.NAG_MARKER)),
+    'and it must contain no pause record at all — that IS the truncation');
+
+  const v = pause.pauseVerdict({ readable: true, switchFound: true, comments: truncated });
+  assert.equal(v.paused, true, 'a reminder only ever exists while paused');
+  assert.equal(v.code, 3);
+  assert.equal(v.certain, false, 'and it must not claim to be certain about it');
+  assert.match(v.message, /INCOMPLETE/);
+});
+
+test('a switch with genuinely nothing on it is still "running" — the belt must not seize', () => {
+  // The other direction: no records at all is a real answer, not a truncation.
+  const v = pause.pauseVerdict({ readable: true, switchFound: true, comments: [comment('hello', 5)] });
+  assert.equal(v.paused, false);
+  assert.equal(v.code, 0);
+});
+
+test('a resume followed by reminders is running — the newest STATE still wins', () => {
+  // Reminders are stale noise after a resume; they must not re-pause the line.
+  const t0 = 1_756_000_000_000;
+  const comments = [
+    comment(pause.pauseRecord({ by: 'Dane', at: 'a' }), t0),
+    comment(pause.nagRecord({ by: 'Dane', at: 'b' }), t0 + HOUR),
+    comment(pause.resumeRecord({ by: 'Dane', at: 'c' }), t0 + 2 * HOUR),
+  ];
+  const v = pause.pauseVerdict({ readable: true, switchFound: true, comments });
+  assert.equal(v.paused, false);
+});
+
+test('the store PAGES the switch trail, so a 30-reminder pause still reads as paused', () => {
+  const all = pausedTrailWithNags(30).map((c, i) => ({ ...c, id: `c${i}` }));
+  const newestFirst = all.slice().sort((a, b) => Number(b.date) - Number(a.date));
+  const seen = [];
+  const call = async (m, p) => {
+    if (p.includes('/list/')) return OK({ tasks: [{ id: 'sw', name: pause.SWITCH_TASK_NAME }], last_page: true });
+    seen.push(p);
+    const m2 = /start_id=([^&]+)/.exec(p);
+    const from = m2 ? newestFirst.findIndex((c) => c.id === decodeURIComponent(m2[1])) + 1 : 0;
+    return OK({ comments: newestFirst.slice(from, from + PAGE) });
+  };
+  return store.readSwitch({ call, list: '1' }).then((sw) => {
+    assert.ok(seen.length > 1, 'one unpaged GET is the bug — it must ask for the next page');
+    assert.equal(sw.comments.length, all.length, 'and it must come back with the WHOLE trail');
+    assert.equal(pause.pauseVerdict(sw).paused, true);
+  });
+});
+
+test('a trail that never ends within the page budget is UNREADABLE, not running', () => {
+  // Fail-safe again: "I stopped looking" must never be reported as "nothing there".
+  const full = Array.from({ length: PAGE }, (_, i) => ({ ...comment('chatter', 1000 - i), id: `x${i}` }));
+  const call = async (m, p) => (p.includes('/list/')
+    ? OK({ tasks: [{ id: 'sw', name: pause.SWITCH_TASK_NAME }], last_page: true })
+    : OK({ comments: full }));
+  return store.readSwitch({ call, list: '1' }).then((sw) => {
+    assert.equal(sw.readable, false);
+    assert.equal(pause.pauseVerdict(sw).code, 3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Paging the LIST: an absent flag means "fetch the next page", never "stop".
+// ---------------------------------------------------------------------------
+
+test('a list response with NO last_page field keeps paging instead of stopping', () => {
+  // `last_page !== false` is true when the field is absent, so the old guard
+  // read page 0 and reported the switch ABSENT — fail-open on the list read.
+  const pages = [
+    OK({ tasks: Array.from({ length: 100 }, (_, i) => ({ id: `t${i}`, name: 'other' })) }), // no last_page
+    OK({ tasks: [{ id: 'sw', name: pause.SWITCH_TASK_NAME }] }),
+    OK({ tasks: [] }),
+  ];
+  let i = 0;
+  const call = async (m, p) => (p.includes('/comment') ? OK({ comments: [] }) : pages[i++]);
+  return store.readSwitch({ call, list: '1' }).then((sw) => {
+    assert.equal(sw.switchFound, true, 'the switch was on page 2 and must be found');
+  });
+});
+
+test('a list that never says it is done is UNREADABLE rather than silently short', () => {
+  const call = async (m, p) => (p.includes('/comment')
+    ? OK({ comments: [] })
+    : OK({ tasks: [{ id: 'x', name: 'other' }] }));
+  return store.fetchQueue({ call, list: '1', maxPages: 3 }).then((q) => {
+    assert.equal(q.readable, false);
+    assert.match(q.why, /incomplete/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A stale CLICKUP_PAUSE_TASK must not manufacture a second switch.
+// ---------------------------------------------------------------------------
+
+test('a configured switch id that no longer exists falls back to the NAME', () => {
+  const call = async (m, p) => {
+    if (p.includes('/task/gone')) return { res: { ok: false, status: 404 }, json: null };
+    if (p.includes('/list/')) return OK({ tasks: [{ id: 'sw', name: pause.SWITCH_TASK_NAME }], last_page: true });
+    return OK({ comments: [comment(pause.pauseRecord({ by: 'Dane', at: 'x' }), 10)] });
+  };
+  return store.readSwitch({ call, list: '1', pauseTaskId: 'gone' }).then((sw) => {
+    assert.equal(sw.switchFound, true, 'a stale id is a stale SETTING, not a missing switch');
+    assert.equal(pause.pauseVerdict(sw).paused, true, 'and a live pause must survive it');
+  });
+});
+
+test('a stale id with no switch by name either is still a confirmed absence', () => {
+  const call = async (m, p) => (p.includes('/task/gone')
+    ? { res: { ok: false, status: 404 }, json: null }
+    : OK({ tasks: [{ id: 'a', name: 'other' }], last_page: true }));
+  return store.readSwitch({ call, list: '1', pauseTaskId: 'gone' }).then((sw) => {
+    assert.equal(sw.readable, true);
+    assert.equal(sw.switchFound, false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "The decks are clear" is a promise, not a summary.
+// ---------------------------------------------------------------------------
+
+test('a drain with stranded tickets does NOT call the decks clear', () => {
+  // A ticket becomes "stranded" merely by going 90 minutes untouched, and a CI
+  // wait passes that routinely — so a live build can be sitting in that column
+  // while the report told the operator the deck was his.
+  const r = pause.drainReport({ ended: 'clear', working: [], stranded: [{ id: 'gone', name: 'Orphan', kind: 'a build' }] });
+  assert.equal(r.code, 0, 'it still must not hold the pause open forever');
+  assert.ok(!/decks are clear/.test(r.message), 'but it must not say the words either');
+  assert.match(r.message, /NOT empty/);
+  assert.match(r.message, /gone/);
+});
+
+// ---------------------------------------------------------------------------
+// A stranded review keeps its finished build.
+// ---------------------------------------------------------------------------
+
+test('a stranded REVIEW is released where it stands, not sent back to Queued', () => {
+  const note = pause.sweptTicketNote({ at: 'now', by: 'Dane', kind: 'a review' });
+  assert.match(note, /In review/, 'its build is finished and its PR is open');
+  assert.ok(!/Returned to Queued/.test(note), 'sending it back would throw that away');
+});
+
+test('the review claim note comes from loopNote, not a hand copy', () => {
+  const loopNote = require('./loopNote.js');
+  assert.equal(pause.REVIEW_CLAIM_NOTE, loopNote.REVIEW_CLAIM_NOTE);
+  assert.ok(loopNote.loopNote('review-started', { at: '8/25 4:10pm' }).startsWith(pause.REVIEW_CLAIM_NOTE),
+    'the drain identifies a live review by this exact text — two copies would drift');
+});
+
+// ---------------------------------------------------------------------------
+// npm eats the flags. Every documented form must carry the `--`.
+// ---------------------------------------------------------------------------
+
+test('every documented `npm run pipeline` command carries the `--`', () => {
+  // Confirmed on a real machine: `npm run pipeline resume --operator-asked`
+  // exits 2 and is refused for missing the flag that was just typed, because
+  // npm swallowed it. CLAUDE.md is the copy Dane reads, so the wrong form
+  // there is the one he types first.
+  const FILES = [
+    'CLAUDE.md',
+    'docs/LOOP_ENGINEERING.md',
+    'docs/WORK-LOG.md',
+    '.claude/skills/loop-build/SKILL.md',
+    '.claude/skills/loop-review/SKILL.md',
+    'scripts/pipeline.mjs',
+    'scripts/builder/pipelinePause.js',
+    'scripts/builder/pipelinePauseStore.js',
+  ];
+  const bad = [];
+  for (const f of FILES) {
+    read(f).split('\n').forEach((ln, i) => {
+      // "npm run pipeline" plus a SUBCOMMAND. Prose naming the script alone
+      // ("the `npm run pipeline` command") has no subcommand and is fine.
+      if (/npm run pipeline +(?!--)\S/.test(ln)) bad.push(`${f}:${i + 1}: ${ln.trim()}`);
+    });
+  }
+  assert.deepEqual(bad, [], `npm eats the flags without \`--\`:\n${bad.join('\n')}`);
+});
+
+// ---------------------------------------------------------------------------
+// Zero is an answer.
+// ---------------------------------------------------------------------------
+
+test('--wait-minutes 0 means zero, not the default', () => {
+  // `Number(arg(...)) || 30` swallowed the falsy 0, so "pause but do not wait"
+  // waited the full half hour — the opposite of what was typed.
+  const argv = ['node', 'pipeline.mjs', 'pause', '--wait-minutes', '0'];
+  assert.equal(pause.numericOption(argv, 'wait-minutes', 30), 0);
+});
+
+test('a missing or unparseable number still falls back', () => {
+  assert.equal(pause.numericOption(['node', 'x', 'pause'], 'wait-minutes', 30), 30);
+  assert.equal(pause.numericOption(['node', 'x', '--wait-minutes', 'soon'], 'wait-minutes', 30), 30);
+  assert.equal(pause.numericOption(['node', 'x', '--wait-minutes', '--now'], 'wait-minutes', 30), 30,
+    'the next FLAG is not this option\'s value');
+  assert.equal(pause.numericOption(['node', 'x', '--wait-minutes', '5'], 'wait-minutes', 30), 5);
+});
+
+test('the resume sweep sends a stranded build back but leaves a stranded review', () => {
+  // Source-level, like the bus-relay wiring tests above: the move itself needs
+  // a live token. What must never come back is one unconditional "-> Queued".
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  assert.match(code, /const reviewing = s\.kind === 'a review'/,
+    'the sweep must branch on what kind of pass died');
+  const queued = code.indexOf("status: 'Queued'");
+  const branch = code.indexOf('if (reviewing)');
+  assert.ok(branch > -1 && queued > -1 && branch < queued,
+    'the review case must be handled BEFORE the move to Queued, or it is swept anyway');
+  assert.match(code, /clearLoopNote\(task\)/, 'releasing a review means clearing its stale claim');
 });

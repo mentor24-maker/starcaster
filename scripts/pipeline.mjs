@@ -2,10 +2,16 @@
 /**
  * pipeline.mjs — the sanctioned way to clear the decks and go fast.
  *
- *   npm run pipeline status                    is the line running, and if not, since when and who
- *   npm run pipeline check                     the same question, for a machine: 0 = running, 3 = paused
- *   npm run pipeline pause [--now] [--why "…"] stop new claims, wait for work in flight to finish
- *   npm run pipeline resume --operator-asked   hand the deck back, and sweep up anything stranded
+ *   npm run pipeline -- status                    is the line running, and if not, since when and who
+ *   npm run pipeline -- check                     the same question, for a machine: 0 = running, 3 = paused
+ *   npm run pipeline -- pause [--now] [--why "…"] stop new claims, wait for work in flight to finish
+ *   npm run pipeline -- resume --operator-asked   hand the deck back, and sweep up anything stranded
+ *
+ * THE `--` IS NOT OPTIONAL. Without it npm swallows every `--flag` before this
+ * script ever sees it: `resume --operator-asked` is then refused for missing
+ * the very flag that was typed, and `pause --now` silently waits the full half
+ * hour. Every documented form in this repo carries it, and pipelinePause.test.js
+ * fails if one ever loses it again (found in review, PR #434).
  *
  * WHY (2026-08-25, task 86bbmfc15). Until now there was the loop lane —
  * specced, built, reviewed, merged, about a day end to end — and nothing else.
@@ -22,7 +28,7 @@
  * Every decision lives in scripts/builder/pipelinePause.js (pure, tested,
  * no network). This file is only the plumbing that carries them out.
  *
- * The token is Doppler's; `npm run pipeline` wraps this in `doppler run`, and
+ * The token is Doppler's; the `pipeline` npm script wraps this in `doppler run`, and
  * nothing here prints or logs it (DOCTRINE 4.1).
  */
 
@@ -35,7 +41,7 @@ const {
   SWITCH_TASK_NAME, STRANDED_AFTER_MS,
   pauseRecord, resumeRecord, readTrail, pauseVerdict,
   inFlight, describeTickets, drainReport,
-  resumedMessage, sweptTicketNote, resumeAuthorization,
+  resumedMessage, sweptTicketNote, resumeAuthorization, numericOption,
 } = pipelinePause;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
@@ -63,8 +69,13 @@ function arg(name, fallback = null) {
 }
 function flag(name) { return process.argv.includes(`--${name}`); }
 
+/** A numeric option, where ZERO is a real answer — the rule and its reasoning
+ *  live in pipelinePause.js, which is where it can be tested. */
+function num(name, fallback) { return numericOption(process.argv, name, fallback); }
+
 function usage(code = 2) {
   console.error('Usage: npm run pipeline -- <status|check|pause|resume> [options]');
+  console.error('  (the `--` is required — without it npm eats every flag before this script sees it)');
   console.error('  status                          plain English: running or paused, since when, by whom, what is in flight');
   console.error('  check                           for a machine: exit 0 = running, 3 = paused (or unreadable, which counts as paused)');
   console.error('  pause [--now] [--why "..."] [--by NAME] [--wait-minutes N]');
@@ -73,7 +84,8 @@ function usage(code = 2) {
   console.error('  resume --operator-asked [--by NAME] [--no-sweep]');
   console.error('                                  hand the deck back. Refused without --operator-asked: an agent may pause');
   console.error('                                  the line but may not un-pause the operator\'s deck. Sweeps tickets that');
-  console.error('                                  were stranded mid-build back to Queued with a note.');
+  console.error('                                  were stranded mid-pass, with a note: a build goes back to Queued, a');
+  console.error('                                  review is released where it stands so its finished build is not lost.');
   process.exit(code);
 }
 
@@ -152,6 +164,9 @@ async function writeRecord(taskId, text, label, at) {
   // carries an ISO instant unique to this call — the same lesson as
   // busRelayPlan's receipt signature, where a constant fingerprint let a
   // leftover comment from an earlier outage "verify" a POST that never stuck.
+  // Deliberately UNPAGED, unlike the state read: this is looking for a comment
+  // written a moment ago, and the endpoint answers newest-first, so it is
+  // always on page one. Paging here would be extra requests for no answer.
   const back = await tryCall('GET', `/api/v2/task/${taskId}/comment`);
   const stuck = back.ok && (back.json?.comments || []).some((c) => {
     const body = String(c.comment_text || '');
@@ -159,7 +174,7 @@ async function writeRecord(taskId, text, label, at) {
   });
   if (!stuck) {
     console.error(`\n${label} reported success but the record could not be read back.`);
-    console.error('Treat the pipeline as being in an UNKNOWN state and run `npm run pipeline status`.');
+    console.error('Treat the pipeline as being in an UNKNOWN state and run `npm run pipeline -- status`.');
     process.exit(1);
   }
   return true;
@@ -185,6 +200,17 @@ async function stampSwitchNote(task, text) {
   if (!field) { console.error('  (no "Loop note" field on this list — the queue will not show the state at a glance)'); return; }
   const out = await tryCall('POST', `/api/v2/task/${task.id}/field/${field.id}`, { value: text });
   if (!out.ok) console.error(`  (could not stamp the Loop note — ${whyOf(out)})`);
+}
+
+/** Wipe a ticket's Loop note, and say whether it actually went. Used to
+ *  release a ticket whose review pass died: the note is the claim, so clearing
+ *  it IS the release. Verified by reading the write's own response back — a
+ *  200 that did not stick would leave the ticket looking taken forever. */
+async function clearLoopNote(task) {
+  const field = (task?.custom_fields || []).find((f) => String(f.name || '').trim().toLowerCase() === 'loop note');
+  if (!field) return true; // no field on this list — nothing is claiming by note either
+  const out = await tryCall('POST', `/api/v2/task/${task.id}/field/${field.id}`, { value: '' });
+  return Boolean(out.ok);
 }
 
 /** One formatter for the whole feature, shared with the verdict wording. */
@@ -233,7 +259,7 @@ if (cmd === 'check') {
     if (stranded.length) {
       console.log(`STRANDED:      ${describeTickets(stranded)}`);
       console.log('               nothing is working on these and nothing ever will — the loops only claim from Queued.');
-      console.log('               `npm run pipeline resume` returns them to Queued with a note.');
+      console.log('               `npm run pipeline -- resume --operator-asked` puts them right.');
     }
   } else {
     console.log('\nin flight:     could not be read, so this answer is INCOMPLETE.');
@@ -244,8 +270,8 @@ if (cmd === 'check') {
   const now = flag('now');
   const why = arg('why', '');
   const by = arg('by', `an agent on ${thisNodeName()}`);
-  const waitMs = Math.max(0, Number(arg('wait-minutes', String(DEFAULT_WAIT_MINUTES))) || DEFAULT_WAIT_MINUTES) * 60000;
-  const pollMs = Math.max(5, Number(arg('poll-seconds', String(DEFAULT_POLL_SECONDS))) || DEFAULT_POLL_SECONDS) * 1000;
+  const waitMs = Math.max(0, num('wait-minutes', DEFAULT_WAIT_MINUTES)) * 60000;
+  const pollMs = Math.max(5, num('poll-seconds', DEFAULT_POLL_SECONDS)) * 1000;
 
   let sw = await readSwitch({ withQueue: true });
   if (!sw.readable) {
@@ -268,7 +294,7 @@ if (cmd === 'check') {
         'Its COMMENTS are the flag: the newest `[pipeline] PAUSED` / `[pipeline] RUNNING` record is the state '
         + 'of the whole build pipeline, and every loop, the bus relay and every hand-driven session asks it '
         + 'before claiming a ticket or merging anything.\n\n'
-        + 'Run `npm run pipeline status` to read it in plain English. Only the operator resumes.',
+        + 'Run `npm run pipeline -- status` to read it in plain English. Only the operator resumes.',
     });
     if (!made.ok) {
       console.error(`\nCould not create the switch ticket (${whyOf(made)}).`);
@@ -297,7 +323,7 @@ if (cmd === 'check') {
     const q = await fetchQueue();
     if (!q.readable) {
       console.error(`\nPaused, but the queue could not be read to see what is in flight (${q.why}).`);
-      console.error('The pause itself is recorded and holding. Run `npm run pipeline status` once the read works.');
+      console.error('The pause itself is recorded and holding. Run `npm run pipeline -- status` once the read works.');
       process.exit(3);
     }
     const rows = (q.tasks || []).map((t) => ({ ...t, loopNote: loopNoteOf(t) }));
@@ -356,11 +382,37 @@ if (cmd === 'check') {
     const rows = (sw.queue.tasks || []).map((t) => ({ ...t, loopNote: loopNoteOf(t) }));
     const { stranded } = inFlight(rows, { nowMs: Date.now(), strandedAfterMs: STRANDED_AFTER_MS });
     for (const s of stranded) {
+      // WHERE a stranded ticket belongs depends on what died on it.
+      //
+      // A stranded BUILD has no finished work to protect, so it goes back to
+      // Queued and the next build pass picks it up (its `build-start` check
+      // finds any half-pushed branch, which is what the note tells it to do).
+      //
+      // A stranded REVIEW is different: the ticket is already in "In review",
+      // which is where a ticket WAITS for a reviewer. All that is wrong with it
+      // is the stale claim note saying a review is running. Sending it to
+      // Queued would throw away a completed, PR-open build and hand the whole
+      // job to a second builder. So it is released where it stands — note
+      // cleared, status untouched — and the next review pass claims it.
+      const reviewing = s.kind === 'a review';
       const note = await tryCall('POST', `/api/v2/task/${s.id}/comment`, {
-        comment_text: sweptTicketNote({ at: new Date().toISOString(), by }), notify_all: false,
+        comment_text: sweptTicketNote({ at: new Date().toISOString(), by, kind: s.kind }), notify_all: false,
       });
       if (!note.ok) { console.error(`  ${s.id}: could not write the hand-back note (${whyOf(note)}) — LEAVING it where it is rather than moving it silently.`); continue; }
+
       const task = (sw.queue.tasks || []).find((t) => String(t.id) === s.id);
+
+      if (reviewing) {
+        const cleared = await clearLoopNote(task);
+        if (!cleared) {
+          console.error(`  ${s.id}: the note landed but the stale review claim could NOT be cleared — the next review pass will still see it as taken.`);
+          continue;
+        }
+        console.error(`  ${s.id} ("${s.name}") released in "In review" — its review pass died, but its build is finished and its PR is open.`);
+        swept.push(s.id);
+        continue;
+      }
+
       const rem = (task?.assignees || []).map((a) => a.id);
       const move = await tryCall('PUT', `/api/v2/task/${s.id}`, { status: 'Queued', assignees: { add: [], rem } });
       if (!move.ok || String(move.json?.status?.status || '').toLowerCase() !== 'queued') {
@@ -371,7 +423,7 @@ if (cmd === 'check') {
       swept.push(s.id);
     }
   } else if (!flag('no-sweep')) {
-    console.error('  the queue could not be read, so nothing was swept — run `npm run pipeline status` after this.');
+    console.error('  the queue could not be read, so nothing was swept — run `npm run pipeline -- status` after this.');
   }
 
   const at = new Date().toISOString();

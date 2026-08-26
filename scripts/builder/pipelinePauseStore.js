@@ -22,6 +22,9 @@
  */
 
 const { SWITCH_TASK_NAME } = require('./pipelinePause.js');
+// The comment-paging RULE, borrowed rather than re-derived — one answer to
+// "have I read the whole trail" for the whole repo. See scripts/lib/clickup.cjs.
+const { pageComments } = require('../lib/clickup.cjs');
 
 /** How the injected caller's answer is read, whichever shape it uses. */
 function okOf(out) {
@@ -72,10 +75,27 @@ async function fetchQueue({ call, list, maxPages = 50 }) {
   for (let page = 0; page < maxPages; page += 1) {
     const out = await safely(call, 'GET', `/api/v2/list/${list}/task?archived=false&include_closed=true&page=${page}`);
     if (!okOf(out)) return { readable: false, why: `reading the Loop Queue: ${whyOf(out)}`, tasks };
-    tasks.push(...(out.json?.tasks || []));
-    if (out.json?.last_page !== false || (out.json?.tasks || []).length === 0) break;
+    const batch = out.json?.tasks || [];
+    tasks.push(...batch);
+    // Stop on an EMPTY page or an explicit `last_page: true` — never on
+    // `last_page !== false`. ClickUp can omit the flag, and `undefined !== false`
+    // is true, so the old form read page 0 and stopped: on a list past 100
+    // tasks that reports the switch ABSENT, which is fail-open in the one
+    // feature built to fail safe. scripts/lib/clickup.cjs `listTasks` learned
+    // this first; an absent flag means "fetch the next page", not "stop and hope".
+    if (batch.length === 0 || out.json?.last_page === true) return { readable: true, why: '', tasks };
   }
-  return { readable: true, why: '', tasks };
+  // Ran past the cap without ever being told the end. We do not know whether
+  // the switch is in the pages we never read, so this is UNREADABLE, which
+  // every caller turns into "paused".
+  return { readable: false, why: `reading the Loop Queue: stopped after ${maxPages} pages without reaching the end — treat as incomplete`, tasks };
+}
+
+/** The switch's real identity is its NAME; CLICKUP_PAUSE_TASK is only a shortcut. */
+function findSwitchByName(tasks) {
+  return (tasks || []).find(
+    (t) => String(t.name || '').trim().toLowerCase() === SWITCH_TASK_NAME.toLowerCase(),
+  ) || null;
 }
 
 /**
@@ -95,16 +115,30 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
   let task = null;
   let queue = null;
 
+  /** Read the list once, lazily — `status` always wants it, `check` only does
+   *  when it has to fall back to the name lookup. */
+  async function needQueue() {
+    if (!queue) queue = await fetchQueue({ call, list });
+    return queue;
+  }
+
   if (withQueue || !pauseTaskId) {
-    queue = await fetchQueue({ call, list });
-    if (!queue.readable) return { readable: false, why: queue.why };
+    if (!(await needQueue()).readable) return { readable: false, why: queue.why };
   }
 
   if (pauseTaskId) {
     const out = await safely(call, 'GET', `/api/v2/task/${pauseTaskId}`);
-    // A 404 is a clean answer: the id names no task, so there is no switch.
-    if (statusOf(out) === 404) return { readable: true, switchFound: false, queue };
-    if (!okOf(out)) {
+    if (statusOf(out) === 404) {
+      // A configured id that resolves to nothing is a STALE SETTING, not proof
+      // the switch is gone: the id is an optimisation (one GET instead of a
+      // list walk), and the switch's real identity is its NAME. Reading a 404
+      // as "no switch" made `pause` create a SECOND one, which is two flags
+      // disagreeing — the exact state the command refuses to create elsewhere.
+      // So fall back to the name lookup, and only then call it absent.
+      if (!(await needQueue()).readable) return { readable: false, why: queue.why };
+      task = findSwitchByName(queue.tasks);
+      if (!task) return { readable: true, switchFound: false, queue };
+    } else if (!okOf(out)) {
       // Driven live on 2026-08-25: ClickUp answers a made-up task id with 401,
       // not 404. That is the SAFE direction — an id we cannot resolve becomes
       // "unreadable", which becomes "paused" — but the bare status reads like
@@ -117,19 +151,36 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
           + 'unset it and the switch is found by name in the Loop Queue instead.'
         : '';
       return { readable: false, why: `reading the switch ticket ${pauseTaskId}: ${whyOf(out)}${hint}` };
+    } else {
+      task = out.json;
     }
-    task = out.json;
   } else {
-    task = (queue.tasks || []).find(
-      (t) => String(t.name || '').trim().toLowerCase() === SWITCH_TASK_NAME.toLowerCase(),
-    ) || null;
+    task = findSwitchByName(queue.tasks);
     if (!task) return { readable: true, switchFound: false, queue };
   }
 
-  const cout = await safely(call, 'GET', `/api/v2/task/${task.id}/comment`);
-  if (!okOf(cout)) return { readable: false, why: `reading the switch's comments: ${whyOf(cout)}` };
+  // EVERY page of the trail, not the newest 25.
+  //
+  // The state is ONE comment on a task that also collects an hourly reminder
+  // comment while it is paused, so an unpaged read loses the pause record after
+  // about 25 hours and reports the pipeline RUNNING — the two headline features
+  // cancelling each other out, failing open, overnight, which is exactly when
+  // the reminder exists. Found in review on 2026-08-26.
+  const trail = await pageComments({
+    get: async (path) => {
+      const out = await safely(call, 'GET', path);
+      return { ok: okOf(out), status: statusOf(out), json: out?.json ?? null, threw: out?.threw, text: out?.text };
+    },
+    taskId: task.id,
+  });
+  if (!trail.complete) {
+    const why = trail.capped
+      ? 'the trail did not end within the page budget, so the state record may be beyond it'
+      : whyOf(trail.failed);
+    return { readable: false, why: `reading the switch's comments: ${why}` };
+  }
 
-  return { readable: true, switchFound: true, task, comments: cout.json?.comments || [], queue };
+  return { readable: true, switchFound: true, task, comments: trail.comments, queue };
 }
 
-module.exports = { fetchQueue, readSwitch, loopNoteOf, whyOf, safely, okOf, statusOf };
+module.exports = { fetchQueue, readSwitch, findSwitchByName, loopNoteOf, whyOf, safely, okOf, statusOf };

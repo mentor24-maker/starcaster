@@ -7,7 +7,7 @@ a day — and there was nothing else. So whenever something was urgent, the only
 way to move was to step outside the whole system, into the one place where none
 of the safety rules apply.
 
-There is now a switch. `npm run pipeline pause` tells every machine to stop
+There is now a switch. `npm run pipeline -- pause` tells every machine to stop
 taking new work, and then **waits** for anything already half-built to finish
 before it tells you the decks are clear — it never just yanks the plug, because
 a job killed halfway through leaves its ticket stuck in a place nothing ever

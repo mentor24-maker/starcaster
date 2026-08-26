@@ -43,7 +43,7 @@ the machines stop taking new work so nothing lands under him while he is
 working.
 
 ```bash
-npm run pipeline check
+npm run pipeline -- check
 ```
 
 *   **exit 0** — the pipeline is running. Carry on.
@@ -59,7 +59,7 @@ and one loud message. Those are not symmetric, so the tie goes to stopping.
 
 **Never resume it.** An agent may pause the line — that is a safety move
 anyone should be able to make — but only Dane hands the deck back
-(`npm run pipeline resume --operator-asked`). `npm run pipeline status` says
+(`npm run pipeline -- resume --operator-asked`). `npm run pipeline -- status` says
 whether it is on, since when, who put it there and why.
 
 ## Then: is the merge side already full?

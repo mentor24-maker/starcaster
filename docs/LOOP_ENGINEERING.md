@@ -564,12 +564,17 @@ outside the system entirely, into the one place where none of the guards apply,
 and that is a **missing lane** rather than anyone being careless.
 
 ```bash
-npm run pipeline status                    is it running? if not, since when, who, and why
-npm run pipeline check                     the same question for a script: 0 = running, 3 = paused
-npm run pipeline pause --why "..."         stop new claims, then WAIT for work in flight to finish
-npm run pipeline pause --now               ... or don't wait, and name exactly what was left running
-npm run pipeline resume --operator-asked   hand the deck back — yours, never an agent's
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- pause --now               ... or don't wait, and name exactly what was left running
+npm run pipeline -- resume --operator-asked   hand the deck back — yours, never an agent's
 ```
+
+The `--` is required in every one of those. npm eats any `--flag` typed without
+it, which is silent and confusing: `resume --operator-asked` gets refused for
+missing the flag you just typed, and `pause --now` waits the full half hour.
+`pipelinePause.test.js` fails if a documented form ever loses it again.
 
 **It drains, it does not kill.** A pass killed mid-build leaves its ticket in
 `Building` forever, because the loops only ever claim from `Queued` — that

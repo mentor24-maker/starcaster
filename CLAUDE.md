@@ -258,16 +258,21 @@ none of the guards apply. That is a missing lane, not a person being careless,
 so there is now a switch:
 
 ```
-npm run pipeline status                    is it running? if not, since when, who, and why
-npm run pipeline check                     the same question for a script: 0 = running, 3 = paused
-npm run pipeline pause --why "..."         stop new claims, then WAIT for work in flight to finish
-npm run pipeline resume --operator-asked   hand the deck back (Dane's call, never an agent's)
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- resume --operator-asked   hand the deck back (Dane's call, never an agent's)
 ```
+
+**Type the `--`.** It is not decoration: without it npm swallows every `--flag`
+before the command sees it. Leave it out and `resume --operator-asked` is
+refused for missing the very flag you just typed, and `pause --now` waits the
+full half hour instead of returning at once.
 
 **Every actor asks, not just the loops.** A pause only the loops respected
 would not have prevented the collision it was written for — the session that
 merged PR #432 was hand-driven and would never have looked. So: **before
-claiming a ticket, and before merging anything, run `npm run pipeline check`.**
+claiming a ticket, and before merging anything, run `npm run pipeline -- check`.**
 Exit 3 means claim nothing, merge nothing, write nothing to ClickUp; say so
 once and stop. That is a normal outcome, exactly like `node:owns` saying
 another machine owns the job.
@@ -280,8 +285,10 @@ he does not costs idle machines and a loud message. Those are not symmetric.
 the flag and then waits for anything already building, because killing a pass
 mid-build strands its ticket in `Building` forever — the loops only ever claim
 from `Queued`, and that happened twice in the week the switch was written.
-`--now` skips the wait and names exactly what it left running. `resume` sweeps
-any ticket that was stranded back into `Queued` with a note.
+`--now` skips the wait and names exactly what it left running. `resume` also
+unsticks anything a dead pass left behind: a stranded build goes back to
+`Queued` with a note, while a stranded review stays in `In review` — its build
+is finished and its PR is open, so only the stale claim is cleared.
 
 **An agent may pause; only Dane resumes.** Anyone should be able to stop the
 line — it is a safety move. Handing the deck back is his, because only the

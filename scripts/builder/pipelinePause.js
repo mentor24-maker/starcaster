@@ -88,8 +88,13 @@ const STRANDED_AFTER_MS = 90 * 60 * 1000;
 /** The statuses a pass in flight can hold, and what kind of pass it is. */
 const IN_FLIGHT_STATUSES = { building: 'a build', 'in review': 'a review' };
 
-/** The Loop note a review pass stamps when it claims a ticket to check. */
-const REVIEW_CLAIM_NOTE = '🔍 being checked';
+/**
+ * The Loop note a review pass stamps when it claims a ticket to check —
+ * IMPORTED, never re-typed. A hand copy would drift the first time the note
+ * was reworded, and the drain would then see a live review as a resting
+ * ticket. loopNote.js is the one source (it is pure, so this file stays pure).
+ */
+const { REVIEW_CLAIM_NOTE } = require('./loopNote.js');
 
 /**
  * The register the operator reads. The RECORD keeps a machine-precise ISO
@@ -174,10 +179,12 @@ function readTrail(comments) {
   const sorted = byDateNewestFirst(comments);
   let state = null;
   let lastNagAt = null;
+  let sawNag = false;
   for (const c of sorted) {
     const rec = parseRecord(c && c.comment_text);
     if (!rec) continue;
     if (rec.kind === 'nag') {
+      sawNag = true;
       if (lastNagAt == null) lastNagAt = commentDate(c) || Date.parse(rec.at) || null;
       continue;
     }
@@ -195,7 +202,7 @@ function readTrail(comments) {
     // last thing the announcer said, and stopping here would re-announce a
     // pause every single pass.
   }
-  return { state, lastNagAt };
+  return { state, lastNagAt, sawNag };
 }
 
 /**
@@ -238,11 +245,35 @@ function pauseVerdict({ readable = true, why = '', switchFound = true, comments 
       code: 0,
       message:
         'The pipeline is RUNNING — no pause switch exists, so it has never been paused.\n' +
-        `(\`npm run pipeline pause\` creates the switch ticket "${SWITCH_TASK_NAME}" the first time it is used.)`,
+        `(\`npm run pipeline -- pause\` creates the switch ticket "${SWITCH_TASK_NAME}" the first time it is used.)`,
     };
   }
 
-  const { state } = readTrail(comments);
+  const { state, sawNag } = readTrail(comments);
+
+  // A NAG with no state record behind it means the read was TRUNCATED, not
+  // that the pipeline is running. A nag is only ever written while paused, so
+  // seeing one without the pause it refers to proves the trail is incomplete —
+  // and an incomplete trail must fail the same way an unreadable one does.
+  //
+  // This is the belt behind the braces. The braces are the paged read in
+  // pipelinePauseStore; on 2026-08-26 an unpaged one lost the pause record
+  // after roughly 25 hourly nags and reported the pipeline RUNNING. If the
+  // paging is ever wrong again, this catches it in the safe direction.
+  if (!state && sawNag) {
+    return {
+      paused: true,
+      certain: false,
+      truncated: true,
+      code: 3,
+      message:
+        'The pipeline pause switch is being treated as PAUSED: its record is INCOMPLETE.\n' +
+        'The switch carries a "still paused" reminder but not the pause it refers to, and a reminder is only\n' +
+        'ever written while the line is off — so part of the trail was not read.\n\n' +
+        'Claim nothing and merge nothing until `npm run pipeline -- status` gives a straight answer.',
+    };
+  }
+
   if (!state || !state.paused) {
     return {
       paused: false,
@@ -267,7 +298,7 @@ function pauseVerdict({ readable = true, why = '', switchFound = true, comments 
       `The pipeline is PAUSED${state.by ? ` — ${state.by} has the deck` : ''}${state.at ? ` (since ${humanTime(state.atMs) || state.at})` : ''}.\n` +
       (state.why ? `Why: ${state.why}\n` : '') +
       'Claim nothing and merge nothing. This is a normal outcome, not a failure — say so once and stop.\n' +
-      'Only the operator resumes: `npm run pipeline resume --operator-asked`.',
+      'Only the operator resumes: `npm run pipeline -- resume --operator-asked`.',
   };
 }
 
@@ -335,16 +366,23 @@ function drainReport({ ended, working = [], stranded = [], waitedMs = 0, budgetM
   const waitedMin = Math.round(waitedMs / 60000);
   const strandedLine = stranded.length
     ? `\n${stranded.length} ticket(s) look STRANDED rather than busy (nothing has touched them in a long while): ` +
-      `${describeTickets(stranded)}.\nThey are not being waited for. \`npm run pipeline resume\` returns them to Queued with a note.`
+      `${describeTickets(stranded)}.\nThey are not being waited for. \`npm run pipeline -- resume --operator-asked\` puts them right.`
     : '';
 
   if (ended === 'clear') {
+    const waited = waitedMin ? ` (waited ${waitedMin} min)` : '';
+    // "The decks are clear" is the one sentence this command must never say
+    // loosely: the operator reads it and goes to work on the deck. Nothing
+    // MOVING is not the same as nothing THERE — a ticket is reclassified as
+    // stranded merely by being untouched for 90 minutes, and a CI wait passes
+    // that routinely, so a live build can be sitting in the stranded column.
+    // Say what is true instead of reaching for the reassuring word.
     return {
       clear: true,
       code: 0,
-      message:
-        `Pipeline PAUSED and the decks are clear — nothing is claiming and nothing is mid-build` +
-        `${waitedMin ? ` (waited ${waitedMin} min)` : ''}.${strandedLine}`,
+      message: stranded.length
+        ? `Pipeline PAUSED and nothing is still moving${waited} — but the decks are NOT empty.${strandedLine}`
+        : `Pipeline PAUSED and the decks are clear — nothing is claiming and nothing is mid-build${waited}.`,
     };
   }
 
@@ -407,7 +445,7 @@ function nagMessage({ by, why, sinceMs, nowMs } = {}) {
     (by ? `, paused by ${by}` : '') + '.' +
     (why ? `\nWhy: ${why}` : '') +
     '\nNothing is being claimed, reviewed or merged while it is off.' +
-    '\nResume with: npm run pipeline resume --operator-asked';
+    '\nResume with: npm run pipeline -- resume --operator-asked';
 }
 
 /** What it says once, when the deck goes back. */
@@ -417,7 +455,7 @@ function resumedMessage({ by, pausedForMs, swept = [] } = {}) {
     (by ? `, resumed by ${by}` : '') +
     (mins != null ? ` after ${mins} min paused` : '') + '.' +
     (swept.length
-      ? `\n${swept.length} ticket(s) stranded mid-build were returned to Queued: ${swept.join(', ')}.`
+      ? `\n${swept.length} ticket(s) whose pass had died were unstuck: ${swept.join(', ')}.`
       : '\nNothing was left stranded.');
 }
 
@@ -428,13 +466,47 @@ function resumedMessage({ by, pausedForMs, swept = [] } = {}) {
  * was already half done. Say what happened and what the next pass should
  * check before it starts over.
  */
-function sweptTicketNote({ at, by } = {}) {
+function sweptTicketNote({ at, by, kind = 'a build' } = {}) {
+  const signature = `\n\n(Automatic — pipeline resume${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
+
+  // A stranded REVIEW keeps its status. It is already in "In review", which is
+  // where a ticket waits for a reviewer; the only thing wrong with it is the
+  // stale claim note. Sending it to Queued would throw away a finished build
+  // with an open PR and hand the same job to a second builder.
+  if (kind === 'a review') {
+    return 'Released by the pipeline pause sweep.\n\n' +
+      'A review pass claimed this ticket and then ended without leaving a verdict, so it sat here looking ' +
+      'like it was being checked when nothing was. **Nothing about the build has changed** — the branch and ' +
+      'its PR are exactly as they were, and this ticket stays in "In review" so the next review pass picks ' +
+      'it up instead of the work being rebuilt.' + signature;
+  }
+
   return 'Returned to Queued by the pipeline pause sweep.\n\n' +
     'This ticket was sitting in a machine status with nothing working on it — its pass ended without ' +
     'handing it on, which leaves it invisible to the loops (they only ever claim from Queued). ' +
     'Nothing has been undone: **check for an existing branch and PR before building** ' +
-    '(`npm run clickup -- build-start --task <id>`), because part of the work may already be pushed.\n\n' +
-    `(Automatic — pipeline resume${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
+    '(`npm run clickup -- build-start --task <id>`), because part of the work may already be pushed.' +
+    signature;
+}
+
+/**
+ * A numeric command-line option, where ZERO is a real answer.
+ *
+ * `Number(arg(...)) || DEFAULT` swallows a falsy 0, so `--wait-minutes 0` —
+ * "pause, but do not wait for the drain" — silently waited the full half hour
+ * instead (found in review, PR #434). Only a MISSING or unparseable value may
+ * fall back to the default; a supplied 0 means 0.
+ *
+ * Here rather than in pipeline.mjs so it can be driven in `node --test`: the
+ * command itself exits before argv parsing unless a live token is present.
+ */
+function numericOption(argv, name, fallback) {
+  const list = Array.isArray(argv) ? argv : [];
+  const i = list.indexOf(`--${name}`);
+  const raw = i !== -1 && list[i + 1] && !String(list[i + 1]).startsWith('--') ? list[i + 1] : null;
+  if (raw == null) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 /**
@@ -493,4 +565,5 @@ module.exports = {
   resumedMessage,
   sweptTicketNote,
   resumeAuthorization,
+  numericOption,
 };
