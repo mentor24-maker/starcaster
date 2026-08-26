@@ -1,3 +1,43 @@
+## 2026-08-26 — Checking the new merge lock before trusting it (#444)
+
+Yesterday's work put a lock on the door: an automatic check that refuses to
+merge a pull request unless its ticket carries a passing review of the code
+actually being merged. The lock is fitted but not yet switched on — that is a
+setting only you can tick — so right now it announces its answer and lets
+everything through regardless.
+
+Before flipping a switch like that, it is worth going over the lock itself, so
+this pass did. Four things were wrong with it. None of them can do any harm
+today, precisely because it is not switched on yet, but every one of them
+becomes real the moment it is.
+
+The serious one: the lock finds the ticket by taking the first ClickUp link in
+the pull request's description, and nothing checked that it was the right
+ticket. A description that mentioned some related ticket before its own would
+have been checked against **that** ticket's approval — and would have been let
+through if that other ticket happened to have a recent one. A lock that opens
+because it read somebody else's paperwork is worse than no lock. It never
+actually happened, but only because our automatic builder happens to always put
+its own link first. That is a habit, and habits are the exact thing this lock
+exists so we stop relying on. It now confirms the ticket it read really is
+about this pull request, and says "I cannot tell" rather than yes when it
+cannot.
+
+The other three were smaller and quieter. Two of our commands disagreed about
+what counts as naming a ticket, so a description one of them called perfectly
+fine would be rejected by the other with a message saying the opposite of what
+you could plainly see — they read the same piece of code now, so they cannot
+disagree again. The lock's own messages happened to be worded in a way our
+system reads as a **review rejection**, meaning that pasting one onto a ticket
+to explain it would have registered as a rejection nobody wrote and jammed
+three things at once. And a mismatch in how commit history is described could
+have silently switched off a protection that stops perfectly good reviews from
+being treated as out of date.
+
+Each of the four fixes was then deliberately un-done, one at a time, to watch
+the test that guards it actually fail — because a test that cannot fail proves
+nothing, and this is a lock we are about to start trusting.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone
