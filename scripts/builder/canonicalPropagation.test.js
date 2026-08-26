@@ -12,6 +12,7 @@ const {
   propagateCanonicalSection,
   propagateCanonicalModule,
 } = require('../../lib/canonicalPropagation');
+const { readLayoutSectionsFromRow } = require('../../lib/builder');
 
 /**
  * Sync 7/7: sections and modules push through ONE engine.
@@ -332,4 +333,236 @@ test('a multi-module run stops at a locked copy instead of swallowing it', async
   assert.equal(kept[0].id, 'b');
   assert.equal(written.filter((m) => m.text === 'first').length, 2, 'the two following copies each expand to the master pair');
   assert.equal(new Set(written.map((m) => m.id)).size, written.length, 'minted ids are unique — the old ones folded in Date.now() and collided');
+});
+
+/* ----------------------------- the template write, through the REAL store */
+
+/**
+ * Every test above injects a fake `updatePageTemplate` that records
+ * `{ id, input }` and stops there. That is the right shape for asking WHICH
+ * templates a push reaches — and it is exactly why the first cut of this PR
+ * shipped a template write that blanked the template.
+ *
+ * `inputToRow` in lib/builderPageTemplatesStore.js builds all 34 columns
+ * unconditionally from `input?.x`, and `safeText(undefined)` is `''`. So a
+ * partial `{ layoutSections }` is not a one-column patch: it PATCHes every
+ * column and empties the 33 it never mentioned. A template named
+ * "Delray — Main Site Template" came back named "". There is no revision row
+ * for a template, so there is nothing to restore it from.
+ *
+ * These run the real store with only `sbQuery` — the database call itself —
+ * stubbed, so the column-building actually happens and the test can read the
+ * body that would have gone over the wire.
+ */
+
+const REAL_STORE_PATHS = {
+  supabase: require.resolve('../../lib/supabase'),
+  projectScope: require.resolve('../../lib/projectScope'),
+  store: require.resolve('../../lib/builderPageTemplatesStore'),
+};
+
+/** A template row with every column carrying a value worth losing. */
+function populatedTemplateRow(layoutSections) {
+  return {
+    id: 7,
+    name: 'Delray — Main Site Template',
+    template_kind: 'modular',
+    template_id: 'tpl_delray',
+    email_function: 'magic_link',
+    summary: 'The main site template',
+    subject: 'Welcome to Delray Beach Tennis Center',
+    email_slug: 'delray-main',
+    primary_color: '#1f6feb',
+    background_color: '#ffffff',
+    accent_color: '#f0b429',
+    form_id: 'form_1',
+    lead_magnet_id: 'lm_1',
+    headline_id: 'hl_1',
+    pitch_id: 'pi_1',
+    cta_id: 'cta_1',
+    website_banner_image_id: 'img_banner',
+    background_image_id: 'img_bg',
+    feature_image_id: 'img_feature',
+    highlight_image_id: 'img_highlight',
+    feature_headline_id: 'fh_1',
+    feature_subheading_id: 'fs_1',
+    feature_title: 'Book a court',
+    feature_copy: 'Courts are open seven days a week.',
+    highlight_headline_id: 'hh_1',
+    highlight_pitch_id: 'hp_1',
+    highlight_title: 'Junior programs',
+    highlight_copy: 'Coaching for every age.',
+    body_headline_id: 'bh_1',
+    body_subheading_id: 'bs_1',
+    body_pitch_id: 'bp_1',
+    logo_wide_id: 'logo_wide',
+    logo_square_id: 'logo_square',
+    content_overrides: { greeting: 'Hello' },
+    layout_sections: {
+      pageBackground: { color: '#101010' },
+      theme: { typography: { scale: { baseSize: 18, baseLineHeight: 1.6 } } },
+      sections: layoutSections,
+    },
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-02T00:00:00Z',
+  };
+}
+
+/**
+ * Load a FRESH copy of the real template store with `lib/supabase` replaced by
+ * a stub. The store and projectScope both destructure `sbQuery` at require
+ * time, so patching the module object afterwards would not reach them — both
+ * have to be evicted and re-required behind the stub.
+ */
+function realTemplateStoreWithStubbedDatabase(row) {
+  const saved = {};
+  Object.values(REAL_STORE_PATHS).forEach((p) => { saved[p] = require.cache[p]; });
+
+  const patches = [];
+  require.cache[REAL_STORE_PATHS.supabase] = {
+    id: REAL_STORE_PATHS.supabase,
+    filename: REAL_STORE_PATHS.supabase,
+    loaded: true,
+    exports: {
+      tableConfig: () => ({ builderPageTemplates: 'builder_page_templates' }),
+      sbQuery: async ({ method = 'GET', body }) => {
+        if (method === 'PATCH') {
+          patches.push(body);
+          return { ok: true, status: 200, data: [{ ...row, ...body }] };
+        }
+        return { ok: true, status: 200, data: [row] };
+      },
+    },
+  };
+  delete require.cache[REAL_STORE_PATHS.projectScope];
+  delete require.cache[REAL_STORE_PATHS.store];
+
+  const store = require('../../lib/builderPageTemplatesStore');
+
+  const restore = () => {
+    Object.entries(saved).forEach(([p, mod]) => {
+      if (mod) require.cache[p] = mod;
+      else delete require.cache[p];
+    });
+  };
+  return { store, patches, restore };
+}
+
+test('a section push through the REAL template store leaves the rest of the template alone', async () => {
+  // A legacy full COPY of the shared section, which is the case the push
+  // normalizes down to a reference - so this write fires on the first push.
+  const row = populatedTemplateRow([
+    { id: 's1', savedSectionId: SAVED_SECTION_ID, canonical: true, modules: [textModule()] },
+  ]);
+  const { store, patches, restore } = realTemplateStoreWithStubbedDatabase(row);
+
+  try {
+    const tally = await propagateCanonicalSection(
+      SAVED_SECTION_ID,
+      { id: 'master', savedSectionId: SAVED_SECTION_ID, modules: [textModule({ text: 'new' })] },
+      null,
+      {
+        deps: {
+          listPages: async () => ({ ok: true, data: [] }),
+          updatePage: async () => ({ ok: true, status: 200 }),
+          listPageTemplates: store.listPageTemplates,
+          updatePageTemplate: store.updatePageTemplate,
+        },
+      }
+    );
+
+    assert.equal(tally.templates.failed, 0, 'the template write should succeed');
+    assert.equal(tally.templates.updated, 1, 'the template should have been written once');
+    assert.equal(patches.length, 1, 'exactly one PATCH should have gone to the database');
+
+    const written = patches[0];
+
+    // The reviewer's specific ask: the name survives.
+    assert.equal(
+      written.name,
+      'Delray — Main Site Template',
+      'the template name must survive a section push'
+    );
+
+    // And so does everything else the blanking write took with it.
+    assert.equal(written.subject, 'Welcome to Delray Beach Tennis Center');
+    assert.equal(written.primary_color, '#1f6feb');
+    assert.equal(written.background_color, '#ffffff');
+    assert.equal(written.accent_color, '#f0b429');
+    assert.equal(written.feature_title, 'Book a court');
+    assert.equal(written.feature_copy, 'Courts are open seven days a week.');
+    assert.equal(written.highlight_title, 'Junior programs');
+    assert.equal(written.feature_image_id, 'img_feature');
+    assert.equal(written.logo_wide_id, 'logo_wide');
+    assert.equal(written.template_id, 'tpl_delray');
+    assert.equal(written.email_function, 'magic_link');
+    assert.deepEqual(written.content_overrides, { greeting: 'Hello' });
+
+    // layout_sections carries pageBackground and theme in the same column, so
+    // a partial write reset those too. Compare the documents rather than the
+    // raw column: the serializer fills in its own defaults, so the value that
+    // comes back is normalized, not identical.
+    const before = readLayoutSectionsFromRow(row);
+    const after = readLayoutSectionsFromRow(written);
+    assert.deepEqual(after.pageBackground, before.pageBackground, 'pageBackground must not reset');
+    assert.deepEqual(after.theme, before.theme, 'theme must not reset');
+    assert.equal(after.pageBackground.color, '#101010');
+    assert.equal(after.theme.typography.scale.baseSize, 18);
+    assert.equal(after.theme.typography.scale.baseLineHeight, 1.6);
+
+    // The push still did its actual job: the legacy copy is now a reference.
+    // The serializer expands a bare reference back out to a full section and
+    // gives it `modules: []`, so "carries no content" is an EMPTY module list
+    // here rather than an absent one - it resolves against the live master.
+    assert.equal(tally.templates.normalized, 1, 'the legacy copy should be normalized');
+    const pushed = after.layoutSections[0];
+    assert.equal(pushed.savedSectionId, SAVED_SECTION_ID);
+    assert.equal(pushed.canonical, true);
+    assert.equal(pushed.modules.length, 0, 'a normalized copy keeps no content of its own');
+
+    // No column may be blank that was not blank before.
+    const emptied = Object.entries(written)
+      .filter(([key, value]) => value === '' && row[key])
+      .map(([key]) => key);
+    assert.deepEqual(emptied, [], `these columns were blanked by the write: ${emptied.join(', ')}`);
+  } finally {
+    restore();
+  }
+});
+
+test('every column inputToRow writes is one rowToPageTemplate reads back', async () => {
+  // The spread above is only safe while the store's two halves stay a matched
+  // pair. Add a column to `inputToRow` and forget `rowToPageTemplate`, and the
+  // spread silently blanks it again - with no revision row to notice from.
+  const row = populatedTemplateRow([
+    { id: 's1', savedSectionId: SAVED_SECTION_ID, canonical: true, modules: [textModule()] },
+  ]);
+  const { store, patches, restore } = realTemplateStoreWithStubbedDatabase(row);
+
+  try {
+    // Read the row out through the store, then hand it straight back in
+    // unchanged. Nothing should move.
+    const listed = await store.listPageTemplates(10, null);
+    const template = listed.data[0];
+    await store.updatePageTemplate(row.id, template, null);
+
+    const written = patches[0];
+    Object.keys(written).forEach((column) => {
+      if (column === 'layout_sections') return; // compared field-by-field below
+      assert.deepEqual(
+        written[column],
+        row[column],
+        `${column} did not round-trip: inputToRow writes it, rowToPageTemplate does not read it back`
+      );
+    });
+    // Same as above: compare the normalized documents, since the serializer
+    // fills its own defaults in on the way through.
+    const before = readLayoutSectionsFromRow(row);
+    const after = readLayoutSectionsFromRow(written);
+    assert.deepEqual(after.pageBackground, before.pageBackground);
+    assert.deepEqual(after.theme, before.theme);
+    assert.deepEqual(after.layoutSections, before.layoutSections);
+  } finally {
+    restore();
+  }
 });
