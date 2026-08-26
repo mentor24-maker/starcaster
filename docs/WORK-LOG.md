@@ -53,6 +53,37 @@ enforces them, and refuses out loud when it meets a rule it does not understand
 
 Every one of these was proved twice: once by breaking the fix on purpose and
 watching the right test fail, and once by running it against a real database.
+
+A fourth review found the same shape twice more, in the two places nobody had
+looked yet. Each recording session names one file as the one everybody else
+gets lined up against — and the code that set that name never checked the file
+belonged to the same client. One client could point at another client's
+footage and be told it worked. Then the other client deletes their file and the
+first one is pointing at nothing. There is no safety net underneath this in the
+database itself, deliberately, so this code was the only thing that could have
+caught it, and it was not looking. It looks now, and a test proves it both
+refuses the other client's file and still accepts your own.
+
+The second: every file gets a fingerprint so the same footage is not filed
+twice. If something handed over a fingerprint that was not text — a whole
+bundle of data instead of a line of it — it got quietly turned into the useless
+word "[object Object]" and stored. The next genuinely different file then came
+back as "we already have this one," which was simply untrue, about two files
+with nothing in common. Now anything that is not text is refused outright, and
+whatever was already recorded is left alone.
+
+Four smaller things came with them, the notable one being the miniature
+stand-in database the tests run against: it was reading the column types out of
+the real design and then never checking anything against them, so a test could
+hand it obvious nonsense and be told yes. It checks now — and, in keeping with
+how the rest of it already worked, it refuses out loud when it meets a type it
+does not know how to check, rather than waving it through.
+
+Proved the same way as before, and deliberately: each of the seven fixes was
+broken on purpose and the matching test failed each time, and both of the
+serious ones were reproduced against a real database on the old code before
+being confirmed fixed on the new.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone
