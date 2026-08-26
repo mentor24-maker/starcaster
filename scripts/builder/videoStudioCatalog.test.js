@@ -1309,3 +1309,368 @@ test('a generated id is uuid-shaped, and two of them differ', async () => {
     assert.notEqual(first.id, second.id);
   } finally { restore(); }
 });
+
+// ── Round five ──────────────────────────────────────────────────────────────
+// Six ways a write could still succeed and store something other than what it
+// was given. Each of these was reproduced against real local Postgres before
+// it was fixed; each test below was then broken on purpose to prove it fails.
+
+test('updateSource applies snake_case keys instead of dropping them silently', async () => {
+  // The reported failure exactly: state and width applied, duration_s ignored,
+  // under ok:true/200. Slices 4/8-6/8 write probe output under the COLUMN
+  // names, so this was aimed at the only callers this table will ever have.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const created = await sources.createSource(
+      { sessionId: session.id, durationS: 61.5 }, SCOPE_A
+    );
+    assert.equal(created.ok, true, created.error);
+
+    const patched = await sources.updateSource(
+      created.data.id, { state: 'probed', duration_s: 99.5, width: 1920 }, SCOPE_A
+    );
+    assert.equal(patched.ok, true, patched.error);
+    assert.equal(patched.data.state, 'probed');
+    assert.equal(patched.data.width, 1920);
+    assert.equal(patched.data.durationS, 99.5, 'duration_s was accepted and then dropped');
+
+    // Read it back rather than trusting the write's own answer.
+    const reread = await sources.getSourceById(created.data.id, SCOPE_A);
+    assert.equal(reread.data.durationS, 99.5, 'the stored row kept the OLD duration');
+  } finally { restore(); }
+});
+
+test('updateSession applies snake_case keys too — the same asymmetry', async () => {
+  const { sessions, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const patched = await sessions.updateSession(
+      session.id, { state: 'synced', sync_confidence: 0.92, recorded_at: '2026-08-26' }, SCOPE_A
+    );
+    assert.equal(patched.ok, true, patched.error);
+    assert.equal(patched.data.syncConfidence, 0.92, 'sync_confidence was dropped');
+    assert.equal(patched.data.recordedAt, '2026-08-26T00:00:00.000Z', 'recorded_at was dropped');
+  } finally { restore(); }
+});
+
+test('an unknown field is a 400, not a 200 that ignores it', async () => {
+  // The other half: the casing fix saves the common spelling, this saves the
+  // typo. Mixed in with one good key, an unrecognised key used to ride along
+  // under a 200 because the patch was not empty and nothing looked at the rest.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const created = await sources.createSource({ sessionId: session.id }, SCOPE_A);
+
+    const typo = await sources.updateSource(
+      created.data.id, { state: 'probed', durationSec: 99.5 }, SCOPE_A
+    );
+    assert.equal(typo.ok, false, 'a typo\'d field name was silently discarded');
+    assert.equal(typo.status, 400);
+    assert.match(typo.error, /durationSec/);
+
+    // ...and nothing was written, so the good key did not land either.
+    const reread = await sources.getSourceById(created.data.id, SCOPE_A);
+    assert.equal(reread.data.state, 'new', 'a refused patch still wrote part of itself');
+
+    const onSession = await sessions.updateSession(session.id, { titel: 'typo' }, SCOPE_A);
+    assert.equal(onSession.ok, false);
+    assert.match(onSession.error, /titel/);
+
+    const onCreate = await sessions.createSession({ title: 'x', colour: 'red' }, SCOPE_A);
+    assert.equal(onCreate.ok, false, 'create ignored an unknown field');
+    assert.match(onCreate.error, /colour/);
+  } finally { restore(); }
+});
+
+test('the same field in both casings with different values is refused', async () => {
+  // `??` preferred camelCase, which is a coin-toss dressed as a rule — one of
+  // the two values was going to be discarded under a 200.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const conflict = await sources.createSource(
+      { sessionId: session.id, durationS: 1, duration_s: 2 }, SCOPE_A
+    );
+    assert.equal(conflict.ok, false, 'one of two conflicting values was silently chosen');
+    assert.equal(conflict.status, 400);
+    assert.match(conflict.error, /supplied twice/);
+
+    // The same value twice is not a conflict — it is one answer, said twice.
+    const agreed = await sources.createSource(
+      { sessionId: session.id, durationS: 2, duration_s: 2 }, SCOPE_A
+    );
+    assert.equal(agreed.ok, true, agreed.error);
+    assert.equal(agreed.data.durationS, 2);
+  } finally { restore(); }
+});
+
+test('programme audio must belong to THIS session, not merely this project', async () => {
+  // The round-four fix stopped project A pointing at project B. One session
+  // over, inside the same project, still landed ok:true/200 — and there is no
+  // foreign key on this column to catch the dangling pointer afterwards.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const mine = await seedSession(sessions, SCOPE_A, 'Mine');
+    const theirs = await seedSession(sessions, SCOPE_A, 'Another of mine');
+    const theirAudio = await sources.createSource(
+      { sessionId: theirs.id, layerRole: 'reference' }, SCOPE_A
+    );
+    assert.equal(theirAudio.ok, true, theirAudio.error);
+
+    const crossed = await sessions.updateSession(
+      mine.id, { programAudioSourceId: theirAudio.data.id }, SCOPE_A
+    );
+    assert.equal(crossed.ok, false, 'a session pointed its audio at another session\'s file');
+    assert.equal(crossed.status, 400);
+    assert.match(crossed.error, /belong to this session/);
+
+    // Its own source is still accepted — the check is not just refusing everything.
+    const ownAudio = await sources.createSource({ sessionId: mine.id }, SCOPE_A);
+    const fine = await sessions.updateSession(
+      mine.id, { programAudioSourceId: ownAudio.data.id }, SCOPE_A
+    );
+    assert.equal(fine.ok, true, fine.error);
+    assert.equal(fine.data.programAudioSourceId, ownAudio.data.id);
+  } finally { restore(); }
+});
+
+test('a timestamp that is not a date is a 400, not an invented instant', async () => {
+  // `recordedAt: 0` stored 2000-01-01T07:00:00Z under ok:true — a real instant,
+  // from a number that is not a date at all, via new Date()'s fallback parser.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    for (const junk of [0, true, {}, [], 'someday', '26/08/2026']) {
+      const created = await sources.createSource(
+        { sessionId: session.id, recordedAt: junk }, SCOPE_A
+      );
+      assert.equal(created.ok, false, `recordedAt: ${JSON.stringify(junk)} was accepted`);
+      assert.equal(created.status, 400);
+
+      const onSession = await sessions.createSession({ title: 'x', recordedAt: junk }, SCOPE_A);
+      assert.equal(onSession.ok, false, `createSession accepted ${JSON.stringify(junk)}`);
+    }
+  } finally { restore(); }
+});
+
+test('a date that does not exist is refused, not rolled over into one that does', () => {
+  // new Date() does not reject these; it rolls them over, so 2026-02-30 came
+  // back as 2 March — a real instant, silently not the one asked for.
+  const { timestampOrError } = require('../../lib/storeInput.js');
+  for (const impossible of ['2026-02-30', '2026-02-29', '2026-13-01', '2026-08-26T25:00:00']) {
+    const parsed = timestampOrError(impossible, 'recordedAt');
+    assert.equal(parsed.ok, false, `${impossible} was quietly turned into another date`);
+  }
+  assert.equal(
+    timestampOrError('2028-02-29', 'recordedAt').value, '2028-02-29T00:00:00.000Z',
+    '29 February in a leap year is a real date'
+  );
+});
+
+test('a zoneless timestamp is read as UTC, so two machines store one instant', () => {
+  // `new Date('2026-08-26T12:00:00')` uses the MACHINE's zone, so the same
+  // string written from the Mac Mini and the MacBook stored different instants.
+  const { timestampOrError } = require('../../lib/storeInput.js');
+  assert.equal(timestampOrError('2026-08-26T12:00:00', 'recordedAt').value, '2026-08-26T12:00:00.000Z');
+  assert.equal(timestampOrError('2026-08-26 12:00:00', 'recordedAt').value, '2026-08-26T12:00:00.000Z');
+  assert.equal(timestampOrError('2026-08-26', 'recordedAt').value, '2026-08-26T00:00:00.000Z');
+  // An explicit zone is still honoured — this is not "ignore the offset".
+  assert.equal(timestampOrError('2026-08-26T12:00:00+02:00', 'recordedAt').value, '2026-08-26T10:00:00.000Z');
+});
+
+// ── The fake's own promises ─────────────────────────────────────────────────
+// It is billed as reusable infrastructure for slices 2/8-8/8, and its header
+// promises it throws rather than reading past a rule it does not implement.
+
+test('the fake honours Prefer: return=representation, so forgetting it FAILS here', async () => {
+  const { db, restore } = withDb();
+  try {
+    const withHeader = await db.sbQuery({
+      method: 'POST',
+      table: 'video_sessions',
+      query: 'select=*',
+      headers: { Prefer: 'return=representation' },
+      body: [{ project_id: 'proj_a', title: 'With' }],
+    });
+    assert.equal(withHeader.status, 201);
+    assert.equal(withHeader.data.length, 1, 'the representation was not returned');
+
+    // PostgREST answers 201 with an EMPTY BODY here; lib/supabase.js turns that
+    // into data:null. A store reading res.data[0] then 404s in production.
+    const without = await db.sbQuery({
+      method: 'POST',
+      table: 'video_sessions',
+      query: 'select=*',
+      body: [{ project_id: 'proj_a', title: 'Without' }],
+    });
+    assert.equal(without.ok, true);
+    assert.equal(without.status, 201);
+    assert.equal(without.data, null, 'the fake invented a body PostgREST would not send');
+
+    // ...and PATCH answers 204, not 200.
+    const patched = await db.sbQuery({
+      method: 'PATCH',
+      table: 'video_sessions',
+      query: 'project_id=eq.proj_a',
+      body: { title: 'Renamed' },
+    });
+    assert.equal(patched.status, 204, 'a minimal PATCH must be 204 with no body');
+    assert.equal(patched.data, null);
+  } finally { restore(); }
+});
+
+test('the fake throws on a header or Prefer token it does not implement', async () => {
+  const { db, restore } = withDb();
+  try {
+    await assert.rejects(
+      () => db.sbQuery({ method: 'GET', table: 'video_sessions', headers: { Range: '0-9' } }),
+      /not implemented/,
+      'an unimplemented header was accepted and ignored'
+    );
+    await assert.rejects(
+      () => db.sbQuery({
+        method: 'POST', table: 'video_sessions', body: [{ project_id: 'proj_a', title: 'x' }],
+        headers: { Prefer: 'resolution=merge-duplicates' },
+      }),
+      /Prefer token/,
+      'an unimplemented Prefer token was read past'
+    );
+  } finally { restore(); }
+});
+
+test("the fake evaluates the WHOLE or= filter, owner_user_id included", async () => {
+  // lib/projectScope.js emits
+  //   (project_id.eq.X,and(project_id.is.null,or(owner_user_id.eq.U,owner_user_id.is.null)))
+  // and the fake used to treat project_id.is.null as unconditionally allowed,
+  // never looking at owner_user_id — over-permissive in the tenancy direction.
+  const schema = parseSchemaText(`
+    create table if not exists public.legacy (
+      id uuid primary key default gen_random_uuid(),
+      project_id text,
+      owner_user_id text,
+      title text not null default ''
+    );
+    alter table public.legacy enable row level security;
+  `);
+  const db = createFakeDb(schema);
+  const insert = (row) => db.sbQuery({
+    method: 'POST', table: 'legacy', query: 'select=*',
+    headers: { Prefer: 'return=representation' }, body: [row],
+  });
+  await insert({ project_id: 'proj_a', owner_user_id: 'user_1', title: 'mine, tenanted' });
+  await insert({ project_id: null, owner_user_id: 'user_1', title: 'mine, legacy' });
+  await insert({ project_id: null, owner_user_id: 'user_9', title: "SOMEONE ELSE'S legacy" });
+  await insert({ project_id: null, owner_user_id: null, title: 'nobody\'s legacy' });
+
+  const or = '(project_id.eq.proj_a,and(project_id.is.null,or(owner_user_id.eq.user_1,owner_user_id.is.null)))';
+  const res = await db.sbQuery({ method: 'GET', table: 'legacy', query: `select=*&or=${or}` });
+  const titles = res.data.map((row) => row.title).sort();
+  assert.deepEqual(titles, ["mine, legacy", "mine, tenanted", "nobody's legacy"].sort());
+  assert.ok(
+    !titles.includes("SOMEONE ELSE'S legacy"),
+    "another user's legacy row was returned — the tenancy filter was half-read"
+  );
+});
+
+test('the fake throws on an or= shape it cannot parse, rather than guessing', async () => {
+  const { db, restore } = withDb();
+  try {
+    await assert.rejects(
+      () => db.sbQuery({
+        method: 'GET', table: 'video_sessions', query: 'select=*&or=(title.like.*talk*)',
+      }),
+      /unsupported or= condition/,
+      'an unreadable condition was silently treated as no filter'
+    );
+    await assert.rejects(
+      () => db.sbQuery({
+        method: 'GET', table: 'video_sessions', query: 'select=*&or=project_id.eq.proj_a',
+      }),
+      /parenthesised/,
+      'PostgREST would read this as a column name, and the fake pretended otherwise'
+    );
+  } finally { restore(); }
+});
+
+test('two NULLs do not collide in a unique index — SQL says NULL != NULL', async () => {
+  // String()-comparison made two nulls equal as the text 'null', inventing a
+  // constraint Postgres does not have. The inline `unique` path dodged this via
+  // its own predicate; the named `create unique index` path — the one slice 2/8
+  // inherits — did not.
+  const schema = parseSchemaText(`
+    create table if not exists public.things (
+      id uuid primary key default gen_random_uuid(),
+      project_id text not null,
+      content_hash text
+    );
+    create unique index if not exists idx_things_hash on public.things (project_id, content_hash);
+    alter table public.things enable row level security;
+  `);
+  const db = createFakeDb(schema);
+  const insert = (row) => db.sbQuery({
+    method: 'POST', table: 'things', query: 'select=*',
+    headers: { Prefer: 'return=representation' }, body: [row],
+  });
+
+  const first = await insert({ project_id: 'proj_a', content_hash: null });
+  assert.equal(first.ok, true, first.error);
+  const second = await insert({ project_id: 'proj_a', content_hash: null });
+  assert.equal(second.ok, true, 'two unmeasured hashes collided as the text "null"');
+
+  // A real duplicate is still a real duplicate.
+  await insert({ project_id: 'proj_a', content_hash: 'abc' });
+  const dup = await insert({ project_id: 'proj_a', content_hash: 'abc' });
+  assert.equal(dup.ok, false, 'the index stopped enforcing anything at all');
+  assert.equal(dup.status, 409);
+});
+
+test('a NULL hash does not collide with the literal text "null" either', async () => {
+  // The String()-comparison's other victim, and the reason the null check is
+  // needed on BOTH sides of it: with the guard on one side only, a real hash
+  // that happens to spell "null" collided with an unmeasured one. Contrived
+  // content, but it is what makes each half of the guard falsifiable — with
+  // only the two-NULLs case above, either half could be deleted and every test
+  // still passed, which is the "check that cannot fail" this ticket keeps
+  // finding.
+  const schema = parseSchemaText(`
+    create table if not exists public.things (
+      id uuid primary key default gen_random_uuid(),
+      project_id text not null,
+      content_hash text
+    );
+    create unique index if not exists idx_things_hash on public.things (project_id, content_hash);
+    alter table public.things enable row level security;
+  `);
+  const db = createFakeDb(schema);
+  const insert = (hash) => db.sbQuery({
+    method: 'POST', table: 'things', query: 'select=*',
+    headers: { Prefer: 'return=representation' },
+    body: [{ project_id: 'proj_a', content_hash: hash }],
+  });
+
+  // Unmeasured first, then the text — the existing row is the null one.
+  assert.equal((await insert(null)).ok, true);
+  const textAfterNull = await insert('null');
+  assert.equal(textAfterNull.ok, true, 'the text "null" collided with an unmeasured hash');
+
+  // ...and the other way round, where the INCOMING row is the null one.
+  const db2 = createFakeDb(parseSchemaText(`
+    create table if not exists public.things (
+      id uuid primary key default gen_random_uuid(),
+      project_id text not null,
+      content_hash text
+    );
+    create unique index if not exists idx_things_hash on public.things (project_id, content_hash);
+    alter table public.things enable row level security;
+  `));
+  const insert2 = (hash) => db2.sbQuery({
+    method: 'POST', table: 'things', query: 'select=*',
+    headers: { Prefer: 'return=representation' },
+    body: [{ project_id: 'proj_a', content_hash: hash }],
+  });
+  assert.equal((await insert2('null')).ok, true);
+  const nullAfterText = await insert2(null);
+  assert.equal(nullAfterText.ok, true, 'an unmeasured hash collided with the text "null"');
+});

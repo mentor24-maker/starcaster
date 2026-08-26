@@ -15,8 +15,8 @@
  * It understands only what the setup files here actually use: create table if
  * not exists, column types/defaults/not-null, inline `primary key`, inline
  * `unique`, inline `references`, `check (col in (...))`, unique (optionally
- * partial) indexes, `alter column ... drop not null|default`, and enable row
- * level security. It is not a Postgres. Anything it does not understand, it
+ * partial) indexes, `alter column ... drop not null|default`, enable row
+ * level security, `or=` filter trees, and the `Prefer` header. It is not a Postgres. Anything it does not understand, it
  * refuses loudly rather than ignoring — a fake that quietly skips a constraint
  * is worse than no fake.
  *
@@ -30,6 +30,17 @@
  * id cannot be used twice" would have passed while enforcing nothing.
  * parseColumn now consumes every clause it finds and THROWS on a leftover,
  * which is what makes the paragraph above checkable rather than aspirational.
+ *
+ * THREE MORE HOLES CLOSED 2026-08-26, all the same shape — a rule read past in
+ * silence rather than refused. (1) `headers` was accepted by JavaScript and
+ * consulted by nothing, so a store forgetting `Prefer: return=representation`
+ * passed here and 404'd in production off PostgREST's empty 204. (2) `matchesOr`
+ * scraped `project_id` out with a regex and never looked at `owner_user_id`, so
+ * the tenancy filter was half-read — in the over-permissive direction. (3) the
+ * unique index String()-compared, so two NULLs collided as the text 'null', a
+ * constraint Postgres does not have. This file is the harness for Studio slices
+ * 2/8-8/8; each of those was six more chances to ship a bug with a green run
+ * behind it.
  *
  * The one thing still declared and not exercised is `on delete cascade`:
  * DELETE is not implemented, and says so when called rather than pretending.
@@ -399,13 +410,73 @@ function parseQuery(query) {
   return params;
 }
 
-/** Only the two shapes lib/projectScope.js emits. */
-function matchesOr(row, orValue) {
-  const text = decodeURIComponent(String(orValue || ''));
-  const projectIds = [...text.matchAll(/project_id\.eq\.([^,)]+)/g)].map((m) => m[1]);
-  const allowsNullProject = /project_id\.is\.null/.test(text);
-  if (projectIds.includes(String(row.project_id))) return true;
-  return allowsNullProject && (row.project_id === null || row.project_id === undefined);
+/**
+ * One condition of a PostgREST `or=` filter: `col.eq.v`, `col.is.null`, or a
+ * nested `and(...)`/`or(...)`. Anything else throws rather than being read past.
+ */
+function parseFilterNode(text) {
+  const trimmed = String(text).trim();
+
+  const group = /^(and|or)\((.*)\)$/is.exec(trimmed);
+  if (group) {
+    return {
+      kind: group[1].toLowerCase(),
+      children: splitTopLevel(group[2]).map(parseFilterNode),
+    };
+  }
+  const equals = /^([a-z_][a-z0-9_]*)\.eq\.(.*)$/i.exec(trimmed);
+  if (equals) return { kind: 'eq', column: equals[1], value: equals[2] };
+
+  const isCheck = /^([a-z_][a-z0-9_]*)\.is\.(null|true|false)$/i.exec(trimmed);
+  if (isCheck) {
+    return { kind: 'is', column: isCheck[1], value: isCheck[2].toLowerCase() };
+  }
+  throw new Error(`sqlSchemaFake: unsupported or= condition "${trimmed}"`);
+}
+
+function evaluateFilterNode(row, node) {
+  if (node.kind === 'or') return node.children.some((child) => evaluateFilterNode(row, child));
+  if (node.kind === 'and') return node.children.every((child) => evaluateFilterNode(row, child));
+
+  const value = row[node.column];
+  const isNull = value === null || value === undefined;
+  if (node.kind === 'is') {
+    if (node.value === 'null') return isNull;
+    return value === (node.value === 'true');
+  }
+  // NULL is never equal to anything in SQL, not even to the text 'null'.
+  if (isNull) return false;
+  return String(value) === node.value;
+}
+
+/**
+ * A PostgREST `or=(...)` filter, evaluated properly.
+ *
+ * It used to scrape `project_id` out with two regexes and never look at
+ * `owner_user_id` at all — so the third shape lib/projectScope.js emits,
+ * `(project_id.eq.X,and(project_id.is.null,or(owner_user_id.eq.U,owner_user_id.is.null)))`,
+ * was read as "project X, or ANY row with a null project". That is
+ * over-permissive in the tenancy direction, which is the direction that matters:
+ * a store that leaked another user's legacy rows would have passed here. It was
+ * harmless on these two tables only because their project_id is NOT NULL, which
+ * is exactly the kind of accident that stops being true in slice 2/8.
+ *
+ * Now the whole condition tree is parsed and evaluated, and a shape this cannot
+ * read THROWS — the promise the header of this file makes.
+ */
+function parseOr(orValue) {
+  const text = decodeURIComponent(String(orValue || '')).trim();
+  const wrapped = /^\((.*)\)$/s.exec(text);
+  if (!wrapped) {
+    // PostgREST requires the parentheses; without them it reads the whole thing
+    // as a column name (see the note in lib/projectScope.js).
+    throw new Error(`sqlSchemaFake: or= must be parenthesised — got "${text}"`);
+  }
+  return splitTopLevel(wrapped[1]).map(parseFilterNode);
+}
+
+function matchesOr(row, conditions) {
+  return conditions.some((node) => evaluateFilterNode(row, node));
 }
 
 function createFakeDb(schema, { idPrefix = 'row' } = {}) {
@@ -478,13 +549,27 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     }
   }
 
+  /** A row Postgres would not consider for a unique index: any indexed column null. */
+  function hasNullIndexColumn(index, row) {
+    return index.columns.some((column) => row[column] === null || row[column] === undefined);
+  }
+
   function uniqueViolation(tableName, row, skipRow = null) {
     for (const index of schema.indexes) {
       if (index.table !== tableName || !index.unique) continue;
       if (!index.predicate(row)) continue;
+      // NULL is never equal to NULL, so a null in ANY indexed column means the
+      // row simply is not a candidate for that index. The comparison below is
+      // String()-based, which made two nulls collide as the text 'null' — a
+      // constraint Postgres does not have, invented by the fake. The inline
+      // `unique` path dodged it via its own predicate; the named
+      // `create unique index` path did not, and that is the path slice 2/8
+      // inherits.
+      if (hasNullIndexColumn(index, row)) continue;
       for (const existing of data.get(tableName)) {
         if (existing === skipRow) continue;
         if (!index.predicate(existing)) continue;
+        if (hasNullIndexColumn(index, existing)) continue;
         if (index.columns.every((column) => String(existing[column]) === String(row[column]))) {
           return `duplicate key value violates unique constraint "${index.name}" (23505)`;
         }
@@ -608,7 +693,15 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       if (!match) throw new Error(`sqlSchemaFake: unsupported filter ${key}=${value}`);
       rows = rows.filter((row) => String(row[key]) === match[1]);
     }
-    if (params.has('or')) rows = rows.filter((row) => matchesOr(row, params.get('or')));
+    if (params.has('or')) {
+      // Parsed BEFORE the filter runs, not inside the predicate. `.filter()`
+      // never calls its callback on an empty table, so an unreadable condition
+      // sailed through as "no filter" whenever nothing had been inserted yet —
+      // and a query matching nothing is exactly the shape of the cross-project
+      // tests here. Same reasoning as the PATCH column check below.
+      const conditions = parseOr(params.get('or'));
+      rows = rows.filter((row) => matchesOr(row, conditions));
+    }
 
     // Order BEFORE limit, as SQL does — limiting first would return a
     // different set of rows, not merely a differently-sorted one.
@@ -623,8 +716,50 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     return rows;
   }
 
-  async function sbQuery({ method = 'GET', table: tableName = '', query = '', body = undefined } = {}) {
-    calls.push({ method, table: tableName, query, body });
+  /**
+   * What the caller asked to get BACK — the header this fake ignored entirely.
+   *
+   * `sbQuery` destructured `{ method, table, query, body }` only, so `headers`
+   * was accepted by JavaScript and consulted by nothing. PostgREST answers a
+   * POST with no `Prefer: return=representation` with **201 and an empty body**,
+   * and a PATCH with **204 and an empty body** — lib/supabase.js turns both into
+   * `data: null`. So a store that forgets the header reads `res.data[0]` as
+   * undefined and returns a spurious 404 in production, while passing every test
+   * here. This file is the harness for Studio slices 2/8-8/8; that is six more
+   * chances to ship the bug with a green run behind it.
+   *
+   * An unknown header, or an unknown Prefer token, THROWS — the same bargain the
+   * unsupported-clause and unknown-type checks already make.
+   */
+  function wantsRepresentation(headers) {
+    const names = Object.keys(headers || {});
+    const unknown = names.filter((name) => name.toLowerCase() !== 'prefer');
+    if (unknown.length) {
+      throw new Error(
+        `sqlSchemaFake: header(s) ${unknown.join(', ')} are not implemented, so a test `
+        + 'using one would prove nothing. Add support or drop the header.'
+      );
+    }
+    const prefer = names.length ? String(headers[names[0]] || '') : '';
+    if (!prefer.trim()) return false;
+
+    let asked = false;
+    for (const token of prefer.split(',').map((part) => part.trim().toLowerCase())) {
+      if (!token) continue;
+      if (token === 'return=representation') asked = true;
+      else if (token === 'return=minimal') asked = false;
+      else {
+        throw new Error(`sqlSchemaFake: Prefer token "${token}" is not implemented`);
+      }
+    }
+    return asked;
+  }
+
+  async function sbQuery({
+    method = 'GET', table: tableName = '', query = '', body = undefined, headers = {},
+  } = {}) {
+    calls.push({ method, table: tableName, query, body, headers });
+    const representation = wantsRepresentation(headers);
     const table = schema.tables.get(tableName);
     if (!table) {
       return { ok: false, status: 404, error: `relation "public.${tableName}" does not exist` };
@@ -670,7 +805,8 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         data.get(tableName).push(row);
         created.push({ ...row });
       }
-      return { ok: true, status: 201, data: created };
+      // 201 either way; the BODY is what the header decides. See above.
+      return { ok: true, status: 201, data: representation ? created : null };
     }
 
     if (method === 'PATCH') {
@@ -699,7 +835,10 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         Object.assign(row, body);
         updated.push({ ...row });
       }
-      return { ok: true, status: 200, data: updated };
+      // PostgREST answers 204, not 200, when no representation was asked for.
+      return representation
+        ? { ok: true, status: 200, data: updated }
+        : { ok: true, status: 204, data: null };
     }
 
     if (String(method).toUpperCase() === 'DELETE') {

@@ -1,4 +1,4 @@
-## 2026-08-25 — Somewhere to write down what footage exists (#422)
+## 2026-08-26 — Somewhere to write down what footage exists (#422)
 
 The video Studio needs a filing cabinet before it can have a workshop: a record
 of which recording sessions exist and which files belong to each one. This is
@@ -83,6 +83,52 @@ Proved the same way as before, and deliberately: each of the seven fixes was
 broken on purpose and the matching test failed each time, and both of the
 serious ones were reproduced against a real database on the old code before
 being confirmed fixed on the new.
+
+A fifth review found six more, and the first one is the plainest example of
+this whole pattern yet. There are two ways to spell the name of anything in
+this system — `durationS` if you are writing code, `duration_s` if you are
+looking at the database. Filing a new file accepted both spellings. Updating
+one accepted only the first. So a piece of equipment reporting "this video is
+99.5 seconds long" using the database's own spelling was told "saved" and the
+old wrong length stayed. Nothing about that input was wrong. It was correct
+data, in a correct field, dropped because of how it was spelled. And the only
+code that will ever write those numbers is the next three pieces of this
+project, which naturally use exactly that spelling. Both spellings now work
+everywhere, giving the same field twice with two different answers is refused
+rather than one being quietly picked, and a field name that is simply a typo is
+now turned away instead of being ignored inside an otherwise successful save.
+
+The session's chosen audio file got the same treatment one level deeper. Last
+round taught it to refuse another client's file; it turned out it would still
+accept a file belonging to a different session of your own. Delete that other
+session and the first one is left pointing at something that no longer exists.
+It now requires the file to belong to the session that is naming it.
+
+Dates were the last of it, and the worst behaved. Handing over the number zero
+where a date belongs stored "1 January 2000" — a real moment in time, invented
+out of something that was not a date at all, reported as success. Asking for
+the 30th of February stored the 2nd of March. And a time written without a time
+zone was read in whatever zone the computer happened to be in, so the same
+recording filed from the Mac Mini and from the laptop landed six hours apart.
+All three are now refused or made consistent, which matters because these dates
+are how footage gets lined up in the edit.
+
+The other three were in the miniature stand-in database the tests run against.
+It is going to be the test bench for the next seven pieces of this project, so
+a rule it pretends to enforce is a rule that gets broken seven more times. It
+was ignoring an instruction about what to send back — the exact mistake that
+would make new code work perfectly in tests and fail on the live site. It was
+only half-reading the rule about which client owns which row, in the direction
+that shows too much rather than too little. And it treated two blanks as
+identical to each other, inventing a restriction the real database does not
+have.
+
+All six were reproduced against a real database on the old code first, then
+confirmed gone on the new. Each fix was also broken on purpose to watch the
+right test fail — and that exercise caught something on its own: two of the
+safety checks covered each other so completely that either could be deleted
+with every test still passing. A check that cannot fail is not a check, so a
+test was added that tells them apart.
 
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
