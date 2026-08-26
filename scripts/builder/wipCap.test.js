@@ -168,6 +168,65 @@ test('the ticket id is read out of the PR body', () => {
   assert.equal(ticketIdFromPrBody(undefined), null);
 });
 
+test('it reads a body exactly as loosely as pr-opened ACCEPTS one', () => {
+  // Review round 2. The gate that guarantees every loop-opened PR carries its
+  // ticket is prBodyCarriesTicket in loopTrail.js, and it takes a BARE id
+  // case-insensitively. This reader demanded a URL and matched case-sensitively
+  // against a lowercase map — so a body reading `ClickUp: 86bbm4zwd` sailed
+  // through pr-opened and then went UNCOUNTED here. That is the cap failing
+  // OPEN, the direction this ticket calls the dangerous one.
+  //
+  // BREAK TEST: revert ticketIdFromPrBody to `return m ? m[1] : null` with no
+  // knownIds scan, and the first two assertions fail. Watched fail.
+  const known = ['86bbm4zwd', '86bbk2fuh'];
+  assert.equal(ticketIdFromPrBody('ClickUp: 86bbm4zwd', known), '86bbm4zwd',
+    'a bare id is what pr-opened accepts, so it must be what this reads');
+  assert.equal(ticketIdFromPrBody('see https://app.clickup.com/t/86BBM4ZWD', known), '86bbm4zwd',
+    'the URL ClickUp\'s own UI copies is mixed case; the map is keyed lowercase');
+  assert.equal(ticketIdFromPrBody('a run like 86bbm4zwdxx is not that id', known), null,
+    'and it must not match an id buried inside a longer word');
+  assert.equal(ticketIdFromPrBody('nothing familiar here', known), null);
+});
+
+test('the two readers agree — anything pr-opened lets through, the cap can count', () => {
+  // The property, asserted against the REAL gate rather than a description of
+  // it, so the two cannot drift apart again without this failing.
+  const { prBodyCarriesTicket } = require('./loopTrail');
+  const id = '86bbm4zwd';
+  const bodies = [
+    `Ticket: https://app.clickup.com/t/${id}`,
+    `Ticket: https://app.clickup.com/t/90141423066/${id}`,
+    `ClickUp: ${id}`,
+    `Closes ${id.toUpperCase()}.`,
+  ];
+  for (const body of bodies) {
+    assert.ok(prBodyCarriesTicket(body, id), `pr-opened accepts: ${body}`);
+    assert.equal(ticketIdFromPrBody(body, [id]), id,
+      `so the cap must resolve it too, or the PR silently stops counting: ${body}`);
+  }
+});
+
+test('casing on EITHER side — the PR body or the queue — must not decide the count', () => {
+  // Two separate lowercasings, so two assertions. The reader lowercases what
+  // it captures; classifyPrs lowercases the map keys. Drop either one and a
+  // real, in-flight PR silently stops counting — the cap failing OPEN.
+  //
+  // BREAK TEST: drop `.toLowerCase()` from the captured id and the first fails;
+  // drop it from the map keys and the second fails. Both watched fail.
+  const bodyCased = classifyPrs({
+    prs: [pr(1, '86BBM4ZWD')],
+    ticketStatusById: { '86bbm4zwd': 'Building' },
+  });
+  assert.deepEqual(bodyCased.inFlight, [1], 'a mixed-case id in the PR body must still resolve');
+
+  const queueCased = classifyPrs({
+    prs: [pr(2, '86bbm4zwd')],
+    ticketStatusById: { '86BBM4ZWD': 'Building' },
+  });
+  assert.deepEqual(queueCased.inFlight, [2], 'a mixed-case id from the QUEUE must still resolve');
+  assert.deepEqual(queueCased.unknown, []);
+});
+
 test('only in-flight tickets count; queued rework and live zombies do not', () => {
   const prs = [pr(1, 'tBuild'), pr(2, 'tReview'), pr(3, 'tReady'), pr(4, 'tQueued'), pr(5, 'tLive'), pr(6, null)];
   const g = classifyPrs({ prs, ticketStatusById: {
@@ -244,7 +303,39 @@ test('an unknown status is not counted AND is not mislabelled as live', () => {
   const g = classifyPrs({ prs: [pr(9, 'x')], ticketStatusById: { x: 'Some New Status' } });
   assert.deepEqual(g.inFlight, []);
   assert.deepEqual(g.live, []);
-  assert.deepEqual(g.unknown, [9], 'unrecognised means unknown, not shipped');
+  assert.deepEqual(g.queued, []);
+  // UPDATED AGAIN after review round 2: it must not be filed as "no ticket
+  // found" either. A ticket WAS found — saying otherwise sends the reader
+  // hunting for a missing ClickUp link that is not missing, which is round
+  // 1's finding 1 in a different bucket.
+  assert.deepEqual(g.unknown, [], 'a ticket was found, so this is not "no ticket found"');
+  assert.deepEqual(g.unrecognised, [{ number: 9, status: 'Some New Status' }],
+    'and the status it did not recognise is carried, so the message can quote it');
+});
+
+test('the message says WHICH status it did not recognise, and does not call it missing', () => {
+  // The wording is the whole fix: "no ticket found" for a PR whose ticket is
+  // right there is a false statement, and it costs the reader a hunt. Naming
+  // the status also makes the line actionable — either IN_FLIGHT_STATUSES is
+  // out of date, or somebody typed a status by hand.
+  const { message } = wipDecision({
+    prs: [pr(1, 'a'), pr(2, 'b')], cap: 5,
+    ticketStatusById: { a: 'Building', b: 'Parked Indefinitely' },
+  });
+  assert.match(message, /unrecognised status/);
+  assert.match(message, /#2 — "Parked Indefinitely"/, 'quoted verbatim, in ClickUp\'s own casing');
+  assert.doesNotMatch(message, /no ticket found/,
+    'a ticket WAS found — reporting a missing link that is not missing is the defect');
+});
+
+test('a PR with genuinely no ticket still reports as no ticket found', () => {
+  // The other side of the split: separating the buckets must not lose the
+  // case criterion 4 is about. Reported by number, never counted, exit still 0.
+  const d = wipDecision({ prs: [pr(1, 'a'), pr(7, null)], cap: 5, ticketStatusById: { a: 'Building' } });
+  assert.deepEqual(d.groups.unknown, [7]);
+  assert.deepEqual(d.groups.unrecognised, []);
+  assert.equal(d.code, 0, 'an unidentifiable PR must not stop the pass');
+  assert.match(d.message, /1 with no ticket found \(#7\)/);
 });
 
 test('Needs your input counts as in flight — it is operator-held, like Ready to launch', () => {
@@ -293,4 +384,47 @@ test('a failed read falls back to the STRICTER counting, never to uncapped', () 
   const d = wipDecision({ prs, cap: 5 });
   assert.equal(d.claim, false, 'no ticket data must mean MORE restrictive, not less');
   assert.equal(d.code, 3, 'and a normal decline, never exit 1 which means "proceed uncapped"');
+});
+
+// ── The doc must describe THIS code, not the code it replaced ─────────────
+// Review round 2, finding 4: the section added to LOOP_ENGINEERING.md listed
+// three counting statuses where the code has four, and described the reconcile
+// scan as newest-PR-only after round 1 had already made it check every PR. Both
+// were true of an earlier draft. A doc that documents the bug is worse than no
+// doc, because the operator has no way to tell — so the claims that can be
+// mechanically checked are checked here rather than re-read by hand.
+
+const LOOP_DOC = fs.readFileSync(path.join(__dirname, '../../docs/LOOP_ENGINEERING.md'), 'utf8');
+
+test('the doc names every status that counts, and none that does not', () => {
+  const { IN_FLIGHT_STATUSES } = require('./wipCap');
+  const start = LOOP_DOC.indexOf('## The work-in-progress cap');
+  assert.ok(start > -1, 'the section must exist — a doc nobody can find is not a doc');
+  const section = LOOP_DOC.slice(start, LOOP_DOC.indexOf('\n## ', start + 5));
+
+  for (const status of IN_FLIGHT_STATUSES) {
+    // Backticked, in the doc's own Title Case, as ClickUp shows it.
+    const shown = status.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bIn Review\b/, 'In review');
+    assert.ok(new RegExp(`\`${shown}\``, 'i').test(section),
+      `IN_FLIGHT_STATUSES has "${status}" but the doc's cap section never mentions it`);
+  }
+  // And the reverse: a status that does NOT count must not be listed as one.
+  // `Queued` and `Live` appear in the section on purpose — as the things that
+  // count zero — so this checks the sentence that enumerates what counts.
+  const sentence = /A PR counts only when its ticket is ([^.]+)\./.exec(section);
+  assert.ok(sentence, 'the doc must state plainly which statuses count');
+  for (const notCounted of ['Queued', 'Live']) {
+    assert.ok(!sentence[1].includes(notCounted),
+      `"${notCounted}" does not count, so it must not appear in the sentence that says what does`);
+  }
+});
+
+test('the doc does not describe the reconcile scan as newest-PR-only', () => {
+  const start = LOOP_DOC.indexOf('**The matching drift check.**');
+  assert.ok(start > -1, 'the reconcile paragraph must exist');
+  const para = LOOP_DOC.slice(start, start + 1200);
+  assert.doesNotMatch(para, /newest PR is still open/,
+    'round 1 replaced newest-only with every-distinct-PR; the doc documented the bug');
+  assert.match(para, /any linked PR still open|every distinct PR/i,
+    'it must say what the code actually does');
 });

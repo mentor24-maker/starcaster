@@ -84,16 +84,65 @@ const IN_FLIGHT_STATUSES = Object.freeze([
 const TERMINAL_STATUSES = Object.freeze(['live', 'complete', 'closed', 'done']);
 
 /**
- * The ClickUp task id a pull request declares in its body.
+ * Where `id` appears in `haystack` as a WHOLE id rather than as part of a
+ * longer alphanumeric run, or -1. Both are lowercase already.
+ *
+ * Plain scanning rather than a built regex: a ClickUp id is alphanumeric, so
+ * it needs no escaping, and building ~140 regexes per pull request to answer
+ * a substring question is work for nothing.
+ */
+function indexOfWholeId(haystack, id) {
+  for (let from = 0; ;) {
+    const at = haystack.indexOf(id, from);
+    if (at === -1) return -1;
+    const before = at === 0 ? '' : haystack[at - 1];
+    const after = haystack[at + id.length] || '';
+    if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return at;
+    from = at + 1;
+  }
+}
+
+/**
+ * The ClickUp task id a pull request declares in its body, lowercased.
  *
  * Reliable because `pr-opened` REFUSES to record a PR whose body carries no
  * link back to its ticket — so every PR the loops open has one by
  * construction. A PR without one is hand-made, and is reported rather than
  * counted (see classifyPrs).
+ *
+ * READ IT EXACTLY AS LOOSELY AS THAT GATE ACCEPTS IT (2026-08-25, review
+ * round 2). The gate is `prBodyCarriesTicket` in scripts/builder/loopTrail.js,
+ * and it takes the full URL **or a bare task id**, case-insensitively. This
+ * used to demand the URL and capture it verbatim, so a body reading
+ * `ClickUp: 86bbm4zwd` — or a URL in the mixed case ClickUp's own UI hands
+ * out — passed `pr-opened` and then landed in `unknown` here, uncounted.
+ * That is the cap failing OPEN, the direction this ticket calls dangerous.
+ * Two functions disagreeing about the same string is what makes a bug like
+ * that arrive later and silently, so they are matched deliberately.
+ *
+ * @param {string} body        the pull request body
+ * @param {Iterable<string>} [knownIds]  every ticket id in the queue, which is
+ *   what makes a BARE id findable at all — without a URL there is nothing in
+ *   the text marking one alphanumeric word as an id, so it is recognised by
+ *   being one we know. Omitted, only the URL form resolves.
  */
-function ticketIdFromPrBody(body) {
-  const m = /app\.clickup\.com\/t\/(?:\d+\/)?([a-z0-9]+)/i.exec(String(body || ''));
-  return m ? m[1] : null;
+function ticketIdFromPrBody(body, knownIds) {
+  const text = String(body || '');
+  const m = /app\.clickup\.com\/t\/(?:\d+\/)?([a-z0-9]+)/i.exec(text);
+  if (m) return m[1].toLowerCase();
+
+  const hay = text.toLowerCase();
+  // The EARLIEST id mentioned wins, so the answer does not depend on the order
+  // ClickUp happened to return the queue in. A body naming two tickets is
+  // already odd; giving it an unstable answer would make it unreproducible too.
+  let best = null;
+  for (const raw of knownIds || []) {
+    const id = String(raw || '').trim().toLowerCase();
+    if (!id) continue;
+    const at = indexOfWholeId(hay, id);
+    if (at !== -1 && (best === null || at < best.at)) best = { id, at };
+  }
+  return best ? best.id : null;
 }
 
 /**
@@ -101,17 +150,37 @@ function ticketIdFromPrBody(body) {
  * rather than a bare total. A bare total is what made the deadlock invisible
  * for four passes: "7 open, cap 5" is true and useless.
  *
- * `ticketStatusById` is a plain object of id -> status string. A PR whose
- * ticket is absent from it is `unknown` — reported, never counted.
+ * `ticketStatusById` is a plain object of id -> status string; its keys are
+ * lowercased here, because `ticketIdFromPrBody` lowercases what it reads and a
+ * mixed-case key would then miss (review round 2).
+ *
+ * FOUR buckets do not count, and they are kept APART on purpose:
+ *
+ *   queued        rework the loop must be free to claim
+ *   live          the work shipped elsewhere; the PR is a leftover
+ *   unknown       no ticket could be found for the PR at all
+ *   unrecognised  a ticket WAS found, in a status this file does not know
+ *
+ * The last two used to share one bucket reported as "no ticket found", which
+ * is a false statement about the second: it sends the reader hunting for a
+ * missing ClickUp link that is not missing. That is verbatim the shape review
+ * round 1 rejected for `live`, so it gets the same treatment — say the thing
+ * you actually know, including the status you did not recognise.
  */
 function classifyPrs({ prs, ticketStatusById } = {}) {
-  const byId = ticketStatusById && typeof ticketStatusById === 'object' ? ticketStatusById : {};
-  const groups = { inFlight: [], queued: [], live: [], unknown: [] };
+  const source = ticketStatusById && typeof ticketStatusById === 'object' ? ticketStatusById : {};
+  const byId = Object.create(null);
+  for (const [k, v] of Object.entries(source)) byId[String(k).trim().toLowerCase()] = v;
+  const knownIds = Object.keys(byId);
+
+  const groups = { inFlight: [], queued: [], live: [], unknown: [], unrecognised: [] };
   for (const pr of Array.isArray(prs) ? prs : []) {
     if (!pr || typeof pr !== 'object') continue;
     if (String(pr.state || 'OPEN').toUpperCase() !== 'OPEN') continue;
-    const id = ticketIdFromPrBody(pr.body);
-    const status = id ? String(byId[id] || '').trim().toLowerCase() : '';
+    const id = ticketIdFromPrBody(pr.body, knownIds);
+    // Kept in the casing ClickUp gave it, so the message can quote it back.
+    const raw = id ? String(byId[id] ?? '').trim() : '';
+    const status = raw.toLowerCase();
     if (!id || !status) groups.unknown.push(pr.number);
     else if (IN_FLIGHT_STATUSES.includes(status)) groups.inFlight.push(pr.number);
     else if (status === 'queued') groups.queued.push(pr.number);
@@ -119,7 +188,7 @@ function classifyPrs({ prs, ticketStatusById } = {}) {
     // A status nobody anticipated: not counted, and NOT called "live" — that
     // label is a claim about the work having shipped, and a wrong claim here
     // is what this ticket exists to stop.
-    else groups.unknown.push(pr.number);
+    else groups.unrecognised.push({ number: pr.number, status: raw });
   }
   return groups;
 }
@@ -169,13 +238,23 @@ function wipDecision({ prs, cap, ticketStatusById } = {}) {
 
   const groups = classifyPrs({ prs, ticketStatusById });
   const inFlight = groups.inFlight.length;
-  const notCounted = groups.queued.length + groups.live.length + groups.unknown.length;
+  const notCounted = groups.queued.length + groups.live.length
+    + groups.unknown.length + groups.unrecognised.length;
 
   // The split, always — a bare total is what hid the 2026-08-25 deadlock.
   const parts = [];
   if (groups.queued.length) parts.push(`${groups.queued.length} queued for rework (#${groups.queued.join(', #')})`);
   if (groups.live.length) parts.push(`${groups.live.length} whose ticket is already live (#${groups.live.join(', #')})`);
   if (groups.unknown.length) parts.push(`${groups.unknown.length} with no ticket found (#${groups.unknown.join(', #')})`);
+  // Said separately from "no ticket found", because a ticket WAS found here
+  // (review round 2). Reporting a missing ClickUp link that is not missing
+  // sends the reader after drift that does not exist — and naming the status
+  // is what turns this line into something actionable: either the status list
+  // in this file is out of date, or someone typed a status by hand.
+  if (groups.unrecognised.length) {
+    parts.push(`${groups.unrecognised.length} whose ticket is in an unrecognised status (`
+      + groups.unrecognised.map((u) => `#${u.number} — "${u.status}"`).join('; ') + ')');
+  }
   const tail = notCounted ? `\n${notCounted} open PR(s) not counted: ${parts.join('; ')}.` : '';
 
   if (inFlight >= limit) {
