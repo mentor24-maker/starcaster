@@ -32,6 +32,26 @@ party line and keeps saying so every hour, because a pipeline that is paused
 and a pipeline that is broken look identical from the outside — which is
 exactly the confusion that cost most of today.
 
+The independent check on this work found two holes in it before it shipped, and
+both are worth knowing about because they are the same shape. The switch keeps
+its state as a note on a ClickUp ticket, and the hourly "still paused" reminder
+is *also* a note on that same ticket — and ClickUp only hands back the newest
+twenty-five. So after about a day of reminders, the reminders had pushed the
+original "PAUSED" note out of sight, the machines could no longer find it, and
+they would have quietly gone back to work while you still had the deck. The two
+best features cancelled each other out, overnight, in the one place that was
+supposed to be careful. It now reads the *whole* history, and separately, a
+reminder with no pause behind it is treated as "I could not read this properly"
+rather than "nothing to see" — because a reminder only ever gets written while
+the line is off, so seeing one alone proves something is missing.
+
+The second was smaller and would have hit you first: every command written down
+here was missing two characters. `npm run` quietly swallows anything starting
+with a dash unless you put `--` in front, so typing the resume command exactly
+as documented got you told off for leaving out the very word you had just
+typed. Every command in every document now has it, and there is a check that
+fails if one ever loses it again.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp
