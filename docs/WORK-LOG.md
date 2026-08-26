@@ -1,3 +1,43 @@
+## 2026-08-25 — One command that answers what is actually waiting on you (#435)
+
+Twice on the evening of the 23rd an agent told you something needed you when it
+did not, and you went and dealt with it both times. Eleven of the "seventeen
+tickets waiting on your merge word" already had your approval on them — they
+were stuck on a machine that could not reach GitHub. And the YouTube worker
+question you were asked a second time, you had already answered "A" an hour
+before. Neither agent was lying or thinking badly. Both had stated something
+about how things stood right now while reading something that was not how
+things stood right now — an old terminal window in one case, a stale memory of
+a list in the other. In both cases the true answer was one lookup away.
+
+Writing down a rule would not have fixed it, because the problem is that asking
+"wait, is this really his?" takes a moment of doubt, and nobody had a quick way
+to settle it. So instead there is now a command that is faster to run than the
+sentence is to think about: `npm run clickup -- waiting`. With no arguments it
+sweeps every open ticket in both lists you watch and shows only the ones that
+genuinely need you. Point it at one ticket and it prints that ticket's status,
+whether your name is on it, who spoke last and what they said, and then its
+verdict.
+
+It works out that verdict from three things it has just looked up, and nothing
+else: which column the ticket is in, whether you are assigned, and whether the
+newest comment is yours. If the newest comment is yours, it is never waiting on
+you — you have spoken, something else owes the next move. And when it cannot
+establish one of those three facts it says "cannot tell" and names the reason,
+rather than picking the comfortable answer. Guessing "nothing needs you" is how
+a question you already answered sits unread for nine hours.
+
+The same rule now guards the other direction. The command that hands a ticket
+back to you refuses to do it when your own comment is already the newest one —
+that is the "please answer this a third time" failure, and it was arriving
+through the very thing built to stop it.
+
+It proved itself on its first live run. Two tickets are sitting in Ready to
+launch with your name on them where you already typed "merge" — the exact shape
+that produced the wrong sentence on the 23rd. The old way of looking would call
+those two things waiting on you. The command says they are not: you did your
+part, a machine owes those merges.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp
