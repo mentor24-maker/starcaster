@@ -62,6 +62,47 @@ rule teaches people to route around it. Those words now only count when
 something in the same sentence actually proposes the act: "approve the
 deletion" still asks for proof, "the deletion already happened" does not.
 
+A third review round found the heading getting the time wrong for the third
+time, and it is worth saying why that one mattered more than the others.
+Everywhere else this rule REFUSES something, and being wrong costs a reword.
+The heading is the one place it TELLS you something — "measured at 8:04pm" —
+so being wrong there means the card states, in the machine's own voice, that a
+check was run at a time it was not. That is the same shape as the mistake the
+whole thing exists to prevent.
+
+Each of the three attempts had picked the time by where it sat in the sentence:
+the first one, then the first one outside the printout, then the last one. Each
+worked until somebody wrote the sentence a slightly different way. "I re-ran
+the chat call at 9:40pm, well after the outage that began at 3:12pm" got read
+as 3:12pm, because the words "re-ran" were allowed to claim every time later in
+the sentence. The rule now says something different in kind: the phrase that
+means "I ran this" belongs to the ONE time it introduces and no further. And if
+an agent genuinely marks two different times as the run, the card no longer
+picks a winner — it stops and asks which one to print.
+
+Three smaller holes went with it. A time written on its own next to a printout
+that carries its own timestamp is no longer trusted, because a bare time next
+to a log is usually the thing that broke rather than the check that was run. A
+command typed across two lines with a backslash was counting as "a command plus
+its output" when there was no output at all. And the short list of harmless
+phrases was being cut out of the text letter by letter rather than word by
+word, so "pays offshore contractors" lost the phrase "pays off" out of the
+middle of a word and stopped counting as money. Related: the words that turn a
+noun into a request only knew their plainest spelling, so "proceeding with the
+deletion", "performing the key rotation", "kicking off the migration" and
+"signing off on the invoice" all posted with no proof required — all of them
+ordinary English for exactly the things this rule is meant to catch.
+
+One thing was deliberately left alone, and it is yours to call rather than
+mine. Any dollar figure in a request trips the rule, even when the card is not
+asking for anything — so "nothing needed, the Vercel bill came to $30 last
+month" gets refused and has to be reworded. Requiring a request-word alongside
+the figure would fix that, but it would also let "$29/month for Business or $49
+for the tier above?" through silently, and that one is a real question about
+your money. Which way that should go is a judgment about how much plain English
+a word-matching rule ought to chase, and it seemed better to say so than to
+quietly pick.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone

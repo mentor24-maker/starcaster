@@ -460,6 +460,103 @@ test('a clock needs a boundary after am/pm, or a timezone reads as a time', () =
   assert.equal(evidenceTimestamp('measured at 10:15am, America/New_York'), '10:15am');
 });
 
+// -------------------------------------- review round 3: the measured-at clock
+
+test('a cue does not reach past the clock it introduces', () => {
+  // THE ROUND-3 BLOCKER, and the third recurrence of one mis-dating. Every
+  // earlier version let a cue govern the whole rest of its sentence and then
+  // picked a clock by position — first, first-in-prose, last. Authors narrate
+  // AFTER the run time as readily as before it, so "last wins" dated this card
+  // by the outage: the one place the gate asserts something to Dane rather
+  // than refusing something, shipping a false claim about a live system.
+  const narratedAfter = [
+    'I re-ran the failing chat POST at 9:40pm, well after the outage that began at 3:12pm.',
+    '```',
+    '$ curl -sS .../chat',
+    '{"ok":true} 200',
+    '```',
+  ].join('\n');
+  assert.equal(evidenceTimestamp(narratedAfter), '9:40pm');
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: narratedAfter })));
+  assert.match(out, /THE CHECK BEHIND THIS ASK — measured at 9:40pm/);
+  assert.doesNotMatch(out, /measured at 3:12pm/,
+    'the outage time is narration, not the measurement');
+  // The compressed spelling of the same sentence.
+  assert.equal(evidenceTimestamp('I re-ran it at 9:40pm, after the 3:12pm outage.\n```\ncmd\nout\n```'), '9:40pm');
+  // ...and the order the round-2 test pinned still reads the same way.
+  assert.equal(evidenceTimestamp('The outage began at 3:12pm. I re-ran it at 8:04pm.\n```\ncmd\nout\n```'), '8:04pm');
+});
+
+test('two times both marked as the run are refused, not ranked', () => {
+  // There is no position that means "this is the measurement" — rounds 1-3
+  // each picked one and each was wrong on the next sentence somebody wrote.
+  // So the card asks, which costs a reword; the alternative is a wrong
+  // "measured at", which is a false statement about a live system.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'I checked it at 3:12pm and re-ran it at 9:40pm.',
+      '```',
+      '$ curl -sS .../plan',
+      '{"plan_name":"Free Forever"} 200',
+      '```',
+    ].join('\n'),
+  })));
+  assert.match(problems.join('\n'), /marks more than one time as the run/);
+  assert.match(problems.join('\n'), /Leave one time/);
+});
+
+test('a bare prose clock beside a stamped log is refused', () => {
+  // The docstring used to claim a lone clock has "nothing to confuse it with".
+  // It does when the output carries a time of its own — and a bare clock next
+  // to a log is usually the thing that BROKE, not the check that was run.
+  const evidence = [
+    'The chat channel began refusing writes at 3:12pm.',
+    '```',
+    '[8:04pm] POST /chat -> 200 OK',
+    'verified in the channel',
+    '```',
+  ].join('\n');
+  assert.equal(evidenceTimestamp(evidence), null,
+    'it must not date the card by the outage');
+  const problems = validateCard(parseCard(card({ needed: COSTLY_ASK, evidence })));
+  assert.match(problems.join('\n'), /one time in the prose and another inside the pasted block/);
+});
+
+test('a line-continued command with nothing under it is refused', () => {
+  // The output rule counts pasted lines and wants two. A backslash-continued
+  // command is two lines by itself, so it satisfied the count with no output
+  // at all — "a claim about what would happen", which is the exact shape of
+  // the wrong diagnosis this gate exists for.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'Measured at 8:04pm.',
+      '```',
+      'curl -s https://api.clickup.com/api/v2/team \\',
+      '  -H "Authorization: $TOKEN"',
+      '```',
+    ].join('\n'),
+  })));
+  assert.match(problems.join('\n'), /command with no output under it/);
+});
+
+test('a line-continued command WITH its output is accepted', () => {
+  // The other half, because a gate that misdiagnoses good input gets routed
+  // around and then protects nothing.
+  assert.deepEqual(validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'Measured at 8:04pm.',
+      '```',
+      'curl -s https://api.clickup.com/api/v2/team \\',
+      '  -H "Authorization: $TOKEN"',
+      '{"plans":[{"plan_name":"Free Forever"}]}',
+      '```',
+    ].join('\n'),
+  }))), []);
+});
+
 // --------------------------------------------- the guard inside clickup_direct
 
 /**

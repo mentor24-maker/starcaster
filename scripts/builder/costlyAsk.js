@@ -153,6 +153,33 @@ const TRIGGERS = [
  * cues appears in the SAME sentence, so "approve the deletion", "run the
  * migration" and "authorise the key rotation" all still fire.
  *
+ * EVERY CUE CARRIES ALL THREE FORMS — base, gerund, third-person — for exactly
+ * the reason the TRIGGERS list does, and it was found the same way. Review
+ * round 3 (2026-08-26) put natural inflections through the shipped function
+ * and every one of them was SILENT: "proceeding with the deletion of the 550
+ * rows", "performing the key rotation on Tuesday", "this executes the
+ * migration tonight", "this triggers the migration of every page", "kicking
+ * off the migration at 9pm", "signing off on the invoice". Those are ordinary
+ * English spellings of exactly the acts criterion 1 names, and they posted
+ * with no evidence demanded at all. The completeness test below names the cue
+ * families, because the old test only asserted that each LISTED cue fires —
+ * which is green while a form is missing, the same blind spot that let the
+ * `cost` hole through round 2.
+ *
+ * PAST TENSE IS ABSENT HERE TOO, and for a sharper reason than on the triggers:
+ * adding it would REGRESS round 2's own fix. "Nothing needed — I ran the
+ * migration last week" is a report, and a past-tense `ran` cue would refuse it,
+ * which is the precise false-positive class that fix was made to close. So
+ * "Started the subscription on the paid tier" stays silent by design; it
+ * describes something already done, and the gate fires on what a YES would
+ * cause.
+ *
+ * The accepted cost of the third-person forms, said out loud rather than
+ * discovered later: a cue can also read descriptively, so "Nothing needed —
+ * the migration runs nightly now" fires and has to be reworded. That is the
+ * cheap direction. A reword costs one line; silence on a costly ask is the
+ * incident at the top of this file.
+ *
  * The known limit, stated rather than hidden: a bare noun phrase with no verb
  * at all ("The key rotation — yes or no?") does not fire. The verb forms are
  * the primary net; this list only rescues the noun spellings.
@@ -160,22 +187,40 @@ const TRIGGERS = [
 const PROPOSAL_CUES = [
   { word: 'approve', why: 'the commonest way an operator ask is phrased: "approve the deletion".' },
   { word: 'approving', why: 'the gerund — "approving the rotation" — is the same request.' },
-  { word: 'approves', why: 'third person, for consistency with the trigger list\'s own rule.' },
+  { word: 'approves', why: 'third person: "this approves the deletion of all 550 rows".' },
   { word: 'authorise', why: 'the British spelling of the same act; both are in use here.' },
+  { word: 'authorising', why: 'gerund, British spelling — "authorising the rotation".' },
+  { word: 'authorises', why: 'third person, British spelling: "this authorises the deletion".' },
   { word: 'authorize', why: 'the American spelling of the same act.' },
-  { word: 'authorising', why: 'gerund, British spelling.' },
-  { word: 'authorizing', why: 'gerund, American spelling.' },
+  { word: 'authorizing', why: 'gerund, American spelling — "authorizing the rotation".' },
+  { word: 'authorizes', why: 'third person, American spelling: "this authorizes the deletion".' },
   { word: 'run', why: '"run the migration" is the plainest instruction there is.' },
   { word: 'running', why: 'the gerund — "running the migration tonight".' },
+  { word: 'runs', why: 'third person: "approving this runs the migration on every page".' },
   { word: 'start', why: '"start a subscription" proposes a recurring charge.' },
   { word: 'starting', why: 'the gerund form of the same proposal.' },
+  { word: 'starts', why: 'third person: "this starts the subscription on the paid tier".' },
   { word: 'perform', why: 'the formal register — "perform the rotation".' },
-  { word: 'execute', why: 'the same, in the register a runbook uses.' },
+  { word: 'performing', why: 'the gerund, and the form review found silent: "performing the key rotation on Tuesday".' },
+  { word: 'performs', why: 'third person: "this performs the rotation across every consumer".' },
+  { word: 'execute', why: 'the same as run, in the register a runbook uses.' },
+  { word: 'executing', why: 'the gerund — "executing the migration against production".' },
+  { word: 'executes', why: 'third person, and the form review found silent: "this executes the migration tonight".' },
   { word: 'trigger', why: '"trigger the migration" is how a scheduled job is asked for.' },
+  { word: 'triggering', why: 'the gerund — "triggering the migration from the admin screen".' },
+  { word: 'triggers', why: 'third person, and the form review found silent: "this triggers the migration of every page".' },
   { word: 'proceed', why: '"proceed with the deletion" is an approval with the verb moved.' },
+  { word: 'proceeding', why: 'the gerund, and the form review found silent: "proceeding with the deletion of the 550 rows".' },
+  { word: 'proceeds', why: 'third person: "this proceeds with the rotation on both keys".' },
   { word: 'go ahead', why: '"go ahead with the rotation" — the plainest English form of yes.' },
+  { word: 'going ahead', why: 'the gerund — "going ahead with the deletion tonight".' },
+  { word: 'goes ahead', why: 'third person: "this goes ahead with the migration".' },
   { word: 'sign off', why: '"sign off on the invoice" is an approval of a bill.' },
+  { word: 'signing off', why: 'the gerund, and the form review found silent: "signing off on the invoice".' },
+  { word: 'signs off', why: 'third person: "this signs off on the invoice for the month".' },
   { word: 'kick off', why: '"kick off the migration" — the same instruction, informally.' },
+  { word: 'kicking off', why: 'the gerund, and the form review found silent: "kicking off the migration at 9pm".' },
+  { word: 'kicks off', why: 'third person: "this kicks off the migration across every tenant".' },
 ];
 
 /**
@@ -191,10 +236,16 @@ const INNOCENT_PHRASES = [
   'pay attention',
   'pays attention',
   'paying attention',
-  // "that will pay off later" is a figure of speech, not a payment. All three
-  // forms, because review found `pays off` and `paying off` listed while the
-  // base `pay off` was not — the same missing-form gap the triggers had.
-  'pay off',
+  // "it pays off later" is a figure of speech, not a payment.
+  //
+  // THE BARE FORM IS DELIBERATELY NOT HERE, and it was here for one round.
+  // Round 2 added it for symmetry with the other two, and round 3 found what
+  // that cost: `pay off` also spells the literal sense, so "Pay off the
+  // outstanding invoice." and "Pay off the balance on the card." went SILENT —
+  // money asks of exactly the kind this file exists for, escaping through an
+  // escape hatch. The list's own rule settles it: anything genuinely ambiguous
+  // should fire and be answered with a paste. So "that will pay off later" now
+  // fires and costs a reword, which is the cheap direction.
   'pays off',
   'paying off',
   // "costs" earns its place on "it costs $29 a month", but the same word is
@@ -209,6 +260,21 @@ const INNOCENT_PHRASES = [
 
 function escapeRegExp(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * An innocent phrase, matched on whole-word boundaries so it is lifted out of
+ * the text as a PHRASE and not as a run of characters.
+ *
+ * Raw substring removal was the shipped behaviour until review round 3
+ * (2026-08-26) pointed out that "We can pay offshore contractors" loses
+ * "pay off" out of the middle of a word, leaving "shore contractors" and
+ * disarming the trigger. Contrived on its own, but the bounded matcher this
+ * file already carries fixes the whole shape for free.
+ */
+function innocentPattern(phrase) {
+  const body = String(phrase).trim().split(/\s+/).map(escapeRegExp).join('\\s+');
+  return new RegExp(`\\b${body}\\b`, 'gi');
 }
 
 /**
@@ -253,7 +319,7 @@ function sentences(text) {
 function costlyTriggers(text) {
   let haystack = String(text || '').toLowerCase();
   for (const phrase of INNOCENT_PHRASES) {
-    haystack = haystack.split(phrase).join(' ');
+    haystack = haystack.replace(innocentPattern(phrase), ' ');
   }
   const clauses = sentences(haystack);
   const matches = TRIGGERS.filter((trigger) => {
@@ -264,6 +330,21 @@ function costlyTriggers(text) {
   });
   // A bare dollar amount is a money ask however it is phrased — "$25/month",
   // "$0.02 a call". It has no word form to list, so it is matched separately.
+  //
+  // IT IS DELIBERATELY NOT `needsProposal`, and the cost of that is real. Review
+  // round 3 (2026-08-26) pointed out that "Nothing right now. The Vercel bill
+  // came to $30 last month." is refused — the same false-positive class the
+  // bare NOUNS were given cues for, and a live collision with the weekly-report
+  // ticket, which will put figures in cards that ask for nothing.
+  //
+  // It stays because the trade runs the other way here. A noun has verb forms
+  // covering it; a figure has nothing else, and a figure with no verb and no
+  // cue is a real ask — "It comes to $4.50 a day at current volume, your call",
+  // "$29/month for Business or $49 for the tier above?" — which a cue rule
+  // would silence. A false refusal costs a reword; silence on a money ask is
+  // the incident at the top of this file. Whether that balance is right is a
+  // product question about how much natural language a keyword gate should
+  // chase, and it is the operator's to settle, not this module's to guess at.
   if (/\$\s?\d/.test(haystack)) {
     matches.unshift({ word: '$ amount', class: 'money', why: 'a figure in dollars is a money ask whatever words surround it.' });
   }
@@ -287,6 +368,7 @@ module.exports = {
   PROPOSAL_CUES,
   INNOCENT_PHRASES,
   triggerPattern,
+  innocentPattern,
   proposesAction,
   costlyTriggers,
   isCostlyAsk,

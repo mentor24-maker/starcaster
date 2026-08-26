@@ -243,6 +243,44 @@ function splitFences(text) {
   return { prose: prose.join('\n'), fenced: blocks.map((lines) => lines.join('\n')).join('\n'), blocks };
 }
 
+/**
+ * The non-empty lines of a fenced block, with shell line-continuations folded
+ * into the single line they actually are.
+ *
+ * WHY (review round 3, 2026-08-26). The output rule counts pasted lines and
+ * wants at least two — a command plus something it printed. A backslash-
+ * continued command is two lines on its own, so
+ *
+ *   curl -s https://api.clickup.com/api/v2/team \\
+ *     -H "Authorization: $TOKEN"
+ *
+ * satisfied the count with NO output under it at all — which is precisely "a
+ * claim about what would happen", the thing the refusal message says it
+ * rejects. Folding the continuation makes the count mean what it says.
+ *
+ * ONLY the backslash is folded. A trailing pipe looks like a continuation too,
+ * but it is also how a markdown table row ends, and real pasted output is full
+ * of those — folding them would undercount genuine output and refuse a good
+ * card, which is the failure mode that gets a gate routed around.
+ */
+function contentLines(lines) {
+  const out = [];
+  let carry = '';
+  for (const raw of lines) {
+    const line = String(raw).trim();
+    if (!line) continue;
+    carry = carry ? `${carry} ${line}` : line;
+    if (/\\$/.test(carry)) {
+      carry = carry.replace(/\\+$/, '').trim();
+      continue;
+    }
+    out.push(carry);
+    carry = '';
+  }
+  if (carry) out.push(carry);
+  return out;
+}
+
 /** The fenced blocks inside a section, as arrays of their content lines. */
 function fencedBlocks(text) {
   return splitFences(text).blocks;
@@ -256,18 +294,38 @@ const MEASUREMENT_CUES = /\b(?:measured|measure|measuring|ran|re-ran|reran|re-ru
 
 /**
  * Every clock in the PROSE of a section, in order, each marked with whether a
- * measurement cue governs it. "Governs" means the cue is in the same sentence,
- * before the time — so in "The outage began at 3:12pm. I re-ran the failing
- * call at 8:04pm:" only the second one is a measurement.
+ * measurement cue governs it.
+ *
+ * "Governs" means the cue attaches to THIS clock: it sits between the previous
+ * clock and this one, with no sentence end in between. So in "The outage began
+ * at 3:12pm. I re-ran the failing call at 8:04pm:" only the second is a
+ * measurement, and in "I re-ran the chat POST at 9:40pm, well after the outage
+ * that began at 3:12pm" only the FIRST is — the cue is spent on the clock it
+ * introduces and does not reach past it.
+ *
+ * WHY THE PREVIOUS CLOCK IS THE BOUNDARY (review round 3, 2026-08-26). Every
+ * earlier version scoped the cue to the whole sentence, which made a cue
+ * govern every clock after it, and then picked one of them by position — first
+ * (round 1), first-in-prose (round 2), last (round 3). Each fix moved WHICH
+ * clock is picked instead of changing what makes a clock the measurement, so
+ * the same mis-dating kept reappearing in a new sentence shape. Authors
+ * routinely narrate after the run time, and that spelling dated the card by the
+ * outage. Attaching the cue to its own clock is the rule those three were
+ * approximating.
  */
 function evidenceClocks(text) {
   const { prose } = splitFences(text);
   const scan = new RegExp(CLOCK.source, 'gi');
   const found = [];
+  let previousEnd = 0;
   let match;
   while ((match = scan.exec(prose)) !== null) {
-    const lead = prose.slice(0, match.index).split(/[.!?;\n]/).pop();
+    // Only the span since the previous clock, and only back to the nearest
+    // sentence end inside it — a cue in an earlier sentence governs nothing
+    // here, and a cue already used by an earlier clock is not reused.
+    const lead = prose.slice(previousEnd, match.index).split(/[.!?;\n]/).pop();
     found.push({ time: match[1].trim(), measured: MEASUREMENT_CUES.test(lead) });
+    previousEnd = match.index + match[0].length;
     if (scan.lastIndex === match.index) scan.lastIndex += 1;
   }
   return found;
@@ -275,35 +333,48 @@ function evidenceClocks(text) {
 
 /**
  * When was this evidence measured? Read from the PROSE ONLY — never from
- * inside a fenced block — and from the clock the author MARKED as the run.
+ * inside a fenced block — and only from a clock a measurement cue attaches to.
  *
- * WHY THE PROSE (review round 1 of this very gate, 2026-08-26). The first
- * version took the first clock anywhere in the section, and the pasted output
- * is part of the section. So an author who wrote "measured at 9:40pm" under a
- * log containing `2026-08-20 3:12pm POST /chat -> 401` got a card headed
- * *measured at 2026-08-20 3:12pm* — six days stale, asserted by the card
- * itself. It fails the other way too: a recent-looking time inside an old log
- * makes stale evidence read as fresh.
+ * Returns `{ time, ambiguous, reason, clocks }`. A null `time` always carries a
+ * `reason`, because the caller has a different sentence to say for each one and
+ * "add a time" is unhelpful to an author who wrote three.
  *
- * WHY THE MARKED ONE (review round 2, the same day). Reading the prose fixed
- * the fence but kept "first clock wins", and evidence narrates before it
- * proves. "The outage began at 3:12pm. I re-ran the failing call at 8:04pm:"
- * rendered as *measured at 3:12pm* — the same wrong answer, moved earlier in
- * the sentence — and it fails in the dangerous direction, since "as of 9:00am
- * today" above yesterday's log would label a stale proof fresh.
+ * WHY THE PROSE (review round 1, 2026-08-26). The first version took the first
+ * clock anywhere in the section, and the pasted output is part of the section.
+ * So an author who wrote "measured at 9:40pm" under a log containing
+ * `2026-08-20 3:12pm POST /chat -> 401` got a card headed *measured at
+ * 2026-08-20 3:12pm* — six days stale, asserted by the card itself.
  *
- * So: the LAST clock a measurement cue governs, because evidence narrates and
- * then concludes. One unmarked clock is taken at its word — that is the
- * ordinary "8:04pm" card and there is nothing to confuse it with. Two or more
- * unmarked clocks are AMBIGUOUS and refused rather than guessed at: the
- * heading is load-bearing, so a wrong time is worse than no time.
+ * WHY NO TIE-BREAK BY POSITION (review round 3, the same day). Rounds 1-3 each
+ * picked a clock by where it sat — first, first-in-prose, last — and each was
+ * wrong on the next sentence shape somebody wrote. There is no position that
+ * means "this is the measurement"; only the cue means that. So exactly one
+ * cue-governed time is the answer, and two rival ones are REFUSED rather than
+ * ranked. The heading is the single place this gate asserts something to Dane
+ * instead of refusing something, and a wrong "measured at" is a false
+ * statement about a live system — the very shape of the incident behind the
+ * ticket. A wrong refusal costs a reword.
+ *
+ * ONE UNMARKED CLOCK is still taken at its word — the ordinary "8:04pm" card,
+ * with nothing to confuse it with. Unless the fenced output carries a clock
+ * too, in which case there IS something to confuse it with (round 3 again:
+ * "the channel began refusing at 3:12pm" over a log stamped 8:04pm dated the
+ * card by the outage), and it asks instead.
  */
 function readEvidenceTime(text) {
+  const { fenced } = splitFences(text);
+  const loggedClock = CLOCK.test(fenced);
   const clocks = evidenceClocks(text);
-  const measured = clocks.filter((clock) => clock.measured);
-  if (measured.length) return { time: measured[measured.length - 1].time, ambiguous: false, clocks };
-  if (clocks.length === 1) return { time: clocks[0].time, ambiguous: false, clocks };
-  return { time: null, ambiguous: clocks.length > 1, clocks };
+  const measured = [...new Set(clocks.filter((clock) => clock.measured).map((clock) => clock.time))];
+
+  if (measured.length === 1) return { time: measured[0], ambiguous: false, reason: null, clocks };
+  if (measured.length > 1) return { time: null, ambiguous: true, reason: 'rival-measurements', clocks };
+  if (clocks.length === 1) {
+    if (loggedClock) return { time: null, ambiguous: true, reason: 'unmarked-beside-log', clocks };
+    return { time: clocks[0].time, ambiguous: false, reason: null, clocks };
+  }
+  if (clocks.length > 1) return { time: null, ambiguous: true, reason: 'rival-clocks', clocks };
+  return { time: null, ambiguous: false, reason: loggedClock ? 'log-clock-only' : 'none', clocks };
 }
 
 function evidenceTimestamp(text) {
@@ -353,17 +424,14 @@ function evidenceProblems(card) {
   // From here the section exists, so its SHAPE is checked — for a costly ask
   // because it is owed, and for a volunteered one because half-evidence is
   // more misleading than none.
-  const { fenced, blocks } = splitFences(evidence);
+  const { blocks } = splitFences(evidence);
   const filled = blocks.filter((lines) => lines.some((line) => line.trim()));
   // Counted ACROSS the fences, not within one. The clearer layout puts the
   // command in its own fence and the output in a second, and the first version
   // of this rule told that author "you showed a command with no output" — which
   // was false. A gate that misdiagnoses good input is one people route around,
   // and then it protects nothing.
-  const pastedLines = filled.reduce(
-    (total, lines) => total + lines.filter((line) => line.trim()).length,
-    0,
-  );
+  const pastedLines = filled.reduce((total, lines) => total + contentLines(lines).length, 0);
   if (!filled.length) {
     problems.push(
       '@@EVIDENCE has no fenced block. Put the command and its output inside ``` fences:\n' +
@@ -381,20 +449,38 @@ function evidenceProblems(card) {
 
   const timing = readEvidenceTime(evidence);
   if (!timing.time) {
-    if (timing.ambiguous) {
-      // Two clocks and nothing saying which is the run. The heading asserts a
-      // measurement time, so guessing is worse than asking: an outage time
-      // read as a measurement is exactly what makes a stale proof look fresh.
+    if (timing.reason === 'rival-measurements') {
+      // Two times, both written as though they were the run. Ranking them by
+      // position is what rounds 1-3 each tried, and each ranking was wrong on
+      // the next sentence somebody wrote — so this asks instead.
+      problems.push(
+        '@@EVIDENCE marks more than one time as the run, and the card can only show one.\n' +
+        '  "I re-ran it at 9:40pm, after checking at 3:12pm" gives the heading two answers, and\n' +
+        '  the heading is the one place this card ASSERTS something rather than asking for it —\n' +
+        '  a wrong "measured at" is a false statement about a live system. Leave one time\n' +
+        '  marked as the measurement: "measured at 9:40pm", and say the rest without a cue.',
+      );
+    } else if (timing.reason === 'unmarked-beside-log') {
+      // One bare prose clock and a clock in the output too. The docstring used
+      // to say a lone clock has "nothing to confuse it with"; here it does.
+      problems.push(
+        '@@EVIDENCE has one time in the prose and another inside the pasted block, and nothing\n' +
+        '  says which one you ran it at. A bare time next to a log is usually the thing that\n' +
+        '  BROKE rather than the check — "the channel began refusing at 3:12pm" over output\n' +
+        '  stamped 8:04pm would date this card by the outage. Mark the run explicitly:\n' +
+        '  "re-ran it at 8:04pm", or "measured at 8:04pm".',
+      );
+    } else if (timing.reason === 'rival-clocks') {
       problems.push(
         '@@EVIDENCE has more than one time in it, and nothing says which one you actually ran\n' +
         '  it at. The card puts that time in its heading ("measured at ..."), so a wrong one is\n' +
         '  worse than none — an outage time read as a measurement is what makes a stale proof\n' +
         '  look fresh. Mark the run: "re-ran it at 8:04pm", or "measured at 8:04pm".',
       );
-    } else if (CLOCK.test(fenced)) {
+    } else if (timing.reason === 'log-clock-only') {
       // The section HAS a clock, but it is the log's, not the author's — the
       // exact confusion that would otherwise date the card by whatever the
-      // output happened to print. See evidenceTimestamp.
+      // output happened to print. See readEvidenceTime.
       problems.push(
         '@@EVIDENCE has a time in it, but only inside the pasted block — that is the LOG\'s\n' +
         '  clock, not yours, and it is what the output happened to print rather than when you\n' +
@@ -521,6 +607,7 @@ module.exports = {
   MEASUREMENT_CUES,
   splitFences,
   fencedBlocks,
+  contentLines,
   evidenceProblems,
   CONTEXT_MIN_WORDS,
   CONTEXT_MAX_WORDS,

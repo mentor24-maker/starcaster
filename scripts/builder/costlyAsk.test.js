@@ -206,3 +206,81 @@ test('every proposal cue carries its reasoning and actually rescues a noun', () 
     assert.ok(isCostlyAsk(`Please ${cue.word} the migration.`), `${cue.word} does not fire`);
   }
 });
+
+// ----------------------------------------- review round 3: cue inflections
+
+test('the natural inflections of a proposal cue fire', () => {
+  // Review round 3, 2026-08-26, ran these through the shipped function and
+  // every one was SILENT: PROPOSAL_CUES carried only base forms, so an
+  // ordinary English spelling of exactly the acts criterion 1 names posted
+  // with no evidence demanded at all — never refused, never checked.
+  assert.ok(isCostlyAsk('Proceeding with the deletion of the 550 untenanted rows'), 'proceeding');
+  assert.ok(isCostlyAsk('Performing the key rotation on Tuesday'), 'performing');
+  assert.ok(isCostlyAsk('This executes the migration tonight.'), 'executes');
+  assert.ok(isCostlyAsk('This triggers the migration of every page.'), 'triggers');
+  assert.ok(isCostlyAsk('Kicking off the migration at 9pm'), 'kicking off');
+  assert.ok(isCostlyAsk('Signing off on the invoice'), 'signing off');
+});
+
+test('every proposal cue carries its base, gerund and third-person form together', () => {
+  // The mirror of the TRIGGERS completeness test, and it is here for the same
+  // reason: the old cue test only asserted that each LISTED cue fires, which
+  // stays green for as long as a form is simply absent. That is the blind spot
+  // that let `cost` through round 2 and every cue inflection through round 3.
+  // Checked BOTH ways — every family is fully listed, and every listed cue
+  // belongs to a family, so a lone form cannot be added without its siblings.
+  const families = [
+    ['approve', 'approving', 'approves'],
+    ['authorise', 'authorising', 'authorises'],
+    ['authorize', 'authorizing', 'authorizes'],
+    ['run', 'running', 'runs'],
+    ['start', 'starting', 'starts'],
+    ['perform', 'performing', 'performs'],
+    ['execute', 'executing', 'executes'],
+    ['trigger', 'triggering', 'triggers'],
+    ['proceed', 'proceeding', 'proceeds'],
+    ['go ahead', 'going ahead', 'goes ahead'],
+    ['sign off', 'signing off', 'signs off'],
+    ['kick off', 'kicking off', 'kicks off'],
+  ];
+  const listed = new Set(PROPOSAL_CUES.map((cue) => cue.word));
+  for (const family of families) {
+    for (const form of family) {
+      assert.ok(listed.has(form), `"${form}" is missing from PROPOSAL_CUES`);
+    }
+  }
+  const known = new Set(families.flat());
+  for (const cue of PROPOSAL_CUES) {
+    assert.ok(known.has(cue.word), `"${cue.word}" is a cue with no family in this test`);
+  }
+});
+
+test('a past-tense cue stays silent, because a report is not a proposal', () => {
+  // Deliberate, and the reason is sharper than it is on the triggers: adding
+  // past tense here would REGRESS round 2's own fix, which exists so that
+  // "the deletion already happened" can be said without being refused.
+  assert.equal(isCostlyAsk('Started the subscription on the paid tier'), false);
+  assert.equal(isCostlyAsk('Nothing needed — I ran the migration last week.'), false);
+});
+
+test('the literal sense of "pay off" is a money ask and must fire', () => {
+  // Round 2 added the bare phrase to INNOCENT_PHRASES for symmetry; round 3
+  // found what that cost — the literal spelling went silent, which is a money
+  // ask escaping through an escape hatch. The list's own rule settles it:
+  // anything genuinely ambiguous fires and is answered with a paste.
+  assert.ok(isCostlyAsk('Pay off the outstanding invoice.'), 'literal, an invoice');
+  assert.ok(isCostlyAsk('Pay off the balance on the card.'), 'literal, a card balance');
+  assert.ok(isCostlyAsk('It will pay off later.'), 'the figurative sense costs a reword, which is the cheap direction');
+});
+
+test('an innocent phrase is lifted out as a phrase, not as a run of characters', () => {
+  // The phrases were removed with a raw substring split, so "pays offshore"
+  // lost "pays off" out of the middle of a word and left "shore" behind —
+  // disarming the trigger on a sentence that never contained the phrase.
+  // Deliberately no dollar figure and no other trigger: the `$ amount` matcher
+  // fires on its own and would make this assertion inert, which is how a
+  // break-test says "caught" without the fix being present.
+  assert.ok(isCostlyAsk('The agency pays offshore contractors weekly.'));
+  assert.equal(isCostlyAsk('The retainer pays off over a year.'), false,
+    'the real phrase is still lifted out');
+});

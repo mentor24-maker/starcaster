@@ -345,10 +345,10 @@ fails if a future verb arrives with a form missing.
 the gate doing the wrong thing silently rather than refusing. (1) Reading the
 prose fixed the fence but kept *first clock wins*, and evidence narrates before
 it proves: "the outage began at 3:12pm. I re-ran the failing call at 8:04pm"
-rendered as *measured at 3:12pm*. The time is now the last one a measurement
-cue governs (`measured|ran|re-ran|checked at`…); two clocks with no cue are
-refused rather than guessed at, because the heading is load-bearing and a wrong
-time is worse than none. (2) Each trigger was bounded by "not a word character
+rendered as *measured at 3:12pm*. Only a clock a measurement cue governs
+(`measured|ran|re-ran|checked at`…) counts as the run; two clocks with no cue
+are refused rather than guessed at, because the heading is load-bearing and a
+wrong time is worse than none. (2) Each trigger was bounded by "not a word character
 **or hyphen**", on the belief that `\b` would not fire beside a hyphen — it does,
 so the custom boundary only ever removed matches, and `hard-delete`,
 `force-delete`, `auto-purge` and `key re-rotation` were never checked at all.
@@ -368,6 +368,42 @@ proposing is what a verb does here — which is also why past tense is
 deliberately absent from the list. The known limit, stated rather than hidden:
 a bare noun phrase with no verb at all ("the key rotation — yes or no?") does
 not fire, and the verb forms are the primary net.
+
+**A third round found the same mis-dating for the third time, and what
+actually fixed it.** Rounds 1, 2 and 3 each picked the run time by where it sat
+in the text — first clock, first clock in the prose, last clock a cue governs —
+and each was wrong on the next sentence shape somebody wrote. A cue was allowed
+to govern every clock later in its sentence, and authors narrate *after* the
+run time as readily as before it, so "I re-ran the chat POST at 9:40pm, well
+after the outage that began at 3:12pm" rendered as *measured at 3:12pm*. There
+is no position that means "this is the measurement": the cue does, and it is
+spent on the clock it introduces. A cue now reaches only from the previous
+clock to the next one, and **two times both marked as the run are refused
+rather than ranked** — this heading is the single place the gate asserts
+something to Dane instead of refusing something, so a wrong "measured at" is a
+false statement about a live system, which is the shape of the original
+incident. A wrong refusal costs a reword.
+
+The same round closed three narrower holes: a lone bare clock in the prose is
+no longer taken at its word when the pasted output carries a clock too (a bare
+time beside a log is usually the thing that *broke*, not the check); a
+backslash-continued command counted as two pasted lines and so satisfied the
+"show me the output" rule with no output at all; and the innocent phrases were
+lifted out as raw characters rather than as whole words, so "pays offshore
+contractors" lost "pays off" out of the middle of a word. The cue list also got
+the all-forms rule the trigger list had already been given twice — "proceeding
+with the deletion", "performing the key rotation", "this executes the
+migration", "kicking off the migration", "signing off on the invoice" were all
+silent — with a completeness test that names the cue families in both
+directions, so a lone form cannot be added without its siblings.
+
+One item is left deliberately unchanged and is the operator's to settle: a bare
+dollar figure fires with no proposal cue, so a card that asks for nothing while
+mentioning a cost ("nothing right now, the Vercel bill came to $30 last month")
+is refused. A cue rule would fix that and would also silence "$29/month for
+Business or $49 for the tier above?", which is a real ask with no verb in it.
+That is a product question about how much natural language a keyword gate
+should chase, not a correctness one.
 
 ### ClickUp deletes `> ` blockquotes — from comments AND descriptions
 
