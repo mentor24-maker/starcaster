@@ -545,9 +545,9 @@ npm run clickup -- waiting --task 86bbjve6b   # one ticket, the whole picture
 ```
 86bbjve6b  Acquire YouTube slice 3/4
   status:     queued
-  assignee:   (nobody)
+  assignee:   (not Dane)
   last word:  Dane, "A", 2026-08-23 8:11pm
-  VERDICT:    NOT waiting on Dane — a machine owes the next move
+  VERDICT:    NOT waiting on Dane — his own comment is the newest word on it — a machine owes the next move, whatever the status says
 ```
 
 The verdict is **derived, never guessed**, from three live facts and nothing
@@ -569,6 +569,13 @@ back to him when his own comment is already the newest one on it, because that
 is the "answer this a third time" failure arriving through the mechanism built
 to prevent it. `--after-his-answer` overrides it, on the record, for a
 genuinely new question.
+
+**The refusal stands on both doors into his lane.** `ask` is one way in;
+`status --status "Needs your input" --no-card` is the other, and it assigns him
+just the same — so both go through one shared check rather than a copy that can
+drift. This is the same lesson the Ready-to-launch gate learned (task
+86bbjt18r): a guard covering one of two routes is worse than no guard, because
+it earns the belief that the failure has become impossible.
 
 
 ## Visual changes come to you as pictures

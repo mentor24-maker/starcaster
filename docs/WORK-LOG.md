@@ -30,7 +30,10 @@ a question you already answered sits unread for nine hours.
 The same rule now guards the other direction. The command that hands a ticket
 back to you refuses to do it when your own comment is already the newest one —
 that is the "please answer this a third time" failure, and it was arriving
-through the very thing built to stop it.
+through the very thing built to stop it. There are two ways for a machine to
+put a ticket in your column, and review caught that the refusal was only
+standing across one of them; it now stands across both. A lock on one of two
+doors is worse than no lock, because everyone stops checking the handle.
 
 It proved itself on its first live run. Two tickets are sitting in Ready to
 launch with your name on them where you already typed "merge" — the exact shape

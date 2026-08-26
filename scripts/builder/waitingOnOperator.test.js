@@ -270,6 +270,22 @@ test('the status-alone shortcut agrees with the full verdict for EVERY comment s
   }
 });
 
+test('the shortcut and the full verdict agree on a PARTIAL read too', () => {
+  // The agreement test above called itself pinned but only ever fed shapes
+  // where both halves were readable, so this divergence sat under it: a task
+  // whose `assignees` array never arrived is a partial read, and the full
+  // verdict stops on it before the machine-status rule. The shortcut used to
+  // answer NOT_WAITING for the same ticket — so `waiting` and `waiting --task`
+  // gave two different answers about one ticket, which is precisely the
+  // "stated with confidence" failure this module exists to remove.
+  const partial = { id: '86bbjve6b', name: 'a partial read', status: { status: 'queued' } };
+  const short = verdictFromStatusAlone(partial, OPS);
+  const full = waitingVerdict({ task: partial, comments: [] }, OPS);
+  assert.equal(short.verdict, CANNOT_TELL, 'a partial read is never settled by the status alone');
+  assert.equal(short.verdict, full.verdict, 'the sweep and --task must not disagree about one ticket');
+  assert.equal(short.why, full.why, 'and must give the same reason, so the two outputs read alike');
+});
+
 test('the shortcut refuses to answer for his own lane — those need the comments', () => {
   assert.equal(verdictFromStatusAlone(task('needs your input', { assigned: true }), OPS), null);
   assert.equal(verdictFromStatusAlone(task('ready to launch', { assigned: true }), OPS), null);

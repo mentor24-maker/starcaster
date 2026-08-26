@@ -181,8 +181,9 @@ function waitingVerdict({ task, comments } = {}, { operatorId } = {}) {
  * per-minute allowance spent to confirm something already settled.
  *
  * This is a shortcut, so it is PINNED: the test asserts it agrees with the
- * full verdict for both comment shapes. Returns null when the comments really
- * are needed — his lane, where the newest comment decides everything.
+ * full verdict for every shape it answers, including the partial reads.
+ * Returns null when the comments really are needed — his lane, where the
+ * newest comment decides everything.
  */
 function verdictFromStatusAlone(task, { operatorId } = {}) {
   const facts = { status: null, assignedToOperator: null, lastWord: null };
@@ -191,9 +192,16 @@ function verdictFromStatusAlone(task, { operatorId } = {}) {
   if (!status) return { verdict: CANNOT_TELL, why: 'the ticket has no readable status', facts };
   if (OPERATOR_LANE.includes(status)) return null; // his lane — the comments decide
   facts.status = status;
-  if (Array.isArray(task.assignees)) {
-    facts.assignedToOperator = task.assignees.some((a) => Number(a?.id) === Number(operatorId));
+  // A missing assignees array means a PARTIAL READ, and the full verdict stops
+  // on it before it ever reaches the machine-status rule. The shortcut has to
+  // stop there too: two commands answering one ticket differently is the
+  // "stated with confidence" failure this whole module exists to remove, and
+  // the sweep is where it would show — `waiting --task X` saying CANNOT TELL
+  // while `waiting` calls the same ticket settled.
+  if (!Array.isArray(task.assignees)) {
+    return { verdict: CANNOT_TELL, why: 'the ticket\'s assignees could not be read', facts };
   }
+  facts.assignedToOperator = task.assignees.some((a) => Number(a?.id) === Number(operatorId));
   return {
     verdict: NOT_WAITING,
     why: `"${status}" is a machine status — a machine owns this`,

@@ -60,3 +60,80 @@ test('`ask` carries the guard that stops a second ask', () => {
   assert.match(cli, /operatorSpokeLast\(/, '`ask` must consult the same rule `waiting` uses');
   assert.match(cli, /--after-his-answer/, 'and offer the on-the-record override');
 });
+
+/**
+ * THE GUARD HAS TO STAND ON BOTH DOORS INTO HIS LANE.
+ *
+ * `ask` is one way in. `status --status "Needs your input" --no-card` is the
+ * other, and it auto-assigns him just the same — so for one review cycle the
+ * double-ask this ticket exists to stop still had a clear route, three lines
+ * below a comment recording that the Ready-to-launch gate had already learned
+ * this exact lesson ("`status --no-card` is the other door into that status,
+ * so the gate has to stand on both", task 86bbjt18r).
+ *
+ * A guard that can be walked around is worse than none: it earns the belief
+ * that the failure is now impossible. So pin the structure, not just the
+ * mention — one shared refusal, reached from both commands.
+ */
+test('the already-answered guard stands on BOTH doors into his lane', () => {
+  const cli = read(CLI);
+
+  // One shared implementation, so the two callers cannot drift apart.
+  assert.match(
+    cli,
+    /async function alreadyAnsweredRefused\(/,
+    'the refusal must live in one function, not be copied into each caller',
+  );
+
+  // Both callers must actually reach it.
+  const calls = cli.match(/await alreadyAnsweredRefused\(/g) || [];
+  assert.ok(
+    calls.length >= 2,
+    `both \`ask\` and \`status\` must call the guard — found ${calls.length} call site(s)`,
+  );
+
+  // And specifically the `status --no-card` door, which is the one that was
+  // missing. It sits beside the Ready-to-launch gate, which guards the same
+  // command against the same shape of bypass.
+  const statusCmd = cli.slice(cli.indexOf("} else if (cmd === 'status') {"));
+  const statusBody = statusCmd.slice(0, statusCmd.indexOf("} else if (cmd === 'priority') {"));
+  assert.match(
+    statusBody,
+    /alreadyAnsweredRefused\(/,
+    '`status` (the --no-card door) must consult the guard, not only `ask`',
+  );
+  assert.match(
+    statusBody,
+    /readyToLaunchRefused\(/,
+    'and it must still carry the Ready-to-launch gate beside it (task 86bbjt18r)',
+  );
+});
+
+/**
+ * A 2xx whose body is not JSON leaves `call()` holding `json: null`. Every
+ * comment read that then says `json.comments` turns a carefully worded
+ * refusal into an unhandled TypeError — at the one moment it matters, which
+ * is when ClickUp is returning a gateway page instead of a ticket.
+ */
+test('the comment reads on THIS ticket\'s paths survive a 2xx with an unparseable body', () => {
+  const cli = read(CLI);
+
+  // Scoped to the code this ticket owns — the guard and the `waiting` command.
+  // The same shape exists at eleven older call sites (bus-relay, pr-opened,
+  // verdict, …); those are a real gap and a separate ticket, not something to
+  // sweep into an unattended build pass.
+  const guard = cli.slice(cli.indexOf('async function alreadyAnsweredRefused('));
+  const guardBody = guard.slice(0, guard.indexOf('\nconst cmd = process.argv[2];'));
+  const waitingCmd = cli.slice(cli.indexOf("} else if (cmd === 'waiting') {"));
+  const waitingBody = waitingCmd.slice(0, waitingCmd.indexOf("} else if (cmd === 'lists') {"));
+
+  for (const [where, body] of [['the already-answered guard', guardBody], ['`waiting`', waitingBody]]) {
+    assert.ok(body.length > 0, `could not locate ${where} in the CLI — the test has drifted`);
+    assert.equal(
+      (body.match(/\bjson\.comments\b/g) || []).length,
+      0,
+      `${where} must use \`json?.comments\` — \`call()\` leaves json null when a 2xx body is `
+        + 'not JSON, and a refusal that throws first is not a refusal',
+    );
+  }
+});

@@ -270,14 +270,16 @@ function usage(code = 2) {
   console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
   console.error('                                             long detail belongs. Verified by reading it back.');
   console.error('  ask --task <id> --body-file <file|-> [--status "Needs your input"|"Ready to launch"] [--no-move]');
-  console.error('      [--after-his-answer]                   REFUSES if his own comment is the newest one on the ticket —');
-  console.error('                                             handing it back then asks him to answer twice. Override only');
-  console.error('                                             when it genuinely is a NEW question, on the record.');
-  console.error('                                             hand the ticket to the operator: post an operator card, then');
+  console.error('      [--after-his-answer]                   hand the ticket to the operator: post an operator card, then');
   console.error('                                             move the status (he is auto-assigned). --no-move posts the');
   console.error('                                             card and leaves the status alone. The card body uses');
   console.error(`                                             @@ASKED / @@WHEN / @@CONTEXT / @@NEEDED; @@CONTEXT must be`);
   console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. Checked before anything is sent.`);
+  console.error('                                             REFUSES if his own comment is the newest one on the ticket —');
+  console.error('                                             handing it back then asks him to answer twice. The same');
+  console.error('                                             refusal stands on `status --no-card`, the other door into his');
+  console.error('                                             lane. --after-his-answer overrides it, on the record, when it');
+  console.error('                                             genuinely is a NEW question.');
   console.error('  waiting [--task <id>]                     is anything ACTUALLY waiting on Dane? Live reads only.');
   console.error('                                             With --task: status, assignee, newest-comment author, verdict.');
   console.error('                                             With no arguments: every open ticket in Agent Response + the');
@@ -772,7 +774,7 @@ async function readyToLaunchRefused(task, status) {
     console.error('Nothing was moved. Try again, or pass --operator-asked if you have checked by eye.\n');
     return true;
   }
-  const gate = readyToLaunchGate(out.json.comments || []);
+  const gate = readyToLaunchGate(out.json?.comments || []);
   if (gate.ok) return false;
   console.error(`\n"Ready to launch" is the operator's safe-to-merge signal, and ${gate.why}.\n`);
   console.error('Nothing was moved — the ticket is where you left it.\n');
@@ -782,6 +784,62 @@ async function readyToLaunchRefused(task, status) {
   console.error('To override anyway, add --operator-asked — that flag is your written claim');
   console.error('that a human checked this, visible in the transcript.\n');
   return true;
+}
+
+/**
+ * THE OPERATOR MUST NOT BE ASKED FOR SOMETHING HE HAS ALREADY ANSWERED
+ * (task 86bbk34x7). Moving a ticket into one of his statuses IS the claim that
+ * something is needed from him — so it is checked against the live ticket, by
+ * the same rule `waiting` uses, before anything is written.
+ *
+ * This is the 2026-08-23 failure: he answered `A` on the YouTube worker ticket
+ * and an hour later was asked the same question again. Authorship only — no
+ * reading of intent from his words (the ticket's own non-goal); if his comment
+ * is the newest one, a machine owes the next move.
+ *
+ * IT HAS TO STAND ON BOTH DOORS. `ask` is one way into his lane;
+ * `status --status "Needs your input" --no-card` is the other, and it
+ * auto-assigns him just the same. A guard that covers one of two routes is
+ * worse than none, because it invites the belief that the double-ask is now
+ * impossible — the same lesson `readyToLaunchRefused` above already learned
+ * (task 86bbjt18r). Both callers go through here; `waitingRuleCarried.test.js`
+ * fails if either one loses it.
+ *
+ * Returns null when the caller may proceed, or the exit code it should stop
+ * with (1 = could not read, 2 = refused). Runs BEFORE any write, so a refusal
+ * leaves the ticket exactly where it was.
+ */
+async function alreadyAnsweredRefused(task, status) {
+  if (!OPERATOR_STATUSES.includes(String(status || '').toLowerCase())) return null;
+
+  // --after-his-answer says "yes, I know he just spoke; this is a NEW
+  // question." A real thing to need, and worth saying out loud in the log.
+  if (flag('after-his-answer')) {
+    console.error('Handing this back although he spoke last (--after-his-answer). Recorded in this transcript.');
+    return null;
+  }
+
+  const seen = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!seen.res.ok) {
+    console.error(`\nCould not read the comments on ${task} — HTTP ${seen.res.status}.`);
+    console.error('Refusing to hand this to Dane without knowing whether he has already answered it.');
+    console.error('Nothing has been posted and the status has NOT moved. Try again, or pass');
+    console.error('--after-his-answer if you already know this is a new question.');
+    return 1;
+  }
+  // `call` leaves json null when a 2xx body is not JSON, so the optional chain
+  // is what keeps this refusal a refusal instead of a TypeError at the one
+  // moment it matters.
+  if (operatorSpokeLast(seen.json?.comments || [], { operatorId: OPERATOR_ID })) {
+    console.error(`\nREFUSED — Dane's own comment is the NEWEST one on ${task}, so a machine owes`);
+    console.error('the next move here. Handing it back to him now asks him to answer twice, which');
+    console.error('is exactly what this check exists to stop (task 86bbk34x7, 2026-08-23).');
+    console.error('\nRead what he said:   npm run clickup -- waiting --task ' + task);
+    console.error('If this really is a NEW question, say so on the record:  ... --after-his-answer');
+    console.error('\nNothing was posted and the status has NOT moved.');
+    return 2;
+  }
+  return null;
 }
 
 const cmd = process.argv[2];
@@ -1005,6 +1063,13 @@ if (cmd === 'whoami') {
   // `status --no-card` is the other door into that status, so the gate has to
   // stand on both (task 86bbjt18r).
   if (await readyToLaunchRefused(task, status)) process.exit(2);
+
+  // And the same reasoning for the already-answered guard (task 86bbk34x7):
+  // `--no-card` walks past the "use `ask` instead" refusal above and still
+  // lands the ticket in his lane with his name auto-assigned to it, so the
+  // double-ask has a route here too unless this stands on both doors.
+  const answeredStop = await alreadyAnsweredRefused(task, status);
+  if (answeredStop !== null) process.exit(answeredStop);
 
   // One read up front: it powers the --if-status claim guard, the
   // clear-assignees list, and the was→now line in the report.
@@ -1519,37 +1584,13 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
-  // THE CARD MUST NOT ASK HIM FOR SOMETHING HE HAS ALREADY ANSWERED
-  // (task 86bbk34x7). Moving a ticket into one of his statuses IS the claim
-  // that something is needed from him — so it is checked against the live
-  // ticket, by the same rule `waiting` uses, before the card is posted.
-  //
-  // This is the 2026-08-23 failure arriving through the very mechanism built
-  // to prevent it: he answered `A` on the YouTube worker ticket, and an hour
-  // later was asked the same question again. Authorship only — no reading of
-  // intent from his words (the non-goal); if his comment is the newest one on
-  // the ticket, a machine owes the next move.
-  //
-  // --after-his-answer says "yes, I know he just spoke; this is a NEW
-  // question." A real thing to need, and worth saying out loud in the log.
-  if (!noMove && !flag('after-his-answer')) {
-    const seen = await call('GET', `/api/v2/task/${task}/comment`);
-    if (!seen.res.ok) {
-      console.error(`\nCould not read the comments on ${task} — HTTP ${seen.res.status}.`);
-      console.error('Refusing to hand this to Dane without knowing whether he has already answered it.');
-      console.error('Nothing has been posted and the status has NOT moved. Try again, or pass');
-      console.error('--after-his-answer if you already know this is a new question.');
-      process.exit(1);
-    }
-    if (operatorSpokeLast(seen.json.comments || [], { operatorId: OPERATOR_ID })) {
-      console.error(`\nREFUSED — Dane's own comment is the NEWEST one on ${task}, so a machine owes`);
-      console.error('the next move here. Handing it back to him now asks him to answer twice, which');
-      console.error('is exactly what this check exists to stop (task 86bbk34x7, 2026-08-23).');
-      console.error('\nRead what he said:   npm run clickup -- waiting --task ' + task);
-      console.error('If this really is a NEW question, say so on the record:  ... ask ... --after-his-answer');
-      console.error('\nNothing was posted and the status has NOT moved.');
-      process.exit(2);
-    }
+  // He must not be asked for something he has already answered (task
+  // 86bbk34x7). The rule and its message live in `alreadyAnsweredRefused`, so
+  // that `status --no-card` — the other door into his lane — enforces exactly
+  // the same thing rather than a copy that can drift.
+  if (!noMove) {
+    const stop = await alreadyAnsweredRefused(task, status);
+    if (stop !== null) process.exit(stop);
   }
 
   const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered });
@@ -1645,7 +1686,7 @@ if (cmd === 'whoami') {
     if (!cm.res.ok) {
       console.error(`Could not read the comments on ${one} — HTTP ${cm.res.status}.`);
     }
-    const comments = cm.res.ok ? (cm.json.comments || []) : null;
+    const comments = cm.res.ok ? (cm.json?.comments || []) : null;
 
     const result = waitingVerdict({ task, comments }, { operatorId });
     console.log(renderTicket({ id: one, name: task?.name, result }, { formatWhen: whenClock }));
@@ -1684,20 +1725,23 @@ if (cmd === 'whoami') {
           console.error(`Could not read the comments on ${t.id} — HTTP ${cm.res.status}.`);
         }
         result = waitingVerdict(
-          { task: t, comments: cm.res.ok ? (cm.json.comments || []) : null },
+          { task: t, comments: cm.res.ok ? (cm.json?.comments || []) : null },
           { operatorId },
         );
         if (cm.res) lastRes = cm.res;
       }
       if (result.verdict !== V_NOT_WAITING) {
-        flagged.push({ id: t.id, name: t.name, list: w.label, url: t.url, result });
+        flagged.push({ id: t.id, name: t.name, list: w.label, url: t.url, updated: t.date_updated, result });
       }
     }
   }
 
   // Newest question first: the most recent comment on the ticket, falling back
-  // to when the ticket itself last moved.
-  flagged.sort((a, b) => (Number(b.result.facts?.lastWord?.date) || 0) - (Number(a.result.facts?.lastWord?.date) || 0));
+  // to when the ticket itself last moved. The fallback matters — a genuinely
+  // waiting ticket with no comments on it has no lastWord date, and sorting
+  // that to 0 buries the newest thing in the list at the bottom of it.
+  const sortKey = (x) => Number(x.result.facts?.lastWord?.date) || Number(x.updated) || 0;
+  flagged.sort((a, b) => sortKey(b) - sortKey(a));
 
   const waiting = flagged.filter((x) => x.result.verdict === V_WAITING);
   const unclear = flagged.filter((x) => x.result.verdict === V_CANNOT_TELL);
