@@ -214,6 +214,18 @@ export const RENDER_DIFFERENTIALS = [
     why: 'A frame setting with no effect involved, so the sweep is not only ever measuring animations.',
   },
   {
+    id: 'image-drop-shadow',
+    module: { type: 'image', settings: { ...PICTURE } },
+    setting: 'imageShadow', from: 'false', to: 'true',
+    why: 'The whole feature behind one checkbox (operator, 2026-08-25). A conditional emit is exactly where a control goes dead, and this one is emitted by a helper written for a different module — if the image renderer ever stops calling it, the box still ticks and saves and nothing appears.',
+  },
+  {
+    id: 'image-drop-shadow-blur',
+    module: { type: 'image', settings: { ...PICTURE, imageShadow: 'true' } },
+    setting: 'imageShadowBlur', from: '0', to: '60',
+    why: 'Proves the five detail controls reach the shadow and are not decoration around a hardcoded one — the checkbox differential above passes even if every number is ignored.',
+  },
+  {
     id: 'text-line-height',
     module: { type: 'text', text: '<p>Two lines of body copy for the differential to measure against.</p>', settings: {} },
     setting: 'lineHeight', from: '1.2', to: '2.4',

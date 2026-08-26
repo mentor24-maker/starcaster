@@ -247,8 +247,8 @@ npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back
 
 - **Never merge autonomously.** `Ready to launch` ≠ merged. The operator
   merges — either by telling a CC session to, or by replying `merge` on the
-  ticket, which the hourly bus-relay pass carries out for him (task
-  86bbjd5nn). Either way the authorization is his and this loop never
+  ticket, which the bus-relay pass carries out for him within about ten
+  minutes (task 86bbjd5nn). Either way the authorization is his and this loop never
   supplies it. This is the human checkpoint that keeps a bad change off the
   auto-deploying `main`.
   One consequence for the pass message: the "Reply/tell me to merge when

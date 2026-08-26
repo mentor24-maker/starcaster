@@ -28,6 +28,166 @@ Alongside it, the daily drift check learned to spot the matching mess: a job
 marked finished whose pull request is still sitting open. It reports those and
 leaves them for a person, because "close the leftover" and "that job was closed
 too early" both happen and only you can tell which.
+## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
+
+Earlier today a pull request went straight to the live site without anyone
+reviewing it. Nothing was broken by it, but the way it happened is worth
+fixing: a second Claude window you had open ran the ordinary "merge this"
+command, and it had no way of knowing that the review lane was still waiting on
+that piece of work. The ticket jumped from "being built" to "live" without ever
+stopping at "ready to launch" for your say-so.
+
+The rule against that has always existed — it is written down, and every part
+of the automatic pipeline obeys it. But a written rule only reaches the people
+and programs that have read it. A fresh window, a terminal you forgot was open,
+or a hurried moment on your own machine are all outside it. So the rule has been
+turned into a lock: GitHub itself now runs a check on every pull request that
+looks up the work's ticket, finds the most recent review verdict on it, and
+refuses the merge unless that verdict is a pass — and a pass on the *current*
+code, not on an older version that has since been rewritten. If the ticket has
+no review at all, or the review sent the work back, or the pull request does not
+even say which ticket it belongs to, the check says no and explains in plain
+words what has to happen next.
+
+There is a deliberate escape hatch, because a rule with no way out gets worked
+around instead of used: writing `[gate-waived: reason]` in the pull request lets
+it through, and doing so announces itself on the team chat with the reason. An
+override nobody can see is not an override, it is a hole.
+
+Two honest notes. First, the check is currently a **warning, not a lock** — it
+watches and reports but blocks nothing, because switching it on is a setting in
+GitHub's own website that only you can change, and it deserves a few days of
+watching first to be sure it never says no when it should say yes. Second, it
+needs a password stored with GitHub so it can read your ClickUp tickets, and
+this project has none stored yet; that one is also yours to add. Both steps are
+written out in the project notes, and neither was guessed at or faked.
+
+The escape hatch had a flaw of its own, and it showed up immediately: this very
+pull request has to *explain* the escape hatch, and the check read its own
+explanation as a real override and let itself straight through. That was fixed
+by requiring the override to sit alone on its own line — a mention inside a
+sentence is talk about the rule, not the rule. The review then found the same
+flaw one step further out: an override written out as a code example, the way
+this project documents everything, still sat alone on a line and still counted.
+So examples shown as code are now skipped entirely, which is why the notes for
+this feature can quote the syntax as often as they like without arming it. When
+in doubt the check now loses an override rather than granting one — a lost
+override costs one edit, a granted one costs a merge.
+
+One thing was caught before it could cause trouble. The obvious version of
+"has this been reviewed recently enough?" compares the review against the newest
+change on the branch. But this project keeps branches up to date by pulling in
+the latest main code, which counts as a change — so every properly reviewed
+piece of work would have looked stale the moment it was refreshed, and the whole
+pipeline would have jammed. Running the new check against the real record found
+exactly that on two recent pull requests, and the rule now ignores those
+housekeeping updates and looks only at genuine edits.
+
+## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
+
+There is a small program on the Mac Mini whose whole job is to read your ClickUp
+tickets and act on what you wrote — most importantly, to merge a PR when you
+reply with the word "merge". It was waking up once an hour.
+
+Nothing about the job needed an hour. It is not an AI session, it costs nothing
+to run, and it finishes everything it has to do in about fourteen seconds. The
+hour was a leftover default from back when the program only sent notifications;
+when it was given the power to merge, nobody went back and asked whether the
+timer still made sense. So work you had already approved could sit waiting on a
+clock rather than on anything real. It now wakes every ten minutes.
+
+Two things were worth checking before speeding it up, and both were measured
+rather than assumed. First, whether six times the traffic would annoy ClickUp:
+a real run uses 39 of the roughly 100 requests ClickUp allows per minute, so
+there is comfortable room, and the program now reports that number on every run
+so it stays honest as the queue grows. Second, whether two runs could overlap
+and post your message to the team chat twice — a real worry at ten minutes that
+barely existed at sixty. A throwaway test job proved macOS refuses to start a
+second copy while the first is still going, so they cannot stack. Useful to
+know that the protection comes from macOS and not from our own code.
+
+One piece is still yours: the Mini's schedule file has to be regenerated with a
+single command before the change takes effect there. Every run now says out loud
+whether the machine's schedule matches what the code says, and prints the exact
+command to fix it, so this cannot drift silently.
+
+Review caught that last promise not quite holding. The check had two answers —
+"matches" and "does not match" — and no way to say "I could not read it". If
+the schedule file were missing or unreadable it said nothing at all, or worse,
+printed a reassuring "matching" with a question mark where the number should
+have been. Since the whole point of that check is to stop the one manual step
+from being quietly forgotten, a check that can say everything is fine without
+knowing is worse than none. It now has a third answer that says plainly what it
+could not read. The same reading is also printed by the status command a person
+would actually run, which previously did not mention the schedule at all.
+
+A second review round found the same shape of problem twice more. The check
+could still give a fourth answer nobody asked for: it picked the number out of
+the schedule file by grabbing the last one on the line, so a file written all on
+one line would report a completely unrelated setting as the timer — wrong, and
+confident about it. It now reads the number that actually belongs to the timer.
+And the change had quietly made three other documents false, because they still
+described the program as running hourly: the ecosystem map, which is published
+and read by people; the page describing how your one-word "merge" reply works,
+where a faster merge is the entire visible point; and the reviewer's own
+instructions. All three now say ten minutes. Worth naming the pattern — the
+number lives in six places, only two of which make anything happen, and nothing
+checks the other four. They are now listed in one table so the next person to
+change it knows where to look.
+
+A third review round then made the neatest point of the three: that table said
+"every place" and was short by eight. The word "hourly" was still sitting in a
+handful of code comments explaining why various safety guards exist, and in one
+message printed on screen to whoever installs the program. None of it breaks
+anything — it just quietly misinforms the next person, which is the same
+failure the previous round was sent back for, moved one layer down. All eight
+are fixed, and most of them no longer name a schedule at all: where the sentence
+only ever meant "every time it runs", it now says that, so it cannot go stale
+again. The table has stopped claiming to be complete and instead hands you the
+one-line search that actually is — with a note that the number is written out as
+"ten minutes" in some places and "10" in others, which is exactly how half a
+list like this gets missed.
+
+Two smaller things came out of the same round. There was a limit in the code
+meant to stop a single run dragging on forever, set to fifteen minutes back when
+the program ran hourly — so after the speed-up it was permitting a run half
+again as long as the entire gap between runs. It is no longer a number anyone
+typed: the test now reads the real schedule and insists a run must finish inside
+it, so if the timer is ever shortened again this fails loudly instead of
+silently allowing an overrun. And the "I could not read it" message had been
+telling you to check by running the very command that had just printed it — a
+circle. It now names the two things that could actually be true and what to do
+about each. Both are pinned by tests, and I broke each on purpose first to
+confirm the tests can fail rather than trusting a green run.
+
+## 2026-08-25 — The top of every module panel lines up now, and images can cast a shadow
+
+You sent a picture of the image module and said it had drifted away from our
+standards. It had, though not in the image module's own settings — those were
+fine. The problem was the strip of shared controls that sits above them, the
+one every module wears: **Label**, **Background**, **Alignment**, the margins
+and the nudge.
+
+Those seven rows were being laid out by three separate mechanisms that had no
+way to agree with each other, so they lined up in three different places on the
+screen — Background stranded off to the left with the whole margin stack
+floating to its right. They are one list now, one label column and one field
+column, on every module, not just the image one.
+
+Two things had kept this hidden. Two panels had a patch that stacked their
+chrome vertically, which made the problem invisible in exactly the two places
+anyone had looked. And the automatic layout checker was scoring the Background
+row on its own, where it could only ever be compared with itself — so it passed
+the whole time. Both are fixed: the checker now measures Background inside the
+group with everything else, and it was broken on purpose first to prove it
+would catch this again.
+
+**Drop shadows on images.** New on the image module's **Frame** column, behind
+a tickbox: colour, X, Y, blur, spread and opacity. They are the same six
+controls, the same defaults and the same soft look the Carousel's pictures have
+had since August, on purpose — one picture and a row of pictures should not
+mean two different things by "Drop Shadow". Off by default, so nothing on a
+live page moves until you tick it.
 
 ## 2026-08-23 — The YouTube acquire box works again
 

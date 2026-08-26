@@ -108,7 +108,7 @@ const { BUS_RELAY_MARKER } = busRelayPlan;
 // The relay marks a comment the moment it reaches the bus; the merge path
 // must only mark a comment once it has reached an answer (merged, handed to
 // a human, or refused with a reason on the ticket). "Checks are still
-// running" writes no marker, so the next hourly pass picks the same
+// running" writes no marker, so the next pass picks the same
 // authorization up instead of losing it.
 //
 // Not every marker is final. Since task 86bbjt18r a REFUSAL marker records
@@ -161,6 +161,26 @@ function reportLimits(res) {
 }
 
 /**
+ * Counts every HTTP request this process makes to ClickUp. Nearly all of them
+ * go through `call`; the one that does not is the multipart upload in `attach`
+ * (FormData, so it cannot share this path), which increments the counter by
+ * hand. If a third caller ever reaches for `fetch` directly it must do the
+ * same — an uncounted request makes this total quietly too low, and the total
+ * is the evidence the poll interval is safe.
+ *
+ * bus-relay reports the total at the end of each pass (task 86bbk2fuh): the
+ * poll interval is only safe if a pass fits inside ClickUp's
+ * ~100-requests-per-minute allowance, and "it feels like plenty" is not a
+ * number anybody can check later. The count grows with the size of the open
+ * queue, so it is worth re-reading whenever the interval is shortened again.
+ *
+ * Counted where the ATTEMPT is made, not where it succeeds: a request that
+ * fails to connect still spent whatever the attempt costs, and for a budget
+ * you would rather over-count than under-count.
+ */
+let requestCount = 0;
+
+/**
  * A response-shaped stand-in for a request that never reached ClickUp at all
  * — DNS failure, a TLS reset, this machine offline, a connection timeout.
  *
@@ -188,6 +208,7 @@ function unreachable(err) {
 }
 
 async function call(method, path, body) {
+  requestCount += 1;
   let res;
   try {
     res = await fetch(`https://api.clickup.com${path}`, {
@@ -1239,6 +1260,9 @@ if (cmd === 'whoami') {
     const bytes = readFileSync(file);
     const form = new FormData();
     form.append('attachment', new Blob([bytes]), basename(file));
+    // Not routed through `call` (multipart), so count it here or the pass
+    // total under-reports — see the note beside `requestCount`.
+    requestCount += 1;
     const res = await fetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
       method: 'POST',
       headers: { Authorization: TOKEN },
@@ -1732,7 +1756,7 @@ if (cmd === 'whoami') {
 
   let relayed = 0, skipped = 0, handedBack = 0;
   // How many tickets may hold this pass open waiting for CI. Worst case is
-  // cap x budget, which is what keeps an hourly pass from becoming unbounded
+  // cap x budget, which is what keeps a pass from becoming unbounded
   // and stops one stuck PR starving the rest (task 86bbk2fb5).
   const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
   const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0 };
@@ -1921,6 +1945,13 @@ if (cmd === 'whoami') {
     console.error('\nCould not fully verify:');
     for (const line of unchecked) console.error(`  - ${line}`);
   }
+  // What this pass COST, in the same units ClickUp throttles on. The poll
+  // interval and this number are one decision, not two: at 10-minute polling
+  // (task 86bbk2fuh) a pass gets a fresh ~100-request minute every time, so
+  // the headroom to watch is per-pass, not per-hour. If this creeps toward
+  // 100 the answer is a cheaper pass, not a longer interval — the relay is
+  // the pipeline's consumer and slowing it down is what the ticket undid.
+  console.error(`  requests this pass: ${requestCount} (ClickUp allows ~100/minute)`);
   if (lastRes) reportLimits(lastRes);
   if (unchecked.length) process.exit(1);
 
