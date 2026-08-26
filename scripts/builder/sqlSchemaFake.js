@@ -110,6 +110,60 @@ function cutMatch(text, regex) {
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Which declared types this fake can actually check a value against.
+ *
+ * A type NOT in here throws at parse time rather than being read past, for the
+ * same reason an unrecognised column clause throws: a check that quietly does
+ * not run is worse than no check, because the green run is taken as proof.
+ * Each entry answers one question — is this value acceptable in this column —
+ * and `null` is handled by the caller, never here.
+ */
+const TYPE_CHECKS = new Map([
+  ['uuid', (value) => typeof value === 'string' && UUID_RE.test(value)],
+  ['text', (value) => typeof value === 'string' || typeof value === 'number'],
+  ['varchar', (value) => typeof value === 'string' || typeof value === 'number'],
+  ['character varying', (value) => typeof value === 'string' || typeof value === 'number'],
+  ['boolean', (value) => typeof value === 'boolean'],
+  ['jsonb', () => true],
+  ['json', () => true],
+  ['integer', isIntegerValue],
+  ['int', isIntegerValue],
+  ['bigint', isIntegerValue],
+  ['smallint', isIntegerValue],
+  ['numeric', isNumberValue],
+  ['decimal', isNumberValue],
+  ['real', isNumberValue],
+  ['double precision', isNumberValue],
+  ['timestamptz', isTimestampValue],
+  ['timestamp', isTimestampValue],
+  ['timestamp with time zone', isTimestampValue],
+  ['date', isTimestampValue],
+]);
+
+/** A number, or a string Postgres would read as one. Booleans are not numbers
+ *  here even though `Number(true)` is 1 — that coercion is the bug, not the
+ *  feature (see numberOrError in lib/videoSourcesStore.js). */
+function isNumberValue(value) {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value !== 'string') return false;
+  const text = value.trim();
+  return text !== '' && Number.isFinite(Number(text));
+}
+
+function isIntegerValue(value) {
+  if (!isNumberValue(value)) return false;
+  return Number.isInteger(Number(value));
+}
+
+function isTimestampValue(value) {
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  if (typeof value !== 'string' || !value.trim()) return false;
+  return !Number.isNaN(new Date(value).getTime());
+}
+
 /**
  * One column definition → what the fake needs to enforce it.
  *
@@ -136,6 +190,14 @@ function parseColumn(definition) {
   if (remaining.startsWith('(')) {
     const sized = cutParenClause(remaining, /^/);
     if (sized) remaining = sized.remaining;
+  }
+
+  if (!TYPE_CHECKS.has(type)) {
+    throw new Error(
+      `sqlSchemaFake: column "${name}" is declared "${type}", which this fake cannot check a `
+      + 'value against. Add it to TYPE_CHECKS — an unchecked type is a column where anything '
+      + 'at all lands with ok:true, which is what this file exists to stop.'
+    );
   }
 
   // check ( ... ). Only the `col in (...)` form is implemented — any other
@@ -362,7 +424,13 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       }
       if (column.default === 'gen_random_uuid()') {
         counter += 1;
-        row[name] = `${idPrefix}-${counter}`;
+        // Uuid-SHAPED, because the uuid column it lands in is now type-checked
+        // and `row-1` is not a uuid. Deterministic on purpose: a test that
+        // fails must fail the same way twice, so nothing here reaches for
+        // real randomness. The counter is what makes each one distinct.
+        row[name] = column.type === 'uuid'
+          ? `00000000-0000-4000-8000-${String(counter).padStart(12, '0')}`
+          : `${idPrefix}-${counter}`;
       } else if (column.default === 'now()') {
         row[name] = new Date(1755000000000 + counter * 1000).toISOString();
       } else if (column.default !== null) {
@@ -383,11 +451,31 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       if (column.notNull && (value === null || value === undefined)) {
         return `null value in column "${name}" violates not-null constraint`;
       }
-      if (column.allowed && value !== null && value !== undefined && !column.allowed.includes(String(value))) {
+      if (value === null || value === undefined) continue;
+      // The declared type was parsed and then never consulted, so
+      // 'not-a-uuid-at-all' landed in a uuid column under ok:true and an
+      // object landed in a text column as '[object Object]'. Postgres's own
+      // wording, so a store branch that reads the error text is tested
+      // against something it could actually be handed.
+      const fits = TYPE_CHECKS.get(column.type);
+      if (fits && !fits(value)) {
+        return `invalid input syntax for type ${column.type}: "${describe(value)}"`;
+      }
+      if (column.allowed && !column.allowed.includes(String(value))) {
         return `new row violates check constraint on "${name}"`;
       }
     }
     return '';
+  }
+
+  /** A value in an error message, without throwing on a circular object. */
+  function describe(value) {
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
   }
 
   function uniqueViolation(tableName, row, skipRow = null) {
@@ -588,13 +676,19 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     if (method === 'PATCH') {
       const rows = filterRows(tableName, params);
       if (rows && rows.error) return { ok: false, status: 400, error: rows.error };
+      // BEFORE the loop, not inside it. Real Postgres parses the statement
+      // before it looks for rows, so a typo'd column is a 400 whether or not
+      // anything matched. Inside the loop it was a 400 only when a row
+      // happened to match — and a filter matching nothing is exactly the shape
+      // of the cross-project tests here, so a typo'd column name in one of
+      // those would have shipped green (ok:true/200/[]).
+      for (const key of Object.keys(body || {})) {
+        if (!table.columns.has(key)) {
+          return { ok: false, status: 400, error: `column "${key}" of relation "${tableName}" does not exist` };
+        }
+      }
       const updated = [];
       for (const row of rows) {
-        for (const key of Object.keys(body || {})) {
-          if (!table.columns.has(key)) {
-            return { ok: false, status: 400, error: `column "${key}" of relation "${tableName}" does not exist` };
-          }
-        }
         const next = { ...row, ...body };
         const broken = violation(table, next);
         if (broken) return { ok: false, status: 400, error: broken };

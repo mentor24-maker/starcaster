@@ -63,6 +63,17 @@ function withDb(wrapQuery = null) {
   return { schema, db, projectScope, sessions, sources, restore };
 }
 
+/**
+ * A uuid-SHAPED literal for a test that needs a fixed id.
+ *
+ * The fake checks declared types now, so `'fixed-id'` in a uuid column is a
+ * 400 before it can reach the constraint the test is actually about. These
+ * stay hand-written rather than generated so each test's ids are legible.
+ */
+function uuid(n) {
+  return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+}
+
 async function seedSession(sessions, scope = SCOPE_A, title = 'A talk') {
   const created = await sessions.createSession({ title }, scope);
   assert.equal(created.ok, true, created.error);
@@ -925,7 +936,7 @@ test('a genuinely missing session is still a 404 that says so', async () => {
 test('the fake rejects a duplicate primary key, as Postgres does', async () => {
   const schema = parseSchemaFile(SQL_PATH);
   const db = createFakeDb(schema);
-  const row = { id: 'fixed-id', project_id: 'proj_a', title: 'A talk' };
+  const row = { id: uuid(77), project_id: 'proj_a', title: 'A talk' };
 
   const first = await db.sbQuery({ method: 'POST', table: 'video_sessions', query: 'select=*', body: [row] });
   assert.equal(first.ok, true, first.error);
@@ -944,7 +955,7 @@ test('the fake rejects a session_id that points at nothing, as Postgres does', a
     method: 'POST',
     table: 'video_sources',
     query: 'select=*',
-    body: [{ project_id: 'proj_a', session_id: 'no-such-session' }],
+    body: [{ project_id: 'proj_a', session_id: uuid(404) }],
   });
   assert.equal(res.ok, false, 'a dangling foreign key was accepted');
   assert.equal(res.status, 409, 'PostgREST answers 409 for a foreign-key violation');
@@ -967,15 +978,16 @@ test('a PATCH cannot move a row onto a session that is not there either', async 
   const db = createFakeDb(schema);
   await db.sbQuery({
     method: 'POST', table: 'video_sessions', query: 'select=*',
-    body: [{ id: 'session-1', project_id: 'proj_a', title: 'A talk' }],
+    body: [{ id: uuid(1), project_id: 'proj_a', title: 'A talk' }],
   });
-  await db.sbQuery({
+  const seeded = await db.sbQuery({
     method: 'POST', table: 'video_sources', query: 'select=*',
-    body: [{ id: 'source-1', project_id: 'proj_a', session_id: 'session-1' }],
+    body: [{ id: uuid(2), project_id: 'proj_a', session_id: uuid(1) }],
   });
+  assert.equal(seeded.ok, true, seeded.error);
   const res = await db.sbQuery({
-    method: 'PATCH', table: 'video_sources', query: 'id=eq.source-1&select=*',
-    body: { session_id: 'gone' },
+    method: 'PATCH', table: 'video_sources', query: `id=eq.${uuid(2)}&select=*`,
+    body: { session_id: uuid(999) },
   });
   assert.equal(res.ok, false);
   assert.match(res.error, /23503/);
@@ -1050,4 +1062,250 @@ test('alter column drop not null / drop default is applied, and stays idempotent
   const count = schema.tables.get('widgets').columns.get('count');
   assert.equal(count.notNull, false);
   assert.equal(count.default, null);
+});
+
+// ── Round four: two writes that succeeded while storing something false ─────
+// Both are the same class the three rounds before this one were spent on — an
+// answer of ok:true over a row that is now wrong.
+
+test('updateSession REFUSES a programme-audio source belonging to another project', async () => {
+  // There is deliberately no foreign key on program_audio_source_id (a second
+  // FK back would be a cycle), so the store is the ONLY thing that can catch
+  // this — and it wasn't looking. Review reproduced it live: project A pointed
+  // its session's programme audio at project B's source and got ok:true/200.
+  // Then B deletes that source and A's session points at nothing.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const mine = await seedSession(sessions, SCOPE_A, 'My talk');
+    const theirs = await seedSession(sessions, SCOPE_B, 'Their talk');
+    const theirSource = await sources.createSource(
+      { sessionId: theirs.id, layerRole: 'reference' }, SCOPE_B
+    );
+    assert.equal(theirSource.ok, true, theirSource.error);
+
+    const res = await sessions.updateSession(
+      mine.id, { programAudioSourceId: theirSource.data.id }, SCOPE_A
+    );
+    assert.equal(res.ok, false, 'a cross-tenant programme-audio pointer was stored');
+    assert.equal(res.status, 404);
+    assert.match(res.error, /does not exist in this project/);
+
+    // Read it back rather than trusting the refusal: nothing may have landed.
+    const after = await sessions.getSessionById(mine.id, SCOPE_A);
+    assert.equal(after.ok, true, after.error);
+    assert.equal(after.data.programAudioSourceId, '', 'the pointer was written anyway');
+  } finally { restore(); }
+});
+
+test('updateSession ACCEPTS a source in its own project, and still allows clearing it', async () => {
+  // The other half: the check must not make the legitimate write impossible.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const mine = await seedSession(sessions, SCOPE_A, 'My talk');
+    const mySource = await sources.createSource(
+      { sessionId: mine.id, layerRole: 'reference' }, SCOPE_A
+    );
+    assert.equal(mySource.ok, true, mySource.error);
+
+    const set = await sessions.updateSession(
+      mine.id, { programAudioSourceId: mySource.data.id }, SCOPE_A
+    );
+    assert.equal(set.ok, true, set.error);
+    assert.equal(set.data.programAudioSourceId, mySource.data.id);
+
+    const cleared = await sessions.updateSession(mine.id, { programAudioSourceId: null }, SCOPE_A);
+    assert.equal(cleared.ok, true, cleared.error);
+    assert.equal(cleared.data.programAudioSourceId, '');
+  } finally { restore(); }
+});
+
+test('a database failure resolving the programme audio is NOT "no such source"', async () => {
+  // Same lesson as the session check on createSource: only a genuine 404 is a
+  // 404. A 500 reported as "that source does not exist" is a message that lies
+  // about what went wrong.
+  const { sessions, sources, restore } = withDb((real) => {
+    let sessionSeeded = false;
+    return async (options) => {
+      if (options.method === 'GET' && options.table === 'video_sources' && sessionSeeded) {
+        return { ok: false, status: 500, error: 'upstream connect error or disconnect/reset before headers' };
+      }
+      if (options.method === 'POST' && options.table === 'video_sources') sessionSeeded = true;
+      return real(options);
+    };
+  });
+  try {
+    const mine = await seedSession(sessions, SCOPE_A, 'My talk');
+    const mySource = await sources.createSource({ sessionId: mine.id }, SCOPE_A);
+    assert.equal(mySource.ok, true, mySource.error);
+
+    const res = await sessions.updateSession(
+      mine.id, { programAudioSourceId: mySource.data.id }, SCOPE_A
+    );
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 500, 'a database failure was reported as a 404 "no such source"');
+    assert.doesNotMatch(String(res.error), /does not exist in this project/);
+  } finally { restore(); }
+});
+
+test('a non-string contentHash is a 400, not the string "[object Object]"', async () => {
+  // safeText String-coerced anything, so `{}` was stored as '[object Object]'
+  // under ok:true — and the next genuinely different file in that project was
+  // then turned away 409 "already in the catalog", which is simply untrue.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions, SCOPE_A);
+    const junk = await sources.createSource(
+      { sessionId: session.id, contentHash: {} }, SCOPE_A
+    );
+    assert.equal(junk.ok, false, "'[object Object]' was stored as a content hash");
+    assert.equal(junk.status, 400);
+    assert.match(junk.error, /contentHash must be text/);
+
+    // The consequence the refusal prevents: two unrelated files colliding.
+    const first = await sources.createSource(
+      { sessionId: session.id, contentHash: 'hash-of-file-one' }, SCOPE_A
+    );
+    assert.equal(first.ok, true, first.error);
+    const second = await sources.createSource(
+      { sessionId: session.id, contentHash: 'hash-of-file-two' }, SCOPE_A
+    );
+    assert.equal(second.ok, true, 'a different file was rejected as a duplicate');
+  } finally { restore(); }
+});
+
+test('a non-string contentHash on UPDATE leaves the stored hash alone', async () => {
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions, SCOPE_A);
+    const created = await sources.createSource(
+      { sessionId: session.id, contentHash: 'the-real-hash' }, SCOPE_A
+    );
+    assert.equal(created.ok, true, created.error);
+
+    const res = await sources.updateSource(created.data.id, { contentHash: ['x'] }, SCOPE_A);
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 400);
+
+    const after = await sources.getSourceById(created.data.id, SCOPE_A);
+    assert.equal(after.data.contentHash, 'the-real-hash', 'the measured hash was overwritten');
+  } finally { restore(); }
+});
+
+test('every probe text field refuses junk, and a number is still legible text', async () => {
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions, SCOPE_A);
+    for (const field of ['codec', 'deviceLane', 'localPath', 'proxyPath', 'driveFileId']) {
+      const res = await sources.createSource(
+        { sessionId: session.id, [field]: true }, SCOPE_A
+      );
+      assert.equal(res.ok, false, `${field} accepted a boolean`);
+      assert.equal(res.status, 400);
+    }
+    // A device lane of 2 is text a person can read; refusing it would be
+    // pedantry rather than protection.
+    const numeric = await sources.createSource(
+      { sessionId: session.id, deviceLane: 2 }, SCOPE_A
+    );
+    assert.equal(numeric.ok, true, numeric.error);
+    assert.equal(numeric.data.deviceLane, '2');
+  } finally { restore(); }
+});
+
+test('rowToSource takes every probe length from probeLimit, not from a literal', () => {
+  // PROBE_TEXT_FIELDS + probeLimit() exist so ONE number governs each column.
+  // The reader still wrote 1000/100/300 by hand, which is harmless only while
+  // the numbers agree: raise localPath to 4000 and a full path would be stored
+  // and read back truncated — the exact round-trip mismatch that table killed.
+  const src = fs.readFileSync(path.join(__dirname, '../../lib/videoSourcesStore.js'), 'utf8');
+  const reader = src.slice(src.indexOf('function rowToSource'), src.indexOf('function isDuplicateHashError'));
+  for (const column of ['drive_file_id', 'content_hash', 'codec', 'device_lane', 'local_path', 'proxy_path']) {
+    const line = reader.split('\n').find((text) => text.includes(`row.${column}`));
+    assert.ok(line, `rowToSource no longer reads ${column}`);
+    assert.match(line, /probeLimit\(/, `rowToSource hard-codes the length for ${column}: ${line.trim()}`);
+  }
+});
+
+// ── The fake's own four holes ───────────────────────────────────────────────
+
+test('the fake refuses an unknown PATCH column even when NO rows match', async () => {
+  // The check sat inside the per-row loop, so a filter matching nothing
+  // answered ok:true/200/[] where PostgREST answers 400 — and a filter
+  // matching nothing is exactly the shape of every cross-project test here,
+  // so a typo'd column name in one of those would have shipped green.
+  const { db, restore } = withDb();
+  try {
+    const res = await db.sbQuery({
+      method: 'PATCH',
+      table: 'video_sessions',
+      query: `id=eq.${uuid(31337)}&select=*`,
+      body: { no_such_column: 'x' },
+    });
+    assert.equal(res.ok, false, 'a typo\'d column passed because nothing matched the filter');
+    assert.equal(res.status, 400);
+    assert.match(res.error, /no_such_column/);
+  } finally { restore(); }
+});
+
+test('the fake refuses a value that does not fit the column type', async () => {
+  const { db, restore } = withDb();
+  try {
+    const badUuid = await db.sbQuery({
+      method: 'POST',
+      table: 'video_sessions',
+      query: 'select=*',
+      body: [{ id: 'not-a-uuid-at-all', project_id: 'proj_a' }],
+    });
+    assert.equal(badUuid.ok, false, 'a non-uuid landed in a uuid column');
+    assert.equal(badUuid.status, 400);
+    assert.match(badUuid.error, /invalid input syntax for type uuid/);
+
+    const badText = await db.sbQuery({
+      method: 'POST',
+      table: 'video_sessions',
+      query: 'select=*',
+      body: [{ project_id: 'proj_a', title: { a: 1 } }],
+    });
+    assert.equal(badText.ok, false, 'an object landed in a text column');
+    assert.match(badText.error, /invalid input syntax for type text/);
+
+    const badNumber = await db.sbQuery({
+      method: 'POST',
+      table: 'video_sources',
+      query: 'select=*',
+      body: [{ project_id: 'proj_a', width: 'wide' }],
+    });
+    assert.equal(badNumber.ok, false, 'a word landed in an integer column');
+    assert.match(badNumber.error, /invalid input syntax for type integer/);
+
+    const badDate = await db.sbQuery({
+      method: 'POST',
+      table: 'video_sessions',
+      query: 'select=*',
+      body: [{ project_id: 'proj_a', recorded_at: 'someday' }],
+    });
+    assert.equal(badDate.ok, false, 'an unparseable date landed in a timestamptz column');
+  } finally { restore(); }
+});
+
+test('the fake REFUSES a declared type it cannot check, rather than reading past it', () => {
+  // Same bargain as the unsupported column clause above: a check that quietly
+  // does not run is worse than no check, because the green run is taken as
+  // proof. A later Studio slice adding an `inet` or an array column has to
+  // teach the fake what "valid" means for it.
+  assert.throws(
+    () => parseSchemaText('create table if not exists public.t ( id uuid primary key, addr inet );'),
+    /sqlSchemaFake:.*inet/,
+    'an unenforceable column type was accepted in silence'
+  );
+});
+
+test('a generated id is uuid-shaped, and two of them differ', async () => {
+  const { sessions, restore } = withDb();
+  try {
+    const first = await seedSession(sessions, SCOPE_A, 'One');
+    const second = await seedSession(sessions, SCOPE_A, 'Two');
+    assert.match(first.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.notEqual(first.id, second.id);
+  } finally { restore(); }
 });
