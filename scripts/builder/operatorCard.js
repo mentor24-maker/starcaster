@@ -215,6 +215,13 @@ const CLOCK = /((?:\d{4}-\d{2}-\d{2}\s+|\d{1,2}\/\d{1,2}\s+)?\d{1,2}:\d{2}\s*(?:
  * Split a section into the prose OUTSIDE its fences and the blocks inside
  * them. Both halves are needed and they mean different things: the fences hold
  * what the machine said, the prose holds what the author said about it.
+ *
+ * NESTED FENCES ARE OUT OF SCOPE, deliberately. Output that itself contains a
+ * ``` line toggles this counter, so which text counts as prose gets scrambled.
+ * Raised in review (2026-08-26) and left alone: the scrambling makes the
+ * section fail its shape checks rather than mis-date the card, which is the
+ * safe direction — the author is told to fix the formatting, and nothing goes
+ * out asserting a measurement time that is not the measurement.
  */
 function splitFences(text) {
   const prose = [];
@@ -242,23 +249,65 @@ function fencedBlocks(text) {
 }
 
 /**
- * When was this evidence measured? Read from the PROSE ONLY — never from
- * inside a fenced block.
- *
- * WHY (review of this very gate, 2026-08-26). The first version took the first
- * clock anywhere in the section, and the pasted output is part of the section.
- * So an author who wrote "measured at 9:40pm" under a log containing
- * `2026-08-20 3:12pm POST /chat -> 401` got a card headed *measured at
- * 2026-08-20 3:12pm* — six days stale, asserted by the card itself. It fails
- * the other way too: a recent-looking time inside an old log makes stale
- * evidence read as fresh. Since the whole point of the heading is that a stale
- * proof should be VISIBLE rather than implied, a heading dated by the log is
- * worse than no heading — so the timestamp has to be the author's, in his own
- * words, outside the paste.
+ * The words that mean "I performed this check". A clock sitting next to one of
+ * these is the measurement; a clock next to anything else is narration.
  */
+const MEASUREMENT_CUES = /\b(?:measured|measure|measuring|ran|re-ran|reran|re-run|rerun|run|running|checked|check|rechecked|re-checked|executed|sampled|verified|tested|queried|called|captured|pulled|took|taken|as of)\b/i;
+
+/**
+ * Every clock in the PROSE of a section, in order, each marked with whether a
+ * measurement cue governs it. "Governs" means the cue is in the same sentence,
+ * before the time — so in "The outage began at 3:12pm. I re-ran the failing
+ * call at 8:04pm:" only the second one is a measurement.
+ */
+function evidenceClocks(text) {
+  const { prose } = splitFences(text);
+  const scan = new RegExp(CLOCK.source, 'gi');
+  const found = [];
+  let match;
+  while ((match = scan.exec(prose)) !== null) {
+    const lead = prose.slice(0, match.index).split(/[.!?;\n]/).pop();
+    found.push({ time: match[1].trim(), measured: MEASUREMENT_CUES.test(lead) });
+    if (scan.lastIndex === match.index) scan.lastIndex += 1;
+  }
+  return found;
+}
+
+/**
+ * When was this evidence measured? Read from the PROSE ONLY — never from
+ * inside a fenced block — and from the clock the author MARKED as the run.
+ *
+ * WHY THE PROSE (review round 1 of this very gate, 2026-08-26). The first
+ * version took the first clock anywhere in the section, and the pasted output
+ * is part of the section. So an author who wrote "measured at 9:40pm" under a
+ * log containing `2026-08-20 3:12pm POST /chat -> 401` got a card headed
+ * *measured at 2026-08-20 3:12pm* — six days stale, asserted by the card
+ * itself. It fails the other way too: a recent-looking time inside an old log
+ * makes stale evidence read as fresh.
+ *
+ * WHY THE MARKED ONE (review round 2, the same day). Reading the prose fixed
+ * the fence but kept "first clock wins", and evidence narrates before it
+ * proves. "The outage began at 3:12pm. I re-ran the failing call at 8:04pm:"
+ * rendered as *measured at 3:12pm* — the same wrong answer, moved earlier in
+ * the sentence — and it fails in the dangerous direction, since "as of 9:00am
+ * today" above yesterday's log would label a stale proof fresh.
+ *
+ * So: the LAST clock a measurement cue governs, because evidence narrates and
+ * then concludes. One unmarked clock is taken at its word — that is the
+ * ordinary "8:04pm" card and there is nothing to confuse it with. Two or more
+ * unmarked clocks are AMBIGUOUS and refused rather than guessed at: the
+ * heading is load-bearing, so a wrong time is worse than no time.
+ */
+function readEvidenceTime(text) {
+  const clocks = evidenceClocks(text);
+  const measured = clocks.filter((clock) => clock.measured);
+  if (measured.length) return { time: measured[measured.length - 1].time, ambiguous: false, clocks };
+  if (clocks.length === 1) return { time: clocks[0].time, ambiguous: false, clocks };
+  return { time: null, ambiguous: clocks.length > 1, clocks };
+}
+
 function evidenceTimestamp(text) {
-  const found = CLOCK.exec(splitFences(text).prose);
-  return found ? found[1].trim() : null;
+  return readEvidenceTime(text).time;
 }
 
 /**
@@ -330,8 +379,19 @@ function evidenceProblems(card) {
     );
   }
 
-  if (!evidenceTimestamp(evidence)) {
-    if (CLOCK.test(fenced)) {
+  const timing = readEvidenceTime(evidence);
+  if (!timing.time) {
+    if (timing.ambiguous) {
+      // Two clocks and nothing saying which is the run. The heading asserts a
+      // measurement time, so guessing is worse than asking: an outage time
+      // read as a measurement is exactly what makes a stale proof look fresh.
+      problems.push(
+        '@@EVIDENCE has more than one time in it, and nothing says which one you actually ran\n' +
+        '  it at. The card puts that time in its heading ("measured at ..."), so a wrong one is\n' +
+        '  worse than none — an outage time read as a measurement is what makes a stale proof\n' +
+        '  look fresh. Mark the run: "re-ran it at 8:04pm", or "measured at 8:04pm".',
+      );
+    } else if (CLOCK.test(fenced)) {
       // The section HAS a clock, but it is the log's, not the author's — the
       // exact confusion that would otherwise date the card by whatever the
       // output happened to print. See evidenceTimestamp.
@@ -456,6 +516,9 @@ module.exports = {
   MARKERS,
   CLOCK,
   evidenceTimestamp,
+  evidenceClocks,
+  readEvidenceTime,
+  MEASUREMENT_CUES,
   splitFences,
   fencedBlocks,
   evidenceProblems,

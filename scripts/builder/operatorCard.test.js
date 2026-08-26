@@ -412,6 +412,48 @@ test('a command fence and a separate output fence is accepted', () => {
   }))), []);
 });
 
+test('the measured-at time is the one the author RAN, not the first one mentioned', () => {
+  // Review round 2, 2026-08-26. Reading the prose fixed the fence but kept
+  // "first clock wins", and evidence narrates before it proves — so this
+  // rendered as "measured at 3:12pm", the same wrong answer moved earlier in
+  // the sentence. It fails in the dangerous direction too: "as of 9:00am
+  // today" above yesterday's log would label a stale proof fresh.
+  const narrated = [
+    'The outage began at 3:12pm. I re-ran the failing call at 8:04pm:',
+    '```',
+    '$ curl -sS .../team/9013/plan',
+    '{"plan_name":"Free Forever"} 200',
+    '```',
+  ].join('\n');
+  assert.equal(evidenceTimestamp(narrated), '8:04pm');
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: narrated })));
+  assert.match(out, /THE CHECK BEHIND THIS ASK — measured at 8:04pm/);
+  assert.doesNotMatch(out, /measured at 3:12pm/,
+    'an outage time read as a measurement is what makes a stale proof look fresh');
+});
+
+test('two clocks and no measurement cue is refused rather than guessed at', () => {
+  // The heading asserts when this was checked, so a wrong time is worse than
+  // no time. Nothing here says which reading is the run, so it asks.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'At 3:12pm it was refusing. At 8:04pm it was fine.',
+      '```',
+      '$ curl -sS .../team/9013/plan',
+      '{"plan_name":"Free Forever"} 200',
+      '```',
+    ].join('\n'),
+  })));
+  assert.match(problems.join('\n'), /more than one time in it/);
+  assert.match(problems.join('\n'), /Mark the run/);
+});
+
+test('one unmarked clock is still taken at its word', () => {
+  // The ordinary card. There is nothing to confuse it with, so it needs no cue.
+  assert.equal(evidenceTimestamp('8:04pm\n```\ncmd\noutput\n```'), '8:04pm');
+});
+
 test('a clock needs a boundary after am/pm, or a timezone reads as a time', () => {
   assert.equal(evidenceTimestamp('cron next run 10:15 America/New_York'), null);
   assert.equal(evidenceTimestamp('9:30 ambient noise on the recording'), null);

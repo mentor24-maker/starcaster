@@ -45,19 +45,28 @@
  * explicitly rather than stemmed. Stemming is where a list like this quietly
  * grows a reach nobody reviewed.
  *
- * That explicitness has a cost, and it was paid once already: the first
- * version of this list carried the base and gerund forms but no THIRD-PERSON
- * ones, and review (2026-08-26) found that "this deletes all 550 rows", "it
- * rotates the key" and "approving this upgrades the workspace" all posted with
- * no evidence at all. Third person is how an approval is most naturally
- * phrased — the agent describes what the operator's yes will do — so every
- * verb here now carries its `-s` form beside its base and gerund. When you add
- * a verb, add all three.
+ * That explicitness has a cost, and it has been paid twice already. The first
+ * version carried the base and gerund forms but no THIRD-PERSON ones, and
+ * review (2026-08-26) found that "this deletes all 550 rows", "it rotates the
+ * key" and "approving this upgrades the workspace" all posted with no evidence
+ * at all. The fix added the `-s` forms — and the next review round found the
+ * mirror image: `costs` was there and the BASE form `cost` was not, so "this
+ * will cost about thirty dollars a month" was silent while "it costs about
+ * thirty dollars a month" fired. **When you add a verb, add all three forms**,
+ * and add it to the completeness test below the list, which is what actually
+ * holds the rule up.
+ *
+ * PAST TENSE IS DELIBERATELY ABSENT. "We deleted the rows last week" and "the
+ * plan was upgraded in July" describe something already done, and a report is
+ * not a proposal. The gate fires on what the operator's YES would cause, so
+ * base, gerund and third-person are the forms that belong here.
  *
  * `class` is one of:
  *   money         — he is being asked to part with money
  *   plan          — an account or subscription level changes
  *   irreversible  — it cannot be taken back once he does it
+ *
+ * `needsProposal: true` marks a BARE NOUN — see PROPOSAL_CUES below.
  */
 const TRIGGERS = [
   // ---- money -------------------------------------------------------------
@@ -68,16 +77,20 @@ const TRIGGERS = [
   { word: 'buying', class: 'money', why: 'the gerund reads as an ask in progress — "buying the seat now".' },
   { word: 'buys', class: 'money', why: 'third person: "approving this buys another seat".' },
   { word: 'purchase', class: 'money', why: 'the noun and verb both read as an instruction to pay.' },
+  { word: 'purchasing', class: 'money', why: 'the gerund — "purchasing the extra seat" — is the same ask.' },
   { word: 'purchases', class: 'money', why: 'third person, and the plural noun: "it purchases two more seats".' },
   { word: 'subscribe', class: 'money', why: 'a subscription is recurring money, so a wrong diagnosis keeps costing.' },
+  { word: 'subscribing', class: 'money', why: 'the gerund — "subscribing would fix the limit" — is the same ask.' },
   { word: 'subscribes', class: 'money', why: 'third person: "this subscribes the workspace to the paid tier".' },
-  { word: 'subscription', class: 'money', why: 'the noun names the recurring charge itself — "start a subscription".' },
+  { word: 'subscription', class: 'money', needsProposal: true, why: 'the noun names the recurring charge; it only proposes one when a cue governs it.' },
   { word: 'pay', class: 'money', why: 'direct. Innocent uses ("pay attention") are stripped before matching.' },
   { word: 'paying', class: 'money', why: 'the gerund is how an ask is softened — "it means paying for the tier".' },
   { word: 'pays', class: 'money', why: 'third person: "this pays for a year up front". "Pays off" is stripped first.' },
-  { word: 'payment', class: 'money', why: 'authorising a payment is the moment the money leaves.' },
-  { word: 'billing', class: 'money', why: 'a billing change is a money change wearing an administrative name.' },
-  { word: 'invoice', class: 'money', why: 'an invoice to approve is a bill to pay.' },
+  { word: 'payment', class: 'money', needsProposal: true, why: 'a payment to authorise is money leaving; a payment page is a screen.' },
+  { word: 'billing', class: 'money', needsProposal: true, why: 'a billing CHANGE is money wearing an administrative name; a billing page is not.' },
+  { word: 'invoice', class: 'money', needsProposal: true, why: 'an invoice to approve is a bill to pay; an invoice screenshot is a picture.' },
+  { word: 'cost', class: 'money', why: 'the base form: "this will cost about thirty dollars a month". "Cost nothing" is stripped first.' },
+  { word: 'costing', class: 'money', why: 'the gerund: "it would be costing us $30 a month from then on".' },
   { word: 'costs', class: 'money', why: 'the commonest third-person money sentence: "it costs $29 a month". "Costs nothing" is stripped first.' },
 
   // ---- plan / account level ---------------------------------------------
@@ -85,32 +98,84 @@ const TRIGGERS = [
   { word: 'upgrading', class: 'plan', why: 'the gerund is how the ask usually arrives — "upgrading would fix it".' },
   { word: 'upgrades', class: 'plan', why: 'third person: "approving this upgrades the workspace to Business".' },
   { word: 'downgrade', class: 'plan', why: 'the other direction is not free either — it can drop data or limits.' },
+  { word: 'downgrading', class: 'plan', why: 'the gerund form of the same loss of data or limits.' },
   { word: 'downgrades', class: 'plan', why: 'third person, and the same loss of data or limits.' },
-  { word: 'paid plan', class: 'plan', why: 'the literal phrase option A used. Bare "plan" is far too common to match.' },
+  { word: 'paid plan', class: 'plan', why: 'the literal phrase option A used, and it needs no verb: "put the workspace back on a paid plan". Bare "plan" is far too common to match.' },
   { word: 'plan change', class: 'plan', why: 'names the act directly, without saying which direction.' },
 
   // ---- irreversible ------------------------------------------------------
   { word: 'delete', class: 'irreversible', why: 'a deletion done on a wrong diagnosis cannot be undone by re-measuring.' },
   { word: 'deleting', class: 'irreversible', why: 'the gerund describes the act mid-proposal — "deleting the stale rows".' },
-  { word: 'deletion', class: 'irreversible', why: 'the noun is the administrative spelling — "approve the deletion".' },
   { word: 'deletes', class: 'irreversible', why: 'third person: "this deletes all 550 untenanted rows".' },
+  { word: 'deletion', class: 'irreversible', needsProposal: true, why: 'the administrative spelling — "approve the deletion" proposes one, "the deletion already happened" reports one.' },
   { word: 'rotate', class: 'irreversible', why: 'rotating a credential breaks every consumer of the old one at once.' },
   { word: 'rotating', class: 'irreversible', why: 'the gerund form — "rotating it will fix the 401" — is the same request.' },
-  { word: 'rotation', class: 'irreversible', why: 'the noun form of the same act — "authorise the key rotation".' },
   { word: 'rotates', class: 'irreversible', why: 'third person: "it rotates CHANNELS_ENCRYPTION_KEY".' },
+  { word: 'rotation', class: 'irreversible', needsProposal: true, why: 'the noun form — "authorise the key rotation" proposes one, "the rotation is already done" does not.' },
   { word: 'revoke', class: 'irreversible', why: 'a revoked token cannot be un-revoked; it can only be re-minted.' },
+  { word: 'revoking', class: 'irreversible', why: 'the gerund — "revoking the old key" — is the same act mid-proposal.' },
   { word: 'revokes', class: 'irreversible', why: 'third person: "this revokes the old publishable key".' },
   { word: 'migrate', class: 'irreversible', why: 'a database migration rewrites rows; the down path is rarely tested.' },
-  { word: 'migration', class: 'irreversible', why: 'same, noun — "run the migration" is an operator action here.' },
+  { word: 'migrating', class: 'irreversible', why: 'the gerund — "migrating the pages tonight" — is the same act.' },
   { word: 'migrates', class: 'irreversible', why: 'third person: "this migrates every page to the new schema".' },
+  { word: 'migration', class: 'irreversible', needsProposal: true, why: 'the noun — "run the migration" is an operator action; "the migration ran last month" is history.' },
   { word: 'force-push', class: 'irreversible', why: 'rewrites shared history; a standing deny rule in this repo already.' },
   { word: 'force push', class: 'irreversible', why: 'the same act, spelled without the hyphen.' },
   { word: 'wipe', class: 'irreversible', why: 'no partial wipe — it is all of it, and then it is gone.' },
+  { word: 'wiping', class: 'irreversible', why: 'the gerund, and the same absence of a partial.' },
   { word: 'wipes', class: 'irreversible', why: 'third person, and the same absence of a partial.' },
   { word: 'purge', class: 'irreversible', why: 'as above, and usually applied to the backup as well.' },
+  { word: 'purging', class: 'irreversible', why: 'the gerund — "purging the archive tonight".' },
   { word: 'purges', class: 'irreversible', why: 'third person: "it purges the archive too".' },
   { word: 'truncate', class: 'irreversible', why: 'empties a table with no row-level undo.' },
+  { word: 'truncating', class: 'irreversible', why: 'the gerund — "truncating observe_usage_logs".' },
   { word: 'truncates', class: 'irreversible', why: 'third person: "this truncates observe_usage_logs".' },
+];
+
+/**
+ * The cues that turn a bare NOUN into a proposal.
+ *
+ * WHY (review round 2, 2026-08-26). `billing`, `invoice`, `deletion`,
+ * `rotation` and `migration` name a thing rather than propose an act, so they
+ * fired on cards that asked for nothing at all:
+ *
+ *   "Nothing right now. The billing page renders correctly again."
+ *   "Nothing needed — the deletion already happened last week."
+ *   "Just confirm you saw the invoice screenshot."
+ *
+ * All three were REFUSED, which means the agent could not hand the ticket off
+ * until it reworded a card that was already correct. AC3's reasoning applies
+ * exactly: a gate that fires on everything gets bypassed, and then it protects
+ * nothing.
+ *
+ * A verb needs no cue — proposing IS what a verb does here, which is why past
+ * tense is left out of the list above. A noun fires only when one of these
+ * cues appears in the SAME sentence, so "approve the deletion", "run the
+ * migration" and "authorise the key rotation" all still fire.
+ *
+ * The known limit, stated rather than hidden: a bare noun phrase with no verb
+ * at all ("The key rotation — yes or no?") does not fire. The verb forms are
+ * the primary net; this list only rescues the noun spellings.
+ */
+const PROPOSAL_CUES = [
+  { word: 'approve', why: 'the commonest way an operator ask is phrased: "approve the deletion".' },
+  { word: 'approving', why: 'the gerund — "approving the rotation" — is the same request.' },
+  { word: 'approves', why: 'third person, for consistency with the trigger list\'s own rule.' },
+  { word: 'authorise', why: 'the British spelling of the same act; both are in use here.' },
+  { word: 'authorize', why: 'the American spelling of the same act.' },
+  { word: 'authorising', why: 'gerund, British spelling.' },
+  { word: 'authorizing', why: 'gerund, American spelling.' },
+  { word: 'run', why: '"run the migration" is the plainest instruction there is.' },
+  { word: 'running', why: 'the gerund — "running the migration tonight".' },
+  { word: 'start', why: '"start a subscription" proposes a recurring charge.' },
+  { word: 'starting', why: 'the gerund form of the same proposal.' },
+  { word: 'perform', why: 'the formal register — "perform the rotation".' },
+  { word: 'execute', why: 'the same, in the register a runbook uses.' },
+  { word: 'trigger', why: '"trigger the migration" is how a scheduled job is asked for.' },
+  { word: 'proceed', why: '"proceed with the deletion" is an approval with the verb moved.' },
+  { word: 'go ahead', why: '"go ahead with the rotation" — the plainest English form of yes.' },
+  { word: 'sign off', why: '"sign off on the invoice" is an approval of a bill.' },
+  { word: 'kick off', why: '"kick off the migration" — the same instruction, informally.' },
 ];
 
 /**
@@ -125,13 +190,19 @@ const TRIGGERS = [
 const INNOCENT_PHRASES = [
   'pay attention',
   'pays attention',
-  'pays off',
   'paying attention',
+  // "that will pay off later" is a figure of speech, not a payment. All three
+  // forms, because review found `pays off` and `paying off` listed while the
+  // base `pay off` was not — the same missing-form gap the triggers had.
+  'pay off',
+  'pays off',
   'paying off',
   // "costs" earns its place on "it costs $29 a month", but the same word is
-  // how an agent says an option is free. Both spellings of that, and nothing
-  // more — anything genuinely ambiguous should fire and be answered with a
-  // paste.
+  // how an agent says an option is free. Both spellings of that, in both the
+  // base and third-person forms, and nothing more — anything genuinely
+  // ambiguous should fire and be answered with a paste.
+  'cost nothing',
+  'cost you nothing',
   'costs nothing',
   'costs you nothing',
 ];
@@ -144,12 +215,35 @@ function escapeRegExp(text) {
  * A whole-word, whitespace-flexible matcher for one trigger. Multi-word
  * triggers ("paid plan") tolerate a line break between the words, because a
  * card wrapped by an editor should read the same as one that was not.
+ *
+ * PLAIN `\b` BOUNDARIES, and that is load-bearing. The first version bounded
+ * each word with "not a word character or hyphen", on the reasoning that `\b`
+ * would not fire next to a hyphen. That reasoning was wrong — `/\bdelete\b/`
+ * matches "hard-delete" perfectly well, and `/\bforce-push\b/` matches too —
+ * so the custom boundary only ever REMOVED matches. Review (round 2,
+ * 2026-08-26) found "hard-delete", "force-delete", "auto-purge" and
+ * "key re-rotation" posting with no evidence demanded at all: not
+ * refused-and-reworded, never checked. Those are ordinary English spellings of
+ * exactly the irreversible acts this gate exists for.
  */
 function triggerPattern(word) {
   const body = String(word).trim().split(/\s+/).map(escapeRegExp).join('\\s+');
-  // \b would not fire next to a hyphen, so "force-push" is bounded by
-  // "not a word character or hyphen" on each side instead.
-  return new RegExp(`(^|[^\\w-])${body}($|[^\\w-])`, 'i');
+  return new RegExp(`\\b${body}\\b`, 'i');
+}
+
+/** Does this sentence propose an act, rather than mention a thing? */
+function proposesAction(sentence) {
+  return PROPOSAL_CUES.some((cue) => triggerPattern(cue.word).test(sentence));
+}
+
+/**
+ * Sentences, split the way a card is actually written: full stops, question
+ * and exclamation marks, semicolons and line breaks. The semicolon matters —
+ * "Nothing right now; the rotation is already done" is two clauses, and only
+ * the first one is the ask.
+ */
+function sentences(text) {
+  return String(text || '').split(/[.!?;\n]+/);
 }
 
 /**
@@ -161,9 +255,15 @@ function costlyTriggers(text) {
   for (const phrase of INNOCENT_PHRASES) {
     haystack = haystack.split(phrase).join(' ');
   }
+  const clauses = sentences(haystack);
+  const matches = TRIGGERS.filter((trigger) => {
+    const pattern = triggerPattern(trigger.word);
+    if (!trigger.needsProposal) return pattern.test(haystack);
+    // A bare noun fires only where a cue in the SAME sentence proposes it.
+    return clauses.some((clause) => pattern.test(clause) && proposesAction(clause));
+  });
   // A bare dollar amount is a money ask however it is phrased — "$25/month",
   // "$0.02 a call". It has no word form to list, so it is matched separately.
-  const matches = TRIGGERS.filter((trigger) => triggerPattern(trigger.word).test(haystack));
   if (/\$\s?\d/.test(haystack)) {
     matches.unshift({ word: '$ amount', class: 'money', why: 'a figure in dollars is a money ask whatever words surround it.' });
   }
@@ -184,8 +284,10 @@ function describeTriggers(triggers) {
 
 module.exports = {
   TRIGGERS,
+  PROPOSAL_CUES,
   INNOCENT_PHRASES,
   triggerPattern,
+  proposesAction,
   costlyTriggers,
   isCostlyAsk,
   describeTriggers,

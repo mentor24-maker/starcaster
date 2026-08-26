@@ -341,6 +341,34 @@ and third person is the most natural way to describe what the operator's yes
 will do. Every verb in the list now carries all three forms, with a test that
 fails if a future verb arrives with a form missing.
 
+**A second review round, the same day, found three more of the same shape** —
+the gate doing the wrong thing silently rather than refusing. (1) Reading the
+prose fixed the fence but kept *first clock wins*, and evidence narrates before
+it proves: "the outage began at 3:12pm. I re-ran the failing call at 8:04pm"
+rendered as *measured at 3:12pm*. The time is now the last one a measurement
+cue governs (`measured|ran|re-ran|checked at`…); two clocks with no cue are
+refused rather than guessed at, because the heading is load-bearing and a wrong
+time is worse than none. (2) Each trigger was bounded by "not a word character
+**or hyphen**", on the belief that `\b` would not fire beside a hyphen — it does,
+so the custom boundary only ever removed matches, and `hard-delete`,
+`force-delete`, `auto-purge` and `key re-rotation` were never checked at all.
+Plain `\b` now. (3) `costs` was listed and the base form `cost` was not, so "this
+will cost thirty dollars a month" was silent; the completeness test now names
+`cost` and twelve other verbs, so the rule it describes is actually held up.
+
+**And one correction in the other direction.** The bare nouns — `billing`,
+`invoice`, `deletion`, `rotation`, `migration`, `payment`, `subscription` —
+fired on any sentence that merely mentioned them, so "nothing needed, the
+deletion already happened last week" and "just confirm you saw the invoice
+screenshot" were both REFUSED and the agent could not hand the ticket off until
+it reworded a card that was already right. A noun now fires only where a
+proposal cue governs it in the same sentence (`approve the deletion`, `run the
+migration`, `go ahead with the rotation`); a verb needs no cue, because
+proposing is what a verb does here — which is also why past tense is
+deliberately absent from the list. The known limit, stated rather than hidden:
+a bare noun phrase with no verb at all ("the key rotation — yes or no?") does
+not fire, and the verb forms are the primary net.
+
 ### ClickUp deletes `> ` blockquotes — from comments AND descriptions
 
 Found live while building the above, on 2026-08-22. A body posted with

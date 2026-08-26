@@ -41,6 +41,27 @@ list of words that trip the rule knew "delete" and "deleting" but not "deletes",
 so "this deletes all 550 rows" — the most natural way to describe what your yes
 would do — sailed straight through with no proof at all. Every verb now carries
 all three forms, and a test fails if a future one arrives missing any of them.
+
+A second review round found three more, all of the same kind — the rule quietly
+doing the wrong thing rather than complaining. The heading still took the first
+time it found, and proof usually tells the story before it shows the receipt
+("the outage started at 3:12pm; I re-ran it at 8:04pm"), so the card announced
+the outage time as the measurement. It now reads the time the agent says it ran
+the check at, and if there are two times and nothing says which is which, it
+refuses and asks rather than guessing. A hyphen also switched the whole rule
+off: "approve the hard-delete of those rows" was never checked at all, because
+of a bad assumption about how word matching works. And "this will cost about
+thirty dollars a month" slipped through while "it costs about thirty dollars a
+month" was caught, because the list had one spelling of the word and not the
+other.
+
+The last fix went the other way. Words like "billing", "invoice" and "deletion"
+were tripping the rule on cards that asked for nothing — "nothing needed, the
+deletion already happened last week" was being refused, which is exactly how a
+rule teaches people to route around it. Those words now only count when
+something in the same sentence actually proposes the act: "approve the
+deletion" still asks for proof, "the deletion already happened" does not.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const {
   TRIGGERS,
+  PROPOSAL_CUES,
   INNOCENT_PHRASES,
   costlyTriggers,
   isCostlyAsk,
@@ -34,12 +35,76 @@ test('a dollar figure fires however it is phrased', () => {
 test('every listed trigger word actually fires on its own', () => {
   // Otherwise a word could sit in the list looking protective while matching
   // nothing — the shape of a check that silently does not run (DOCTRINE 3.11).
+  // A bare noun is put in the frame it is meant to fire in, since on its own
+  // it names a thing rather than proposing one — see PROPOSAL_CUES.
   for (const trigger of TRIGGERS) {
+    const sentence = trigger.needsProposal
+      ? `Please approve the ${trigger.word}.`
+      : `Please ${trigger.word} it.`;
     assert.ok(
-      isCostlyAsk(`Please ${trigger.word} it.`),
-      `"${trigger.word}" is in the list but does not fire`,
+      isCostlyAsk(sentence),
+      `"${trigger.word}" is in the list but does not fire on "${sentence}"`,
     );
   }
+});
+
+test('a hyphenated spelling fires — the whole gate used to vanish on one', () => {
+  // Found by review round 2, 2026-08-26. Each word was bounded by "not a word
+  // character OR HYPHEN", so a trigger preceded by a hyphen never matched and
+  // these posted with no evidence demanded at all — not refused and reworded,
+  // never checked. They are ordinary English spellings of exactly the
+  // irreversible acts criterion 1 names.
+  assert.ok(isCostlyAsk('Approve the hard-delete of the 550 rows.'), 'hard-delete');
+  assert.ok(isCostlyAsk('Authorise a force-delete of the archive.'), 'force-delete');
+  assert.ok(isCostlyAsk('Run the auto-purge tonight.'), 'auto-purge');
+  assert.ok(isCostlyAsk('Approve the key re-rotation.'), 're-rotation');
+  // And the hyphenated trigger the old boundary was written for still works.
+  assert.ok(isCostlyAsk('It needs a force-push to land.'), 'force-push');
+});
+
+test('the base form of a money verb fires, not only the -s form', () => {
+  // The mirror image of the missing third-person forms, found the same day:
+  // `costs` was listed and `cost` was not, so the commoner phrasing was silent.
+  assert.ok(isCostlyAsk('This will cost about thirty dollars a month.'), 'cost');
+  assert.ok(isCostlyAsk('It costs about thirty dollars a month.'), 'costs');
+  assert.ok(isCostlyAsk('It would be costing us thirty dollars a month.'), 'costing');
+});
+
+test('a bare noun needs a cue that PROPOSES it, not a sentence that mentions it', () => {
+  // Review round 2: these five nouns fired on cards that asked for nothing,
+  // so `buildCard` threw and the agent could not hand the ticket off until it
+  // reworded a card that was already correct. Criterion 3's reasoning applies
+  // directly — a gate that fires on everything gets bypassed, and then it
+  // protects nothing.
+  for (const needed of [
+    'Nothing right now. The billing page renders correctly again.',
+    'Nothing needed — the deletion already happened last week.',
+    'Nothing right now; the rotation is already done.',
+    'Just confirm you saw the invoice screenshot.',
+    'The migration ran last month, so nothing is needed from you.',
+  ]) {
+    assert.equal(isCostlyAsk(needed), false, needed);
+  }
+  // ...and the same nouns still fire when something actually proposes them.
+  for (const needed of [
+    'Approve the deletion of the 550 untenanted rows.',
+    'Run the migration on Tuesday when the site is quiet.',
+    'Authorise the credential rotation.',
+    'Please go ahead with the rotation tonight.',
+    'Start a subscription on the paid tier.',
+    'Sign off on the invoice so I can file it.',
+  ]) {
+    assert.ok(isCostlyAsk(needed), needed);
+  }
+});
+
+test('a proposal cue only rescues the noun in ITS OWN sentence', () => {
+  // Otherwise "approve the copy tweak" anywhere in the ask would drag every
+  // later mention of a noun into the gate.
+  assert.equal(
+    isCostlyAsk('Approve the copy tweak on the header. The deletion already ran last week.'),
+    false,
+  );
 });
 
 test('third-person forms fire — the natural way to phrase an approval', () => {
@@ -63,9 +128,21 @@ test('every verb carries its base, gerund and third-person form together', () =>
     ['spend', 'spending', 'spends'],
     ['buy', 'buying', 'buys'],
     ['pay', 'paying', 'pays'],
+    // `cost` is here because it was the one that went missing next: review
+    // round 2 found `costs` listed and the base form absent, and this test
+    // passed with the hole open because it did not name the verb.
+    ['cost', 'costing', 'costs'],
+    ['purchase', 'purchasing', 'purchases'],
+    ['subscribe', 'subscribing', 'subscribes'],
     ['upgrade', 'upgrading', 'upgrades'],
+    ['downgrade', 'downgrading', 'downgrades'],
     ['delete', 'deleting', 'deletes'],
     ['rotate', 'rotating', 'rotates'],
+    ['revoke', 'revoking', 'revokes'],
+    ['migrate', 'migrating', 'migrates'],
+    ['wipe', 'wiping', 'wipes'],
+    ['purge', 'purging', 'purges'],
+    ['truncate', 'truncating', 'truncates'],
   ]) {
     for (const form of [base, gerund, third]) {
       assert.ok(listed.has(form), `"${form}" is missing from TRIGGERS`);
@@ -118,5 +195,14 @@ test('every trigger carries its reasoning, so adding one means saying why', () =
   for (const trigger of TRIGGERS) {
     assert.ok(trigger.why && trigger.why.length > 15, `${trigger.word} has no reasoning`);
     assert.ok(['money', 'plan', 'irreversible'].includes(trigger.class), `${trigger.word} has an unknown class`);
+  }
+});
+
+test('every proposal cue carries its reasoning and actually rescues a noun', () => {
+  // Same contract as the trigger list: adding a cue means saying why, and a
+  // cue that matches nothing is a check that silently does not run.
+  for (const cue of PROPOSAL_CUES) {
+    assert.ok(cue.why && cue.why.length > 15, `${cue.word} has no reasoning`);
+    assert.ok(isCostlyAsk(`Please ${cue.word} the migration.`), `${cue.word} does not fire`);
   }
 });
