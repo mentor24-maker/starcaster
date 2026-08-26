@@ -45,5 +45,23 @@ const finalHtml = injectContentHashes(assembled);
 fs.writeFileSync(outputPath, finalHtml, 'utf8');
 console.log(`Successfully built public/app-shell.html from ${files.length} top-level partials with recursive includes.`);
 
+// Static standalone pages (2026-08-24, task 86bbkh288). These four used to be
+// COMMITTED in public/ with ?v= pins written into them in place — which meant
+// a computed hash lived in files git merges. That one arrangement produced the
+// months of ?v= trouble: branches conflicting on files neither edited, catch-up
+// merges restoring stale hashes CI then rejected, and GitHub reporting phantom
+// conflicts because it cannot run a local merge driver. Now they follow the
+// same shape as app-shell.html: bare references in committed source, hashes
+// applied to the generated, gitignored output. Vercel bundles them into the
+// functions via includeFiles ("public/*.html"), exactly as it already does for
+// app-shell.html.
+const staticPagesDir = path.join(__dirname, '../src/static-pages');
+const staticPages = fs.readdirSync(staticPagesDir).filter((f) => f.endsWith('.html')).sort();
+for (const page of staticPages) {
+  const html = fs.readFileSync(path.join(staticPagesDir, page), 'utf8');
+  fs.writeFileSync(path.join(publicDir, page), injectContentHashes(html), 'utf8');
+}
+console.log(`Built ${staticPages.length} static page(s) from src/static-pages: ${staticPages.join(', ')}`);
+
 const { buildLegalPages } = require('./build_legal');
 buildLegalPages();

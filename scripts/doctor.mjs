@@ -25,6 +25,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -185,7 +186,7 @@ if (!env) {
   // worktree starts with no way to reach any database at all.
   bad(
     'This folder has no settings file, so it cannot reach any database.',
-    'cp ../../../.env.local .      (copies your settings from the main folder)',
+    'npm run env:local      (points this folder at the database on this machine)',
     envPath,
   );
 } else if (!supabaseUrl) {
@@ -363,6 +364,26 @@ if (missing.length) {
   );
 } else {
   ok('All present, and newer than the code behind them.');
+}
+
+// --- the vault (canon nothing else reads) ----------------------------------
+
+heading('VAULT');
+
+// Read-only drift check: canon committed-but-unpushed, or doctrine citing a
+// file that does not exist. A missing vault is CANNOT TELL, never a failure —
+// worktrees and CI do not carry one.
+try {
+  const { checkVaultDrift } = await import('./builder/vaultDrift.js').then((m) => m.default || m);
+  const vaultDir = path.join(os.homedir(), 'vault');
+  const { findings, cannotTell, ok: vaultOk, checked } = checkVaultDrift(vaultDir);
+  if (findings.length) {
+    for (const f of findings) bad(f, 'see `npm run check:vault-drift`');
+  }
+  for (const c of cannotTell) unknown(c);
+  if (checked && vaultOk) ok('Committed, pushed, and every doctrine citation resolves.');
+} catch (err) {
+  unknown(`Vault check could not run (${err.message}).`);
 }
 
 // --- main branch: no stray edits in the shared checkout ---------------------

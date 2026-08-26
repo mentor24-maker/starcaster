@@ -19,6 +19,7 @@ const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
 const { forwardBugReport } = require('../lib/bugReportForward');
+const { emailBugReport } = require('../lib/bugReportEmail');
 const {
   storeBugReportScreenshot,
   verifyBugReportScreenshots,
@@ -208,6 +209,34 @@ async function handle(req, res, pathname, method) {
     return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
   }
 
+  // GET /api/public/bug-report/viewer?projectId=… — which visibility tier the
+  // current browser is, for the Bug Report module's RENDER-side gating:
+  // public (no tenant admin session), client (a signed-in tenant admin,
+  // editor role), staff (admin role). This is UX, not security — the submit
+  // endpoint below re-verifies the session before trusting a tier claim.
+  if (pathname === '/api/public/bug-report/viewer' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    // Same treatment as both neighbours below: unauthenticated, uncached, two
+    // lookups per call (project resolve + admin session), and a gated module
+    // fires it on every page load. checkEndpointLimit returns true when it has
+    // ALREADY sent the 429 (CLAUDE.md landmine 11) — bail out, do not invert.
+    if (checkEndpointLimit(req, res, 'public.bugReportViewer')) return true;
+
+    const { searchParams } = getUrlObj(req);
+    // A read, not a write — but it answers "which project is this?" for the
+    // two writes below, so it resolves through the SAME door they do rather
+    // than keeping a second copy of the rule that could drift from theirs.
+    const resolved = await resolvePublicProjectForRequest(req, searchParams.get('projectId'));
+    if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
+    let tier = 'public';
+    const token = projectAdmin.readAdminSessionToken(req);
+    const session = token ? await getAdminSession(token) : null;
+    if (session && String(session.projectId) === String(resolved.projectId)) {
+      tier = session.adminUser?.isStaff || session.adminUser?.role === 'admin' ? 'staff' : 'client';
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    return respondJson(res, req, 200, { ok: true, data: { tier } }), true;
+  }
+
   // POST /api/public/bug-report/screenshot — one screenshot for a report that
   // is about to be submitted. Why one file per request, why magic bytes, and
   // the orphan cleanup rule: lib/projectBugReportScreenshots.js.
@@ -316,11 +345,19 @@ async function handle(req, res, pathname, method) {
     // the function once the response goes out.
     const forward = await forwardBugReport(result.data, scope);
 
+    // Same contract again, and independent of the forward above: whether the
+    // ClickUp task landed has no bearing on whether the operator asked to be
+    // emailed. Awaited for the same freeze reason; cannot throw, cannot fail
+    // the reporter's request, and never trusts the request body for the
+    // toggle (lib/bugReportEmail.js, rule 4).
+    const emailed = await emailBugReport(result.data, scope);
+
     return respondJson(res, req, 201, {
       ok: true,
       data: {
         ...result.data,
         status: forward.ok ? 'forwarded' : 'failed_forward',
+        emailed: emailed.sent,
         screenshots: screenshots.data.assets,
       },
     }), true;

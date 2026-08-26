@@ -16,6 +16,22 @@ const {
 const OPERATOR = 48012725;
 const AGENT = 99999999;
 
+/**
+ * How often the relay actually wakes, read from the one file that decides it.
+ * `INTERVAL_SECONDS` in scripts/install_bus_relay.sh generates the launchd
+ * plist, so it is the source of truth; copying the number into this test would
+ * just create a second place for it to be wrong.
+ */
+function relayIntervalSeconds() {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'install_bus_relay.sh'), 'utf8');
+  const m = src.match(/^INTERVAL_SECONDS=(\d+)/m);
+  assert.ok(m, 'install_bus_relay.sh must declare INTERVAL_SECONDS');
+  return Number(m[1]);
+}
+
 /** Comment factory: t is a relative timestamp so ordering is readable. */
 let nextId = 1;
 function c(t, userId, text) {
@@ -297,9 +313,8 @@ test('a refusal marker keeps its reason, em-dash and all', () => {
   assert.equal(parsed.at, '2026-08-22T04:00:00.000Z');
 });
 
-test('a merge and a conflict hand-off are terminal, and stay terminal', () => {
+test('a MERGE is terminal, and stays terminal', () => {
   assert.equal(parseMergeMarker(`${MERGE_MARKER} merged PR #372 at 2026-08-22T04:00:00.000Z — 2026-08-22T04:00:01.000Z`).kind, 'terminal');
-  assert.equal(parseMergeMarker(`${MERGE_MARKER} conflict hand-off on PR #380 — 2026-08-22T04:00:00.000Z`).kind, 'terminal');
 });
 
 test('markers written before this change still parse (nothing needs migrating)', () => {
@@ -367,4 +382,332 @@ test('a TERMINAL marker is still spent forever — a merged PR is never re-merge
     refused: new Map(),
   });
   assert.equal(out.act, 'ignore');
+});
+
+// ---------- the comment must not promise what the marker does not do (86bbk0g4u)
+
+const {
+  markerKind,
+  refusalNotice,
+  conflictHandOffNotice,
+  mergedNotice,
+  APPROVAL_CARRIES_OVER,
+} = require('./mergeOnComment.js');
+
+const SOME_PR = { number: 380, url: PR_URL };
+
+/**
+ * THE INVARIANT, asserted over every notice the merge path can post.
+ *
+ * A 'refused' marker is re-decided on later passes, so its body MAY promise
+ * the approval carries over. A 'terminal' marker is spent forever, so its
+ * body MUST NOT — that promise is exactly the lie the conflict hand-off told
+ * eleven tickets on 2026-08-23. Building body and marker in one function is
+ * what makes this checkable at all; before, they lived in different files.
+ */
+function assertPromiseMatchesMarker(notice, label) {
+  const kind = markerKind(notice.marker);
+  const promises = notice.body.includes(APPROVAL_CARRIES_OVER);
+  if (kind === 'terminal') {
+    assert.equal(promises, false, `${label}: terminal marker (${notice.marker}) must not promise the approval carries over`);
+  } else {
+    assert.equal(promises, true, `${label}: re-decidable marker (${notice.marker}) should say so`);
+  }
+}
+
+test('EVERY notice the merge path posts says truthfully whether the approval survives', () => {
+  assertPromiseMatchesMarker(
+    refusalNotice({ commentId: '77', why: 'checks are red: verify (FAILURE)', plainEnglish: 'x' }),
+    'refusal',
+  );
+  assertPromiseMatchesMarker(
+    conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null }),
+    'hand-off, unchecked locally',
+  );
+  assertPromiseMatchesMarker(
+    conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' } }),
+    'hand-off, real overlap',
+  );
+  assertPromiseMatchesMarker(
+    mergedNotice({ commentId: '77', pr: SOME_PR, mergedAt: '2026-08-23T10:00:00.000Z' }),
+    'merged',
+  );
+});
+
+test('the two hand-off kinds say two different things', () => {
+  // 'needs-rebuild' was a third kind while committed HTML carried ?v= asset
+  // pins; retired 2026-08-24 with the pins themselves (task 86bbkh288).
+  const of = (localVerdict) => conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict }).body;
+  const real = of({ kind: 'real-conflict', reason: 'both touched routes/index.js' });
+  const unknown = of({ kind: 'unknown', reason: 'the local merge could not run' });
+  assert.notEqual(real, unknown);
+  assert.match(real, /both changed the same lines/);
+  assert.match(real, /never resolve one blind/);
+  assert.match(unknown, /could not check whether that is true/);
+});
+
+test('an old-style realConflict verdict still reads correctly', () => {
+  // Belt and braces: the boolean shape predates `kind`, and a caller that has
+  // not been updated must not silently fall through to "unknown".
+  const body = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'overlap' },
+  }).body;
+  assert.match(body, /both changed the same lines/,
+    'the pre-`kind` boolean shape must still read as a real overlap');
+});
+
+test('THE BUG: the hand-off told him his merge still stood, then threw it away', () => {
+  // Verbatim from the 2026-08-23 record: the comment said "then your merge
+  // still stands and this goes through", and the marker beside it parsed as
+  // terminal, so no later pass ever looked again.
+  const notice = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
+  assert.equal(markerKind(notice.marker), 'refused');
+  // The opening line says what happened, in the operator's own requested
+  // shape (2026-08-24). It used to open "Needs a hand", which read as a
+  // request for him to do something in a lane where the only thing he owes
+  // is the merge word he had already given.
+  assert.match(notice.body, /was not able to merge on the last attempt/i);
+  assert.ok(notice.body.includes(APPROVAL_CARRIES_OVER));
+});
+
+test('the hand-off never asks the operator for a person, or for anything at all', () => {
+  // He reads this comment in Ready to launch, which is HIS lane: the only
+  // thing owed there is his merge word, and he has already given it. Wording
+  // that reads as a request sends him looking for an action that does not
+  // exist — he said so on 2026-08-24, about this exact comment.
+  for (const localVerdict of [
+    null,
+    { realConflict: true, reason: 'both touched routes/index.js' },
+    { realConflict: false, reason: 'the catch-up could not be pushed' },
+  ]) {
+    const { body } = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict });
+    assert.doesNotMatch(body, /needs a person|needs a hand/i, `asks for a person: ${body}`);
+  }
+});
+
+test('only a REAL overlap is denied the "next run" promise', () => {
+  // The whole family of bugs behind this ticket is the machine promising an
+  // outcome it cannot deliver. A real overlap will hit the same wall next
+  // pass, so it must not say the next run merges it; anything else retries
+  // usefully and must say so, or he is left wondering whether to act.
+  const real = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' },
+  }).body;
+  assert.doesNotMatch(real, /on the next run/i);
+  assert.match(real, /on a later run/i);
+  assert.match(real, /both changed the same lines/i);
+
+  for (const localVerdict of [null, { realConflict: false, reason: 'the catch-up could not be pushed' }]) {
+    const { body } = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict });
+    assert.match(body, /merged on the next run/i, `no retry promise: ${body}`);
+  }
+});
+
+test('the hand-off marker and the reason the plumbing compares are the SAME string', () => {
+  // The quieting in clickup_direct.mjs compares the reason a previous pass
+  // recorded against the one it just derived. If those two ever differ by a
+  // character, a permanently-conflicting ticket gets an identical comment
+  // on every pass instead of going silent.
+  const notice = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
+  const derived = notice.marker.replace(/^refused:\s*/, '');
+  const readBack = parseMergeMarker(`${MERGE_MARKER} ${notice.marker} — 2026-08-23T10:00:00.000Z`);
+  assert.equal(readBack.kind, 'refused');
+  assert.equal(readBack.reason, derived);
+});
+
+test('MIGRATION: the eleven already-stuck hand-offs read back as re-decidable', () => {
+  // Written before this change, so no "refused:" prefix. They must now heal
+  // themselves on the next pass rather than needing a command run by hand.
+  const legacy = parseMergeMarker(`${MERGE_MARKER} conflict hand-off on PR #380 — 2026-08-23T04:00:00.000Z`);
+  assert.equal(legacy.kind, 'refused');
+  assert.equal(legacy.legacy, true);
+  assert.equal(legacy.reason, 'conflict hand-off on PR #380');
+
+  // ...and the reason it yields is byte-identical to what a NEW hand-off
+  // records, so a ticket that is still genuinely conflicted stays quiet
+  // instead of being re-announced once per pass.
+  const fresh = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
+  assert.equal(fresh.marker.replace(/^refused:\s*/, ''), legacy.reason);
+});
+
+test('MIGRATION does not reach a merged marker — that stays spent forever', () => {
+  for (const spent of [
+    'merged PR #380 at 2026-08-22T04:00:00.000Z',
+    'conflict hand-off on PR #380 and then some',
+    'handed off',
+  ]) {
+    assert.equal(parseMergeMarker(`${MERGE_MARKER} ${spent} — 2026-08-23T04:00:00.000Z`).kind, 'terminal', spent);
+  }
+});
+
+test('AC2: a conflict cleared since the hand-off merges on the next pass, unprompted', () => {
+  const cmd = c(3, OPERATOR, 'merge');
+  const comments = [reviewPassed(1), prOpened(2), cmd];
+
+  // Pass 1 reached 'merge' on the ClickUp side and then hit a conflict at the
+  // GitHub gate. Rebuild what bus-relay records: the hand-off marker, parsed
+  // back off the reply thread exactly as the live pass does.
+  const first = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments });
+  assert.equal(first.act, 'merge');
+  assert.equal(
+    githubGate({ state: 'OPEN', mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }).action,
+    'conflict',
+  );
+  const notice = conflictHandOffNotice({ commentId: first.commentId, pr: SOME_PR, localVerdict: null });
+  const parsed = latestMergeMarker([marker(4, notice.marker)]);
+  const refused = new Map([[first.commentId, parsed.reason]]);
+
+  // Someone merges main into the branch and pushes. Next pass: the SAME
+  // authorization is still live — under the old terminal marker it was in
+  // `handled` and this decision was never reached at all.
+  const second = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments, refused });
+  assert.equal(second.act, 'merge');
+  assert.equal(second.pr.number, 362);
+  assert.equal(second.priorRefusal, 'conflict hand-off on PR #380');
+  assert.equal(
+    githubGate({
+      state: 'OPEN', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
+      statusCheckRollup: [{ name: 'verify', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+    }).action,
+    'merge',
+  );
+});
+
+test('a still-conflicted ticket stays quiet: the reason it derives is the one it recorded', () => {
+  const cmd = c(3, OPERATOR, 'merge');
+  const comments = [reviewPassed(1), prOpened(2), cmd];
+  const notice = conflictHandOffNotice({ commentId: String(cmd.id), pr: SOME_PR, localVerdict: null });
+  const refused = new Map([[String(cmd.id), notice.marker.replace(/^refused:\s*/, '')]]);
+  const again = mergeDecision({ status: 'ready to launch', operatorId: OPERATOR, comments, refused });
+  // mergeDecision cannot know about the conflict — it lives at the GitHub
+  // gate — so it correctly still says 'merge' and hands the plumbing the
+  // reason to compare against.
+  assert.equal(again.act, 'merge');
+  assert.equal(again.priorRefusal, notice.marker.replace(/^refused:\s*/, ''));
+});
+
+// ── Merging in one pass (task 86bbk2fb5) ────────────────────────────────────
+
+/**
+ * Merging one PR is ~3 minutes of work — catch up, run CI (verify median 85s),
+ * merge — and we were achieving 1.25 merges an hour. The cost was the shape:
+ * pass N caught the branch up and left, CI finished 85 seconds later, pass N+1
+ * merged an hour after that.
+ *
+ * The rule that makes waiting safe is that running out of budget produces a
+ * WAIT — precisely what the pass returned before — and never a merge. These
+ * tests exist mostly to defend that asymmetry.
+ */
+
+const {
+  IN_PASS_WAIT_MS,
+  IN_PASS_POLL_MS,
+  MAX_IN_PASS_WAITS,
+  mayWaitInPass,
+  afterCatchUpDecision,
+} = require('./mergeOnComment.js');
+
+test('a green PR after the catch-up merges in this pass', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'merge', reason: '1 check green' }, elapsedMs: 20_000 });
+  assert.equal(out.action, 'merge');
+});
+
+test('red during the wait refuses, with the gate\'s own words', () => {
+  // No new wording: the existing refusal path handles it, unchanged.
+  const out = afterCatchUpDecision({ gate: { action: 'refuse', reason: 'checks are red: verify' }, elapsedMs: 20_000 });
+  assert.equal(out.action, 'refuse');
+  assert.equal(out.reason, 'checks are red: verify');
+});
+
+test('a conflict discovered during the wait goes to the conflict path', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'conflict', reason: 'the branch conflicts' }, elapsedMs: 1000 });
+  assert.equal(out.action, 'conflict');
+});
+
+test('still running inside the budget means ask again', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'wait', reason: 'checks still running: verify' }, elapsedMs: 30_000 });
+  assert.equal(out.action, 'poll-again');
+});
+
+test('OUT OF BUDGET IS A WAIT, never a merge', () => {
+  // The whole safety of this feature. A slow CI run must not become either a
+  // failure or an unchecked merge — it must become exactly the outcome the
+  // pass produced before this existed.
+  for (const gate of [
+    { action: 'wait', reason: 'checks still running: verify' },
+    { action: 'wait', reason: 'GitHub is still computing whether the branch merges cleanly' },
+    { action: 'unknown-future-action' },
+    {},
+  ]) {
+    const out = afterCatchUpDecision({ gate, elapsedMs: IN_PASS_WAIT_MS + 1 });
+    assert.equal(out.action, 'wait', `${JSON.stringify(gate)} must time out to wait`);
+    assert.notEqual(out.action, 'merge');
+  }
+});
+
+test('the timeout says how long it waited, so the log is readable', () => {
+  const out = afterCatchUpDecision({ gate: { action: 'wait' }, elapsedMs: 999_999, budgetMs: 180_000 });
+  assert.match(out.reason, /180s/);
+  assert.match(out.reason, /next pass/);
+});
+
+test('the per-pass cap is enforced, and the extras fall through', () => {
+  assert.equal(mayWaitInPass(0), true);
+  assert.equal(mayWaitInPass(MAX_IN_PASS_WAITS - 1), true);
+  assert.equal(mayWaitInPass(MAX_IN_PASS_WAITS), false, 'the cap must actually stop it');
+  assert.equal(mayWaitInPass(MAX_IN_PASS_WAITS + 5), false);
+  assert.equal(mayWaitInPass(0, 0), false, 'a cap of zero disables in-pass waiting entirely');
+});
+
+test('the budget is a named constant, roughly 2x the observed median', () => {
+  // 85s median for `verify`. A literal here is how a tuned number becomes a
+  // mystery number six months later.
+  assert.equal(typeof IN_PASS_WAIT_MS, 'number');
+  // This range is about the MEDIAN, not about the schedule. The tighter of the
+  // two constraints is the next test: cap x budget must stay under the relay's
+  // interval, which at cap 3 and a 600s interval means a budget under 200s.
+  assert.ok(IN_PASS_WAIT_MS >= 120_000 && IN_PASS_WAIT_MS <= 300_000,
+    `budget should be ~2x the 85s median, got ${IN_PASS_WAIT_MS}ms`);
+  assert.ok(IN_PASS_POLL_MS > 0 && IN_PASS_POLL_MS < IN_PASS_WAIT_MS);
+});
+
+test('worst case is bounded — a pass cannot outlast its own interval', () => {
+  // launchd runs one instance per Label and COALESCES the firings it misses
+  // while a pass is still running, so a long pass can never stack. What it can
+  // do is swallow the firing it overran: approvals that arrived meanwhile then
+  // wait on work already in flight instead of being picked up next time round.
+  //
+  // So the bound is the relay's own interval — read from the source of truth
+  // rather than written down a second time here. A literal would be a number
+  // that stops agreeing with the schedule the moment either one moves, which
+  // is exactly what happened to the 15-minute bound this replaces: it was
+  // picked when the relay ran hourly, and it survived the change to 10 minutes
+  // still permitting a pass 1.5x longer than the whole interval.
+  const intervalMs = relayIntervalSeconds() * 1000;
+  const worstMs = MAX_IN_PASS_WAITS * IN_PASS_WAIT_MS;
+  assert.ok(worstMs < intervalMs,
+    `a pass could hold open for ${Math.round(worstMs / 60_000)} minutes, which is not ` +
+    `shorter than the ${Math.round(intervalMs / 60_000)}-minute relay interval — it would ` +
+    `swallow its own next firing and delay approvals that arrive while it runs`);
+});
+
+test('the relay waits after BOTH catch-up paths, and merges the same way', () => {
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../clickup_direct.mjs'), 'utf8');
+
+  // Both the GitHub update-branch path and the local false-conflict catch-up
+  // must wait — fixing only one leaves half the backlog waiting a full extra
+  // interval for no reason.
+  //
+  // Counting the NAME is not enough: a first version of this assertion counted
+  // `waitForChecksInPass(` and a break that left the identifier in place while
+  // never calling it passed cleanly. The AWAITED calls are the thing.
+  const awaited = (src.match(/await waitForChecksInPass\(/g) || []).length;
+  assert.equal(awaited, 2,
+    `expected exactly 2 awaited calls, one per catch-up path, found ${awaited}`);
+  assert.match(src, /branch updated from main —/);
+
+  // It must NOT decide mergeability itself.
+  assert.match(src, /gate: githubGate\(json\)/,
+    'the in-pass wait must re-ask the same gate, not re-implement it');
 });

@@ -52,6 +52,13 @@ write any code here. You produce well-formed tasks.
    ticket to Dane — see below), and a `markdown_description` in exactly this
    shape.
 
+   **If the task is not for starcaster, tag it `repo:<name>`** (`normie`,
+   `pulse`, or `vault`). A task with no `repo:` tag builds in starcaster — the
+   default, so most tasks need no repo tag at all. Only tag when the work
+   lives in another repo; an unknown repo name makes the build loop escalate
+   the task rather than build it, so use exactly one of the four known names
+   (`starcaster`, `normie`, `pulse`, `vault`).
+
    **The description is the LEFT column, and it is where the detail goes.** The
    right-hand column is narrow; reasoning written there arrives as a wall of
    text in the skinniest part of the screen. Ratified 2026-08-22, after Sync
@@ -64,20 +71,6 @@ write any code here. You produce well-formed tasks.
    Found live on 2026-08-22, on the first ticket rewritten with this template:
    the quoted instruction was gone and nothing said so. Use a fenced block.
    `describe` and `ask` both refuse a body containing one.
-
-   ````markdown
-   ## Dane asked for
-   ```
-   His own words, verbatim — the instruction that caused this ticket to exist.
-   ```
-   — where and when he said it (a ClickUp comment, the bus, a voice note)
-
-   If a task descends from a standing decision rather than a fresh instruction,
-   say so and name the decision. **Never invent a quote.**
-
-   ## The problem
-   Two or three sentences of plain English: what is wrong today, and why it
-   matters to the business or to Dane. No jargon, or explain it in place.
 
    ## Goal
    One or two sentences: what this task does about it.
@@ -97,9 +90,15 @@ write any code here. You produce well-formed tasks.
    - [ ] Concrete, checkable outcomes. The build loop is done when all are met.
 
    ## How to test
-   - Steps a human (or the review loop) follows to confirm it works: the exact
-     address to open, the exact clicks, and what should appear. "Open the page
-     in a browser" is not a step.
+   - Steps **the operator** can follow, not steps a developer can follow.
+     Every step is one of exactly two things:
+       1. **a link he can click**, or
+       2. **an exact command to copy and paste**, with the output it should
+          print written next to it.
+     No step may assume the reader knows where to go or what "right" looks
+     like. "Open the page in a browser" is not a step. Neither is "run the
+     generator and open the SVG" — that is a developer's instruction wearing
+     a test's clothes.
 
    ## Risk
    low | medium | high — and one line on the blast radius.
@@ -154,7 +153,8 @@ not a way around the format.
 
 4. **Report back.** List the tasks you filed (name + risk + one-line goal) and
    the total. Remind the operator they can now start the build loop:
-   `/loop 30m loop-build` (in its own worktree).
+   `/loop 30m loop-build` — from wherever this session already is; the build
+   loop makes its own worktree per task.
 
 ## Guardrails
 
@@ -165,6 +165,17 @@ not a way around the format.
   refactor, say so and propose how to slice it, rather than filing one giant
   task.
 - Never file a task whose acceptance criteria you couldn't verify yourself.
+- **Read your own "How to test" back as Dane.** He said it plainly on task
+  86bbh7qer:
+
+  > This should include a clickable link I can click to test... none of the "How to test" options are clear how I actually do it.
+
+  A step he
+  cannot act on without asking a follow-up question is not a test step, and a
+  ticket full of them hands the verifying back to him at the exact moment the
+  loop was supposed to have done it. If the work has a visible surface and you
+  cannot name a link, say so in the ticket — that is a scoping problem worth
+  seeing, not a formatting one to paper over.
 
 ## First-time setup
 

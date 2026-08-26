@@ -2074,13 +2074,83 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 /* --- Navigation panel: the Links list -------------------------------- */
 
+/* ONE definition of the columns, read by both the header and every row.
+   L6a's first shape is a titled-column grid, and "clean" is the word it
+   uses; this list was not one. The header and the rows were two separate
+   FLEX containers working out three `1fr`-ish columns each from a
+   different available width — the header carries its own 8px side padding
+   and its "Action" title is narrower than the three icon buttons beneath
+   it. The columns therefore disagreed, and the error accumulated across
+   the row: at 1440 "Page Name" sat 15px right of the field it titles and
+   "Slug" 21px. Two containers cannot share a track width by computing it
+   twice; they share it by reading it from one place, which is what this
+   custom property is.
+
+   The rows stay separate boxes rather than becoming `display: contents`
+   children of one grid because a child row has to slide sideways as a
+   whole (see the indent below), and only a box can do that.
+
+   --nav-link-action-col is the three icon buttons at their fixed 26px,
+   stated once so the header's title track and the row's button track
+   cannot drift apart. --nav-link-width-col holds the 64px Width input
+   plus its "%" — it only appears under custom sizing. */
+.builder-react-root .builder-nav-items-manager {
+  --nav-link-action-col: 78px;
+  --nav-link-width-col: 82px;
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager[data-nav-width-col="true"] {
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-width-col) var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header,
+.builder-react-root .builder-nav-items-manager .builder-nav-item-row {
+  display: grid;
+  grid-template-columns: var(--nav-link-cols);
+  align-items: center;
+  gap: 8px;
+}
+
+/* W0's mechanism, applied to a titled-column grid: the wrapper has no box
+   of its own, so the selects and inputs inside it land directly on the
+   row's tracks. Without this the whole group would take ONE track and the
+   columns would be back to being decided by a nested flex box. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-fields {
+  display: contents;
+}
+
+/* The three action buttons keep their own row, right-aligned so the ✕ sits
+   on the block edge (L8) rather than wherever three 26px buttons happen to
+   end. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The mega menu's "Feature column" disclosure was the row's THIRD flex
+   child, so on a parent row it shared the line with the fields and took
+   width from them: at 1440 that row's fields rendered 341px against every
+   other row's 384px, its icons floated into the middle of the row, and the
+   summary text ran off the right edge of the panel. It spans the full grid
+   instead, which puts it on its own line under the row it belongs to and
+   gives every row in the list the same three columns. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-feature {
+  grid-column: 1 / -1;
+}
+
 /* Children indent one step per level while KEEPING a top-level row's
    field widths: the indent is paid back on the right, so the row slides
    right instead of shrinking, and a child's action icons deliberately
    sit beyond the top-level ones (operator, 2026-08-14). The header row
    and top-level rows carry no depth, so the var falls back to 0. The
    cell panel is overflow: visible, so the overhang draws rather than
-   clips. */
+   clips.
+
+   This is a NAMED EXEMPTION from L8's single right edge, recorded in
+   docs/UI_RULES.md — an indented row deliberately overhangs, and the
+   equal-and-opposite margins keep its track widths identical to a
+   top-level row's rather than shrinking them. */
 .builder-react-root .builder-nav-item-row {
   margin-left: calc(var(--nav-item-depth, 0) * 26px);
   margin-right: calc(var(--nav-item-depth, 0) * -26px);
@@ -2091,11 +2161,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    used to be 11px muted mini-caps that read as hints, not headers
    (operator, 2026-08-14: "make proper headers out of these"). Tokens
    rather than the literal hexes _tables.css predates: --ink-primary is
-   the canonical black, --bg-surface the canonical white. The 8px side
-   padding lines the header text up with the text inside the selects
-   below, which carry about the same internal inset. */
+   the canonical black, --bg-surface the canonical white.
+
+   The 8px that lines a title up with the text inside the select below it
+   is now carried by the title CELLS, not by the band. On the band it
+   narrowed the header's content box by 16px against the rows', which is
+   half of why the columns disagreed; on the cells it does the same job to
+   the eye and leaves both grids the same width to divide up. */
 .builder-react-root .builder-nav-items-header {
-  padding: 5px 8px;
+  padding: 5px 0;
   border-radius: 6px;
   background: var(--ink-primary, #18324a);
   color: var(--bg-surface, #ffffff);
@@ -2104,6 +2178,19 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-transform: none;
   letter-spacing: 0;
   margin-bottom: 6px;
+}
+
+/* Each title sits over its own column, inset by the same 8px the select
+   under it insets its text. "Action" is the exception: the buttons it
+   titles have no internal inset and their ✕ sits on the block edge, so the
+   title is right-aligned to that edge. */
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header .builder-nav-item-fields > span {
+  padding-left: 8px;
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header-action {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 /* --- Navigation panel: the mega menu's extra column -------------------- */
@@ -2970,16 +3057,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-items: start;
 }
 
-.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip {
-  display: grid;
-  grid-template-columns: max-content minmax(0, max-content);
-  align-items: center;
-  row-gap: var(--space-2, 6px);
-}
-
-.builder-react-root .builder-module-editor--carousel > .builder-module-field-strip .builder-module-field {
-  display: contents;
-}
+/* The carousel's own copy of the top-level-strip rule was retired 2026-08-25
+   (ticket 86bbjt1aq): every lattice editor gets it now, from one place, near
+   the chrome rules it belongs with. The reasoning above is why the control
+   track is `minmax(0, max-content)` there and not bare `max-content`. */
 
 /* The editor's own children — the "Settings" heading the module card puts
    above every two-column panel — stay in column 1 with the settings. */
@@ -3023,22 +3104,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 
 /*
- * The chrome STACKS in these two, instead of flowing (operator, 2026-08-12:
- * "Move Alignment, Top Margin, etc. under Background").
+ * RETIRED 2026-08-25 (ticket 86bbjt1aq), and worth keeping the note because
+ * it names the bug this ticket finally fixed at the cause.
  *
- * `.builder-module-chrome` is a wrapping flex row by design (D1/D2) — one
- * line of module-level settings above a full-width panel. That is still right
- * everywhere else, and this rule does not touch it there. But in a two-column
- * editor the chrome is confined to a half-width column, so the row wrapped
- * into Background on the left with the Alignment/margins strip beside it: two
- * ragged sub-columns where the operator was reading one list. Stacked, every
- * chrome label starts at the same x as every other one in the column.
+ * The chrome used to STACK in these two instead of flowing (operator,
+ * 2026-08-12: "Move Alignment, Top Margin, etc. under Background"), because
+ * in a two-column editor the chrome is confined to a half-width column and
+ * the flex row wrapped into Background on the left with the Alignment/margins
+ * strip beside it — two ragged sub-columns where the operator was reading one
+ * list. Stacking hid that in two panels.
+ *
+ * The cause was that Background was a SIBLING of the strip rather than a row
+ * of it, so the same two sub-columns appeared in every other panel too, just
+ * with enough width not to be obviously wrong. It is one row of one grid now,
+ * so there is nothing left to stack.
  */
-.builder-react-root .builder-module-editor--feature-cards .builder-module-chrome,
-.builder-react-root .builder-module-editor--carousel .builder-module-chrome {
-  flex-direction: column;
-  align-items: flex-start;
-}
 
 /* `span 100` rather than `1 / -1`: the rows here are implicit, and -1 on an
    implicit grid resolves to the explicit grid's only line, which collapses
@@ -4001,19 +4081,55 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   grid-column: 1 / -1;
 }
 
-/*
- * Chrome above the columns (the module Label row) has no axis column to
- * live in, so its strip is the grid instead — same two tracks, same rule,
- * measured over that strip.
- */
-.builder-react-root .is-lattice .builder-module-chrome .builder-module-field-strip {
+/* ---------------------------------------------------------------------------
+ * THE CHROME IS ONE LATTICE COLUMN (ticket 86bbjt1aq, 2026-08-25).
+ *
+ * The shared controls at the top of every module panel — Label, Background,
+ * Alignment, the margins, the nudge, Width — have no axis column to live in,
+ * so the strip that holds them is the grid: the same two tracks, sized the
+ * same way, as the axis columns below.
+ *
+ * WHAT WAS WRONG. The strip was already the grid. Two of its rows were not
+ * IN it. `Label` was a strip of its own above the chrome, and `Background`
+ * was a sibling of the strip rather than a member, so a panel opened with
+ * three label tracks stacked above the axes, each measuring its own content:
+ * on the image module at 1600 the three landed at x=182, x=237 and x=552.
+ * The operator photographed exactly that on 2026-08-25 — Background stranded
+ * at the left with the whole margin stack floating to its right.
+ *
+ * Both rows are inside the strip now (`builder-module-card.tsx`), so this
+ * only has to flatten what they bring with them. `--feature-cards` /
+ * `--carousel` used to answer the same symptom by stacking the chrome; that
+ * rule is gone with the cause.
+ *
+ * The control track is `minmax(0, max-content)` rather than bare
+ * `max-content` for the reason the carousel found first: in a narrow editor
+ * column a `max-content` track cannot shrink, so the row overflows its
+ * column and prints over the next one instead of wrapping.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .is-lattice .builder-module-chrome > .builder-module-field-strip,
+/* A lattice editor's own top-level strip — the Label row on a module that
+   has no chrome to put it in. Same treatment for the same reason; it was
+   carousel-only until 2026-08-25, which is why every OTHER chrome-less panel
+   still measured its Label against nothing. */
+.builder-react-root .is-lattice.builder-module-editor > .builder-module-field-strip {
   display: grid;
-  grid-template-columns: max-content max-content;
+  grid-template-columns: max-content minmax(0, max-content);
   align-items: center;
   row-gap: var(--space-2, 6px);
+  column-gap: 0;
 }
 
-.builder-react-root .is-lattice .builder-module-chrome .builder-module-field {
+/* The fields themselves, and the two wrappers that carry fields in with
+   them: the background picker's horizontal block and the strip inside it.
+   Each has to disappear so its label/control pairs land on the chrome's
+   tracks — an unflattened wrapper takes ONE cell and lays its own rows out
+   inside it, which is the "Background on a line of its own under its label"
+   failure the axis columns already fixed this way. */
+.builder-react-root .is-lattice .builder-module-chrome .builder-module-field,
+.builder-react-root .is-lattice .builder-module-chrome .builder-background-controls-horizontal,
+.builder-react-root .is-lattice .builder-module-chrome .builder-background-controls-horizontal .builder-module-field-strip,
+.builder-react-root .is-lattice.builder-module-editor > .builder-module-field-strip > .builder-module-field {
   display: contents;
 }
 
@@ -6069,6 +6185,81 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     sc-effect-hop var(--sc-effect-bounce-duration, 2s) infinite;
 }
 
+/* ---------------------------------------------------------------------------
+   Parkour (2026-08-23)
+   ---------------------------------------------------------------------------
+   The fourth and last of the operator's 2026-08-19 decision (ClickUp
+   86bbfrpbb), and the only one held back from the 08-22 batch. It travels,
+   hops, and turns about TWO axes at once — a Z-spin and a Y-tumble together.
+
+   WHY IT NEEDS ITS OWN KEYFRAME. Every other effect here turns on the
+   individual `rotate` property, which takes ONE axis: `rotate: 1turn` is
+   about Z, `rotate: y 1turn` is about Y, and there is no form that composes
+   two independent rotations. (`rotate: 1 1 0 45deg` names a single tilted
+   axis, which tumbles diagonally — not the same motion at all.) So parkour's
+   rotation goes back onto `transform`, where the two functions compose the
+   way the reference does.
+
+   Putting it on `transform` costs nothing here, because the three-properties
+   rule that governs the rest of this file is about the three MOTIONS not
+   colliding, and they still do not: the travel owns `translate` on the
+   figure, the hop owns `translate` on the stage wrapper, and the rotation
+   owns `transform` on the figure. Three animations, three properties, no
+   two of them fighting over one.
+
+   The reference is the dead `normie-parkour` keyframe in `_builder-react.css`
+   (~line 10778): -100vw to 100vw, four -36px hops, and `rotate()` +
+   `rotateY()` advancing in lockstep to 1200deg over a fixed 8s. Its CHARACTER
+   is what is being reproduced, not its pixels — 1200deg in 8s is 2.4s a turn,
+   which is exactly what Rotation Rate's default of 25 turns/min gives, so an
+   untouched parkour turns at the reference's speed and every other rate is
+   now one dropdown away. */
+@keyframes sc-effect-tumble {
+  from {
+    transform: rotate(0turn) rotateY(0turn);
+  }
+
+  to {
+    transform: rotate(1turn) rotateY(1turn);
+  }
+}
+
+/* DEPTH LIVES ON AN ANCESTOR — the same lesson axis-rotate records. A picture
+   turning about its own Y axis with `perspective` on ITSELF stays flat and
+   reads as a horizontal squash. The motion clip is the nearest box that is
+   not itself animated, and 1600px matches what the old dead rule used. */
+.builder-react-root .starcaster-effect-motion-clip:has(.starcaster-effect-parkour-motion) {
+  perspective: 1600px;
+  perspective-origin: center center;
+}
+
+/* The class is `starcaster-effect-parkour-MOTION`, not `-parkour`, and this is
+   not a stylistic choice: the generated `_builder-react.css` still carries the
+   buried effect's old rules keyed on `:has(.starcaster-effect-parkour)`, which
+   pin a FLOATING image to `inset: 0 !important` at `min-height: 240px` and
+   reinstate the fixed-duration `normie-parkour` animation that has no settings
+   behind it. Slide hit the identical trap and three rounds of loop-review
+   proved that fighting those rules loses and dodging the selector wins; the
+   name they cannot match is the fix. getImageEffectClassName carries the
+   matching note. Those rules are LEFT WHERE THEY ARE — `_builder-react.css` is
+   regenerated wholesale (R2), so a deletion would come back on its own. */
+.builder-react-root .starcaster-effect-parkour-motion {
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  animation:
+    sc-effect-travel var(--sc-effect-travel-duration, 8s) linear infinite,
+    sc-effect-tumble var(--sc-effect-rotation-duration, 2.4s) linear infinite;
+  animation-direction: var(--sc-effect-direction, normal);
+  animation-delay: var(--sc-effect-delay, 0s);
+  /* TWO values, for the reason tumbleweed's rule spells out: a flat `1` would
+     stop the tumble after one turn and the figure would slide the rest of the
+     crossing without rotating. The renderer works out how many turns fit. */
+  animation-iteration-count:
+    var(--sc-effect-travel-iterations, infinite),
+    var(--sc-effect-turn-iterations, infinite);
+  animation-fill-mode: var(--sc-effect-fill, none);
+}
+
 /* R6: motion is decoration on all of these — a visitor who has asked their
    system for less of it gets the picture, standing still. */
 @media (prefers-reduced-motion: reduce) {
@@ -6077,7 +6268,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .starcaster-effect-spin,
   .builder-react-root .starcaster-effect-slide-motion,
   .builder-react-root .starcaster-effect-axis-rotate,
-  .builder-react-root .starcaster-effect-flips {
+  .builder-react-root .starcaster-effect-flips,
+  .builder-react-root .starcaster-effect-parkour-motion {
     animation: none;
   }
 }
@@ -6150,6 +6342,235 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-weight: 600;
 }
 
+/* ==============================================================
+   BUG REPORT MODULE (task 4/5) — a floating trigger + a popup.
+   Rendered by components/builder/builder-bug-report-module.tsx.
+
+   Two renderings, one set of classes:
+   - `.is-floating`: the live tenant site. Portaled onto <body> so that
+     `position: fixed` means the window (DOCTRINE §5.17 — inside a builder
+     column, any ancestor filter captures it).
+   - `.is-inline`: builder preview / editor. Same size, same colours, in the
+     module's own box, so the operator sees what they are placing and
+     check:render can measure it.
+   Size, colours and corner are CSS variables the component writes from the
+   settings; the stylesheet never hardcodes a value a setting controls.
+   ============================================================== */
+.builder-bug-report-inline-host {
+  display: flex;
+  justify-content: flex-start;
+  padding: 6px 0;
+}
+
+.builder-bug-report-trigger {
+  --bug-report-size: 40px;
+  --bug-report-icon-color: var(--btn-text);
+  --bug-report-block-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bug-report-size);
+  min-width: var(--bug-report-size);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bug-report-icon-color);
+  cursor: pointer;
+  font: 600 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.builder-bug-report-trigger.has-label {
+  padding: 0 14px 0 0;
+}
+.builder-bug-report-trigger.is-block {
+  background: var(--bug-report-block-color);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+.builder-bug-report-trigger:hover,
+.builder-bug-report-trigger:focus-visible {
+  filter: brightness(1.08);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+.builder-bug-report-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bug-report-size);
+  height: var(--bug-report-size);
+}
+.builder-bug-report-glyph svg {
+  width: 60%;
+  height: 60%;
+}
+.builder-bug-report-trigger.is-floating {
+  position: fixed;
+  bottom: 18px;
+  z-index: 9990;
+}
+.builder-bug-report-trigger.is-floating.builder-bug-report-trigger--bottom-right { right: 18px; }
+.builder-bug-report-trigger.is-floating.builder-bug-report-trigger--bottom-left { left: 18px; }
+
+/* The popup */
+.builder-bug-report-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9991;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 20, 30, 0.5);
+}
+.builder-bug-report-dialog {
+  /* D7: a dialog sizes to its content — a floor, not a cap. */
+  width: max-content;
+  min-width: min(440px, 100%);
+  max-width: min(75vw, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.builder-bug-report-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+.builder-bug-report-dialog-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+.builder-bug-report-close {
+  border: 0;
+  background: transparent;
+  font-size: var(--text-xl);
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+.builder-bug-report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.builder-bug-report-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+}
+.builder-bug-report-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+.builder-bug-report-shot-list {
+  margin: 6px 0 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.builder-bug-report-shot-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.builder-bug-report-shot-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.builder-bug-report-shot-remove {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  font-size: 1.1em;
+  color: var(--ink-muted);
+}
+.builder-bug-report-shot-remove:hover { color: var(--ink-primary); }
+.builder-bug-report-shot-list .is-error { color: var(--ink-primary); }
+.builder-bug-report-shot-list .is-uploading { color: var(--ink-muted); }
+.builder-bug-report-error {
+  margin: 0;
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+.builder-bug-report-thanks {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+/* Only ever rendered off the live site, where the submit sent nothing. Its own
+   line and a lighter weight so it reads as a note about the preview rather
+   than as part of the tenant's own thank-you wording. */
+.builder-bug-report-preview-note {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.builder-bug-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.builder-bug-report-cancel,
+.builder-bug-report-submit {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  width: fit-content;
+}
+.builder-bug-report-cancel {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+}
+.builder-bug-report-submit {
+  border: 0;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+}
+.builder-bug-report-submit[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The read-only caps note in the settings panel */
+.builder-react-root .builder-bug-report-settings-note {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: normal;
+}
+
 /* Canonical-provenance badges (section AND module cards share these classes:
    (canonical) / Unlinked / Linked / Custom / Changed) had no styling at all —
    plain inline text next to the title, on both cards. This gives the shared
@@ -6172,4 +6593,92 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-canonical-badge-changed {
   background: var(--warn-notice-bg, #fdf0d5);
   color: var(--warn-notice-text, #8a5a00);
+}
+
+/* ==============================================================
+   BLOCK STATE CHIP + LINEAGE LINE (Sync 6a)
+   ==============================================================
+   The block header used to answer "what is this thing a copy of?" in
+   fragments — a "(canonical)" tag, a "Changed" tag beside it, an "Unlinked"
+   tag somewhere else — and never answered "how far does saving it reach?"
+   at all. One chip and one line replace all of that.
+
+   The header title becomes two stacked rows rather than one, so the chip can
+   change width (Following / Changed / Independent / Original are four
+   different strings) without the lineage line beneath it moving. The chip is
+   ALSO given one width for every state, because a header that twitches when
+   a section drifts reads as a bug even when it is telling the truth. */
+.builder-react-root .builder-section-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  /* Without this a long master name in the lineage line refuses to shrink and
+     pushes the section's action buttons off the right edge. */
+  min-width: 0;
+}
+
+.builder-react-root .builder-section-title-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-block-state-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 92px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+/* The original is the thing everything else follows, so it is the one state
+   that reads as a claim rather than a status. */
+.builder-react-root .builder-block-state-chip-original {
+  background: var(--accent-subtle, #e6effa);
+  color: var(--accent-strong, #24527f);
+}
+
+.builder-react-root .builder-block-state-chip-following {
+  background: var(--ok-notice-bg, #e6f4ea);
+  color: var(--ok-notice-text, #1f6b3a);
+}
+
+/* Changed is the only state a push silently skips, so it is the only one
+   allowed to look like a warning. */
+.builder-react-root .builder-block-state-chip-changed {
+  background: var(--warn-notice-bg, #fdf0d5);
+  color: var(--warn-notice-text, #8a5a00);
+}
+
+.builder-react-root .builder-block-state-chip-independent {
+  background: var(--bg-subtle, #eef1f0);
+  color: var(--ink-muted, #5c6a72);
+}
+
+.builder-react-root .builder-block-lineage {
+  max-width: 100%;
+  font-size: var(--text-xs, 0.78rem);
+  font-weight: 500;
+  line-height: 1.4;
+  /* The section header is dark in BOTH its collapsed and expanded states — its
+     title renders white either way — so the muted INK token is the wrong
+     family here and left the line nearly invisible on the teal. This is the
+     same value the edit hint beside the title already uses. */
+  color: rgba(255, 255, 255, 0.82);
+  /* Truncate rather than wrap: a second wrapped line would change the header's
+     height per section and stagger the whole workspace (UI_RULES T10). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -77,10 +77,15 @@ function patternToRegExp(pattern) {
  * stripped. Deliberately conservative -- this exists to explain a denial, not
  * to be the denial, so over-splitting costs nothing and under-splitting only
  * means the agent gets the vaguer message it would have got anyway.
+ *
+ * NEWLINES COUNT. A heredoc or a multi-line Bash call separates commands with
+ * a newline and nothing else, and the globs are matched whole-string against
+ * `.*`, which does not cross a line break -- so before 2026-08-23 a two-line
+ * command was checked as one unmatchable blob and every deny rule missed it.
  */
 function subcommands(command) {
   const parts = String(command || '')
-    .split(/\s*(?:&&|\|\||;|\|)\s*/g)
+    .split(/\s*(?:&&|\|\||;|\||\r?\n)\s*/g)
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => part.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, ''));

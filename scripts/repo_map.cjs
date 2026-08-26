@@ -99,9 +99,17 @@ if (!hasMain) {
     const { state, fresh } = classifyBranch(branch, base);
 
     if (state === 'empty') {
+      // A branch with no commits is a workspace somebody just PREPARED —
+      // `npm run thread` has already spent an npm ci and a full build on the
+      // folder it names. This used to read "already shipped, safe to delete"
+      // whenever the map was run from anywhere but that branch, which is the
+      // normal case: you set the folder up from the main folder and read the
+      // map from the main folder. The classification was right, the sentence
+      // was not (DOCTRINE.md 2.1 — a confident wrong message is worse than a
+      // bare one). Neither wording may say "shipped" or "safe to delete".
       const note = branch.name === current
         ? 'nothing committed here yet.'
-        : 'already shipped, safe to delete.';
+        : `a prepared workspace — nothing committed yet, nothing to ship (${branch.where}).`;
       out.push(bullet(`${branch.name} — ${note}${here}`));
       return;
     }
@@ -109,6 +117,18 @@ if (!hasMain) {
     if (state === 'shipped') {
       out.push(bullet(`${branch.name} — its work is already live, safe to delete (${branch.where}).${here}`));
       out.push(indent('(Applied to main as a separate commit, so git still calls it unmerged.)'));
+      return;
+    }
+
+    if (state === 'unknown') {
+      // Neither the content check nor GitHub could answer. Saying "unshipped
+      // changes" here would be a confident wrong message (DOCTRINE 2.1) —
+      // exactly the register this map already avoids for a prepared workspace.
+      out.push(bullet(
+        `${branch.name} — could not confirm whether this is shipped, `
+        + `so it is being left alone (${branch.where}).${here}`
+      ));
+      out.push(indent('(GitHub was unreachable and the content check could not run.)'));
       return;
     }
 

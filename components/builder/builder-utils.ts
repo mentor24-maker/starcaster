@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { getCarouselImageShadow } from "@/lib/builder-carousel-image-frame";
 import { getModuleTrigger } from "@/lib/module-trigger";
 import type {
   BackgroundSettings,
@@ -624,6 +625,17 @@ export function getImageModuleStyle(settings: Record<string, string>): CSSProper
       settings.borderColor || "#0f4f8f"
     }`,
     borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 18, 0)}px`,
+    // The drop shadow (operator, 2026-08-25). Built by the same pure function
+    // the Carousel's pictures use, so one picture and a row of pictures
+    // cannot end up with two different shadows from the same six numbers.
+    // "" when the box is unticked, and an empty `boxShadow` is no shadow —
+    // it does not need to be conditionally spread.
+    //
+    // On the FIGURE, which is the element carrying the border and the radius,
+    // so the shadow follows the frame's rounded corners. `overflow: hidden`
+    // below clips the figure's CHILDREN; an element's own box-shadow is drawn
+    // outside its border box and is not affected by it.
+    boxShadow: getCarouselImageShadow(settings),
     // border-radius describes the OUTER edge, so the hole the image sits in is
     // rounded at (radius - borderThickness). Giving the image the outer radius
     // curves it away from that hole and exposes a crescent of background in

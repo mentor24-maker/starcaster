@@ -50,6 +50,10 @@ function stagedFiles(filter) {
 
 const GENERATED = [
   'public/app-shell.html',
+  'public/about.html',
+  'public/site.html',
+  'public/explore.html',
+  'public/builder-preview.html',
   'public/privacy-policy.html',
   'public/terms-of-service.html',
   'public/data-deletion.html',
@@ -196,6 +200,17 @@ function main() {
   const { failures: pathFailures, notes: pathNotes } = machinePaths.run({ all: MODE_ALL });
   for (const note of pathNotes) console.log(`[conventions] ${note}`);
   failures.push(...pathFailures);
+
+  // A vitest test that (transitively) requires a generated server lib passes
+  // locally and always fails CI, because vitest runs before the build. Own
+  // module; surfaced here so pre-commit catches it before it can ever be
+  // pushed. It walks the whole test-file graph regardless of what is staged, so
+  // there is no diff-mode shortcut — a change to a shared SOURCE can newly route
+  // an untouched test into lib/builder/. See docs/DOCTRINE.md, CLAUDE.md #14.
+  const vitestGeneratedLib = require('./check_vitest_generated_lib.cjs');
+  const { failures: vitestFailures, notes: vitestNotes } = vitestGeneratedLib.run({ all: MODE_ALL });
+  for (const note of vitestNotes) console.log(`[conventions] ${note}`);
+  failures.push(...vitestFailures);
 
   if (failures.length) {
     console.error('\n[conventions] Commit blocked — fix the following (or SKIP_CONVENTIONS=1 with a stated reason):\n');

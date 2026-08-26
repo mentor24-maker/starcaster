@@ -237,15 +237,17 @@ objects:
     name: bus-relay
     kind: job
     layer: coordination
-    summary: Every hour, relays Dane's new ClickUp task comments onto the party line, hands answered tickets back to the machine, and merges the PRs he has approved by comment.
+    summary: Every ten minutes, relays Dane's new ClickUp task comments onto the party line, hands answered tickets back to the machine, and merges the PRs he has approved by comment.
     links:
       url: https://github.com/mentor24-maker/starcaster/blob/main/scripts/builder/busRelayPlan.js
-    host: macbook-pro
+    host: mac-mini
     detail:
       label: com.starcaster.bus-relay
-      schedule: hourly
+      schedule: every 10 minutes
       must_run_in: exactly one place — two machines running it double-posts to the bus
-      pending_move: to mac-mini (Phase 5)
+      moved: 2026-08-23, laptop -> mac-mini. On the laptop it only relayed when the lid
+        was open; Dane's answers to two tickets sat unheard for nine hours.
+      install: ./scripts/install_bus_relay.sh (--status / --uninstall)
     probe: launchctl
 
   - id: job-channel-steward
@@ -441,7 +443,7 @@ relationships:
   - {from: loop-review, to: anthropic, label: spends model attention, kind: authenticates-to}
 
   # scheduled work
-  - {from: job-bus-relay, to: macbook-pro, label: scheduled on, kind: schedules}
+  - {from: job-bus-relay, to: mac-mini, label: scheduled on, kind: schedules}
   - {from: job-channel-steward, to: macbook-pro, label: scheduled on, kind: schedules}
   - {from: job-librarian-sweep, to: macbook-pro, label: scheduled on, kind: schedules}
   - {from: job-colima, to: mac-mini, label: scheduled on, kind: schedules}

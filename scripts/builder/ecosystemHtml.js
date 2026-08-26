@@ -68,18 +68,34 @@ const DARK = {
 // let whichever stylesheet came last win.
 const tokens = (p) => Object.entries(p).map(([k, v]) => `--ui-${k}:${v};`).join(' ');
 
-/** The data the page needs, and nothing it does not (no probes, no notes). */
-function pageData(doc) {
-  const objects = (doc.objects ?? []).map((o) => ({
-    id: o.id,
-    name: o.name,
-    kind: o.kind,
-    layer: o.layer,
-    summary: o.summary,
-    host: o.host ?? null,
-    links: o.links ? { doc: o.links.doc ?? null, url: o.links.url ?? null } : null,
-    detail: o.detail ?? null,
-  }));
+/**
+ * The data the page needs, and nothing it does not (no probes, no notes).
+ *
+ * PUBLIC MODE strips every `detail` block. The inventory's details carry the
+ * local-dev database login, the Mac Mini's login user and ssh reachability, and
+ * Doppler auth notes — right inside the private vault, wrong in a copy shared
+ * with a partner or reached from the admin Help → Docs link. The key is OMITTED,
+ * not nulled: it must not survive in the page's embedded DATA at all, so hiding
+ * it in the UI is not enough. Dropping it here also makes renderPanel's
+ * `facts.length` guard omit the Details section by construction.
+ *
+ * Non-public output is unchanged to the byte: `detail` is appended last, in the
+ * same position and with the same `?? null` fallback as before.
+ */
+function pageData(doc, { public: isPublic = false } = {}) {
+  const objects = (doc.objects ?? []).map((o) => {
+    const obj = {
+      id: o.id,
+      name: o.name,
+      kind: o.kind,
+      layer: o.layer,
+      summary: o.summary,
+      host: o.host ?? null,
+      links: o.links ? { doc: o.links.doc ?? null, url: o.links.url ?? null } : null,
+    };
+    if (!isPublic) obj.detail = o.detail ?? null;
+    return obj;
+  });
   const relationships = (doc.relationships ?? []).map((r) => ({ from: r.from, to: r.to, label: r.label }));
   return { title: doc.meta?.title ?? 'Development Ecosystem', objects, relationships };
 }
@@ -296,7 +312,7 @@ if (location.hash.length > 1) select(decodeURIComponent(location.hash.slice(1)))
  * build_ecosystem_diagram.mjs; it is inlined so its boxes are live DOM the
  * click handler can read. An <img> would be a picture with no ids.
  */
-function renderPage(doc, svgMarkup) {
+function renderPage(doc, svgMarkup, { public: isPublic = false } = {}) {
   if (!svgMarkup || !/<svg[\s>]/.test(svgMarkup)) {
     throw new Error('renderPage needs the web-mode diagram markup (run build_ecosystem_diagram.mjs --links web)');
   }
@@ -305,7 +321,7 @@ function renderPage(doc, svgMarkup) {
     // selection highlight and theme would silently not apply.
     throw new Error('renderPage was given a vault-mode diagram; the page needs --links web');
   }
-  const data = pageData(doc);
+  const data = pageData(doc, { public: isPublic });
   const stack = STACK.map((b) => ({ ...b, accent: accentFor(b.layer) }));
   const objectCount = data.objects.length;
   const edgeCount = data.relationships.length;

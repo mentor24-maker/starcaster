@@ -35,6 +35,8 @@ require('dotenv').config({ path: path.join(ROOT, '.env.local'), quiet: true });
 const { sbQuery, tableConfig } = require(path.join(ROOT, 'lib/supabase.js'));
 const { BUILDER_MODULE_TYPES, createEmptyModule } = require(path.join(ROOT, 'lib/builder/template.js'));
 const projectsStore = require(path.join(ROOT, 'lib/projectsStore.js'));
+const crmConfigStore = require(path.join(ROOT, 'lib/crmConfigStore.js'));
+const crmFormsStore = require(path.join(ROOT, 'lib/crmFormsStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
 const PROJECT_NAME = process.env.UI_HARNESS_PROJECT || 'UI Harness Fixture';
@@ -44,7 +46,7 @@ const supabaseUrl = String(process.env.SUPABASE_URL || '');
 if (!/localhost|127\.0\.0\.1/.test(supabaseUrl)) {
   console.error(
     `Refusing to seed: SUPABASE_URL is "${supabaseUrl || '(unset)'}", which is not local.\n` +
-    'This script writes rows and must only ever touch the local stack. Copy .env.local into the worktree first.'
+    'This script writes rows and must only ever touch the local stack. Run `npm run env:local` in this folder first.'
   );
   process.exit(1);
 }
@@ -73,8 +75,27 @@ const must = (res, what) => {
  * TUNED[type] overrides the factory defaults where a module needs awkward
  * content to be worth measuring — the longest labels, a shadow turned on,
  * an offsets block. Everything else takes `createEmptyModule`.
+ *
+ * EVERY PANEL GETS CONTENT, not just the ones with an obvious list (added
+ * 2026-08-22). Two things kept panels invisible to `check_panels`:
+ *   1. an item manager with no items renders no fields, so the check found
+ *      the group, measured nothing and passed — the exact hole that let the
+ *      Feature Cards and Programs panels ship staggered in August; and
+ *   2. a `visibleWhen` gate left at its default hides whole strips, so a
+ *      green run is a green run over half a panel.
+ * So the rule here is: seed the list, AND open the gate. Where a panel's
+ * fields live behind a database row rather than a setting (the two CRM
+ * panels), `ensureCrm` below creates the row and its id is threaded in.
  */
-const TUNED = {
+const LONG = 'Delray Beach Tennis Center — Junior High Performance Academy, Adult Clinics & Sunday Mixers';
+
+/**
+ * `ids` carries the database rows the fixture had to create before the page
+ * could reference them: `{ crmConfigId, crmFormId }`. A module whose panel
+ * gates on one of these gets it from here rather than from a hard-coded
+ * string, because the ids are generated per machine.
+ */
+const buildTuned = (ids) => ({
   // Navigation's "Dropdown" sub-section is where the axis-section lattice
   // broke when the menu joined it (its six fields started at x=0 while the
   // rest of Structure started at 125). Also the widest labels in the app:
@@ -245,28 +266,6 @@ const TUNED = {
       effectSpeed: '16', effectRepeat: 'once', effectDelay: '2',
     },
   },
-  table: {
-    name: 'Contact Strip',
-    settings: {
-      columns: '3', columnsCount: '3', rowsCount: '4', alignment: 'center',
-      // A cell with a module in it: the cell editor is its own lattice
-      // surface (a modal), and it is where the `label.field` pairs live —
-      // the shape that hid from the check until 2026-08-12.
-      tableData: JSON.stringify({
-        headers: ['Phone', 'Hours', 'Status'],
-        rowCount: 1,
-        cells: {
-          '0-0': [{
-            id: 'cell-image', type: 'image', column: '0-0', name: 'Cell Image', text: '',
-            settings: { url: '', alt: '', size: '100', linkUrl: '', newTab: 'false' },
-          }],
-        },
-      }),
-      borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
-      cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
-      backgroundColor: '#ffffff',
-    },
-  },
   // The rich-text module's Structure / Text / Placement / Frame axes
   // (2026-08-15). Every frame and spacing setting is non-default and no field
   // is visibleWhen-gated, so all four columns render every control the panel
@@ -299,9 +298,519 @@ const TUNED = {
       dropShadowX: '3', dropShadowY: '3', dropShadowBlur: '2',
     },
   },
-};
+  // Bug Report module (task 4/5): the floating icon + popup. Every setting
+  // non-default and nothing visibleWhen-gated except the block colour, which
+  // is ON here so the Frame strip renders its full width. The label text is
+  // the longest control on the Content axis and sets that track.
+  'bug-report': {
+    name: 'Bug Report (floating, staff only)',
+    settings: {
+      visibility: 'staff', emailReports: 'true', icon: 'ladybug', corner: 'bottom-left', iconSize: '55',
+      iconBlock: 'true', blockColor: '#7a1f3d', iconColor: '#fff4e6', labelText: 'Report a problem',
+      popupTitle: 'Tell us what broke', promptPlaceholder: 'What happened, and what did you expect?',
+      thankYouMessage: 'Got it — thank you for helping us fix this.',
+    },
+  },
 
-const PANEL_CHECK_SECTION = {
+  // ---------------------------------------------------------------------
+  // The rest of the sweep (2026-08-22). Everything below was previously
+  // seeded straight out of `createEmptyModule`, which meant its panel was
+  // measured with empty text boxes and every gated strip hidden.
+  // ---------------------------------------------------------------------
+
+  // A cell with a module in it: the cell editor is its own lattice surface
+  // (a modal), and it is where the `label.field` pairs live — the shape that
+  // hid from the check until 2026-08-12. THREE cells now, of three different
+  // types and in three different columns: the editor only exists where a
+  // cell HAS a module, and one empty-settings image module measured a cell
+  // editor full of blank boxes. Four columns and three rows, so the grid the
+  // Rows/Columns selects report is not the 1×3 minimum either.
+  table: {
+    name: 'Contact Strip',
+    settings: {
+      columns: '4', columnsCount: '4', rowsCount: '3', alignment: 'center',
+      showColumnHeads: 'true',
+      tableData: JSON.stringify({
+        headers: ['Phone', 'Hours', 'Status', 'Court Fees & Guest Rates'],
+        rowCount: 3,
+        cells: {
+          '0-0': [{
+            id: 'cell-image', type: 'image', column: '0-0', name: 'Cell Image', text: '',
+            settings: {
+              url: '/images/Gemini_Generated_starcaster_banner.png',
+              alt: 'Clay courts at sunrise', size: '100',
+              linkUrl: '/delray-champions-junior-tennis-high-performance', newTab: 'true',
+            },
+          }],
+          '1-2': [{
+            id: 'cell-heading', type: 'heading', column: '1-2', name: 'Cell Heading',
+            text: LONG,
+            settings: { variant: 'eyebrow', level: 'h6', fontSize: '14', textAlign: 'left' },
+          }],
+          '2-3': [{
+            id: 'cell-text', type: 'text', column: '2-3', name: 'Cell Text',
+            text: '<p>Resident and guest rates, posted at the desk.</p>',
+            settings: { size: '100', alignment: 'left' },
+          }],
+        },
+      }),
+      borderColor: '#cccccc', borderWidth: '1', borderThickness: '1',
+      cellPadding: '8', tableMaxWidth: '600', verticalMargin: '0',
+      backgroundColor: '#ffffff',
+    },
+  },
+
+  breadcrumb: {
+    name: 'Breadcrumb',
+    settings: {
+      separator: '›', alignment: 'left', bold: 'true', fontSize: '13',
+      items: JSON.stringify([
+        { id: 'crumb-1', label: 'Home', url: '/' },
+        { id: 'crumb-2', label: LONG, url: '/delray-champions-junior-tennis-high-performance' },
+        { id: 'crumb-3', label: 'Court Fees', url: '/delray-beach-tennis-center-court-fees' },
+      ]),
+    },
+  },
+
+  'blog-toc': {
+    name: 'On This Page',
+    settings: {
+      showTitle: 'true', title: 'On This Page', style: 'numbered',
+      indentSubheadings: 'true', fontSize: '14',
+      items: JSON.stringify([
+        { id: 'toc-1', label: LONG, anchor: 'junior-high-performance-academy', depth: 1 },
+        { id: 'toc-2', label: 'Court fees', anchor: 'court-fees', depth: 2 },
+        { id: 'toc-3', label: 'Booking a court', anchor: 'booking', depth: 1 },
+      ]),
+    },
+  },
+
+  'blog-category-filter': {
+    name: 'Category Filter',
+    settings: {
+      showAll: 'true', allLabel: 'All Programs', filterParam: 'category',
+      targetPageUrl: '/blog', layout: 'pills', alignment: 'left', gap: '8',
+      categories: JSON.stringify([
+        { id: 'cat-1', label: LONG, slug: 'junior-high-performance-academy' },
+        { id: 'cat-2', label: 'Adult Clinics', slug: 'adult-clinics' },
+      ]),
+    },
+  },
+
+  'blog-tag-cloud': {
+    name: 'Tag Cloud',
+    settings: {
+      filterParam: 'tag', targetPageUrl: '/blog', showCounts: 'true',
+      layout: 'cloud', alignment: 'left', minFontSize: '11', maxFontSize: '22',
+      tags: JSON.stringify([
+        { id: 'tag-1', label: LONG, slug: 'junior-high-performance-academy', count: 12 },
+        { id: 'tag-2', label: 'Pickleball', slug: 'pickleball', count: 3 },
+      ]),
+    },
+  },
+
+  // `tags` here is a comma-separated string, not JSON — the two tag panels
+  // do NOT share a shape, and seeding JSON into this one renders one tag
+  // named `[{"id":...`. Worth the second look before copying the line above.
+  'blog-post-tags': {
+    name: 'Post Tags',
+    settings: {
+      linkToFilter: 'true', filterParam: 'tag', targetPageUrl: '/blog',
+      showPrefix: 'true', prefix: 'Filed under',
+      tags: `${LONG}, pickleball, junior tennis, round robin`,
+      layout: 'pills', fontSize: '13', gap: '8',
+    },
+  },
+
+  // `matchBy: manual` is the gate on the whole manual-post list; left at its
+  // default the list does not render and the panel is three strips shorter.
+  'blog-related-posts': {
+    name: 'Related Posts',
+    settings: {
+      showTitle: 'true', title: LONG, matchBy: 'manual',
+      layout: 'grid', columns: '3', cardGap: '16',
+      showFeaturedImage: 'true', showExcerpt: 'true', showAuthor: 'true',
+      showDate: 'true', showCategories: 'true',
+      imageAspectRatio: '16:9', cardStyle: 'shadow',
+      manualPosts: JSON.stringify([
+        {
+          id: 'rel-1', title: LONG,
+          imageUrl: '/images/Gemini_Generated_starcaster_banner.png',
+          url: '/delray-champions-junior-tennis-high-performance',
+          date: 'Jun 20, 2026', categories: 'Juniors, High Performance',
+        },
+        {
+          id: 'rel-2', title: 'Sunday Morning Mixer',
+          imageUrl: '/images/background_galaxy_1920x1080.jpg',
+          url: '/sunday-mixer', date: 'Jul 4, 2026', categories: 'Adults',
+        },
+      ]),
+    },
+  },
+
+  'blog-author-bio': {
+    name: 'Author Bio',
+    settings: {
+      name: 'Brent Wellman', title: LONG,
+      bio: 'Junior Tennis Director. Twenty years on clay, three USTA sectional titles.',
+      avatarUrl: '/images/Gemini_Generated_starcaster_banner.png',
+      avatarShape: 'circle', avatarSize: '96', layout: 'horizontal',
+      socialLinks: JSON.stringify([
+        { id: 'link-1', platform: 'website', url: 'https://delraybeachtenniscenter.com/coaches/brent-wellman' },
+        { id: 'link-2', platform: 'instagram', url: 'https://instagram.com/delraytennis' },
+      ]),
+    },
+  },
+
+  'blog-post-card': {
+    name: 'Post Card',
+    settings: {
+      title: LONG,
+      excerpt: 'Camps, clinics and private lessons all summer, on eight clay courts.',
+      author: 'Brent Wellman', date: 'Jun 20, 2026',
+      categories: 'Juniors, High Performance, Clay',
+      url: '/delray-champions-junior-tennis-high-performance',
+      imageUrl: '/images/Gemini_Generated_starcaster_banner.png',
+      cardLayout: 'vertical', imageAspectRatio: '16:9',
+      showFeaturedImage: 'true', showExcerpt: 'true', showAuthor: 'true',
+      showDate: 'true', showCategories: 'true',
+      showReadMore: 'true', readMoreLabel: 'Read the whole programme',
+      cardStyle: 'shadow', cardBorderRadius: '12',
+    },
+  },
+
+  'blog-post-list': {
+    name: LONG,
+    settings: {
+      postTitle: LONG, postsPerPage: '9', layout: 'grid', columns: '3', cardGap: '16',
+      showSearch: 'true', showCategoryFilter: 'true', showTagFilter: 'true',
+      showAuthorFilter: 'true', showDateFilter: 'true',
+    },
+  },
+
+  'blog-post': {
+    name: 'Blog Post',
+    text: LONG,
+    settings: { title: LONG, slug: 'junior-high-performance-academy' },
+  },
+
+  'blog-post-create': {
+    name: 'New Post Form',
+    settings: {
+      showFormTitle: 'true', formTitle: LONG,
+      submitLabel: 'Publish this post', draftLabel: 'Save as draft',
+      afterSubmitHeader: 'Posted', successMessage: 'Your post is live.',
+      redirectAfterCreate: '/blog', defaultStatus: 'draft', allowStatusChange: 'true',
+      fieldsHeader: 'Fields on the form',
+      showSlug: 'true', showFeaturedImage: 'true', showExcerpt: 'true',
+      showAuthorField: 'true', showCategories: 'true', showTags: 'true',
+      showSeoFields: 'true',
+    },
+  },
+
+  'blog-post-manager': {
+    name: 'Post Manager',
+    settings: {
+      viewPageUrl: '/blog', editPageUrl: '/blog-post-edit',
+      showStatus: 'true', showDate: 'true', showDelete: 'true',
+      accentColor: '#0f4f8f',
+    },
+  },
+
+  'blog-category-manager': {
+    name: 'Category Manager',
+    settings: {
+      showDescription: 'true', showColor: 'true', showSortOrder: 'true',
+      showDelete: 'true', accentColor: '#0f4f8f',
+    },
+  },
+
+  'blog-search': {
+    name: 'Blog Search',
+    settings: {
+      placeholder: LONG, buttonLabel: 'Search the blog',
+      searchParam: 'q', targetPageUrl: '/blog-search-results', borderRadius: '20',
+    },
+  },
+
+  'blog-search-results': {
+    name: 'Blog Search Results',
+    settings: {
+      searchParam: 'q', postPageUrl: '/blog-post-view', limit: '20',
+      thumbWidth: '120', emptyMessage: LONG,
+    },
+  },
+
+  'blog-newsletter-subscribe': {
+    name: 'Newsletter',
+    settings: {
+      headline: LONG,
+      description: 'One email a month: court closures, clinic dates, league sign-ups.',
+      showImage: 'true', imageUrl: '/images/Gemini_Generated_starcaster_banner.png',
+      layout: 'inline',
+    },
+  },
+
+  'site-search': {
+    name: 'Site Search',
+    settings: {
+      placeholder: LONG, showButton: 'true', buttonLabel: 'Search this site',
+      searchParam: 'q', targetPageUrl: '/site-search-results',
+    },
+  },
+
+  'site-search-results': {
+    name: 'Site Search Results',
+    settings: {
+      searchParam: 'q', limit: '25', showSearchField: 'true',
+      placeholder: LONG, buttonLabel: 'Search again',
+      showResultCount: 'true', showMatchLocation: 'true', showOtherMatches: 'true',
+      emptyMessage: 'Nothing matched. Try a court name or a coach.',
+    },
+  },
+
+  // `destinationType: custom` is what reveals BOTH the target page and the
+  // filter-parameter field; at the default only one of the two renders.
+  'messaging-tag-list': {
+    name: 'Message Tags',
+    settings: {
+      destinationType: 'custom', targetPageUrl: '/messages',
+      filterParam: 'tag', layout: 'cloud', gap: '8', maxTags: '24',
+      minFontSize: '11', maxFontSize: '22',
+    },
+  },
+
+  'messaging-topic-list': {
+    name: 'Message Topics',
+    settings: {
+      showAll: 'true', allLabel: LONG, filterParam: 'topic',
+      targetPageUrl: '/messages', layout: 'pills', gap: '8',
+      fontSize: '14', borderRadius: '20', moduleBorderWidth: '2',
+    },
+  },
+
+  // The two CRM panels gate on a DATABASE row, not a setting: with no form
+  // id the whole "Form Appearance" block is absent and the panel measures
+  // four controls. `ensureCrm` creates the row; the id arrives via `ids`.
+  'crm-form': {
+    name: 'Contact Form',
+    settings: { crmFormId: ids.crmFormId, alignment: 'center' },
+  },
+
+  'crm-contacts-table': {
+    name: 'Contacts',
+    settings: {
+      crmConfigId: ids.crmConfigId,
+      showTitle: 'true', tableTitle: LONG,
+      showAddButton: 'true', addButtonLabel: 'Add a new contact record',
+      rowsPerPage: '25', showSearch: 'true',
+      showViewButton: 'true', showEditButton: 'true', showDeleteButton: 'true',
+    },
+  },
+
+  // `sound` off hides the volume control — the one gated field in the panel.
+  confetti: {
+    name: 'Confetti',
+    settings: {
+      particleCount: '120', spread: '70', originX: '50', originY: '40',
+      zIndex: '60', sound: 'pop', popVolume: '70',
+    },
+  },
+
+  // `flips` on purpose, NOT the image module's `tumbleweed`. Tumbleweed
+  // travels, rotates and hops, so it reveals every effect field at once and
+  // the panel is never measured with any of them hidden. Flips hops and spins
+  // without travelling, so Direction / Speed / Repeat / Delay are absent here
+  // — the half of the panel the image module above cannot show.
+  'floating-image': {
+    name: 'Floating Image',
+    settings: {
+      url: '/images/background_galaxy_1920x1080.jpg',
+      alt: LONG,
+      size: '40', overlayAnchor: 'bottom-right', offsetX: '24',
+      effect: 'flips', effectRotationRate: '20',
+      effectFrequency: '5', effectBounceHeight: '120',
+      borderThickness: '3', borderColor: '#0f4f8f', borderRadius: '16',
+    },
+  },
+
+  button: {
+    name: 'Book a Court',
+    settings: {
+      text: 'Book a court on the reservation system',
+      href: '/delray-beach-tennis-center-court-reservations',
+      buttonSize: 'large', fontSize: '18', bold: 'true', underline: 'true',
+      alignment: 'center', textColor: '#ffffff', buttonHoverColor: '#0b3a6b',
+      borderStyle: 'solid', borderWidth: '2', borderColor: '#0f4f8f', borderRadius: '24',
+    },
+  },
+
+  'speech-bubble': {
+    name: 'Speech Bubble',
+    text: LONG,
+    settings: {
+      text: LONG,
+      containerWidth: '420', containerHeight: '180',
+      offsetX: '12', offsetY: '-8', zIndex: '40',
+      backgroundColor: '#ffffff', borderColor: '#0f4f8f', borderThickness: '3',
+      textColor: '#0b2a4a',
+    },
+  },
+
+  // `tractor-nav` already gets a second, CONTINUOUS module below; this is
+  // the rings default with every ring control turned up so the linear-sizing
+  // branch renders rather than the curve one.
+  'tractor-nav': {
+    name: 'Proximity Effect (Rings)',
+    settings: {
+      dotUrl: '/delray-champions-junior-tennis-high-performance',
+      dotNewTab: 'true', effect: 'rings', dotSize: '18',
+      ringCount: '4', sizingMode: 'linear', ringStep: '14',
+      placement: 'anchored', posX: '30', posY: '60', zIndex: '35',
+      innerOpacity: '80', opacityStep: '12', transition: '200',
+    },
+  },
+
+  'headline-rotator': {
+    name: 'Headline Rotator',
+    text: [LONG, 'Eight clay courts, open to the public', 'Junior camps all summer'].join('\n'),
+    settings: {
+      fontSize: '34', bold: 'true', color: '#0b2a4a',
+      displaySpeed: '2600', fadeDuration: '400', minHeight: '120',
+      verticalAlignment: 'center',
+      dropShadow: 'true', dropShadowColor: '#0b2a4a',
+      dropShadowX: '2', dropShadowY: '2', dropShadowBlur: '4',
+    },
+  },
+
+  'poll-category-list': {
+    name: 'Poll Categories',
+    text: LONG,
+    settings: {
+      listTitle: LONG, categoryListFlow: 'horizontal', categorySort: 'alpha',
+      itemGap: '12', fontSize: '16', bold: 'true',
+      color: '#0b2a4a', panelBorderColor: '#0f4f8f',
+    },
+  },
+
+  'social-share': {
+    name: 'Share',
+    text: LONG,
+    settings: {
+      shareLabel: 'Share this page with a partner',
+      shareTemplate: LONG,
+      shareFallbackQuestion: 'Which court do you want?',
+      shareHashtags: 'delraytennis,claycourts,juniortennis',
+      shareVia: 'delraytennis',
+      shareUrl: 'https://delraybeachtenniscenter.com/junior-high-performance',
+      shareIconSize: '40', shareGlyphSize: '20', shareIconGap: '12',
+      shareLabelSize: '15', shareIconBackground: '#0f4f8f',
+    },
+  },
+
+  quote: { name: 'Quote', text: LONG },
+  video: {
+    name: 'Court Cam',
+    text: LONG,
+    settings: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', variant: 'video' },
+  },
+  code: {
+    name: 'Embed',
+    text: '<iframe src="https://example.com/court-availability" title="Court availability"></iframe>',
+    settings: { label: LONG },
+  },
+  merch: { name: 'Merch', text: LONG },
+  'contact-form': { name: 'Contact Form (legacy)', text: LONG },
+  'player-portal': { name: 'Player Portal', text: LONG },
+  'previous-results': { name: 'Previous Results', text: LONG },
+  'current-poll': {
+    name: 'Current Poll',
+    text: LONG,
+    settings: { alignment: 'center', size: '80' },
+  },
+
+  // TWO reminder records, and this one comes with a caveat worth reading
+  // before ticket 11/15 trusts a green run: the record cards are COLLAPSED by
+  // default (`isRecordCollapsed` returns true until clicked) and
+  // `check_panels.openPanels` does not click them, so seeding here makes the
+  // panel real for a person opening it and does NOT make it measurable. The
+  // reminder panel is still the one panel in the sweep the checker sees only
+  // one field of. Making it measurable means teaching openPanels to expand a
+  // record card, which is a change to the checker rather than the fixture.
+  reminder: {
+    name: 'Reminders',
+    settings: {
+      reminderRecordsJson: JSON.stringify([
+        {
+          id: 'reminder-signup-nudge', name: LONG,
+          messageHtml: '<p>Create a free account to save your picks and earn points.</p>',
+          appearance: 'speech_bubble', gameAudience: 'both', isActive: true, sortOrder: 0,
+          criteriaLogic: 'and',
+          criteria: [
+            { id: 'polls-taken', type: 'polls_taken', value: { operator: 'gte', count: 1 } },
+            { id: 'not-registered', type: 'registered', value: { registered: false } },
+          ],
+          backgroundColor: '#ffffff', borderColor: '#4cbb17', borderThickness: '2',
+          containerWidth: '520', offsetX: '12', offsetY: '-8', zIndex: '46',
+          stripPlacement: 'top',
+        },
+        {
+          id: 'reminder-court-fees', name: 'Court Fees Reminder',
+          messageHtml: '<p>Guest rates apply after your third visit this month.</p>',
+          appearance: 'strip', gameAudience: 'registered', isActive: true, sortOrder: 1,
+          criteriaLogic: 'or',
+          criteria: [{ id: 'polls-taken-3', type: 'polls_taken', value: { operator: 'gte', count: 3 } }],
+          backgroundColor: '#eaf3e2', borderColor: '#0f4f8f', borderThickness: '3',
+          containerWidth: '640', offsetX: '0', offsetY: '0', zIndex: '48',
+          stripPlacement: 'bottom',
+        },
+      ]),
+    },
+  },
+
+  'admin-team-users': {
+    name: 'Team',
+    settings: {
+      showTitle: 'true', tableTitle: LONG,
+      showAddButton: 'true', addButtonLabel: 'Invite somebody to the team',
+      showEditButton: 'true', showDeleteButton: 'true',
+    },
+  },
+  'admin-modules': {
+    name: 'Admin Modules',
+    settings: { showTitle: 'true', tableTitle: LONG, showToggle: 'true' },
+  },
+  'admin-site-settings': {
+    name: 'Site Settings',
+    settings: { showTitle: 'true', panelTitle: LONG },
+  },
+  'admin-login': {
+    name: 'Admin Login',
+    settings: {
+      formTitle: LONG, buttonText: 'Sign in to the tenant admin',
+      showForgotPassword: 'true', successRedirect: '/admin',
+    },
+  },
+  'admin-nav-link': {
+    name: 'Admin Link',
+    settings: { linkText: LONG, linkHref: '/admin' },
+  },
+  'admin-support-form': {
+    name: 'Support',
+    settings: {
+      showContact: 'true', contactHeading: LONG,
+      contactIntro: 'Reach the desk between 8am and 8pm, seven days.',
+      showTitle: 'true', formTitle: 'Tell us what went wrong',
+      buttonText: 'Send it to the desk', defaultPriority: 'normal',
+      showHistory: 'true', historyTitle: 'Your previous requests',
+      showScreenshot: 'true', layout: 'stacked',
+    },
+  },
+});
+
+const buildPanelCheckSection = (ids) => {
+  const TUNED = buildTuned(ids);
+  return {
   id: 'section-panel-lattice-check',
   title: 'Panel Lattice Check',
   layout: 'single',
@@ -336,6 +845,31 @@ const PANEL_CHECK_SECTION = {
           ...TUNED.navigation.settings,
           navDropdownStyle: 'mega',
           navMegaPlacement: 'menu',
+        },
+      };
+    })(),
+    // A THIRD menu, on CUSTOM sizing. The Links list grows a fifth column
+    // ("Width") only under this setting, so the two menus above render the
+    // four-column shape and a check over them says nothing at all about the
+    // five-column one. Same hole as the mega panel above it: a variant that
+    // never renders is a variant nobody is measuring. Widths that sum under
+    // 100 so the manager is not also showing its over-budget warning.
+    (() => {
+      const base = createEmptyModule('navigation', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-navigation-custom-width',
+        name: 'Top Menu (Custom Widths)',
+        settings: {
+          ...base.settings,
+          ...TUNED.navigation.settings,
+          navItemSizing: 'custom',
+          navItems: JSON.stringify([
+            { id: 'home', label: 'Home', href: '/', width: '25' },
+            { id: 'play', label: 'Play', href: '/play', width: '25' },
+            { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
+            { id: 'about', label: 'About', href: '/about', width: '25' },
+          ]),
         },
       };
     })(),
@@ -378,11 +912,87 @@ const PANEL_CHECK_SECTION = {
         },
       };
     })(),
+    // A SECOND text module, in the PLAIN variant. `variant: 'plain'` swaps
+    // the whole editor — BuilderSimpleTextModuleSettings instead of the rich
+    // one — so the module above could never measure it, and it is the only
+    // panel in the app that declares an `advanced` region. That region is
+    // gated on having at least one visible advanced strip, so an unseeded
+    // plain-text module is two whole columns the check has never opened.
+    (() => {
+      const base = createEmptyModule('text', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-text-plain',
+        name: 'Pro Shop (Plain Text)',
+        text: LONG,
+        settings: {
+          ...base.settings,
+          variant: 'plain',
+          fontSize: '18', fontWeight: '600',
+          lineHeight: '1.5', letterSpacing: '0.5',
+          color: '#0b2a4a',
+          alignment: 'left', size: '80',
+        },
+      };
+    })(),
   ],
+  };
+};
+
+/**
+ * A SHARED SECTION AND ITS COPIES — so the block-state chip has something to
+ * be, on screen, where a check and a person can both see it.
+ *
+ * Three of the chip's four states need real data behind them: a master to
+ * follow, a copy whose content matches it, and a copy whose content does not.
+ * Without this the fixture holds nothing canonical at all and every header in
+ * it reads "Independent" — a clean pass over the one state that needs no data
+ * to get right, which is the same hole that let two panels ship measured-but-
+ * unseen (see PANEL_CHECK_SECTION above).
+ *
+ * The master and the Following copy are built from ONE function so their
+ * content is byte-identical. `hasSectionDrifted` compares
+ * `JSON.stringify(getSectionContent(...))`, so key ORDER decides the answer —
+ * two hand-written literals that merely look alike would read as drifted.
+ */
+const SHARED_SECTION_ID = 'saved-section-fixture-menu-banner';
+const SHARED_SECTION_NAME = '2 - Menu Banner';
+const SHARED_SECTION_TEXT = '<p>Book a court, join a clinic, or meet the pros.</p>';
+
+function sharedSectionBody(text) {
+  return {
+    title: 'Menu Banner',
+    layout: 'single',
+    locked: false,
+    alignment: 'left',
+    widthMode: 'contained',
+    modules: [
+      {
+        ...createEmptyModule('text', 'main'),
+        id: 'module-shared-banner-text',
+        name: 'Banner copy',
+        text,
+      },
+    ],
+  };
+}
+
+/** A copy on a page. `canonical: true` is what makes it Following. */
+function sharedSectionCopy(id, text) {
+  return { id, savedSectionId: SHARED_SECTION_ID, canonical: true, ...sharedSectionBody(text) };
+}
+
+const SHARED_SECTION_MASTER = { id: SHARED_SECTION_ID, ...sharedSectionBody(SHARED_SECTION_TEXT) };
+
+/** Chip: Independent. Same shape, linked to nothing. */
+const UNLINKED_SECTION = {
+  id: 'section-independent-copy',
+  ...sharedSectionBody('<p>This block belongs to this page and nothing else.</p>'),
+  title: 'Local Notice',
 };
 
 /** Content chosen to break layouts, not to look plausible. */
-const PAGES = [
+const buildPages = (ids) => [
   ['Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray',
    'meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray'],
   ['The Delray Tennis Center is Looking for Players for our Women’s Team Tennis in all Divisions from 1-7',
@@ -392,7 +1002,17 @@ const PAGES = [
   ['', 'empty-name-row'],
   ['Short', 's'],
   ['Court Fees', 'course-fees'],
-  ['Panel Lattice Check', 'panel-lattice-check', [PANEL_CHECK_SECTION]],
+  ['Panel Lattice Check', 'panel-lattice-check', [buildPanelCheckSection(ids)]],
+  // Two pages follow the same master, so the lineage line reads "2 pages" and
+  // exercises the plural path rather than the "1 page" special case.
+  ['Block States', 'block-states', [
+    sharedSectionCopy('section-following-copy', SHARED_SECTION_TEXT),
+    sharedSectionCopy('section-changed-copy', '<p>Hand-edited here, on this page only.</p>'),
+    UNLINKED_SECTION,
+  ]],
+  ['Block States (second follower)', 'block-states-second', [
+    sharedSectionCopy('section-following-copy-2', SHARED_SECTION_TEXT),
+  ]],
 ];
 
 async function findOwnerUserId() {
@@ -431,7 +1051,70 @@ if (!project) {
   console.log(`reusing fixture project ${project.id}`);
 }
 
+/**
+ * The two CRM panels are the only ones in the sweep whose fields live behind
+ * a DATABASE row instead of a setting. `crm-form` renders its whole "Form
+ * Appearance" block only once `crmFormId` names a form that exists, and
+ * `crm-contacts-table` needs a config id for the same reason — so a fixture
+ * that seeds neither leaves both panels at four visible controls and the
+ * check reports a confident pass over the empty box.
+ *
+ * Written through the same stores the app uses, so the rows are tenanted the
+ * way `scopedInsertRow` tenants them; the id is read back rather than assumed
+ * (CLAUDE.md landmine 12 — an insert reporting success is not evidence the
+ * row carries a project).
+ */
+async function ensureCrm(projectId, userId) {
+  const scope = { projectId, userId };
+  const CONFIG_NAME = 'UI Harness CRM';
+  const FORM_NAME = 'UI Harness Contact Form';
+
+  const configs = await crmConfigStore.listConfigs(scope);
+  let config = (configs || []).find((c) => c.name === CONFIG_NAME) || null;
+  if (!config) {
+    config = await crmConfigStore.createConfig({
+      name: CONFIG_NAME,
+      standardFields: ['email', 'first_name', 'last_name', 'phone'],
+      customFields: [
+        { key: 'ntrp_rating', label: 'NTRP Rating', type: 'text', required: false },
+        { key: 'preferred_court_surface', label: 'Preferred Court Surface', type: 'text', required: false },
+      ],
+    }, scope);
+  }
+  if (!config?.id) {
+    console.error('  could not create the fixture CRM config — the two CRM panels will seed empty.');
+    return { crmConfigId: '', crmFormId: '' };
+  }
+
+  const forms = await crmFormsStore.listForms(config.id, scope);
+  let form = (forms || []).find((f) => f.name === FORM_NAME) || null;
+  if (!form) {
+    form = await crmFormsStore.createForm({
+      crmConfigId: config.id,
+      name: FORM_NAME,
+      heading: LONG,
+      submitLabel: 'Send it to the front desk',
+      successMessage: 'Thank you — the desk has your details.',
+      accentColor: '#0f4f8f',
+      fields: [
+        { key: 'email', label: 'Email', type: 'email', required: true },
+        { key: 'first_name', label: 'First Name', type: 'text', required: true },
+        { key: 'ntrp_rating', label: 'NTRP Rating', type: 'text', required: false },
+      ],
+    }, scope);
+  }
+  if (!form?.id) {
+    console.error('  could not create the fixture CRM form — the crm-form panel will seed empty.');
+    return { crmConfigId: config.id, crmFormId: '' };
+  }
+  return { crmConfigId: config.id, crmFormId: form.id };
+}
+
+const ids = CLEAN ? { crmConfigId: '', crmFormId: '' } : await ensureCrm(project.id, userId);
+if (!CLEAN) console.log(`CRM fixture: config ${ids.crmConfigId || '(none)'}, form ${ids.crmFormId || '(none)'}`);
+
 const pagesTable = tableConfig().builderPages;
+const savedSectionsTable = tableConfig().builderSavedSections;
 const existing = must(
   await sbQuery({
     method: 'GET', table: pagesTable,
@@ -448,10 +1131,64 @@ if (CLEAN) {
   process.exit(0);
 }
 
+/**
+ * The saved-section master the Block States page follows.
+ *
+ * Rewritten on every seed for the same reason the check page is: a master
+ * somebody hand-edited locally would make the Following copy read as Changed,
+ * and the fixture would then be measuring the opposite of what it claims.
+ *
+ * BOTH project_id and owner_user_id are stamped — a tenant-scoped table that
+ * carries only one of them takes rows with no tenant at all (CLAUDE.md
+ * landmine 12), and this table has both columns precisely so it does not.
+ */
+async function seedSharedSectionMaster() {
+  const row = {
+    id: SHARED_SECTION_ID,
+    name: SHARED_SECTION_NAME,
+    section: SHARED_SECTION_MASTER,
+    project_id: project.id,
+    owner_user_id: userId,
+    updated_at: new Date().toISOString(),
+  };
+  const found = await sbQuery({
+    method: 'GET', table: savedSectionsTable,
+    query: `select=id&id=eq.${encodeURIComponent(SHARED_SECTION_ID)}&limit=1`,
+  });
+  if (!found.ok) {
+    console.error(`  failed to look up the shared section master: ${found.error}`);
+    return false;
+  }
+  const res = (found.data || []).length
+    ? await sbQuery({
+        method: 'PATCH', table: savedSectionsTable,
+        query: `id=eq.${encodeURIComponent(SHARED_SECTION_ID)}`, body: row,
+      })
+    : await sbQuery({ method: 'POST', table: savedSectionsTable, body: row });
+  if (!res.ok) {
+    console.error(`  failed to seed the shared section master: ${res.error}`);
+    return false;
+  }
+  return true;
+}
+
+const sharedSectionSeeded = await seedSharedSectionMaster();
+
+/**
+ * Pages are written as `{ sections: [...] }`, NOT as a bare array.
+ *
+ * Both shapes load and render, which is what makes the bare one dangerous:
+ * `coerceLayoutInput` (lib/builder/document.js) only rescues the fields
+ * `normalizeLayoutSections` whitelists away — `savedSectionId`, `canonical`,
+ * `locked`, the saved-module links — when the input is the wrapped shape.
+ * Seeded as a bare array, a section written here as a canonical copy comes
+ * back from the server with no lineage at all and every block header reads
+ * "Independent". The fixture has to be the shape production actually stores.
+ */
 const bySlug = new Map(existing.map((r) => [r.slug, r]));
 let created = 0;
 let refreshed = 0;
-for (const [name, slug, sections = []] of PAGES) {
+for (const [name, slug, sections = []] of buildPages(ids)) {
   const row = bySlug.get(slug);
   if (row) {
     // A page that carries modules is REWRITTEN on every seed. The empty
@@ -462,7 +1199,7 @@ for (const [name, slug, sections = []] of PAGES) {
     if (!sections.length) continue;
     const res = await sbQuery({
       method: 'PATCH', table: pagesTable, query: `id=eq.${row.id}`,
-      body: { layout_sections: sections, updated_at: new Date().toISOString() },
+      body: { layout_sections: { sections }, updated_at: new Date().toISOString() },
     });
     if (!res.ok) { console.error(`  failed to refresh ${slug}: ${res.error}`); continue; }
     refreshed += 1;
@@ -472,7 +1209,7 @@ for (const [name, slug, sections = []] of PAGES) {
     method: 'POST', table: pagesTable, query: 'select=id',
     body: {
       name, slug, project_id: project.id, template_kind: 'modular',
-      is_published: true, layout_sections: sections, updated_at: new Date().toISOString(),
+      is_published: true, layout_sections: { sections }, updated_at: new Date().toISOString(),
     },
     headers: { Prefer: 'return=representation' },
   });
@@ -483,5 +1220,12 @@ for (const [name, slug, sections = []] of PAGES) {
 console.log(
   `fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ` +
   `${refreshed} refreshed, ${existing.length} already present.`
+);
+// Said out loud rather than swallowed: without the master, the Block States
+// page shows three Independent headers and a check over it proves nothing.
+console.log(
+  sharedSectionSeeded
+    ? `shared section "${SHARED_SECTION_NAME}" seeded — Block States shows Following / Changed / Independent.`
+    : 'WARNING: the shared section master was NOT seeded; every block header will read Independent.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

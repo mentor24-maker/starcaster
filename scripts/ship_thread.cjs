@@ -53,7 +53,8 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
-const { pickPullRequestCommit, REPIN_SUBJECT } = require('./builder/pullRequestCommit');
+const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
+const { waitForChecks } = require('./builder/waitForChecks');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -85,6 +86,44 @@ function run(cmd, argv, { cwd = root, allowFail = false } = {}) {
 function quiet(cmd, argv, { cwd = root } = {}) {
   const result = spawnSync(cmd, argv, { cwd, encoding: 'utf8' });
   return { ok: result.status === 0, out: `${result.stdout || ''}${result.stderr || ''}`.trim() };
+}
+
+/** Block for ms without a busy loop — the CI poll is the only place this runs. */
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+const bucketOf = (check) => String((check && check.bucket) || '').toLowerCase();
+
+/**
+ * The current check list for a PR, as an array (empty = none reported yet).
+ * `--json` gives a stable machine list and, crucially, returns an empty array
+ * rather than a non-zero exit when there are no checks — so "none yet" arrives
+ * here as `[]`, never as a thrown failure. A genuinely broken `gh` call (auth,
+ * network) is different: it stops ship rather than being read as "no checks".
+ */
+function queryPullRequestChecks(prNumber) {
+  const result = spawnSync('gh', ['pr', 'checks', String(prNumber), '--json', 'bucket,name,state'], {
+    cwd: root, encoding: 'utf8',
+  });
+  const stdout = (result.stdout || '').trim();
+  const stderr = (result.stderr || '').trim();
+  // gh exits non-zero when checks are pending or failing, and (older gh) when
+  // there are none at all — but with --json it still prints the list (or `[]`).
+  // So parse stdout first and trust it; only treat a call with NO parseable
+  // output as a real error.
+  if (stdout) {
+    try {
+      const parsed = JSON.parse(stdout);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) { /* fall through to the error path */ }
+  }
+  if (/no checks reported/i.test(stderr)) return [];
+  fail(
+    `Could not read the checks from GitHub (\`gh pr checks\`). Nothing was merged.\n` +
+    `${stderr || 'gh returned no output.'}`
+  );
+  return []; // unreachable; fail() exits.
 }
 
 let step = 0;
@@ -140,9 +179,7 @@ if (behind === '0') {
       'Two changes genuinely disagree and a person has to choose:\n\n' +
       conflicted.split('\n').filter(Boolean).map((f) => `  · ${f}`).join('\n') +
       '\n\nThe merge has been undone, so the branch is exactly as it was.\n' +
-      'Resolve it by hand (`git merge origin/main`), then run `npm run ship` again.\n\n' +
-      'Note: the `?v=` asset pins are merged automatically (.gitattributes →\n' +
-      'scripts/merge_asset_pins.cjs), so a conflict here is a real one.'
+      'Resolve it by hand (`git merge origin/main`), then run `npm run ship` again.'
     );
   }
   say('    Merged cleanly.');
@@ -247,15 +284,134 @@ if (DRY) {
 
 /* ------------------------------------------------------------ 6. wait for CI */
 
+// WHY THIS IS A POLL AND NOT `gh pr checks --watch`:
+// `--watch` returns non-zero the instant a branch has ZERO checks — which is
+// exactly the state a branch is in for the first few seconds after a push,
+// before GitHub has registered its workflows. Ship used to read that as a
+// failure and stop, and the operator read "The checks did not pass" for a thing
+// that had not run yet (PRs #356/#358, 2026-08-20). So we wait for the checks to
+// APPEAR (a short grace window) and only then for them to finish, and we never
+// call absence a failure. Decision logic lives in scripts/builder/waitForChecks.
 heading(`Waiting for the checks (up to ${CI_TIMEOUT_MIN} minutes)`);
-const checks = spawnSync('gh', ['pr', 'checks', prNumber, '--watch', '--interval', '20'], {
-  stdio: 'inherit',
-  timeout: CI_TIMEOUT_MIN * 60 * 1000,
+
+const prUrl = `https://github.com/mentor24-maker/starcaster/pull/${prNumber}`;
+let lastReport = '';
+
+/**
+ * Push an empty commit so GitHub creates a check run.
+ *
+ * A PR can be born with no runs at all: open it with `gh pr create` and push
+ * again within ~15 seconds and BOTH the `opened` run and the second push's run
+ * go missing (PRs #387 and #389, 2026-08-23). Nothing arrives later on its own,
+ * because a run only exists if an event created one — so the branch stays
+ * checkless forever, ship waits on nothing, and the merge gate refuses it.
+ * A new head SHA fires `synchronize`, which is the only thing that fixes it.
+ *
+ * Deliberately NOT `--no-verify`: an empty commit gives the hooks nothing to
+ * object to, and a convenience path does not get to route around them. If the
+ * hooks re-pin an asset the commit stops being empty, which is equally fine —
+ * all that matters is that the head SHA moves.
+ */
+/**
+ * Which STEP of the nudge failed, or null if it did not fail.
+ *
+ * 'commit' and 'push' are different situations for the operator and the advice
+ * differs completely: after a failed commit the branch really does need a new
+ * one, but after a failed push the commit already exists locally and an
+ * ordinary `git push` (or another `npm run ship`) sends it. The message at the
+ * bottom used to give the commit-failed advice for both, so in the push case it
+ * told him NOT to do the one thing that works.
+ */
+let nudgeFailedAt = null;
+
+function nudgeChecks() {
+  say('    Still nothing after the grace window. Waiting longer cannot help: with no new');
+  say('    push GitHub never creates a run. Pushing an empty commit to trigger one.');
+  const message =
+    `${NUDGE_SUBJECT}\n\n` +
+    'GitHub registered no check run for this pull request. That happens when a\n' +
+    'push lands within seconds of the PR being opened. Only a new head SHA can\n' +
+    'make a run; this commit is that SHA and carries no changes.';
+  const committed = quiet('git', ['commit', '--allow-empty', '-m', message]);
+  if (!committed.ok) {
+    say(`    Could not make the commit:\n${committed.out}`);
+    nudgeFailedAt = 'commit';
+    return false;
+  }
+  const pushed = quiet('git', pushArgs);
+  if (!pushed.ok) {
+    say(`    Could not push it:\n${pushed.out}`);
+    nudgeFailedAt = 'push';
+    return false;
+  }
+  nudgeFailedAt = null;
+  say('    Pushed. Watching for the run it should create.');
+  return true;
+}
+
+const wait = waitForChecks({
+  totalBudgetMs: CI_TIMEOUT_MIN * 60 * 1000,
+  now: () => Date.now(),
+  sleep: sleepMs,
+  queryChecks: () => queryPullRequestChecks(prNumber),
+  nudge: nudgeChecks,
+  onPoll: (state, list, elapsed) => {
+    // One honest progress line per poll, only when the picture changes, so a
+    // 20-minute wait does not scroll — and "none yet" never reads as trouble.
+    const mins = Math.round(elapsed / 60000);
+    let line;
+    if (state === 'none') {
+      line = `    No checks on GitHub yet — this is normal right after a push, still watching (${mins}m).`;
+    } else {
+      const pass = list.filter((c) => bucketOf(c) === 'pass' || bucketOf(c) === 'skipping').length;
+      const pend = list.filter((c) => bucketOf(c) === 'pending').length;
+      const bad = list.filter((c) => bucketOf(c) === 'fail' || bucketOf(c) === 'cancel').length;
+      line = `    Checks: ${pass} passed, ${pend} running, ${bad} failed (${mins}m).`;
+    }
+    if (line !== lastReport) { say(line); lastReport = line; }
+  },
 });
-if (checks.status !== 0) {
+
+if (wait.outcome === 'never_appeared') {
+  fail(
+    wait.nudged
+      ? `No checks appeared on this pull request, and pushing an extra commit did not produce\n` +
+        `one either. That is not a delay — something is stopping GitHub Actions from running\n` +
+        `on this branch. Nothing was merged; the work is safe. Check that Actions is enabled\n` +
+        `for the repository and that the workflow file is present on the branch.\n\n` +
+        `Look at: ${prUrl}`
+      // The nudge is only skipped when it could not be made — and the two ways
+      // it can fail need OPPOSITE advice, so they get their own sentences. The
+      // single message that used to stand here gave the commit-failed advice in
+      // both cases, which in the push case told the operator not to do the one
+      // thing that works.
+      : nudgeFailedAt === 'push'
+        ? `No checks ever appeared on the branch. The extra commit that would create one was\n` +
+          `made, but pushing it failed (see the reason above), so it is sitting on this branch\n` +
+          `locally and GitHub has not seen it. Nothing was merged; the work is safe.\n\n` +
+          `Push it and the run should start:\n` +
+          `  git push\n` +
+          `or just run \`npm run ship\` again — it picks up where it got to.\n\n` +
+          `Look at: ${prUrl}`
+        : `No checks ever appeared on the branch, and the extra commit that would have created\n` +
+          `one could not be made (see the reason above). Nothing was merged; the work is safe\n` +
+          `on the branch. Re-running \`npm run ship\` on its own will NOT help — the branch\n` +
+          `needs a new commit before GitHub will make a run.\n\n` +
+          `Look at: ${prUrl}`
+  );
+}
+if (wait.outcome === 'timed_out_pending') {
+  fail(
+    `The checks were still running after ${CI_TIMEOUT_MIN} minutes, so nothing was merged.\n` +
+    `They have not failed — they just have not finished. The work is safe on the branch;\n` +
+    `run \`npm run ship\` again once they go green.\n\n` +
+    `Look at: ${prUrl}`
+  );
+}
+if (wait.outcome === 'failed') {
   fail(
     `The checks did not pass, so nothing was merged. The work is safe on the branch.\n` +
-    `Look at: https://github.com/mentor24-maker/starcaster/pull/${prNumber}`
+    `Look at: ${prUrl}`
   );
 }
 

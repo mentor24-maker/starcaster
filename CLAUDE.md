@@ -51,6 +51,7 @@ them locally.
 | Artifact | Source | Rebuild |
 |---|---|---|
 | `public/app-shell.html` | `src/layout.html` + `src/pages/**` | `npm run build:html` |
+| `public/about.html`, `site.html`, `explore.html`, `builder-preview.html` | `src/static-pages/*` | `npm run build:html` |
 | `public/privacy-policy.html`, `terms-of-service.html`, `data-deletion.html` | `src/legal/*` | `npm run build:html` |
 | `public/styles.css` | `src/css/main.css` + partials | `npm run build:css` |
 | `public/builder-bundle.js` | `builder-react-entry.tsx`, `components/**`, `lib/builder-client/**` | `npm run build:builder` |
@@ -61,8 +62,26 @@ them locally.
 | `lib/site-import/dist/*.js` | `lib/site-import/*.ts` | `npm run build:site-import` |
 | `lib/build-stamp.json` | `scripts/write_build_stamp.mjs` (records build time) | `npm run build:stamp` |
 
-`public/about.html` and `public/site.html` are hand-authored but get asset
-hashes pinned by `npm run pin:assets` — editing them is fine.
+**No committed file carries a `?v=` hash** (2026-08-24, tasks 86bbkh1nn +
+86bbkh288). Sources keep bare asset references; the build applies content
+hashes to the generated, gitignored outputs in `public/`. To edit About, Site,
+Explore or the builder preview page, edit `src/static-pages/*` and run
+`npm run build:html`. This closed the whole class of `?v=` trouble — pin merge
+conflicts, stale pins after catch-up merges, and GitHub's phantom conflicts —
+and retired the `asset-pins` merge driver with it. CI enforces the invariant
+directly: a clean build must not modify any tracked file.
+
+**`src/layout.html` is no longer pinned** (2026-08-24, task 86bbkh1nn). Its
+asset references are bare in source; the hashes are applied to the file the
+build produces, `public/app-shell.html`, which is gitignored. Removing it from
+the pin targets left that generated shell **byte-identical**, which is the
+proof the source pins were pure redundancy — they were re-derived on the output
+every build, while making the busiest file in the repo change on every asset
+change. That is where most `?v=` merge conflicts, stale-pin CI failures and
+phantom GitHub conflicts came from. Four committed files still carry pins
+(`public/about.html`, `site.html`, `builder-preview.html`, `explore.html`);
+task 86bbkh288 removes those too, and with them the merge driver and the
+clean-build CI check.
 
 ### The other kind: committed, but regenerated wholesale
 
@@ -100,13 +119,12 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
 6. **Never write `data/*.json` from production code paths.** Vercel's
    filesystem is read-only; writes silently vanish. Use Supabase.
 7. **Never expose `SUPABASE_SERVICE_KEY` (or any secret) to the browser.**
-8. **`?v=` asset pins come from built files, not from source.**
-   `pin_asset_versions.cjs` hashes whatever sits in `public/`, so a stale or
-   other-branch bundle pins a hash nobody can reproduce — it either ships a
-   dead cache-buster (new CSS deploys, browsers keep serving the cached old
-   one) or surfaces as "unrelated" modified HTML in someone else's commit.
-   Pre-commit now runs `npm run build:assets` first, and CI fails if a clean
-   build changes any committed HTML. Never hand-edit a `?v=` value.
+8. **`?v=` asset pins come from built files, not from source — and they only
+   exist on generated, gitignored files** (since 2026-08-24, task 86bbkh288;
+   before that they were committed, and were the largest source of phantom
+   conflicts and stale-pin CI failures in the repo's history). Never hand-edit
+   a `?v=` value, and never commit a file that carries one — CI fails if a
+   clean build modifies any tracked file.
    The same hash also breaks if the FOLDER reaches its dependencies oddly:
    esbuild stamps each bundled module's path into the output as a comment, so
    a worktree whose `node_modules` is a symlink to another checkout emitted
@@ -167,6 +185,14 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     success. Spread the page (`{ ...page, layoutSections: next }`) so
     `pageBackground` and `theme` are not reset, and read the page back after
     writing before you touch the next one.
+14. **A vitest test must not require a generated server lib.** CI runs
+    `npx vitest run` BEFORE `npm run build`, so anything under `lib/builder/`
+    (`template.js`, `document.js` → `./template`, …) does not exist at vitest
+    time — a test reaching it passes locally forever and fails CI forever
+    (PR #343). vitest (`components/**`, `lib/builder-client/**`) tests TS
+    sources only; a test needing a generated lib goes in the node suite
+    (`scripts/builder/*.test.js`, run after the build). Enforced by
+    `check_vitest_generated_lib.cjs`; full story in `docs/DOCTRINE.md` §5.18.
 
 ## Working locally
 
@@ -175,6 +201,7 @@ Production is not where you find out whether something works. Full guide:
 
 ```
 npm run doctor        # what is up, what is stale, which database am I on
+npm run env:local     # a NEW worktree: point it at this machine's database
 npm run db:refresh    # make this copy match production (about two minutes)
 npm run db:use        # which database am I on? add local/cloud to switch
 npm run schema:check  # has production's structure moved away from the record?
@@ -185,9 +212,42 @@ talking to, `npm run dev` refuses to start against the live one without
 `ALLOW_CLOUD_DEV=1`, and all three read the same classifier
 (`lib/environmentBanner.js`) so they cannot disagree.
 
+**A fresh worktree has no settings file, so run `npm run env:local` in it
+first.** It writes one pointed at the Supabase on this machine, using the
+development defaults `supabase status` prints — no live credential is involved,
+so an agent may run it. This is what makes `check:panels` runnable in a
+worktree; the old advice (`cp ../../../.env.local .`) was a live-secret copy an
+agent may not perform, which left the one gate CI cannot run also unrunnable by
+an unattended pass.
+
 **`db:refresh` costs production disk IO.** Six runs in one day exhausted the
 budget and left every tenant site down on 2026-08-17 (`docs/DOCTRINE.md` §1.5).
 Weekly is the rhythm; `doctor` says when you have drifted.
+
+## Some jobs run on exactly one machine
+
+There is more than one machine now, and three jobs are not safe to run twice
+at once: **`bus-relay`** (two relays both post the same comment), **`db:refresh`**
+(Supabase disk IO is one budget for the whole company — six runs in a day took
+every client site down on 2026-08-17) and **the loop skills** (claiming a
+ticket is check-then-act, which is only sound with a single claimant).
+
+Which machine owns which job is a committed table in **`lib/nodeRoles.js`**,
+and every one of those jobs asks it first. Moving a job to another machine is
+a one-line edit there plus a commit — deliberately reviewable, rather than a
+setting somebody flips on one machine at 2am.
+
+```
+npm run node:whoami          # which machine is this, and what may it run
+npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
+```
+
+Each machine says who it is in `~/.alphire-node` (one short line:
+`macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
+which is a guess — rename the Mac and the guess changes. **A machine whose
+name is not recognised does not quietly skip; it refuses out loud**, because
+"another machine is doing it" and "nobody is doing it" look identical
+otherwise, and only one of them is safe.
 
 ## One thread, one topic, one session
 
@@ -245,11 +305,24 @@ Give every thread its own worktree — a separate folder with its own branch,
 sharing the same repo history. **Use the command, not the raw git:**
 
 ```
-npm run thread <topic>     # tidy first, branch off CURRENT origin/main, npm ci, build
+npm run thread <topic> <clickup-task-id>   # tidy first, branch off CURRENT origin/main, npm ci, build
 npm run ship               # catch up, verify, push, PR, wait for CI, merge, tidy
 npm run map                # what exists, what is shipped, what is still live work
 npm run tidy               # delete shipped branches, remove finished worktrees
 ```
+
+**A thread exists only while its ClickUp task is open** (Charter Q1,
+2026-08-18). The task id is required, not optional — `npm run thread` stamps
+it onto the branch (`git config branch.<topic>.clickup-task <id>`, the same
+`branch.<name>.*` namespace git/VS Code already use for per-branch metadata)
+and refuses to create a thread for a task that is not confirmed open. `npm
+run tidy` reads the stamp back and cleans up a thread whose task has since
+closed — branch deleted, worktree removed, logged to `tidy-restore.log` —
+**even if its commits never shipped**, which the older shipped-only check
+could never reach (an abandoned thread's commits are legitimately "active" by
+`git cherry`, and would otherwise sit there forever). A branch whose ClickUp
+status can't be determined (network, auth, rate limit) is never treated as
+closed — only a clean, confirmed read authorizes a delete.
 
 `npm run ship` is the other end of `thread`: the nine hand-run steps between
 "the work is done" and "it is live", in order, with the state checked between
@@ -275,19 +348,15 @@ newest *hand-authored* commit, so if shipping turns up an unrelated fix, commit
 it BEFORE the feature (or fold it in) — otherwise the chore takes the name,
 which is exactly how #304 landed titled after a `.gitattributes` line.
 
-**The `?v=` asset pins no longer conflict.** Those four committed HTML files
-carry hashes rebuilt from whatever the build produced, so any two branches
-touching styling collide there even when neither edited a word of markup — it
-was most of the conflict traffic on 2026-08-11, and the resolution was
-mechanical every time. `.gitattributes` routes them through
-`scripts/merge_asset_pins.cjs`, which merges the markup normally and restores
-each pin by asset path. A genuine markup conflict still conflicts.
-
-The driver lives in `.git/config` (git will not run a driver defined by a
-cloned repo), so `scripts/install_git_hooks.cjs` registers it on every
-`npm install`. Without that step `.gitattributes` names a driver that does not
-exist and git falls back to the default merge **silently** — so if pins start
-conflicting again, run `npm install` before anything else.
+**The `?v=` asset pins cannot conflict any more, because they are not in git**
+(2026-08-24, task 86bbkh288). They used to live inside committed HTML, which
+made any two branches touching styling collide there — most of the conflict
+traffic on 2026-08-11 — and needed a local merge driver GitHub could not run,
+which made clean branches read as `CONFLICTING` and stalled eight approved
+merges on 2026-08-24. Now every pinned file is generated and gitignored, the
+driver is gone, and a pin conflict is structurally impossible. If a `?v=`
+value ever shows up in `git diff` again, something has re-committed a
+generated file — `check_conventions` blocks exactly that.
 
 `npm run thread` exists because each hand-rolled step had already cost time:
 branching off a stale local `main` (forces a rebase later, which is where the
@@ -400,13 +469,31 @@ Before reporting a task complete, run and state the results of:
    two assertions that could not fail, including one where the check was
    comparing a setting to itself.
 
+8. **`npm run check:shots` on every task, not only the visual-looking ones.**
+   It builds `main`'s code and this branch's code, photographs six pages
+   through both, and attaches every pair that differs to the ClickUp ticket —
+   so a change to what a page renders reaches the operator as pictures rather
+   than as a branch to check out (charter Q5). Deciding for yourself that a
+   change "is not visual" is the failure it exists to prevent, and it costs
+   about ten seconds to say so and stop when no watched file changed.
+
+   ```
+   PORT=3058 node server.js
+   UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:shots -- --task <clickup-id>
+   ```
+
+   Its comparison is exact — one differing pixel counts — which is only
+   affordable because it proves its own instrument before trusting a reading.
+   If that control ever fails, fix the scene, never the comparison.
+   `docs/VISUAL_REVIEW.md`.
+
 `npm run check:css` is deliberately absent from this list: CI runs it on
 every pull request, so it is the one visual gate nobody has to remember.
 What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
 §5.14 — read that before treating a green run as proof a page looks right.
 Neither of them can tell a bounce from a wobble.
 
-8. **Say where you looked at it.** Not a command — a sentence naming the
+9. **Say where you looked at it.** Not a command — a sentence naming the
    screen you opened and what you saw. Every gate above can pass on a change
    that is visibly broken: nothing here tests CSS, and the panel bugs of
    2026-08-12, 08-13 and 08-16 all reached the operator green. The local app

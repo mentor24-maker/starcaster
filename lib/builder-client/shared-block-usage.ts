@@ -108,6 +108,39 @@ export function savedSectionUsage(
   return buildSavedSectionUsageIndex(pages).get(id) ?? EMPTY_USAGE;
 }
 
+/** The minimum of a `Response` this needs; keeps the helper server-bundle safe. */
+export type UsageResponse = { ok: boolean; json: () => Promise<unknown> };
+
+/**
+ * Count one saved section's usage from the page list, or return `null` when the
+ * list could not be read.
+ *
+ * `null` and zero are DIFFERENT ANSWERS and the difference is the whole point.
+ * `builderAdminFetch` does not throw on an HTTP error -- it hands back a normal
+ * response carrying the failure status -- so before 2026-08-23 a 401 or a 500
+ * left `body.pages` undefined, the list became `[]`, and the modal reported a
+ * confident ZERO. The header then read "Original -- Not used on any page yet",
+ * tooltip "saving it changes nothing else", about a master that dozens of live
+ * tenant pages follow.
+ *
+ * This lives here, rather than inline in the modal, so the branch is reachable
+ * by a test. A test that re-implements the branch it is checking cannot fail.
+ */
+export async function loadSavedSectionUsage(
+  fetchPages: () => Promise<UsageResponse>,
+  savedSectionId: string
+): Promise<BlockUsage | null> {
+  try {
+    const response = await fetchPages();
+    if (!response.ok) return null;
+    const body = (await response.json()) as { pages?: unknown };
+    const pages = Array.isArray(body?.pages) ? (body.pages as UsagePage[]) : [];
+    return savedSectionUsage(pages, savedSectionId);
+  } catch {
+    return null;
+  }
+}
+
 /** A following instance, with the content `hasSectionDrifted` actually compares. */
 export type UsageSectionWithContent = UsageSection & DriftableSection;
 

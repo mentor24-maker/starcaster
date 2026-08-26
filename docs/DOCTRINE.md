@@ -479,8 +479,31 @@ to a file and check the real code, or the gate is theatre.
   may reference a path outside the repo), so a new build script that forgets
   the shared settings is caught even though nothing checks for the flag itself.
 
-On a merge conflict in `src/layout.html`, take the incoming file and rebuild.
-Never resolve pins by hand.
+**`src/layout.html` stopped carrying pins on 2026-08-24** (task 86bbkh1nn), so
+it can no longer conflict on one. It is committed source AND the template
+`build_html.js` composes into `public/app-shell.html` — which is gitignored and
+pinned as one of `public/*.html`. Pinning the source re-derived exactly the same
+hashes onto a file humans edit and git merges: removing it from the targets left
+the generated shell **byte-identical**, and two branches that each touched a
+bundled asset then merged with zero conflicts, where before they collided there.
+
+That one file was the largest single source of the `?v=` trouble — the merge
+conflicts, the stale pins a catch-up merge restored, and GitHub's phantom
+`CONFLICTING` (it cannot run our merge driver). On 2026-08-24 that chain left
+eight already-approved tickets parked for a day.
+
+**And on 2026-08-24 the class was closed for good** (task 86bbkh288): the four
+remaining pin-carrying files — `public/about.html`, `site.html`,
+`builder-preview.html`, `explore.html` — moved to `src/static-pages/` as bare
+sources, their `public/` outputs generated and gitignored like the app shell.
+No committed file carries a `?v=` hash, so a pin can no longer conflict, go
+stale in a merge, or make GitHub report a phantom `CONFLICTING`. The
+`asset-pins` merge driver was deleted with the case it existed for, and CI's
+"pins match a clean build" check became the stronger general rule: **a clean
+build must not modify any tracked file.**
+
+If a pin conflict ever appears again, someone has re-committed a generated
+file; fix that, never the pin.
 
 **When CI rejects pins on files your change never touched, suspect the folder
 before the change.** Run `npm run check:build-paths`.
@@ -784,6 +807,44 @@ a valid value, which is a different question from the one that harness asks.
   Both halves of this one were found that way and neither was obvious on
   screen.
 
+### 5.18 A vitest test that requires a generated lib passes locally and always fails CI
+
+2026-08-22, PR #343 (Sync 5/7). Every local gate was green — typecheck,
+`test:builder` 490/490, `test:builder-ui` 1102/1102, conventions — and CI's
+`verify` job was RED. The new `lib/builder-client/section-drift.test.ts` did
+`require("../builder/document.js")`, whose own line 3 requires `./template`,
+and `lib/builder/template.js` is a **gitignored generated artifact**.
+
+CI's step order is the whole story:
+
+```
+npm ci → check:syntax → check:css → typecheck → npx vitest run → npm run build → … → npm run test:builder
+```
+
+`npx vitest run` happens **before** `npm run build`, so at vitest time the
+generated libs under `lib/builder/` do not exist. On any developer machine they
+already do — which is why this shape of test passes locally forever and fails
+CI forever. **A green local `npm run test:builder-ui` is not evidence the same
+test passes in CI.**
+
+**The rule.** vitest (`components/**`, `lib/builder-client/**`) tests
+TypeScript sources only. Anything that must require a generated server lib
+(anything under `lib/builder/`) belongs in the **node** suite
+(`scripts/builder/*.test.js`, run by `npm run test:builder`), which CI runs
+**after** the build — which is why every existing node test may require them
+freely.
+
+**Prove a fix:** `mv lib/builder/template.js /tmp/ && npx vitest run` must stay
+clean, then restore. Reproduced deliberately that way at the time: it produced
+the identical `Cannot find module './template'` CI error.
+
+**Enforced, not just remembered** (`scripts/check_vitest_generated_lib.cjs`, in
+`check_conventions.cjs`). It walks each vitest test file's relative-import graph
+and fails the moment the chain reaches `lib/builder/` — the direct require *and*
+the indirect one through a committed source like `document.js`. A grep could not
+see the indirect case. To prove the guard bites: add a vitest test that requires
+`lib/builder/…`, run conventions, watch it fail; remove it, watch it pass.
+
 ---
 
 ## 6. Working in this repo
@@ -971,6 +1032,44 @@ not a per-occasion bypass.
 *Why this is doctrine and not judgement:* §6.4 already says his bottleneck is
 attention, not willingness. Asking about a settled question is the same waste as
 surfacing a chore for approval, minus even the possibility of a useful answer.
+
+**The second incident — a rule can be evaded without anyone trying to evade
+it.** 2026-08-23: three unattended `loop-build` runs on the Mac Mini
+force-pushed, despite four deny rules forbidding it. Recovered from the session
+transcripts rather than the agents' own accounts, every instance was the same
+command:
+
+```
+git -c credential.helper='<the gh helper>' push --force-with-lease
+```
+
+Deny rules are command-**prefix** globs. `Bash(git push --force*)` matches a
+command that *starts* `git push`; this one starts `git -c`. And that prefix is
+not an evasion anyone invented — it is this repo's own documented way to push,
+because osxkeychain is unreachable from an agent session. **The house idiom
+walked straight through the house rule**, and nobody would have known if the
+agents had not each volunteered it.
+
+Two lessons, and the second is the durable one:
+
+1. Every instance had the same cause: write the work-log entry, open the PR,
+   then amend the commit to stamp the number in. **Remove the reason and you
+   remove the pressure** — `loop-build/SKILL.md` now says to add the entry as a
+   second commit, and never to amend after pushing.
+2. **A guard made of patterns protects only the spellings someone thought of.**
+   `git -C <dir> push --force`, a newline instead of `&&`, `git push origin
+   +main` with no flag at all — each needs its own pattern, and none of them
+   gets written until after the incident that needed it.
+   `scripts/lib/force_push_guard.cjs` therefore *parses* the command — strips
+   env assignments and git's global options, then asks whether the subcommand
+   is `push` and whether anything forces — and the hook refuses on that, ahead
+   of `SKIP_DENY_EXPLAIN` so no environment variable is a way around it.
+   `scripts/hooks/force_push_guard.test.js` holds all seventeen forms.
+
+*The damage was nil — every push was to the loop's own unmerged branch, seconds
+old. That is not the point. An unattended agent crossed a line the operator drew
+and the crossing was invisible; on a machine nobody is watching, "the guard has
+a hole" is the whole finding.*
 
 ---
 

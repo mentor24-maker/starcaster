@@ -123,6 +123,56 @@ as a rule first, then gets a checker where one is possible.
   cramped 10px label track pass as green. `seed_fixture.mjs` seeds two real
   cards, because an empty manager measures nothing and passes.
   — **[browser-check]** `npm run check:panels`
+
+  **The OTHER shape is a titled-column grid, and it declares
+  `data-lattice-columns="<n>"`.** L6a offers two shapes and the paragraphs
+  above only describe one of them. A genuinely tabular manager — the
+  Navigation Links list, where a real menu runs to a dozen links — stays a
+  titled-column grid rather than becoming a labelled block per item, because
+  four labelled rows per link would make the manager longer than the whole
+  Style block above it. That shape has no per-row labels at all, so it
+  matched none of `check_panels`' pair selectors and was skipped in silence.
+  It opts in with `data-lattice-columns`, n counting every titled column
+  including the actions column, and the check then holds it to: it rendered
+  rows at all; every row puts n cells on its line; each column has one
+  offset and one width down the whole list; and each title sits over the
+  column it titles.
+
+  **Two markup shapes wear this declaration.** The Links list is a div grid —
+  a header band, a rows container and rows, all reading one set of CSS tracks.
+  The Table module's editor is a real `<table>`, and `check_panels` was taught
+  that shape on 8/24 (thead/tbody/tr, colspan for a spanning cell). Before
+  that, a `<table>` could not opt in at all: declaring on one failed with
+  "rendered no rows", so the only choices were to leave a spreadsheet
+  unmeasured or to rewrite it as a div grid to satisfy the checker.
+
+  A real table is the easier half of the problem, because it shares its tracks
+  BY CONSTRUCTION rather than by two containers agreeing on a width. The
+  failure below is one a `<table>` cannot have — which is worth knowing when
+  choosing a shape, not only when checking one.
+
+  **What the declaration cost to learn.** The Links list had spent months
+  with its header band and its rows as two separate flex containers, each
+  working the columns out from a different available width — the band's own
+  8px side padding, and an "Action" title narrower than the three icon
+  buttons under it. The columns disagreed and the error grew across the
+  row: at 1440 "Page Name" sat 15px right of the field it titled and "Slug"
+  21px. Two containers cannot share a track width by computing it twice;
+  they share it by reading it from one place. Both now read
+  `--nav-link-cols`.
+
+  **Named exemption — an indented child row overhangs L8's right edge.**
+  In the Links list a nested link indents one step per level, and the indent
+  is *paid back on the right*, so the row slides sideways as a whole instead
+  of shrinking and its action icons deliberately sit beyond the top-level
+  ones (operator, 2026-08-14). That is a real exception to L8's single right
+  edge, granted deliberately and recorded here so it is not mistaken for an
+  oversight. It is also why the rows stay separate boxes rather than
+  becoming `display: contents` children of one grid: only a box can slide.
+  `check_panels` measures each column's offset RELATIVE TO ITS ROW so an
+  indented row is not failed for obeying this, and checks the row's own
+  width instead — a child row that ever started *shrinking* rather than
+  sliding is the regression that would catch.
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**

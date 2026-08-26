@@ -11,6 +11,59 @@ See `docs/LOOP_ENGINEERING.md` for the whole system.
 Each run of this skill builds **one** task into **one** PR. When run under
 `/loop`, it repeats, draining the queue one clean PR at a time.
 
+## Before anything else: is this the machine that runs this loop?
+
+Two machines can both reach ClickUp, and claiming a ticket is check-then-act —
+a read, a comparison, then a write. There is no way to make that one atomic
+step, so it is only sound while exactly ONE machine is claiming. Which machine
+that is lives in `lib/nodeRoles.js`, the same table `db:refresh` and the bus
+relay read.
+
+**Run this first, before reading the queue or touching anything:**
+
+```bash
+npm run node:owns -- loop-build
+```
+
+*   **exit 0** — this machine owns the loop. Carry on.
+*   **exit 3** — another machine owns it. **Stop.** Claim nothing, build
+    nothing. Report the message it printed, which names the owning machine,
+    and finish the run. This is a normal outcome, not a failure.
+*   **exit 1** — it could not tell which machine this is. **Stop and say so
+    loudly.** Do not treat it as "not mine": "someone else is doing it" and
+    "nobody is doing it" look identical from here, and only one of them is
+    safe. The message says exactly what to type to fix it (one line, once per
+    machine). `npm run node:whoami` shows the whole picture.
+
+## Then: is the merge side already full?
+
+Branch protection is `strict: true`, so a branch must be current with `main` to
+merge — which means **every merge invalidates every other open branch**. With N
+PRs open, each merge dates N-1 branches, each needing its own catch-up and its
+own CI run. On 2026-08-23 with 24 open, a single merge dated 23 branches and
+the relay spent most of its work re-catching-up branches that went stale again
+before it could use them.
+
+So building faster than the merge side can absorb does not ship anything
+sooner. It just rots, and rotting costs real work.
+
+```bash
+npm run clickup -- wip-check
+```
+
+*   **exit 0** — room to claim. Carry on.
+*   **exit 3** — the cap is reached. **Claim nothing.** Report the line it
+    printed and finish the pass **successfully** — this is a normal outcome,
+    the same shape as `node:owns` saying another machine owns the job. Write
+    NOTHING to ClickUp: no status, no comment, no Loop note. A capped pass
+    leaves the queue exactly as it found it, and says so once, not per ticket.
+*   **exit 1** — the count could not be read. It proceeds deliberately rather
+    than stopping all work on a transient `gh` failure, but the pass is
+    unbounded by the cap — say so in the run report.
+
+The cap is `DEFAULT_WIP_CAP` in `scripts/builder/wipCap.js`, with the reasoning
+beside it. `CLAUDE_LOOP_WIP_CAP` overrides it for experiments.
+
 ## ClickUp access: use the direct script, not the connector
 
 Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
@@ -30,6 +83,15 @@ npm run clickup -- describe --task <id> --body-file -                        # R
 ```
 
 ## The two columns — which one you are writing to
+
+**`describe` REPLACES the description — it does not append.** The spec and the
+acceptance criteria live there, and a build pass that writes its outcome with
+`describe` destroys the very thing the next reviewer checks the work against.
+That happened on 86bbjv61n (2026-08-23): the reviewer had to reconstruct the
+acceptance criteria from the outcome writeup that had overwritten them. **An
+outcome report is a `comment`.** Reach for `describe` only to change what the
+task IS — narrowing a scope the operator sliced, correcting a spec — and when
+you do, keep the spec above whatever you add.
 
 ClickUp shows the description on the **left**, wide, and comments on the
 **right**, narrow. Detail goes left. The right column carries the PR URL and the
@@ -59,6 +121,28 @@ standing decision it descends from.
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
 
+## Loop note — stamp the queue as you go (queue visibility)
+
+At each transition you perform, stamp the ticket's **Loop note** so the Loop
+Queue shows what is happening at a glance (not just the stage). One write per
+real transition — never per queued ticket:
+
+```bash
+npm run clickup -- loop-note --task <id> --transition claimed        # when you claim it
+npm run clickup -- loop-note --task <id> --transition pr-open --pr <n>   # when the PR is open / handed to review
+npm run clickup -- loop-note --task <id> --transition escalated       # when you move it to Needs your input
+```
+
+If it prints `CANNOT STAMP — custom field "Loop note" not found`, that is not a
+failure of your build: the field is a one-time ClickUp setup (see
+`docs/LOOP_ENGINEERING.md`). Note it in your run report and carry on.
+
+At the END of the pass, one heartbeat so the list shows the pipeline is alive:
+
+```bash
+npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task name>"
+```
+
 ## Workflow
 
 1. **Claim the next task.** Find the oldest `Queued` task (highest priority
@@ -67,6 +151,30 @@ the run report.
    `--status Building --if-status Queued`: the guard makes the claim atomic,
    so a parallel build loop that got there first shows up as exit code 3 —
    take the next task instead of proceeding.
+
+   **Then, BEFORE creating a branch, ask whether one already exists:**
+
+   ```bash
+   npm run clickup -- build-start --task <id>
+   ```
+
+   *   **exit 0** — no PR, or its PR is closed/merged. A fresh branch is right;
+       carry on to step 2.
+   *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
+       second branch. Check that one out, read the send-back that returned the
+       ticket to `Queued`, fix what it named, and push to the SAME PR. The
+       command prints the branch.
+   *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
+       branch on a guess; that is the failure this step exists to prevent,
+       arriving through the check meant to catch it.
+
+   The claim in the line above and this check answer DIFFERENT questions, and
+   conflating them cost two duplicate PRs on 2026-08-23 (#407 beside the still
+   open #349, #408 beside #350). `--if-status Queued` asks *"is anyone else
+   starting this right now"* — it was working perfectly. Nothing asked *"was
+   this already started and handed back"*, and a sent-back ticket is genuinely
+   `Queued` with its PR genuinely still open. Reading the comments would have
+   shown it; a pass that must remember to read is a pass that will forget.
 
    The list's six statuses, in order, are `Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
@@ -92,28 +200,66 @@ the run report.
    automatically; if the status command ever reports an assignee that did not
    stick or clear, treat that as a failed handoff, not a cosmetic detail.
 
+   **Which repo the task belongs to.** The Loop Queue carries work for more
+   than one repo. A task declares its repo with a `repo:<name>` tag (known:
+   `starcaster`, `normie`, `pulse`, `vault`); no tag means `starcaster`. The
+   `queue` and `get` commands already resolve it — `queue` prints a **repo**
+   column (`?<name>` there means "does not resolve — escalate"), and `get`
+   prints a `repo:` line. The rule the resolver enforces
+   (`scripts/builder/taskRepo.js`):
+
+   - **A known repo, present on this machine** (or no tag → starcaster) →
+     build in THAT repo (step 2).
+   - **An unknown repo tag, or two different repo tags** → do NOT build. Move
+     the task to `Needs your input`, assign Dane, comment why (quote the
+     `get` command's `repo:` line), and take the next task. Guessing would
+     build in the wrong checkout against the wrong gates and call it done.
+   - **A known repo whose checkout is NOT on this machine** → escalate too.
+     The `get` command's `repo:` line reads
+     `ESCALATE — repo:<name> is not checked out on this machine (<path>)`;
+     quote it. (This is why step 2 can assume `$REPO` exists.)
+
 2. **Get an isolated workspace — MANDATORY.** Create a dedicated worktree and
-   branch off the latest main. Never build in a shared folder; never edit main.
+   branch off the latest main, **inside the repo the task declares**. Never
+   build in a shared folder; never edit main. `$REPO` is that repo's checkout,
+   resolved by `taskRepo.repoHome('<repo>')` — this checkout for `starcaster`,
+   the sibling or `~/vault` for the others. (Step 1 already ESCALATED a repo
+   whose checkout is missing, so by here `$REPO` exists.)
 
    Run this as ONE command — shell variables do not survive between tool
-   calls, and `REPO` has to still be set when the later lines use it:
+   calls, and `REPO` has to still be set when the later lines use it. `npm ci`
+   is skipped where the repo has no `package.json` (the vault is prose-only):
 
    ```bash
-   REPO="$(git rev-parse --show-toplevel)" && \
+   MAIN="$(node "$(git rev-parse --show-toplevel)/scripts/lib/main_checkout.mjs")" && \
+     [ -n "$MAIN" ] || { echo "main checkout came back empty — do not build"; exit 1; } && \
+     REPO="$(node -e "console.log(require('$MAIN/scripts/builder/taskRepo.js').repoHome('<repo>'))")" && \
+     [ -n "$REPO" ] || { echo "repoHome returned empty — do not build"; exit 1; } && \
      git -C "$REPO" fetch origin --quiet && \
      git -C "$REPO" worktree add "$REPO/.claude/worktrees/<task-slug>" \
        -b <task-slug> origin/main && \
-     cd "$REPO/.claude/worktrees/<task-slug>" && npm ci
+     cd "$REPO/.claude/worktrees/<task-slug>" && \
+     if [ -f package.json ]; then npm ci; else echo "no package.json (e.g. vault) — skipping npm ci"; fi
    ```
 
    The checkout is **derived, never written down**: this skill runs on more
    than one machine, and a literal path is an assumption that fails silently
    on every machine but the one it was typed on (vault `doctrine/NODES.md`,
-   principle P1). Start the loop session in the main checkout, not inside an
-   existing worktree — `--show-toplevel` answers "the folder I am in".
+   principle P1).
+
+   **It no longer matters where the loop session starts.** `--show-toplevel`
+   answers *"the folder I am in"*, and using it for the ANSWER meant a loop
+   started inside a worktree — which is what `docs/LOOP_ENGINEERING.md` used to
+   tell you to do — put its per-task worktrees **inside another worktree**.
+   Nothing errored; the work just happened somewhere nobody expected.
+   `main_checkout.mjs` asks git for `--git-common-dir`, which points at the
+   MAIN checkout's `.git` from inside a linked worktree, so the answer is the
+   same from anywhere. `--show-toplevel` survives here only to locate that
+   file, which every worktree carries, and is correct for that.
 
    `<task-slug>` = short kebab-case name from the task. Do ALL work for this
-   task inside that worktree.
+   task inside that worktree. A repo other than `starcaster` runs THAT repo's
+   gates (see `docs/LOOP_ENGINEERING.md` → "Per-repo gates"), not starcaster's.
 
 3. **Build to the acceptance criteria.** Implement exactly what the task's
    Scope and Acceptance criteria describe. Respect the Non-goals — do not
@@ -134,6 +280,25 @@ the run report.
      Needs `npm run dev` and `npm run seed:ui-fixture` first, and is **not** a
      CI gate (CI has no browsers), so nothing else will catch a regression here.
 
+5. **Photograph the change if it altered a rendering.** Charter Q5: a visual
+   change reaches Dane as before/after pictures on the ticket, so the decision
+   he is asked for is "does this look right" rather than "check out this branch".
+
+   ```
+   PORT=3058 node server.js
+   UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:shots -- --task <task-id>
+   ```
+
+   Run it on EVERY task, not only the ones you think are visual — deciding
+   that yourself is the failure it exists to prevent. It costs about ten
+   seconds when nothing under `components/`, `lib/builder-client/`, `src/css/`,
+   `public/images/` or `builder-preview.html` changed: it says so and stops
+   without opening a browser. When renders are identical it also files nothing,
+   so a non-visual PR never interrupts him.
+
+   `docs/VISUAL_REVIEW.md` covers the rest — in particular, that a green run
+   proves something changed, never that it changed correctly.
+
    If a gate fails and you cannot fix it **within the task's scope**, escalate
    with `ask` (which posts the card and assigns Dane in one move) and stop. Do
    not force a broken build through, and do not expand scope to chase an
@@ -143,16 +308,32 @@ the run report.
    `@@NEEDED` with the specific question, and where you can, give him named
    options to pick between rather than an open question.
 
-5. **Add a plain-English work-log entry.** Prepend one dated entry to
+6. **Add a plain-English work-log entry.** Prepend one dated entry to
    `docs/WORK-LOG.md` (newest first) describing this task the way you would
    explain it to a non-programmer: what changed and why it mattered, plus the
-   `(#PR)` number once known. Keep it to a short paragraph. This entry is part
+   `(#PR)` number. Keep it to a short paragraph. This entry is part
    of the task's own PR, so the log lands on `main` at the same moment the work
    does — never edit `docs/WORK-LOG.md` directly on `main`. If a parallel task
    causes a merge conflict here, it is trivial (two entries at the top); resolve
    by keeping both.
 
-6. **Commit and open the PR.**
+   **The entry needs a PR number, and you do not have one yet. Do NOT amend the
+   commit later to add it — that needs a force-push, which is a standing deny
+   rule here and is now blocked outright by a PreToolUse hook.** On 2026-08-23
+   three separate runs force-pushed for exactly this reason, using the repo's
+   own `git -c credential.helper=... push` idiom, which slipped past the deny
+   rule because that rule matches commands *starting* with `git push`.
+
+   Two orders work; pick either and never amend:
+
+   - **Commit the code first, push, open the PR, then add the work-log entry as
+     its own second commit** with the number already known. One extra commit,
+     no rewrite. (Squash-merge collapses them anyway.)
+   - **Or reserve the number first**: `gh pr create --draft` on the pushed
+     branch, read the number off it, write the entry, commit, push, then
+     `gh pr ready`.
+
+7. **Commit and open the PR.**
    - Inspect `git diff --cached` before committing (staging is whole-file; make
      sure no stray edits ride along). Never commit generated artifacts.
    - Commit message ends with the Co-Authored-By trailer from CLAUDE.md.
@@ -161,8 +342,22 @@ the run report.
      line of its own — this is not optional), a plain-language summary, the
      task's "How to test" steps, and a note that a Vercel preview will be
      attached. End with the Generated-with trailer.
+   - **Then check the PR actually has checks, and do not push in the seconds
+     right after opening it.** A push landing ~15 seconds after `gh pr create`
+     makes GitHub drop BOTH the `opened` run and that push's run, and nothing
+     arrives later on its own — the PR is checkless forever, this step waits on
+     nothing, and the merge gate refuses it (#387, #389; see
+     `docs/LOOP_ENGINEERING.md` → "A build node must be able to make GitHub run
+     its checks"). So: if the work-log entry needs the PR number, wait until
+     `gh pr checks <pr>` lists a run before pushing it. If none has appeared
+     after a couple of minutes, only a new commit can create one —
+     `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
+   - **Only ordinary pushes.** If a push is rejected because the branch is
+     behind, merge `origin/main` in — never rebase-and-force. That is the same
+     choice `npm run ship` makes on purpose (`docs/DOCTRINE.md` §6.6): the
+     branch only ever gains commits, so an ordinary push always works.
 
-7. **Record the PR on the ticket — with the command, and check what it says.**
+8. **Record the PR on the ticket — with the command, and check what it says.**
 
    ```bash
    npm run clickup -- pr-opened --task <id> --pr <pr-url>
@@ -172,7 +367,7 @@ the run report.
    link back to the ticket, then posts the one line the merge step can read
    (`PR opened: <url>`) and **parses it back with that step's own reader**.
 
-   **A non-zero exit here fails the run.** Do not carry on to step 8, and do
+   **A non-zero exit here fails the run.** Do not carry on to step 9, and do
    not hand the ticket to review — a ticket with no readable PR trail is a
    ticket the merge step will later refuse, which strands the operator's
    approval with nobody noticing. Exit 4 means the PR body is missing the
@@ -183,13 +378,13 @@ the run report.
    ClickUp link either, so ticket and PR could only be paired by reading
    titles. The step had been written down the whole time.
 
-8. **Hand off to review.** Set the task status to `In review` and leave it
+9. **Hand off to review.** Set the task status to `In review` and leave it
    unassigned (it is the machine's turn, not Dane's). **Do NOT merge** —
    `main` is PR-protected (the "verify" check must go green) and merges happen
    only on the operator's explicit say-so. The `loop-review` skill takes it
    from here.
 
-9. **Report** which task you built and the PR number, then finish (the `/loop`
+10. **Report** which task you built and the PR number, then finish (the `/loop`
    wrapper will re-invoke you for the next task).
 
 ## Guardrails
