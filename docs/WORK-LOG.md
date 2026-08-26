@@ -1,3 +1,36 @@
+## 2026-08-25 — An agent that asks you to spend money now has to show its work (#436)
+
+A few days ago one of the agents came to you with a confident recommendation:
+put the ClickUp workspace back on a paid plan. It had good-looking reasons. The
+chat channel had been refusing to accept messages for sixteen hours, a separate
+write had failed with an error mentioning plan limits, and the account did read
+back as being on the free tier. Three facts, one tidy story.
+
+The story was wrong. Checked again a few hours later — same account, same free
+plan, nothing changed — every one of those things worked fine. The outage had
+been temporary and had already cleared on its own. Paying would have fixed
+nothing.
+
+The bad guess is not really the problem; a guess like that is reasonable on a
+day when two things break at once. The problem is that it got all the way to
+your wallet without anybody re-running the thing that had been failing. That
+would have taken one command and about ten seconds, and the moment of coming to
+you is exactly when it is still cheap to check and already expensive to be
+wrong.
+
+So the request itself now demands the proof. When an agent writes you a card
+that asks you to spend, buy, subscribe, upgrade, change a plan, rotate a
+password or delete something, it simply will not post unless the card also
+carries the command it ran, what that command actually printed, and the time it
+ran it. Not a summary of the output — the output. And the time shows up in the
+heading you read, so evidence gathered before an outage cannot quietly pass
+itself off as evidence about right now.
+
+Ordinary questions are untouched. "Should this sort by name or by date?" posts
+exactly as it always did, and there is a test making sure it keeps doing so —
+because a rule that nags about everything is a rule people learn to go around,
+and then it protects nothing at all.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp
