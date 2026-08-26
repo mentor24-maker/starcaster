@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# What the hourly schedule actually runs. Two steps: bring the checkout up to
-# date with main, then relay.
+# What the schedule (every 10 minutes) actually runs. Two steps: bring the
+# checkout up to date with main, then relay.
 #
 # WHY THE UPDATE STEP EXISTS
 # The relay reads WHO MAY RUN IT out of lib/nodeRoles.js in this checkout, at
@@ -37,6 +37,11 @@ elif ! git merge --ff-only origin/main 2>&1; then
 else
   echo "update: checkout is at $(git rev-parse --short HEAD)"
 fi
+
+# Does the machine still agree with the repo about how often to wake?
+# Three answers, never two — and "could not tell" is one of them, said out
+# loud. The reasoning and the exit codes live in the script itself.
+REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 
 npm run --silent clickup -- bus-relay
 status=$?

@@ -4,7 +4,10 @@
 /**
  * Pin ?v=<content-hash> on every local /path/*.js and /path/*.css reference in HTML.
  *
- * Scans all public/*.html plus src/layout.html by default — no manual file list.
+ * Scans all public/*.html by default — no manual file list. (src/layout.html
+ * is deliberately NOT scanned since 2026-08-24, task 86bbkh1nn: it is source,
+ * and its generated output public/app-shell.html is pinned instead — see
+ * defaultHtmlTargets below.)
  * Safe to run repeatedly (idempotent when artifacts are unchanged).
  *
  * Usage:
@@ -50,8 +53,18 @@ function defaultHtmlTargets(projectRoot = root) {
       if (name.endsWith('.html')) targets.push(path.join(pub, name));
     }
   }
-  const layout = path.join(projectRoot, 'src', 'layout.html');
-  if (fs.existsSync(layout)) targets.push(layout);
+  // src/layout.html is deliberately NOT a target (2026-08-24, task 86bbkh1nn).
+  // It is committed SOURCE, and it is also the template build_html.js composes
+  // into public/app-shell.html — which is gitignored and pinned above, as one
+  // of public/*.html. So pinning the source re-derived the same hashes onto a
+  // file humans edit and git merges, for no benefit at all.
+  //
+  // The cost was not theoretical. Because every bundled asset changes those
+  // hashes, the busiest file in the repo changed on every build: two branches
+  // touching anything bundled conflicted there, a catch-up merge restored the
+  // branch's stale hash and CI rejected the result, and GitHub reported
+  // CONFLICTING because it cannot run our merge driver. On 2026-08-24 that
+  // chain left eight already-approved tickets parked for a day.
   return targets.sort();
 }
 

@@ -233,7 +233,8 @@ function mergeDecision({ status, comments, operatorId, handled, refused }) {
   // caller as well as used below. The plumbing needs it because two of the
   // three refusal reasons are only discovered later, against GitHub (checks
   // red, branch conflicts) — mergeDecision cannot quiet those on its own, and
-  // without it a permanent conflict would post an identical comment hourly.
+  // without it a permanent conflict would post an identical comment on every
+  // pass.
   const base = {
     commentId: String(authorization.id),
     commentDate: commentDate(authorization),
@@ -241,7 +242,7 @@ function mergeDecision({ status, comments, operatorId, handled, refused }) {
   };
 
   // A refusal we have already given, whose reason is still true, is not news.
-  // Saying it again on every hourly pass would bury the ticket in identical
+  // Saying it again on every pass would bury the ticket in identical
   // comments, so it goes quiet — but it goes quiet by RE-DERIVING the same
   // answer, not by being permanently struck off. The moment the reason
   // changes (or disappears), the next pass acts.
@@ -333,7 +334,7 @@ function githubGate(pr) {
 
   // GitHub answers UNKNOWN while it is still computing mergeability. That is
   // not a failure — it is "ask again", and asking again is what the next
-  // hourly pass is for.
+  // pass is for.
   if (mergeable === 'UNKNOWN' || mergeStateStatus === 'UNKNOWN') {
     return { action: 'wait', reason: 'GitHub is still computing whether the branch merges cleanly' };
   }
@@ -360,6 +361,93 @@ function githubGate(pr) {
   }
 
   return { action: 'merge', reason: `open, ${checks.total} check(s) green, no conflicts` };
+}
+
+/**
+ * WAITING FOR CI INSIDE ONE PASS (2026-08-24, task 86bbk2fb5).
+ *
+ * Merging one PR is about three minutes of real work — catch the branch up,
+ * run CI (`verify` median 85 seconds), merge. We were achieving 1.25 merges an
+ * hour, with the pipeline idle roughly 95% of the time.
+ *
+ * The cost was the SHAPE, not the work. It took two passes to merge one PR:
+ * pass N caught the branch up and returned `waiting`; CI finished 85 seconds
+ * later; pass N+1 merged it an hour after that. A three-minute job took two
+ * hours.
+ *
+ * It gets worse as the queue grows, not better. Branch protection is
+ * `strict: true`, so a branch must be current with main to merge — meaning
+ * EVERY merge invalidates every other open branch. At 24 open PRs each merge
+ * leaves 23 needing catch-up, and a catch-up done an hour ago is stale before
+ * the next pass reaches it. The two-pass shape can lose a race with its own
+ * previous pass.
+ *
+ * So after a catch-up push, the pass waits for the check run rather than
+ * going away for an hour. Three rules keep that bounded:
+ *
+ *   - A BUDGET, not patience. ~2x the observed median. When it runs out the
+ *     answer is `wait` — exactly what the pass returned before — never a
+ *     merge and never a failure. A slow CI run is not a broken one.
+ *   - A CAP per pass, so one stuck PR cannot starve the rest. Beyond the cap
+ *     everything falls through to `wait` and the next pass takes it.
+ *   - The SAME gate. Nothing here decides whether a PR may merge; it only
+ *     decides whether to ask again. Red is refused by the existing path, with
+ *     the existing wording.
+ */
+
+/** ~2x the observed 85s median for `verify`. Named, not a literal. */
+const IN_PASS_WAIT_MS = 180_000;
+
+/** How often to re-ask GitHub inside that budget. */
+const IN_PASS_POLL_MS = 10_000;
+
+/**
+ * How many tickets may hold a pass open. Worst case is CAP x BUDGET, so this
+ * is the number that keeps a pass from becoming an unbounded one.
+ *
+ * The ceiling that matters is the relay's OWN interval (`INTERVAL_SECONDS` in
+ * scripts/install_bus_relay.sh, 600s). A pass that stays under it is finished
+ * before the next firing is due; a pass that runs past it swallows that firing
+ * — launchd coalesces the ones it misses — so approvals arriving meanwhile
+ * wait on work already in flight instead of being picked up promptly.
+ * mergeOnComment.test.js reads that interval and pins the bound against it, so
+ * shortening the cadence again fails a test rather than quietly permitting a
+ * pass longer than its own schedule.
+ */
+const MAX_IN_PASS_WAITS = 3;
+
+/** Has this pass already spent its in-pass waits? */
+function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
+  return Number(waitsUsed || 0) < cap;
+}
+
+/**
+ * Given a freshly re-read gate and how long we have been waiting, what next?
+ *
+ * Deliberately does NOT re-implement the gate. `merge`, `refuse` and
+ * `conflict` are handed straight back to the paths that already handle them,
+ * so there is exactly one place that decides whether something may merge.
+ *
+ * @returns {{ action: 'merge'|'refuse'|'conflict'|'wait'|'poll-again', reason?: string }}
+ */
+function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS } = {}) {
+  const action = String(gate?.action || '');
+
+  // Terminal answers go back to the existing paths untouched.
+  if (action === 'merge' || action === 'refuse' || action === 'conflict') {
+    return { action, reason: gate.reason };
+  }
+
+  // Anything else means "not resolved yet". Out of budget is a WAIT — the
+  // same outcome the pass used to return immediately — never a merge.
+  if (Number(elapsedMs) >= Number(budgetMs)) {
+    return {
+      action: 'wait',
+      reason: `CI was still running after ${Math.round(Number(budgetMs) / 1000)}s; the next pass will pick it up`,
+    };
+  }
+
+  return { action: 'poll-again', reason: gate?.reason || 'checks still running' };
 }
 
 /**
@@ -414,19 +502,36 @@ function refusalNotice({ commentId, why, plainEnglish }) {
  * body says so, and says plainly what the person has to do first.
  *
  * `localVerdict` is what THIS machine found when it tried the merge itself:
- * `realConflict` true means the branches genuinely overlap, false means the
- * check could not be completed — different problems with different fixes,
- * and reading one as the other sends a machine problem to a code review.
+ * two outcomes, and collapsing them sends the reader after the wrong thing:
+ *
+ *   'real-conflict' — the branches genuinely overlap. A person must decide.
+ *   'unknown'       — the check could not run at all.
+ *
+ * (A third kind, 'needs-rebuild', existed while committed HTML carried
+ * ?v= asset pins; retired 2026-08-24 with the pins themselves, task 86bbkh288.)
  */
 function conflictHandOffNotice({ commentId, pr, localVerdict }) {
-  const localLine = !localVerdict
-    ? ''
-    : localVerdict.realConflict
-      ? `\n\nChecked on this machine too, and it is a real overlap — ${localVerdict.reason}. This one genuinely needs a person.`
-      : `\n\nWorth knowing: this could not be checked properly here either — ${localVerdict.reason}. So it may not be a real conflict at all; GitHub cannot run our asset-pin merge driver, and that alone makes clean branches look like conflicting ones.`;
+  // Two different situations wear the same GitHub answer, and only one of them
+  // retries usefully. Saying "it will merge next run" about a real overlap is
+  // the same shape of untrue promise this whole ticket family exists to
+  // remove — so the two get different sentences, and the difference comes from
+  // the localVerdict rather than from a guess.
+  //
+  const kind = localVerdict
+    ? (localVerdict.kind || (localVerdict.realConflict ? 'real-conflict' : 'unknown'))
+    : '';
+  const realOverlap = kind === 'real-conflict';
+  const because = realOverlap
+    ? `this branch and \`main\` have both changed the same lines — ${localVerdict.reason}`
+    : localVerdict
+      ? `GitHub called it a conflict, and this machine could not check whether that is true — ${localVerdict.reason}`
+      : 'GitHub reported that the branch conflicts with newer work on `main`';
+  const whatHappensNext = realOverlap
+    ? 'Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. It will merge on a later run, once the branch is caught up and its checks are green.'
+    : 'It will be merged on the next run, unless something else is in the way by then — GitHub\'s answer about a branch is often minutes stale.';
   return {
     marker: `refused: conflict hand-off on PR #${pr.number}`,
-    body: `Needs a hand: the branch for PR #${pr.number} conflicts with newer work that has landed on main since it was built, and a script must never resolve a conflict blind. Someone has to merge main into the branch, sort out the overlap and push it.${localLine}\n\nThat is the only part that needs a person. ${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
+    body: `This task was not able to merge on the last attempt, because ${because}.\n\n${whatHappensNext}\n\n${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
   };
 }
 
@@ -443,6 +548,11 @@ function mergedNotice({ commentId, pr, mergedAt }) {
 }
 
 module.exports = {
+  IN_PASS_WAIT_MS,
+  IN_PASS_POLL_MS,
+  MAX_IN_PASS_WAITS,
+  mayWaitInPass,
+  afterCatchUpDecision,
   MERGE_PHRASES,
   MERGE_MARKER,
   parseMergeMarker,

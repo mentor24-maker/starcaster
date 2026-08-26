@@ -20,6 +20,14 @@
  *    and the operator can see what they are placing. The popup still opens on
  *    click in every context — the operator should be able to try it.
  *
+ * AND TRYING IT MUST NOT FILE A REPORT. Off the live site the submit stops at
+ * the network boundary: the description is still validated, the thank-you still
+ * shows (with "Preview — nothing was sent."), the 2s auto-close still runs, and
+ * nothing reaches /api/public/bug-report. Before this, `previewMode` gated only
+ * the live-site detection, so an operator clicking their own button in the
+ * editor filed a genuine report — and once task 3/5 is live, a genuine ClickUp
+ * task assigned to Dane.
+ *
  * VISIBILITY IS UX, NOT SECURITY. "Clients" and "staff" tiers ask the server
  * which tier this browser is (GET /api/public/bug-report/viewer) and hide the
  * icon otherwise. The submit endpoint re-verifies the session before trusting
@@ -232,6 +240,7 @@ export function BugReportModule({ settings, previewMode = false, liveSite = fals
       settings={s}
       projectId={projectId}
       tier={tier ?? "public"}
+      live={live}
       fetchImpl={doFetch}
       onClose={() => setOpen(false)}
     />
@@ -253,16 +262,45 @@ export function BugReportModule({ settings, previewMode = false, liveSite = fals
 // good upload was orphaned "uploading" forever and the form could not submit).
 type PickedShot = { id: number; name: string; assetId?: number; token?: string; error?: string; uploading: boolean };
 
+/**
+ * What a member of the public is allowed to read when the submit fails.
+ *
+ * Task 1/5's messages are plain language on purpose, so the server's own words
+ * are the most useful thing to show — EXCEPT for the validation codes, which
+ * are written for a developer ("projectId is required") and only ever surface
+ * when the module is mis-wired. A visitor reading that learns nothing and
+ * cannot act on it, so those get the generic sentence instead.
+ */
+export const BUG_REPORT_GENERIC_ERROR = "Sorry — that could not be sent. Please try again.";
+
+export function plainSubmitError(error?: { message?: string; code?: string }): string {
+  const generic = BUG_REPORT_GENERIC_ERROR;
+  const message = String(error?.message || "").trim();
+  if (!message) return generic;
+  if (error?.code === "VALIDATION_ERROR" || error?.code === "PROJECT_NOT_FOUND") return generic;
+  // Belt and braces: a message naming an internal field is developer-speak
+  // whatever code came with it.
+  if (/projectid/i.test(message)) return generic;
+  return message;
+}
+
 function BugReportDialog({
   settings: s,
   projectId,
   tier,
+  live,
   fetchImpl,
   onClose,
 }: {
   settings: ReturnType<typeof readBugReportSettings>;
   projectId: string;
   tier: BugReportViewerTier;
+  /**
+   * True only on a real published tenant page — the same `liveSite &&
+   * !previewMode` the trigger uses. Off in the builder preview AND in the
+   * editor, and it is what stops the submit from filing a real report.
+   */
+  live: boolean;
   fetchImpl: typeof fetch;
   onClose: () => void;
 }) {
@@ -372,8 +410,18 @@ function BugReportDialog({
     const text = description.trim();
     if (!text) { setError("Please describe what went wrong."); return; }
     if (shots.some((shot) => shot.uploading)) { setError("A screenshot is still uploading — one moment."); return; }
-    setSubmitting(true);
     setError("");
+    // NOT LIVE = NOTHING IS SENT. `previewMode` gated the live-site *detection*
+    // but never the submit, so an operator clicking their own "Send report"
+    // while designing the page filed a genuine report — and once task 3/5 is
+    // live, a genuine ClickUp task assigned to Dane. Harmless only by accident
+    // until now: builder-preview.html passes no projectId so the request errored,
+    // but inside the Builder editor a project IS in context and the row lands.
+    //
+    // The validation above still runs and the thank-you + 2s auto-close below
+    // still happen, because seeing the whole flow is the point of clicking it.
+    if (!live) { setDone(true); return; }
+    setSubmitting(true);
     try {
       const response = await fetchImpl(BUG_REPORT_SUBMIT_PATH, {
         method: "POST",
@@ -391,11 +439,14 @@ function BugReportDialog({
             .map((shot) => ({ id: shot.assetId as number, token: shot.token as string })),
         }),
       });
-      const body = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: { message?: string } };
-      if (!response.ok || body.ok === false) throw new Error(body.error?.message || "Could not send your report. Please try again.");
+      const body = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: { message?: string; code?: string } };
+      if (!response.ok || body.ok === false) { setError(plainSubmitError(body.error)); return; }
       setDone(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not send your report. Please try again.");
+    } catch {
+      // The request never completed at all (offline, DNS, CORS). Whatever the
+      // browser named the failure is developer-speak — a visitor gets the one
+      // plain sentence, not "Failed to fetch".
+      setError(BUG_REPORT_GENERIC_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -409,7 +460,13 @@ function BugReportDialog({
           <button type="button" className="builder-bug-report-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         {done ? (
-          <p className="builder-bug-report-thanks" role="status">{s.thankYouMessage}</p>
+          <p className="builder-bug-report-thanks" role="status">
+            {s.thankYouMessage}
+            {/* Unmistakable, and only ever here: the operator has just watched
+                the whole flow and must not be left wondering whether a real
+                report went out. On a live page this is absent entirely. */}
+            {live ? null : <span className="builder-bug-report-preview-note">Preview — nothing was sent.</span>}
+          </p>
         ) : (
           <form className="builder-bug-report-form" onSubmit={(event) => void submit(event)}>
             <textarea

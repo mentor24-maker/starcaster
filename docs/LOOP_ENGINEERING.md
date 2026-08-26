@@ -476,15 +476,15 @@ Your day:
 2. **During the day:** the loops build and review. You get a message per
    `Ready to launch` PR with a preview link and test steps.
 3. **When you're ready:** reply **`merge`** on the ticket — just that word.
-   Within one bus-relay cycle (hourly) it is merged and the ticket closes as
-   `Live`, provided the PR is still open, green and conflict-free. Telling a
+   Within one bus-relay cycle (every 10 minutes) it is merged and the ticket
+   closes as `Live`, provided the PR is still open, green and conflict-free. Telling a
    CC session "merge PR #NN" still works and is faster if one is open; the
    comment is the version that works when nobody is watching. Either way the
    decision is yours — see Safety.
 4. **When a ticket asks you a question** (`Needs your input`): answer it as a
-   comment on the ticket. Within one bus-relay cycle (hourly) your answer is
-   posted to the bus and the ticket goes back to `Queued` for a build loop to
-   pick up — the comment alone is enough, no status clicking.
+   comment on the ticket. Within one bus-relay cycle (every 10 minutes) your
+   answer is posted to the bus and the ticket goes back to `Queued` for a build
+   loop to pick up — the comment alone is enough, no status clicking.
 
 ### The one place to check: Assigned to me
 
@@ -535,8 +535,8 @@ is different, so the loops have guardrails baked in:
 - **`main` auto-deploys to production.** So no loop ever merges on its own. The
   review loop can only mark a PR `Ready to launch`; **you** authorize the merge.
   Since 2026-08-21 that authorization can be a one-word comment on the ticket
-  and the hourly relay carries it out (task 86bbjd5nn) — which moves the
-  *hands*, not the *decision*. The relay merges nothing you did not name, on a
+  and the relay carries it out within 10 minutes (task 86bbjd5nn) — which
+  moves the *hands*, not the *decision*. The relay merges nothing you did not name, on a
   ticket no independent review passed, or on a branch that is red or in
   conflict. It exists because on 2026-08-20 three tickets you had already
   approved sat unmerged for hours waiting for a human to notice: the
@@ -554,6 +554,211 @@ is different, so the loops have guardrails baked in:
   `Needs your input` for a human instead of shipping broken.
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
+
+## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
+
+The relay runs **every 10 minutes** (`StartInterval` 600). It was hourly until
+2026-08-23. The interval lives in `scripts/install_bus_relay.sh`
+(`INTERVAL_SECONDS`), which generates the launchd plist — so it is changed by
+editing the repo and re-running the installer, never by hand-editing the plist
+on the machine.
+
+**Why it moved.** Hourly was a fair default while the relay only *notified*.
+On 2026-08-21 it started **merging** (task 86bbjd5nn), which made it the
+consumer for the whole pipeline, and the default was never revisited. Nothing
+about the work justified an hour: a pass costs **no tokens at all** — it is a
+plain Node script, not a Claude session — and finishes the entire job in about
+**14 seconds**. So an approved PR could sit up to an hour waiting on the
+*interval*, not on any work. That was the ceiling, and it is the one thing this
+change removed.
+
+**What it costs, measured.** ClickUp allows roughly **100 requests per minute**.
+A steady pass, measured on 2026-08-23 against a queue of 15 open tickets
+carrying 22 already-relayed operator comments, used **39 requests** — leaving
+**61 requests of headroom**, about 61%. The relay prints this itself now, on
+every pass:
+
+```
+requests this pass: 39 (ClickUp allows ~100/minute)
+```
+
+Two things about that number are worth keeping straight:
+
+- **The interval does not multiply it.** ClickUp's budget resets every minute,
+  and a 14-second pass every 10 minutes never shares a minute with the next
+  one. Peak usage is one pass, whatever the interval. Going 3600 → 600 raised
+  requests *per hour* from 39 to 234, and ClickUp does not meter per hour.
+- **Queue size does multiply it.** The count is roughly `2 list reads + 1 per
+  open ticket + 1 per operator comment on those tickets`, so it grows with how
+  much work is open, not with how often the relay runs. Reaching 100 would take
+  roughly 2.5× the current open queue. This is also the real shape of the 429
+  on 2026-08-23 that reported six tasks as "could not read comments": that was
+  a 24-comment backlog drain, a *volume* problem wearing a rate-limit hat, and
+  shortening the interval does not make it likelier. **If "requests this pass"
+  starts creeping toward 100, the fix is a cheaper pass — not a longer
+  interval.**
+
+**Overlap: what actually prevents a double-post.** At 10 minutes a slow pass
+overlapping the next is far likelier than at 60, so this was verified rather
+than assumed. It matters because the relay's own dedup guard would *not*
+survive an overlap: "has this comment been relayed?" is a read, a comparison,
+then a write against a remote API, and two passes can both read "no" before
+either writes its marker. The code says so itself, about two machines.
+
+**launchd is the guard, and it holds.** A launchd job is one instance per
+`Label`: it will not start a second copy while the first is still running.
+Probed directly on the Mini — a scratch job with `StartInterval` 10 running a
+25-second script, which would overlap 2–3 deep if overlap were possible:
+
+```
+START pid=2550 23:32:15    END pid=2550 23:32:41
+START pid=3013 23:32:51    END pid=3013 23:33:16
+START pid=3165 23:33:26    END pid=3165 23:33:51
+START pid=3832 23:34:01
+```
+
+Never two STARTs before an END — which is the load-bearing finding, and it was
+confirmed a second time by an independent 16-run probe in review.
+
+Note what the timings do *not* prove. Each run begins 10 seconds after the
+previous one **ended**, and it is tempting to read that as launchd restarting
+the countdown from exit. Apple documents `StartInterval` as a plain periodic
+timer whose firings are **coalesced** when the job is still running — several
+missed firings collapse into a single start. With a 25-second job on a
+10-second interval those two mechanisms produce identical logs, so this data
+cannot tell them apart, and coalescing is the documented one. The practical
+consequence is the same either way and is what actually matters: **a pass
+that runs long never stacks — it swallows the firings it overran.** The cost
+of a long pass is therefore a delay, not a double-post: approvals arriving
+while it runs wait on work already in flight. That is why the merge pass's
+worst case is pinned below one interval in
+`scripts/builder/mergeOnComment.test.js`.
+
+The consequence worth remembering: **overlap safety comes entirely from
+launchd, not from the relay's code.** Anything that runs the relay outside that
+schedule — a second machine, a hand-run pass alongside the timer, a future
+wrapper that backgrounds it — loses the guarantee. `lib/nodeRoles.js` covers
+the second-machine case; the others are on whoever types the command.
+
+**The interval is still only on one machine.** The generated plist lives at
+`~/Library/LaunchAgents/com.starcaster.bus-relay.plist` on the Mini and is not
+in the repo, so it is invisible to everyone and lost if the machine is rebuilt.
+That belongs to the **NODES** slices, not to this ticket — recording the number
+here is the stopgap. The closest live one is **Slice D, "provision a node by
+script, not by document"** (`86bbhbaay`); treat this relay interval as a worked
+example of why a machine-only config is a config nobody can review. (Task
+86bbk2fuh cited "NODES Slice B (86bbh9kh2)" for this, but that id is
+"Make Pulse path-portable" and no Slice B ticket could be found — A, C, D and E
+exist. Verify before citing it again.)
+
+**The drift check, and why it has three answers.** Changing
+`INTERVAL_SECONDS` in the repo does not change the machine — that needs the
+installer re-run, by hand, by a person. So `scripts/bus_relay_interval.sh`
+compares the two on every relay pass and in `install_bus_relay.sh --status`,
+and it answers one of **three** ways, never two:
+
+| | |
+|---|---|
+| `interval: every 600s, matching the repo` | both values read, and equal |
+| `interval: MISMATCH — this machine wakes every 3600s, the repo says 600s.` | both read, different — prints the installer command, pointed at the **main** checkout (the installer refuses to run from a worktree) |
+| `interval: CANNOT TELL — …` | no plist, no readable `StartInterval`, or no readable `INTERVAL_SECONDS` — it names which |
+
+The third one is the point. This check is the compensating control for the one
+thing the change could not do for itself: the installer re-run is a human step,
+and this is what keeps it from being forgotten silently forever. Its first
+version had only two answers, so an unparseable `StartInterval` printed
+`every ?s, matching the repo` — claiming a match while the `?` admitted it had
+no value — and a missing plist printed nothing at all, which reads as no news.
+Both were false all-clears in the one check whose whole job is to make silent
+drift loud (`docs/DOCTRINE.md` 3.11: *checked*, *empty* and *could not check*
+are three outcomes, and the third is never folded into the second). Caught in
+review, 2026-08-24. `scripts/builder/busRelayInterval.test.js` pins all three,
+and each was verified by reintroducing the defect and watching the test fail.
+
+Review round 2 then found a **fourth** answer hiding in the same check, and the
+worst kind: confidently wrong. A plist is XML, not a line-oriented file, so
+launchd is content with the whole `<dict>` on one line — and the value was read
+with `grep -A1` plus a greedy `sed`, which takes the **last** `<integer>` on the
+line rather than the one belonging to `StartInterval`. A single-line plist
+saying 600, with any later integer-valued key (`Nice`, `ThrottleInterval`),
+reported that other key's number as the schedule. The match is now anchored to
+the value that follows `<key>StartInterval</key>`, and the test file pins it.
+
+**The interval is written down in more places than the two that run it.**
+Round 1 of review fixed the check; round 2 caught what the check cannot see.
+`INTERVAL_SECONDS` and the plist are the two copies that *take effect*, and the
+drift check compares those. But the number is also stated in prose, and prose
+that says "hourly" after the machine stopped being hourly is wrong in exactly
+the way nobody notices — it never fails, it just misinforms.
+
+**Do not trust a list here to be complete — run the search.** The list below
+was published in review round 2 under the heading "every place that had to
+change", and round 3 found it short by eight: the same stale word sitting in
+code comments and in one line of operator-visible stderr. A hand-maintained
+inventory of a scattered fact is itself a scattered fact. The check is one
+command and it is the only thing that actually answers the question:
+
+```
+git grep -niE "hourly|every hour"
+```
+
+Search for the **outgoing** wording, not the incoming one — the stale copies are
+the ones still saying the old thing. And search for the number spelled out as
+well as in digits: two of the six records above say "every **ten** minutes", so
+a future change away from 10 minutes wants
+`git grep -niE "ten minutes|10 minutes"` and would miss half the list without
+the words.
+
+Three families come back, and only the first needs touching:
+
+1. **States the current cadence** — the rows below. These go stale on a change.
+2. **Describes the past on purpose** — `scripts/bus_relay_interval.sh`,
+   `scripts/install_bus_relay.sh` (the `INTERVAL_SECONDS` history note), the
+   "it was hourly until 2026-08-23" sentences in this file, and every dated
+   entry in `docs/WORK-LOG.md`. Correct as they stand; changing them would
+   falsify the record. The work log in particular is a record of what was true
+   on a date and must never be back-edited to match today.
+3. **A different feature entirely** — `lib/builderPageRevisionsStore.js` and
+   its tests use "hourly" about page-revision bucketing. Unrelated; never touch.
+
+The places that state the cadence, and why each one matters:
+
+| Where | Why it matters |
+|---|---|
+| `scripts/install_bus_relay.sh` → `INTERVAL_SECONDS` | the source of truth; generates the plist |
+| `~/Library/LaunchAgents/com.starcaster.bus-relay.plist` | what actually runs; only changes when the installer is re-run |
+| `docs/ecosystem/inventory.yaml` → `job-bus-relay` | **published** — `build_ecosystem_html.mjs` and `ecosystemNotes.js` render it, so a stale value ships to the page people read |
+| `docs/APPROVALS.md` | the operator-facing description of the one-word merge flow; a faster merge is the whole visible point of the change |
+| `.claude/skills/loop-review/SKILL.md` | tells the review loop what happens after `Ready to launch` |
+| `scripts/install_bus_relay.sh` install-time stderr | a person reads this one, on the machine, when doppler is missing |
+| code comments in `scripts/clickup_direct.mjs` and `scripts/builder/mergeOnComment.js` (+ its test) | they explain *why* a guard exists; a wrong cadence there misleads the next person to change the guard |
+| this file | the reasoning, the measurement, and the table you are reading |
+
+**Most of those comments no longer name a cadence at all.** Where the sentence
+only meant "on every pass" — dedup markers, quieted repeat comments, "ask again
+next time" — it now says exactly that, and is immune to the next change. Only
+the places where the *number itself* is load-bearing still carry one, and the
+one that matters most (the merge pass's worst-case bound) no longer states it
+in prose either: `scripts/builder/mergeOnComment.test.js` reads
+`INTERVAL_SECONDS` and asserts a pass cannot outlast one interval, so shortening
+the cadence again fails a test instead of quietly permitting an overrun.
+
+**Nothing checks the prose, and one thing nearly could.**
+`scripts/check_ecosystem_drift.cjs` probes the bus-relay job with its
+`launchctl` probe, which asks only whether `detail.label` is loaded on the host
+machine — it never reads `StartInterval`, so `schedule:` in the inventory can be
+wrong forever without a single check complaining. That checker is the one place
+positioned to catch this class, since it already talks to the real machine and
+already holds the inventory's claim beside it. Teaching it to compare
+`detail.schedule` against the live plist is a **follow-up, deliberately not done
+here** — it needs a schedule vocabulary (`hourly`, `every 10 minutes`, a cron
+expression) before it can compare anything, which is a design question and not a
+one-line fix. Until then, the table above is the manual answer: this number
+changes in six places or it is wrong in some of them.
+
+**Known and not fixed here:** the launchd log now grows 6× faster with no
+rotation. It is small (a few KB per pass) but unbounded, and belongs to a
+housekeeping ticket rather than this one.
 
 ## A build node must be able to make GitHub run its checks
 
@@ -619,6 +824,120 @@ PR after it — `SHIP_AUTHORED_SUBJECTS` skips only the re-pin and nudge subject
 and a work-log commit is hand-authored. Squash-merge then makes that title
 permanent. That is exactly the #304 failure, and why
 `docs/MISLABELED_MERGES.md` exists.
+
+## The party line is not the only way out — and the 2026-08-23 outage
+
+The relay only hands a ticket back once the operator's answer has been
+**delivered**. That gate is right: a ticket must never move on an answer that
+nobody received. But until 2026-08-23 "delivered" meant exactly one thing —
+a chat message posted to the party line — and that made the busiest surface in
+the stack a single point of failure for the whole pipeline.
+
+**What happened.** For about sixteen hours, every chat write in the workspace
+returned `HTTP 400` and every custom-field write returned `usages exceeded`.
+The party line's own history dates it precisely: last message before the gap
+**06:00:08Z**, next message **22:04:00Z**, nothing in between. Twenty-three
+comments and five handbacks piled up behind it, including two answers written
+at 06:19 that sat for the rest of the day. Then it cleared on its own. Cause
+unknown, and almost certainly ClickUp-side.
+
+**The first diagnosis was wrong, and it is worth knowing why.** The failures
+were read as the Free Forever plan blocking chat posting, and the proposed fix
+was to pay for an upgrade. Two commands disproved it once the outage lifted:
+
+```bash
+# Still on the same plan it was on before, during and after:
+GET  /api/v2/team/<team>/plan                     # 200 — "Free Forever", plan_id 13
+
+# And chat posting works on that plan:
+POST /api/v3/workspaces/<ws>/chat/channels/<ch>/messages   # 200 — message id returned
+```
+
+Nothing about the plan had changed, so nothing about the plan could explain a
+window that opened and closed. **If you see a wall of 400s from chat writes,
+check whether it is a window before you go looking for a permission** — read
+the channel's own timestamps, and try again in an hour. Paying would have
+fixed nothing.
+
+**What changed as a result.** The gate stayed; its target moved. Delivery is
+now a chain, not a single call (`deliverToBus` in `scripts/clickup_direct.mjs`,
+decisions in `scripts/builder/busRelayPlan.js`):
+
+1. Post to the party line.
+2. If that fails — **and only on a watch that hands the ticket back** — post a
+   short **receipt comment** on the ticket the message concerns. Task comments
+   were the one write that kept working throughout. It is a receipt, not a
+   re-quote: his words are already on that ticket one comment up; what was
+   missing was the acknowledgement they were read.
+3. The handback fires if **either** landed.
+
+**That carve-out in step 2 is the most important line here.** Of the three
+watched cases only one hands a ticket back (`needs your input` in the Loop
+Queue). On the other two — the Agent Response list, and `ready to launch` —
+**nothing reads the ticket**: the party line IS the delivery. So no receipt is
+written there at all, the message stays undelivered, it lands in "Could not
+fully verify", and it retries every pass until the bus takes it. Counting a
+receipt there would post a note to Dane on a ticket he is already looking at,
+write the permanent dedup marker, and lose the bus message for good once chat
+recovered — turning a self-healing retry into silent permanent loss.
+
+The receipt is **read back before it is trusted**, and it is identified by the
+comment id ClickUp returned plus the ISO instant folded into its signature line
+— never by its wording. A receipt's wording is a constant, so matching on that
+would let a leftover receipt from an earlier outage "verify" a fresh write that
+never stuck, which is the exact case the read-back exists to catch.
+
+The dedup marker records which surface carried it — `[bus-relay] sent to
+channel X at …` versus `[bus-relay] chat unavailable, receipted on the ticket
+at …` — behind the same prefix the "already relayed" check reads, so the trail
+stays legible without changing how it is parsed.
+
+A chat failure that was covered this way is **not a run failure**. It prints
+under its own heading (*"Party line unavailable — N bus post(s) skipped; the
+record is on the ticket in each case"*) and the pass still exits 0. The same
+goes for the merge step's three bus posts: each of those writes its real
+explanation onto the ticket first, so a failed bus post there was only ever
+cosmetic and should never have stopped a pass. Those merge-step entries carry
+**no receipt comment** — their record is the explanation the merge step already
+wrote — which is why the heading says "the record is on the ticket" rather than
+naming receipts.
+
+What did **not** change: a message that reached neither surface is still
+undelivered, still lands in "Could not fully verify", still exits 1, and still
+moves no ticket. The gate was re-pointed, not weakened.
+
+### Running the relay by hand
+
+`bus-relay` belongs to the Mac Mini (`lib/nodeRoles.js`), so every hand-run of
+it happens over `ssh` — and a non-interactive `ssh` shell has neither `doppler`
+nor `node` on its `PATH`. Export it first or the command fails with a bare
+"command not found" that looks nothing like a relay problem:
+
+```bash
+export PATH=/opt/homebrew/bin:$PATH
+
+npm run clickup -- bus-relay --dry-run              # says what it would do, writes nothing
+npm run clickup -- bus-relay --only-task <task-id>  # one ticket, real writes
+```
+
+To exercise the fallback deliberately rather than waiting for the next outage,
+point the pass at a channel id that does not exist:
+
+```bash
+npm run clickup -- bus-relay --only-task <task-id> --channel 0000-nonexistent
+```
+
+Green is: **exit 0**, a receipt comment on the ticket, the ticket moved to
+`Queued`, and the skipped bus post named under *"Party line unavailable"*
+rather than under *"Could not fully verify"*.
+
+That test needs a **fresh, un-relayed comment from the operator** — the relay
+filters on `OPERATOR_ID` and skips anything already carrying a `[bus-relay]`
+marker. The cheap way to make one is to ask Dane to comment on any parked
+ticket; it costs him ten seconds. `CLICKUP_OPERATOR_ID` is an env override, so
+a scratch ticket plus a comment of your own works too. Do **not** delete an
+existing `[bus-relay]` marker to manufacture one — that is destructive, and the
+run will then send his real answer to a dead channel.
 
 ## Reading the queue at a glance — the Loop note
 

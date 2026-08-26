@@ -184,7 +184,16 @@ function measure(page, nonStretch) {
       // that Structure and Placement match, which the rule deliberately does
       // not ask for. Chrome outside any axis column is its own group.
       const groups = [...panel.querySelectorAll('.builder-schema-panel-column')];
-      const loose = [...panel.querySelectorAll('.builder-module-chrome .builder-module-field-strip')];
+      // The chrome's OWN strip, by direct child (2026-08-25, ticket
+      // 86bbjt1aq). It used to be any descendant strip, which read as the
+      // safer selector and was the looser one in the way that matters: the
+      // background picker brings a strip of its own, so `Background` was
+      // measured as a group of one — a group of one always agrees with
+      // itself — instead of as a row of the chrome. Its label sat 55px left
+      // of every other chrome control for weeks and this reported a clean
+      // pass the whole time. As a direct child the group is the whole chrome
+      // and the background's rows are inside it, where they can disagree.
+      const loose = [...panel.querySelectorAll('.builder-module-chrome > .builder-module-field-strip')];
       // An item manager running its own lattice (L6a) opts in by declaring
       // how many label/field pairs it puts on a row. It is measured like any
       // other group — this check reported a clean pass on the Feature Cards
@@ -532,16 +541,34 @@ function measureColumnGrids(page) {
     return managers.map((m, index) => {
       const declared = Number(m.getAttribute('data-lattice-columns') || '0') || 0;
       const name = (m.className || '').split(/\s+/)[0] || `manager ${index}`;
-      const header = m.querySelector('.builder-nav-items-header');
+      // TWO markup shapes wear this declaration.
+      //
+      // The Navigation Links list is a div grid: a header band, a rows
+      // container, and rows, all reading one set of CSS tracks. The Table
+      // module's editor is a real <table> — thead/tbody/tr/th/td — which
+      // shares its tracks by construction rather than by agreement.
+      //
+      // Teaching the check the second shape is what lets a genuinely tabular
+      // manager opt in at all. Before this, declaring on a <table> failed
+      // with "rendered no rows", so the only options were to leave it
+      // unmeasured or to rewrite a spreadsheet as a div grid.
+      const isTable = m.tagName === 'TABLE';
+      const header = isTable
+        ? m.querySelector(':scope > thead > tr')
+        : m.querySelector('.builder-nav-items-header');
       // Every direct grid cell of a row, in visual order. `display: contents`
       // wrappers have no box, so descend through them the same way the
       // lattice measurement does.
       const cellsOf = (row) => [...row.children].flatMap((child) => (
+        // A table cell is already a box; only the div grid hides cells behind
+        // `display: contents` wrappers that have none.
         getComputedStyle(child).display === 'contents' ? [...child.children] : [child]
       ));
       const rect = (el) => el.getBoundingClientRect();
-      const rowsOf = (root) => [...root.querySelectorAll(':scope > .builder-nav-item-row')];
-      const items = m.querySelector('.builder-nav-items');
+      const rowsOf = (root) => (isTable
+        ? [...root.querySelectorAll(':scope > tr')]
+        : [...root.querySelectorAll(':scope > .builder-nav-item-row')]);
+      const items = isTable ? m.querySelector(':scope > tbody') : m.querySelector('.builder-nav-items');
       const rows = items ? rowsOf(items) : [];
       const read = (row) => {
         const rr = rect(row);
@@ -551,6 +578,10 @@ function measureColumnGrids(page) {
           // A cell that spans the whole grid is its own line (the mega
           // menu's Feature column disclosure), not one of the n columns.
           cells: cellsOf(row)
+            // A cell that spans the whole grid is its own line (the mega
+            // menu's Feature column disclosure), not one of the n columns.
+            // In a real table the equivalent is an explicit colspan.
+            .filter((c) => (c.colSpan || 1) === 1)
             .filter((c) => getComputedStyle(c).gridColumnStart !== '1'
               || getComputedStyle(c).gridColumnEnd !== '-1')
             .map((c) => ({
@@ -704,9 +735,11 @@ if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
 if (panelsSeen === 0) {
   console.error(
     'No panels carrying `.is-lattice` were found.\n' +
-    'That is a FAILURE, not a pass: either the page has no modules whose type\n' +
-    'is in LATTICE_MODULE_TYPES (builder-module-card.tsx), or the navigation\n' +
-    'above stopped working. Zero assertions is never a green result.'
+    'That is a FAILURE, not a pass. The class is stamped on EVERY module\n' +
+    'editor by ModuleEditorWrapper (components/builder/builder-module-card.tsx)\n' +
+    'and on the section, cell and table-cell editors, so finding none means\n' +
+    'either the fixture page has no modules (`npm run seed:ui-fixture`) or the\n' +
+    'navigation above stopped working. Zero assertions is never a green result.'
   );
   process.exit(1);
 }

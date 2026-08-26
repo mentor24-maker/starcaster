@@ -214,6 +214,18 @@ export const RENDER_DIFFERENTIALS = [
     why: 'A frame setting with no effect involved, so the sweep is not only ever measuring animations.',
   },
   {
+    id: 'image-drop-shadow',
+    module: { type: 'image', settings: { ...PICTURE } },
+    setting: 'imageShadow', from: 'false', to: 'true',
+    why: 'The whole feature behind one checkbox (operator, 2026-08-25). A conditional emit is exactly where a control goes dead, and this one is emitted by a helper written for a different module — if the image renderer ever stops calling it, the box still ticks and saves and nothing appears.',
+  },
+  {
+    id: 'image-drop-shadow-blur',
+    module: { type: 'image', settings: { ...PICTURE, imageShadow: 'true' } },
+    setting: 'imageShadowBlur', from: '0', to: '60',
+    why: 'Proves the five detail controls reach the shadow and are not decoration around a hardcoded one — the checkbox differential above passes even if every number is ignored.',
+  },
+  {
     id: 'text-line-height',
     module: { type: 'text', text: '<p>Two lines of body copy for the differential to measure against.</p>', settings: {} },
     setting: 'lineHeight', from: '1.2', to: '2.4',
@@ -399,6 +411,39 @@ export const RENDER_CONTRACTS = [
         }
       }
       if (!sample.advanced) return `flips' animations did not advance over ${sample.settleMs}ms — parked.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-effect-parkour-named',
+    why:
+      'Parkour must run BOTH override animations (sc-effect-travel for the crossing + sc-effect-tumble ' +
+      'for the two-axis rotation). The base file still carries `normie-parkour`, a single fixed-duration ' +
+      '8s keyframe that ignores Speed, Rotation Rate, Frequency and Bounce Height alike — and it is bound ' +
+      'to `.starcaster-effect-parkour`, which is exactly why the emitted class is `-parkour-motion`. If ' +
+      'that dodge is ever undone, a normie-parkour name shows up here and this contract fails.',
+    module: {
+      type: 'image',
+      settings: {
+        ...PICTURE,
+        effect: 'parkour',
+        effectSpeed: '8',
+        effectRotationRate: '30',
+        effectFrequency: '4',
+        effectBounceHeight: '150',
+      },
+    },
+    selector: 'figure.builder-preview-image',
+    expect(sample) {
+      const names = sample.animations.map((a) => a.name);
+      for (const required of ['sc-effect-travel', 'sc-effect-tumble']) {
+        if (!names.includes(required)) {
+          return `parkour is not running \`${required}\` (found: ${names.join(', ') || 'none'}). ` +
+            'A normie-parkour name here means the class dodge or the override rule broke, and every ' +
+            'setting on the panel is being ignored.';
+        }
+      }
+      if (!sample.advanced) return `parkour's animations did not advance over ${sample.settleMs}ms — parked.`;
       return null;
     },
   },
