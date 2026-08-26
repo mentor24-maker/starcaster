@@ -75,7 +75,13 @@ create table if not exists public.video_sources (
                  check (layer_role in ('background', 'subject', 'plate', 'reference')),
   -- Milliseconds to shift this source to line up with the session's programme
   -- audio. Negative = this source starts earlier than the programme.
-  sync_offset_ms integer not null default 0,
+  --
+  -- NULLABLE, and with no default, on purpose. It was `not null default 0`,
+  -- which left no way to say "not measured yet" — and for a sync offset, 0 is
+  -- not a blank, it is the claim "these two tracks are already perfectly in
+  -- sync." Studio 7/8 is built to trust that claim, so an unmeasured row that
+  -- reads as 0 is a wrong answer stated confidently rather than a gap.
+  sync_offset_ms integer,
   drive_file_id  text,
   -- Content hash of the file's bytes. Unique per project (index below), so the
   -- same footage handed to two projects is two rows, and re-ingesting the same
@@ -113,5 +119,12 @@ create index if not exists idx_video_sources_session_id
   on public.video_sources (session_id);
 create index if not exists idx_video_sources_project_state
   on public.video_sources (project_id, state);
+
+-- Bring a table created before that change into line. Both are no-ops when
+-- already true, so the file stays idempotent; they exist because this SQL has
+-- been applied to local databases already and `create table if not exists`
+-- will not revisit a table that is there.
+alter table public.video_sources alter column sync_offset_ms drop not null;
+alter table public.video_sources alter column sync_offset_ms drop default;
 
 alter table public.video_sources enable row level security;

@@ -1,4 +1,4 @@
-## 2026-08-23 — Somewhere to write down what footage exists (#422)
+## 2026-08-25 — Somewhere to write down what footage exists (#422)
 
 The video Studio needs a filing cabinet before it can have a workshop: a record
 of which recording sessions exist and which files belong to each one. This is
@@ -24,6 +24,36 @@ straight out of the file that creates it, rather than keeping their own copy.
 A copy stays right while the original goes wrong, which is exactly how the
 forgotten-client bug survives being tested. To prove that works, the design was
 broken three separate ways on purpose and the right tests failed each time.
+
+Three rounds of review later, the same mistake had been found three times in
+three different places, so this round went after the pattern rather than the
+instances. The pattern is: you hand the system a value it cannot read, and
+instead of refusing, it throws away the good value that was already there and
+tells you it worked. A recording's length, its frame rate, its dimensions, how
+confident we are about the audio sync — every one of those would accept the
+word "N/A" from a piece of equipment that failed to read the file, wipe what
+was there, and report success. Now each of them says no and leaves the good
+value alone. That matters most because the very next pieces of this project are
+the ones that read video files and write those numbers back, and equipment that
+cannot read a file reports exactly that kind of nonsense.
+
+One of those numbers deserved more than a refusal. The sync offset says how far
+apart two recordings are in time, and it used to fall back to zero — but zero
+is not a blank, it is the confident claim "these two are already perfectly
+lined up." An unmeasured file was silently asserting something false about
+itself. It can now say "nobody has measured this yet," which is the truth.
+
+Also fixed: a database that was briefly unreachable used to be reported as
+"that recording session does not exist," which would send somebody looking for
+a problem that was not there. And the miniature stand-in database the tests run
+against was quietly ignoring three of the rules the real one enforces, so a
+future test could have proved something it was not actually checking. It now
+enforces them, and refuses out loud when it meets a rule it does not understand
+— which is what its own instructions had claimed all along.
+
+Every one of these was proved twice: once by breaking the fix on purpose and
+watching the right test fail, and once by running it against a real database.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp

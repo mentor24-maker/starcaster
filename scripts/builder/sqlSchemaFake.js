@@ -13,10 +13,26 @@
  * Parsing the SQL means deleting a column from the file fails the test.
  *
  * It understands only what the setup files here actually use: create table if
- * not exists, column types/defaults/not-null, `check (col in (...))`, unique
- * (optionally partial) indexes, and enable row level security. It is not a
- * Postgres. Anything it does not understand, it refuses loudly rather than
- * ignoring — a fake that quietly skips a constraint is worse than no fake.
+ * not exists, column types/defaults/not-null, inline `primary key`, inline
+ * `unique`, inline `references`, `check (col in (...))`, unique (optionally
+ * partial) indexes, `alter column ... drop not null|default`, and enable row
+ * level security. It is not a Postgres. Anything it does not understand, it
+ * refuses loudly rather than ignoring — a fake that quietly skips a constraint
+ * is worse than no fake.
+ *
+ * THAT PROMISE WAS NOT TRUE UNTIL 2026-08-25. parseColumn read `primary key`,
+ * `unique` and `references ... on delete cascade` straight past, recording only
+ * name/type/not-null/default/allowed — so the fake accepted a duplicate primary
+ * key (real Postgres: 23505) and a dangling foreign key (23503) and answered
+ * ok:true to both. This is the same hole as the ORDER BY one below and it
+ * matters for the same reason: this fake is deliberately reusable
+ * infrastructure for Studio slices 2/8-8/8, so a later slice testing "the same
+ * id cannot be used twice" would have passed while enforcing nothing.
+ * parseColumn now consumes every clause it finds and THROWS on a leftover,
+ * which is what makes the paragraph above checkable rather than aspirational.
+ *
+ * The one thing still declared and not exercised is `on delete cascade`:
+ * DELETE is not implemented, and says so when called rather than pretending.
  */
 
 const fs = require('fs');
@@ -53,28 +69,137 @@ function splitTopLevel(text, separator = ',') {
   return parts.map((part) => part.trim()).filter(Boolean);
 }
 
+/**
+ * Cut `<keyword> ( ... )` out of `text`, counting parentheses so a nested
+ * `in ('a','b')` does not end the clause early. Returns the clause (parens
+ * included) and what is left, or null if the keyword is not there.
+ */
+function cutParenClause(text, keywordRegex) {
+  const found = keywordRegex.exec(text);
+  if (!found) return null;
+  let i = found.index + found[0].length;
+  while (i < text.length && /\s/.test(text[i])) i += 1;
+  if (text[i] !== '(') return null;
+  const start = i;
+  let depth = 0;
+  let inString = false;
+  for (; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === "'") inString = !inString;
+    else if (!inString && char === '(') depth += 1;
+    else if (!inString && char === ')') {
+      depth -= 1;
+      if (depth === 0) { i += 1; break; }
+    }
+  }
+  if (depth !== 0) throw new Error(`sqlSchemaFake: unbalanced parentheses in "${text}"`);
+  return {
+    clause: text.slice(start, i),
+    remaining: `${text.slice(0, found.index)} ${text.slice(i)}`.replace(/\s+/g, ' ').trim(),
+  };
+}
+
+/** Cut a whole regex match out of `text`, returning the match and the rest. */
+function cutMatch(text, regex) {
+  const found = regex.exec(text);
+  if (!found) return null;
+  return {
+    match: found,
+    remaining: `${text.slice(0, found.index)} ${text.slice(found.index + found[0].length)}`
+      .replace(/\s+/g, ' ').trim(),
+  };
+}
+
+/**
+ * One column definition → what the fake needs to enforce it.
+ *
+ * Every clause is CONSUMED as it is recognised, and whatever is left over at
+ * the end throws. That is the whole design: a constraint this fake does not
+ * implement can no longer be read past in silence, which is how inline
+ * `primary key`, `unique` and `references` sat here unenforced.
+ */
 function parseColumn(definition) {
   const match = /^([a-z_][a-z0-9_]*)\s+([\s\S]+)$/i.exec(definition.trim());
   if (!match) return null;
   const [, name, rest] = match;
-  if (['primary', 'unique', 'check', 'constraint', 'foreign'].includes(name.toLowerCase())) return null;
+  // A table-level constraint on its own line, not a column.
+  if (['primary', 'unique', 'check', 'constraint', 'foreign', 'exclude'].includes(name.toLowerCase())) {
+    return null;
+  }
 
-  const typeMatch = /^([a-z ]+?)(\s|$|\()/i.exec(rest.trim());
-  const type = (typeMatch ? typeMatch[1] : rest).trim().toLowerCase();
+  let remaining = rest.replace(/\s+/g, ' ').trim();
 
-  const checkMatch = /check\s*\(\s*[a-z_][a-z0-9_]*\s+in\s*\(([^)]*)\)\s*\)/i.exec(rest);
-  const allowed = checkMatch
-    ? checkMatch[1].split(',').map((value) => value.trim().replace(/^'|'$/g, ''))
-    : null;
+  // The type, plus any (length) or (precision, scale) after it.
+  const typeMatch = /^([a-z ]+?)(\s|$|\()/i.exec(remaining);
+  const type = (typeMatch ? typeMatch[1] : remaining).trim().toLowerCase();
+  remaining = remaining.slice(typeMatch ? typeMatch[1].length : remaining.length).trim();
+  if (remaining.startsWith('(')) {
+    const sized = cutParenClause(remaining, /^/);
+    if (sized) remaining = sized.remaining;
+  }
 
-  const defaultMatch = /default\s+([^\s,]+(?:\([^)]*\))?)/i.exec(rest);
+  // check ( ... ). Only the `col in (...)` form is implemented — any other
+  // form REFUSES, because silently ignoring `check (n >= 0)` is the same bug
+  // in a different costume.
+  let allowed = null;
+  const check = cutParenClause(remaining, /\bcheck\b/i);
+  if (check) {
+    remaining = check.remaining;
+    const inMatch = /^\(\s*[a-z_][a-z0-9_]*\s+in\s*\(([^)]*)\)\s*\)$/i.exec(check.clause);
+    if (!inMatch) {
+      throw new Error(
+        `sqlSchemaFake: the check on "${name}" is not the "col in (...)" form this fake `
+        + `implements, and it will not be skipped — ${check.clause}`
+      );
+    }
+    allowed = inMatch[1].split(',').map((value) => value.trim().replace(/^'|'$/g, ''));
+  }
+
+  // references [public.]<table> (<column>) [on delete <action>]
+  let references = null;
+  const ref = cutMatch(
+    remaining,
+    /\breferences\s+(?:public\.)?([a-z_][a-z0-9_]*)\s*\(\s*([a-z_][a-z0-9_]*)\s*\)(?:\s+on\s+delete\s+(cascade|restrict|no action|set null|set default))?/i
+  );
+  if (ref) {
+    references = {
+      table: ref.match[1],
+      column: ref.match[2],
+      onDelete: (ref.match[3] || 'no action').toLowerCase(),
+    };
+    remaining = ref.remaining;
+  } else if (/\breferences\b/i.test(remaining)) {
+    throw new Error(`sqlSchemaFake: unsupported references clause on "${name}" — ${remaining}`);
+  }
+
+  const def = cutMatch(remaining, /\bdefault\s+([^\s,]+(?:\([^)]*\))?)/i);
+  if (def) remaining = def.remaining;
+
+  const primaryKey = /\bprimary\s+key\b/i.test(remaining);
+  remaining = remaining.replace(/\bprimary\s+key\b/gi, ' ');
+  const notNull = /\bnot\s+null\b/i.test(remaining);
+  remaining = remaining.replace(/\bnot\s+null\b/gi, ' ');
+  const unique = /\bunique\b/i.test(remaining);
+  remaining = remaining.replace(/\bunique\b/gi, ' ');
+  remaining = remaining.replace(/\bnull\b/gi, ' ').replace(/\s+/g, ' ').trim();
+
+  if (remaining) {
+    throw new Error(
+      `sqlSchemaFake: unsupported clause on column "${name}" — "${remaining}". `
+      + 'Implement it or the fake would be enforcing less than the SQL says.'
+    );
+  }
 
   return {
     name,
     type,
-    notNull: /\bnot\s+null\b/i.test(rest),
-    default: defaultMatch ? defaultMatch[1].trim() : null,
+    // A primary key is NOT NULL in Postgres whether or not it says so.
+    notNull: notNull || primaryKey,
+    default: def ? def.match[1].trim() : null,
     allowed,
+    primaryKey,
+    unique,
+    references,
   };
 }
 
@@ -111,7 +236,41 @@ function parseSchemaText(sqlText) {
         const column = parseColumn(definition);
         if (column) columns.set(column.name, column);
       }
-      if (!tables.has(name)) tables.set(name, { name, columns });
+      if (!tables.has(name)) {
+        const foreignKeys = [];
+        for (const column of columns.values()) {
+          // An inline primary key or unique IS a unique index; expressing it as
+          // one means uniqueViolation() enforces it with no second code path.
+          if (column.primaryKey) {
+            indexes.push({
+              name: `${name}_pkey`,
+              table: name,
+              unique: true,
+              columns: [column.name],
+              predicate: () => true,
+            });
+          } else if (column.unique) {
+            indexes.push({
+              name: `${name}_${column.name}_key`,
+              table: name,
+              unique: true,
+              columns: [column.name],
+              // Postgres lets a UNIQUE column hold many nulls; a PRIMARY KEY
+              // cannot be null at all, which the not-null check covers.
+              predicate: (row) => row[column.name] !== null && row[column.name] !== undefined,
+            });
+          }
+          if (column.references) {
+            foreignKeys.push({
+              column: column.name,
+              refTable: column.references.table,
+              refColumn: column.references.column,
+              onDelete: column.references.onDelete,
+            });
+          }
+        }
+        tables.set(name, { name, columns, foreignKeys });
+      }
       continue;
     }
 
@@ -127,6 +286,18 @@ function parseSchemaText(sqlText) {
           predicate: predicate ? parsePartialPredicate(predicate) : () => true,
         });
       }
+      continue;
+    }
+
+    match = /^alter table (?:public\.)?([a-z_][a-z0-9_]*) alter column ([a-z_][a-z0-9_]*) drop (not null|default)$/i.exec(normalized);
+    if (match) {
+      const [, tableName, columnName, what] = match;
+      const target = tables.get(tableName);
+      if (!target) throw new Error(`sqlSchemaFake: alter table ${tableName} before it is created`);
+      const column = target.columns.get(columnName);
+      if (!column) throw new Error(`sqlSchemaFake: no column ${tableName}.${columnName} to alter`);
+      if (what.toLowerCase() === 'default') column.default = null;
+      else column.notNull = false;
       continue;
     }
 
@@ -229,6 +400,27 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         if (index.columns.every((column) => String(existing[column]) === String(row[column]))) {
           return `duplicate key value violates unique constraint "${index.name}" (23505)`;
         }
+      }
+    }
+    return '';
+  }
+
+  /**
+   * A foreign key that points at nothing. Real Postgres raises 23503 and
+   * PostgREST answers 409 — which is what lib/videoSourcesStore.js's
+   * isMissingSessionError() reads, so the fake must produce the same shape or
+   * that branch is tested against a message it will never see.
+   */
+  function foreignKeyViolation(tableName, row) {
+    const table = schema.tables.get(tableName);
+    for (const fk of table.foreignKeys || []) {
+      const value = row[fk.column];
+      if (value === null || value === undefined) continue;
+      const parent = data.get(fk.refTable);
+      if (!parent || !parent.some((existing) => String(existing[fk.refColumn]) === String(value))) {
+        return `insert or update on table "${tableName}" violates foreign key constraint `
+          + `"${tableName}_${fk.column}_fkey" (23503) — key (${fk.column})=(${value}) `
+          + `is not present in table "${fk.refTable}"`;
       }
     }
     return '';
@@ -385,6 +577,8 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         if (broken) return { ok: false, status: 400, error: broken };
         const duplicate = uniqueViolation(tableName, row);
         if (duplicate) return { ok: false, status: 409, error: duplicate };
+        const dangling = foreignKeyViolation(tableName, row);
+        if (dangling) return { ok: false, status: 409, error: dangling };
         data.get(tableName).push(row);
         created.push({ ...row });
       }
@@ -406,12 +600,21 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         if (broken) return { ok: false, status: 400, error: broken };
         const duplicate = uniqueViolation(tableName, next, row);
         if (duplicate) return { ok: false, status: 409, error: duplicate };
+        const dangling = foreignKeyViolation(tableName, next);
+        if (dangling) return { ok: false, status: 409, error: dangling };
         Object.assign(row, body);
         updated.push({ ...row });
       }
       return { ok: true, status: 200, data: updated };
     }
 
+    if (String(method).toUpperCase() === 'DELETE') {
+      throw new Error(
+        'sqlSchemaFake: DELETE is not implemented, so `on delete cascade` is declared in the '
+        + 'SQL and NOT exercised by any test here. Cascade behaviour has to be proved against '
+        + 'real Postgres — see the "How to test" step on the ticket.'
+      );
+    }
     throw new Error(`sqlSchemaFake: unsupported method ${method}`);
   }
 

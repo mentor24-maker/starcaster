@@ -29,13 +29,13 @@ const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
 /** Swap lib/supabase for the SQL-backed fake and hand back live stores. */
-function withDb() {
+function withDb(wrapQuery = null) {
   const schema = parseSchemaFile(SQL_PATH);
   const db = createFakeDb(schema);
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ videoSessions: 'video_sessions', videoSources: 'video_sources' }),
-    sbQuery: db.sbQuery,
+    sbQuery: wrapQuery ? wrapQuery(db.sbQuery) : db.sbQuery,
   };
 
   const realSupabase = require.cache[supabasePath];
@@ -725,4 +725,329 @@ test('a 409 is only a duplicate hash when it actually says so', () => {
   const vague = { status: 409, error: 'conflict' };
   assert.equal(isDuplicateHashError(vague), false);
   assert.equal(isMissingSessionError(vague), false);
+});
+
+// ── Review round three on PR #422 ───────────────────────────────────────────
+// Five defects, and four of them are the SAME defect the first two rounds
+// already sent this back for, in a column the fix did not reach: an invalid
+// input that DESTROYS the value it was meant to replace and reports success.
+// The date was fixed in round one; the numbers went on doing exactly what the
+// date used to do. These tests are written per COLUMN for that reason — the
+// class is what recurs, so the coverage has to be exhaustive rather than
+// representative.
+
+test('a bad probe number is a 400, and leaves the measured value alone', async () => {
+  const { sources, sessions, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const created = await sources.createSource({
+      sessionId: session.id, durationS: 61.5, fps: 29.97, width: 1920, height: 1080,
+    }, SCOPE_A);
+    assert.equal(created.ok, true, created.error);
+
+    // Every number a probe writes. `'N/A'` is precisely what ffprobe hands back
+    // for a stream it cannot read, and slices 4/8-6/8 are the only callers.
+    for (const [field, junk] of [
+      ['durationS', 'N/A'], ['fps', 'N/A'], ['width', 'unknown'], ['height', ''],
+    ]) {
+      const before = await sources.getSourceById(created.data.id, SCOPE_A);
+      const res = await sources.updateSource(created.data.id, { [field]: junk }, SCOPE_A);
+      if (junk === '') {
+        // A blank string is a legitimate "clear this", not junk — asserted here
+        // so the boundary is pinned rather than assumed.
+        assert.equal(res.ok, true, `${field}: '' should clear, not fail`);
+        continue;
+      }
+      assert.equal(res.ok, false, `${field}: junk was accepted`);
+      assert.equal(res.status, 400, `${field}: junk must be a 400, not a silent wipe`);
+      assert.match(res.error, /must be a number/);
+
+      const after = await sources.getSourceById(created.data.id, SCOPE_A);
+      assert.equal(after.data[field], before.data[field],
+        `${field}: the measured value was destroyed by a refused write`);
+    }
+  } finally { restore(); }
+});
+
+test('a bad probe number is refused on the way IN too, not only on update', async () => {
+  const { sources, sessions, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    for (const field of ['durationS', 'fps', 'width', 'height']) {
+      const res = await sources.createSource({ sessionId: session.id, [field]: 'N/A' }, SCOPE_A);
+      assert.equal(res.ok, false, `${field}: junk was written on create`);
+      assert.equal(res.status, 400);
+    }
+    // And nothing landed while being refused.
+    const listed = await sources.listSources(100, SCOPE_A);
+    assert.equal(listed.data.length, 0, 'a refused create still inserted a row');
+  } finally { restore(); }
+});
+
+test('numberOrError refuses what Number() would have coerced', () => {
+  const { numberOrError, integerOrError } = require('../../lib/videoSourcesStore.js');
+  // Number(true) is 1, Number([]) is 0, Number(['5']) is 5 — every one of those
+  // is a confident wrong value arriving through a coercion nobody asked for.
+  for (const junk of [true, false, [], ['5'], {}, NaN, Infinity, 'N/A', '12px']) {
+    assert.equal(numberOrError(junk, 'x').ok, false, `${JSON.stringify(junk)} was accepted`);
+  }
+  // Absent and blank are a genuine null; a numeric string is a number.
+  for (const blank of [undefined, null, '', '   ']) {
+    assert.deepEqual(numberOrError(blank, 'x'), { ok: true, value: null });
+  }
+  assert.deepEqual(numberOrError('61.5', 'x'), { ok: true, value: 61.5 });
+  assert.deepEqual(numberOrError(-3, 'x'), { ok: true, value: -3 });
+  assert.deepEqual(integerOrError('29.6', 'x'), { ok: true, value: 30 });
+});
+
+test('an unmeasured sync offset stays NULL, because 0 is a claim', async () => {
+  const { sources, sessions, db, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const created = await sources.createSource({ sessionId: session.id }, SCOPE_A);
+    assert.equal(created.ok, true, created.error);
+
+    // 0 would mean "these two tracks are already perfectly in sync", which is
+    // an answer. Nothing has measured this file yet, so the honest value is
+    // "we do not know" — and the column has to be able to hold it.
+    const [row] = db.data.get('video_sources');
+    assert.equal(row.sync_offset_ms, null, 'an unmeasured offset was written as 0');
+    assert.equal(created.data.syncOffsetMs, null, 'the row reader turned a null offset back into 0');
+
+    const measured = await sources.updateSource(created.data.id, { syncOffsetMs: 250 }, SCOPE_A);
+    assert.equal(measured.data.syncOffsetMs, 250);
+  } finally { restore(); }
+});
+
+test('a bad sync offset is a 400, not a confident zero', async () => {
+  const { sources, sessions, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const created = await sources.createSource({ sessionId: session.id, syncOffsetMs: 250 }, SCOPE_A);
+    assert.equal(created.data.syncOffsetMs, 250);
+
+    const res = await sources.updateSource(created.data.id, { syncOffsetMs: 'unknown' }, SCOPE_A);
+    assert.equal(res.ok, false, 'junk offset was accepted');
+    assert.equal(res.status, 400);
+
+    const after = await sources.getSourceById(created.data.id, SCOPE_A);
+    assert.equal(after.data.syncOffsetMs, 250, 'a measured offset was replaced by 0');
+
+    // And on the way in.
+    const onCreate = await sources.createSource(
+      { sessionId: session.id, syncOffsetMs: 'unknown' }, SCOPE_A
+    );
+    assert.equal(onCreate.ok, false);
+    assert.equal(onCreate.status, 400);
+  } finally { restore(); }
+});
+
+test('the offset column can hold "not measured yet"', () => {
+  const schema = parseSchemaFile(SQL_PATH);
+  const offset = schema.tables.get('video_sources').columns.get('sync_offset_ms');
+  assert.equal(offset.notNull, false,
+    'sync_offset_ms is not null, so an unmeasured offset has to be written as 0 — a claim, not a blank');
+  assert.equal(offset.default, null,
+    'sync_offset_ms defaults to a value, so an omitted offset still arrives as a measurement');
+});
+
+test('a bad sync confidence is a 400, not an erased measurement', async () => {
+  const { sessions, restore } = withDb();
+  try {
+    const created = await sessions.createSession({ title: 'A talk', syncConfidence: 0.92 }, SCOPE_A);
+    assert.equal(created.data.syncConfidence, 0.92);
+
+    const res = await sessions.updateSession(created.data.id, { syncConfidence: 'high' }, SCOPE_A);
+    assert.equal(res.ok, false, "'high' was accepted as a confidence");
+    assert.equal(res.status, 400);
+
+    const after = await sessions.getSessionById(created.data.id, SCOPE_A);
+    assert.equal(after.data.syncConfidence, 0.92, 'a measured confidence was erased by a refused write');
+
+    const onCreate = await sessions.createSession({ title: 'B', syncConfidence: 'high' }, SCOPE_A);
+    assert.equal(onCreate.ok, false);
+    assert.equal(onCreate.status, 400);
+  } finally { restore(); }
+});
+
+test('an out-of-range confidence is still clamped, which is a different judgement', () => {
+  // 1.4 is a legible answer from a sync pass that over-normalised, and the real
+  // hazard is it being read as a percentage later. 'high' is not an answer at
+  // all. The two are deliberately handled differently; this pins that.
+  const { confidenceOrError } = require('../../lib/videoSessionsStore.js');
+  assert.deepEqual(confidenceOrError(1.4, 'c'), { ok: true, value: 1 });
+  assert.deepEqual(confidenceOrError(-2, 'c'), { ok: true, value: 0 });
+  assert.equal(confidenceOrError('high', 'c').ok, false);
+  assert.equal(confidenceOrError(true, 'c').ok, false);
+  assert.deepEqual(confidenceOrError(null, 'c'), { ok: true, value: null });
+});
+
+test('a database failure is NOT reported as "that session does not exist"', async () => {
+  // `if (!owner.ok || !owner.data)` was true for a Supabase 500, a timeout and
+  // an auth failure just as much as for a missing row — so a database that was
+  // briefly down told the caller their session did not exist. That is a
+  // message that lies about what went wrong, which is what round one sent this
+  // back for, appearing inside the code written to fix round one.
+  const { sources, sessions, restore } = withDb((real) => async (options) => {
+    if (options.method === 'GET' && options.table === 'video_sessions') {
+      return { ok: false, status: 500, error: 'upstream connect error or disconnect/reset before headers' };
+    }
+    return real(options);
+  });
+  try {
+    // The session genuinely exists; only the READ is broken.
+    const res = await sources.createSource({ sessionId: 'row-1' }, SCOPE_A);
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 500, 'a database failure was reported as a 404 "no such session"');
+    assert.match(res.error, /upstream connect/);
+    assert.doesNotMatch(String(res.error), /does not exist in this project/);
+    assert.equal(typeof sessions.createSession, 'function');
+  } finally { restore(); }
+});
+
+test('a genuinely missing session is still a 404 that says so', async () => {
+  const { sources, restore } = withDb();
+  try {
+    const res = await sources.createSource({ sessionId: 'no-such-session' }, SCOPE_A);
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 404);
+    assert.match(res.error, /does not exist in this project/);
+  } finally { restore(); }
+});
+
+// ── The fake now enforces the constraints it reads ──────────────────────────
+// Its own header promised it "refuses loudly rather than ignoring". That was
+// not true: parseColumn read inline `primary key`, `unique` and `references`
+// straight past. It is reusable infrastructure for Studio slices 2/8-8/8, so a
+// later slice testing "the same id cannot be used twice" would have passed
+// while enforcing nothing.
+
+test('the fake rejects a duplicate primary key, as Postgres does', async () => {
+  const schema = parseSchemaFile(SQL_PATH);
+  const db = createFakeDb(schema);
+  const row = { id: 'fixed-id', project_id: 'proj_a', title: 'A talk' };
+
+  const first = await db.sbQuery({ method: 'POST', table: 'video_sessions', query: 'select=*', body: [row] });
+  assert.equal(first.ok, true, first.error);
+
+  const second = await db.sbQuery({ method: 'POST', table: 'video_sessions', query: 'select=*', body: [row] });
+  assert.equal(second.ok, false, 'the same primary key was inserted twice');
+  assert.equal(second.status, 409);
+  assert.match(second.error, /23505/);
+});
+
+test('the fake rejects a session_id that points at nothing, as Postgres does', async () => {
+  const schema = parseSchemaFile(SQL_PATH);
+  const db = createFakeDb(schema);
+
+  const res = await db.sbQuery({
+    method: 'POST',
+    table: 'video_sources',
+    query: 'select=*',
+    body: [{ project_id: 'proj_a', session_id: 'no-such-session' }],
+  });
+  assert.equal(res.ok, false, 'a dangling foreign key was accepted');
+  assert.equal(res.status, 409, 'PostgREST answers 409 for a foreign-key violation');
+  assert.match(res.error, /23503/);
+  // The exact shape lib/videoSourcesStore.js reads, so that branch is tested
+  // against a message it will actually see.
+  const { isMissingSessionError, isDuplicateHashError } = require('../../lib/videoSourcesStore.js');
+  assert.equal(isMissingSessionError(res), true);
+  assert.equal(isDuplicateHashError(res), false);
+
+  // A null session_id is not a violation — Postgres does not check a null FK.
+  const orphan = await db.sbQuery({
+    method: 'POST', table: 'video_sources', query: 'select=*', body: [{ project_id: 'proj_a' }],
+  });
+  assert.equal(orphan.ok, true, orphan.error);
+});
+
+test('a PATCH cannot move a row onto a session that is not there either', async () => {
+  const schema = parseSchemaFile(SQL_PATH);
+  const db = createFakeDb(schema);
+  await db.sbQuery({
+    method: 'POST', table: 'video_sessions', query: 'select=*',
+    body: [{ id: 'session-1', project_id: 'proj_a', title: 'A talk' }],
+  });
+  await db.sbQuery({
+    method: 'POST', table: 'video_sources', query: 'select=*',
+    body: [{ id: 'source-1', project_id: 'proj_a', session_id: 'session-1' }],
+  });
+  const res = await db.sbQuery({
+    method: 'PATCH', table: 'video_sources', query: 'id=eq.source-1&select=*',
+    body: { session_id: 'gone' },
+  });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /23503/);
+});
+
+test('the SQL declares the cascade, and the fake says it does not cover it', async () => {
+  const schema = parseSchemaFile(SQL_PATH);
+  const sourceTable = schema.tables.get('video_sources');
+  const fk = (sourceTable.foreignKeys || []).find((key) => key.column === 'session_id');
+  assert.ok(fk, 'video_sources.session_id no longer declares a foreign key');
+  assert.equal(fk.refTable, 'video_sessions');
+  assert.equal(fk.onDelete, 'cascade');
+
+  // Declared and NOT exercised. The fake refuses out loud rather than letting a
+  // later slice believe cascade behaviour is under test here.
+  const db = createFakeDb(schema);
+  await assert.rejects(
+    () => db.sbQuery({ method: 'DELETE', table: 'video_sources', query: 'id=eq.x' }),
+    /cascade/i
+  );
+});
+
+test('an inline unique is enforced, and nulls do not collide', async () => {
+  const schema = parseSchemaText(`
+    create table if not exists public.widgets (
+      id      uuid primary key default gen_random_uuid(),
+      slug    text unique,
+      name    text not null default ''
+    );
+    alter table public.widgets enable row level security;
+  `);
+  const db = createFakeDb(schema);
+  const insert = (body) => db.sbQuery({ method: 'POST', table: 'widgets', query: 'select=*', body: [body] });
+
+  assert.equal((await insert({ slug: 'a' })).ok, true);
+  const clash = await insert({ slug: 'a' });
+  assert.equal(clash.ok, false, 'a duplicate unique value was accepted');
+  assert.match(clash.error, /23505/);
+
+  // Postgres allows many nulls in a unique column.
+  assert.equal((await insert({})).ok, true);
+  assert.equal((await insert({})).ok, true, 'two null slugs collided, which Postgres would allow');
+});
+
+test('the fake REFUSES a column clause it does not implement', () => {
+  // The point of the rewrite: an unrecognised clause can no longer be read
+  // past in silence. Each of these used to parse "fine" and enforce nothing.
+  const cases = [
+    'total integer generated always as (1) stored',
+    "n integer check (n >= 0)",
+    'ref uuid references',
+    'name text collate "C"',
+  ];
+  for (const column of cases) {
+    assert.throws(
+      () => parseSchemaText(`create table if not exists public.t (\n  id uuid primary key,\n  ${column}\n);`),
+      /sqlSchemaFake:/,
+      `"${column}" was parsed without complaint`
+    );
+  }
+});
+
+test('alter column drop not null / drop default is applied, and stays idempotent', () => {
+  const schema = parseSchemaText(`
+    create table if not exists public.widgets (
+      id     uuid primary key default gen_random_uuid(),
+      count  integer not null default 0
+    );
+    alter table public.widgets alter column count drop not null;
+    alter table public.widgets alter column count drop default;
+  `);
+  const count = schema.tables.get('widgets').columns.get('count');
+  assert.equal(count.notNull, false);
+  assert.equal(count.default, null);
 });
