@@ -85,6 +85,7 @@
     "env:local": "node scripts/db_use.mjs local",
     "node:whoami": "node scripts/node_role.mjs whoami",
     "node:owns": "node scripts/node_role.mjs owns",
+    "report:weekly": "node scripts/weekly_report.mjs",
     "schema:snapshot": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs snapshot",
     "schema:check": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs check",
     "check:ecosystem": "node scripts/check_ecosystem_inventory.mjs",

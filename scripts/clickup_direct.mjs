@@ -235,6 +235,9 @@ function usage(code = 2) {
   console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name <TAB> loop note');
   console.error('                                             the loop note is what a pass in flight looks like (e.g. a review already running)');
   console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
+  console.error('  stage-counts [--list <id>] [--since YYYY-MM-DD]   every stage counted, as JSON, CLOSED TICKETS INCLUDED');
+  console.error('                                             ("Live" is a closed status, so the open-queue fetch cannot see it);');
+  console.error('                                             --since also counts tickets closed on/after that date');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
   console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
@@ -303,10 +306,16 @@ if (!TOKEN) {
 
 /** Every page of a list's open tasks. The endpoint caps at 100 per page and
  *  a first-page-only read silently starves everything past it (DOCTRINE 5.12). */
-async function fetchAllTasks(list) {
+async function fetchAllTasks(list, { includeClosed = false } = {}) {
+  // `include_closed` is off by default because every OTHER caller wants the
+  // open queue, and a closed ticket in a claim list is noise. The weekly
+  // report is the one caller that needs the closed ones: "Live" IS a closed
+  // status, so without this the report would count every stage except the one
+  // that means the work shipped, and print a confident 0 (task 86bbkw1mn).
+  const closed = includeClosed ? '&include_closed=true' : '';
   const tasks = [];
   for (let page = 0; page < 50; page++) {
-    const out = await call('GET', `/api/v2/list/${list}/task?archived=false&page=${page}`);
+    const out = await call('GET', `/api/v2/list/${list}/task?archived=false${closed}&page=${page}`);
     if (!out.res.ok) die('list tasks', out);
     tasks.push(...out.json.tasks);
     if (out.json.last_page !== false || out.json.tasks.length === 0) {
@@ -916,6 +925,38 @@ if (cmd === 'whoami') {
   }
   console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
   if (res) reportLimits(res);
+
+} else if (cmd === 'stage-counts') {
+  // Every stage of the pipeline, counted, as JSON — for the weekly report
+  // (task 86bbkw1mn) and anything else that wants the shape of the queue
+  // rather than its contents.
+  //
+  // It is a command here, and not a `queue | wc -l` in the report script, for
+  // one reason: the token. Reading ClickUp means holding the API token, and
+  // the standing rule is that the token lives in exactly one script that
+  // Doppler feeds (DOCTRINE 4.1). A second reader would be a second place to
+  // get that wrong.
+  const list = arg('list') || LOOP_QUEUE_LIST;
+  const since = arg('since'); // YYYY-MM-DD; counts tickets CLOSED on/after it
+  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  const byStatus = {};
+  for (const t of tasks) {
+    const key = (t.status?.status ?? 'unknown').toLowerCase();
+    byStatus[key] = (byStatus[key] || 0) + 1;
+  }
+  let closedInWindow = null;
+  if (since) {
+    const cutoff = Date.parse(`${since}T00:00:00Z`);
+    if (Number.isNaN(cutoff)) {
+      console.error(`--since "${since}" is not a YYYY-MM-DD date.`);
+      process.exit(2);
+    }
+    closedInWindow = tasks.filter((t) => {
+      const closedAt = Number(t.date_closed);
+      return Number.isFinite(closedAt) && closedAt > 0 && closedAt >= cutoff;
+    }).length;
+  }
+  console.log(JSON.stringify({ list, total: tasks.length, byStatus, since: since || null, closedInWindow }, null, 2));
 
 } else if (cmd === 'get') {
   const task = arg('task');
