@@ -105,8 +105,11 @@ type BuilderCarouselModuleSettingsProps = {
  * get the identical set and every item in the module wears it.
  *
  * Not schema-driven, for the same reason Feature Cards is not: the item
- * manager is a bespoke item grid, so the two columns are the module's own CSS
- * rather than the generator's axis lattice.
+ * manager runs its own lattice, so the columns are the module's own CSS rather
+ * than the generator's axis lattice. Since the panel sweep it runs the SAME
+ * lattice as Feature Cards — `.builder-cards-panel-fields`, one labelled block
+ * per item (L6a) — rather than the titled-column grid plus `label.field`
+ * sub-row it inherited from the Slideshow panel.
  */
 export function BuilderCarouselModuleSettings({
   module,
@@ -147,6 +150,13 @@ export function BuilderCarouselModuleSettings({
   };
 
   const addItem = () => persist([...items, createBuilderCardItem(items.length + 1, "item")]);
+
+  // The four copy fields an item carries beyond its picture, its identifying
+  // field and its link. A card always shows them; a slideshow shows them only
+  // with captions on, because that is the only place a slide has to put them.
+  // Unchanged by the L6a rewrite — it moved these fields, it did not regate
+  // them.
+  const showItemCopy = isCards || settings.showCaptions === "true";
 
   // A checkbox setting written the same way in every group: absent means the
   // normalizer's format-dependent default, which it has already resolved onto
@@ -438,134 +448,182 @@ export function BuilderCarouselModuleSettings({
           ) : null}
         </div>
 
-        {/* The items. Titled-column item grid (UI_RULES L6): the image picker
-            and the primary text field each get a column, so neither one can
-            stretch the way they did as a stacked `label.field`. The remaining
-            fields ride a sub-row that spans the grid, which is what that
-            mechanism exists for. */}
-        <div className="builder-schema-group-title">{isCards ? "Cards" : "Slides"}</div>
-        <div className="builder-item-grid builder-item-grid--carousel">
-          <span className="builder-item-grid-header">Image</span>
-          <span className="builder-item-grid-header">{isCards ? "Title" : "Alt text"}</span>
-          <span className="builder-item-grid-header">Action</span>
-          {items.map((item, index) => (
-            <Fragment key={item.id}>
-              <div className="builder-item-grid-picker">
-                <BuilderImagePickerField
-                  value={item.imageUrl}
-                  onChange={(imageUrl) => updateItem(item.id, { imageUrl })}
-                />
-              </div>
-              {isCards ? (
-                <input
-                  type="text"
-                  value={item.title}
-                  onChange={(event) => updateItem(item.id, { title: event.target.value })}
-                  placeholder={`${Noun} title`}
-                  aria-label={`${Noun} ${index + 1} title`}
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={item.imageAlt}
-                  onChange={(event) => updateItem(item.id, { imageAlt: event.target.value })}
-                  placeholder="Describe the image"
-                  aria-label={`${Noun} ${index + 1} alt text`}
-                />
-              )}
-              <div className="builder-item-grid-actions">
-                <button
-                  type="button"
-                  className="builder-icon-button"
-                  onClick={() => moveItem(item.id, -1)}
-                  aria-label={`Move ${noun} ${index + 1} up`}
-                  title="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="builder-icon-button"
-                  onClick={() => moveItem(item.id, 1)}
-                  aria-label={`Move ${noun} ${index + 1} down`}
-                  title="Move down"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="builder-icon-button builder-icon-button-danger"
-                  onClick={() => removeItem(item.id)}
-                  aria-label={`Delete ${noun} ${index + 1}`}
-                  title={`Delete ${noun}`}
-                >
-                  ✕
-                </button>
-              </div>
+        {/* The items. ONE LABELLED BLOCK PER ITEM, on its own lattice
+            (UI_RULES L6a) — the same shape and the same CSS as Feature
+            Cards, not a second pattern.
 
-              {/* The rest of the item. A slideshow shows these only when
-                  captions are on, because with captions off there is nowhere
-                  on the slide for them to appear — an editor that collects
-                  copy nothing renders is the defect this merge is cleaning
-                  up, not one to reintroduce. The link is the exception: a
-                  slide can be clickable with no visible text at all. */}
-              <div className="builder-item-grid-sub builder-carousel-item-sub">
-                <label className="field">
-                  <span>Link</span>
+            It was a titled-column grid (L6) with a spanning sub-row of
+            `label.field` boxes, and L6a names that exact combination as the
+            one to convert: "a manager with fields that cannot [be columns]
+            — pickers, long text — takes the labelled block, because that is
+            the one where the spanning secondary row was already breaking
+            the column alignment." This manager had all three at once: an
+            image picker, a description textarea, and four fields riding a
+            sub-row whose auto-fit tracks were measured independently of the
+            three columns above them, so nothing below an item's first row
+            lined up with anything above it.
+
+            The sub-row's `label.field` was also the shape W0 says to retire
+            rather than style — it stacks its label above a full-width box,
+            which is a second label geometry inside one panel. Every field
+            here is a `BuilderModuleField` now, so the whole manager reads
+            the one lattice.
+
+            `data-lattice-pairs="2"` is what makes any of this checkable.
+            `check_panels` only measures a manager that declares itself:
+            selecting on `[data-lattice-pairs]` and `[data-lattice-columns]`,
+            it found neither here and skipped the manager in silence — the
+            panel passed every sweep while never being looked at. */}
+        <div className="builder-schema-group-title">{isCards ? "Cards" : "Slides"}</div>
+        <div className="builder-cards-panel-fields" data-lattice-pairs="2">
+          {items.map((item, index) => {
+            // What the item is called in its own head row. A card is known by
+            // its title and a slide by its alt text — the same field each
+            // format already showed first — falling back to the position when
+            // the item is still blank.
+            const itemName = (isCards ? item.title : item.imageAlt) || `${Noun} ${index + 1}`;
+
+            return (
+              <Fragment key={item.id}>
+                <div className="builder-card-editor-head">
+                  <span className="builder-card-editor-name">{itemName}</span>
+                  <div className="builder-item-grid-actions">
+                    <button
+                      type="button"
+                      className="builder-icon-button"
+                      onClick={() => moveItem(item.id, -1)}
+                      aria-label={`Move ${noun} ${index + 1} up`}
+                      title="Move up"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="builder-icon-button"
+                      onClick={() => moveItem(item.id, 1)}
+                      aria-label={`Move ${noun} ${index + 1} down`}
+                      title="Move down"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="builder-icon-button builder-icon-button-danger"
+                      onClick={() => removeItem(item.id)}
+                      aria-label={`Delete ${noun} ${index + 1}`}
+                      title={`Delete ${noun}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {/* The 2x2. Which fields an item shows is unchanged by this
+                    rewrite — only where they sit. The first pair is the field
+                    that identifies the item and its link, both of which every
+                    item has in both formats. */}
+                {isCards ? (
+                  <BuilderModuleField label="Title" width="text-md" className="builder-card-field--a">
+                    <input
+                      type="text"
+                      value={item.title}
+                      onChange={(event) => updateItem(item.id, { title: event.target.value })}
+                      placeholder={`${Noun} title`}
+                      aria-label={`${Noun} ${index + 1} title`}
+                    />
+                  </BuilderModuleField>
+                ) : (
+                  <BuilderModuleField label="Alt text" width="text-md" className="builder-card-field--a">
+                    <input
+                      type="text"
+                      value={item.imageAlt}
+                      onChange={(event) => updateItem(item.id, { imageAlt: event.target.value })}
+                      placeholder="Describe the image"
+                      aria-label={`${Noun} ${index + 1} alt text`}
+                    />
+                  </BuilderModuleField>
+                )}
+                <BuilderModuleField label="Link" width="text-md" className="builder-card-field--b">
                   <input
                     type="text"
                     value={item.linkUrl}
                     onChange={(event) => updateItem(item.id, { linkUrl: event.target.value })}
                     placeholder="/path-or-url"
+                    aria-label={`${Noun} ${index + 1} link`}
                   />
-                </label>
-                {isCards || settings.showCaptions === "true" ? (
+                </BuilderModuleField>
+
+                {/* A slideshow shows these only when captions are on, because
+                    with captions off there is nowhere on the slide for them to
+                    appear — an editor that collects copy nothing renders is
+                    the defect the merge was cleaning up, not one to
+                    reintroduce. The link above is the exception: a slide can
+                    be clickable with no visible text at all. */}
+                {showItemCopy ? (
                   <>
-                    <label className="field">
-                      <span>Link label</span>
+                    <BuilderModuleField label="Link label" width="text-md" className="builder-card-field--a">
                       <input
                         type="text"
                         value={item.linkLabel}
                         onChange={(event) => updateItem(item.id, { linkLabel: event.target.value })}
                         placeholder="Read more"
+                        aria-label={`${Noun} ${index + 1} link label`}
                       />
-                    </label>
+                    </BuilderModuleField>
                     {isCards ? (
-                      <label className="field">
-                        <span>Alt text</span>
+                      <BuilderModuleField label="Alt text" width="text-md" className="builder-card-field--b">
                         <input
                           type="text"
                           value={item.imageAlt}
                           onChange={(event) => updateItem(item.id, { imageAlt: event.target.value })}
                           placeholder="Describe the image"
+                          aria-label={`${Noun} ${index + 1} alt text`}
                         />
-                      </label>
+                      </BuilderModuleField>
                     ) : (
-                      <label className="field">
-                        <span>Caption title</span>
+                      <BuilderModuleField label="Caption title" width="text-md" className="builder-card-field--b">
                         <input
                           type="text"
                           value={item.title}
                           onChange={(event) => updateItem(item.id, { title: event.target.value })}
                           placeholder="Headline over the image"
+                          aria-label={`${Noun} ${index + 1} caption title`}
                         />
-                      </label>
+                      </BuilderModuleField>
                     )}
-                    <label className="field builder-carousel-item-sub-full">
-                      <span>Description</span>
-                      <textarea
-                        className="builder-textarea"
-                        rows={2}
-                        value={item.body}
-                        onChange={(event) => updateItem(item.id, { body: event.target.value })}
-                        placeholder={`Add copy for this ${noun}`}
-                      />
-                    </label>
                   </>
                 ) : null}
-              </div>
-            </Fragment>
-          ))}
+
+                {/* Too wide for half a row, so it spans to the block's right
+                    edge (L8). `--picker` is what pushes the Gallery button
+                    onto that edge instead of leaving it wherever the input
+                    ran out. */}
+                <BuilderModuleField
+                  label="Image"
+                  width="full"
+                  className="builder-card-field--wide builder-card-field--picker"
+                >
+                  <BuilderImagePickerField
+                    value={item.imageUrl}
+                    onChange={(imageUrl) => updateItem(item.id, { imageUrl })}
+                  />
+                </BuilderModuleField>
+
+                {showItemCopy ? (
+                  <BuilderModuleField label="Description" width="full" className="builder-card-field--wide">
+                    <textarea
+                      className="builder-textarea"
+                      rows={2}
+                      value={item.body}
+                      onChange={(event) => updateItem(item.id, { body: event.target.value })}
+                      placeholder={`Add copy for this ${noun}`}
+                      aria-label={`${Noun} ${index + 1} description`}
+                    />
+                  </BuilderModuleField>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </div>
         <button type="button" className="secondary-button" onClick={addItem}>
           Add {Noun}
