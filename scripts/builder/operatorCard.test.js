@@ -350,6 +350,74 @@ test('@@EVIDENCE is parsed as its own section and may not be repeated', () => {
   assert.throws(() => parseCard(card({ evidence: 'x' }) + '\n@@EVIDENCE\ny'), /@@EVIDENCE appears twice/);
 });
 
+/**
+ * WHY THESE FIVE (review of this gate, 2026-08-26). The gate shipped reading
+ * the first clock ANYWHERE in @@EVIDENCE, and the pasted output is part of
+ * @@EVIDENCE — so a log line dated the card instead of the run. That is the
+ * exact stale-proof failure the timestamp exists to prevent, arriving through
+ * the feature meant to prevent it.
+ */
+
+/** The reviewer's own reproduction: a six-day-old log under a fresh reading. */
+const LOG_DATED_EVIDENCE = [
+  'Re-ran it just now:',
+  '```',
+  '$ curl -s .../chat',
+  '2026-08-20 3:12pm  POST /chat -> 401 refused',
+  '```',
+  'Measured at 9:40pm today.',
+].join('\n');
+
+test('the measured-at time comes from the prose, never from the pasted log', () => {
+  assert.equal(evidenceTimestamp(LOG_DATED_EVIDENCE), '9:40pm');
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: LOG_DATED_EVIDENCE })));
+  assert.match(out, /THE CHECK BEHIND THIS ASK — measured at 9:40pm/);
+  assert.doesNotMatch(out, /measured at 2026-08-20/,
+    'the card must not date itself by whatever the output happened to print');
+});
+
+test('evidence whose only clock is inside the fence is refused', () => {
+  // It fails the other way too: a recent-looking time inside an old log would
+  // make stale evidence read as fresh.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'Re-ran it:',
+      '```',
+      '$ curl -s .../team/9013/plan',
+      '2026-08-20 3:12pm  200 {"plan_name":"Free Forever"}',
+      '```',
+    ].join('\n'),
+  })));
+  assert.match(problems.join('\n'), /only inside the pasted block/);
+  assert.match(problems.join('\n'), /outside the fences/);
+});
+
+test('a command fence and a separate output fence is accepted', () => {
+  // The clearer layout. The first version of the rule wanted one fence holding
+  // two lines and told this author "you showed a command with no output",
+  // which is false — and a gate that misdiagnoses good input gets routed around.
+  assert.deepEqual(validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'Measured at 9:40pm:',
+      '```',
+      '$ curl -sS .../team/9013/plan',
+      '```',
+      'and it printed:',
+      '```',
+      '{"plans":[{"plan_name":"Free Forever"}]}',
+      '```',
+    ].join('\n'),
+  }))), []);
+});
+
+test('a clock needs a boundary after am/pm, or a timezone reads as a time', () => {
+  assert.equal(evidenceTimestamp('cron next run 10:15 America/New_York'), null);
+  assert.equal(evidenceTimestamp('9:30 ambient noise on the recording'), null);
+  assert.equal(evidenceTimestamp('measured at 10:15am, America/New_York'), '10:15am');
+});
+
 // --------------------------------------------- the guard inside clickup_direct
 
 /**

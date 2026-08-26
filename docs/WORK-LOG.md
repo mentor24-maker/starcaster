@@ -31,6 +31,17 @@ exactly as it always did, and there is a test making sure it keeps doing so —
 because a rule that nags about everything is a rule people learn to go around,
 and then it protects nothing at all.
 
+Review caught two holes in the first version, both now closed. The time shown in
+the heading was taken from the first clock anywhere in the proof — including
+inside the pasted output — so an agent who wrote "measured at 9:40pm" under a log
+line from last Thursday got a card telling you the check was six days old. The
+heading now reads only what the agent wrote in its own words, and a proof whose
+only time is buried in the printout is refused with an explanation. Second, the
+list of words that trip the rule knew "delete" and "deleting" but not "deletes",
+so "this deletes all 550 rows" — the most natural way to describe what your yes
+would do — sailed straight through with no proof at all. Every verb now carries
+all three forms, and a test fails if a future one arrives missing any of them.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp

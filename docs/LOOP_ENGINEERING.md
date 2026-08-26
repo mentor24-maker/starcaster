@@ -274,7 +274,8 @@ has to be written down rather than left blank.
 @@EVIDENCE
 Optional in general; REQUIRED when the ask costs money or cannot be undone.
 The command in runnable form, its actual output pasted in a ``` fence, and the
-time you ran it in his clock ("measured at 8:04pm").
+time you ran it in his clock ("measured at 8:04pm") — in the prose OUTSIDE the
+fence, because a time inside the paste is the log's clock and not yours.
 ```
 
 `@@NEEDED` renders under a banner he can find without reading:
@@ -322,6 +323,23 @@ The card also shows the measurement time in the heading it renders
 (**THE CHECK BEHIND THIS ASK — measured at 8:04pm**). Evidence gathered before
 a sixteen-hour outage is not evidence about now, so the freshness is stated
 rather than implied.
+
+**That time is read from the prose, never from the pasted output** — a
+correction to the gate's own first version, found in review on 2026-08-26. It
+took the first clock anywhere in `@@EVIDENCE`, and the paste is part of
+`@@EVIDENCE`, so an author who wrote "measured at 9:40pm" beneath a log line
+reading `2026-08-20 3:12pm` got a card headed *measured at 2026-08-20 3:12pm*:
+six days stale, asserted by the card itself. It fails the other way too, a
+recent-looking time inside an old log making stale evidence read as fresh. A
+card whose only clock is inside a fence is now refused, and told to say when
+YOU ran it.
+
+The same review found the trigger list carried base and gerund forms but no
+third-person ones, so "this deletes all 550 rows", "it rotates the key" and
+"approving this upgrades the workspace" all posted with no evidence at all —
+and third person is the most natural way to describe what the operator's yes
+will do. Every verb in the list now carries all three forms, with a test that
+fails if a future verb arrives with a form missing.
 
 ### ClickUp deletes `> ` blockquotes — from comments AND descriptions
 

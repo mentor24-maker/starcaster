@@ -105,7 +105,8 @@ spec. Dane could not tell what was being asked of him on either ticket.
 **Escalating is one command, not two.** `status --status "Needs your input"`
 refuses on its own now — a status move with no stated ask is a red badge in his
 inbox with no answerable question on it, which is exactly how 7/7 sat there for
-a day. Use `ask`, whose body is four sections, checked before anything is sent:
+a day. Use `ask`, whose body is four sections plus a fifth that costly asks must
+carry, all checked before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
@@ -119,9 +120,11 @@ a day. Use `ask`, whose body is four sections, checked before anything is sent:
 
 **An ask that spends money or cannot be undone is refused without
 `@@EVIDENCE`** — spend, buy, subscribe, upgrade, a plan change, a credential
-rotation, a deletion. That section carries the command in runnable form, its
-ACTUAL output pasted in a fence, and when you ran it in his clock ("measured at
-8:04pm"). On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
+rotation, a deletion — and it reads third-person phrasings too ("this deletes
+all 550 rows"). That section carries the command in runnable form, its ACTUAL
+output pasted in a fence, and when you ran it in his clock ("measured at
+8:04pm") — written in the prose OUTSIDE the fence, since a time inside the
+paste is the log's clock rather than yours. On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
 diagnosis that was wrong, and re-running the one failing call would have
 settled it in seconds. Re-run it, paste what it says — do not summarise it.
 Ordinary escalations are untouched. If the ticket

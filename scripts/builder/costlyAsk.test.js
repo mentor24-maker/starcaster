@@ -42,7 +42,45 @@ test('every listed trigger word actually fires on its own', () => {
   }
 });
 
+test('third-person forms fire — the natural way to phrase an approval', () => {
+  // Found by review, 2026-08-26. The list carried `delete`/`deleting`/
+  // `deletion` but not `deletes`, so every one of these posted with no
+  // evidence at all — and describing what the operator's YES will do is the
+  // most natural phrasing there is.
+  assert.ok(isCostlyAsk('This deletes all 550 untenanted rows.'), 'deletes');
+  assert.ok(isCostlyAsk('It rotates CHANNELS_ENCRYPTION_KEY.'), 'rotates');
+  assert.ok(isCostlyAsk('Approving this upgrades the workspace to Business.'), 'upgrades');
+  assert.ok(isCostlyAsk('This migrates every page to the new schema.'), 'migrates');
+  assert.ok(isCostlyAsk('Approving this purchases another seat.'), 'purchases');
+});
+
+test('every verb carries its base, gerund and third-person form together', () => {
+  // Criterion 4 in the shape that actually protects it: the gap review found
+  // was one missing form on verbs whose other forms were all present, and
+  // nothing was watching for that.
+  const listed = new Set(TRIGGERS.map((t) => t.word));
+  for (const [base, gerund, third] of [
+    ['spend', 'spending', 'spends'],
+    ['buy', 'buying', 'buys'],
+    ['pay', 'paying', 'pays'],
+    ['upgrade', 'upgrading', 'upgrades'],
+    ['delete', 'deleting', 'deletes'],
+    ['rotate', 'rotating', 'rotates'],
+  ]) {
+    for (const form of [base, gerund, third]) {
+      assert.ok(listed.has(form), `"${form}" is missing from TRIGGERS`);
+    }
+  }
+});
+
 // -------------------------------------------- the asks that must NOT fire
+
+test('"costs" fires on a price but not on "costs nothing"', () => {
+  // The word earns its place on "it costs $29 a month", and the same word is
+  // how an agent says an option is free.
+  assert.ok(isCostlyAsk('Running it hourly costs about $6 a month.'));
+  assert.equal(isCostlyAsk('Leaving it as it is costs nothing.'), false);
+});
 
 test('an ordinary ask is untouched', () => {
   // Criterion 3, and the whole value of the gate: one that fires on everything

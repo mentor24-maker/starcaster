@@ -123,7 +123,8 @@ the card and moves the status together so the two can never come apart:
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
 ```
 
-The body is four sections, and the check runs **before** anything is sent:
+The body is four sections plus a fifth that costly asks must carry, and the
+check runs **before** anything is sent:
 
 ```
 @@ASKED

@@ -67,7 +67,8 @@ the loops' reasoning arrived as walls of text in ClickUp's narrow right column.
 
 Handing a ticket to Dane is one command, not two: `status` refuses to set
 `Ready to launch` or `Needs your input` on its own and points at `ask`. The card
-body is four sections, checked before anything is sent:
+body is four sections plus a fifth that costly asks must carry, all checked
+before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented

@@ -55,7 +55,7 @@ const { costlyTriggers, describeTriggers } = require('./costlyAsk.js');
 
 /** The three required sections of the authored input, plus two optional ones.
  *  `@@EVIDENCE` is optional in general and REQUIRED when the ask costs money
- *  or cannot be undone — see requiredEvidenceProblems below. */
+ *  or cannot be undone — see evidenceProblems below. */
 const MARKERS = ['ASKED', 'WHEN', 'CONTEXT', 'NEEDED', 'EVIDENCE'];
 
 const CONTEXT_MIN_WORDS = 50;
@@ -198,22 +198,26 @@ function validateCard(card) {
 
 /**
  * A clock time in the register the operator reads — "8:04pm", "8:04 PM",
- * optionally dated ("2026-08-23 8:04pm", "8/23 8:04pm"). Returns the matched
- * text, or null when there is no timestamp at all.
+ * optionally dated ("2026-08-23 8:04pm", "8/23 8:04pm").
  *
  * Only the operator's own register counts. A bare ISO instant or a unix epoch
  * is a number he has to convert before he can tell whether the measurement is
  * from ten minutes ago or from before the outage, and that conversion is
  * exactly the step nobody performs (OPERATIONS SOP 13).
+ *
+ * The trailing look-ahead is not decoration. Without it `cron next run 10:15
+ * America/New_York` reads as "10:15 Am" and `9:30 ambient` as "9:30 am", so
+ * the freshness check passes on text that is not a run time at all.
  */
-const CLOCK = /((?:\d{4}-\d{2}-\d{2}\s+|\d{1,2}\/\d{1,2}\s+)?\d{1,2}:\d{2}\s*(?:am|pm))/i;
-function evidenceTimestamp(text) {
-  const found = CLOCK.exec(String(text || ''));
-  return found ? found[1].trim() : null;
-}
+const CLOCK = /((?:\d{4}-\d{2}-\d{2}\s+|\d{1,2}\/\d{1,2}\s+)?\d{1,2}:\d{2}\s*(?:am|pm))(?![A-Za-z0-9])/i;
 
-/** The fenced blocks inside a section, as arrays of their content lines. */
-function fencedBlocks(text) {
+/**
+ * Split a section into the prose OUTSIDE its fences and the blocks inside
+ * them. Both halves are needed and they mean different things: the fences hold
+ * what the machine said, the prose holds what the author said about it.
+ */
+function splitFences(text) {
+  const prose = [];
   const blocks = [];
   let open = null;
   for (const line of String(text || '').split('\n')) {
@@ -223,12 +227,38 @@ function fencedBlocks(text) {
       continue;
     }
     if (open !== null) open.push(line);
+    else prose.push(line);
   }
   // An unclosed fence still carried content; count what it holds rather than
   // discarding it, so a missing back-tick line reads as a formatting slip and
   // not as "you pasted no output".
   if (open !== null && open.length) blocks.push(open);
-  return blocks;
+  return { prose: prose.join('\n'), fenced: blocks.map((lines) => lines.join('\n')).join('\n'), blocks };
+}
+
+/** The fenced blocks inside a section, as arrays of their content lines. */
+function fencedBlocks(text) {
+  return splitFences(text).blocks;
+}
+
+/**
+ * When was this evidence measured? Read from the PROSE ONLY — never from
+ * inside a fenced block.
+ *
+ * WHY (review of this very gate, 2026-08-26). The first version took the first
+ * clock anywhere in the section, and the pasted output is part of the section.
+ * So an author who wrote "measured at 9:40pm" under a log containing
+ * `2026-08-20 3:12pm POST /chat -> 401` got a card headed *measured at
+ * 2026-08-20 3:12pm* — six days stale, asserted by the card itself. It fails
+ * the other way too: a recent-looking time inside an old log makes stale
+ * evidence read as fresh. Since the whole point of the heading is that a stale
+ * proof should be VISIBLE rather than implied, a heading dated by the log is
+ * worse than no heading — so the timestamp has to be the author's, in his own
+ * words, outside the paste.
+ */
+function evidenceTimestamp(text) {
+  const found = CLOCK.exec(splitFences(text).prose);
+  return found ? found[1].trim() : null;
 }
 
 /**
@@ -274,28 +304,51 @@ function evidenceProblems(card) {
   // From here the section exists, so its SHAPE is checked — for a costly ask
   // because it is owed, and for a volunteered one because half-evidence is
   // more misleading than none.
-  const blocks = fencedBlocks(evidence);
+  const { fenced, blocks } = splitFences(evidence);
   const filled = blocks.filter((lines) => lines.some((line) => line.trim()));
+  // Counted ACROSS the fences, not within one. The clearer layout puts the
+  // command in its own fence and the output in a second, and the first version
+  // of this rule told that author "you showed a command with no output" — which
+  // was false. A gate that misdiagnoses good input is one people route around,
+  // and then it protects nothing.
+  const pastedLines = filled.reduce(
+    (total, lines) => total + lines.filter((line) => line.trim()).length,
+    0,
+  );
   if (!filled.length) {
     problems.push(
       '@@EVIDENCE has no fenced block. Put the command and its output inside ``` fences:\n' +
       '  a fence is the only form ClickUp is known to keep verbatim, and verbatim is the\n' +
       '  whole point — a summary of the output is the judgment this gate exists to skip.',
     );
-  } else if (!filled.some((lines) => lines.filter((line) => line.trim()).length >= 2)) {
+  } else if (pastedLines < 2) {
     problems.push(
       '@@EVIDENCE shows a command with no output under it. Paste what it actually printed,\n' +
       '  not what it should print — the 2026-08-23 escalation was wrong precisely because\n' +
-      '  nobody re-ran the failing call before asking him to pay for the diagnosis.',
+      '  nobody re-ran the failing call before asking him to pay for the diagnosis.\n' +
+      '  One fence holding both, or one for the command and one for its output, both count.',
     );
   }
 
   if (!evidenceTimestamp(evidence)) {
-    problems.push(
-      '@@EVIDENCE carries no time it was run. Add it in his clock — "measured at 8:04pm",\n' +
-      '  dated if it was not today. Evidence gathered before a sixteen-hour outage is not\n' +
-      '  evidence about now, and a stale proof has to be visible rather than implied.',
-    );
+    if (CLOCK.test(fenced)) {
+      // The section HAS a clock, but it is the log's, not the author's — the
+      // exact confusion that would otherwise date the card by whatever the
+      // output happened to print. See evidenceTimestamp.
+      problems.push(
+        '@@EVIDENCE has a time in it, but only inside the pasted block — that is the LOG\'s\n' +
+        '  clock, not yours, and it is what the output happened to print rather than when you\n' +
+        '  ran it. A log line from last week would date this card as measured last week.\n' +
+        '  Say when YOU ran it, in prose outside the fences: "measured at 8:04pm".',
+      );
+    } else {
+      problems.push(
+        '@@EVIDENCE carries no time it was run. Add it in his clock — "measured at 8:04pm",\n' +
+        '  dated if it was not today, in prose outside the fenced block. Evidence gathered\n' +
+        '  before a sixteen-hour outage is not evidence about now, and a stale proof has to\n' +
+        '  be visible rather than implied.',
+      );
+    }
   }
   return problems;
 }
@@ -401,7 +454,9 @@ function buildCard(text) {
 
 module.exports = {
   MARKERS,
+  CLOCK,
   evidenceTimestamp,
+  splitFences,
   fencedBlocks,
   evidenceProblems,
   CONTEXT_MIN_WORDS,
