@@ -604,6 +604,11 @@ Every failure names the ticket, says what the newest verdict actually is, and
 states the one thing that has to happen next. A red X that teaches nothing
 teaches people to route around it.
 
+A check is computed once per commit, so a verdict posted *after* the last push
+does not reach the run that already happened. The merge step re-runs a gate in
+that state rather than merging on it — "A stale gate is re-run, never merged
+on", below.
+
 **Lane A is not exempt.** Auto-merging a docs- or test-only change removes the
 *operator's word*, never the review (vault `doctrine/AUTO-MERGE-LANES.md`).
 
@@ -682,13 +687,67 @@ mode from "is the token present?" would have exactly that hole.
    currently answers CANNOT TELL on every PR and, being advisory, exits 0.
    Adding it is Settings → Secrets and variables → Actions → New repository
    secret.
-2. **Something must re-run the gate after a review lands.** A status check is
-   computed once per commit. loop-review posts its PASS *after* the last push,
-   so the check that already ran saw no verdict and will not re-run on its own.
-   Today the answer is by hand — `gh run rerun <run-id>` — which is fine while
-   the gate is advisory and **not** fine once it is required. Teaching the merge
-   step to re-run a stale gate before merging is the follow-up that has to land
-   first.
+2. **Something must re-run the gate after a review lands.** Done as of
+   2026-08-26 — see "A stale gate is re-run, never merged on" below. It was
+   the follow-up that had to land before the box could be ticked.
+
+### A stale gate is re-run, never merged on (2026-08-26, task 86bbmk7pv)
+
+A GitHub status check is computed **once per commit**. This gate reads the
+ticket for a review PASS — and loop-review posts that PASS *after* the last
+push, by definition. So the run that already happened saw no verdict, recorded
+a fail, and **will not re-run on its own**. Nothing later changes its mind.
+
+While the gate is advisory that is harmless: it exits 0 either way. The moment
+the branch-protection box is ticked it is a **deadlock** — every correctly
+reviewed PR carries a stale red check that only a new commit can clear, and
+pushing a commit to clear it invalidates the review that just passed.
+
+So the merge step (`bus-relay`'s merge path) asks one more question before it
+merges: **is this check answering a question that has since changed?**
+
+| What it finds | What it does |
+|---|---|
+| The gate run started **after** the newest verdict | nothing — merges as before, no CI spent |
+| The gate run started **before** the newest verdict | **re-runs it** (`gh run rerun`) and waits for the result |
+| The re-run comes back red | **refuses** the merge, naming GitHub's own reason |
+| The re-run cannot be started, or its result is never seen | **refuses** the merge — cannot-see is not a pass |
+| The PR carries **no** gate run at all | nothing to be out of date; see below |
+| A timestamp on either side is unreadable | treated as **stale**, so it re-runs |
+
+**It compares START times, not completion times.** A verdict posted before the
+run started was certainly visible to it; one posted after the start may or may
+not have been read before the job fetched the ticket. That ambiguity resolves
+toward "stale", because being wrong costs one CI minute in this direction and a
+merge on an unreviewed verdict in the other.
+
+**A catch-up does not need any of this.** `gh pr update-branch` pushes a commit,
+which fires `synchronize` and re-runs the gate on its own. The staleness path is
+for the case where nothing was pushed, so nothing re-ran.
+
+**No gate run at all is deliberately not a refusal.** There is no answer to be
+out of date, and refusing would strand every PR opened before the workflow
+existed — a deadlock introduced by the fix for a deadlock. Both actors that
+could merge such a PR are already covered: GitHub refuses one itself once the
+check is required, and the relay has independently checked the ticket's verdict
+in ClickUp before it ever reaches this step.
+
+**The gate is never weakened to work around its own staleness.** "Stale" only
+ever means *run it again*; it never means *pass*.
+
+The decision is pure and lives beside the gate
+(`scripts/builder/reviewGate.js` — `reviewGateStaleness`, `afterRerunDecision`),
+so every path is tested without touching GitHub, including the ones that are
+awkward to reproduce live. The plumbing that carries it out is in
+`scripts/clickup_direct.mjs`, and a test asserts it is still wired in — the
+first version of that assertion could not fail, because deleting the real check
+left an identical call in the wait loop behind it.
+
+While it waits for the re-run it keeps waiting on **the re-run**, not merely on
+"the checks look settled": a re-run takes a few seconds to appear, and until it
+does GitHub still reports the old, green, stale answer. Polling on the ordinary
+check gate alone would merge on it in the first poll — the same bug wearing a
+fresh coat.
 
 ## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
 
