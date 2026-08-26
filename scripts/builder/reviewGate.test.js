@@ -503,18 +503,28 @@ test('no commits at all is not a date, so the gate answers CANNOT TELL', () => {
 
 test('documenting the waiver syntax does not waive the gate', () => {
   // The real PR #433 body shape, trimmed to the parts that matter.
+  //
+  // Every mention here carries a REALISTIC reason on purpose. The first
+  // version of this fixture led with `<reason>`, and because findWaiver only
+  // ever read the FIRST match, the placeholder guard answered it and this
+  // test passed with the anchors removed — a break-test that could not break,
+  // on the one bug that actually escaped (found in review, 2026-08-25). The
+  // only thing standing between this body and a waiver is now the anchoring.
   const docBody = [
     'https://app.clickup.com/t/86bbmfbkv',
     '',
+    'There is an escape hatch: writing `[gate-waived: production is down]`',
+    'in the body lets it through.',
+    '',
     '| Situation | Verdict |',
     '|---|---|',
-    '| `[gate-waived: <reason>]` in the PR body | **pass**, announced on the bus |',
-    '',
-    'There is an escape hatch: writing `[gate-waived: reason]` lets it through.',
+    '| `[gate-waived: hotfix, site is down]` in the PR body | **pass**, announced |',
   ].join('\n');
 
-  // BREAK-TEST: drop the ^...$ anchors from WAIVER_RE and this fails — which
-  // is exactly what shipped for one CI run, and the gate waived itself.
+  // BREAK-TEST: drop the ^...$ anchors from WAIVER_RE and this fails —
+  // observed failing on both assertions below, with 'production is down'
+  // returned from a sentence. That is exactly what shipped for one CI run,
+  // and the gate waived itself.
   assert.equal(gate.findWaiver(docBody), '');
 
   const decision = gate.reviewGateDecision({
@@ -524,6 +534,63 @@ test('documenting the waiver syntax does not waive the gate', () => {
   });
   assert.equal(decision.verdict, gate.FAIL);
   assert.match(decision.reason, /no review verdict/);
+});
+
+// ---------------------------------------------------------------------------
+// The same weakness, one step further out — found in review, 2026-08-25.
+//
+// The line anchor stops a mention inside a sentence, but not a realistic
+// example sitting ALONE inside a code fence, which is exactly how this repo
+// writes down its own rules. The next docs page with a plausible reason in it
+// would have waived the gate silently.
+// ---------------------------------------------------------------------------
+
+test('a realistic waiver shown as a code example does not waive the gate', () => {
+  const fenced = [
+    'https://app.clickup.com/t/86bbmfbkv',
+    '',
+    'To override, put this on a line of its own:',
+    '',
+    '```',
+    '[gate-waived: production is down]',
+    '```',
+    '',
+    'and it is announced on the bus.',
+  ].join('\n');
+
+  // BREAK-TEST: delete the CODE_FENCE_RE branch in findWaiver and this fails
+  // — observed returning 'production is down', i.e. a docs page describing
+  // the override would have used it.
+  assert.equal(gate.findWaiver(fenced), '');
+  assert.equal(
+    gate.reviewGateDecision({ prBody: fenced, headCommittedAt: NOW, comments: [] }).verdict,
+    gate.FAIL,
+  );
+
+  // Tildes are the other fence Markdown accepts, and a four-space indent is
+  // the third way to show code.
+  assert.equal(gate.findWaiver('~~~\n[gate-waived: production is down]\n~~~'), '');
+  // BREAK-TEST: delete the INDENTED_CODE_RE branch and this line fails.
+  assert.equal(gate.findWaiver('Example:\n\n    [gate-waived: production is down]\n'), '');
+
+  // A single backtick pair is not a fence, but inline code is not a line of
+  // its own either — the anchor already refuses it.
+  assert.equal(gate.findWaiver('`[gate-waived: production is down]`'), '');
+});
+
+test('an unclosed fence hides the rest of the body — losing a waiver, never granting one', () => {
+  const body = 'https://app.clickup.com/t/86bbmfbkv\n\n```\nsome output\n\n[gate-waived: real reason]';
+  // Fail-closed by design: the gate goes on to check the ticket rather than
+  // opening. BREAK-TEST: make the fence skip fail OPEN (scan fenced lines
+  // when the fence never closes) and this returns 'real reason'.
+  assert.equal(gate.findWaiver(body), '');
+});
+
+test('a placeholder does not stop the search — the next line is still read', () => {
+  // The mechanism behind the un-failable break-test above: rejecting a
+  // placeholder must skip that ONE line, not abandon the body.
+  const body = '[gate-waived: <reason>]\n[gate-waived: production is down]';
+  assert.equal(gate.findWaiver(body), 'production is down');
 });
 
 test('a waiver alone on its line still works, in the shapes people actually write', () => {

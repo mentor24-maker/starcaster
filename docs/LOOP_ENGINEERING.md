@@ -632,6 +632,18 @@ bypassed the gate while looking entirely ordinary. Mentioning a waiver inside a
 sentence or a table cell is now only mentioning it, exactly as `mergeOnComment`
 anchors its verdict regexes so that prose about a rule is not the rule.
 
+**And a waiver shown as CODE is an example, not an instruction.** The anchor
+alone still let a realistic waiver through if it sat on its own line inside a
+code fence — which is exactly how this repo writes down its own rules, so the
+next docs page with a plausible reason in it would have reopened the same hole
+one step out (found in review, 2026-08-25). Both ways Markdown says "this is
+an example" are skipped: a fenced block (triple backtick or triple tilde) and a
+four-space-indented block. Both skips fail **closed**: an unclosed
+fence hides the rest of the body, so a real waiver after it is ignored and the
+gate goes on to check the ticket. Losing a waiver costs one edit; granting one
+costs a merge. That is why the table above and every example in this document
+can quote the syntax safely.
+
 Using one **posts to the party line** with the reason, the PR and who did it.
 An override nobody can see is not an override, it is a hole, so the price of
 reaching for it is visibility. If the bus post fails the gate still passes but

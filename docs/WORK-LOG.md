@@ -32,6 +32,18 @@ needs a password stored with GitHub so it can read your ClickUp tickets, and
 this project has none stored yet; that one is also yours to add. Both steps are
 written out in the project notes, and neither was guessed at or faked.
 
+The escape hatch had a flaw of its own, and it showed up immediately: this very
+pull request has to *explain* the escape hatch, and the check read its own
+explanation as a real override and let itself straight through. That was fixed
+by requiring the override to sit alone on its own line — a mention inside a
+sentence is talk about the rule, not the rule. The review then found the same
+flaw one step further out: an override written out as a code example, the way
+this project documents everything, still sat alone on a line and still counted.
+So examples shown as code are now skipped entirely, which is why the notes for
+this feature can quote the syntax as often as they like without arming it. When
+in doubt the check now loses an override rather than granting one — a lost
+override costs one edit, a granted one costs a merge.
+
 One thing was caught before it could cause trouble. The obvious version of
 "has this been reviewed recently enough?" compares the review against the newest
 change on the branch. But this project keeps branches up to date by pulling in

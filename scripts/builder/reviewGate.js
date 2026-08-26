@@ -59,15 +59,35 @@ const CLICKUP_LINK_RE = /https?:\/\/app\.clickup\.com\/t\/(?:\d+\/)?([a-z0-9]+)/
  *
  * So a waiver must sit ALONE on its line, exactly as mergeOnComment anchors
  * its verdict regexes for the same reason: a comment that merely DISCUSSES
- * the words is prose, not an instruction. Mentioning `[gate-waived: ...]`
- * inside a sentence, a table cell or a code fence is now mentioning it.
+ * the words is prose, not an instruction. This anchor covers the sentence and
+ * the table cell; the code-block skip in `findWaiver` below covers the other
+ * shape a written-down example takes.
  *
  * Deliberately requires a REASON — `[gate-waived:]` does not match — because
  * the whole value of an override is that it is legible afterwards. An
  * override nobody can see is not an override, it is a hole, which is why
  * using one also posts to the bus (see `waiverAnnouncement`).
  */
-const WAIVER_RE = /^[ \t>*-]*\[gate-waived:\s*([^\]\n]+?)\s*\][ \t]*$/im;
+const WAIVER_RE = /^[ \t>*-]*\[gate-waived:\s*([^\]\n]+?)\s*\][ \t]*$/i;
+
+/**
+ * The two ways Markdown says "this is an example, not an instruction":
+ * a fenced block (``` or ~~~) and an indented block (four spaces, or a tab).
+ *
+ * Scanning line by line and skipping both is the rest of the fix above, and
+ * it closes the same hole one step further out (found in review, 2026-08-25).
+ * The line anchor alone stops a mention inside a SENTENCE, but this repo
+ * documents its own rules with realistic, runnable-looking examples — and an
+ * example sitting alone inside a code fence has exactly the shape of a real
+ * waiver. The next docs page to write a plausible reason would have waived
+ * the gate silently, which is the original bug wearing a different hat.
+ *
+ * Both skips fail CLOSED: an unbalanced fence makes the remainder of the body
+ * read as code, so a waiver after it is ignored and the gate still checks the
+ * ticket. Losing a waiver costs one edit; granting one costs a merge.
+ */
+const CODE_FENCE_RE = /^[ \t]*(?:`{3,}|~{3,})/;
+const INDENTED_CODE_RE = /^(?: {4,}|\t)/;
 
 /**
  * A reason that is obviously a placeholder copied out of the documentation,
@@ -83,12 +103,32 @@ function findTicketId(prBody) {
   return m ? m[1] : '';
 }
 
-/** The waiver reason a PR body carries, or '' if it carries none. */
+/**
+ * The waiver reason a PR body carries, or '' if it carries none.
+ *
+ * Scans EVERY candidate line rather than only the first. That is not a
+ * detail: the first version took `WAIVER_RE.exec(body)` once, so a body whose
+ * first match was a placeholder stopped the search there — and the regression
+ * test named after the self-waiver incident could not fail, because its
+ * fixture's first match was `<reason>` and a different guard caught it
+ * (found in review, 2026-08-25). Rejecting a placeholder now skips that ONE
+ * line and keeps looking, so each rule is pinned by its own behaviour.
+ */
 function findWaiver(prBody) {
-  const m = WAIVER_RE.exec(String(prBody || ''));
-  if (!m) return '';
-  const reason = m[1].trim();
-  return PLACEHOLDER_REASON_RE.test(reason) ? '' : reason;
+  let inFence = false;
+  for (const line of String(prBody || '').split(/\r?\n/)) {
+    if (CODE_FENCE_RE.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence || INDENTED_CODE_RE.test(line)) continue;
+    const m = WAIVER_RE.exec(line);
+    if (!m) continue;
+    const reason = m[1].trim();
+    if (PLACEHOLDER_REASON_RE.test(reason)) continue;
+    return reason;
+  }
+  return '';
 }
 
 /** ClickUp dates are epoch-millisecond STRINGS; git dates are ISO. */
