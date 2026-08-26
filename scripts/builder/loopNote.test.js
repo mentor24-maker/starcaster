@@ -47,5 +47,27 @@ test('the heartbeat handles an empty queue honestly', () => {
 
 test('KNOWN_TRANSITIONS lists exactly the composable transitions', () => {
   assert.deepEqual(KNOWN_TRANSITIONS.sort(),
-    ['claimed', 'escalated', 'merged', 'pr-open', 'review-started', 'sent-back', 'verified'].sort());
+    ['auto-merge-armed', 'auto-merge-cancelled', 'claimed', 'escalated', 'merged',
+      'pr-open', 'review-started', 'sent-back', 'verified'].sort());
+});
+
+test('the armed note says when, in his own clock, and how to stop it', () => {
+  // Lane A (task 86bbkw2au). The ticket stays in Ready to launch either way,
+  // so this note is the ONLY thing that tells "waiting on your word" apart
+  // from "merging shortly unless you object" in the queue view.
+  assert.equal(loopNote('auto-merge-armed', { deadline: '9:15pm' }),
+    '🤖 auto-merge at 9:15pm unless you say stop');
+});
+
+test('an armed note without a deadline is refused, not rendered', () => {
+  // "auto-merge at undefined unless you say stop" is worse than no note at
+  // all: it tells him something is coming and refuses to say when.
+  assert.throws(() => loopNote('auto-merge-armed', {}), /needs a deadline/);
+  assert.throws(() => loopNote('auto-merge-armed', { at: '9:15pm' }), /needs a deadline/,
+    'the send time is not the deadline, and must not be silently used as one');
+});
+
+test('the cancelled note puts it back in his hands', () => {
+  assert.equal(loopNote('auto-merge-cancelled', { at: '8:20pm' }),
+    '✋ auto-merge stopped — back to waiting on your word (8:20pm)');
 });

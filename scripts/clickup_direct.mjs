@@ -63,6 +63,7 @@ import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
+import autoMergeLane from './builder/autoMergeLane.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled,
@@ -76,6 +77,15 @@ const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
   readyToLaunchGate, isReadyToLaunch,
 } = loopTrail;
+// Lane A (task 86bbkw2au). Every DECISION is in the module and tested there;
+// what lives out here is the network and the file, nothing else.
+const {
+  laneADecision, laneAEligibility, laneGate, killSwitchState, switchCommand,
+  rateCapState, selfDisableState, announcementNotice, cancellationNotice,
+  digestDue, digestBody, WINDOW_MS, DIGEST_WINDOW_MS,
+  asLedger, ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable,
+  ledgerAfterDigest, switchSignalsFromLedger, mergesSince,
+} = autoMergeLane;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 const { resolveTaskRepo } = taskRepo;
 
@@ -225,8 +235,10 @@ function usage(code = 2) {
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
-  console.error('  loop-note --task <id> --transition claimed|pr-open|review-started|verified|sent-back|merged|escalated [--pr N]');
+  console.error('  loop-note --task <id> --transition claimed|pr-open|review-started|verified|sent-back|merged|escalated|auto-merge-armed|auto-merge-cancelled [--pr N] [--deadline "9:15pm"]');
   console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent.');
+  console.error('                                             auto-merge-armed needs --deadline: it is the whole content of the note, and');
+  console.error('                                             "merging at undefined" tells him something is coming and refuses to say when');
   console.error('                                             review-started is loop-review\'s VISIBLE CLAIM — stamp it before verifying, and');
   console.error('                                             stand down if `queue`/`get` already shows one that is not stale');
   console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
@@ -286,6 +298,14 @@ function usage(code = 2) {
   console.error('                                             --only-task <id> confines the whole pass to one ticket.');
   console.error('                                             ONE machine relays (lib/nodeRoles.js); on any other it');
   console.error('                                             says so and exits 0. npm run node:whoami names this one');
+  console.error('                                             LANE A: a Ready-to-launch ticket whose PR touches nothing but');
+  console.error(`                                             tests and documentation is announced, left ${autoMergeLane.WINDOW_MS / 3600000} hour, then`);
+  console.error('                                             merged unless he comments. --no-merge turns it off with the');
+  console.error(`                                             rest; so does "${autoMergeLane.SWITCH_STOP}" on the bus or any`);
+  console.error(`                                             ticket ("${autoMergeLane.SWITCH_RESUME}" to undo). Cap`);
+  console.error(`                                             ${autoMergeLane.CAP_PER_HOUR}/hour and ${autoMergeLane.CAP_PER_DAY}/day; one digest a day, "none" included.`);
+  console.error('  auto-merge-status                          what Lane A would do right now, reading only — the switch,');
+  console.error('                                             the cap, the self-disable flag and the recent auto-merges');
   console.error('  task-open --task <id>                      exit 0 if the task is still open (status.type), 1 if closed/done');
   console.error('                                             or gone — used by `npm run thread`/`tidy` (Task-closes-thread)');
   process.exit(code);
@@ -519,8 +539,21 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget }) {
   }
 }
 
-async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked, busSkipped, inPassBudget }) {
-  const decision = mergeDecision({
+async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked, busSkipped, inPassBudget, lane }) {
+  // ONE GATE, ONE MERGE COMMAND, ONE Live TRANSITION (task 86bbkw2au). Lane A
+  // replaces the operator's WORD and nothing else, so it arrives here as a
+  // decision of the same shape and takes the identical path afterwards:
+  // githubGate, the catch-up, the in-pass CI wait, `gh pr merge --squash`.
+  // A second merge implementation would be a second set of preconditions to
+  // keep in step, and the one that drifted would be the one nobody was
+  // watching.
+  //
+  // The one thing a lane does NOT reuse is the refusal WORDING. Every refusal
+  // notice promises "your approval is still standing", which is true of a word
+  // he said and meaningless about a window that expired — so a lane's refusals
+  // and conflicts come back as `lane-cancel` and the caller announces them in
+  // the lane's own terms.
+  const decision = lane ? lane.decision : mergeDecision({
     status: task.status?.status,
     comments,
     operatorId: OPERATOR_ID,
@@ -543,6 +576,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   const alreadySaid = (why) => decision.priorRefusal === why;
 
   const refuse = async (why, plainEnglish) => {
+    if (lane) return { outcome: 'lane-cancel', reason: why };
     if (alreadySaid(why)) {
       console.error(`  MERGE REFUSED (unchanged, nothing posted) on ${label}: ${why}`);
       return { outcome: 'refused-quiet', reason: why };
@@ -663,6 +697,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
         : null,
     });
     const handOffReason = notice.marker.replace(/^refused:\s*/, '');
+    if (lane) return { outcome: 'lane-cancel', reason: gate.reason };
     if (alreadySaid(handOffReason)) {
       console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
       return { outcome: 'handed-off-quiet', reason: gate.reason };
@@ -705,7 +740,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   // Marker first, now that the irreversible thing has happened: if the next
   // two writes fail, the worst case is a ticket that needs a hand, not a
   // second merge attempt against an already-merged PR.
-  const mergedRecord = mergedNotice({ commentId: decision.commentId, pr, mergedAt });
+  const mergedRecord = mergedNotice({
+    commentId: decision.commentId,
+    pr,
+    mergedAt,
+    lane: lane ? lane.name : undefined,
+    files: lane ? lane.files : undefined,
+  });
   await markMergeHandled(decision.commentId, task, unchecked, mergedRecord.marker);
 
   const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: mergedRecord.body });
@@ -728,10 +769,163 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     }
   }
 
-  const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGED on Dane's say-so: ${label} — PR #${pr.number} squash-merged into main, ticket set to Live. main auto-deploys.\n\n${pr.url}`);
+  const how = lane
+    ? `AUTO-MERGED (Lane ${lane.name}, one-hour window elapsed with no objection)`
+    : "MERGED on Dane's say-so";
+  const bus = await postToBus(channel, `[CC-starcaster bus-relay] ${how}: ${label} — PR #${pr.number} squash-merged into main, ticket set to Live. main auto-deploys.\n\n${pr.url}`);
   if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: PR #${pr.number} merged and the ticket moved and recorded, but the bus post failed (${bus.why})` });
 
-  return { outcome: 'merged', pr: pr.number };
+  return { outcome: 'merged', pr: pr.number, url: pr.url, lane: lane ? lane.name : null, files: lane ? lane.files : null };
+}
+
+// ── Lane A plumbing (task 86bbkw2au) ─────────────────────────────────────────
+//
+// Everything below is network and file IO. Not one decision is made here: the
+// rules live in scripts/builder/autoMergeLane.js, where they can be
+// break-tested without a ClickUp, a GitHub or a clock.
+
+/**
+ * Where the ledger lives. `.git/` rather than a folder in the working tree,
+ * for one reason: it is the only place in a repo that cannot be committed by
+ * accident, and a record of what a machine merged on its own is not something
+ * to discover in a `git status` six weeks later. `--git-common-dir` answers
+ * from inside a linked worktree too, so the relay finds the same file wherever
+ * it is started (vault doctrine/NODES.md P1 — derive the path, never write it
+ * down).
+ */
+function ledgerPath() {
+  const out = spawnSync('git', ['rev-parse', '--git-common-dir'], { encoding: 'utf8' });
+  const dir = out.status === 0 ? String(out.stdout || '').trim() : '';
+  if (!dir) return null;
+  return `${dir}/auto-merge-ledger.json`;
+}
+
+/**
+ * Read the ledger. A MISSING file is an empty ledger — that is a first run,
+ * not a fault. An UNREADABLE or unparseable one is a different thing and must
+ * not be waved through: the rate cap and the self-disable flag both live in
+ * here, so "I could not read it" has to mean what an unreadable kill switch
+ * means, which is OFF.
+ */
+function readLedger() {
+  const file = ledgerPath();
+  if (!file) return { ok: false, ledger: asLedger(null), file: null, why: 'could not locate the git directory, so the auto-merge ledger could not be read' };
+  if (!existsSync(file)) return { ok: true, ledger: asLedger(null), file, fresh: true };
+  try {
+    return { ok: true, ledger: asLedger(JSON.parse(readFileSync(file, 'utf8'))), file };
+  } catch (e) {
+    return { ok: false, ledger: asLedger(null), file, why: `the auto-merge ledger could not be read (${e.message})` };
+  }
+}
+
+function writeLedger(ledger, file) {
+  if (!file) return { ok: false, why: 'no ledger path' };
+  try {
+    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, why: e.message };
+  }
+}
+
+/**
+ * The kill switch's other half: the party line. A read failure here is NOT a
+ * quiet zero — it means we cannot know whether he said stop, and the entire
+ * point of standing condition 1 is that those two are not the same thing.
+ */
+async function readBusSwitchSignals(channel) {
+  const out = await call('GET', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`);
+  if (!out.res.ok) {
+    return { readable: false, signals: [], why: `the party line could not be read (HTTP ${out.res.status})` };
+  }
+  const messages = out.json?.data || out.json?.messages || [];
+  const signals = [];
+  for (const m of messages) {
+    // Only HIS words. An agent post quoting the phrase is a machine talking to
+    // itself, and a bus full of agents discussing the kill switch would hold
+    // it down permanently.
+    if (Number(m.user_id ?? m.userId ?? m.user?.id) !== OPERATOR_ID) continue;
+    const kind = switchCommand(m.content ?? m.text_content ?? m.comment_text);
+    if (kind) signals.push({ kind, at: Number(new Date(m.date ?? m.created_at ?? 0)) || 0, where: 'on the party line' });
+  }
+  return { readable: true, signals };
+}
+
+/** Is main's most recent build red? The second self-disable trigger (condition 4). */
+function mainBuildIsRed(repo) {
+  const out = gh(['run', 'list', '--repo', repo, '--branch', 'main', '--limit', '1', '--json', 'conclusion,status,createdAt']);
+  if (!out.ok) return { known: false, red: false, why: 'could not read the build history for main' };
+  try {
+    const runs = JSON.parse(out.stdout);
+    const last = runs[0];
+    if (!last) return { known: true, red: false };
+    // A run still in flight is not a red run. Reading "not yet green" as red
+    // would disable the lane every time CI is merely busy.
+    if (String(last.status || '').toUpperCase() !== 'COMPLETED') return { known: true, red: false };
+    const c = String(last.conclusion || '').toUpperCase();
+    return { known: true, red: !['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(c), at: Number(new Date(last.createdAt)) || 0 };
+  } catch {
+    return { known: false, red: false, why: 'the build history for main was unparseable' };
+  }
+}
+
+/** The PR's changed files — the whole of criterion 1's evidence. */
+function prChangedFiles(prNumber, repo) {
+  const out = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'files']);
+  if (!out.ok) return { ok: false, files: [], why: out.stderr.slice(0, 200) };
+  try {
+    const json = JSON.parse(out.stdout);
+    return { ok: true, files: (json.files || []).map((f) => f.path) };
+  } catch {
+    return { ok: false, files: [], why: 'gh returned unparseable JSON for the file list' };
+  }
+}
+
+/**
+ * Post a Lane A notice on the ticket and READ IT BACK, returning ClickUp's own
+ * timestamp for it.
+ *
+ * THE READ-BACK IS THE FEATURE, not diligence theatre. The one-hour clock runs
+ * from the confirmed post time, never from local time at the moment of
+ * sending: an announcement that failed to post is not a window, and a clock
+ * started on the attempt would merge something nobody was ever told about.
+ */
+async function postLaneNotice(taskId, body) {
+  const out = await call('POST', `/api/v2/task/${taskId}/comment`, { comment_text: body });
+  if (!out.res.ok) return { ok: false, why: `the notice did not post (HTTP ${out.res.status}), so no clock was started` };
+  const back = await call('GET', `/api/v2/task/${taskId}/comment`);
+  if (!back.res.ok) return { ok: false, why: 'the notice posted but could not be read back, so no clock was started' };
+  const id = String(out.json?.id ?? '');
+  const found = (back.json.comments || []).find((c) => String(c.id) === id)
+    || (back.json.comments || []).find((c) => String(c.comment_text || '').includes(body.slice(0, 60)));
+  if (!found) return { ok: false, why: 'the notice did not read back, so no clock was started' };
+  return { ok: true, at: Number(found.date) || 0, commentId: String(found.id) };
+}
+
+/** hh:mmam with the zone, read from this machine (OPERATIONS SOP 13). */
+function clockAt(ms) {
+  const d = new Date(Number(ms));
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '');
+  const zone = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
+    .formatToParts(d).find((x) => x.type === 'timeZoneName')?.value;
+  return zone ? `${time} ${zone}` : time;
+}
+
+/**
+ * Stamp the Loop note without exiting the process. `stampLoopNote` is a CLI
+ * command and calls process.exit on failure, which is right for a one-shot and
+ * catastrophic inside a pass that still has tickets to get through.
+ */
+async function stampLoopNoteSoftly(taskId, text, unchecked) {
+  const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
+  const field = before.res.ok && (before.json.custom_fields || []).find(
+    (f) => String(f.name || '').trim().toLowerCase() === 'loop note');
+  if (!field) {
+    unchecked.push(`${taskId}: could not stamp the Loop note (the field was not found) — the queue will not show the auto-merge state`);
+    return;
+  }
+  const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
+  if (!out.res.ok) unchecked.push(`${taskId}: the Loop note write failed — the queue will not show the auto-merge state`);
 }
 
 /**
@@ -1655,6 +1849,17 @@ if (cmd === 'whoami') {
   // too: a second comment on the same ticket inherits the first receipt's
   // verdict, so an unverified receipt never hands anything back by proxy.
   const receipted = new Map();
+  // Lane A (task 86bbkw2au). Two things are gathered while the pass is already
+  // reading every open ticket, so the lane costs no extra ClickUp requests
+  // for either: the kill switch as he may have set it on a ticket, and the
+  // Ready-to-launch tickets that are candidates for the lane.
+  //
+  // The lane itself runs AFTER this loop, deliberately. Standing condition 4
+  // disables it if the pass "could not fully verify" anything, and `unchecked`
+  // is not final until every ticket has been through — so a lane that ran
+  // inline would be judging a half-finished account of its own reliability.
+  const laneSwitchSignals = [];
+  const laneCandidates = [];
   let lastRes = null;
 
   for (const watch of watches) {
@@ -1670,6 +1875,14 @@ if (cmd === 'whoami') {
       if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
       const fromOperator = (commentsOut.json.comments || [])
         .filter((c) => Number(c.user?.id) === OPERATOR_ID);
+
+      // The kill switch, as he may have set it on a ticket rather than on the
+      // party line (standing condition 1: "on the bus or any Loop Queue
+      // ticket"). Free — these comments are already in hand.
+      for (const c of fromOperator) {
+        const kind = switchCommand(c.comment_text);
+        if (kind) laneSwitchSignals.push({ kind, at: Number(c.date) || 0, where: `on task ${t.id}` });
+      }
 
       // Comments relayed on THIS run, for THIS task. This is the handback
       // trigger: only a comment that was actually DELIVERED counts, so a
@@ -1775,6 +1988,13 @@ if (cmd === 'whoami') {
         // handles — skip the handback check rather than acting on a status
         // this pass itself just changed.
         if (m.outcome === 'merged') continue;
+
+        // Still Ready to launch after his own word was considered: a Lane A
+        // candidate. Collected rather than acted on here — see the note beside
+        // `laneCandidates` for why the lane runs after this loop.
+        if (isReadyToLaunch(t.status?.status)) {
+          laneCandidates.push({ task: t, comments: commentsOut.json.comments || [] });
+        }
       }
 
       // Comment-driven handback (task 86bbh9g7k): a fresh answer from the
@@ -1805,10 +2025,226 @@ if (cmd === 'whoami') {
     }
   }
 
+  // ── Lane A: announce, wait one hour, merge ─────────────────────────────────
+  //
+  // Canon: vault doctrine/AUTO-MERGE-LANES.md. Lane A replaces the operator's
+  // WORD and nothing else — a review PASS, an open PR, green checks and a
+  // clean merge are all still required, and are still checked by the same
+  // githubGate this pass uses for his own authorizations.
+  const lane = { announced: 0, merged: 0, cancelled: 0, waiting: 0, ineligible: 0, halted: '' };
+  if (mergingAllowed) {
+    const now = Date.now();
+    const led = readLedger();
+    let ledger = led.ledger;
+
+    // Every source the switch can be set from. `readable` is the fail-safe:
+    // if the party line or the ledger could not be read, we cannot know
+    // whether he said stop, and standing condition 1 says an unreadable
+    // switch is OFF — not "assume fine".
+    const busSw = await readBusSwitchSignals(channel);
+    const readable = busSw.readable && led.ok;
+    if (!busSw.readable) busSkipped.push(`the kill switch could not be read from the party line (${busSw.why}) — auto-merge is OFF this pass`);
+    if (!led.ok) unchecked.push(led.why);
+
+    const liveSignals = [...busSw.signals, ...laneSwitchSignals];
+    // Remember a stop the moment it is seen. A pass only reads OPEN tickets,
+    // so a "stop auto-merging" said on a ticket that later goes Live would
+    // vanish from view and the lane would quietly switch itself back on —
+    // the one direction a fail-safe must never fail in.
+    const newestLive = liveSignals.slice().sort((a, b) => b.at - a.at)[0];
+    if (newestLive) ledger = ledgerAfterSwitch(ledger, newestLive);
+
+    const killSwitch = killSwitchState({
+      signals: [...liveSignals, ...switchSignalsFromLedger(ledger)],
+      readable,
+    });
+
+    // Condition 4, trigger two: main going red after an auto-merge. Only
+    // asked when there IS a previous auto-merge to be "after" — a red main
+    // that predates the lane is not the lane's evidence about itself.
+    const lastMerge = ledger.merges[ledger.merges.length - 1];
+    let mainRed = false;
+    if (lastMerge && lastMerge.repo && !ledger.disabled) {
+      const build = mainBuildIsRed(lastMerge.repo);
+      if (!build.known) unchecked.push(`${build.why} — auto-merge cannot confirm main is healthy`);
+      else if (build.red && Number(build.at) >= Number(lastMerge.at)) mainRed = true;
+    }
+
+    const selfDisable = selfDisableState({ unchecked, mainBuildRed: mainRed, persisted: ledger.disabled });
+    if (selfDisable.disabled && selfDisable.fresh) {
+      ledger = ledgerAfterDisable(ledger, selfDisable.why, now);
+      await postToBus(channel, `[CC-starcaster bus-relay] AUTO-MERGE DISABLED ITSELF: ${selfDisable.why}. No pull request will be auto-merged until a human says "resume auto-merging". Merges on your own word are unaffected.`);
+    }
+
+    const gate = laneGate({
+      killSwitch,
+      selfDisable,
+      rateCap: rateCapState(ledger.merges, now),
+    });
+
+    if (!gate.allowed) {
+      lane.halted = gate.why;
+      console.error(`  Lane A is not running this pass: ${gate.why}`);
+    } else {
+      for (const cand of laneCandidates) {
+        const t = cand.task;
+        const label = `"${t.name}" (${t.id})`;
+
+        // Re-checked per ticket, not once per pass: three merges into a pass
+        // the hourly cap is spent, and a cap read before the first one would
+        // let the fourth through.
+        const cap = rateCapState(ledger.merges, Date.now());
+        if (!cap.allowed) { lane.halted = cap.why; console.error(`  Lane A stopping: ${cap.why}`); break; }
+
+        let decision = laneADecision({
+          status: t.status?.status,
+          comments: cand.comments,
+          operatorId: OPERATOR_ID,
+          now: Date.now(),
+        });
+
+        // The file list is a network call, so the module asks for it rather
+        // than reaching for it — that is what keeps every rule in there
+        // break-testable without a GitHub.
+        if (decision.act === 'need-files') {
+          const repo = `${decision.pr.owner}/${decision.pr.repo}`;
+          const got = prChangedFiles(decision.pr.number, repo);
+          if (!got.ok) {
+            unchecked.push(`${t.id}: could not read PR #${decision.pr.number}'s changed files (${got.why}) — Lane A did not judge it`);
+            continue;
+          }
+          decision = laneADecision({
+            status: t.status?.status,
+            comments: cand.comments,
+            operatorId: OPERATOR_ID,
+            now: Date.now(),
+            files: got.files,
+          });
+        }
+
+        if (decision.act === 'ignore') {
+          if (decision.eligibility) lane.ineligible++;
+          else if (decision.deadlineAt) lane.waiting++;
+          continue;
+        }
+
+        const pr = decision.pr;
+        const repo = `${pr.owner}/${pr.repo}`;
+
+        if (decision.act === 'announce') {
+          const at = new Date().toISOString();
+          const deadlineLabel = clockAt(Date.now() + WINDOW_MS);
+          const notice = announcementNotice({ pr, files: decision.eligibility.files, deadlineLabel, at });
+          if (dryRun) {
+            console.error(`  DRY RUN — would announce Lane A on ${label}: PR #${pr.number} merging at ${deadlineLabel}`);
+            lane.announced++;
+            continue;
+          }
+          const posted = await postLaneNotice(t.id, notice.body);
+          if (!posted.ok) {
+            // An announcement that failed to post is not a window. Nothing is
+            // armed, no clock runs, and the next pass starts over.
+            unchecked.push(`${t.id}: the Lane A announcement failed (${posted.why}) — nothing is armed and nothing will merge`);
+            continue;
+          }
+          // The BINDING deadline is ClickUp's confirmed post time plus an
+          // hour, which is never earlier than the time announced above. He
+          // can be merged on late; he cannot be merged on early.
+          await stampLoopNoteSoftly(t.id, loopNote('auto-merge-armed', { deadline: clockAt(posted.at + WINDOW_MS) }), unchecked);
+          const bus = await postToBus(channel, `[CC-starcaster bus-relay] Lane A armed on ${label} (${t.url}): PR #${pr.number} is tests and documentation only and has a review PASS, so it merges at ${clockAt(posted.at + WINDOW_MS)} unless Dane comments on the ticket.\n\n${pr.url}`);
+          if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: Lane A announced on the ticket but the bus post failed (${bus.why})` });
+          console.error(`  LANE A ARMED on ${label}: PR #${pr.number}, merging at ${clockAt(posted.at + WINDOW_MS)}`);
+          lane.announced++;
+          continue;
+        }
+
+        if (decision.act === 'cancel') {
+          const notice = cancellationNotice({ pr, why: decision.reason, at: new Date().toISOString() });
+          if (dryRun) { console.error(`  DRY RUN — would cancel Lane A on ${label}: ${decision.reason}`); lane.cancelled++; continue; }
+          const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
+          if (!out.res.ok) {
+            unchecked.push(`${t.id}: Lane A was cancelled (${decision.reason}) but the notice FAILED to post — he has not been told, and the announcement is still armed`);
+            continue;
+          }
+          await stampLoopNoteSoftly(t.id, loopNote('auto-merge-cancelled', { at: clockAt(Date.now()) }), unchecked);
+          console.error(`  LANE A CANCELLED on ${label}: ${decision.reason}`);
+          lane.cancelled++;
+          continue;
+        }
+
+        if (decision.act === 'merge') {
+          if (dryRun) { console.error(`  DRY RUN — would auto-merge PR #${pr.number} for ${label} (${decision.reason})`); lane.merged++; continue; }
+          const m = await runMergeStep({
+            task: t,
+            comments: cand.comments,
+            mergeHandled: new Set(),
+            mergeRefused: new Map(),
+            dryRun,
+            channel,
+            unchecked,
+            busSkipped,
+            inPassBudget,
+            lane: { name: 'A', decision, files: decision.eligibility.files },
+          });
+          if (m.outcome === 'merged') {
+            lane.merged++;
+            ledger = ledgerAfterMerge(ledger, {
+              at: Date.now(), lane: 'A', pr: pr.number, url: pr.url, task: t.id, repo, files: decision.eligibility.files,
+            }, Date.now());
+            const saved = writeLedger(ledger, led.file);
+            // The ledger IS the rate cap. If it cannot be written, the next
+            // pass has no idea this merge happened and the cap stops
+            // capping — which is exactly the runaway condition 2 exists for.
+            if (!saved.ok) unchecked.push(`${t.id}: PR #${pr.number} auto-merged but the auto-merge ledger could not be written (${saved.why}) — the rate cap has lost this merge`);
+          } else if (m.outcome === 'lane-cancel') {
+            // The gate said no after the window had already run: checks went
+            // red, the branch conflicts, something changed. He is told, and it
+            // needs a fresh review PASS before it can announce itself again.
+            const notice = cancellationNotice({ pr, why: m.reason, at: new Date().toISOString() });
+            const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
+            if (!out.res.ok) unchecked.push(`${t.id}: Lane A was cancelled at merge time (${m.reason}) but the notice FAILED to post`);
+            else await stampLoopNoteSoftly(t.id, loopNote('auto-merge-cancelled', { at: clockAt(Date.now()) }), unchecked);
+            console.error(`  LANE A CANCELLED at merge time on ${label}: ${m.reason}`);
+            lane.cancelled++;
+          } else {
+            // 'waiting' — CI is still running. The announcement stays armed
+            // and the next pass tries again. Nothing is said, because nothing
+            // has happened.
+            lane.waiting++;
+          }
+        }
+      }
+    }
+
+    // Standing condition 3: announced, never silent. One post a day, and it
+    // posts "none" on a quiet day — a silent day and a broken job must not
+    // look alike.
+    if (!dryRun && digestDue(ledger.lastDigestAt, now)) {
+      const body = digestBody({
+        entries: mergesSince(ledger, now - DIGEST_WINDOW_MS),
+        sinceLabel: 'the last 24 hours',
+        clockLabel: clockAt(now),
+      });
+      const bus = await postToBus(channel, body);
+      if (bus.ok) ledger = ledgerAfterDigest(ledger, now);
+      else reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `the daily auto-merge digest could not be posted (${bus.why}) — it will be retried next pass` });
+    }
+
+    if (!dryRun && led.file) writeLedger(ledger, led.file);
+  }
+
+  // "0 announced" and "never looked" must not read the same (DOCTRINE 3.11),
+  // so the line says how many tickets were JUDGED as well as what happened to
+  // them. On the queue of 2026-08-25 the honest answer was "9 considered, 9
+  // ineligible" — which is Lane A working, not Lane A asleep.
+  const laneLine = mergingAllowed
+    ? `, Lane A: ${laneCandidates.length} considered, ${lane.announced} announced, ${lane.waiting} in window, ${lane.merged} auto-merged, ${lane.cancelled} cancelled, ${lane.ineligible} ineligible${lane.halted ? ` (HALTED: ${lane.halted})` : ''}`
+    : '';
+
   const mergeLine = mergingAllowed
     ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
     : ', merging disabled (--no-merge)';
-  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
+  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.
   if (busSkipped.length) {
@@ -1849,7 +2285,7 @@ if (cmd === 'whoami') {
     // yesterday's abandoned one. Every other transition is read live and a
     // clock is enough.
     const at = transition === 'review-started' ? nowDateClock() : nowClock();
-    text = loopNote(transition, { at, pr: arg('pr') });
+    text = loopNote(transition, { at, pr: arg('pr'), deadline: arg('deadline') });
   } catch (e) {
     console.error(`\nloop-note: ${e.message}`);
     process.exit(2);
@@ -1868,6 +2304,37 @@ if (cmd === 'whoami') {
   }
   const text = heartbeatNote({ at: nowClock(), inLine: Number(arg('in-line', '0')), nextUp: arg('next', '') });
   await stampLoopNote(task, text);
+} else if (cmd === 'auto-merge-status') {
+  // Read-only. "Is Lane A on, and why not" is the first question anyone asks
+  // when a PR did not merge itself, and the answer must be gettable without
+  // running a pass that might act on what it finds.
+  const now = Date.now();
+  const led = readLedger();
+  if (!led.ok) console.log(`ledger:  UNREADABLE — ${led.why}`);
+  else console.log(`ledger:  ${led.file}${led.fresh ? ' (not created yet — no auto-merge has happened)' : ''}`);
+
+  const busSw = await readBusSwitchSignals(arg('channel', BUS_CHANNEL));
+  if (!busSw.readable) console.log(`bus:     UNREADABLE — ${busSw.why}`);
+
+  const ks = killSwitchState({
+    signals: [...busSw.signals, ...switchSignalsFromLedger(led.ledger)],
+    readable: busSw.readable && led.ok,
+  });
+  const disabled = selfDisableState({ persisted: led.ledger.disabled });
+  const cap = rateCapState(led.ledger.merges, now);
+  const gate = laneGate({ killSwitch: ks, selfDisable: disabled, rateCap: cap });
+
+  console.log(`switch:  ${ks.state} — ${ks.why}`);
+  console.log(`disabled:${disabled.disabled ? ` yes — ${disabled.why}` : ' no'}`);
+  console.log(`cap:     ${cap.why}`);
+  console.log(`window:  ${WINDOW_MS / 60000} minutes`);
+  console.log(`digest:  ${digestDue(led.ledger.lastDigestAt, now) ? 'due' : `last posted ${clockAt(led.ledger.lastDigestAt)}`}`);
+  console.log(`LANE A:  ${gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`}`);
+  const recent = mergesSince(led.ledger, now - DIGEST_WINDOW_MS);
+  console.log(`recent:  ${recent.length} auto-merge(s) in the last 24 hours`);
+  for (const m of recent) console.log(`  PR #${m.pr}  task ${m.task}  ${clockAt(m.at)}  ${(m.files || []).join(' ')}`);
+  process.exit(gate.allowed ? 0 : 3);
+
 } else if (cmd === 'task-open') {
   // Charter Q1 (Task-closes-thread): a thread should only exist while its
   // ClickUp task is open. ClickUp's own status.type is the general signal —
