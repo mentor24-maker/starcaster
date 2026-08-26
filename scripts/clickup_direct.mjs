@@ -64,6 +64,7 @@ import taskRepo from './builder/taskRepo.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
+import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
@@ -78,6 +79,10 @@ const {
 } = loopTrail;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 const { resolveTaskRepo } = taskRepo;
+const {
+  waitingVerdict, verdictFromStatusAlone, renderTicket, exitCodeFor, sweepSummary,
+  operatorSpokeLast, WAITING: V_WAITING, NOT_WAITING: V_NOT_WAITING, CANNOT_TELL: V_CANNOT_TELL,
+} = waitingOnOperator;
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -265,11 +270,21 @@ function usage(code = 2) {
   console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
   console.error('                                             long detail belongs. Verified by reading it back.');
   console.error('  ask --task <id> --body-file <file|-> [--status "Needs your input"|"Ready to launch"] [--no-move]');
+  console.error('      [--after-his-answer]                   REFUSES if his own comment is the newest one on the ticket —');
+  console.error('                                             handing it back then asks him to answer twice. Override only');
+  console.error('                                             when it genuinely is a NEW question, on the record.');
   console.error('                                             hand the ticket to the operator: post an operator card, then');
   console.error('                                             move the status (he is auto-assigned). --no-move posts the');
   console.error('                                             card and leaves the status alone. The card body uses');
   console.error(`                                             @@ASKED / @@WHEN / @@CONTEXT / @@NEEDED; @@CONTEXT must be`);
   console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. Checked before anything is sent.`);
+  console.error('  waiting [--task <id>]                     is anything ACTUALLY waiting on Dane? Live reads only.');
+  console.error('                                             With --task: status, assignee, newest-comment author, verdict.');
+  console.error('                                             With no arguments: every open ticket in Agent Response + the');
+  console.error('                                             Loop Queue, listing only the ones waiting on him, newest first.');
+  console.error('                                             exit 0 = nothing of his, 3 = something IS his, 1 = could not tell.');
+  console.error('                                             READ-ONLY — it never writes. NO AGENT SAYS SOMETHING IS WAITING');
+  console.error('                                             ON DANE WITHOUT RUNNING THIS FIRST (task 86bbk34x7).');
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
   console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run] [--no-merge]');
   console.error('                                             relay the operator\'s new comments on open tasks to the bus.');
@@ -1504,6 +1519,39 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
+  // THE CARD MUST NOT ASK HIM FOR SOMETHING HE HAS ALREADY ANSWERED
+  // (task 86bbk34x7). Moving a ticket into one of his statuses IS the claim
+  // that something is needed from him — so it is checked against the live
+  // ticket, by the same rule `waiting` uses, before the card is posted.
+  //
+  // This is the 2026-08-23 failure arriving through the very mechanism built
+  // to prevent it: he answered `A` on the YouTube worker ticket, and an hour
+  // later was asked the same question again. Authorship only — no reading of
+  // intent from his words (the non-goal); if his comment is the newest one on
+  // the ticket, a machine owes the next move.
+  //
+  // --after-his-answer says "yes, I know he just spoke; this is a NEW
+  // question." A real thing to need, and worth saying out loud in the log.
+  if (!noMove && !flag('after-his-answer')) {
+    const seen = await call('GET', `/api/v2/task/${task}/comment`);
+    if (!seen.res.ok) {
+      console.error(`\nCould not read the comments on ${task} — HTTP ${seen.res.status}.`);
+      console.error('Refusing to hand this to Dane without knowing whether he has already answered it.');
+      console.error('Nothing has been posted and the status has NOT moved. Try again, or pass');
+      console.error('--after-his-answer if you already know this is a new question.');
+      process.exit(1);
+    }
+    if (operatorSpokeLast(seen.json.comments || [], { operatorId: OPERATOR_ID })) {
+      console.error(`\nREFUSED — Dane's own comment is the NEWEST one on ${task}, so a machine owes`);
+      console.error('the next move here. Handing it back to him now asks him to answer twice, which');
+      console.error('is exactly what this check exists to stop (task 86bbk34x7, 2026-08-23).');
+      console.error('\nRead what he said:   npm run clickup -- waiting --task ' + task);
+      console.error('If this really is a NEW question, say so on the record:  ... ask ... --after-his-answer');
+      console.error('\nNothing was posted and the status has NOT moved.');
+      process.exit(2);
+    }
+  }
+
   const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered });
   if (!posted.res.ok) die('post the operator card', posted);
   const cardId = String(posted.json.id ?? '');
@@ -1560,6 +1608,123 @@ if (cmd === 'whoami') {
   }
   console.log(`Task ${task}: card ${cardId} posted, "${was}" -> "${now}", assigned: ${assigneeNames(moved.json)}.`);
   reportLimits(moved.res);
+
+} else if (cmd === 'waiting') {
+  // "Is this actually waiting on Dane?" — the whole point is that it is
+  // CHEAPER TO RUN THAN THE CLAIM IS TO REASON ABOUT (task 86bbk34x7). Twice on
+  // 2026-08-23 an agent stated flatly that something was waiting on him while
+  // reading something other than the state — a terminal buffer once, a stale
+  // impression of a list the other time — and he acted on both. The
+  // authoritative answer was one API call away each time.
+  //
+  // Read-only, always. It moves nothing, assigns nobody and comments nowhere:
+  // a command an agent must run before speaking cannot also be a command that
+  // changes what it is describing.
+  const one = arg('task');
+  const operatorId = OPERATOR_ID;
+
+  /** m/d h:mmam local — the register he reads, same as the loop notes. */
+  const whenClock = (ms) => {
+    const d = new Date(Number(ms));
+    if (Number.isNaN(d.getTime())) return '';
+    const clock = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      .toLowerCase().replace(/\s/g, '');
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${clock}`;
+  };
+
+  if (one) {
+    // One ticket: read both halves in full, even where the status alone would
+    // settle it. It is two requests, and showing the last word is most of the
+    // value — "you answered this an hour ago" is the sentence that was missing.
+    const got = await call('GET', `/api/v2/task/${one}`);
+    if (!got.res.ok) {
+      console.error(`Could not read task ${one} — HTTP ${got.res.status}. Reporting CANNOT TELL rather than guessing.`);
+    }
+    const task = got.res.ok ? got.json : null;
+    const cm = await call('GET', `/api/v2/task/${one}/comment`);
+    if (!cm.res.ok) {
+      console.error(`Could not read the comments on ${one} — HTTP ${cm.res.status}.`);
+    }
+    const comments = cm.res.ok ? (cm.json.comments || []) : null;
+
+    const result = waitingVerdict({ task, comments }, { operatorId });
+    console.log(renderTicket({ id: one, name: task?.name, result }, { formatWhen: whenClock }));
+    if (task?.url) console.log(`  url:        ${task.url}`);
+    reportLimits(cm.res);
+    process.exit(exitCodeFor(result.verdict));
+  }
+
+  // No arguments: the answer to "what actually needs me?" — a question he
+  // asked five times that evening and got a wrong answer to twice.
+  const watched = [
+    { id: AGENT_RESPONSE_LIST, label: 'Agent Response' },
+    { id: LOOP_QUEUE_LIST, label: 'Loop Queue' },
+  ];
+  const flagged = [];
+  let checked = 0;
+  let readInFull = 0;
+  let lastRes = null;
+
+  for (const w of watched) {
+    // fetchAllTasks pages to the end and dies loudly on a failed read — a
+    // partial sweep must never print as "nothing is waiting on you".
+    const { tasks, res } = await fetchAllTasks(w.id);
+    if (res) lastRes = res;
+    for (const t of tasks) {
+      checked += 1;
+      // A machine status is settled by the status alone (proven against the
+      // full verdict in waitingOnOperator.test.js), so the comment read is
+      // skipped there — otherwise the sweep would spend most of ClickUp's
+      // per-minute allowance confirming things already decided.
+      let result = verdictFromStatusAlone(t, { operatorId });
+      if (!result) {
+        const cm = await call('GET', `/api/v2/task/${t.id}/comment`);
+        readInFull += 1;
+        if (!cm.res.ok) {
+          console.error(`Could not read the comments on ${t.id} — HTTP ${cm.res.status}.`);
+        }
+        result = waitingVerdict(
+          { task: t, comments: cm.res.ok ? (cm.json.comments || []) : null },
+          { operatorId },
+        );
+        if (cm.res) lastRes = cm.res;
+      }
+      if (result.verdict !== V_NOT_WAITING) {
+        flagged.push({ id: t.id, name: t.name, list: w.label, url: t.url, result });
+      }
+    }
+  }
+
+  // Newest question first: the most recent comment on the ticket, falling back
+  // to when the ticket itself last moved.
+  flagged.sort((a, b) => (Number(b.result.facts?.lastWord?.date) || 0) - (Number(a.result.facts?.lastWord?.date) || 0));
+
+  const waiting = flagged.filter((x) => x.result.verdict === V_WAITING);
+  const unclear = flagged.filter((x) => x.result.verdict === V_CANNOT_TELL);
+
+  for (const x of waiting) {
+    console.log(renderTicket({ id: x.id, name: `${x.name}  [${x.list}]`, result: x.result }, { formatWhen: whenClock }));
+    if (x.url) console.log(`  url:        ${x.url}`);
+    console.log('');
+  }
+  if (unclear.length) {
+    console.log('--- could NOT be decided — do not assume either way ---');
+    for (const x of unclear) {
+      console.log(renderTicket({ id: x.id, name: `${x.name}  [${x.list}]`, result: x.result }, { formatWhen: whenClock }));
+      if (x.url) console.log(`  url:        ${x.url}`);
+      console.log('');
+    }
+  }
+
+  console.error(sweepSummary({
+    checked,
+    waiting: waiting.length,
+    cannotTell: unclear.length,
+    lists: watched.map((w) => w.label),
+  }));
+  console.error(`  ${readInFull} of them were in his lane and had their comments read in full; the rest were settled by status.`);
+  if (lastRes) reportLimits(lastRes);
+  process.exit(exitCodeFor(flagged.map((x) => x.result.verdict)));
 
 } else if (cmd === 'lists') {
   // Exists because of 2026-08-18: 90146476303 (the Starcaster SPACE) was

@@ -79,6 +79,7 @@ npm run clickup -- status --task <id> --status "In review"                   # h
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # escalate: card + status together
 npm run clickup -- pr-opened --task <id> --pr <pr-url>                        # record the PR — REQUIRED, and it verifies itself
 npm run clickup -- comment --task <id> --body-file -                         # a plain note (progress, notes)
+npm run clickup -- waiting [--task <id>]                                      # read-only: is this ACTUALLY waiting on Dane? run it before saying so
 npm run clickup -- describe --task <id> --body-file -                        # REPLACE the description (left column)
 ```
 
@@ -120,6 +121,33 @@ standing decision it descends from.
 
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
+
+## Never say something is waiting on Dane without checking
+
+**One command, run BEFORE the sentence leaves your mouth:**
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task <id>        # one ticket: status, assignee, last word, verdict
+```
+
+Read-only, a couple of seconds, exit **0** nothing of his / **3** something IS
+his / **1** could not tell. It reports the verdict from three live facts — the
+status, whether he is assigned, and whether the newest comment is his — so a
+ticket he has already answered can never be handed back to him a second time.
+
+Twice on 2026-08-23 an agent told him something was waiting on him when it was
+not, and he acted on it both times: eleven of "seventeen tickets waiting on
+your merge word" already carried his approval, and the YouTube worker question
+he was asked again had been answered `A` an hour earlier. Him, that night:
+*"The issue is making assumptions and stating them with confidence. It has come
+up many times."* Every wrong claim that evening was a confident sentence with
+nothing attached; every right one carried its evidence. This is the evidence,
+and it is cheaper to run than the claim is to reason about.
+
+Applies to the run report as much as to a comment. `ask` enforces the same rule
+at its own end — it refuses to hand a ticket back when his comment is already
+the newest one on it (`--after-his-answer` overrides, on the record).
 
 ## Loop note — stamp the queue as you go (queue visibility)
 

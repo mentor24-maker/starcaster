@@ -65,6 +65,7 @@ The everyday commands (run `npm run clickup` bare for the full list):
 npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
+npm run clickup -- waiting [--task <id>]                        # is this ACTUALLY waiting on Dane? read-only; run it BEFORE saying so
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
@@ -505,6 +506,70 @@ offers every status in the workspace at once. Assignment sidesteps all of it.
 
 If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
+
+### No agent says something is waiting on you without running `waiting` first
+
+**The rule, in one line: an agent may not state that anything is waiting on
+Dane until `npm run clickup -- waiting` has said so.** It is one command, it
+takes a couple of seconds, and it is the only thing in the room that has
+actually read the ticket.
+
+Twice on the evening of 2026-08-23 an agent told him something needed him when
+it did not, and he acted on it both times:
+
+- *"Seventeen Ready-to-launch tickets are waiting on your merge word."* Eleven
+  already carried his approval and were stuck on a machine that could not push
+  to GitHub. He went looking for work that was not his.
+- *"The YouTube worker decision is the one thing waiting on you."* He had
+  answered `A` an hour earlier, and the relay had already cleared his name and
+  moved the ticket to `Queued`. He asked, reasonably, whether he had to answer
+  a third time.
+
+Neither was a lie and neither was a reasoning failure. Both were **a claim
+about current state, stated flatly, by an agent reading something other than
+the state** — a terminal buffer in one case, a stale impression of a list in
+the other. Him, that night: *"The issue is making assumptions and stating them
+with confidence. It has come up many times."*
+
+A rule alone would not have held. Every claim that was RIGHT that evening
+carried its evidence welded on ("854/854, verified by read-back"; "exit 0,
+here is the output"). Every claim that was WRONG was a confident sentence with
+nothing attached. So the command exists to make the cheapest path the correct
+one:
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task 86bbjve6b   # one ticket, the whole picture
+```
+
+```
+86bbjve6b  Acquire YouTube slice 3/4
+  status:     queued
+  assignee:   (nobody)
+  last word:  Dane, "A", 2026-08-23 8:11pm
+  VERDICT:    NOT waiting on Dane — a machine owes the next move
+```
+
+The verdict is **derived, never guessed**, from three live facts and nothing
+else: the status (`needs your input` / `ready to launch` are his lane), whether
+he is assigned (assignment IS the handoff signal, above), and whether the
+newest comment is his. A ticket in his lane, assigned to him, whose newest
+comment is not his → **waiting on him**. A ticket whose newest comment IS his →
+waiting on a machine, whatever the status says. Anything the read cannot
+establish prints `CANNOT TELL` with the reason and exits non-zero — never a
+confident verdict either way, because a wrong "not waiting" is how an answered
+ticket sits for nine hours.
+
+Exit codes match the rest of the loop tooling: **0** nothing of his, **3**
+something IS his, **1** could not tell. It is read-only — it never moves a
+status, assigns anyone or comments anywhere.
+
+`ask` enforces the same rule at the other end: it **refuses** to hand a ticket
+back to him when his own comment is already the newest one on it, because that
+is the "answer this a third time" failure arriving through the mechanism built
+to prevent it. `--after-his-answer` overrides it, on the record, for a
+genuinely new question.
+
 
 ## Visual changes come to you as pictures
 
