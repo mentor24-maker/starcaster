@@ -1,3 +1,39 @@
+## 2026-08-25 — The weekly report gathers itself now; the writing is still yours (#437)
+
+The first weekly report took most of an afternoon to put together. Almost none
+of that was writing — it was fetching. How many pull requests merged, how many
+lines changed, how long the tests took, where every ticket sat. Every one of
+those numbers already existed inside a command; somebody just had to go and ask
+for each one and copy it down.
+
+So a program does that part now. Every Monday at 7am the Mac Mini gathers all of
+it, builds the page, and opens a pull request with the figures already filled in
+and a chart of what shipped each day, grouped by which part of the system it
+touched. It stops there. It does not write a word of the actual report — the
+"here is what mattered this week and why" part is judgement, and a paragraph
+written by a machine would read like an opinion nobody actually holds. It leaves
+an obvious blank space where that goes, and files a ticket so writing it does not
+depend on anyone remembering. Ten minutes on top of finished numbers instead of
+an afternoon.
+
+The part worth insisting on is what happens when a number cannot be fetched. It
+prints "not available" and says why, in amber so you cannot skim past it. It
+never quietly leaves the row out, and it never estimates. A report missing a
+metric looks exactly like a report where that metric was fine, and there is no
+way to tell from the page which one you are reading. For the same reason, a
+pull request only counts as shipped if GitHub itself says it merged — the first
+edition credited one that was still open, because a commit message mentioning a
+PR is not proof that the PR landed.
+
+Two problems turned up while building it, both of the quiet kind. The first
+would have broken something else entirely: the straightforward way to commit
+the report would have left the Mac Mini's main folder sitting on the report's
+own branch permanently, and the little program that reads your ClickUp replies
+checks that folder's branch before updating itself. It would have stopped
+updating, kept running old code, and mentioned it only in a log file nobody
+opens. The second: the report was dating itself using Greenwich time, so a run
+late in the evening stamped tomorrow's date on it and pulled the wrong week's
+figures. Both are fixed, and there are tests that fail if either creeps back.
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp
