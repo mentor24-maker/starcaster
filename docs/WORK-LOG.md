@@ -1,3 +1,31 @@
+## 2026-08-26 — The new merge lock could have jammed itself shut (#443)
+
+Yesterday's change put a real lock on the merge button: before anything goes
+live, GitHub itself checks the work's ticket for a review pass. It works — but
+it had a flaw that would only have shown up on the day you switched it from a
+warning into a real block, and by then it would have stopped everything.
+
+The problem is that these checks run **once**, right after code is pushed, and
+they never think again. The review always lands *after* the last push — that is
+what a review is. So the check looked at the ticket, saw no review yet, wrote
+down "no", and then sat there forever with that answer. Nothing was ever going
+to change its mind. The only way to make a check run again is to push more code,
+and pushing more code cancels the review that just passed. Every properly
+reviewed piece of work would have been stuck in that loop.
+
+So the step that actually performs merges now asks one extra question first: is
+this check answering a question that has since changed? If the check ran before
+the review landed, it runs it again and waits for the real answer — about three
+minutes — instead of merging on the old one. If the fresh answer is a no, the
+merge is refused and you are told why. If the check cannot be run again at all,
+or its answer never arrives, the merge is refused too: not being able to see is
+never treated as an all-clear. And when the check is already up to date, nothing
+happens and nothing is spent, which is the ordinary case.
+
+Nothing about the lock itself was loosened to achieve this — "out of date" only
+ever means run it again, never let it through. With this in place the
+branch-protection setting is safe to turn on.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone
