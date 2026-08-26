@@ -53,6 +53,60 @@ enforces them, and refuses out loud when it meets a rule it does not understand
 
 Every one of these was proved twice: once by breaking the fix on purpose and
 watching the right test fail, and once by running it against a real database.
+## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
+
+Earlier today a pull request went straight to the live site without anyone
+reviewing it. Nothing was broken by it, but the way it happened is worth
+fixing: a second Claude window you had open ran the ordinary "merge this"
+command, and it had no way of knowing that the review lane was still waiting on
+that piece of work. The ticket jumped from "being built" to "live" without ever
+stopping at "ready to launch" for your say-so.
+
+The rule against that has always existed — it is written down, and every part
+of the automatic pipeline obeys it. But a written rule only reaches the people
+and programs that have read it. A fresh window, a terminal you forgot was open,
+or a hurried moment on your own machine are all outside it. So the rule has been
+turned into a lock: GitHub itself now runs a check on every pull request that
+looks up the work's ticket, finds the most recent review verdict on it, and
+refuses the merge unless that verdict is a pass — and a pass on the *current*
+code, not on an older version that has since been rewritten. If the ticket has
+no review at all, or the review sent the work back, or the pull request does not
+even say which ticket it belongs to, the check says no and explains in plain
+words what has to happen next.
+
+There is a deliberate escape hatch, because a rule with no way out gets worked
+around instead of used: writing `[gate-waived: reason]` in the pull request lets
+it through, and doing so announces itself on the team chat with the reason. An
+override nobody can see is not an override, it is a hole.
+
+Two honest notes. First, the check is currently a **warning, not a lock** — it
+watches and reports but blocks nothing, because switching it on is a setting in
+GitHub's own website that only you can change, and it deserves a few days of
+watching first to be sure it never says no when it should say yes. Second, it
+needs a password stored with GitHub so it can read your ClickUp tickets, and
+this project has none stored yet; that one is also yours to add. Both steps are
+written out in the project notes, and neither was guessed at or faked.
+
+The escape hatch had a flaw of its own, and it showed up immediately: this very
+pull request has to *explain* the escape hatch, and the check read its own
+explanation as a real override and let itself straight through. That was fixed
+by requiring the override to sit alone on its own line — a mention inside a
+sentence is talk about the rule, not the rule. The review then found the same
+flaw one step further out: an override written out as a code example, the way
+this project documents everything, still sat alone on a line and still counted.
+So examples shown as code are now skipped entirely, which is why the notes for
+this feature can quote the syntax as often as they like without arming it. When
+in doubt the check now loses an override rather than granting one — a lost
+override costs one edit, a granted one costs a merge.
+
+One thing was caught before it could cause trouble. The obvious version of
+"has this been reviewed recently enough?" compares the review against the newest
+change on the branch. But this project keeps branches up to date by pulling in
+the latest main code, which counts as a change — so every properly reviewed
+piece of work would have looked stale the moment it was refreshed, and the whole
+pipeline would have jammed. Running the new check against the real record found
+exactly that on two recent pull requests, and the rule now ignores those
+housekeeping updates and looks only at genuine edits.
 
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
