@@ -130,6 +130,52 @@ safety checks covered each other so completely that either could be deleted
 with every test still passing. A check that cannot fail is not a check, so a
 test was added that tells them apart.
 
+A sixth review found five more, and two of them are the same story this whole
+entry keeps telling: an answer that is wrong, delivered as a success.
+
+The first is about how a name is spelled in capitals. Every recording session
+has an id, and the database treats `A115C635` and `a115c635` as the same id —
+it does not care about capitals. Our code did. So a session handed its own id
+in capital letters refused its own audio file, with the message "that file
+belongs to a different session." The file did belong to it. The session did
+exist. The refusal simply was not true. Ids get typed, pasted and copied out of
+logs by hand, and any of those can change the capitals without changing the id.
+
+The second is what happens when a fingerprint is too long. There is a limit on
+how much of one gets stored, and past that limit the system used to quietly cut
+it short and say "saved." Two completely different files that happen to match
+for the first stretch then look identical, and the second one is turned away as
+"we already have this one" — untrue, about two files with nothing in common.
+That is the same lie an earlier round fixed from the other end: the check that
+reports the duplicate was corrected, but the thing that manufactured the
+collision was not. Anything too long is now refused outright, saying which
+field and what the limit is. The same applies to the file paths, where a
+quietly shortened one is worse still — a shortened path points at nothing, and
+the pieces of this project that write those paths are the next ones to be built.
+
+The other three were in the miniature stand-in database again, and they matter
+for the same reason as last round: it is the test bench for the next seven
+pieces. It was matching genuinely empty values against the literal word "null"
+— the third time that exact confusion has been found in this branch, in a third
+place. It was accepting a misspelled column name and a malformed id by
+answering "no results found" where the real database refuses the question
+outright, which had already caused a test here to be checking for the wrong
+answer entirely. And it was silently unable to handle three of the column types
+it listed as supported, which today's design does not use — a trap set for
+whichever of the next seven pieces uses one first.
+
+Fixing the capitals problem turned up something the tests could never have
+found: the fake ids the tests use were made entirely of zeroes, so "the same id
+in capitals" was not a thing that could exist in a test. They have letters in
+them now, and that change alone immediately exposed a second copy of the
+capitals bug in the stand-in database itself.
+
+All five were reproduced against a real database on the old code before being
+fixed, and twenty-one checks against that real database confirm the new
+behaviour — each one reading the row back with a direct query rather than
+asking the code that wrote it. Every fix was then broken on purpose, nine
+different ways, to watch the right test fail each time.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone

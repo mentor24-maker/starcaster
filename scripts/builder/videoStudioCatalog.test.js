@@ -71,7 +71,9 @@ function withDb(wrapQuery = null) {
  * stay hand-written rather than generated so each test's ids are legible.
  */
 function uuid(n) {
-  return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  // Same shape createFakeDb generates, letters included — see the note there
+  // for why an all-zero uuid makes a casing bug untestable.
+  return `a115c635-8658-4dad-a8b1-${String(n).padStart(12, '0')}`;
 }
 
 async function seedSession(sessions, scope = SCOPE_A, title = 'A talk') {
@@ -504,12 +506,36 @@ test('a session id that does not exist says so, instead of "already in the catal
   // isDuplicateHashError used to treat ANY 409 as a duplicate hash, and
   // PostgREST answers 409 for a foreign-key violation too — so a bad session
   // id produced a message that lied about what went wrong.
+  //
+  // The id has to be a well-formed uuid that is simply ABSENT. It used to be
+  // `'no_such_session'`, which conflates two different answers: Postgres never
+  // reaches "no such row" on that input, it refuses to cast it (400). The fake
+  // did not check the cast, so this test passed while asserting a 404 the real
+  // database does not give. The 400 half is pinned in its own test below.
+  const { sources, restore } = withDb();
+  try {
+    const out = await sources.createSource({ sessionId: uuid(404), layerRole: 'reference' }, SCOPE_A);
+    assert.equal(out.ok, false);
+    assert.equal(out.status, 404);
+    assert.match(out.error, /does not exist in this project/);
+    assert.doesNotMatch(out.error, /already in the catalog/, 'it must not blame a duplicate hash');
+  } finally { restore(); }
+});
+
+test('a session id that is not a uuid at all is a 400, not a 404', async () => {
+  // The other half of the pair above, and the reason this file needed both.
+  // "I cannot read that id" and "there is no such session" are different
+  // answers, and the fake could not tell them apart until filterRows started
+  // checking the cast — so the suite was pinning a 404 on a path production
+  // returns as a 400.
   const { sources, restore } = withDb();
   try {
     const out = await sources.createSource({ sessionId: 'no_such_session', layerRole: 'reference' }, SCOPE_A);
     assert.equal(out.ok, false);
-    assert.match(out.error, /does not exist in this project/);
-    assert.doesNotMatch(out.error, /already in the catalog/, 'it must not blame a duplicate hash');
+    assert.equal(out.status, 400);
+    assert.match(out.error, /invalid input syntax for type uuid/);
+    assert.doesNotMatch(out.error, /does not exist in this project/,
+      'a value it could not read must not be reported as an absent row');
   } finally { restore(); }
 });
 
@@ -569,12 +595,14 @@ test('a bad date is refused on the way in too, on both stores', async () => {
   } finally { restore(); }
 });
 
-test('a content hash is STORED at one length, whichever path wrote it', async () => {
+test('one length rules both write paths — accepted at the limit, refused past it', async () => {
   // It was capped at 200 on create and 1000 on update, so the same value was
-  // stored differently depending on how it got there.
+  // stored differently depending on how it got there. That was fixed by one
+  // shared table of limits; what stayed wrong for another round was the
+  // ANSWER at the boundary — both paths truncated and reported success.
   //
   // This test asserts against the row in the database, not against what the
-  // stores hand back. The first version compared updateSource's return value
+  // stores hand back. An earlier version compared updateSource's return value
   // to createSource's, and both of those have already been through
   // rowToSource, which truncates content_hash to probeLimit('contentHash') on
   // the way OUT. A 400-character write and a 200-character write therefore
@@ -586,23 +614,62 @@ test('a content hash is STORED at one length, whichever path wrote it', async ()
   try {
     const limit = sources.probeLimit('contentHash');
     const session = await seedSession(sessions);
-    const long = 'h'.repeat(limit * 2);
+    const exact = 'h'.repeat(limit);
+    const long = 'h'.repeat(limit + 1);
 
+    // Exactly at the limit is a legal value and must land WHOLE — a fix that
+    // refuses one character early is the same wrong answer facing the other
+    // way.
     const created = await sources.createSource(
-      { sessionId: session.id, layerRole: 'reference', contentHash: long }, SCOPE_A);
+      { sessionId: session.id, layerRole: 'reference', contentHash: exact }, SCOPE_A);
     assert.equal(created.ok, true, created.error);
 
     const storedRow = () => db.data.get('video_sources')
       .find((row) => row.id === created.data.id);
+    assert.equal(storedRow().content_hash, exact,
+      'a hash at exactly the declared length must be stored in full');
 
-    assert.equal(storedRow().content_hash.length, limit,
-      'createSource must store the hash capped at the declared length');
+    // One character over is a 400 from BOTH paths, naming the field and the
+    // limit — not a success that quietly stored something shorter.
+    const tooLong = await sources.createSource(
+      { sessionId: session.id, layerRole: 'reference', contentHash: long }, SCOPE_A);
+    assert.equal(tooLong.ok, false, 'createSource must refuse an over-length hash');
+    assert.equal(tooLong.status, 400);
+    assert.match(tooLong.error, /contentHash/);
+    assert.match(tooLong.error, new RegExp(String(limit)));
 
     const updated = await sources.updateSource(created.data.id, { contentHash: long }, SCOPE_A);
-    assert.equal(updated.ok, true, updated.error);
+    assert.equal(updated.ok, false, 'updateSource must refuse at the SAME boundary');
+    assert.equal(updated.status, 400);
 
-    assert.equal(storedRow().content_hash.length, limit,
-      'updateSource must store the hash capped at the SAME declared length');
+    // And the refusal wrote nothing. A 400 that has already replaced the row
+    // is the failure mode this whole ticket is about.
+    assert.equal(storedRow().content_hash, exact,
+      'a refused update must leave the stored hash untouched');
+  } finally { restore(); }
+});
+
+test('an over-length hash is refused, not shortened into a false duplicate', async () => {
+  // The reason the boundary above is a refusal rather than a trim, reproduced
+  // as the user-visible lie it caused: two files with NOTHING in common past
+  // the limit, and the second one turned away as a copy of the first.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const limit = sources.probeLimit('contentHash');
+    const session = await seedSession(sessions);
+    const shared = 'h'.repeat(limit);
+
+    const first = await sources.createSource(
+      { sessionId: session.id, layerRole: 'reference', contentHash: `${shared}AAA` }, SCOPE_A);
+    const second = await sources.createSource(
+      { sessionId: session.id, layerRole: 'reference', contentHash: `${shared}ZZZ` }, SCOPE_A);
+
+    for (const [name, res] of [['first', first], ['second', second]]) {
+      assert.equal(res.ok, false, `the ${name} over-length hash must be refused`);
+      assert.equal(res.status, 400);
+      assert.doesNotMatch(res.error, /already in the catalog/,
+        'two different files must never be reported as copies of each other');
+    }
   } finally { restore(); }
 });
 
@@ -907,7 +974,7 @@ test('a database failure is NOT reported as "that session does not exist"', asyn
   });
   try {
     // The session genuinely exists; only the READ is broken.
-    const res = await sources.createSource({ sessionId: 'row-1' }, SCOPE_A);
+    const res = await sources.createSource({ sessionId: uuid(1) }, SCOPE_A);
     assert.equal(res.ok, false);
     assert.equal(res.status, 500, 'a database failure was reported as a 404 "no such session"');
     assert.match(res.error, /upstream connect/);
@@ -917,9 +984,11 @@ test('a database failure is NOT reported as "that session does not exist"', asyn
 });
 
 test('a genuinely missing session is still a 404 that says so', async () => {
+  // A well-formed uuid that is absent — see the pair above for why the id may
+  // not be `'no-such-session'`: that input never reaches "missing" in Postgres.
   const { sources, restore } = withDb();
   try {
-    const res = await sources.createSource({ sessionId: 'no-such-session' }, SCOPE_A);
+    const res = await sources.createSource({ sessionId: uuid(909) }, SCOPE_A);
     assert.equal(res.ok, false);
     assert.equal(res.status, 404);
     assert.match(res.error, /does not exist in this project/);
@@ -1673,4 +1742,209 @@ test('a NULL hash does not collide with the literal text "null" either', async (
   assert.equal((await insert2('null')).ok, true);
   const nullAfterText = await insert2(null);
   assert.equal(nullAfterText.ok, true, 'an unmeasured hash collided with the text "null"');
+});
+
+// ── Round six: five wrong answers that arrived under a success ──────────────
+// Each of these reproduces a defect review found live against local Postgres.
+// They are written to FAIL if the matching fix is reverted — the point of this
+// branch since round one is that a green run is evidence, not decoration.
+
+test('a session accepts its own source when the id is typed in UPPERCASE', async () => {
+  // Postgres compares `uuid` case-insensitively; JavaScript's `!==` does not.
+  // A session id therefore comes back lowercase from a read while the caller's
+  // copy keeps whatever casing they typed, and the ownership check compared
+  // two spellings of the same id. Review reproduced it end to end: the row
+  // existed, the source genuinely belonged to it, and updateSession answered
+  // 400 "The programme audio source must belong to this session" — a refusal
+  // that states something untrue.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const source = await sources.createSource(
+      { sessionId: session.id, layerRole: 'reference' }, SCOPE_A);
+    assert.equal(source.ok, true, source.error);
+
+    const shouted = session.id.toUpperCase();
+    assert.notEqual(shouted, session.id, 'the fixture must actually change case');
+
+    const res = await sessions.updateSession(
+      shouted, { programAudioSourceId: source.data.id }, SCOPE_A);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(res.status, 200);
+  } finally { restore(); }
+});
+
+test('a source belonging to ANOTHER session is still refused', async () => {
+  // The other half: the case fix must not turn the ownership check off. Both
+  // halves are needed — with only the test above, deleting the comparison
+  // entirely would pass.
+  const { sessions, sources, restore } = withDb();
+  try {
+    const mine = await seedSession(sessions, SCOPE_A, 'mine');
+    const theirs = await seedSession(sessions, SCOPE_A, 'theirs');
+    const strayer = await sources.createSource(
+      { sessionId: theirs.id, layerRole: 'reference' }, SCOPE_A);
+    assert.equal(strayer.ok, true, strayer.error);
+
+    const res = await sessions.updateSession(
+      mine.id, { programAudioSourceId: strayer.data.id }, SCOPE_A);
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 400);
+    assert.match(res.error, /must belong to this session/);
+  } finally { restore(); }
+});
+
+test('sameUuid reads casing and whitespace the way Postgres does', () => {
+  const { sameUuid } = require('../../lib/videoSessionsStore.js');
+  const id = uuid(7);
+  assert.equal(sameUuid(id, id.toUpperCase()), true);
+  assert.equal(sameUuid(` ${id}\n`, id), true, 'a pasted id with stray whitespace is the same id');
+  assert.equal(sameUuid(id, uuid(8)), false);
+  // Two blanks are not "the same uuid" — that would make an absent pointer
+  // match an absent pointer and read as ownership.
+  assert.equal(sameUuid('', ''), false);
+  assert.equal(sameUuid(null, undefined), false);
+});
+
+test('the fake does not match a real NULL with col=eq.null', async () => {
+  // `String(null)` is the text 'null'. This PR found and fixed exactly this
+  // coercion in uniqueViolation and again in evaluateFilterNode; filterRows
+  // was the third copy. In PostgREST `eq.null` matches nothing — `is.null` is
+  // the operator that matches NULLs.
+  const schema = parseSchemaText(`
+    create table if not exists public.things (
+      id uuid primary key default gen_random_uuid(),
+      project_id text not null,
+      note text
+    );
+    alter table public.things enable row level security;
+  `);
+  const db = createFakeDb(schema);
+  const insert = (note) => db.sbQuery({
+    method: 'POST', table: 'things', query: 'select=*',
+    headers: { Prefer: 'return=representation' },
+    body: [{ project_id: 'proj_a', note }],
+  });
+  assert.equal((await insert(null)).ok, true);
+  assert.equal((await insert('null')).ok, true);
+
+  const eqNull = await db.sbQuery({ method: 'GET', table: 'things', query: 'note=eq.null&select=*' });
+  assert.equal(eqNull.ok, true, eqNull.error);
+  assert.equal(eqNull.data.length, 1, 'eq.null must match only the literal text "null"');
+  assert.equal(eqNull.data[0].note, 'null');
+
+  const isNull = await db.sbQuery({
+    method: 'GET', table: 'things', query: 'or=(note.is.null)&select=*',
+  });
+  assert.equal(isNull.ok, true, isNull.error);
+  assert.equal(isNull.data.length, 1, 'is.null is the operator that reaches the real NULL');
+  assert.equal(isNull.data[0].note, null);
+});
+
+test('the fake refuses a filter on a column that does not exist', async () => {
+  // A misspelled column read row[key] as undefined, matched nothing, and
+  // answered 200 with []. Real PostgREST answers 400 — and "no rows" is
+  // exactly the shape of the cross-project tests this fake holds up, so the
+  // typo would have shipped green.
+  const { db, restore } = withDb();
+  try {
+    const typo = await db.sbQuery({
+      method: 'GET', table: 'video_sources', query: 'sesion_id=eq.' + uuid(3) + '&select=*',
+    });
+    assert.equal(typo.ok, false, 'a typo’d filter column must not answer 200 with []');
+    assert.equal(typo.status, 400);
+    assert.match(typo.error, /does not exist/);
+
+    // ...and inside an or=, which parseFilterNode checked only for SHAPE.
+    const inOr = await db.sbQuery({
+      method: 'GET', table: 'video_sources', query: 'or=(sesion_id.eq.x)&select=*',
+    });
+    assert.equal(inOr.ok, false, 'the same hole one line over, in or=');
+    assert.equal(inOr.status, 400);
+    assert.match(inOr.error, /does not exist/);
+  } finally { restore(); }
+});
+
+test('the fake refuses a filter value its column cannot hold', async () => {
+  const { db, restore } = withDb();
+  try {
+    const bad = await db.sbQuery({
+      method: 'GET', table: 'video_sources', query: 'id=eq.not-a-uuid&select=*',
+    });
+    assert.equal(bad.ok, false, 'Postgres raises rather than returning no rows');
+    assert.equal(bad.status, 400);
+    assert.match(bad.error, /invalid input syntax for type uuid/);
+
+    // A well-formed uuid that is simply absent is still an ordinary empty
+    // result — the check must refuse unreadable values, not absent ones.
+    const absent = await db.sbQuery({
+      method: 'GET', table: 'video_sources', query: `id=eq.${uuid(4242)}&select=*`,
+    });
+    assert.equal(absent.ok, true, absent.error);
+    assert.equal(absent.data.length, 0);
+
+    // And a text column still takes text that merely looks odd.
+    const text = await db.sbQuery({
+      method: 'GET', table: 'video_sources', query: 'codec=eq.not-a-uuid&select=*',
+    });
+    assert.equal(text.ok, true, text.error);
+  } finally { restore(); }
+});
+
+test('the fake checks multi-word column types instead of throwing on them', () => {
+  // `/^([a-z ]+?)(\s|$|\()/i` was non-greedy, so `double precision` parsed as
+  // `double` and `character varying` as `character` — neither a TYPE_CHECKS
+  // key, so both threw rather than being checked. Three entries in that table
+  // were unreachable: they looked supported and were not. Today's SQL declares
+  // none of them, which is what made this a trap for a later slice rather than
+  // a live bug.
+  const schema = parseSchemaText(`
+    create table if not exists public.wide (
+      id uuid primary key default gen_random_uuid(),
+      ratio double precision,
+      label character varying(40),
+      seen timestamp with time zone
+    );
+    alter table public.wide enable row level security;
+  `);
+  const columns = schema.tables.get('wide').columns;
+  assert.equal(columns.get('ratio').type, 'double precision');
+  assert.equal(columns.get('label').type, 'character varying');
+  assert.equal(columns.get('seen').type, 'timestamp with time zone');
+
+  const db = createFakeDb(schema);
+  const insert = (row) => db.sbQuery({
+    method: 'POST', table: 'wide', query: 'select=*',
+    headers: { Prefer: 'return=representation' },
+    body: [row],
+  });
+
+  return (async () => {
+    assert.equal((await insert({ ratio: 1.5, label: 'ok', seen: '2026-08-26T00:00:00Z' })).ok, true);
+
+    // Each of the three now actually CHECKS, which is the whole difference
+    // between "supported" and "looks supported".
+    const badRatio = await insert({ ratio: 'not a number' });
+    assert.equal(badRatio.ok, false, 'double precision must reject non-numbers');
+    assert.match(badRatio.error, /invalid input syntax for type double precision/);
+
+    const badSeen = await insert({ seen: 'not a date' });
+    assert.equal(badSeen.ok, false, 'timestamp with time zone must reject non-dates');
+    assert.match(badSeen.error, /invalid input syntax for type timestamp with time zone/);
+  })();
+});
+
+test('a type this fake cannot check still throws rather than being read past', () => {
+  // The promise in this file's header, and the reason matchDeclaredType falls
+  // back to the first word instead of guessing. `interval` must not be read as
+  // the `int` its first three letters spell.
+  assert.throws(
+    () => parseSchemaText(`
+      create table if not exists public.t (
+        id uuid primary key default gen_random_uuid(),
+        gap interval
+      );
+    `),
+    /cannot check a value against/,
+  );
 });

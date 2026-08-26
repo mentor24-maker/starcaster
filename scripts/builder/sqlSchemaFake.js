@@ -154,6 +154,44 @@ const TYPE_CHECKS = new Map([
   ['date', isTimestampValue],
 ]);
 
+/**
+ * Every type name this fake knows, longest first.
+ *
+ * The order is the whole point: matched shortest-first, `int` would swallow the
+ * head of `interval` and `timestamp` the head of `timestamptz`.
+ */
+const TYPE_NAMES_LONGEST_FIRST = [...TYPE_CHECKS.keys()].sort((a, b) => b.length - a.length);
+
+/**
+ * The declared type at the head of a column definition.
+ *
+ * WHY THIS IS NOT A REGEX ANY MORE (2026-08-26). It was `/^([a-z ]+?)(\s|$|\()/i`
+ * — non-greedy, so it stopped at the first space. `double precision` parsed as
+ * `double` and `character varying` as `character`, and since neither is a key
+ * in TYPE_CHECKS, both THREW instead of being checked. The three multi-word
+ * entries in that table were unreachable: they looked supported and were not.
+ * (`timestamp with time zone` survived only by accident, matching the shorter
+ * `timestamp` key — the right answer for the wrong reason.)
+ *
+ * It failed loudly, which is what this file promises, and today's SQL declares
+ * none of those types — so it cost nothing yet. It was a trap set for whichever
+ * of slices 2/8-8/8 first adds a `double precision` column.
+ *
+ * A name must END at a space, a `(` or the end of the string, and a type this
+ * fake does not know falls back to its first word so the caller can still name
+ * it in the error it throws.
+ */
+function matchDeclaredType(text) {
+  const lower = String(text).toLowerCase();
+  for (const name of TYPE_NAMES_LONGEST_FIRST) {
+    if (!lower.startsWith(name)) continue;
+    const after = lower.charAt(name.length);
+    if (after === '' || after === ' ' || after === '(') return name;
+  }
+  const first = /^[a-z_][a-z0-9_]*/i.exec(lower);
+  return first ? first[0] : lower;
+}
+
 /** A number, or a string Postgres would read as one. Booleans are not numbers
  *  here even though `Number(true)` is 1 — that coercion is the bug, not the
  *  feature (see numberOrError in lib/videoSourcesStore.js). */
@@ -194,10 +232,11 @@ function parseColumn(definition) {
 
   let remaining = rest.replace(/\s+/g, ' ').trim();
 
-  // The type, plus any (length) or (precision, scale) after it.
-  const typeMatch = /^([a-z ]+?)(\s|$|\()/i.exec(remaining);
-  const type = (typeMatch ? typeMatch[1] : remaining).trim().toLowerCase();
-  remaining = remaining.slice(typeMatch ? typeMatch[1].length : remaining.length).trim();
+  // The type, plus any (length) or (precision, scale) after it. Multi-word
+  // types are matched WHOLE — see matchDeclaredType for what stopping at the
+  // first space cost.
+  const type = matchDeclaredType(remaining);
+  remaining = remaining.slice(type.length).trim();
   if (remaining.startsWith('(')) {
     const sized = cutParenClause(remaining, /^/);
     if (sized) remaining = sized.remaining;
@@ -499,8 +538,15 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         // and `row-1` is not a uuid. Deterministic on purpose: a test that
         // fails must fail the same way twice, so nothing here reaches for
         // real randomness. The counter is what makes each one distinct.
+        // The leading groups carry hex LETTERS on purpose. They were all
+        // zeroes, which is uuid-shaped but unreachable by a whole class of
+        // bug: `id.toUpperCase()` was a no-op, so no fixture built on this
+        // could ever exercise Postgres's case-insensitive uuid comparison —
+        // and that is exactly the bug review found in videoSessionsStore
+        // (a session refusing its OWN source over two spellings of one id).
+        // Still deterministic; the counter is what makes each one distinct.
         row[name] = column.type === 'uuid'
-          ? `00000000-0000-4000-8000-${String(counter).padStart(12, '0')}`
+          ? `a115c635-8658-4dad-a8b1-${String(counter).padStart(12, '0')}`
           : `${idPrefix}-${counter}`;
       } else if (column.default === 'now()') {
         row[name] = new Date(1755000000000 + counter * 1000).toISOString();
@@ -686,12 +732,103 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       .map(({ row }) => row);
   }
 
+  /**
+   * Can this URL text be cast to this column's type — the question real
+   * PostgREST asks before it runs the query at all?
+   *
+   * The row-value checks in TYPE_CHECKS take JS values; a filter value is
+   * always a string off the query string, so `boolean` is spelled out here
+   * rather than being asked `typeof value === 'boolean'` and always refused.
+   */
+  /**
+   * Does this stored cell equal this filter value, by the COLUMN's rules?
+   *
+   * `uuid` is compared case-insensitively because Postgres stores it
+   * canonically and compares it that way — `A115C635-...` and `a115c635-...`
+   * are one value to the database. A plain `===` here made the fake answer
+   * "no such row" to a lookup real Postgres satisfies, which is a false
+   * NEGATIVE: a store that works in production would fail its test, and the
+   * obvious way to make that test pass is to break the store.
+   *
+   * Found by the fixture, not by reading: the generated ids used to be all
+   * zeroes, so `toUpperCase()` was a no-op and nothing here could tell the
+   * difference. See the id generator in applyDefaults.
+   */
+  function valuesEqual(type, cell, wanted) {
+    if (type === 'uuid') return String(cell).toLowerCase() === wanted.toLowerCase();
+    return String(cell) === wanted;
+  }
+
+  function filterValueFits(type, text) {
+    const fits = TYPE_CHECKS.get(type);
+    if (!fits) return true;
+    if (type === 'boolean') return ['true', 'false', 't', 'f', '1', '0'].includes(text.toLowerCase());
+    return fits(text);
+  }
+
+  /**
+   * Is every column named in this `or=` tree a real column?
+   *
+   * Same hole as the `eq` filters below, one line over: `parseFilterNode`
+   * checks that a column NAME is well-SHAPED and never that it exists, so a
+   * typo inside an `or=` matched nothing and answered 200 with an empty list —
+   * which is the exact shape of the cross-project tests this fake exists to
+   * hold up.
+   */
+  function unknownOrColumn(table, node) {
+    if (node.kind === 'or' || node.kind === 'and') {
+      for (const child of node.children) {
+        const bad = unknownOrColumn(table, child);
+        if (bad) return bad;
+      }
+      return '';
+    }
+    return table.columns.has(node.column) ? '' : node.column;
+  }
+
+  /**
+   * Apply the `col=eq.value` filters the way PostgREST does.
+   *
+   * WHY THE PREDICATE IS NO LONGER ONE LINE (2026-08-26). It was
+   * `String(row[key]) === match[1]`, which got three separate things wrong,
+   * all of them in the "answers 200 and means it" direction:
+   *
+   *   1. `String(null)` is the text `'null'`, so `col=eq.null` MATCHED a real
+   *      SQL NULL. In PostgREST it matches nothing — `is.null` is the operator
+   *      for that. This PR had already found and fixed the identical coercion
+   *      twice, in `uniqueViolation` and in `evaluateFilterNode`; this was the
+   *      third copy, left live.
+   *   2. A misspelled column read `row[key]` as `undefined`, matched nothing,
+   *      and answered `200` with `[]`. Real PostgREST answers `400`.
+   *   3. A malformed uuid did the same, where Postgres raises
+   *      `invalid input syntax for type uuid`.
+   *
+   * (2) and (3) are not test-only nits: `videoStudioCatalog.test.js` was
+   * asserting a 404 on a path production returns as a 400, so the suite pinned
+   * behaviour the real database does not have. This file is the declared
+   * harness for Studio slices 2/8 through 8/8, and a check that quietly does
+   * not run here buys false confidence seven more times.
+   */
   function filterRows(tableName, params) {
+    const table = schema.tables.get(tableName);
     let rows = data.get(tableName).slice();
     for (const [key, value] of params.get('filters') || []) {
       const match = /^eq\.(.*)$/.exec(value);
       if (!match) throw new Error(`sqlSchemaFake: unsupported filter ${key}=${value}`);
-      rows = rows.filter((row) => String(row[key]) === match[1]);
+      if (!table.columns.has(key)) {
+        return { error: `column ${tableName}.${key} does not exist` };
+      }
+      const wanted = match[1];
+      const { type } = table.columns.get(key);
+      if (!filterValueFits(type, wanted)) {
+        return { error: `invalid input syntax for type ${type}: "${wanted}"` };
+      }
+      rows = rows.filter((row) => {
+        const cell = row[key];
+        // NULL is never equal to anything in SQL, not even to the text 'null'.
+        if (cell === null || cell === undefined) return false;
+        return valuesEqual(type, cell, wanted);
+      });
     }
     if (params.has('or')) {
       // Parsed BEFORE the filter runs, not inside the predicate. `.filter()`
@@ -700,6 +837,10 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       // and a query matching nothing is exactly the shape of the cross-project
       // tests here. Same reasoning as the PATCH column check below.
       const conditions = parseOr(params.get('or'));
+      for (const node of conditions) {
+        const bad = unknownOrColumn(table, node);
+        if (bad) return { error: `column ${tableName}.${bad} does not exist` };
+      }
       rows = rows.filter((row) => matchesOr(row, conditions));
     }
 
