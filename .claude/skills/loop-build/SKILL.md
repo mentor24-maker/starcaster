@@ -112,9 +112,19 @@ a day. Use `ask`, whose body is four sections, checked before anything is sent:
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask; "Nothing right now" is fine, but say it out loud
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone
 ```
 
-`@@NEEDED` renders under a banner he can spot without reading. If the ticket
+`@@NEEDED` renders under a banner he can spot without reading.
+
+**An ask that spends money or cannot be undone is refused without
+`@@EVIDENCE`** — spend, buy, subscribe, upgrade, a plan change, a credential
+rotation, a deletion. That section carries the command in runnable form, its
+ACTUAL output pasted in a fence, and when you ran it in his clock ("measured at
+8:04pm"). On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
+diagnosis that was wrong, and re-running the one failing call would have
+settled it in seconds. Re-run it, paste what it says — do not summarise it.
+Ordinary escalations are untouched. If the ticket
 genuinely has no instruction behind it, say that in `@@ASKED` and name the
 standing decision it descends from.
 

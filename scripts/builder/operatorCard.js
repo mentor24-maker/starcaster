@@ -1,5 +1,7 @@
 'use strict';
 
+const { costlyTriggers, describeTriggers } = require('./costlyAsk.js');
+
 /**
  * The operator card — the fixed shape of every message a loop puts in front
  * of Dane on a ClickUp ticket.
@@ -51,8 +53,10 @@
  * `describe` command refuses a body containing one, for the same reason.
  */
 
-/** The three (plus one optional) sections of the authored input. */
-const MARKERS = ['ASKED', 'WHEN', 'CONTEXT', 'NEEDED'];
+/** The three required sections of the authored input, plus two optional ones.
+ *  `@@EVIDENCE` is optional in general and REQUIRED when the ask costs money
+ *  or cannot be undone — see requiredEvidenceProblems below. */
+const MARKERS = ['ASKED', 'WHEN', 'CONTEXT', 'NEEDED', 'EVIDENCE'];
 
 const CONTEXT_MIN_WORDS = 50;
 const CONTEXT_MAX_WORDS = 100;
@@ -89,7 +93,12 @@ function countWords(text) {
  *   @@NEEDED
  *   ...the ask...
  *
- * `@@WHEN` is optional. Anything before the first marker is an error rather
+ *   @@EVIDENCE
+ *   ...the command, its output, and when it was run...
+ *
+ * `@@WHEN` and `@@EVIDENCE` are optional to the parser — `@@EVIDENCE` becomes
+ * mandatory in validateCard when the ask itself costs money or cannot be
+ * undone. Anything before the first marker is an error rather
  * than silently-dropped text: a card whose first section got eaten is exactly
  * the failure this format exists to prevent.
  */
@@ -132,6 +141,7 @@ function parseCard(text) {
     when: trim('WHEN'),
     context: trim('CONTEXT'),
     needed: trim('NEEDED'),
+    evidence: trim('EVIDENCE'),
   };
 }
 
@@ -171,7 +181,9 @@ function validateCard(card) {
     );
   }
 
-  for (const name of ['asked', 'context', 'needed']) {
+  problems.push(...evidenceProblems(card));
+
+  for (const name of ['asked', 'context', 'needed', 'evidence']) {
     const offending = findBlockquoteLines(card[name]);
     if (offending.length) {
       problems.push(
@@ -180,6 +192,110 @@ function validateCard(card) {
         '  Use plain text, **bold**, or a fenced block instead.',
       );
     }
+  }
+  return problems;
+}
+
+/**
+ * A clock time in the register the operator reads — "8:04pm", "8:04 PM",
+ * optionally dated ("2026-08-23 8:04pm", "8/23 8:04pm"). Returns the matched
+ * text, or null when there is no timestamp at all.
+ *
+ * Only the operator's own register counts. A bare ISO instant or a unix epoch
+ * is a number he has to convert before he can tell whether the measurement is
+ * from ten minutes ago or from before the outage, and that conversion is
+ * exactly the step nobody performs (OPERATIONS SOP 13).
+ */
+const CLOCK = /((?:\d{4}-\d{2}-\d{2}\s+|\d{1,2}\/\d{1,2}\s+)?\d{1,2}:\d{2}\s*(?:am|pm))/i;
+function evidenceTimestamp(text) {
+  const found = CLOCK.exec(String(text || ''));
+  return found ? found[1].trim() : null;
+}
+
+/** The fenced blocks inside a section, as arrays of their content lines. */
+function fencedBlocks(text) {
+  const blocks = [];
+  let open = null;
+  for (const line of String(text || '').split('\n')) {
+    if (/^\s*```/.test(line)) {
+      if (open === null) open = [];
+      else { blocks.push(open); open = null; }
+      continue;
+    }
+    if (open !== null) open.push(line);
+  }
+  // An unclosed fence still carried content; count what it holds rather than
+  // discarding it, so a missing back-tick line reads as a formatting slip and
+  // not as "you pasted no output".
+  if (open !== null && open.length) blocks.push(open);
+  return blocks;
+}
+
+/**
+ * The evidence rule. An ask that costs money or cannot be undone must arrive
+ * with the check that establishes it — see costlyAsk.js for the incident.
+ *
+ * Three things are demanded, and all three are mechanical:
+ *
+ *   1. the COMMAND or request, in runnable form — a fenced block, which is
+ *      also the only verbatim form ClickUp is known to keep intact;
+ *   2. its ACTUAL OUTPUT, pasted rather than summarised — so the fence has to
+ *      hold more than the one command line. A command with nothing underneath
+ *      it is a claim about what would happen, which is what went wrong;
+ *   3. WHEN it was run, in the operator's clock. Evidence gathered before a
+ *      sixteen-hour outage is not evidence about now.
+ *
+ * What is deliberately NOT checked: whether the evidence is CORRECT. That is
+ * a reasoning task and it belongs to the reader. This gate only enforces that
+ * a costly ask arrives with a reproducible check and the time it was run.
+ */
+function evidenceProblems(card) {
+  const problems = [];
+  const triggers = costlyTriggers(card.needed);
+  const evidence = String(card.evidence || '').trim();
+
+  if (!triggers.length) {
+    // An ordinary ask is untouched — including one that volunteered evidence.
+    // Narrowness is the value: a gate that fires on everything gets routed
+    // around, and then it protects nothing.
+    if (!evidence) return problems;
+  } else if (!evidence) {
+    problems.push(
+      `@@EVIDENCE is missing, and this ask is a costly one: ${describeTriggers(triggers)}.\n` +
+      '  An ask that spends money or cannot be undone has to carry the check that proves it —\n' +
+      '  the command or request in runnable form, its ACTUAL output pasted in a fenced block,\n' +
+      '  and when you ran it in his clock ("8:04pm"). On 2026-08-23 an agent asked Dane to pay\n' +
+      '  for a plan upgrade on a diagnosis that was wrong; re-running the one failing call\n' +
+      '  would have settled it in seconds. Re-run it now and paste what it says.',
+    );
+    return problems;
+  }
+
+  // From here the section exists, so its SHAPE is checked — for a costly ask
+  // because it is owed, and for a volunteered one because half-evidence is
+  // more misleading than none.
+  const blocks = fencedBlocks(evidence);
+  const filled = blocks.filter((lines) => lines.some((line) => line.trim()));
+  if (!filled.length) {
+    problems.push(
+      '@@EVIDENCE has no fenced block. Put the command and its output inside ``` fences:\n' +
+      '  a fence is the only form ClickUp is known to keep verbatim, and verbatim is the\n' +
+      '  whole point — a summary of the output is the judgment this gate exists to skip.',
+    );
+  } else if (!filled.some((lines) => lines.filter((line) => line.trim()).length >= 2)) {
+    problems.push(
+      '@@EVIDENCE shows a command with no output under it. Paste what it actually printed,\n' +
+      '  not what it should print — the 2026-08-23 escalation was wrong precisely because\n' +
+      '  nobody re-ran the failing call before asking him to pay for the diagnosis.',
+    );
+  }
+
+  if (!evidenceTimestamp(evidence)) {
+    problems.push(
+      '@@EVIDENCE carries no time it was run. Add it in his clock — "measured at 8:04pm",\n' +
+      '  dated if it was not today. Evidence gathered before a sixteen-hour outage is not\n' +
+      '  evidence about now, and a stale proof has to be visible rather than implied.',
+    );
   }
   return problems;
 }
@@ -247,6 +363,21 @@ function renderCard(card) {
     card.needed,
     '',
   );
+  if (card.evidence) {
+    // Under the ask, not above it: he reads what is being asked of him first,
+    // then the proof it rests on. The measurement time goes in the HEADING
+    // rather than being left inside the paste, so a stale proof is visible at
+    // a glance instead of implied — that is the half of the 2026-08-23 failure
+    // that survives even when evidence is attached.
+    const when = evidenceTimestamp(card.evidence);
+    parts.push(
+      '',
+      `**THE CHECK BEHIND THIS ASK${when ? ` — measured at ${when}` : ''}**`,
+      '',
+      card.evidence,
+      '',
+    );
+  }
   return parts.join('\n');
 }
 
@@ -270,6 +401,9 @@ function buildCard(text) {
 
 module.exports = {
   MARKERS,
+  evidenceTimestamp,
+  fencedBlocks,
+  evidenceProblems,
   CONTEXT_MIN_WORDS,
   CONTEXT_MAX_WORDS,
   BANNER_RULE,

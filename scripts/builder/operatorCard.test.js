@@ -17,6 +17,8 @@ const {
   cardSurvived,
   renderCard,
   buildCard,
+  evidenceTimestamp,
+  fencedBlocks,
 } = require('./operatorCard.js');
 
 /** A body of exactly n words, for testing the range boundaries. */
@@ -24,14 +26,27 @@ function words(n) {
   return Array.from({ length: n }, (_, i) => `word${i + 1}`).join(' ');
 }
 
-function card({ asked = 'build the chip display', when = '', context = words(60), needed = 'Nothing right now.' } = {}) {
+function card({ asked = 'build the chip display', when = '', context = words(60), needed = 'Nothing right now.', evidence = '' } = {}) {
   return [
     '@@ASKED', asked,
     ...(when ? ['@@WHEN', when] : []),
     '@@CONTEXT', context,
     '@@NEEDED', needed,
+    ...(evidence ? ['@@EVIDENCE', evidence] : []),
   ].join('\n');
 }
+
+/** A well-formed proof: the command, its real output, and when it was run. */
+const GOOD_EVIDENCE = [
+  'Re-ran the call that was failing, at 8:04pm:',
+  '```',
+  '$ curl -sS -w "%{http_code}" .../team/9013/plan',
+  '{"plans":[{"plan_name":"Free Forever"}]} 200',
+  '```',
+].join('\n');
+
+/** The ask from the 2026-08-23 escalation, verbatim in spirit. */
+const COSTLY_ASK = 'Put the workspace back on a paid plan.';
 
 // ---------------------------------------------------------------- parsing
 
@@ -220,6 +235,119 @@ test('buildCard returns the rendered card AND the parsed one', () => {
   // The parsed card comes back too, so the caller can check after posting that
   // ClickUp actually kept the operator's words.
   assert.equal(built.card.asked, 'build the chip display');
+});
+
+// ------------------------------------------------------ the evidence gate
+
+/**
+ * WHY (2026-08-23). An agent asked Dane to pay for a plan upgrade to fix an
+ * outage that was transient and had already cleared. The diagnosis was
+ * plausible and wrong, and it reached his wallet without anyone re-running the
+ * one call that would have settled it. The gate below makes the escalation
+ * itself demand that command and its output. See costlyAsk.js.
+ */
+
+test('a costly ask is REFUSED without @@EVIDENCE, and the message says why', () => {
+  assert.throws(
+    () => buildCard(card({ needed: COSTLY_ASK })),
+    (err) => {
+      assert.match(err.message, /@@EVIDENCE is missing/);
+      assert.match(err.message, /paid plan/);          // names the trigger it fired on
+      assert.match(err.message, /2026-08-23/);         // and the incident behind the rule
+      assert.match(err.message, /Nothing was posted and no status was moved/);
+      return true;
+    },
+  );
+});
+
+test('the same costly ask WITH evidence is accepted', () => {
+  const built = buildCard(card({ needed: COSTLY_ASK, evidence: GOOD_EVIDENCE }));
+  assert.equal(built.card.evidence, GOOD_EVIDENCE);
+});
+
+test('an ordinary ask is unaffected — no evidence needed, none demanded', () => {
+  // Criterion 3. A gate that fires on everything gets bypassed, and then it
+  // protects nothing. These are the escalations that must still sail through.
+  for (const needed of [
+    'Nothing right now.',
+    'Should the chip show the count or the label?',
+    'A or B: keep the sidebar, or fold it into the header?',
+    'Confirm the scope is pages only, not posts.',
+  ]) {
+    assert.deepEqual(validateCard(parseCard(card({ needed }))), [], needed);
+  }
+});
+
+test('evidence with no output under the command is refused', () => {
+  // A command with nothing beneath it is a claim about what WOULD happen,
+  // which is exactly the shape of the wrong diagnosis.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: 'Checked at 8:04pm:\n```\n$ curl -sS .../team/9013/plan\n```',
+  })));
+  assert.match(problems.join('\n'), /command with no output under it/);
+});
+
+test('evidence that only summarises the output is refused', () => {
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: 'I ran the plan endpoint at 8:04pm and it came back Free Forever.',
+  })));
+  assert.match(problems.join('\n'), /no fenced block/);
+});
+
+test('evidence with no time it was run is refused', () => {
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: '```\n$ curl -sS .../team/9013/plan\n{"plan_name":"Free Forever"}\n```',
+  })));
+  assert.match(problems.join('\n'), /no time it was run/);
+});
+
+test('volunteered evidence on an ordinary ask is still shape-checked', () => {
+  // Half-evidence is more misleading than none: it reads as proof.
+  const problems = validateCard(parseCard(card({
+    needed: 'Which column should it sort by?',
+    evidence: 'I looked and it seemed fine.',
+  })));
+  assert.match(problems.join('\n'), /no fenced block/);
+});
+
+test('the timestamp is read in the operator\'s own register', () => {
+  assert.equal(evidenceTimestamp('measured at 8:04pm'), '8:04pm');
+  assert.equal(evidenceTimestamp('measured at 8:04 PM'), '8:04 PM');
+  assert.equal(evidenceTimestamp('ran 2026-08-23 8:04pm'), '2026-08-23 8:04pm');
+  assert.equal(evidenceTimestamp('ran 8/23 8:04pm'), '8/23 8:04pm');
+  // A bare ISO instant is a number he has to convert before he can tell
+  // whether the reading is from ten minutes ago or from before the outage.
+  assert.equal(evidenceTimestamp('ran at 2026-08-23T20:04:11Z'), null);
+});
+
+test('fencedBlocks keeps the content of an unclosed fence', () => {
+  // A missing back-tick line is a formatting slip, not "you pasted no output".
+  assert.deepEqual(fencedBlocks('```\nline one\nline two'), [['line one', 'line two']]);
+  assert.deepEqual(fencedBlocks('nothing fenced here'), []);
+});
+
+test('the card SHOWS the evidence, under the ask, with its measured-at time', () => {
+  // Criterion 2 and the freshness half: a stale proof has to be visible
+  // rather than implied, so the time goes in the heading.
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: GOOD_EVIDENCE })));
+  assert.match(out, /\*\*THE CHECK BEHIND THIS ASK — measured at 8:04pm\*\*/);
+  assert.ok(out.indexOf(COSTLY_ASK) < out.indexOf('THE CHECK BEHIND THIS ASK'),
+    'the ask comes first, then the proof it rests on');
+  assert.ok(out.includes('{"plans":[{"plan_name":"Free Forever"}]} 200'),
+    'the pasted output reaches the card verbatim');
+});
+
+test('a card with no evidence renders exactly as it always did', () => {
+  const out = renderCard(parseCard(card()));
+  assert.ok(!out.includes('THE CHECK BEHIND THIS ASK'));
+});
+
+test('@@EVIDENCE is parsed as its own section and may not be repeated', () => {
+  assert.equal(parseCard(card({ evidence: 'x' })).evidence, 'x');
+  assert.throws(() => parseCard(card({ evidence: 'x' }) + '\n@@EVIDENCE\ny'), /@@EVIDENCE appears twice/);
 });
 
 // --------------------------------------------- the guard inside clickup_direct

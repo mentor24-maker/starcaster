@@ -269,7 +269,9 @@ function usage(code = 2) {
   console.error('                                             move the status (he is auto-assigned). --no-move posts the');
   console.error('                                             card and leaves the status alone. The card body uses');
   console.error(`                                             @@ASKED / @@WHEN / @@CONTEXT / @@NEEDED; @@CONTEXT must be`);
-  console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. Checked before anything is sent.`);
+  console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. An ask that SPENDS MONEY or cannot be undone`);
+  console.error('                                             also needs @@EVIDENCE: the command, its real output, and');
+  console.error('                                             the time you ran it. Checked before anything is sent.');
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
   console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run] [--no-merge]');
   console.error('                                             relay the operator\'s new comments on open tasks to the bus.');
@@ -976,11 +978,13 @@ if (cmd === 'whoami') {
     console.error(`\n"${status}" is a handoff to the operator, not just a status.\n`);
     console.error('Use `ask` instead — it posts the operator card and moves the status together:');
     console.error(`  npm run clickup -- ask --task ${task} --status "${status}" --body-file -\n`);
-    console.error('The card body is four sections, and the check runs before anything is sent:');
+    console.error('The card body is these sections, and the check runs before anything is sent:');
     console.error('  @@ASKED    his own words that caused this ticket, verbatim');
     console.error('  @@WHEN     optional — when and where he said it');
     console.error(`  @@CONTEXT  the problem and the fix in plain English, ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words`);
-    console.error('  @@NEEDED   the specific ask ("Nothing right now" is fine — say it out loud)\n');
+    console.error('  @@NEEDED   the specific ask ("Nothing right now" is fine — say it out loud)');
+    console.error('  @@EVIDENCE required only when the ask spends money or cannot be undone: the');
+    console.error('             command, its real output, and when you ran it ("measured at 8:04pm")\n');
     console.error('If this really is a status move with no ask attached, pass --no-card. That flag is');
     console.error('your written claim that a card is not owed here, visible in the transcript.\n');
     process.exit(2);

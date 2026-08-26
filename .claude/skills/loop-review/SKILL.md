@@ -74,6 +74,8 @@ body is four sections, checked before anything is sent:
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask, under a banner he can spot without reading
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone: the
+            command, its real output in a fence, and when you ran it
 ```
 
 ### A `Ready to launch` card must carry a link he can click

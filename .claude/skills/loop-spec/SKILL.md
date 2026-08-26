@@ -137,6 +137,11 @@ replaces. The long version belongs in the description.
 @@NEEDED
 The specific ask. "Nothing right now" is a good answer and a useful one — but it
 has to be written down, not left blank.
+@@EVIDENCE
+Required ONLY when the ask costs money or cannot be undone (spend, buy,
+subscribe, upgrade, plan change, credential rotation, deletion): the command in
+runnable form, its ACTUAL output pasted in a ``` fence, and when you ran it in
+his clock ("measured at 8:04pm").
 ```
 
 It renders with `@@NEEDED` under a banner he can spot without reading:
