@@ -51,6 +51,7 @@ npm run clickup -- comments --task <id>                             # the commen
 npm run clickup -- loop-note --task <id> --transition review-started           # CLAIM THE REVIEW — do this before you verify
 npm run clickup -- verdict --task <id> --pass --if-status "In review" --body-file -   # RECORD THE VERDICT FIRST — the gate reads this
 npm run clickup -- verdict --task <id> --fail --if-status "In review" --body-file -   # ... or the send-back, same shape
+npm run clickup -- send-back-rounds --task <id>                     # how many rounds already? exit 3 = escalate, do not send back
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -   # pass: card + status together
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -  # a judgment call only he can settle
 npm run clickup -- status --task <id> --status Queued --if-status "In review" # send back (assignees auto-cleared)
@@ -119,6 +120,11 @@ npm run clickup -- loop-note --task <id> --transition review-started  # CLAIM �
 npm run clickup -- loop-note --task <id> --transition verified    # PASS -> Ready to launch
 npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back to Queued
 ```
+
+The send-back note carries its **round** and reason — `↩ round 3 — three docs
+now contradict the change (12:28pm)` — and reads both off the ticket's own
+verdict comments, so run it **after** `verdict --fail`, not before. Nothing to
+pass by hand.
 
 `CANNOT STAMP` means the one-time "Loop note" field is not set up yet (see
 `docs/LOOP_ENGINEERING.md`) — note it and carry on; it never blocks a verdict.
@@ -232,6 +238,21 @@ npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back
      to fix and why. The `loop-build` skill will pick it up again. Do not fix
      it yourself inside the review step — keep build and review separate so the
      check stays honest.
+
+     `--body-file` is **required** on a send-back and its FIRST LINE is the
+     reason the board will show, so write that line as one short clause a
+     non-programmer can read at a glance ("three docs now contradict the
+     change"), then the detail below it.
+
+     **`verdict --fail` refuses on what would be the fourth send-back** (exit
+     3, nothing written) and prints what each previous round found. That is not
+     an error to work around: three rounds means the **spec** is wrong, not the
+     build, and the next move is Dane's. Escalate instead — `ask --status
+     "Needs your input"` with all three rounds named one line each in
+     `@@CONTEXT` (or in the description if it runs long), and `@@NEEDED`
+     offering him named options — respec, split, or drop — rather than an open
+     question. Then `loop-note --transition escalated`. The reasoning is in
+     `docs/LOOP_ENGINEERING.md` → "A send-back says which round it is".
    - **Fail, and only a human can settle it** (the task is ambiguous, the
      acceptance criteria contradict what the code should do, or the fix is a
      product decision) → `ask --status "Needs your input"`. Put the evidence in
@@ -262,6 +283,11 @@ npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back
   Two passes reviewing one ticket is wasted work; two passes *writing verdicts*
   on one ticket is a wrong answer reaching the operator. If `--if-status`
   refuses, that is the system working — re-read, stand down, move on.
+- **Never force a fourth send-back through.** `--fourth-round-anyway` exists
+  for the case where Dane has already settled the ticket and another round is
+  genuinely right; it is a written claim, not a way past a refusal you did not
+  want. A ticket going round a fourth time is the loop failing to notice it is
+  stuck.
 - If the PR has merge conflicts with main, send it back to `Queued` with a note
   to rebase — don't resolve conflicts blind.
 - Keep review comments plain-language and specific enough that the next build

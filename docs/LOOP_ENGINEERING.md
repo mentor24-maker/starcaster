@@ -1080,8 +1080,9 @@ The Status column says which STAGE a ticket is in; the **Loop note** column
 says what is actually happening and what happens next, in plain language:
 `🔨 building — claimed 10:12am`, `🔀 PR #351 open — waiting for a review pass`,
 `🔍 being checked — a review pass started 8/23 3:41am`,
-`👀 verified — waiting on Dane to say "merge"`, `↩ returned to the line…`,
-`✅ live 8/20`. An empty note means "waiting in line" — correct, not a gap.
+`👀 verified — waiting on Dane to say "merge"`,
+`↩ round 3 — three docs now contradict the change`, `✅ live 8/20`. An empty
+note means "waiting in line" — correct, not a gap.
 The note is not decoration in one case: `🔍 being checked` is loop-review's
 **claim** on a ticket, and the next review pass reads it to decide whether to
 leave that ticket alone (see "Two passes, one ticket" above). `queue` and `get`
@@ -1094,6 +1095,63 @@ The loops stamp these themselves (`loop-note` / `loop-heartbeat` in
 `scripts/clickup_direct.mjs`, wording in `scripts/builder/loopNote.js`) — one
 write per real transition, never per queued ticket (that would be ~33 writes a
 pass against a rate-limited API for what the sort order already shows).
+
+### A send-back says which round it is, and the fourth asks Dane
+
+`Queued` holds two different things — work nobody has started, and work that
+was built, reviewed and handed back with notes — and from the board they are
+identical. Dane spotted it from the UI on 2026-08-25, watching a ticket bounce
+for the third time: *"I would think tasks would never go back to queue except
+for situations involving dependencies or time delays."* The build loop had
+spotted the same conflation by jamming on it earlier that day (86bbm4zwd): the
+WIP cap counts open PRs, three of those PRs belonged to tickets sitting in
+`Queued` **for rework**, so the cap was blocking the only thing that could
+close them.
+
+He chose the lighter of the two fixes — carry the distinction in the Loop note,
+**not** in a new ClickUp status. (Statuses live on the list, and that dialog has
+burned this project before.) So a send-back now reads
+`↩ round 3 — three docs now contradict the change (12:28pm)`:
+
+- **The round** is prior send-backs + 1, counted from the ticket's own
+  `REVIEW: sent back` verdict comments. Derived, never stored — no new state
+  means no new state to fall out of sync.
+- **The reason** is the first line of the note the review pass gave
+  `verdict --fail`, so the board line and the audit trail cannot disagree.
+  It is truncated to fit ClickUp's 255-character field; **the round is never
+  what gets cut**, because "this is the third time" is the part that carries
+  the meaning and the reason can be read in full on the ticket.
+
+**On what would be round 4, `verdict --fail` refuses** (exit 3, nothing
+written) and prints what every previous round found plus the `ask` command to
+use instead. Three rounds means the **spec** was wrong, not the builder, and a
+fourth pass at the same ticket is the system failing to notice it is stuck.
+Ticket 86bbk2fuh proved it on 2026-08-25: it asked to change one number, turned
+out to touch four other records, and each round found something genuinely new.
+The escalation card must name each round's finding on its own line — a card
+saying "this has failed three times" without saying what they were is not
+actionable — and `@@NEEDED` should offer him named options (respec, split,
+drop) rather than an open question.
+
+Four, not three: two rounds is ordinary and healthy. The week this shipped,
+send-backs caught a tenancy hole and an inverted safety property, and
+escalating either would have spent his attention on work the loop was handling
+correctly.
+
+```
+npm run clickup -- send-back-rounds --task <id>   # rounds so far, what each found; exit 3 = escalate
+```
+
+**The counter is the ticket's whole history, and it does not reset** — including
+after Dane answers an escalation. That is deliberate: the count is a fact about
+the ticket, and resetting it on any operator comment would let a ticket loop
+indefinitely as long as somebody kept talking on it. If he settles a ticket and
+a further round genuinely is the right move, `verdict --fail
+--fourth-round-anyway` is the written claim that you meant it, visible in the
+transcript — the same idiom as `--no-guard`.
+
+Code: `scripts/builder/sendBackRounds.js` (pure, `sendBackRounds.test.js` pins
+the round counting and both sides of the round-3/round-4 boundary).
 
 **One-time setup (ClickUp UI — the API cannot create either):**
 1. On the Loop Queue list: Columns → + → Create field → **Text**, named
