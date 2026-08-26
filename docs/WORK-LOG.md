@@ -1,3 +1,21 @@
+## 2026-08-26 — Saving a shared section no longer wipes your page templates (#428)
+
+The Builder lets you save a section — a footer, say — once and have every page
+that uses it follow along. This change was meant to make that push reach page
+templates too. It did, but it wrote them the wrong way: instead of updating
+just the sections, it overwrote the template's whole record with mostly blanks.
+A template called "Delray — Main Site Template" came back with no name at all,
+and its subject line, colours, logos, banner images and feature copy went with
+it. Templates keep no history, so there was nothing to undo it from.
+
+The write now hands over the full template with only the sections changed —
+the same way the page side has always done it. Two tests hold the line, and
+both were deliberately broken first to confirm they actually catch it: one
+runs a real push through the real storage code and checks the name and
+everything around it survives, and one fails if someone later adds a field to
+the saving half without adding it to the loading half, which is how this class
+of bug gets back in.
+
 ## 2026-08-23 — The YouTube acquire box works again
 
 On Acquire > YouTube there used to be a box where you pasted one video's link
