@@ -233,7 +233,8 @@ function mergeDecision({ status, comments, operatorId, handled, refused }) {
   // caller as well as used below. The plumbing needs it because two of the
   // three refusal reasons are only discovered later, against GitHub (checks
   // red, branch conflicts) — mergeDecision cannot quiet those on its own, and
-  // without it a permanent conflict would post an identical comment hourly.
+  // without it a permanent conflict would post an identical comment on every
+  // pass.
   const base = {
     commentId: String(authorization.id),
     commentDate: commentDate(authorization),
@@ -241,7 +242,7 @@ function mergeDecision({ status, comments, operatorId, handled, refused }) {
   };
 
   // A refusal we have already given, whose reason is still true, is not news.
-  // Saying it again on every hourly pass would bury the ticket in identical
+  // Saying it again on every pass would bury the ticket in identical
   // comments, so it goes quiet — but it goes quiet by RE-DERIVING the same
   // answer, not by being permanently struck off. The moment the reason
   // changes (or disappears), the next pass acts.
@@ -333,7 +334,7 @@ function githubGate(pr) {
 
   // GitHub answers UNKNOWN while it is still computing mergeability. That is
   // not a failure — it is "ask again", and asking again is what the next
-  // hourly pass is for.
+  // pass is for.
   if (mergeable === 'UNKNOWN' || mergeStateStatus === 'UNKNOWN') {
     return { action: 'wait', reason: 'GitHub is still computing whether the branch merges cleanly' };
   }
@@ -402,7 +403,16 @@ const IN_PASS_POLL_MS = 10_000;
 
 /**
  * How many tickets may hold a pass open. Worst case is CAP x BUDGET, so this
- * is the number that keeps an hourly pass from becoming an unbounded one.
+ * is the number that keeps a pass from becoming an unbounded one.
+ *
+ * The ceiling that matters is the relay's OWN interval (`INTERVAL_SECONDS` in
+ * scripts/install_bus_relay.sh, 600s). A pass that stays under it is finished
+ * before the next firing is due; a pass that runs past it swallows that firing
+ * — launchd coalesces the ones it misses — so approvals arriving meanwhile
+ * wait on work already in flight instead of being picked up promptly.
+ * mergeOnComment.test.js reads that interval and pins the bound against it, so
+ * shortening the cadence again fails a test rather than quietly permitting a
+ * pass longer than its own schedule.
  */
 const MAX_IN_PASS_WAITS = 3;
 

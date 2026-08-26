@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Install (or remove) the hourly bus-relay schedule on THIS machine.
+# Install (or remove) the bus-relay schedule on THIS machine (every 10 minutes).
 #
 # bus-relay is the only automated path from "Dane replied on a ticket" to "the
 # loop carries on". Until 2026-08-23 its schedule existed as a launchd job
@@ -9,7 +9,7 @@
 # machine?" had no answer short of going and looking. This script is that
 # answer: one command to install, one to remove, and `--status` to look.
 #
-#   ./scripts/install_bus_relay.sh              # install here, run hourly
+#   ./scripts/install_bus_relay.sh              # install here, run every 10 minutes
 #   ./scripts/install_bus_relay.sh --status     # is it installed here? when did it last run?
 #   ./scripts/install_bus_relay.sh --uninstall  # remove it from here
 #
@@ -30,7 +30,24 @@ LABEL="com.starcaster.bus-relay"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/bus-relay-launchd.log"
-INTERVAL_SECONDS=3600
+# How often the relay wakes. 600 = every 10 minutes.
+#
+# This was 3600 until 2026-08-23 (task 86bbk2fuh). Hourly was a sensible
+# default while the relay only NOTIFIED; the day it started merging
+# (2026-08-21) it became the throughput ceiling for the whole pipeline, and
+# nobody revisited it. A pass does the entire job in about 14 seconds and
+# costs no tokens at all — it is a plain Node script, not a Claude session —
+# so the interval, not the work, was what made an approved PR wait up to an
+# hour.
+#
+# The number that bounds this is ClickUp's ~100 requests per minute. A
+# measured steady pass uses 39 (see docs/LOOP_ENGINEERING.md), and because a
+# pass finishes in ~14 seconds it never shares a rate-limit minute with the
+# next one — so shortening the interval does not raise the peak. What raises
+# it is a bigger open queue: the count grows with open tickets and operator
+# comments, so re-read the "requests this pass" line the relay prints before
+# shortening this again.
+INTERVAL_SECONDS=600
 
 status() {
   node -e '
@@ -45,9 +62,13 @@ status() {
   else
     echo "schedule: not installed on this machine"
   fi
+  # How often it actually wakes, and whether that still matches the repo.
+  # Without this line the only place drift shows up is the relay's own log,
+  # which is not where a person looks when they ask "is this running right?".
+  REPO="$REPO" BUS_RELAY_PLIST="$PLIST" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
   if launchctl list | grep -q "$LABEL"; then
     echo "loaded:   yes — $(launchctl list | grep "$LABEL")"
-    echo "          (columns: PID, last exit code, label. '-' for PID means not running right now, which is normal between hourly runs.)"
+    echo "          (columns: PID, last exit code, label. '-' for PID means not running right now, which is normal between runs.)"
   else
     echo "loaded:   no"
   fi
@@ -87,14 +108,14 @@ install() {
 
   # A launchd job gets almost no environment, so `npm` and `doppler` have to be
   # findable through the PATH set in the plist below. Check now, on the machine
-  # doing the installing, rather than discovering it hourly in a log file.
+  # doing the installing, rather than discovering it in a log file ten minutes later.
   if ! command -v npm >/dev/null; then
     echo "Cannot find npm on this machine — install Node before installing the schedule." >&2
     exit 1
   fi
   if ! command -v doppler >/dev/null; then
     echo "Cannot find doppler on this machine. The relay reads its ClickUp token through" >&2
-    echo "Doppler, so the schedule would install and then fail every hour." >&2
+    echo "Doppler, so the schedule would install and then fail on every pass." >&2
     exit 1
   fi
 
