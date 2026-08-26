@@ -1,3 +1,52 @@
+## 2026-08-26 — A check that asks "is anything moving?" rather than "is it switched on" (#439)
+
+Seven things went wrong in the pipeline last week, and here is the part worth
+sitting with: **not one of them was a crash.** Every single one was a piece of
+the system that started up, ran, reported success, and got nothing done. The
+build loop turned away thirteen jobs in a row because a counter had got stuck.
+Tickets sat three days in a stage that normally takes fifteen minutes. A pull
+request and its ticket each knew about the other in only one direction, which is
+exactly how two duplicate branches got opened a few days earlier.
+
+None of it was noticed, and the reason is uncomfortable: **everything looked
+healthy the whole time.** Every program was running. Every command reported
+success. Any "is it alive?" check you could have run would have come back green
+during all seven.
+
+So `npm run pulse` asks a different question. It looks at three things and
+prints a page you can read in about ten seconds. Has the build loop stopped
+picking up work, and if so, *why* did it decline each time? Has any ticket been
+sitting longer than that stage actually takes — with the time limit for each
+stage set from how long the work really takes, and the reasoning written down
+next to the number so nobody quietly retunes it on an irritating afternoon? And
+do the tickets and the pull requests still agree with each other, checked in
+*both* directions rather than one?
+
+That last one sounds like a technicality and is not. The loop decides "has this
+job been started already?" by reading the ticket. So a job whose link exists
+only on the pull-request side is invisible to it, and it cheerfully starts the
+same work a second time. That is not hypothetical — it happened, twice, on the
+23rd.
+
+Three deliberate choices are worth knowing about. **It never changes anything;
+it only reads** — and not as a promise but as a property, with a test that fails
+if anyone ever adds a way for it to write. When it finds a problem it tells you
+and stops, because one of the four problems it detects has two sensible fixes
+and only a person can pick the right one. **It always prints, even when
+everything is fine** — that is the entire point, because "all clear" and "the
+job died" looking identical is precisely what hid all seven incidents. And
+**"I couldn't check that" is never reported as "fine"**; it is kept separate all
+the way through to the end.
+
+The first time it ran against the real pipeline it found two things wrong with
+itself, both now fixed. It had been calling ordinary handed-back work "abandoned
+branches", and it had been matching any ticket number that appeared anywhere in
+a pull request's text — including, in one case, a made-up example number sitting
+in a paragraph that explained error messages. Both are worth mentioning because
+they are the failure this whole thing exists to prevent: a check that cries wolf
+gets skimmed past, and then the day it means something, it gets skimmed past
+then too.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone
