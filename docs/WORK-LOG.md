@@ -1,3 +1,32 @@
+## 2026-08-29 — The Tractor Nav settings panel is one rectangle again (#447)
+
+Open the settings for a Tractor Nav module and look down the Placement column.
+The dropdown at the top ran the full width of the column; the three boxes under
+it — Position X, Position Y, Z-Index — stopped about 74 pixels early. The column
+read as a rectangle with a bite out of its right side.
+
+The cause was a width written onto those three boxes by hand, back when someone
+decided nine characters was about right. That is the one thing the panel rules
+forbid outright: widths are supposed to come from the column so that every row
+in it agrees. So the fix was a deletion — take the hand-written width out and
+the shared rule sizes them, the way it already sizes everything around them.
+
+The four slider rows had the same problem a size smaller. A slider is a track
+plus a small number beside it, and the number sized itself to its own text, so
+"80%" and "200ms" in the same column ended three pixels apart. Three pixels is
+small enough to look like nothing and is still the thing the eye reads as
+unfinished. The number now gets a fixed slot and the slider stretches into
+whatever is left, so the rows end on the same line at any panel width.
+
+One thing found on the way that is worth writing down: the automatic panel
+checker could not see this bug, and reported a clean pass on it. It measures the
+slot a control sits in rather than the control itself, and all three short boxes
+sat in correctly sized slots. Measuring the real page instead turned up 25 rows
+across six panels with the same shape of defect; four were this panel and the
+rest belong to later tickets in the same sweep. Teaching the checker to look
+inside the slot would fail those panels today, so it is written down here and on
+the ticket rather than done in this change.
+
 ## 2026-08-26 — Somewhere to write down what footage exists (#422)
 
 The video Studio needs a filing cabinet before it can have a workshop: a record
