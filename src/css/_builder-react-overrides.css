@@ -6682,3 +6682,64 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------------------
+ * TRACTOR NAV — the slider rows end on the block edge (ticket 86bbjt1b0,
+ * 2026-08-29, panel sweep 6/15).
+ *
+ * L8 asks the form to be one rectangle: every row's rightmost thing ends at
+ * the same x. Four rows in this panel are a range slider with a numeric
+ * readout beside it, and neither half was reaching the edge on its own.
+ *
+ * The slider carried the shared `input[type="range"] { width: 200px }` rule,
+ * which is a fixed length inside a track that is not fixed — so Falloff sat
+ * 44px short of the Structure column's edge at 1440. The readout was three
+ * inline style declarations sized to its own text, so "80%" ended at x=472
+ * and "200ms" at x=475 in the SAME column: a 3px ragged edge, which is small
+ * enough to look like nothing and is exactly the kind of unresolved outline
+ * L8 was written after.
+ *
+ * The shape here is the one L6a already uses for buttons — the readout gets a
+ * TRACK rather than its natural width, and the slider takes the slack. That
+ * makes both halves identical down the column and puts the readout's right
+ * edge on the slot's right edge by construction, at any panel width, rather
+ * than by the two happening to add up.
+ *
+ * Scoped to this panel deliberately: the 200px range rule is shared with
+ * panels this ticket's Non-goals put out of scope, and widening the fix into
+ * them would be the big-bang sweep the sweep was split up to avoid.
+ */
+.builder-react-root .builder-tractor-nav-module-settings {
+  /* Fits the longest readout this panel can render ("200ms"), plus room. One
+     value for all four rows so the sliders are the same length as each other. */
+  --tractor-nav-readout-w: 46px;
+}
+
+.builder-react-root
+  .builder-tractor-nav-module-settings
+  .builder-module-field-control
+  > input[type="range"] {
+  /* Overrides the shared 200px. `flex: 1 1 0` rather than `1 1 auto` so every
+     slider is sized by its TRACK and not by its own intrinsic width — two
+     sliders in one column are then identical, which `auto` does not promise. */
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.builder-react-root
+  .builder-tractor-nav-module-settings
+  .builder-tractor-nav-readout {
+  flex: 0 0 var(--tractor-nav-readout-w, 46px);
+  /* Right-aligned so the DIGITS land on the block edge too, not just the box:
+     a left-aligned readout would put "2.0" and "200ms" at different x while
+     their boxes agreed. */
+  text-align: right;
+  /* 12px, the size it already had as an inline style. NO `color` here. The
+     readout sits on the builder's blue, and `var(--muted)` on that blue is
+     the exact R9 pairing the note above `.builder-module-field-label` in this
+     file was written after — a first cut of this rule set it, and the readout
+     came back visibly fainter than it had been. It inherits, as before. */
+  font-size: var(--text-xs, 0.75rem);
+  white-space: nowrap;
+}

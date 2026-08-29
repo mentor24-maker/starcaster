@@ -20,8 +20,23 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-const NUMBER_INPUT_STYLE = { width: "9ch" } as const;
-const RANGE_READOUT_STYLE = { marginLeft: 8, fontSize: 12, minWidth: 36 } as const;
+/*
+ * W0/L8 (ticket 86bbjt1b0, 2026-08-29). These two used to be inline style
+ * objects — `{ width: "9ch" }` on the three number inputs and
+ * `{ marginLeft, fontSize, minWidth }` on the slider readouts. Both are the
+ * per-field width W0 forbids by name ("NEVER give a field its own width"),
+ * and the first one was visible: Position X, Position Y and Z-Index rendered
+ * 91px wide inside a 164px slot and stopped 74px short of the block's right
+ * edge, while `Sits` directly above them ran to it. That is L8's notch.
+ *
+ * There is no replacement width here on purpose. The shared `.is-lattice`
+ * rule already sizes every `input[type="number"]` in a column to its track,
+ * so the fix is the deletion; anything added back would be the same bug in a
+ * different unit. The readout keeps its own track in
+ * `_builder-react-overrides.css`, the way L6a gives a button a track rather
+ * than its natural width.
+ */
+const RANGE_READOUT_CLASS = "builder-tractor-nav-readout";
 
 function isLinearSizing(settings: Record<string, string>): boolean {
   return (settings.sizingMode || "linear") === "linear";
@@ -200,7 +215,7 @@ export function BuilderTractorNavModuleSettings({
                     value={settings.curve || "2"}
                     onChange={(event) => set("curve", event.target.value)}
                   />
-                  <span style={RANGE_READOUT_STYLE}>{parseFloat(settings.curve || "2").toFixed(1)}</span>
+                  <span className={RANGE_READOUT_CLASS}>{parseFloat(settings.curve || "2").toFixed(1)}</span>
                 </>
               )
             }
@@ -235,7 +250,7 @@ export function BuilderTractorNavModuleSettings({
                     value={settings.falloff || "2"}
                     onChange={(event) => set("falloff", event.target.value)}
                   />
-                  <span style={RANGE_READOUT_STYLE}>{parseFloat(settings.falloff || "2").toFixed(1)}</span>
+                  <span className={RANGE_READOUT_CLASS}>{parseFloat(settings.falloff || "2").toFixed(1)}</span>
                 </>
               )
             }
@@ -304,7 +319,6 @@ export function BuilderTractorNavModuleSettings({
                 <input
                   type="number"
                   step={1}
-                  style={NUMBER_INPUT_STYLE}
                   value={settings.posX || "0"}
                   onChange={(event) => set("posX", event.target.value)}
                 />
@@ -320,7 +334,6 @@ export function BuilderTractorNavModuleSettings({
                 <input
                   type="number"
                   step={1}
-                  style={NUMBER_INPUT_STYLE}
                   value={settings.posY || "0"}
                   onChange={(event) => set("posY", event.target.value)}
                 />
@@ -338,7 +351,6 @@ export function BuilderTractorNavModuleSettings({
                 <input
                   type="number"
                   step={1}
-                  style={NUMBER_INPUT_STYLE}
                   value={settings.zIndex || "-9999"}
                   onChange={(event) => set("zIndex", event.target.value)}
                 />
@@ -402,7 +414,7 @@ export function BuilderTractorNavModuleSettings({
                     value={settings.innerOpacity || "90"}
                     onChange={(event) => set("innerOpacity", event.target.value)}
                   />
-                  <span style={RANGE_READOUT_STYLE}>{settings.innerOpacity || "90"}%</span>
+                  <span className={RANGE_READOUT_CLASS}>{settings.innerOpacity || "90"}%</span>
                 </>
               )
             },
@@ -434,7 +446,7 @@ export function BuilderTractorNavModuleSettings({
                     value={settings.transition || "0"}
                     onChange={(event) => set("transition", event.target.value)}
                   />
-                  <span style={RANGE_READOUT_STYLE}>{settings.transition || "0"}ms</span>
+                  <span className={RANGE_READOUT_CLASS}>{settings.transition || "0"}ms</span>
                 </>
               )
             }
