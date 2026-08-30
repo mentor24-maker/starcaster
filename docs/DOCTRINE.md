@@ -1103,6 +1103,57 @@ old. That is not the point. An unattended agent crossed a line the operator drew
 and the crossing was invisible; on a machine nobody is watching, "the guard has
 a hole" is the whole finding.*
 
+### 6.7 CC runs the operational commands — handing one over is a claim it cannot
+
+**Standing instruction from the operator, 2026-08-07, verbatim:**
+
+> *"when you say 'you' can veto etc., you mean you, cc-starcaster, right? I
+> won't remember all those commands."*
+
+He raised it again on 2026-08-23 and 2026-08-30. It kept recurring because the
+rule lived only in agent memory and in the vault, and neither of those is
+loaded into a repo session the way `CLAUDE.md` is. Neither is a guard, either —
+so nothing ever caught an agent doing it.
+
+**The incident.** 2026-08-30, the Delray header. One safety-gate refusal early
+in the session was treated as a verdict on the whole session rather than a
+refusal of that one call, and every production step after it came back to him
+as a command to paste. One of them was a script with a dry run and an
+`--apply`. He ran the dry run; it printed what it *would* change; nothing in
+the output or the hand-off said the change had not happened yet, so he had no
+way to know a second command was still waiting on him. Most of an evening went
+on a fix that had already been written.
+
+**The rule.**
+
+- CC runs the operational commands — scripts, `doppler run`, SSH to the Mini,
+  publishing. He says what he wants in plain language; CC picks the script and
+  the flags, runs it, and reports the outcome rather than the log.
+- **Four exceptions, and only four:** a real secret VALUE (§4.1), a billing
+  screen, a browser login, and a decision that is genuinely his — money,
+  clients, what ships. A hand-off **names which one applies**. An unnamed
+  hand-off is itself the defect, the same shape as §2.5's unnamed actor.
+- **A refusal is scoped to the call it refused.** Retry when the step actually
+  comes; if it is refused again, say so in one line and carry on. An early
+  "no" is not a session-wide policy, and converting it into one silently
+  widens a single gate into a work stoppage.
+- **Never leave a production fix as a two-step.** A dry run and its `--apply`
+  are one job. Run both, then say what changed. A dry run reported as though
+  it were the fix is a §3.10 failure wearing an operator's clothes: it looks
+  exactly like success and changed nothing.
+
+*Why this is doctrine and not a courtesy:* flags exist so the agent has a
+precise instrument, not so the operator has a syntax to memorize — §6.4 already
+establishes that his bottleneck is attention. But the sharper cost is that a
+hand-off **misreports the state of the work**. He reads a pasted command as
+"this needs your hands", so a job that was finished reads as blocked on him,
+and one that is genuinely blocked is indistinguishable from it. That is §2.5
+arriving from the other direction: there, an automation said it had asked a
+human when it had not; here, an agent implies a human is needed when none is.
+
+Canon home for this rule is the vault `doctrine/OPERATIONS.md`; this section is
+the repo-side copy, which is the one actually loaded into every session.
+
 ---
 
 ## 7. Operator-facing gotchas
