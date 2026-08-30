@@ -1450,6 +1450,15 @@ now guarded by tests:
 2. **"Cannot tell" is its own state**, never folded into "fine" (DOCTRINE
    3.11) — and it has its own exit code (2) so a caller can treat "I could not
    look" differently from "I looked and it was fine".
+   In the report that means a **`CLEAR` line may only print when the check
+   both found nothing AND could read everything** — `whollyMeasured()` in
+   `pulse.js`, one predicate shared by every section. Guarding on findings
+   alone is how the two collapse: with `gh` unavailable, B1 compared 0 tickets
+   against 0 PRs, found nothing because it had seen nothing, and printed
+   "CLEAR every ticket and PR names the other" directly above its own CANNOT
+   line (caught in review, 2026-08-30). A CLEAR asserts something about
+   everything the check looked at, so a check that looked at nothing has
+   nothing to assert.
 3. **Every count carries its breakdown.** `7 open, cap 5` was true and hid a
    deadlock for four passes.
 4. **The bottleneck is named in a sentence** — "Bottleneck: BUILD (4

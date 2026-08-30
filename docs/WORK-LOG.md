@@ -47,6 +47,27 @@ they are the failure this whole thing exists to prevent: a check that cries wolf
 gets skimmed past, and then the day it means something, it gets skimmed past
 then too.
 
+**The review caught a third one, and it was the same bug a third time.** The
+paragraph above says "I couldn't check that" is never reported as "fine" — and
+that was the intention, but in one line of the printout it was not what the code
+did. When the tool asked GitHub for the open pull requests and GitHub did not
+answer, that check compared nothing, found nothing wrong because it had looked
+at nothing, and printed **"all clear: every ticket and pull request names the
+other"** — sitting directly above its own line admitting it could not read
+GitHub at all. Read quickly, that is a green light on a check that never ran.
+
+The fix is one rule applied in one place: a check may only say "all clear" if it
+found nothing **and** managed to read everything, and that judgement now lives in
+a single shared function rather than being re-decided in each section, so the
+next check added to the tool inherits it instead of repeating the mistake. Two
+tests hold it down — each one run against the old code first and watched to
+fail, because a test that has never failed is not yet evidence of anything.
+
+Worth noting where this was caught: not by the tests, which were green, and not
+by the build, which passed. It was caught by the independent review step reading
+the output with the question "would this line be true if the check had not run?"
+That is the review lane earning its day.
+
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 
 You said you needed an emergency shutdown that clears the decks so you can run

@@ -746,7 +746,7 @@ function formatReport(result) {
   } else {
     push(`  note: ${res.proxyNote}`);
     push(`  census: ${describeCensus(res.census)}`);
-    if (!res.findings.length) push('  CLEAR   every measured ticket is inside its threshold');
+    if (whollyMeasured(res)) push('  CLEAR   every measured ticket is inside its threshold');
     for (const f of res.findings) push(`  ${verdictTag(f.severity)} ${f.message}`);
     for (const c of res.cannotTell) push(`  CANNOT  ${c.taskId} (${c.status}) — ${c.reason}`);
     if (res.unmeasured.length) {
@@ -764,7 +764,7 @@ function formatReport(result) {
     push('  CANNOT TELL — neither ClickUp nor GitHub was read');
   } else {
     push(`  compared ${drift.ticketsCompared ?? '?'} ticket(s) against ${drift.openPrsCompared ?? '?'} open PR(s)`);
-    if (!drift.findings.length) push('  CLEAR   every ticket and PR names the other');
+    if (whollyMeasured(drift)) push('  CLEAR   every ticket and PR names the other');
     for (const f of drift.findings) push(`  ${verdictTag(f.severity)} [${f.shape}] ${f.message}`);
     for (const c of drift.cannotTell) push(`  CANNOT  ${c.taskId} (${c.status}) — ${c.reason}`);
   }
@@ -774,6 +774,24 @@ function formatReport(result) {
   push(`  ${summaryLine(result)}`);
   push(`${COMPLETION_MARKER} ${result.generatedAt} — if a scheduled run does not print this line, that absence IS the alert`);
   return lines.join('\n');
+}
+
+/**
+ * Rule 2 in code, and the reason it is a function rather than a condition
+ * repeated at each call site. A CLEAR line makes a claim about EVERYTHING the
+ * check looked at ("every ticket and PR names the other"), so it may only
+ * print when the check actually managed to look at everything: no findings
+ * AND nothing it could not read.
+ *
+ * Guarding on `findings` alone is how a cannot-tell folds into a fine. B1 did
+ * exactly that: with `gh` unavailable it compared 0 tickets against 0 PRs,
+ * found nothing because it had seen nothing, and printed CLEAR beside its own
+ * CANNOT line (send-back, 2026-08-30). A2 had the identical shape and had not
+ * bitten yet. One predicate, so the next section added here inherits the guard
+ * instead of re-deriving it.
+ */
+function whollyMeasured(section) {
+  return !section.findings.length && !section.cannotTell.length;
 }
 
 function verdictTag(v) {

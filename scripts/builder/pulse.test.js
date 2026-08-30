@@ -452,6 +452,64 @@ test('BREAK-TEST: the report prints all three checks even when a check is clear'
   assert.match(text, /CLEAR\s+every ticket and PR names the other/);
 });
 
+/**
+ * A CLEAR belonging to ANOTHER check is perfectly correct in the same run, so
+ * asserting on the whole report would pass while the defect stood. Slice out
+ * the one section under test and assert inside it.
+ */
+const sectionOf = (text, tag) => {
+  const lines = text.split('\n');
+  const start = lines.findIndex((l) => l.startsWith(tag));
+  assert.ok(start >= 0, `the report is missing section ${tag}`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^(A1|A2|B1)\s|^={20,}/.test(l));
+  return rest.slice(0, end === -1 ? rest.length : end).join('\n');
+};
+
+test('BREAK-TEST: B1 does not print CLEAR when the PR side could not be read', () => {
+  // The defect that sent this ticket back (2026-08-30). With `gh` unavailable
+  // B1 compared 0 tickets against 0 PRs, had no findings BECAUSE it had seen
+  // nothing, and printed "CLEAR every ticket and PR names the other" directly
+  // above its own CANNOT line. Rule 2: a cannot-tell is never a fine.
+  const text = formatReport({
+    generatedAt: '2026-08-30T12:00:00.000Z',
+    noOp: { ...noOpStreak([claimed()], { queuedCount: 2 }), source: '/tmp/x.log', unterminated: [] },
+    residency: stageResidency([task('86bb1', 'building', 1)], { now: NOW }),
+    drift: {
+      findings: [],
+      cannotTell: [{
+        taskId: '(all)',
+        status: '-',
+        reason: '`gh pr list` failed, so the PR side could not be read at all',
+      }],
+      ticketsCompared: 0,
+      openPrsCompared: 0,
+    },
+  });
+  const b1 = sectionOf(text, 'B1');
+  assert.doesNotMatch(b1, /CLEAR/, 'a check that compared nothing must not report an all-clear');
+  assert.match(b1, /CANNOT\s+\(all\).*could not be read at all/);
+});
+
+test('BREAK-TEST: A2 does not print CLEAR when a ticket could not be measured', () => {
+  // Identical shape to B1's, guarded before it could bite. A2's wording says
+  // "every MEASURED ticket", which is defensible prose over an unusable state:
+  // the reader cannot see which tickets were measured, so CLEAR beside a
+  // CANNOT still reads as all-clear.
+  const text = formatReport({
+    generatedAt: '2026-08-30T12:00:00.000Z',
+    noOp: { ...noOpStreak([claimed()], { queuedCount: 2 }), source: '/tmp/x.log', unterminated: [] },
+    // A real dateless ticket, not a hand-built section: findings [], cannotTell 1.
+    residency: stageResidency([{ id: '86bbnodate', name: 'x', status: { status: 'building' } }], { now: NOW }),
+    drift: { findings: [], cannotTell: [], ticketsCompared: 1, openPrsCompared: 3 },
+  });
+  const a2 = sectionOf(text, 'A2');
+  assert.doesNotMatch(a2, /CLEAR/, 'an unmeasurable ticket must not be reported as inside its threshold');
+  assert.match(a2, /CANNOT\s+86bbnodate/);
+  // The proof the slice is honest: B1 genuinely IS clear in this same run.
+  assert.match(sectionOf(text, 'B1'), /CLEAR\s+every ticket and PR names the other/);
+});
+
 test('BREAK-TEST: the report always ends with the completion marker — rule 5', () => {
   // A scheduled run that produces no report must be distinguishable from one
   // that ran and found nothing. The marker is what makes the absence readable.
