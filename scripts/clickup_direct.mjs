@@ -68,6 +68,7 @@ import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
+import sendBackRounds from './builder/sendBackRounds.js';
 import pipelinePause from './builder/pipelinePause.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
@@ -85,6 +86,10 @@ const {
 } = loopTrail;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 const { resolveTaskRepo } = taskRepo;
+const {
+  ESCALATE_AT_ROUND, currentRound, nextRound, wouldEscalate,
+  roundSummaryLines, reasonOf, sendBacks,
+} = sendBackRounds;
 const {
   waitingVerdict, verdictFromStatusAlone, renderTicket, exitCodeFor, sweepSummary,
   operatorSpokeLast, WAITING: V_WAITING, NOT_WAITING: V_NOT_WAITING, CANNOT_TELL: V_CANNOT_TELL,
@@ -285,8 +290,9 @@ function usage(code = 2) {
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
-  console.error('  loop-note --task <id> --transition claimed|pr-open|review-started|verified|sent-back|merged|escalated [--pr N]');
+  console.error('  loop-note --task <id> --transition claimed|pr-open|review-started|verified|sent-back|merged|escalated [--pr N] [--round N] [--reason "..."]');
   console.error('                                             stamp the "Loop note" field with a plain-language line; CANNOT STAMP if the field is absent.');
+  console.error('                                             sent-back reads its round and reason off the ticket\'s verdicts — run it AFTER `verdict --fail`.');
   console.error('                                             review-started is loop-review\'s VISIBLE CLAIM — stamp it before verifying, and');
   console.error('                                             stand down if `queue`/`get` already shows one that is not stale');
   console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
@@ -321,10 +327,14 @@ function usage(code = 2) {
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
   console.error('                                             to the ticket, then verifies the comment by parsing it back.');
-  console.error('  verdict --task <id> --pass|--fail --if-status "In review" [--body-file <file|->] [--no-guard]');
+  console.error('  send-back-rounds --task <id>               how many times this ticket has been sent back, what each round found,');
+  console.error('                                             and whether the next one escalates. Exit 3 = escalate, do not send back.');
+  console.error('  verdict --task <id> --pass|--fail --if-status "In review" [--body-file <file|->] [--no-guard] [--fourth-round-anyway]');
   console.error('                                             record loop-review\'s verdict in the ONE shape the merge step');
   console.error('                                             and the Ready-to-launch gate can read, verified by read-back.');
   console.error('                                             A ticket cannot reach Ready to launch without a PASS on it.');
+  console.error('                                             --fail REFUSES at send-back round 4 (exit 3): three rounds means the spec');
+  console.error('                                             is wrong, so it prints the prior rounds and the `ask` command instead.');
   console.error('                                             --if-status is REQUIRED: exit 3, nothing written, if the ticket');
   console.error('                                             moved while you reviewed. --no-guard opts out, on the record.');
   console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
@@ -1720,6 +1730,41 @@ if (cmd === 'whoami') {
   }
 
   const note = arg('body-file') ? readBody(arg('body-file')).trim() : '';
+
+  // THE FOURTH-ROUND GATE (task 86bbmg2tq). Three send-backs means the SPEC was
+  // wrong, not the builder, and a fourth pass at the same ticket is the system
+  // failing to notice it is stuck. So the send-back is REFUSED at round 4 and
+  // the pass hands the ticket to Dane instead — a judgement call (respec,
+  // split, or drop) that was always his. This is a command and not a line in a
+  // skill file for the loopTrail reason: a step that must be remembered is a
+  // step that will be forgotten.
+  if (!passed) {
+    const seen = await call('GET', `/api/v2/task/${task}/comment`);
+    if (!seen.res.ok) die('read the ticket\'s send-back history', seen);
+    const history = seen.json.comments || [];
+    const round = nextRound(history);
+    if (wouldEscalate(history) && !flag('fourth-round-anyway')) {
+      console.error(`\nNOTHING WRITTEN: this would be send-back round ${round}, and the loop escalates at ${ESCALATE_AT_ROUND}.`);
+      console.error('Three rounds means the spec is wrong, not the build. Ask Dane instead of sending it back.\n');
+      console.error('What the previous rounds found:');
+      for (const line of roundSummaryLines(history)) console.error(`  ${line}`);
+      console.error('\nHand it to him — the card must name all three, one line each, so he sees the');
+      console.error('pattern rather than the latest symptom, and @@NEEDED should offer him named');
+      console.error('options (respec / split / drop) rather than an open question:\n');
+      console.error(`  npm run clickup -- ask --task ${task} --status "Needs your input" --body-file -`);
+      console.error(`  npm run clickup -- loop-note --task ${task} --transition escalated\n`);
+      console.error('If he has already settled this and a fourth round is genuinely the right move,');
+      console.error('pass --fourth-round-anyway. That flag is your written claim, visible in the transcript.\n');
+      process.exit(3);
+    }
+    if (!note) {
+      console.error('\nNOTHING WRITTEN: a send-back needs a reason (--body-file -).');
+      console.error('Its first line becomes the Loop note clause the board shows, so the queue says');
+      console.error(`"round ${round} — <why>" rather than "returned to the line" for the ${round}${round === 1 ? 'st' : 'th'} time.\n`);
+      process.exit(2);
+    }
+  }
+
   const text = verdictComment(passed, note);
   const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
   if (!out.res.ok) die('post the review verdict', out);
@@ -1749,7 +1794,14 @@ if (cmd === 'whoami') {
     console.error('as a PASS. Nothing else was changed — check the ticket by eye.\n');
     process.exit(1);
   }
-  console.log(`Task ${task}: verdict ${passed ? 'PASSED' : 'sent back'} recorded as comment ${newId}, verified through the Ready-to-launch gate itself.`);
+  const roundNow = passed ? 0 : currentRound(check.json.comments || []);
+  console.log(`Task ${task}: verdict ${passed ? 'PASSED' : `sent back (round ${roundNow})`} recorded as comment ${newId}, verified through the Ready-to-launch gate itself.`);
+  if (!passed) {
+    console.log(`Next: npm run clickup -- loop-note --task ${task} --transition sent-back`);
+    if (roundNow + 1 >= ESCALATE_AT_ROUND) {
+      console.log(`NOTE: a further send-back on this ticket would be round ${roundNow + 1} — the loop escalates to Dane at ${ESCALATE_AT_ROUND}.`);
+    }
+  }
   reportLimits(check.res);
 
 } else if (cmd === 'describe') {
@@ -2373,7 +2425,15 @@ if (cmd === 'whoami') {
     // yesterday's abandoned one. Every other transition is read live and a
     // clock is enough.
     const at = transition === 'review-started' ? nowDateClock() : nowClock();
-    text = loopNote(transition, { at, pr: arg('pr') });
+    // A send-back note carries the round and the reason (task 86bbmg2tq), and
+    // both are DERIVED from the ticket's own verdict comments rather than
+    // passed in — no new state, so nothing to fall out of sync. This runs
+    // AFTER `verdict --fail` has posted, which is the order the review pass
+    // works in, so the send-back being stamped is already among them and the
+    // round is the count itself, not the count plus one.
+    let extra = {};
+    if (transition === 'sent-back') extra = await sentBackRoundAndReason(task);
+    text = loopNote(transition, { at, pr: arg('pr'), ...extra });
   } catch (e) {
     console.error(`\nloop-note: ${e.message}`);
     process.exit(2);
@@ -2446,8 +2506,58 @@ if (cmd === 'whoami') {
   reportLimits(out.res);
   process.exit(isOpen ? 0 : 1);
 
+} else if (cmd === 'send-back-rounds') {
+  // "How many times has this ticket been round already, and what did each one
+  // find?" — the question a review pass has to answer BEFORE deciding to send
+  // back, and the one Dane needs answered to settle a stuck ticket. Reads
+  // only; the gate that acts on it lives in `verdict --fail`.
+  const task = arg('task');
+  if (!task) usage();
+  const out = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!out.res.ok) die('read the ticket comments', out);
+  const history = out.json.comments || [];
+  const done = sendBacks(history);
+  console.log(`task:        ${task}`);
+  console.log(`sent back:   ${done.length} time(s)`);
+  console.log(`next round:  ${nextRound(history)} (the loop escalates to Dane at ${ESCALATE_AT_ROUND})`);
+  for (const line of roundSummaryLines(history)) console.log(`  ${line}`);
+  if (wouldEscalate(history)) {
+    console.log('\nESCALATE — do not send this back again. Hand it to Dane with `ask`,');
+    console.log('naming all of the rounds above so he sees the pattern, not the latest symptom.');
+  }
+  reportLimits(out.res);
+  process.exit(wouldEscalate(history) ? 3 : 0);
+
 } else {
   usage();
+}
+
+/**
+ * The round a just-written send-back is, and the reason its verdict gave —
+ * both read back off the ticket, so the board line and the audit trail cannot
+ * disagree. Called only for the `sent-back` transition.
+ *
+ * A ticket with no send-back verdict on it at all is a BROKEN TRAIL, not a
+ * round zero: `verdict --fail` should have run first. Rather than stamping a
+ * nonsense round it says so and treats this as round 1, which is the only
+ * honest reading of "a send-back is happening and nothing recorded it".
+ */
+async function sentBackRoundAndReason(taskId) {
+  const out = await call('GET', `/api/v2/task/${taskId}/comment`);
+  if (!out.res.ok) die('read the ticket\'s send-back history', out);
+  const history = out.json.comments || [];
+  const counted = currentRound(history);
+  if (counted === 0) {
+    console.error('\nWARNING: no "REVIEW: sent back" verdict is on this ticket, so the round cannot be');
+    console.error('counted. Stamping round 1. Record the verdict first — the verdict, not this note,');
+    console.error('is what the merge step and the Ready-to-launch gate read:');
+    console.error(`  npm run clickup -- verdict --task ${taskId} --fail --if-status "In review" --body-file -\n`);
+  }
+  const newest = sendBacks(history)[counted - 1];
+  return {
+    round: Number(arg('round', String(Math.max(1, counted)))),
+    reason: arg('reason', newest ? newest.reason : ''),
+  };
 }
 
 /** hh:mmam local — the register the operator reads. */

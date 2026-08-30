@@ -1,3 +1,30 @@
+## 2026-08-26 — A ticket sent back now says which trip round it is (#442)
+
+You noticed this on the board on Monday: when a piece of work comes back from
+review with notes, it goes back into the "Queued" column — the same column as
+work nobody has started yet. From the outside those two look identical, so a
+ticket on its third trip round reads exactly like a fresh one.
+
+That is not just an eyesore. The same morning it jammed the build pipeline: the
+limit on how much work can be in flight counts open pull requests, and three of
+those belonged to tickets sitting in "Queued" *for rework* — so the limit was
+blocking the only thing that could clear them.
+
+Two changes, both the lighter option you chose rather than adding a new column
+to ClickUp. First, the Loop note on a sent-back ticket now says the round and
+the reason in one line — `↩ round 3 — three docs now contradict the change`
+instead of the old, identical-every-time "returned to the line with notes".
+The round is counted from the review comments already on the ticket, so nothing
+new is stored and nothing can drift out of step.
+
+Second, a fourth trip round no longer happens. Three rounds means the
+*instructions* were wrong, not the work, so on what would be the fourth the
+review pass stops and hands the ticket to you instead — with a card naming what
+each of the three previous rounds found, one line each, and asking you to pick:
+rewrite the spec, split it up, or drop it. Four and not three deliberately: two
+rounds is ordinary and healthy, and this week's send-backs caught two real bugs
+that would have been a waste of your attention to escalate.
+
 ## 2026-08-26 — The loops now decide their own nap length from the queue (#441)
 
 The two background helpers that build and check work have always worked for
