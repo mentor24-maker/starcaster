@@ -106,6 +106,7 @@ npm run clickup -- status --task <id> --status "In review"                   # h
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # escalate: card + status together
 npm run clickup -- pr-opened --task <id> --pr <pr-url>                        # record the PR — REQUIRED, and it verifies itself
 npm run clickup -- comment --task <id> --body-file -                         # a plain note (progress, notes)
+npm run clickup -- waiting [--task <id>]                                      # read-only: is this ACTUALLY waiting on Dane? run it before saying so
 npm run clickup -- describe --task <id> --body-file -                        # REPLACE the description (left column)
 ```
 
@@ -132,21 +133,72 @@ spec. Dane could not tell what was being asked of him on either ticket.
 **Escalating is one command, not two.** `status --status "Needs your input"`
 refuses on its own now — a status move with no stated ask is a red badge in his
 inbox with no answerable question on it, which is exactly how 7/7 sat there for
-a day. Use `ask`, whose body is four sections, checked before anything is sent:
+a day. Use `ask`, whose body is four sections plus a fifth that costly asks must
+carry, all checked before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask; "Nothing right now" is fine, but say it out loud
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone
 ```
 
-`@@NEEDED` renders under a banner he can spot without reading. If the ticket
+`@@NEEDED` renders under a banner he can spot without reading.
+
+**An ask that spends money or cannot be undone is refused without
+`@@EVIDENCE`** — spend, buy, subscribe, upgrade, a plan change, a credential
+rotation, a deletion — and it reads third-person phrasings too ("this deletes
+all 550 rows"). That section carries the command in runnable form, its ACTUAL
+output pasted in a fence, and one line saying when you ran it:
+
+```
+@@MEASURED 8:04pm
+```
+
+That line is the only thing that dates the card — every other clock in the
+section, narrated or inside the paste, is ignored. Put it in the prose outside
+the fence, with the clock and nothing else on it (date it too if it was not
+today). It is declared rather than read out of your sentences because four
+earlier versions guessed which clock you meant and the last one dated a card by
+the outage it was reporting (Dane's call, 2026-08-29, task 86bbk34ym).
+
+On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
+diagnosis that was wrong, and re-running the one failing call would have
+settled it in seconds. Re-run it, paste what it says — do not summarise it.
+Ordinary escalations are untouched. If the ticket
 genuinely has no instruction behind it, say that in `@@ASKED` and name the
 standing decision it descends from.
 
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
+
+## Never say something is waiting on Dane without checking
+
+**One command, run BEFORE the sentence leaves your mouth:**
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task <id>        # one ticket: status, assignee, last word, verdict
+```
+
+Read-only, a couple of seconds, exit **0** nothing of his / **3** something IS
+his / **1** could not tell. It reports the verdict from three live facts — the
+status, whether he is assigned, and whether the newest comment is his — so a
+ticket he has already answered can never be handed back to him a second time.
+
+Twice on 2026-08-23 an agent told him something was waiting on him when it was
+not, and he acted on it both times: eleven of "seventeen tickets waiting on
+your merge word" already carried his approval, and the YouTube worker question
+he was asked again had been answered `A` an hour earlier. Him, that night:
+*"The issue is making assumptions and stating them with confidence. It has come
+up many times."* Every wrong claim that evening was a confident sentence with
+nothing attached; every right one carried its evidence. This is the evidence,
+and it is cheaper to run than the claim is to reason about.
+
+Applies to the run report as much as to a comment. `ask` enforces the same rule
+at its own end — it refuses to hand a ticket back when his comment is already
+the newest one on it (`--after-his-answer` overrides, on the record).
 
 ## Loop note — stamp the queue as you go (queue visibility)
 

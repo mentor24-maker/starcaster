@@ -65,6 +65,7 @@ The everyday commands (run `npm run clickup` bare for the full list):
 npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
+npm run clickup -- waiting [--task <id>]                        # is this ACTUALLY waiting on Dane? read-only; run it BEFORE saying so
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
@@ -255,8 +256,9 @@ npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -
 ```
 
-The body is four sections. The check runs **before** the first network call, so
-a card that fails the shape leaves the ticket exactly where it was:
+The body is four sections, plus a fifth that some asks are required to carry.
+The check runs **before** the first network call, so a card that fails the
+shape leaves the ticket exactly where it was:
 
 ```
 @@ASKED
@@ -270,6 +272,17 @@ anything else; over 100 it becomes the wall of text this replaces.
 @@NEEDED
 The specific ask. "Nothing right now" is a good answer and a useful one, but it
 has to be written down rather than left blank.
+@@EVIDENCE
+Optional in general; REQUIRED when the ask costs money or cannot be undone.
+The command in runnable form, its actual output pasted in a ``` fence, and one
+line saying when you ran it:
+
+    @@MEASURED 8:04pm
+
+That line is the ONLY thing that dates the card. Every other clock in the
+section — narrated or inside the paste — is ignored. It goes in the prose,
+outside the fence, and carries the clock and nothing else (date it too if it
+was not today: `@@MEASURED 2026-08-23 8:04pm`).
 ```
 
 `@@NEEDED` renders under a banner he can find without reading:
@@ -285,6 +298,149 @@ The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
 remember. `status --status "Needs your input"` refuses on its own and prints
 the `ask` form; `--no-card` is the escape hatch, and like `--operator-asked`
 above it is a written claim in the transcript, not a permission check.
+
+### An ask that costs money must carry the command that proves it
+
+On 2026-08-23 an agent escalated to Dane and asked him to spend money on a
+diagnosis that was wrong: the bus chat had refused every write for sixteen
+hours, a custom-field write failed with "Custom field usages exceeded for your
+plan", and `GET /team/{id}/plan` read back `Free Forever`, so it recommended
+putting the workspace on a paid plan. Re-measured hours later on the same token
+and the same unchanged Free plan, every one of those calls succeeded — the
+outage was transient and cleared itself, and paying would have fixed nothing.
+
+The mistake was not the hypothesis; it was that the hypothesis reached his
+wallet without anyone re-running the failing call. So `ask` now refuses a card
+whose `@@NEEDED` proposes spending, buying, subscribing, a plan change, a
+credential rotation or a deletion unless `@@EVIDENCE` carries the command, its
+real output in a fence, and the time it was run. The trigger words and the
+reason for each live in `scripts/builder/costlyAsk.js`; adding one is a
+one-line change with a test beside it.
+
+The gate is deliberately narrow rather than a general assumption-checker: a
+checking agent would add a round trip, make assertions of its own, and cost
+tokens continuously to catch a class a free rule catches — and the evidence for
+"assertions of its own" is this incident, where the agent that produced the
+wrong diagnosis was already the careful one. An ordinary escalation — a design
+question, a scope choice, an A-or-B with no cost — is untouched, and a test
+pins that, because a gate that fires on everything gets routed around and then
+protects nothing.
+
+The card also shows the measurement time in the heading it renders
+(**THE CHECK BEHIND THIS ASK — measured at 8:04pm**). Evidence gathered before
+a sixteen-hour outage is not evidence about now, so the freshness is stated
+rather than implied.
+
+**That time is DECLARED on its own line, not read out of your sentences.**
+Four versions of this gate each inferred it, and each inferred it differently —
+the first clock anywhere in the section (which is how a `2026-08-20 3:12pm` log
+line dated a card six days stale), then the first clock in the prose, then the
+last clock a measurement cue governed, then the clock a cue introduces. Every
+one was right on the sentences it was tested against and wrong on the next one
+somebody wrote. The last of them headed a card *measured at 3:12pm* — the
+moment the outage STARTED — off the sentence "At 8:04pm I re-ran the failing
+call, well after the outage began at 3:12pm". That is the exact half of the
+2026-08-23 incident the timestamp exists to close, arriving through the
+machinery meant to close it, and it did not refuse: it asserted it.
+
+Dane settled it on 2026-08-29 (option A on task 86bbk34ym): stop guessing, make
+the writer say so. `@@MEASURED 8:04pm` on its own line, everything else
+ignored. It costs an agent one line per costly ask, and it ends the class —
+there is no sentence shape left to get wrong. The reasoning is on the rule
+itself (`MEASURED_LINE` in `scripts/builder/operatorCard.js`), because the
+ticket's own Non-goals say this gate stays cheap, narrow and mechanical, and
+reading which clock an English sentence means is none of those.
+
+A card with no `@@MEASURED` line is refused; so are two of them, a line with
+something other than a clock on it, and one written inside the fence (where it
+reads as part of what the machine printed) or under the wrong section. Each of
+those gets its own sentence, because "add a time" is unhelpful to an author who
+wrote one in the wrong place.
+
+The same review found the trigger list carried base and gerund forms but no
+third-person ones, so "this deletes all 550 rows", "it rotates the key" and
+"approving this upgrades the workspace" all posted with no evidence at all —
+and third person is the most natural way to describe what the operator's yes
+will do. Every verb in the list now carries all three forms, with a test that
+fails if a future verb arrives with a form missing.
+
+**A second review round, the same day, found three more of the same shape** —
+the gate doing the wrong thing silently rather than refusing. (1) Reading the
+prose fixed the fence but kept *first clock wins*, and evidence narrates before
+it proves: "the outage began at 3:12pm. I re-ran the failing call at 8:04pm"
+rendered as *measured at 3:12pm*. Only a clock a measurement cue governs
+(`measured|ran|re-ran|checked at`…) counts as the run; two clocks with no cue
+are refused rather than guessed at, because the heading is load-bearing and a
+wrong time is worse than none. (2) Each trigger was bounded by "not a word character
+**or hyphen**", on the belief that `\b` would not fire beside a hyphen — it does,
+so the custom boundary only ever removed matches, and `hard-delete`,
+`force-delete`, `auto-purge` and `key re-rotation` were never checked at all.
+Plain `\b` now. (3) `costs` was listed and the base form `cost` was not, so "this
+will cost thirty dollars a month" was silent; the completeness test now names
+`cost` and twelve other verbs, so the rule it describes is actually held up.
+
+**And one correction in the other direction.** The bare nouns — `billing`,
+`invoice`, `deletion`, `rotation`, `migration`, `payment`, `subscription` —
+fired on any sentence that merely mentioned them, so "nothing needed, the
+deletion already happened last week" and "just confirm you saw the invoice
+screenshot" were both REFUSED and the agent could not hand the ticket off until
+it reworded a card that was already right. A noun now fires only where a
+proposal cue governs it in the same sentence (`approve the deletion`, `run the
+migration`, `go ahead with the rotation`); a verb needs no cue, because
+proposing is what a verb does here — which is also why past tense is
+deliberately absent from the list. The known limit, stated rather than hidden:
+a bare noun phrase with no verb at all ("the key rotation — yes or no?") does
+not fire, and the verb forms are the primary net.
+
+**A third round found the same mis-dating for the third time, and what
+actually fixed it.** Rounds 1, 2 and 3 each picked the run time by where it sat
+in the text — first clock, first clock in the prose, last clock a cue governs —
+and each was wrong on the next sentence shape somebody wrote. A cue was allowed
+to govern every clock later in its sentence, and authors narrate *after* the
+run time as readily as before it, so "I re-ran the chat POST at 9:40pm, well
+after the outage that began at 3:12pm" rendered as *measured at 3:12pm*. There
+is no position that means "this is the measurement": the cue does, and it is
+spent on the clock it introduces. A cue now reaches only from the previous
+clock to the next one, and **two times both marked as the run are refused
+rather than ranked** — this heading is the single place the gate asserts
+something to Dane instead of refusing something, so a wrong "measured at" is a
+false statement about a live system, which is the shape of the original
+incident. A wrong refusal costs a reword.
+
+**A fourth and fifth round found the same mis-dating again, and it went to
+Dane.** Round 4 scoped a cue to the clock it introduces; round 5 wrote the run
+time FIRST and the narration after it — "At 8:04pm I re-ran the failing call,
+well after the outage began at 3:12pm" — and the cue, sitting between the two
+clocks, reached forward to the wrong one. Five rounds, five positional rules,
+five sentence shapes. It was escalated as a product decision rather than sent
+back a fifth time, and Dane chose to stop inferring altogether: the run time is
+now the declared `@@MEASURED` line described above. The same round also found
+that every bare noun fired in the singular and was silent in the plural —
+"Approve the deletions" demanded no evidence while "Approve the deletion" did,
+which is the gate declining on the more costly spelling of the same ask. Each
+noun now carries its plural, with a completeness test that names the pairs in
+both directions.
+
+The same round closed three narrower holes: a lone bare clock in the prose is
+no longer taken at its word when the pasted output carries a clock too (a bare
+time beside a log is usually the thing that *broke*, not the check); a
+backslash-continued command counted as two pasted lines and so satisfied the
+"show me the output" rule with no output at all; and the innocent phrases were
+lifted out as raw characters rather than as whole words, so "pays offshore
+contractors" lost "pays off" out of the middle of a word. The cue list also got
+the all-forms rule the trigger list had already been given twice — "proceeding
+with the deletion", "performing the key rotation", "this executes the
+migration", "kicking off the migration", "signing off on the invoice" were all
+silent — with a completeness test that names the cue families in both
+directions, so a lone form cannot be added without its siblings.
+
+One item is left deliberately unchanged and is the operator's to settle: a bare
+dollar figure fires with no proposal cue, so a card that asks for nothing while
+mentioning a cost ("nothing right now, the Vercel bill came to $30 last month")
+is refused. A cue rule would fix that and would also silence "$29/month for
+Business or $49 for the tier above?", which is a real ask with no verb in it.
+That is a product question about how much natural language a keyword gate
+should chase, not a correctness one.
 
 ### ClickUp deletes `> ` blockquotes — from comments AND descriptions
 
@@ -506,6 +662,77 @@ offers every status in the workspace at once. Assignment sidesteps all of it.
 If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
 
+### No agent says something is waiting on you without running `waiting` first
+
+**The rule, in one line: an agent may not state that anything is waiting on
+Dane until `npm run clickup -- waiting` has said so.** It is one command, it
+takes a couple of seconds, and it is the only thing in the room that has
+actually read the ticket.
+
+Twice on the evening of 2026-08-23 an agent told him something needed him when
+it did not, and he acted on it both times:
+
+- *"Seventeen Ready-to-launch tickets are waiting on your merge word."* Eleven
+  already carried his approval and were stuck on a machine that could not push
+  to GitHub. He went looking for work that was not his.
+- *"The YouTube worker decision is the one thing waiting on you."* He had
+  answered `A` an hour earlier, and the relay had already cleared his name and
+  moved the ticket to `Queued`. He asked, reasonably, whether he had to answer
+  a third time.
+
+Neither was a lie and neither was a reasoning failure. Both were **a claim
+about current state, stated flatly, by an agent reading something other than
+the state** — a terminal buffer in one case, a stale impression of a list in
+the other. Him, that night: *"The issue is making assumptions and stating them
+with confidence. It has come up many times."*
+
+A rule alone would not have held. Every claim that was RIGHT that evening
+carried its evidence welded on ("854/854, verified by read-back"; "exit 0,
+here is the output"). Every claim that was WRONG was a confident sentence with
+nothing attached. So the command exists to make the cheapest path the correct
+one:
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task 86bbjve6b   # one ticket, the whole picture
+```
+
+```
+86bbjve6b  Acquire YouTube slice 3/4
+  status:     queued
+  assignee:   (not Dane)
+  last word:  Dane, "A", 2026-08-23 8:11pm
+  VERDICT:    NOT waiting on Dane — his own comment is the newest word on it — a machine owes the next move, whatever the status says
+```
+
+The verdict is **derived, never guessed**, from three live facts and nothing
+else: the status (`needs your input` / `ready to launch` are his lane), whether
+he is assigned (assignment IS the handoff signal, above), and whether the
+newest comment is his. A ticket in his lane, assigned to him, whose newest
+comment is not his → **waiting on him**. A ticket whose newest comment IS his →
+waiting on a machine, whatever the status says. Anything the read cannot
+establish prints `CANNOT TELL` with the reason and exits non-zero — never a
+confident verdict either way, because a wrong "not waiting" is how an answered
+ticket sits for nine hours.
+
+Exit codes match the rest of the loop tooling: **0** nothing of his, **3**
+something IS his, **1** could not tell. It is read-only — it never moves a
+status, assigns anyone or comments anywhere.
+
+`ask` enforces the same rule at the other end: it **refuses** to hand a ticket
+back to him when his own comment is already the newest one on it, because that
+is the "answer this a third time" failure arriving through the mechanism built
+to prevent it. `--after-his-answer` overrides it, on the record, for a
+genuinely new question.
+
+**The refusal stands on both doors into his lane.** `ask` is one way in;
+`status --status "Needs your input" --no-card` is the other, and it assigns him
+just the same — so both go through one shared check rather than a copy that can
+drift. This is the same lesson the Ready-to-launch gate learned (task
+86bbjt18r): a guard covering one of two routes is worse than no guard, because
+it earns the belief that the failure has become impossible.
+
+
 ## Visual changes come to you as pictures
 
 A ticket that changes what a page *renders* arrives with before/after
@@ -554,6 +781,141 @@ is different, so the loops have guardrails baked in:
   `Needs your input` for a human instead of shipping broken.
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
+- **And since 2026-08-25 one of these is a check, not a convention.** Every
+  bullet above binds only an actor that has read this file; PR #432 was merged
+  unreviewed by a session that had not. The `review-gate` status check refuses a
+  merge whose ticket carries no review PASS newer than the code — see "The
+  review gate" below, including the two settings that switch it from a warning
+  into a block.
+
+## The review gate — the rule the repository enforces (2026-08-25, task 86bbmfbkv)
+
+Everything in "Safety" above is a **convention**, and a convention only reaches
+the actors that know they are bound by it.
+
+On 2026-08-25 at 12:38 PR #432 was merged to production with no review verdict
+on its ticket and no merge word from Dane. Ticket 86bbjt1aq went `Live` without
+ever reaching `Ready to launch`. None of the unattended machinery did it: it was
+**a second Claude Code session on the MacBook** running `gh pr merge 432
+--squash` — an ordinary session, with ordinary `gh` access, that had no way to
+know a review lane was waiting for that PR.
+
+A fresh session, a forgotten terminal window, an operator in a hurry: none of
+them have read this file. So the rule stops being something every actor must
+remember and becomes a **status check**.
+
+### What it checks
+
+`.github/workflows/review-gate.yml` runs `scripts/review_gate.mjs` on every
+pull request. It reads the ticket id out of the PR body, reads that ticket's
+comments, and finds the newest `REVIEW:` verdict. It **passes only if that
+verdict is a PASS and it is newer than the PR's newest commit** — a PASS on
+older code is not a review of what is about to merge.
+
+The verdict parser is **imported** from `scripts/builder/mergeOnComment.js`,
+never re-implemented, and a test asserts the gate, the merge step and
+`loopTrail.readyToLaunchGate` all agree across a fixture set. A gate that
+disagreed with the merge step about what a PASS is would be worse than no gate.
+
+| Situation | Verdict |
+|---|---|
+| Newest verdict is a PASS, newer than the newest commit | **pass** |
+| No `REVIEW:` verdict on the ticket at all | **fail**, naming the ticket |
+| Newest verdict is a send-back | **fail** |
+| PASS older than the newest commit (sent back, fixed, pushed) | **fail** |
+| No ClickUp link in the PR body | **fail** |
+| `[gate-waived: <reason>]` in the PR body | **pass**, and announced on the bus |
+| ClickUp unreachable, or the CI token missing | **CANNOT TELL** — never a pass |
+
+Every failure names the ticket, says what the newest verdict actually is, and
+states the one thing that has to happen next. A red X that teaches nothing
+teaches people to route around it.
+
+**Lane A is not exempt.** Auto-merging a docs- or test-only change removes the
+*operator's word*, never the review (vault `doctrine/AUTO-MERGE-LANES.md`).
+
+**Freshness measures the branch's own commits, not its catch-up merges.**
+Branch protection is `strict: true` and this repo catches up by merging
+`origin/main` in rather than rebasing (DOCTRINE §6.6), so every catch-up adds a
+commit newer than any review. Counting those would deadlock the pipeline —
+catch up, go stale, re-review, catch up again. Merge commits are excluded by
+**parent count**, which is what a merge *is*, rather than by matching a merge
+message, which is only what a script currently writes. Checked against the live
+record before shipping: PRs #400 and #406 both failed the naive rule and pass
+the real one, while #432 (the incident) and #419 still fail correctly.
+
+### The waiver
+
+A waiver line passes the gate, including past the no-ticket rule — a hotfix
+opened by hand at 2am is what it is for. A reason is **required**; an empty one
+is not a waiver, and neither is a placeholder pasted out of this document.
+
+**It must sit ALONE on its own line**, and that anchor is load-bearing. The
+first version matched anywhere in the body, and the first CI run caught it on
+the gate's own pull request: that PR necessarily *documents* the syntax, so the
+gate read its own documentation as a live waiver and let itself through. Any PR
+quoting the syntax — a doc change, a rules table, a discussion — would have
+bypassed the gate while looking entirely ordinary. Mentioning a waiver inside a
+sentence or a table cell is now only mentioning it, exactly as `mergeOnComment`
+anchors its verdict regexes so that prose about a rule is not the rule.
+
+**And a waiver shown as CODE is an example, not an instruction.** The anchor
+alone still let a realistic waiver through if it sat on its own line inside a
+code fence — which is exactly how this repo writes down its own rules, so the
+next docs page with a plausible reason in it would have reopened the same hole
+one step out (found in review, 2026-08-25). Both ways Markdown says "this is
+an example" are skipped: a fenced block (triple backtick or triple tilde) and a
+four-space-indented block. Both skips fail **closed**: an unclosed
+fence hides the rest of the body, so a real waiver after it is ignored and the
+gate goes on to check the ticket. Losing a waiver costs one edit; granting one
+costs a merge. That is why the table above and every example in this document
+can quote the syntax safely.
+
+Using one **posts to the party line** with the reason, the PR and who did it.
+An override nobody can see is not an override, it is a hole, so the price of
+reaching for it is visibility. If the bus post fails the gate still passes but
+says so loudly — tell the party line by hand.
+
+### It is ADVISORY until Dane ticks the box
+
+Making a check *required* is a branch-protection change in GitHub's settings, a
+browser action on his account that an agent may not perform. Until then the job
+annotates loudly, writes its verdict to the run summary, and **exits 0**.
+
+Exiting 0 rather than going red is deliberate and load-bearing:
+`mergeOnComment.githubGate` refuses to merge **any** PR carrying a red check. An
+"advisory" gate that went red would therefore not be advisory at all — it would
+silently block every merge the relay makes, through a rule nobody had agreed to
+enforce yet.
+
+**To switch it on, both halves, in one visit:**
+
+1. **Settings → Branches → `main` → Require status checks to pass → add
+   `review-gate`.**
+2. **Settings → Secrets and variables → Actions → Variables → New variable:
+   `REVIEW_GATE_ENFORCING` = `true`.**
+
+The variable exists so the two halves cannot drift. With the box ticked but the
+token missing or revoked, the gate answers CANNOT TELL and stays shut, instead
+of quietly reverting to advisory and waving everything through. Inferring the
+mode from "is the token present?" would have exactly that hole.
+
+### Before ticking the box: two things must be true
+
+1. **The CI ClickUp token must exist.** The workflow reads
+   `secrets.CLICKUP_API_TOKEN` — the same name the rest of the repo uses
+   (`scripts/clickup_direct.mjs`), not a new one invented for CI. **As of
+   2026-08-25 this repository has no Actions secrets at all**, so the gate
+   currently answers CANNOT TELL on every PR and, being advisory, exits 0.
+   Adding it is Settings → Secrets and variables → Actions → New repository
+   secret.
+2. **Something must re-run the gate after a review lands.** A status check is
+   computed once per commit. loop-review posts its PASS *after* the last push,
+   so the check that already ran saw no verdict and will not re-run on its own.
+   Today the answer is by hand — `gh run rerun <run-id>` — which is fine while
+   the gate is advisory and **not** fine once it is required. Teaching the merge
+   step to re-run a stale gate before merging is the follow-up that has to land
+   first.
 
 ## Pausing the pipeline — the sanctioned way to go fast (2026-08-25, task 86bbmfc15)
 
