@@ -13,6 +13,7 @@ const {
   assertProjectIdAllowedOnHost,
   assertDomainQueryAllowedOnHost,
   resolveTenantProjectFromHost,
+  resolvePublicProjectForRequest,
 } = require('../lib/publicSiteHostBinding');
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
@@ -40,34 +41,6 @@ function respondJson(res, req, status, payload) {
 function respondErr(res, req, status, message, opts = {}) {
   if (isHeadRequest(req)) return sendStatus(res, status);
   return sendErr(res, status, message, opts);
-}
-
-/**
- * Which project a public bug-report request belongs to.
- *
- * On a tenant's own domain the host decides and the body's projectId may
- * only agree with it. On a system host (starcaster.pro, localhost, previews)
- * the host names no tenant, so the body's projectId is an unverified claim —
- * it is resolved against real projects first, or any string becomes a
- * tenant (the 1/5 review finding). Shared by the bug-report endpoints so they
- * can never disagree about who owns a report.
- */
-async function resolveBugReportProject(req, projectIdInput) {
-  const projectId = String(projectIdInput || '').trim();
-  const bind = await assertProjectIdAllowedOnHost(req, projectId);
-  if (!bind.ok) return { ok: false, status: bind.status || 403, error: bind.error, code: bind.code };
-  if (bind.projectId) return { ok: true, projectId: String(bind.projectId) };
-  // Plain language, not `projectId is required` / `Unknown project`: these two
-  // are the only messages from this resolver a member of the public can read,
-  // and both mean the same thing to them — the form on this page is not wired
-  // to a site. Developer-speak in a visitor-facing dialog tells them nothing
-  // they can act on. The `code` still carries the detail for the logs.
-  if (!projectId) return { ok: false, status: 400, error: 'This report form is not connected to a site, so nothing could be sent.', code: 'VALIDATION_ERROR' };
-  const project = await getPublicProjectById(projectId);
-  if (!project.ok || !project.data) {
-    return { ok: false, status: 404, error: 'This report form points to a site we do not recognise.', code: 'PROJECT_NOT_FOUND' };
-  }
-  return { ok: true, projectId: String(project.data.id) };
 }
 
 async function handle(req, res, pathname, method) {
@@ -249,7 +222,10 @@ async function handle(req, res, pathname, method) {
     if (checkEndpointLimit(req, res, 'public.bugReportViewer')) return true;
 
     const { searchParams } = getUrlObj(req);
-    const resolved = await resolveBugReportProject(req, searchParams.get('projectId'));
+    // A read, not a write — but it answers "which project is this?" for the
+    // two writes below, so it resolves through the SAME door they do rather
+    // than keeping a second copy of the rule that could drift from theirs.
+    const resolved = await resolvePublicProjectForRequest(req, searchParams.get('projectId'));
     if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
     let tier = 'public';
     const token = projectAdmin.readAdminSessionToken(req);
@@ -289,12 +265,12 @@ async function handle(req, res, pathname, method) {
       return respondErr(res, req, 400, 'That upload could not be read — please pick the file again.', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const resolved = await resolveBugReportProject(req, body.projectId);
-    if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
+    const bind = await resolvePublicProjectForRequest(req, body.projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
 
     const stored = await storeBugReportScreenshot(
       { fileName: body.fileName, fileBase64: body.fileBase64 },
-      { projectId: resolved.projectId }
+      { projectId: bind.projectId }
     );
     if (!stored.ok) return respondErr(res, req, stored.status || 500, stored.error, { code: stored.code }), true;
     return respondJson(res, req, 201, { ok: true, data: stored.data }), true;
@@ -306,6 +282,9 @@ async function handle(req, res, pathname, method) {
     if (checkEndpointLimit(req, res, 'public.bugReport')) return true;
 
     const body = await parseJsonBody(req);
+
+    // Shape of the payload first, so obviously-invalid input costs no database
+    // work — then the project the report may be filed against.
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return respondErr(res, req, 400, 'A description is required', { code: 'VALIDATION_ERROR' }), true;
     }
@@ -315,9 +294,9 @@ async function handle(req, res, pathname, method) {
       return respondErr(res, req, 400, `Description must be ${MAX_BUG_REPORT_DESCRIPTION_LENGTH} characters or fewer`), true;
     }
 
-    const resolved = await resolveBugReportProject(req, body.projectId);
-    if (!resolved.ok) return respondErr(res, req, resolved.status, resolved.error, { code: resolved.code }), true;
-    const scopedProjectId = resolved.projectId;
+    const bind = await resolvePublicProjectForRequest(req, body.projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+    const scopedProjectId = bind.projectId;
 
     // A report claiming a client/staff viewer tier is only trusted if the
     // request carries a real tenant admin session for THIS project —
