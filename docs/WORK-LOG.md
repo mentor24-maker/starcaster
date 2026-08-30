@@ -1,3 +1,47 @@
+## 2026-08-26 — The settings fields and the Layout fields finally line up (#440)
+
+Back on the 13th you looked at a two-column module editor and said the left
+column's width "varies arbitrarily between the Settings fields and the Layout
+fields." Yesterday's work fixed the top half of that. This is the bottom half.
+
+Open Feature Cards and look down the left side. The rows at the top — Label,
+Background, Alignment, the margins — put their boxes at one distance from the
+left edge, and the rows right below them put theirs 33 pixels further over.
+Two ragged edges where you are reading one list.
+
+The reason it survived yesterday's fix is worth a sentence, because it is not
+carelessness. Those top rows and the rows below them are two separate boxes on
+the page, and in the language pages are laid out in, two separate boxes cannot
+share a column width — each one measures its own longest label and puts its
+fields wherever that happens to end. Written identically, they still land in
+different places. There is a newer feature, `subgrid`, that lets two boxes
+borrow their columns from a shared parent, and that is what they do now: the
+widest label is measured across every row at once, so every box starts and
+ends on one line. The two halves of the editor stay exactly the equal widths
+you asked for in August — the card list still begins at the halfway mark, to
+the pixel.
+
+Two of the editors this was expected to touch turned out not to need touching,
+and the only way to know that was to drive a real browser and measure. The
+Carousel's top rows have nothing underneath them to disagree with. Social had
+already solved it a different way months ago. Both were left alone.
+
+The Program List editor, which was not on the ticket, turned out to have its
+two columns backwards: the list of programs was stacked underneath the top
+rows on the left while the settings sat off on the right, with the heading
+"Settings" sitting over the list of programs. Nothing in the styling said so
+— the rule that places those two halves had simply never named this editor.
+It now matches Feature Cards, and the panel is about 850 pixels shorter.
+There are before-and-after pictures on the ticket; that one is worth a look.
+
+The last piece is the checker. `check:panels`, the tool that is supposed to
+catch exactly this kind of misalignment, had been reporting a clean pass over
+it for weeks — it compares each box against itself, so two boxes that are each
+perfectly tidy inside while disagreeing with each other were invisible to it.
+It now measures them together. Before believing the fix, the sharing was
+switched off on purpose to confirm the checker fails loudly: it does, twelve
+times over, at every screen width.
+
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 
 You said you needed an emergency shutdown that clears the decks so you can run
