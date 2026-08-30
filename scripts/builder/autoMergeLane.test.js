@@ -694,6 +694,17 @@ test('--no-merge turns Lane A off with the rest', () => {
     'the whole lane must sit behind the existing merge off-switch');
 });
 
+test('a paused pipeline turns Lane A off with the rest', () => {
+  // Lane A is the one merge path that needs no human word at all, so the
+  // pause switch guarding it is load-bearing rather than incidental: while
+  // Dane has the deck, nothing may land under him — least of all a merge
+  // nobody had to authorise. The lane sits behind `mergingAllowed`, and this
+  // pins what that name is actually made of. It was inherited from main by a
+  // three-way merge on 2026-08-30 and nothing asserted it until now.
+  assert.match(RELAY, /const mergingAllowed = mergeSwitchOn && !pauseState\.paused;/,
+    'the merge off-switch must include the pipeline pause, not just --no-merge');
+});
+
 test('a dry run announces nothing, cancels nothing and merges nothing', () => {
   const laneSection = RELAY.slice(RELAY.indexOf('Lane A: announce, wait one hour, merge'));
   for (const phrase of [
