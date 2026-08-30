@@ -1,5 +1,7 @@
 'use strict';
 
+const { costlyTriggers, describeTriggers } = require('./costlyAsk.js');
+
 /**
  * The operator card — the fixed shape of every message a loop puts in front
  * of Dane on a ClickUp ticket.
@@ -51,8 +53,10 @@
  * `describe` command refuses a body containing one, for the same reason.
  */
 
-/** The three (plus one optional) sections of the authored input. */
-const MARKERS = ['ASKED', 'WHEN', 'CONTEXT', 'NEEDED'];
+/** The three required sections of the authored input, plus two optional ones.
+ *  `@@EVIDENCE` is optional in general and REQUIRED when the ask costs money
+ *  or cannot be undone — see evidenceProblems below. */
+const MARKERS = ['ASKED', 'WHEN', 'CONTEXT', 'NEEDED', 'EVIDENCE'];
 
 const CONTEXT_MIN_WORDS = 50;
 const CONTEXT_MAX_WORDS = 100;
@@ -89,7 +93,13 @@ function countWords(text) {
  *   @@NEEDED
  *   ...the ask...
  *
- * `@@WHEN` is optional. Anything before the first marker is an error rather
+ *   @@EVIDENCE
+ *   @@MEASURED 8:04pm
+ *   ...the command and its output, in fences...
+ *
+ * `@@WHEN` and `@@EVIDENCE` are optional to the parser — `@@EVIDENCE` becomes
+ * mandatory in validateCard when the ask itself costs money or cannot be
+ * undone. Anything before the first marker is an error rather
  * than silently-dropped text: a card whose first section got eaten is exactly
  * the failure this format exists to prevent.
  */
@@ -103,6 +113,15 @@ function parseCard(text) {
     const match = /^@@([A-Z]+)\s*$/.exec(line.trim());
     if (match) {
       const name = match[1];
+      if (name === 'MEASURED') {
+        // Not a section — it carries its value on the same line, so a bare one
+        // is an author who has the right idea and the wrong shape. Saying
+        // "@@MEASURED is not a card section" would be true and useless.
+        throw new Error(
+          '@@MEASURED takes the time on the SAME line — "@@MEASURED 8:04pm" — and it belongs\n' +
+          'inside @@EVIDENCE. It is a line, not a section of its own.',
+        );
+      }
       if (!MARKERS.includes(name)) {
         throw new Error(
           `"@@${name}" is not a card section. Use ${MARKERS.map((m) => `@@${m}`).join(', ')}.`,
@@ -132,6 +151,7 @@ function parseCard(text) {
     when: trim('WHEN'),
     context: trim('CONTEXT'),
     needed: trim('NEEDED'),
+    evidence: trim('EVIDENCE'),
   };
 }
 
@@ -171,13 +191,342 @@ function validateCard(card) {
     );
   }
 
-  for (const name of ['asked', 'context', 'needed']) {
+  problems.push(...evidenceProblems(card));
+
+  for (const name of ['asked', 'context', 'needed', 'evidence']) {
     const offending = findBlockquoteLines(card[name]);
     if (offending.length) {
       problems.push(
         `@@${name.toUpperCase()} uses a "> " blockquote (line ${offending.join(', ')}). ClickUp DELETES\n` +
         '  blockquote lines — they do not arrive unformatted, they arrive not at all.\n' +
         '  Use plain text, **bold**, or a fenced block instead.',
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * A clock time in the register the operator reads — "8:04pm", "8:04 PM",
+ * optionally dated ("2026-08-23 8:04pm", "8/23 8:04pm").
+ *
+ * Only the operator's own register counts. A bare ISO instant or a unix epoch
+ * is a number he has to convert before he can tell whether the measurement is
+ * from ten minutes ago or from before the outage, and that conversion is
+ * exactly the step nobody performs (OPERATIONS SOP 13).
+ *
+ * The trailing look-ahead is not decoration. Without it `cron next run 10:15
+ * America/New_York` reads as "10:15 Am" and `9:30 ambient` as "9:30 am", so
+ * the freshness check passes on text that is not a run time at all.
+ */
+const CLOCK = /((?:\d{4}-\d{2}-\d{2}\s+|\d{1,2}\/\d{1,2}\s+)?\d{1,2}:\d{2}\s*(?:am|pm))(?![A-Za-z0-9])/i;
+
+/**
+ * Split a section into the prose OUTSIDE its fences and the blocks inside
+ * them. Both halves are needed and they mean different things: the fences hold
+ * what the machine said, the prose holds what the author said about it.
+ *
+ * NESTED FENCES ARE OUT OF SCOPE, deliberately. Output that itself contains a
+ * ``` line toggles this counter, so which text counts as prose gets scrambled.
+ * Raised in review (2026-08-26) and left alone: the scrambling makes the
+ * section fail its shape checks rather than mis-date the card, which is the
+ * safe direction — the author is told to fix the formatting, and nothing goes
+ * out asserting a measurement time that is not the measurement.
+ */
+function splitFences(text) {
+  const prose = [];
+  const blocks = [];
+  let open = null;
+  for (const line of String(text || '').split('\n')) {
+    if (/^\s*```/.test(line)) {
+      if (open === null) open = [];
+      else { blocks.push(open); open = null; }
+      continue;
+    }
+    if (open !== null) open.push(line);
+    else prose.push(line);
+  }
+  // An unclosed fence still carried content; count what it holds rather than
+  // discarding it, so a missing back-tick line reads as a formatting slip and
+  // not as "you pasted no output".
+  if (open !== null && open.length) blocks.push(open);
+  return { prose: prose.join('\n'), fenced: blocks.map((lines) => lines.join('\n')).join('\n'), blocks };
+}
+
+/**
+ * The non-empty lines of a fenced block, with shell line-continuations folded
+ * into the single line they actually are.
+ *
+ * WHY (review round 3, 2026-08-26). The output rule counts pasted lines and
+ * wants at least two — a command plus something it printed. A backslash-
+ * continued command is two lines on its own, so
+ *
+ *   curl -s https://api.clickup.com/api/v2/team \\
+ *     -H "Authorization: $TOKEN"
+ *
+ * satisfied the count with NO output under it at all — which is precisely "a
+ * claim about what would happen", the thing the refusal message says it
+ * rejects. Folding the continuation makes the count mean what it says.
+ *
+ * ONLY the backslash is folded. A trailing pipe looks like a continuation too,
+ * but it is also how a markdown table row ends, and real pasted output is full
+ * of those — folding them would undercount genuine output and refuse a good
+ * card, which is the failure mode that gets a gate routed around.
+ */
+function contentLines(lines) {
+  const out = [];
+  let carry = '';
+  for (const raw of lines) {
+    const line = String(raw).trim();
+    if (!line) continue;
+    carry = carry ? `${carry} ${line}` : line;
+    if (/\\$/.test(carry)) {
+      carry = carry.replace(/\\+$/, '').trim();
+      continue;
+    }
+    out.push(carry);
+    carry = '';
+  }
+  if (carry) out.push(carry);
+  return out;
+}
+
+/** The fenced blocks inside a section, as arrays of their content lines. */
+function fencedBlocks(text) {
+  return splitFences(text).blocks;
+}
+
+/**
+ * The line that says when the check was run: `@@MEASURED 8:04pm`, alone on its
+ * own line in the prose of @@EVIDENCE. Every other clock in the section — in
+ * the prose and in the pasted output alike — is IGNORED.
+ *
+ * WHY IT IS DECLARED AND NOT INFERRED (Dane's decision, 2026-08-29, option A
+ * on task 86bbk34ym). Four rounds of this gate each read the run time out of
+ * the author's sentences, and each picked it by a different positional rule:
+ * the first clock (round 1), the first clock in the prose (round 2), the last
+ * cue-governed clock (round 3), the clock a cue introduces (round 4). Every
+ * one of them was right on the sentences it was tested against and wrong on
+ * the next one somebody wrote. The last version dated a card
+ *
+ *   **THE CHECK BEHIND THIS ASK — measured at 3:12pm**
+ *
+ * from the sentence "At 8:04pm I re-ran the failing call, well after the
+ * outage began at 3:12pm" — the moment the outage STARTED, asserted to the
+ * operator as the moment it was checked. That is the exact half of the
+ * 2026-08-23 incident this timestamp exists to close, arriving through the
+ * machinery meant to close it, and it did not refuse: it stated it plainly.
+ *
+ * The ticket's own Non-goals say this gate stays "cheap, narrow, and
+ * mechanical" and does not take on reasoning tasks. Reading which clock in an
+ * English sentence is the measurement is a reasoning task, and an open-ended
+ * one — a fifth positional rule would have closed that shape and left the next
+ * one open, which is what the four before it each did.
+ *
+ * So the writer says it, on one line, and nothing is guessed. The cost is one
+ * line per costly ask. What it buys is that this class of bug cannot recur:
+ * there is no sentence shape left to get wrong.
+ *
+ * It is a line rather than a `@@MEASURED` section because the section markers
+ * (`MARKERS`) must sit alone on their line, and this one carries its value on
+ * the same line — see parseCard, which says so when somebody writes it bare.
+ */
+const MEASURED_LINE = /^[ \t]*@@MEASURED\b[ \t]*(.*?)[ \t]*$/i;
+
+/**
+ * The whole line has to be the clock and NOTHING else.
+ *
+ * Anchored on purpose. Allowing trailing words puts them in the card's
+ * heading, and "measured at 8:04pm I think, before the restart" is the same
+ * hedged assertion the declared line exists to replace. A refusal here costs
+ * one reword and says exactly what to write.
+ */
+const MEASURED_VALUE = new RegExp(`^${CLOCK.source}$`, 'i');
+
+/** Does this text carry a `@@MEASURED` line anywhere in it? */
+function hasMeasuredLine(text) {
+  return String(text || '').split('\n').some((line) => MEASURED_LINE.test(line));
+}
+
+/**
+ * Read the declared run time out of a section.
+ *
+ * Returns `{ time, ambiguous, reason, declared }`. A null `time` always carries
+ * a `reason`, because the caller has a different sentence to say for each one
+ * and "add a time" is unhelpful to an author who wrote one in the wrong place.
+ *
+ * Only the PROSE is read. A `@@MEASURED` line inside a fence is part of the
+ * pasted output — something the machine printed, not something the author is
+ * saying — and taking it at its word is how round 1 dated a card six days
+ * stale off a log line. It is reported as its own problem rather than as
+ * "missing", because the author plainly did write one.
+ */
+function readEvidenceTime(text) {
+  const { prose, fenced } = splitFences(text);
+  const declared = [];
+  for (const line of prose.split('\n')) {
+    const match = MEASURED_LINE.exec(line);
+    if (match) declared.push(match[1].trim());
+  }
+
+  if (declared.length > 1) {
+    return { time: null, ambiguous: true, reason: 'repeated-measured-line', declared };
+  }
+  if (!declared.length) {
+    return {
+      time: null,
+      ambiguous: false,
+      reason: hasMeasuredLine(fenced) ? 'measured-line-fenced' : 'no-measured-line',
+      declared,
+    };
+  }
+  if (!declared[0]) {
+    return { time: null, ambiguous: false, reason: 'measured-line-empty', declared };
+  }
+  const match = MEASURED_VALUE.exec(declared[0]);
+  if (!match) {
+    return { time: null, ambiguous: false, reason: 'measured-line-unreadable', declared };
+  }
+  return { time: match[1].trim(), ambiguous: false, reason: null, declared };
+}
+
+/**
+ * The evidence as the operator should see it — the declared line removed,
+ * because its whole content is already the card's heading. Leaving it in
+ * prints the time twice, once in a spelling that is machine syntax.
+ */
+function evidenceBody(text) {
+  // Fence-aware: a `@@MEASURED` line inside a fence is something the machine
+  // printed, and the paste is verbatim or it is worthless.
+  let fenced = false;
+  return String(text || '')
+    .split('\n')
+    .filter((line) => {
+      if (/^\s*```/.test(line)) { fenced = !fenced; return true; }
+      return fenced || !MEASURED_LINE.test(line);
+    })
+    .join('\n')
+    .trim();
+}
+
+function evidenceTimestamp(text) {
+  return readEvidenceTime(text).time;
+}
+
+/**
+ * The evidence rule. An ask that costs money or cannot be undone must arrive
+ * with the check that establishes it — see costlyAsk.js for the incident.
+ *
+ * Three things are demanded, and all three are mechanical:
+ *
+ *   1. the COMMAND or request, in runnable form — a fenced block, which is
+ *      also the only verbatim form ClickUp is known to keep intact;
+ *   2. its ACTUAL OUTPUT, pasted rather than summarised — so the fence has to
+ *      hold more than the one command line. A command with nothing underneath
+ *      it is a claim about what would happen, which is what went wrong;
+ *   3. WHEN it was run, DECLARED on a `@@MEASURED 8:04pm` line in the
+ *      operator's clock. Evidence gathered before a sixteen-hour outage is not
+ *      evidence about now. It is declared rather than read out of the prose
+ *      because four versions that read it were each wrong on the next sentence
+ *      somebody wrote — see MEASURED_LINE.
+ *
+ * What is deliberately NOT checked: whether the evidence is CORRECT. That is
+ * a reasoning task and it belongs to the reader. This gate only enforces that
+ * a costly ask arrives with a reproducible check and the time it was run.
+ */
+function evidenceProblems(card) {
+  const problems = [];
+  const triggers = costlyTriggers(card.needed);
+  const evidence = String(card.evidence || '').trim();
+
+  if (!triggers.length) {
+    // An ordinary ask is untouched — including one that volunteered evidence.
+    // Narrowness is the value: a gate that fires on everything gets routed
+    // around, and then it protects nothing.
+    if (!evidence) return problems;
+  } else if (!evidence) {
+    problems.push(
+      `@@EVIDENCE is missing, and this ask is a costly one: ${describeTriggers(triggers)}.\n` +
+      '  An ask that spends money or cannot be undone has to carry the check that proves it —\n' +
+      '  the command or request in runnable form, its ACTUAL output pasted in a fenced block,\n' +
+      '  and when you ran it on a line of its own ("@@MEASURED 8:04pm").\n' +
+      '  On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a diagnosis that was\n' +
+      '  wrong; re-running the one failing call would have settled it in seconds.\n' +
+      '  Re-run it now and paste what it says.',
+    );
+    return problems;
+  }
+
+  // From here the section exists, so its SHAPE is checked — for a costly ask
+  // because it is owed, and for a volunteered one because half-evidence is
+  // more misleading than none.
+  const { blocks } = splitFences(evidence);
+  const filled = blocks.filter((lines) => lines.some((line) => line.trim()));
+  // Counted ACROSS the fences, not within one. The clearer layout puts the
+  // command in its own fence and the output in a second, and the first version
+  // of this rule told that author "you showed a command with no output" — which
+  // was false. A gate that misdiagnoses good input is one people route around,
+  // and then it protects nothing.
+  const pastedLines = filled.reduce((total, lines) => total + contentLines(lines).length, 0);
+  if (!filled.length) {
+    problems.push(
+      '@@EVIDENCE has no fenced block. Put the command and its output inside ``` fences:\n' +
+      '  a fence is the only form ClickUp is known to keep verbatim, and verbatim is the\n' +
+      '  whole point — a summary of the output is the judgment this gate exists to skip.',
+    );
+  } else if (pastedLines < 2) {
+    problems.push(
+      '@@EVIDENCE shows a command with no output under it. Paste what it actually printed,\n' +
+      '  not what it should print — the 2026-08-23 escalation was wrong precisely because\n' +
+      '  nobody re-ran the failing call before asking him to pay for the diagnosis.\n' +
+      '  One fence holding both, or one for the command and one for its output, both count.',
+    );
+  }
+
+  const timing = readEvidenceTime(evidence);
+  if (!timing.time) {
+    if (timing.reason === 'repeated-measured-line') {
+      problems.push(
+        '@@EVIDENCE has more than one @@MEASURED line, and the card shows one time. Picking\n' +
+        '  between them is exactly what the four earlier versions of this rule did — each by a\n' +
+        '  different rule, each wrong on the next card somebody wrote. Keep the one line that\n' +
+        '  says when you ran the check; say everything else in ordinary prose, where it is\n' +
+        '  read by nobody but him.',
+      );
+    } else if (timing.reason === 'measured-line-fenced') {
+      problems.push(
+        '@@EVIDENCE has its @@MEASURED line INSIDE the fenced block, where it reads as part of\n' +
+        '  what the command printed rather than as something you are saying. The paste is the\n' +
+        '  machine\'s word and the line is yours, and the card must not confuse them. Move it\n' +
+        '  out to its own line in the prose: "@@MEASURED 8:04pm".',
+      );
+    } else if (timing.reason === 'measured-line-empty') {
+      problems.push(
+        '@@MEASURED has no time after it. The time goes on the SAME line, in his clock —\n' +
+        '  "@@MEASURED 8:04pm", or "@@MEASURED 2026-08-23 8:04pm" if you did not run it today.',
+      );
+    } else if (timing.reason === 'measured-line-unreadable') {
+      problems.push(
+        `@@MEASURED says "${timing.declared[0]}", which is not a time in the register he reads.\n` +
+        '  The line has to be the clock and nothing else — "@@MEASURED 8:04pm", or\n' +
+        '  "@@MEASURED 2026-08-23 8:04pm" if it was not today. "Just now" is not a time by the\n' +
+        '  hour he opens the card, and an ISO instant is a number he has to convert before he\n' +
+        '  can tell whether your reading predates the outage you are reporting.',
+      );
+    } else {
+      const stray = ['asked', 'when', 'context', 'needed']
+        .filter((name) => hasMeasuredLine(card[name]));
+      problems.push(
+        '@@EVIDENCE does not say when you ran it. Add one line — "@@MEASURED 8:04pm" — in his\n' +
+        '  clock, dated if it was not today. The card prints that time in its heading, so a\n' +
+        '  stale proof is visible rather than implied: evidence gathered before a sixteen-hour\n' +
+        '  outage is not evidence about now.\n' +
+        '  It is a line you write rather than something read out of your sentences because\n' +
+        '  four earlier versions of this gate guessed which clock you meant, and the last one\n' +
+        '  dated a card by the outage it was reporting (task 86bbk34ym).' +
+        (stray.length
+          ? `\n  You DID write a @@MEASURED line, but in @@${stray[0].toUpperCase()}. It only counts inside\n  @@EVIDENCE, which is the section the card dates.`
+          : ''),
       );
     }
   }
@@ -247,6 +596,24 @@ function renderCard(card) {
     card.needed,
     '',
   );
+  if (card.evidence) {
+    // Under the ask, not above it: he reads what is being asked of him first,
+    // then the proof it rests on. The measurement time goes in the HEADING
+    // rather than being left inside the paste, so a stale proof is visible at
+    // a glance instead of implied — that is the half of the 2026-08-23 failure
+    // that survives even when evidence is attached.
+    const when = evidenceTimestamp(card.evidence);
+    parts.push(
+      '',
+      `**THE CHECK BEHIND THIS ASK${when ? ` — measured at ${when}` : ''}**`,
+      '',
+      // The @@MEASURED line itself is lifted out: its whole content is the
+      // heading above, and leaving it in prints the time twice, the second
+      // time in a spelling that is machine syntax and means nothing to him.
+      evidenceBody(card.evidence),
+      '',
+    );
+  }
   return parts.join('\n');
 }
 
@@ -270,6 +637,16 @@ function buildCard(text) {
 
 module.exports = {
   MARKERS,
+  CLOCK,
+  evidenceTimestamp,
+  readEvidenceTime,
+  evidenceBody,
+  MEASURED_LINE,
+  MEASURED_VALUE,
+  splitFences,
+  fencedBlocks,
+  contentLines,
+  evidenceProblems,
   CONTEXT_MIN_WORDS,
   CONTEXT_MAX_WORDS,
   BANNER_RULE,

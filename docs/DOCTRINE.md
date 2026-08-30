@@ -236,6 +236,38 @@ And when you find one of these, look for the destructive twin: the same dialog
 that stops a duplicate is what stops an accidental overwrite of a section 40
 pages depend on.
 
+### 2.5 A person is a human being — an agent is not, and a hand-off must say which
+
+`person` and `human` mean a human being. In practice, Dane. An agent session is
+an **agent session** — never a person, a human, somebody, or anyone. Ratified in
+vault `doctrine/TERMINOLOGY.md` (2026-08-29), under the same rule that retired
+"banner" and "harness": doctrine states rules in words with exactly one referent.
+
+This is not house style. It is the answer to the only question that matters at a
+hand-off — *whose hands does this need, and are they Dane's?*
+
+Ticket 86bbmfc15 (PR #434) sat blocked for four days. The merge step hit a real
+conflict and behaved correctly, but its messages did not. It told Dane *"your
+approval is still standing — you do not have to say merge again"* and *"it will
+merge on a later run, once the branch is caught up."* Its log and help text
+called the actor it needed **a human**. An agent read that log and told Dane the
+system had "stopped and asked for a person," so he concluded he was the blocker
+and had missed a prompt. He was not the blocker, no prompt existed, and the
+actor actually requested — an agent session, asked for on the bus — was not
+listening, because nothing consumes those messages. The wrong word hid a missing
+actor for four days, and the conflict itself was three lines.
+
+**Do this:** at any hand-off, name which of the two it needs. A hand-off that
+cannot name a specific waiting actor does not get to imply one. Passive voice is
+the tell — *"once the branch is caught up"* reads as a process underway until you
+ask who is doing the catching up. If nothing is going to pick the work up, the
+message says so plainly.
+
+**And do not over-correct.** Most existing uses are right and must stay: *"a
+human eye is the only gate that exists"*, *"only a HUMAN exports a token by
+hand"*, *"an Urgent flag is a human override"*. The test is not the word, it is
+the referent — replace it only where the actor is genuinely an agent session.
+
 ---
 
 ## 3. Designing checks
