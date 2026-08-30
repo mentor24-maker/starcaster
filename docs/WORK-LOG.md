@@ -103,6 +103,31 @@ your money. Which way that should go is a judgment about how much plain English
 a word-matching rule ought to chase, and it seemed better to say so than to
 quietly pick.
 
+Then a fourth review round found the heading wrong a fourth time, and a fifth
+found it a fifth. The sentence that broke it this time put the run time first
+and the explanation after — "at 8:04pm I re-ran the failing call, well after
+the outage began at 3:12pm" — and the card came out headed 3:12pm, the moment
+things broke, presented as the moment they were checked. Five attempts, each
+one a different rule for working out which time in a sentence is the
+measurement, and each one correct until somebody wrote the next sentence.
+
+So it went to you instead of round the loop again, and you picked option A:
+stop guessing. The agent now writes the time on a line of its own —
+`@@MEASURED 8:04pm` — and every other time anywhere in the proof is ignored,
+narrated or printed. It costs an agent one extra line. What it buys is that
+this particular bug cannot come back, because there is no longer a sentence to
+misread: the five previous fixes were all answers to a question this version
+does not ask. If the line is missing, written twice, buried inside the printout
+or carrying something that is not a time, the card is refused and told exactly
+which of those it is.
+
+The same round fixed a smaller thing that needed no decision from you. Every
+one of these words worked in the singular and went silent in the plural, so
+"approve the deletion" demanded proof and "approve the deletions" did not —
+the rule declining on the more expensive version of the same request. Six words
+gained their plurals, with a test that now checks both spellings of each one
+and fails if a future word arrives with only half of itself.
+
 ## 2026-08-26 — Somewhere to write down what footage exists (#422)
 
 The video Studio needs a filing cabinet before it can have a workshop: a record

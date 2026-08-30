@@ -168,8 +168,10 @@ has to be written down, not left blank.
 @@EVIDENCE
 Required ONLY when the ask costs money or cannot be undone (spend, buy,
 subscribe, upgrade, plan change, credential rotation, deletion): the command in
-runnable form, its ACTUAL output pasted in a ``` fence, and when you ran it in
-his clock ("measured at 8:04pm").
+runnable form, its ACTUAL output pasted in a ``` fence, and one line saying
+when you ran it — `@@MEASURED 8:04pm`, the clock and nothing else. That line is
+the only thing that dates the card; every other clock in the section, narrated
+or inside the paste, is ignored.
 ```
 
 It renders with `@@NEEDED` under a banner he can spot without reading:

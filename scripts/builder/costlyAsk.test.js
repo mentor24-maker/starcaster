@@ -150,6 +150,56 @@ test('every verb carries its base, gerund and third-person form together', () =>
   }
 });
 
+test('every bare noun carries its plural, and every plural fires', () => {
+  // THE ROUND-5 FINDING. Every needsProposal noun fired in the singular and
+  // was silent in the plural — "Approve the deletions" demanded no evidence
+  // while "Approve the deletion" did. A plural act is more costly than its
+  // singular, not less, so this was the gate declining on exactly the asks it
+  // most exists for.
+  //
+  // Checked BOTH ways, like the cue-family test: every pair fully listed, and
+  // every needsProposal noun belonging to a pair — so a singular cannot be
+  // added later without its plural, which is the shape of the hole.
+  const listed = new Set(TRIGGERS.map((t) => t.word));
+  const pairs = [
+    ['subscription', 'subscriptions'],
+    ['payment', 'payments'],
+    ['invoice', 'invoices'],
+    ['deletion', 'deletions'],
+    ['rotation', 'rotations'],
+    ['migration', 'migrations'],
+  ];
+  for (const pair of pairs) {
+    for (const form of pair) {
+      assert.ok(listed.has(form), `"${form}" is missing from TRIGGERS`);
+    }
+  }
+  // `billing` is the one bare noun with no plural in use — "billings" is not
+  // English anyone writes here. Named rather than silently skipped.
+  const covered = new Set([...pairs.flat(), 'billing']);
+  for (const trigger of TRIGGERS) {
+    if (!trigger.needsProposal) continue;
+    assert.ok(covered.has(trigger.word), `"${trigger.word}" is a bare noun with no plural in this test`);
+  }
+
+  // ...and the sentences the reviewer actually wrote, end to end.
+  assert.ok(isCostlyAsk('Approve the deletions tonight.'), 'deletions');
+  assert.ok(isCostlyAsk('Approve the migrations tonight.'), 'migrations');
+  assert.ok(isCostlyAsk('Authorise the key rotations.'), 'rotations');
+  assert.ok(isCostlyAsk('Sign off on the invoices.'), 'invoices');
+  assert.ok(isCostlyAsk('Approve the payments.'), 'payments');
+  assert.ok(isCostlyAsk('Start the subscriptions.'), 'subscriptions');
+  assert.ok(isCostlyAsk('Approve the purchases.'), 'purchases');
+});
+
+test('a plural noun still needs a cue, so a report is not refused', () => {
+  // The plurals inherit needsProposal for the reason round 2 added it: a noun
+  // names a thing as readily as it proposes one, and a gate that refuses
+  // "nothing needed" cards is one people route around.
+  assert.equal(isCostlyAsk('Nothing needed — the deletions already happened last week.'), false);
+  assert.equal(isCostlyAsk('Nothing right now. The invoices render correctly again.'), false);
+});
+
 // -------------------------------------------- the asks that must NOT fire
 
 test('"costs" fires on a price but not on "costs nothing"', () => {

@@ -104,7 +104,9 @@ before anything is sent:
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask, under a banner he can spot without reading
 @@EVIDENCE  required ONLY when the ask costs money or cannot be undone: the
-            command, its real output in a fence, and when you ran it
+            command, its real output in a fence, and a "@@MEASURED 8:04pm"
+            line saying when you ran it — that line is the only thing that
+            dates the card; every other clock in the section is ignored
 ```
 
 ### A `Ready to launch` card must carry a link he can click

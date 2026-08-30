@@ -67,6 +67,17 @@
  *   irreversible  — it cannot be taken back once he does it
  *
  * `needsProposal: true` marks a BARE NOUN — see PROPOSAL_CUES below.
+ *
+ * EVERY BARE NOUN CARRIES ITS PLURAL, for the same reason every verb carries
+ * its three forms. Review round 5 (2026-08-29) put the plurals through the
+ * shipped function and every one was SILENT while its singular fired:
+ * "Approve the deletions", "the migrations tonight", "the key rotations",
+ * "the invoices", "the payments", "the subscriptions". Those are ordinary
+ * English spellings of acts that are MORE costly than the singular, not less,
+ * and they posted with no evidence demanded at all. The completeness test
+ * below names the pairs, because a test that only asserts each LISTED word
+ * fires stays green while a form is missing — the same blind spot that let
+ * `cost` through in round 2 and these six through rounds 2-4.
  */
 const TRIGGERS = [
   // ---- money -------------------------------------------------------------
@@ -83,12 +94,15 @@ const TRIGGERS = [
   { word: 'subscribing', class: 'money', why: 'the gerund — "subscribing would fix the limit" — is the same ask.' },
   { word: 'subscribes', class: 'money', why: 'third person: "this subscribes the workspace to the paid tier".' },
   { word: 'subscription', class: 'money', needsProposal: true, why: 'the noun names the recurring charge; it only proposes one when a cue governs it.' },
+  { word: 'subscriptions', class: 'money', needsProposal: true, why: 'the plural of the same noun — "start the subscriptions" is the same recurring money.' },
   { word: 'pay', class: 'money', why: 'direct. Innocent uses ("pay attention") are stripped before matching.' },
   { word: 'paying', class: 'money', why: 'the gerund is how an ask is softened — "it means paying for the tier".' },
   { word: 'pays', class: 'money', why: 'third person: "this pays for a year up front". "Pays off" is stripped first.' },
   { word: 'payment', class: 'money', needsProposal: true, why: 'a payment to authorise is money leaving; a payment page is a screen.' },
+  { word: 'payments', class: 'money', needsProposal: true, why: 'the plural — "approve the payments" is more money leaving, not less.' },
   { word: 'billing', class: 'money', needsProposal: true, why: 'a billing CHANGE is money wearing an administrative name; a billing page is not.' },
   { word: 'invoice', class: 'money', needsProposal: true, why: 'an invoice to approve is a bill to pay; an invoice screenshot is a picture.' },
+  { word: 'invoices', class: 'money', needsProposal: true, why: 'the plural — "sign off on the invoices" is several bills to pay.' },
   { word: 'cost', class: 'money', why: 'the base form: "this will cost about thirty dollars a month". "Cost nothing" is stripped first.' },
   { word: 'costing', class: 'money', why: 'the gerund: "it would be costing us $30 a month from then on".' },
   { word: 'costs', class: 'money', why: 'the commonest third-person money sentence: "it costs $29 a month". "Costs nothing" is stripped first.' },
@@ -108,10 +122,12 @@ const TRIGGERS = [
   { word: 'deleting', class: 'irreversible', why: 'the gerund describes the act mid-proposal — "deleting the stale rows".' },
   { word: 'deletes', class: 'irreversible', why: 'third person: "this deletes all 550 untenanted rows".' },
   { word: 'deletion', class: 'irreversible', needsProposal: true, why: 'the administrative spelling — "approve the deletion" proposes one, "the deletion already happened" reports one.' },
+  { word: 'deletions', class: 'irreversible', needsProposal: true, why: 'the plural — "approve the deletions" is more rows gone, and just as final.' },
   { word: 'rotate', class: 'irreversible', why: 'rotating a credential breaks every consumer of the old one at once.' },
   { word: 'rotating', class: 'irreversible', why: 'the gerund form — "rotating it will fix the 401" — is the same request.' },
   { word: 'rotates', class: 'irreversible', why: 'third person: "it rotates CHANNELS_ENCRYPTION_KEY".' },
   { word: 'rotation', class: 'irreversible', needsProposal: true, why: 'the noun form — "authorise the key rotation" proposes one, "the rotation is already done" does not.' },
+  { word: 'rotations', class: 'irreversible', needsProposal: true, why: 'the plural — "authorise the key rotations" breaks every consumer of each old key.' },
   { word: 'revoke', class: 'irreversible', why: 'a revoked token cannot be un-revoked; it can only be re-minted.' },
   { word: 'revoking', class: 'irreversible', why: 'the gerund — "revoking the old key" — is the same act mid-proposal.' },
   { word: 'revokes', class: 'irreversible', why: 'third person: "this revokes the old publishable key".' },
@@ -119,6 +135,7 @@ const TRIGGERS = [
   { word: 'migrating', class: 'irreversible', why: 'the gerund — "migrating the pages tonight" — is the same act.' },
   { word: 'migrates', class: 'irreversible', why: 'third person: "this migrates every page to the new schema".' },
   { word: 'migration', class: 'irreversible', needsProposal: true, why: 'the noun — "run the migration" is an operator action; "the migration ran last month" is history.' },
+  { word: 'migrations', class: 'irreversible', needsProposal: true, why: 'the plural — "run the migrations tonight" rewrites rows in more tables, not fewer.' },
   { word: 'force-push', class: 'irreversible', why: 'rewrites shared history; a standing deny rule in this repo already.' },
   { word: 'force push', class: 'irreversible', why: 'the same act, spelled without the hyphen.' },
   { word: 'wipe', class: 'irreversible', why: 'no partial wipe — it is all of it, and then it is gone.' },

@@ -274,9 +274,15 @@ The specific ask. "Nothing right now" is a good answer and a useful one, but it
 has to be written down rather than left blank.
 @@EVIDENCE
 Optional in general; REQUIRED when the ask costs money or cannot be undone.
-The command in runnable form, its actual output pasted in a ``` fence, and the
-time you ran it in his clock ("measured at 8:04pm") — in the prose OUTSIDE the
-fence, because a time inside the paste is the log's clock and not yours.
+The command in runnable form, its actual output pasted in a ``` fence, and one
+line saying when you ran it:
+
+    @@MEASURED 8:04pm
+
+That line is the ONLY thing that dates the card. Every other clock in the
+section — narrated or inside the paste — is ignored. It goes in the prose,
+outside the fence, and carries the clock and nothing else (date it too if it
+was not today: `@@MEASURED 2026-08-23 8:04pm`).
 ```
 
 `@@NEEDED` renders under a banner he can find without reading:
@@ -325,15 +331,31 @@ The card also shows the measurement time in the heading it renders
 a sixteen-hour outage is not evidence about now, so the freshness is stated
 rather than implied.
 
-**That time is read from the prose, never from the pasted output** — a
-correction to the gate's own first version, found in review on 2026-08-26. It
-took the first clock anywhere in `@@EVIDENCE`, and the paste is part of
-`@@EVIDENCE`, so an author who wrote "measured at 9:40pm" beneath a log line
-reading `2026-08-20 3:12pm` got a card headed *measured at 2026-08-20 3:12pm*:
-six days stale, asserted by the card itself. It fails the other way too, a
-recent-looking time inside an old log making stale evidence read as fresh. A
-card whose only clock is inside a fence is now refused, and told to say when
-YOU ran it.
+**That time is DECLARED on its own line, not read out of your sentences.**
+Four versions of this gate each inferred it, and each inferred it differently —
+the first clock anywhere in the section (which is how a `2026-08-20 3:12pm` log
+line dated a card six days stale), then the first clock in the prose, then the
+last clock a measurement cue governed, then the clock a cue introduces. Every
+one was right on the sentences it was tested against and wrong on the next one
+somebody wrote. The last of them headed a card *measured at 3:12pm* — the
+moment the outage STARTED — off the sentence "At 8:04pm I re-ran the failing
+call, well after the outage began at 3:12pm". That is the exact half of the
+2026-08-23 incident the timestamp exists to close, arriving through the
+machinery meant to close it, and it did not refuse: it asserted it.
+
+Dane settled it on 2026-08-29 (option A on task 86bbk34ym): stop guessing, make
+the writer say so. `@@MEASURED 8:04pm` on its own line, everything else
+ignored. It costs an agent one line per costly ask, and it ends the class —
+there is no sentence shape left to get wrong. The reasoning is on the rule
+itself (`MEASURED_LINE` in `scripts/builder/operatorCard.js`), because the
+ticket's own Non-goals say this gate stays cheap, narrow and mechanical, and
+reading which clock an English sentence means is none of those.
+
+A card with no `@@MEASURED` line is refused; so are two of them, a line with
+something other than a clock on it, and one written inside the fence (where it
+reads as part of what the machine printed) or under the wrong section. Each of
+those gets its own sentence, because "add a time" is unhelpful to an author who
+wrote one in the wrong place.
 
 The same review found the trigger list carried base and gerund forms but no
 third-person ones, so "this deletes all 550 rows", "it rotates the key" and
@@ -384,6 +406,20 @@ rather than ranked** — this heading is the single place the gate asserts
 something to Dane instead of refusing something, so a wrong "measured at" is a
 false statement about a live system, which is the shape of the original
 incident. A wrong refusal costs a reword.
+
+**A fourth and fifth round found the same mis-dating again, and it went to
+Dane.** Round 4 scoped a cue to the clock it introduces; round 5 wrote the run
+time FIRST and the narration after it — "At 8:04pm I re-ran the failing call,
+well after the outage began at 3:12pm" — and the cue, sitting between the two
+clocks, reached forward to the wrong one. Five rounds, five positional rules,
+five sentence shapes. It was escalated as a product decision rather than sent
+back a fifth time, and Dane chose to stop inferring altogether: the run time is
+now the declared `@@MEASURED` line described above. The same round also found
+that every bare noun fired in the singular and was silent in the plural —
+"Approve the deletions" demanded no evidence while "Approve the deletion" did,
+which is the gate declining on the more costly spelling of the same ask. Each
+noun now carries its plural, with a completeness test that names the pairs in
+both directions.
 
 The same round closed three narrower holes: a lone bare clock in the prose is
 no longer taken at its word when the pasted output carries a clock too (a bare

@@ -123,9 +123,20 @@ carry, all checked before anything is sent:
 `@@EVIDENCE`** — spend, buy, subscribe, upgrade, a plan change, a credential
 rotation, a deletion — and it reads third-person phrasings too ("this deletes
 all 550 rows"). That section carries the command in runnable form, its ACTUAL
-output pasted in a fence, and when you ran it in his clock ("measured at
-8:04pm") — written in the prose OUTSIDE the fence, since a time inside the
-paste is the log's clock rather than yours. On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
+output pasted in a fence, and one line saying when you ran it:
+
+```
+@@MEASURED 8:04pm
+```
+
+That line is the only thing that dates the card — every other clock in the
+section, narrated or inside the paste, is ignored. Put it in the prose outside
+the fence, with the clock and nothing else on it (date it too if it was not
+today). It is declared rather than read out of your sentences because four
+earlier versions guessed which clock you meant and the last one dated a card by
+the outage it was reporting (Dane's call, 2026-08-29, task 86bbk34ym).
+
+On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
 diagnosis that was wrong, and re-running the one failing call would have
 settled it in seconds. Re-run it, paste what it says — do not summarise it.
 Ordinary escalations are untouched. If the ticket

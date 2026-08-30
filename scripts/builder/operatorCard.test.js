@@ -18,6 +18,7 @@ const {
   renderCard,
   buildCard,
   evidenceTimestamp,
+  readEvidenceTime,
   fencedBlocks,
 } = require('./operatorCard.js');
 
@@ -38,7 +39,8 @@ function card({ asked = 'build the chip display', when = '', context = words(60)
 
 /** A well-formed proof: the command, its real output, and when it was run. */
 const GOOD_EVIDENCE = [
-  'Re-ran the call that was failing, at 8:04pm:',
+  '@@MEASURED 8:04pm',
+  'Re-ran the call that was failing:',
   '```',
   '$ curl -sS -w "%{http_code}" .../team/9013/plan',
   '{"plans":[{"plan_name":"Free Forever"}]} 200',
@@ -301,7 +303,9 @@ test('evidence with no time it was run is refused', () => {
     needed: COSTLY_ASK,
     evidence: '```\n$ curl -sS .../team/9013/plan\n{"plan_name":"Free Forever"}\n```',
   })));
-  assert.match(problems.join('\n'), /no time it was run/);
+  assert.match(problems.join('\n'), /does not say when you ran it/);
+  assert.match(problems.join('\n'), /@@MEASURED 8:04pm/,
+    'the refusal has to name the exact line the author is missing');
 });
 
 test('volunteered evidence on an ordinary ask is still shape-checked', () => {
@@ -313,14 +317,18 @@ test('volunteered evidence on an ordinary ask is still shape-checked', () => {
   assert.match(problems.join('\n'), /no fenced block/);
 });
 
-test('the timestamp is read in the operator\'s own register', () => {
-  assert.equal(evidenceTimestamp('measured at 8:04pm'), '8:04pm');
-  assert.equal(evidenceTimestamp('measured at 8:04 PM'), '8:04 PM');
-  assert.equal(evidenceTimestamp('ran 2026-08-23 8:04pm'), '2026-08-23 8:04pm');
-  assert.equal(evidenceTimestamp('ran 8/23 8:04pm'), '8/23 8:04pm');
+test('the declared time is read in the operator\'s own register', () => {
+  assert.equal(evidenceTimestamp('@@MEASURED 8:04pm'), '8:04pm');
+  assert.equal(evidenceTimestamp('@@MEASURED 8:04 PM'), '8:04 PM');
+  assert.equal(evidenceTimestamp('@@MEASURED 2026-08-23 8:04pm'), '2026-08-23 8:04pm');
+  assert.equal(evidenceTimestamp('@@MEASURED 8/23 8:04pm'), '8/23 8:04pm');
   // A bare ISO instant is a number he has to convert before he can tell
   // whether the reading is from ten minutes ago or from before the outage.
-  assert.equal(evidenceTimestamp('ran at 2026-08-23T20:04:11Z'), null);
+  assert.equal(evidenceTimestamp('@@MEASURED 2026-08-23T20:04:11Z'), null);
+  // And the line has to BE the clock: trailing words would ride into the
+  // card's heading, which is the one place this gate asserts rather than asks.
+  assert.equal(evidenceTimestamp('@@MEASURED 8:04pm I think, before the restart'), null);
+  assert.equal(evidenceTimestamp('@@MEASURED just now'), null);
 });
 
 test('fencedBlocks keeps the content of an unclosed fence', () => {
@@ -351,34 +359,168 @@ test('@@EVIDENCE is parsed as its own section and may not be repeated', () => {
 });
 
 /**
- * WHY THESE FIVE (review of this gate, 2026-08-26). The gate shipped reading
- * the first clock ANYWHERE in @@EVIDENCE, and the pasted output is part of
- * @@EVIDENCE — so a log line dated the card instead of the run. That is the
- * exact stale-proof failure the timestamp exists to prevent, arriving through
- * the feature meant to prevent it.
+ * WHY THE RUN TIME IS DECLARED (Dane's decision, 2026-08-29, option A on task
+ * 86bbk34ym). Four versions of this gate each READ the run time out of the
+ * author's sentences, and each picked it by a different positional rule. Every
+ * one was right on the sentences it was tested against and wrong on the next
+ * one somebody wrote — the last of them headed a card "measured at 3:12pm",
+ * the moment the outage STARTED, off "At 8:04pm I re-ran the failing call,
+ * well after the outage began at 3:12pm".
+ *
+ * So nothing is inferred any more. The writer puts `@@MEASURED 8:04pm` on its
+ * own line and every other clock in the section is ignored. These tests pin
+ * that, and the first of them is the sentence that broke round 4.
  */
 
-/** The reviewer's own reproduction: a six-day-old log under a fresh reading. */
-const LOG_DATED_EVIDENCE = [
-  'Re-ran it just now:',
+/** The reviewer's own reproduction: the run time written FIRST, narration after. */
+const FRONTED_RUN_TIME = [
+  '@@MEASURED 8:04pm',
+  'At 8:04pm I re-ran the failing call, well after the outage began at 3:12pm.',
   '```',
-  '$ curl -s .../chat',
-  '2026-08-20 3:12pm  POST /chat -> 401 refused',
+  '$ curl -sS .../team/9013/plan',
+  '{"plan_name":"Free Forever"} 200',
   '```',
-  'Measured at 9:40pm today.',
 ].join('\n');
 
-test('the measured-at time comes from the prose, never from the pasted log', () => {
-  assert.equal(evidenceTimestamp(LOG_DATED_EVIDENCE), '9:40pm');
-  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: LOG_DATED_EVIDENCE })));
+test('the declared line wins over every other clock in the section', () => {
+  // THE ROUND-5 BLOCKER, closed by removing the thing that produced it. The
+  // section carries three clocks — one declared, one narrated, and the outage
+  // time — and only the declared one can reach the heading.
+  assert.equal(evidenceTimestamp(FRONTED_RUN_TIME), '8:04pm');
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: FRONTED_RUN_TIME })));
+  assert.match(out, /THE CHECK BEHIND THIS ASK — measured at 8:04pm/);
+  assert.doesNotMatch(out, /measured at 3:12pm/,
+    'the outage time is narration and can no longer reach the heading');
+});
+
+test('no sentence shape can move the declared time', () => {
+  // The four sentence shapes that each broke a different positional rule,
+  // every one of them now reading the same way — because the rule no longer
+  // looks at the sentence at all. This is the test that says the CLASS is
+  // closed, not just the shape round 5 happened to write.
+  const shapes = [
+    'At 8:04pm I re-ran the failing call, well after the outage began at 3:12pm.',
+    'The outage began at 3:12pm. I re-ran the failing call at 8:04pm.',
+    'I re-ran the chat POST, well after the outage that began at 3:12pm.',
+    'I checked it at 3:12pm and re-ran it at 9:40pm and again at 11:02pm.',
+    'The channel began refusing writes at 3:12pm.',
+  ];
+  for (const prose of shapes) {
+    const evidence = ['@@MEASURED 8:04pm', prose, '```', '$ cmd', 'output line'].join('\n') + '\n```';
+    assert.equal(evidenceTimestamp(evidence), '8:04pm', `moved by: ${prose}`);
+  }
+});
+
+test('a clock inside the pasted log can never date the card', () => {
+  // Round 1's failure: the paste is part of the section, so a six-day-old log
+  // line dated the card six days stale. Now the log is not consulted at all.
+  const evidence = [
+    '@@MEASURED 9:40pm',
+    'Re-ran it just now:',
+    '```',
+    '$ curl -s .../chat',
+    '2026-08-20 3:12pm  POST /chat -> 401 refused',
+    '```',
+  ].join('\n');
+  assert.equal(evidenceTimestamp(evidence), '9:40pm');
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence })));
   assert.match(out, /THE CHECK BEHIND THIS ASK — measured at 9:40pm/);
   assert.doesNotMatch(out, /measured at 2026-08-20/,
     'the card must not date itself by whatever the output happened to print');
 });
 
+test('evidence with a clock but no declared line is refused', () => {
+  // The old rule would have taken this at its word — one clock in the prose,
+  // "nothing to confuse it with". It is the outage time.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'The chat channel began refusing writes at 3:12pm.',
+      '```',
+      '$ curl -sS .../plan',
+      '{"plan_name":"Free Forever"} 200',
+      '```',
+    ].join('\n'),
+  })));
+  assert.match(problems.join('\n'), /does not say when you ran it/);
+});
+
+test('two @@MEASURED lines are refused, not ranked', () => {
+  // There is no rule for picking between two declarations that would not be a
+  // fifth positional rule. So it asks, which costs a reword.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      '@@MEASURED 3:12pm',
+      '@@MEASURED 9:40pm',
+      '```',
+      '$ curl -sS .../plan',
+      '{"plan_name":"Free Forever"} 200',
+      '```',
+    ].join('\n'),
+  })));
+  assert.match(problems.join('\n'), /more than one @@MEASURED line/);
+});
+
+test('a @@MEASURED line buried in the fence is named, not called missing', () => {
+  // Inside a fence it reads as something the machine printed. The author
+  // plainly did write one, so "you did not say when" would be a lie.
+  const problems = validateCard(parseCard(card({
+    needed: COSTLY_ASK,
+    evidence: [
+      'Re-ran it:',
+      '```',
+      '@@MEASURED 8:04pm',
+      '$ curl -sS .../plan',
+      '{"plan_name":"Free Forever"} 200',
+      '```',
+    ].join('\n'),
+  })));
+  assert.match(problems.join('\n'), /INSIDE the fenced block/);
+});
+
+test('a @@MEASURED line in the wrong SECTION is named', () => {
+  // A likely slip, and "add a @@MEASURED line" to someone who wrote one is
+  // the kind of refusal that gets a gate routed around.
+  const problems = validateCard(parseCard(card({
+    needed: `${COSTLY_ASK}\n@@MEASURED 8:04pm`,
+    evidence: '```\n$ curl -sS .../plan\n{"plan_name":"Free Forever"} 200\n```',
+  })));
+  assert.match(problems.join('\n'), /but in @@NEEDED/);
+});
+
+test('@@MEASURED with no time after it says so, wherever it is written', () => {
+  // Alone on its line it is indistinguishable from a section marker, so the
+  // PARSER reaches it first — and it says what the author needs to know
+  // ("the time goes on the same line") rather than "not a card section".
+  // Both spellings land on the same sentence.
+  assert.throws(
+    () => parseCard(card({ needed: COSTLY_ASK, evidence: '@@MEASURED\n```\n$ cmd\noutput\n```' })),
+    /takes the time on the SAME line/,
+  );
+  assert.throws(
+    () => parseCard(card({ needed: COSTLY_ASK, evidence: 'x' }) + '\n@@MEASURED'),
+    /takes the time on the SAME line/,
+  );
+  // readEvidenceTime is exported and called directly — by the reproduction
+  // command on the ticket, among other things — so it answers for itself
+  // rather than relying on a caller having parsed first.
+  assert.equal(readEvidenceTime('@@MEASURED').reason, 'measured-line-empty');
+});
+
+test('the declared line is lifted out of the card body, not printed twice', () => {
+  // Its whole content is the heading. Left in, the card shows the time again
+  // in a spelling that is machine syntax and means nothing to him.
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: GOOD_EVIDENCE })));
+  assert.match(out, /measured at 8:04pm/);
+  assert.ok(!out.includes('@@MEASURED'), 'the marker itself must not reach him');
+  assert.ok(out.includes('{"plans":[{"plan_name":"Free Forever"}]} 200'),
+    'everything else survives verbatim');
+});
+
 test('evidence whose only clock is inside the fence is refused', () => {
-  // It fails the other way too: a recent-looking time inside an old log would
-  // make stale evidence read as fresh.
+  // A recent-looking time inside an old log would make stale evidence read as
+  // fresh. Unchanged in spirit from round 1; only the message moved.
   const problems = validateCard(parseCard(card({
     needed: COSTLY_ASK,
     evidence: [
@@ -389,8 +531,7 @@ test('evidence whose only clock is inside the fence is refused', () => {
       '```',
     ].join('\n'),
   })));
-  assert.match(problems.join('\n'), /only inside the pasted block/);
-  assert.match(problems.join('\n'), /outside the fences/);
+  assert.match(problems.join('\n'), /does not say when you ran it/);
 });
 
 test('a command fence and a separate output fence is accepted', () => {
@@ -400,7 +541,7 @@ test('a command fence and a separate output fence is accepted', () => {
   assert.deepEqual(validateCard(parseCard(card({
     needed: COSTLY_ASK,
     evidence: [
-      'Measured at 9:40pm:',
+      '@@MEASURED 9:40pm',
       '```',
       '$ curl -sS .../team/9013/plan',
       '```',
@@ -412,115 +553,9 @@ test('a command fence and a separate output fence is accepted', () => {
   }))), []);
 });
 
-test('the measured-at time is the one the author RAN, not the first one mentioned', () => {
-  // Review round 2, 2026-08-26. Reading the prose fixed the fence but kept
-  // "first clock wins", and evidence narrates before it proves — so this
-  // rendered as "measured at 3:12pm", the same wrong answer moved earlier in
-  // the sentence. It fails in the dangerous direction too: "as of 9:00am
-  // today" above yesterday's log would label a stale proof fresh.
-  const narrated = [
-    'The outage began at 3:12pm. I re-ran the failing call at 8:04pm:',
-    '```',
-    '$ curl -sS .../team/9013/plan',
-    '{"plan_name":"Free Forever"} 200',
-    '```',
-  ].join('\n');
-  assert.equal(evidenceTimestamp(narrated), '8:04pm');
-  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: narrated })));
-  assert.match(out, /THE CHECK BEHIND THIS ASK — measured at 8:04pm/);
-  assert.doesNotMatch(out, /measured at 3:12pm/,
-    'an outage time read as a measurement is what makes a stale proof look fresh');
-});
-
-test('two clocks and no measurement cue is refused rather than guessed at', () => {
-  // The heading asserts when this was checked, so a wrong time is worse than
-  // no time. Nothing here says which reading is the run, so it asks.
-  const problems = validateCard(parseCard(card({
-    needed: COSTLY_ASK,
-    evidence: [
-      'At 3:12pm it was refusing. At 8:04pm it was fine.',
-      '```',
-      '$ curl -sS .../team/9013/plan',
-      '{"plan_name":"Free Forever"} 200',
-      '```',
-    ].join('\n'),
-  })));
-  assert.match(problems.join('\n'), /more than one time in it/);
-  assert.match(problems.join('\n'), /Mark the run/);
-});
-
-test('one unmarked clock is still taken at its word', () => {
-  // The ordinary card. There is nothing to confuse it with, so it needs no cue.
-  assert.equal(evidenceTimestamp('8:04pm\n```\ncmd\noutput\n```'), '8:04pm');
-});
-
 test('a clock needs a boundary after am/pm, or a timezone reads as a time', () => {
-  assert.equal(evidenceTimestamp('cron next run 10:15 America/New_York'), null);
-  assert.equal(evidenceTimestamp('9:30 ambient noise on the recording'), null);
-  assert.equal(evidenceTimestamp('measured at 10:15am, America/New_York'), '10:15am');
-});
-
-// -------------------------------------- review round 3: the measured-at clock
-
-test('a cue does not reach past the clock it introduces', () => {
-  // THE ROUND-3 BLOCKER, and the third recurrence of one mis-dating. Every
-  // earlier version let a cue govern the whole rest of its sentence and then
-  // picked a clock by position — first, first-in-prose, last. Authors narrate
-  // AFTER the run time as readily as before it, so "last wins" dated this card
-  // by the outage: the one place the gate asserts something to Dane rather
-  // than refusing something, shipping a false claim about a live system.
-  const narratedAfter = [
-    'I re-ran the failing chat POST at 9:40pm, well after the outage that began at 3:12pm.',
-    '```',
-    '$ curl -sS .../chat',
-    '{"ok":true} 200',
-    '```',
-  ].join('\n');
-  assert.equal(evidenceTimestamp(narratedAfter), '9:40pm');
-  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: narratedAfter })));
-  assert.match(out, /THE CHECK BEHIND THIS ASK — measured at 9:40pm/);
-  assert.doesNotMatch(out, /measured at 3:12pm/,
-    'the outage time is narration, not the measurement');
-  // The compressed spelling of the same sentence.
-  assert.equal(evidenceTimestamp('I re-ran it at 9:40pm, after the 3:12pm outage.\n```\ncmd\nout\n```'), '9:40pm');
-  // ...and the order the round-2 test pinned still reads the same way.
-  assert.equal(evidenceTimestamp('The outage began at 3:12pm. I re-ran it at 8:04pm.\n```\ncmd\nout\n```'), '8:04pm');
-});
-
-test('two times both marked as the run are refused, not ranked', () => {
-  // There is no position that means "this is the measurement" — rounds 1-3
-  // each picked one and each was wrong on the next sentence somebody wrote.
-  // So the card asks, which costs a reword; the alternative is a wrong
-  // "measured at", which is a false statement about a live system.
-  const problems = validateCard(parseCard(card({
-    needed: COSTLY_ASK,
-    evidence: [
-      'I checked it at 3:12pm and re-ran it at 9:40pm.',
-      '```',
-      '$ curl -sS .../plan',
-      '{"plan_name":"Free Forever"} 200',
-      '```',
-    ].join('\n'),
-  })));
-  assert.match(problems.join('\n'), /marks more than one time as the run/);
-  assert.match(problems.join('\n'), /Leave one time/);
-});
-
-test('a bare prose clock beside a stamped log is refused', () => {
-  // The docstring used to claim a lone clock has "nothing to confuse it with".
-  // It does when the output carries a time of its own — and a bare clock next
-  // to a log is usually the thing that BROKE, not the check that was run.
-  const evidence = [
-    'The chat channel began refusing writes at 3:12pm.',
-    '```',
-    '[8:04pm] POST /chat -> 200 OK',
-    'verified in the channel',
-    '```',
-  ].join('\n');
-  assert.equal(evidenceTimestamp(evidence), null,
-    'it must not date the card by the outage');
-  const problems = validateCard(parseCard(card({ needed: COSTLY_ASK, evidence })));
-  assert.match(problems.join('\n'), /one time in the prose and another inside the pasted block/);
+  assert.equal(evidenceTimestamp('@@MEASURED 10:15 America/New_York'), null);
+  assert.equal(evidenceTimestamp('@@MEASURED 10:15am'), '10:15am');
 });
 
 test('a line-continued command with nothing under it is refused', () => {
@@ -547,7 +582,7 @@ test('a line-continued command WITH its output is accepted', () => {
   assert.deepEqual(validateCard(parseCard(card({
     needed: COSTLY_ASK,
     evidence: [
-      'Measured at 8:04pm.',
+      '@@MEASURED 8:04pm',
       '```',
       'curl -s https://api.clickup.com/api/v2/team \\',
       '  -H "Authorization: $TOKEN"',

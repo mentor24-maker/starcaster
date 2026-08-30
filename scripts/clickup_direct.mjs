@@ -276,7 +276,8 @@ function usage(code = 2) {
   console.error(`                                             @@ASKED / @@WHEN / @@CONTEXT / @@NEEDED; @@CONTEXT must be`);
   console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. An ask that SPENDS MONEY or cannot be undone`);
   console.error('                                             also needs @@EVIDENCE: the command, its real output, and');
-  console.error('                                             the time you ran it. Checked before anything is sent.');
+  console.error('                                             a "@@MEASURED 8:04pm" line saying when you ran it — the');
+  console.error('                                             only clock that dates the card. Checked before it is sent.');
   console.error('                                             REFUSES if his own comment is the newest one on the ticket —');
   console.error('                                             handing it back then asks him to answer twice. The same');
   console.error('                                             refusal stands on `status --no-card`, the other door into his');
