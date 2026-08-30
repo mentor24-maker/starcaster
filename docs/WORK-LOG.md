@@ -1,3 +1,29 @@
+## 2026-08-30 — A saved section has one name, and renaming it now sticks (#454)
+
+You renamed the Delray site header three times and it snapped back three
+times. That was not stubbornness in the interface — the section genuinely had
+two names. One was the name in the Saved Sections list, which is what you were
+typing into; the other was stamped inside the section's own content, and that
+is the one every page card shows in bold. Renaming changed only the first, and
+then the thing that keeps every following page in sync pushed the section's
+content — old name and all — back over every page. So the rename was undone by
+the very machinery meant to spread it. The only way to move the other name was
+to unlock a section on a page, retitle it there, and save it back to the
+master, which is not something anybody would guess.
+
+There is one name now, and you can move it from either end. Renaming in the
+list changes the name everywhere it appears. Saving a section from a page
+carries that page's title with it, so the two never split apart again. And
+either way, the dialog that already tells you "this updates it on 35 pages"
+now also tells you "this also renames it on 35 pages" — that rename used to
+happen in silence, which is what hid the whole problem in the first place.
+
+Page cards are also titled by the master now rather than by whatever the last
+sync happened to stamp on them, so an old name cannot sit next to the new one
+arguing with it. Nothing was rewritten in the database to fix the sections
+that already disagree; they simply stop showing the wrong name, and they
+correct themselves the next time the section is saved.
+
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 
 You said you needed an emergency shutdown that clears the decks so you can run
