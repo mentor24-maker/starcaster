@@ -969,6 +969,96 @@ outlives two hours announces itself on the party line and keeps saying so
 hourly, because a pause nobody remembers looks exactly like a pipeline that has
 broken.
 
+## The fast-track lane — the loop's job, done by hand (2026-08-30, task 86bbq5523)
+
+**Ruled by Dane on 2026-08-30:** *"Let's fast track \<ticket-id\>"*, said at
+the start of a new session, is a complete instruction. The agent runs the
+human lane end to end and the session ends with a clean merge. Until this
+section existed the procedure lived only in one machine's agent memory; it
+belongs here so every machine and every session runs the same lane.
+
+The lane is not an exemption. It exists because the loop lane — spec, build,
+review, merge — is about a day end to end, and sometimes a ticket cannot wait
+a day. Everything the loops check, the hand session checks too; the only thing
+it skips is the queue position.
+
+### The steps
+
+1. **`npm run pipeline -- check`.** Exit 3 = the deck is Dane's; claim
+   nothing, merge nothing, say so once. Exit 1 = could not tell; re-run it
+   before treating that as paused (one transient 1 was observed on
+   2026-08-30 from a background shell, and the re-run said running).
+2. **Read the ticket and every comment.** On a send-back, the review comment
+   is the specification — it names the defects, how they were proved, and
+   what it already verified so you do not redo it. The description is context.
+3. **Claim it, atomically.** `npm run clickup -- status --task <id> --status
+   Building --if-status Queued`. **Priority is not a guard** — an Urgent
+   ticket is still claimable by a loop pass; only the status is, and only
+   `--if-status` makes the write refuse if a pass got there first (the same
+   check-then-act guard the loops use). Leave the priority where it is.
+4. **Find the branch.** `npm run clickup -- build-start --task <id>`: exit 3
+   means a PR is already open, so the work continues on THAT branch, not a
+   fresh one. `npm run thread` only creates new branches, so for an existing
+   one it is by hand:
+
+   ```
+   git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>
+   cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
+   git config branch.<branch>.clickup-task <id>     # what tidy reads back
+   ```
+
+   Then hand over the command to open a session in that folder and stop
+   building in the current window (CLAUDE.md, "One thread, one topic, one
+   session", rule 2). A session that was opened by "fast track" with nothing
+   else in it may keep going from the worktree by absolute path — the rule's
+   purpose is that the folder and the topic stay one thing, and they do.
+5. **On a send-back, merge `origin/main` in FIRST.** Before touching a line.
+   The branch has been sitting in review while `main` moved; the fix review
+   asked for may already be there under another name. On 2026-08-30, ticket
+   86bbmg2fb's rework added a `soft` option to `fetchAllTasks` for exactly
+   what `main` had meanwhile added as `fatal: false` — a conflict `ship` had
+   to stop for, resolved by throwing the rework away and calling `main`'s
+   version. Merging first would have shown that before any code was written.
+   (`docs/DOCTRINE.md` §6.7.)
+6. **Build to the Definition of done**, and **break every fix on purpose**:
+   revert it, run the suite, name the test that failed, restore it. Say the
+   numbers ("reverted the clamp: tests 3 and 15 failed; restored: 0"). A fix
+   whose test passes both ways is not tested (§6.8).
+7. **`npm run ship`.** It catches up, rebuilds, runs the checks, pushes,
+   reuses the open PR, waits for CI, merges, and tidies. **No pause to merge.**
+   Dane's first instinct was to pause the pipeline so the merge would not
+   collide with a loop pass; it cannot — the loops never merge, and a merge
+   only re-dates their open branches, which `ship` handles by catching up.
+   `pause` costs up to a thirty-minute drain and, past two hours, an hourly
+   nag on the bus. If `ship` stops on a conflict, resolve it by hand, commit,
+   and run `ship` again — it picks up where it got to.
+   *Gotcha:* run from inside the worktree, and expect the shell to lose its
+   working directory afterwards — `ship`'s tidy removes the folder you ran it
+   from, so a trailing command in the same shell can report exit 1 for
+   `getcwd` after a successful merge. Read `ship`'s own last line.
+8. **Close it out.** Ticket to Live with a note that states the gates and
+   their numbers, what was probed live, and what was break-tested;
+   `npm run tidy` (ship already did); one line on the bus.
+
+### What the first run of this lane found (2026-08-30, ticket 86bbmg2fb, PR #441)
+
+* **The Mini's runners took the change before the command existed.** The
+  one-line change to `~/bin/loop-runner.sh` was on the Mini before
+  `next-interval` was on `main`, so both loops logged
+  `next-interval gave no usable answer ('') -- falling back to 900s` for a
+  day. That is the fallback working, not a fault: each loop pass
+  fast-forwards the Mini's `main` checkout (its reflog shows one merge per
+  pass), so the runners pick up a new CLI command on the pass after it
+  merges. If that line persists after a merge, the Mini's `main` is behind —
+  `git pull` there. No restart is needed while the runner already calls the
+  command; a runner that does NOT yet call it holds the old script's inode
+  and needs its screen restarted.
+* **A pipeline-side rework needs the Mini checked, not assumed.** The review
+  note said the runners held the old inode; the logs said they had already
+  been restarted and were calling the command. Thirty seconds over SSH
+  (`zsh -lc`, not a bare `ssh host cmd` — the login shell is what finds
+  Homebrew) settled it, and it changed what the closing step was.
+
 ## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
 
 The relay runs **every 10 minutes** (`StartInterval` 600). It was hourly until
