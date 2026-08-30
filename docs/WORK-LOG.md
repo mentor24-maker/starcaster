@@ -67,6 +67,78 @@ Worth noting where this was caught: not by the tests, which were green, and not
 by the build, which passed. It was caught by the independent review step reading
 the output with the question "would this line be true if the check had not run?"
 That is the review lane earning its day.
+## 2026-08-26 — A ticket sent back now says which trip round it is (#442)
+
+You noticed this on the board on Monday: when a piece of work comes back from
+review with notes, it goes back into the "Queued" column — the same column as
+work nobody has started yet. From the outside those two look identical, so a
+ticket on its third trip round reads exactly like a fresh one.
+
+That is not just an eyesore. The same morning it jammed the build pipeline: the
+limit on how much work can be in flight counts open pull requests, and three of
+those belonged to tickets sitting in "Queued" *for rework* — so the limit was
+blocking the only thing that could clear them.
+
+Two changes, both the lighter option you chose rather than adding a new column
+to ClickUp. First, the Loop note on a sent-back ticket now says the round and
+the reason in one line — `↩ round 3 — three docs now contradict the change`
+instead of the old, identical-every-time "returned to the line with notes".
+The round is counted from the review comments already on the ticket, so nothing
+new is stored and nothing can drift out of step.
+
+Second, a fourth trip round no longer happens. Three rounds means the
+*instructions* were wrong, not the work, so on what would be the fourth the
+review pass stops and hands the ticket to you instead — with a card naming what
+each of the three previous rounds found, one line each, and asking you to pick:
+rewrite the spec, split it up, or drop it. Four and not three deliberately: two
+rounds is ordinary and healthy, and this week's send-backs caught two real bugs
+that would have been a waste of your attention to escalate.
+
+## 2026-08-26 — The loops now decide their own nap length from the queue (#441)
+
+The two background helpers that build and check work have always worked for
+about fourteen minutes and then slept for a fixed stretch. That stretch was an
+hour, chosen as a careful guess back when they first started running on their
+own overnight, and never looked at since. It meant they sat idle roughly three
+quarters of the time.
+
+The trouble is that no single number is right for very long. When there are
+thirty tickets waiting, a short nap costs almost nothing — starting up a
+session is a rounding error next to a fourteen-minute job, so you are only
+removing dead time from work you wanted done anyway. When the list is empty,
+the same short nap is pure waste: a whole session fired up every few minutes
+just to find out there is nothing to do. That is not a theory — one of the
+loops was left on a two-minute timer on the 24th and ran roughly three hundred
+and sixty passes, almost every one of them finding nothing.
+
+So they now ask, after every pass, how long to sleep. Nothing waiting: an hour.
+A few tickets: half an hour. Four or more: fifteen minutes, and never less than
+that. That fifteen-minute floor is written down together with the reason it
+exists, so nobody quietly lowers it on a day they are feeling impatient.
+
+Two things make it safe. It counts only tickets it could actually pick up —
+work belonging to a different codebase, or blocked waiting on something else,
+or work it is not allowed to start because too much is already in flight, does
+not count as a reason to wake up sooner. And every kind of confusion makes it
+sleep *longer*, never shorter: if it cannot reach the ticket list, if it cannot
+count what is already in progress, if the number comes back as nonsense, it
+falls back to the old hour and writes down why. Sleeping too long shows up as
+a slower response, which you would notice. Sleeping too little shows up only on
+the bill.
+
+One busy moment also cannot set the pace for the whole night: speeding up needs
+two readings in a row agreeing, while slowing down happens straight away.
+
+Every cycle now writes both the number and the reason into the log, so the
+pace is never a mystery. The change takes effect the next time the loops are
+restarted.
+
+Review found two holes before it shipped, both fixed in the same PR: a ticket
+waiting on work that had *already finished* would have looked blocked forever
+(finished tickets never appear in the list it reads, so it now looks those up
+separately), and a hand-edited settings file could have switched the
+two-readings rule off. Both would have failed quietly toward sleeping longer.
+
 ## 2026-08-26 — The build loop stops jamming itself, and a dropped connection can no longer switch the brake off (#431)
 
 There is a rule that stops the robot builder taking on new work when too much
