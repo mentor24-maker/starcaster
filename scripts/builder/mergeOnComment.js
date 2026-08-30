@@ -540,10 +540,20 @@ function conflictHandOffNotice({ commentId, pr, localVerdict }) {
  * mistake that cannot be undone, so this marker stays spent forever and the
  * body makes no promise about a next pass — there is not going to be one.
  */
-function mergedNotice({ commentId, pr, mergedAt }) {
+function mergedNotice({ commentId, pr, mergedAt, lane, files }) {
+  // WHOSE WORD MERGED IT (2026-08-25, task 86bbkw2au). Until Lane A there was
+  // only one answer — his comment — and the sentence said so. Now there are
+  // two, and a record that says "merged on operator comment 123" about a merge
+  // he never authorized would be the worst kind of untrue: it would read, to
+  // him and to any later audit, as evidence of an approval that does not
+  // exist. So the attribution is built from what actually happened.
+  const because = lane
+    ? `auto-merged under Lane ${lane} after a one-hour objection window with no objection` +
+      (files && files.length ? `, qualified by: ${files.map((f) => `\`${f}\``).join(', ')}` : '')
+    : `merged on operator comment ${commentId}`;
   return {
     marker: `merged PR #${pr.number} at ${mergedAt}`,
-    body: `Merged: PR #${pr.number} (${pr.url}) squash-merged into main at ${mergedAt}, merged on operator comment ${commentId}. Checks were green and the branch was up to date at merge time; the branch has been deleted. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`,
+    body: `Merged: PR #${pr.number} (${pr.url}) squash-merged into main at ${mergedAt}, ${because}. Checks were green and the branch was up to date at merge time; the branch has been deleted. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay ${lane ? 'auto-merge' : 'merge step'}.)`,
   };
 }
 

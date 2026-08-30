@@ -24,7 +24,7 @@ const {
 } = require('../lib/projectAdminPasswordReset');
 const { getSiteSettings, updateSiteSettings } = require('../lib/projectSiteSettingsStore');
 const { sbQuery, isConfigured: isSupabaseConfigured } = require('../lib/supabase');
-const { assertProjectIdAllowedOnHost } = require('../lib/publicSiteHostBinding');
+const { resolvePublicProjectForRequest } = require('../lib/publicSiteHostBinding');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
@@ -198,9 +198,10 @@ async function handle(req, res, pathname, method) {
   //
   // Reachable without a session because routes/index.js exempts every
   // /api/admin/auth path. Two safeguards stand in for the missing session:
-  //   1. assertProjectIdAllowedOnHost — the projectId must belong to the
+  //   1. resolvePublicProjectForRequest — the projectId must belong to the
   //      requesting host, so brandonmarinoff.com cannot request codes for
-  //      another tenant.
+  //      another tenant; on a system host it must at least be a project that
+  //      really exists, rather than any string the caller typed.
   //   2. The response is identical whether or not the account exists, so this
   //      cannot be used to discover which emails have admin accounts.
   if (pathname === '/api/admin/auth/forgot-password' && method === 'POST') {
@@ -214,9 +215,9 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'projectId and email are required', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const bind = await assertProjectIdAllowedOnHost(req, projectIdInput);
+    const bind = await resolvePublicProjectForRequest(req, projectIdInput);
     if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
-    const projectId = bind.projectId || projectIdInput;
+    const projectId = bind.projectId;
 
     const issued = await createPasswordResetCode({ projectId, email });
     if (!issued.ok) {
@@ -282,11 +283,11 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'Password must be at least 8 characters', { code: 'VALIDATION_ERROR' }), true;
     }
 
-    const bind = await assertProjectIdAllowedOnHost(req, projectIdInput);
+    const bind = await resolvePublicProjectForRequest(req, projectIdInput);
     if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
 
     const result = await consumePasswordResetCode({
-      projectId: bind.projectId || projectIdInput,
+      projectId: bind.projectId,
       email,
       code,
       newPassword: password,
