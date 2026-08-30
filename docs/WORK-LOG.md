@@ -1,3 +1,29 @@
+## 2026-08-30 — Small, safe changes now merge themselves after an hour's notice (#438)
+
+Your ruling from the 24th is now running code: a pull request that touches
+nothing but tests and documentation, and has already passed review, announces
+itself on its ticket — "merging at 9:15pm unless you say otherwise" — waits
+one hour, and merges. Any comment from you during that hour stops it; not a
+keyword, anything at all. Everything riskier still waits for your word, and
+Lane C — anything visual, routes, data, sign-in — is never automated.
+
+It shipped the careful way: the first review pass sent it back because the
+branch had fallen behind the main line, and the second found six real holes
+before anyone was exposed to them. The two that mattered: the loop agents'
+own instruction files counted as "documentation", so a change rewriting the
+review rules could have merged itself — now anything that instructs an agent
+is on the never-auto-merge list; and a damaged memory file (the little ledger
+that records "Dane said stop") was being replaced with a blank one, which
+would have quietly lifted your stop order a pass later — now a ledger that
+cannot be read is never written over, it is left for a person to look at.
+
+Also from that review: an announcement that sat armed for more than a day
+goes stale and is cancelled instead of merged, the daily digest no longer
+lists the same merge twice, and a dry run truly writes nothing. Every one of
+those rules was broken on purpose to prove a named test catches it. The
+switch is `stop auto-merging` on the party line or any Loop Queue ticket,
+and `npm run clickup -- auto-merge-status` shows the lane's state any time.
+
 ## 2026-08-30 — Tickets now end on what they need from you, in red (#457)
 
 You asked for three things while looking at a merge ticket: put the "NEEDED
