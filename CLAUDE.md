@@ -32,6 +32,18 @@ does not land. Every agent working here must:
   then say so immediately and completely. Everything else is a chore, and
   chores are silent.
 
+- **A person is a human being. An agent is not.** `person` and `human` mean
+  Dane, or another actual human. An agent session is an **agent session** —
+  never a person, a human, somebody, or anyone. He has raised this at least
+  three times and it is not a style note: it is the answer to *whose hands
+  does this need, and are they mine?* Saying an automation "asked a person"
+  when it posted a request for an agent session told him he was the blocker
+  when he was not, and hid the fact that nothing was listening — four days
+  on ticket 86bbmfc15. The rule and its guardrail (a hand-off names the
+  actor; passive voice implying an unnamed one is itself the defect) are
+  `docs/DOCTRINE.md` §2.5, ratified in vault `doctrine/TERMINOLOGY.md`.
+  Do not over-correct: most existing uses mean a human and are right.
+
 StarCaster (company: Alphire) is a multi-tenant platform: an admin SPA plus a
 visual site Builder whose published pages serve as tenant public sites on
 custom domains. Backend is Node with a shared dispatcher `routes/index.js`
