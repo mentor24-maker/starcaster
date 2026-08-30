@@ -342,6 +342,12 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
 8. Ticket to Live with the closing note (gates, live probe, what was
    break-tested); `npm run tidy`; one line on the bus.
 
+A ticket already **In review** with an open PR is the review half of this
+lane: skip the claim in step 3 (never drag it back to `Building`), do steps
+4–8 on the existing branch, re-run the gates on the *merged* code yourself, and
+close with `--if-status "in review"`. A job another machine owns (`bus-relay`)
+exits 0 here having tested nothing — rehearse it on the owning machine.
+
 ## One thread, one topic, one session
 
 A worktree keeps two threads from corrupting each other's files. It does
