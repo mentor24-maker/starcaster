@@ -37,6 +37,27 @@ being treated as out of date.
 Each of the four fixes was then deliberately un-done, one at a time, to watch
 the test that guards it actually fail — because a test that cannot fail proves
 nothing, and this is a lock we are about to start trusting.
+## 2026-08-30 — Tickets now end on what they need from you, in red (#457)
+
+You asked for three things while looking at a merge ticket: put the "NEEDED
+FROM DANE" block last, make it properly red and bold, and put the actual ask
+on the same line as the label instead of hiding below the banner. All three
+shipped the same day through the fast-track lane.
+
+Every card a machine puts in front of you now ends on the banner — your words
+first, then the explanation, then any proof, and the ask dead last, where your
+eye stops. The banner is bold and true red (#CC0000). The washed-out red you
+were seeing before was never a choice anybody made: it was ClickUp's standard
+colouring for "computer text", which the banner was wrapped in for safety.
+
+Getting the real red meant changing how cards are sent. ClickUp only allows
+coloured text through its structured format, and that format ignores the
+usual **bold** markup agents write — so the card builder now translates as it
+posts, and the tests prove the translation both ways: break the colour, a
+named test fails; move the banner up, another one fails.
+
+There is a living sample on the ticket itself (86bbq5ruz) — the newest card
+from Pulse ends exactly the way every future one will.
 
 ## 2026-08-30 — When a merge gets stuck, somebody is now actually told to fix it (#452)
 
@@ -71,8 +92,10 @@ name **who** is going to act next, and if the answer is nobody it has to say so
 out loud — "Nothing is currently working on it" — rather than reaching for the
 comfortable phrasing that implies someone. And silence now expires: a conflict
 with no ticket behind it is flagged immediately, and one that has not been
-sorted within a day starts reporting itself by name on every single pass. Three
-days of nothing cannot happen again without something saying so.
+sorted within a day reports itself by name once a day until it is cleared —
+each report re-arms the clock, so a day of silence is the most it can buy
+(that cadence was the review's fix; as first built it nagged every pass).
+Three days of nothing cannot happen again without something saying so.
 ## 2026-08-26 — You can now stage a fake outage to check the backup plan works (#445)
 
 Back on the 23rd, ClickUp's group chat broke for about sixteen hours. The
