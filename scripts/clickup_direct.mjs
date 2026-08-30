@@ -77,6 +77,7 @@ import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
+  SIMULATED_BUS_WHY, simulationGuard, simulationLine,
 } = busRelayPlan;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
@@ -375,7 +376,7 @@ function usage(code = 2) {
   console.error('                                             READ-ONLY — it never writes. NO AGENT SAYS SOMETHING IS WAITING');
   console.error('                                             ON DANE WITHOUT RUNNING THIS FIRST (task 86bbk34x7).');
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
-  console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run] [--no-merge]');
+  console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run] [--no-merge] [--simulate-bus-failure]');
   console.error('                                             relay the operator\'s new comments on open tasks to the bus.');
   console.error('                                             With no flags it watches Agent Response (notify-only) AND the');
   console.error('                                             Loop Queue: an answer on "needs your input" hands the ticket');
@@ -385,6 +386,10 @@ function usage(code = 2) {
   console.error('                                             the PR is open, green and conflict-free; then the ticket goes');
   console.error('                                             Live. Conflicts go to an agent session, never resolved here.');
   console.error('                                             --list/--statuses = that one list, notify-only and no merging;');
+  console.error('                                             --simulate-bus-failure (requires --dry-run) fails every party-line');
+  console.error('                                             write WITHOUT sending a request, so PR #414\'s fallback can be');
+  console.error('                                             rehearsed on demand: dry-run stops short-circuiting and runs the');
+  console.error('                                             real delivery path, writing nothing.');
   console.error('                                             --no-merge disables merging everywhere; --dry-run reads GitHub');
   console.error('                                             and ClickUp and prints the decision, writing nothing at all;');
   console.error('                                             --only-task <id> confines the whole pass to one ticket.');
@@ -490,8 +495,14 @@ function gh(args) {
 }
 
 /** Post to the party line. Returns ok/why so a caller can report a failure
- *  rather than assume the operator was told. */
-async function postToBus(channel, content) {
+ *  rather than assume the operator was told.
+ *
+ *  `simulate` (task 86bbjzg83) fails the write WITHOUT sending a request —
+ *  the return is shaped exactly like a real failure, so every caller below
+ *  takes its real failure branch. The guard in busRelayPlan.simulationGuard
+ *  keeps this out of any pass that could write. */
+async function postToBus(channel, content, { simulate } = {}) {
+  if (simulate) return { ok: false, why: SIMULATED_BUS_WHY };
   const out = await call('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`, {
     type: 'message', content, content_format: 'text/md',
   });
@@ -508,8 +519,8 @@ async function postToBus(channel, content) {
  * Returns { ok, via, why }: `ok` is the handback gate, `via` picks the marker
  * text, `why` carries the chat failure for the report even on success.
  */
-async function deliverToBus(channel, content, { taskId, target, receipted } = {}) {
-  const chat = await postToBus(channel, content);
+async function deliverToBus(channel, content, { taskId, target, receipted, simulate } = {}) {
+  const chat = await postToBus(channel, content, { simulate });
   // `why` is always the chat failure (the report quotes it on the success
   // path too); `reason` is deliveryVerdict's honest account of why nothing was
   // delivered. Keeping them apart is the whole of review finding 1: the old
@@ -540,6 +551,23 @@ async function deliverToBus(channel, content, { taskId, target, receipted } = {}
 
   const at = new Date().toISOString();
   const body = receiptText({ why: chat.why, target, at });
+
+  // Under simulation the receipt is REHEARSED, not sent. The switch only runs
+  // inside --dry-run, whose whole contract is that the pass writes nothing, so
+  // posting here would break that contract to test it. What is being rehearsed
+  // is the DECISION — deliveryVerdict's answer and the hand-back that follows
+  // it — and that is reached identically either way. The rehearsal assumes the
+  // receipt lands, which is the case worth watching: it is the one where #414
+  // claims the hand-back still fires.
+  if (simulate) {
+    console.error(`  SIMULATION — would post the fallback receipt on ${taskId} (not sent):\n    ${body.split('\n')[0]}`);
+    if (receipted) receipted.set(String(taskId), true);
+    return answer(deliveryVerdict({
+      chatOk: false, handsBack: true, receiptAttempted: true,
+      receiptPosted: true, receiptOk: true,
+    }));
+  }
+
   const out = await call('POST', `/api/v2/task/${taskId}/comment`, { comment_text: body });
   const posted = Boolean(out.res.ok);
 
@@ -2315,6 +2343,21 @@ if (cmd === 'whoami') {
   const channel = arg('channel', BUS_CHANNEL);
   const dryRun = flag('dry-run');
 
+  // Break the party line on purpose (task 86bbjzg83). Refused outside
+  // --dry-run: see busRelayPlan.simulationGuard for why that is a refusal and
+  // not a warning. Checked BEFORE the first read, so a refused run does
+  // nothing at all — not even look.
+  const simulateBusFailure = flag('simulate-bus-failure');
+  const simGuard = simulationGuard({ simulate: simulateBusFailure, dryRun });
+  if (!simGuard.ok) {
+    console.error(simGuard.why);
+    process.exit(2);
+  }
+  if (simulateBusFailure) {
+    console.error('SIMULATING A PARTY-LINE OUTAGE — every chat write will report failure without a request being sent.');
+    console.error('This is a rehearsal of the PR #414 fallback. Nothing is posted, moved or merged.\n');
+  }
+
   // No flags: the standing watch list (Agent Response + Loop Queue), rules
   // in scripts/builder/busRelayPlan.js. Explicit --list/--statuses narrows
   // the run to that one list, notify-only — the pre-handback behaviour,
@@ -2459,16 +2502,35 @@ if (cmd === 'whoami') {
 
         const when = new Date(Number(c.date)).toISOString().slice(0, 16).replace('T', ' ');
         console.error(`\nRelaying: task "${t.name}" (${t.id}), comment ${c.id} [${when}]`);
-        if (dryRun) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; continue; }
+        // Plain dry-run stops here, as it always has: it reports what WOULD be
+        // posted and asserts nothing about delivery. Under --simulate-bus-failure
+        // it deliberately does NOT stop, because the whole point is to run the
+        // fallback path rather than describe it.
+        if (dryRun && !simulateBusFailure) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; continue; }
 
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
         // is the answer genuinely undelivered.
+        const simTarget = handbackTarget(watch, t.status?.status, 1);
         const delivery = await deliverToBus(channel, busBody, {
           taskId: t.id,
-          target: handbackTarget(watch, t.status?.status, 1),
+          target: simTarget,
           receipted,
+          simulate: simulateBusFailure,
         });
+
+        // A simulated pass reports the verdict and writes nothing further: no
+        // dedup marker (permanent, and this outage is not real) and no status
+        // move. `fresh` is advanced only on a delivery that counted, which is
+        // what makes the hand-back line below tell the truth about whether the
+        // #414 guarantee holds on THIS watch.
+        if (simulateBusFailure) {
+          console.error(simulationLine({ verdict: delivery, target: simTarget }));
+          if (delivery.ok) { relayed++; fresh++; }
+          else unchecked.push(`${t.id} comment ${c.id}: SIMULATION — not delivered (${delivery.reason || delivery.why}); nothing was marked relayed`);
+          continue;
+        }
+
         if (!delivery.ok) {
           // The reason is deliveryVerdict's, not this line's. It used to hard-code a
           // claim that the fallback receipt had failed as well — even on a notify-only
@@ -2832,7 +2894,7 @@ if (cmd === 'whoami') {
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
-  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
+  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? (simulateBusFailure ? ' (DRY RUN + SIMULATED PARTY-LINE OUTAGE — nothing was merged, posted or moved)' : ' (DRY RUN — nothing was merged, posted or moved)') : ''}`);
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.
   if (busSkipped.length) {

@@ -1,3 +1,28 @@
+## 2026-08-26 — You can now stage a fake outage to check the backup plan works (#445)
+
+Back on the 23rd, ClickUp's group chat broke for about sixteen hours. The
+machines use that chat to tell each other things, so when it went down, five of
+your answers sat in your queue doing nothing — the tickets you had replied to
+never moved on. A fix went in afterwards: if the chat is unavailable, the relay
+writes a short note on the ticket itself instead, and the ticket moves anyway.
+
+The trouble is that backup plan only runs during an outage, and you cannot order
+one. So it had never actually been watched working — only reasoned about. There
+was a command that sounded like a practice run, but it quit early and never
+touched the part it was supposedly practising, which is the worst kind of test:
+one that passes without checking anything.
+
+This adds a switch that pretends the chat is down. Nothing is sent and nothing
+is written, but the real backup code runs and prints what it decided — so you
+can see the ticket note being written and the ticket still moving, on demand, in
+about five seconds. The switch refuses to run in any mode that could write
+something, because faking an outage for real would leave a permanent note on a
+ticket claiming a breakdown that never happened.
+
+Worth recording: while proving this out, one of the new tests turned out to be
+unable to fail. Breaking the code on purpose is the only way that ever shows up,
+and it is why we do it before believing a passing run.
+
 ## 2026-08-26 — Test and documentation changes can now merge themselves, after giving you an hour to object (#438)
 
 You are the last step on every merge, and lately that has meant saying "merge"
