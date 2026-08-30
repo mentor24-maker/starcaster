@@ -1,3 +1,35 @@
+## 2026-08-29 — One loose row above four tidy panels (#449)
+
+Open the settings for a Confetti or Speech Bubble module and the controls sit
+in neat columns, except for one row at the top — the "Trigger" setting, and on
+Confetti the "Button Label" under it. That row was laying itself out by
+proportion rather than by content: the single word "Trigger" was handed a
+414-pixel label slot, and the dropdown beside it was stretched into the middle
+of the panel and then stopped, leaving 268 pixels of empty space before the
+edge. One sprawling row sitting above a set of tidy ones.
+
+It now sizes itself the way every other block in a panel does — to its own
+content — so the label and its dropdown read as a compact pair. Nothing was
+made wider to fix it; the stretching was taken away.
+
+The more useful half of this is that nothing had been *looking* at that row.
+The browser check that enforces the alignment rules examines three kinds of
+block, and this was none of them, so it was skipped in silence — the gap had
+been passing as a clean green run for as long as the row has existed. It now
+announces itself to the check, which went from measuring 558 panels to 570.
+
+Two of the mistakes on the way there are worth writing down, because every
+automated check passed while the panel was visibly wrong both times. Pulling
+the block in tight also squeezed the explanatory sentence under it from one
+line into a five-line sliver; and the fix for THAT scattered Confetti's two
+rows across three columns. Neither was caught by a test. Both were caught by
+opening the panel and looking at it, which remains the only thing that can.
+
+Two panels named in the ticket, Image and Floating Image, turned out to need
+nothing — measuring them showed they already obeyed the rules — so they are
+unchanged to the pixel. The shared row also appears on the two Proximity
+Effect panels, which get the same improvement for free.
+
 ## 2026-08-26 — Somewhere to write down what footage exists (#422)
 
 The video Studio needs a filing cabinet before it can have a workshop: a record
