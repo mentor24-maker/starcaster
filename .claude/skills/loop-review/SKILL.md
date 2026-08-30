@@ -36,6 +36,33 @@ npm run node:owns -- loop-review
     safe. The message says exactly what to type to fix it (one line, once per
     machine). `npm run node:whoami` shows the whole picture.
 
+## Then: has the operator taken the deck?
+
+There is a sanctioned way for Dane to clear the decks and run something
+through fast, and it is a switch rather than an improvisation. While it is on,
+the machines stop taking new work so nothing lands under him while he is
+working.
+
+```bash
+npm run pipeline -- check
+```
+
+*   **exit 0** — the pipeline is running. Carry on.
+*   **exit 3** — **paused.** Claim nothing, review nothing, merge nothing,
+    and write NOTHING to ClickUp — no status, no comment, no Loop note. Report
+    the line it printed and finish the pass **successfully**. This is a normal
+    outcome, the same shape as another machine owning the job.
+
+It **fails safe**: if the switch cannot be read at all, it says so and still
+exits 3. That is deliberate. Running while the operator has the deck collides
+with whatever he is doing there; pausing when he does not costs idle machines
+and one loud message. Those are not symmetric, so the tie goes to stopping.
+
+**Never resume it.** An agent may pause the line — that is a safety move
+anyone should be able to make — but only Dane hands the deck back
+(`npm run pipeline -- resume --operator-asked`). `npm run pipeline -- status` says
+whether it is on, since when, who put it there and why.
+
 ## ClickUp access: use the direct script, not the connector
 
 Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
@@ -95,13 +122,18 @@ the loops' reasoning arrived as walls of text in ClickUp's narrow right column.
 
 Handing a ticket to Dane is one command, not two: `status` refuses to set
 `Ready to launch` or `Needs your input` on its own and points at `ask`. The card
-body is four sections, checked before anything is sent:
+body is four sections plus a fifth that costly asks must carry, all checked
+before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask, under a banner he can spot without reading
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone: the
+            command, its real output in a fence, and a "@@MEASURED 8:04pm"
+            line saying when you ran it — that line is the only thing that
+            dates the card; every other clock in the section is ignored
 ```
 
 ### A `Ready to launch` card must carry a link he can click

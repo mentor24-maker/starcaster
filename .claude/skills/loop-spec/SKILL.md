@@ -150,7 +150,8 @@ the card and moves the status together so the two can never come apart:
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
 ```
 
-The body is four sections, and the check runs **before** anything is sent:
+The body is four sections plus a fifth that costly asks must carry, and the
+check runs **before** anything is sent:
 
 ```
 @@ASKED
@@ -164,6 +165,13 @@ replaces. The long version belongs in the description.
 @@NEEDED
 The specific ask. "Nothing right now" is a good answer and a useful one — but it
 has to be written down, not left blank.
+@@EVIDENCE
+Required ONLY when the ask costs money or cannot be undone (spend, buy,
+subscribe, upgrade, plan change, credential rotation, deletion): the command in
+runnable form, its ACTUAL output pasted in a ``` fence, and one line saying
+when you ran it — `@@MEASURED 8:04pm`, the clock and nothing else. That line is
+the only thing that dates the card; every other clock in the section, narrated
+or inside the paste, is ignored.
 ```
 
 It renders with `@@NEEDED` under a banner he can spot without reading:

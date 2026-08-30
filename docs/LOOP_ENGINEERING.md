@@ -256,8 +256,9 @@ npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -
 ```
 
-The body is four sections. The check runs **before** the first network call, so
-a card that fails the shape leaves the ticket exactly where it was:
+The body is four sections, plus a fifth that some asks are required to carry.
+The check runs **before** the first network call, so a card that fails the
+shape leaves the ticket exactly where it was:
 
 ```
 @@ASKED
@@ -271,6 +272,17 @@ anything else; over 100 it becomes the wall of text this replaces.
 @@NEEDED
 The specific ask. "Nothing right now" is a good answer and a useful one, but it
 has to be written down rather than left blank.
+@@EVIDENCE
+Optional in general; REQUIRED when the ask costs money or cannot be undone.
+The command in runnable form, its actual output pasted in a ``` fence, and one
+line saying when you ran it:
+
+    @@MEASURED 8:04pm
+
+That line is the ONLY thing that dates the card. Every other clock in the
+section — narrated or inside the paste — is ignored. It goes in the prose,
+outside the fence, and carries the clock and nothing else (date it too if it
+was not today: `@@MEASURED 2026-08-23 8:04pm`).
 ```
 
 `@@NEEDED` renders under a banner he can find without reading:
@@ -286,6 +298,149 @@ The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
 remember. `status --status "Needs your input"` refuses on its own and prints
 the `ask` form; `--no-card` is the escape hatch, and like `--operator-asked`
 above it is a written claim in the transcript, not a permission check.
+
+### An ask that costs money must carry the command that proves it
+
+On 2026-08-23 an agent escalated to Dane and asked him to spend money on a
+diagnosis that was wrong: the bus chat had refused every write for sixteen
+hours, a custom-field write failed with "Custom field usages exceeded for your
+plan", and `GET /team/{id}/plan` read back `Free Forever`, so it recommended
+putting the workspace on a paid plan. Re-measured hours later on the same token
+and the same unchanged Free plan, every one of those calls succeeded — the
+outage was transient and cleared itself, and paying would have fixed nothing.
+
+The mistake was not the hypothesis; it was that the hypothesis reached his
+wallet without anyone re-running the failing call. So `ask` now refuses a card
+whose `@@NEEDED` proposes spending, buying, subscribing, a plan change, a
+credential rotation or a deletion unless `@@EVIDENCE` carries the command, its
+real output in a fence, and the time it was run. The trigger words and the
+reason for each live in `scripts/builder/costlyAsk.js`; adding one is a
+one-line change with a test beside it.
+
+The gate is deliberately narrow rather than a general assumption-checker: a
+checking agent would add a round trip, make assertions of its own, and cost
+tokens continuously to catch a class a free rule catches — and the evidence for
+"assertions of its own" is this incident, where the agent that produced the
+wrong diagnosis was already the careful one. An ordinary escalation — a design
+question, a scope choice, an A-or-B with no cost — is untouched, and a test
+pins that, because a gate that fires on everything gets routed around and then
+protects nothing.
+
+The card also shows the measurement time in the heading it renders
+(**THE CHECK BEHIND THIS ASK — measured at 8:04pm**). Evidence gathered before
+a sixteen-hour outage is not evidence about now, so the freshness is stated
+rather than implied.
+
+**That time is DECLARED on its own line, not read out of your sentences.**
+Four versions of this gate each inferred it, and each inferred it differently —
+the first clock anywhere in the section (which is how a `2026-08-20 3:12pm` log
+line dated a card six days stale), then the first clock in the prose, then the
+last clock a measurement cue governed, then the clock a cue introduces. Every
+one was right on the sentences it was tested against and wrong on the next one
+somebody wrote. The last of them headed a card *measured at 3:12pm* — the
+moment the outage STARTED — off the sentence "At 8:04pm I re-ran the failing
+call, well after the outage began at 3:12pm". That is the exact half of the
+2026-08-23 incident the timestamp exists to close, arriving through the
+machinery meant to close it, and it did not refuse: it asserted it.
+
+Dane settled it on 2026-08-29 (option A on task 86bbk34ym): stop guessing, make
+the writer say so. `@@MEASURED 8:04pm` on its own line, everything else
+ignored. It costs an agent one line per costly ask, and it ends the class —
+there is no sentence shape left to get wrong. The reasoning is on the rule
+itself (`MEASURED_LINE` in `scripts/builder/operatorCard.js`), because the
+ticket's own Non-goals say this gate stays cheap, narrow and mechanical, and
+reading which clock an English sentence means is none of those.
+
+A card with no `@@MEASURED` line is refused; so are two of them, a line with
+something other than a clock on it, and one written inside the fence (where it
+reads as part of what the machine printed) or under the wrong section. Each of
+those gets its own sentence, because "add a time" is unhelpful to an author who
+wrote one in the wrong place.
+
+The same review found the trigger list carried base and gerund forms but no
+third-person ones, so "this deletes all 550 rows", "it rotates the key" and
+"approving this upgrades the workspace" all posted with no evidence at all —
+and third person is the most natural way to describe what the operator's yes
+will do. Every verb in the list now carries all three forms, with a test that
+fails if a future verb arrives with a form missing.
+
+**A second review round, the same day, found three more of the same shape** —
+the gate doing the wrong thing silently rather than refusing. (1) Reading the
+prose fixed the fence but kept *first clock wins*, and evidence narrates before
+it proves: "the outage began at 3:12pm. I re-ran the failing call at 8:04pm"
+rendered as *measured at 3:12pm*. Only a clock a measurement cue governs
+(`measured|ran|re-ran|checked at`…) counts as the run; two clocks with no cue
+are refused rather than guessed at, because the heading is load-bearing and a
+wrong time is worse than none. (2) Each trigger was bounded by "not a word character
+**or hyphen**", on the belief that `\b` would not fire beside a hyphen — it does,
+so the custom boundary only ever removed matches, and `hard-delete`,
+`force-delete`, `auto-purge` and `key re-rotation` were never checked at all.
+Plain `\b` now. (3) `costs` was listed and the base form `cost` was not, so "this
+will cost thirty dollars a month" was silent; the completeness test now names
+`cost` and twelve other verbs, so the rule it describes is actually held up.
+
+**And one correction in the other direction.** The bare nouns — `billing`,
+`invoice`, `deletion`, `rotation`, `migration`, `payment`, `subscription` —
+fired on any sentence that merely mentioned them, so "nothing needed, the
+deletion already happened last week" and "just confirm you saw the invoice
+screenshot" were both REFUSED and the agent could not hand the ticket off until
+it reworded a card that was already right. A noun now fires only where a
+proposal cue governs it in the same sentence (`approve the deletion`, `run the
+migration`, `go ahead with the rotation`); a verb needs no cue, because
+proposing is what a verb does here — which is also why past tense is
+deliberately absent from the list. The known limit, stated rather than hidden:
+a bare noun phrase with no verb at all ("the key rotation — yes or no?") does
+not fire, and the verb forms are the primary net.
+
+**A third round found the same mis-dating for the third time, and what
+actually fixed it.** Rounds 1, 2 and 3 each picked the run time by where it sat
+in the text — first clock, first clock in the prose, last clock a cue governs —
+and each was wrong on the next sentence shape somebody wrote. A cue was allowed
+to govern every clock later in its sentence, and authors narrate *after* the
+run time as readily as before it, so "I re-ran the chat POST at 9:40pm, well
+after the outage that began at 3:12pm" rendered as *measured at 3:12pm*. There
+is no position that means "this is the measurement": the cue does, and it is
+spent on the clock it introduces. A cue now reaches only from the previous
+clock to the next one, and **two times both marked as the run are refused
+rather than ranked** — this heading is the single place the gate asserts
+something to Dane instead of refusing something, so a wrong "measured at" is a
+false statement about a live system, which is the shape of the original
+incident. A wrong refusal costs a reword.
+
+**A fourth and fifth round found the same mis-dating again, and it went to
+Dane.** Round 4 scoped a cue to the clock it introduces; round 5 wrote the run
+time FIRST and the narration after it — "At 8:04pm I re-ran the failing call,
+well after the outage began at 3:12pm" — and the cue, sitting between the two
+clocks, reached forward to the wrong one. Five rounds, five positional rules,
+five sentence shapes. It was escalated as a product decision rather than sent
+back a fifth time, and Dane chose to stop inferring altogether: the run time is
+now the declared `@@MEASURED` line described above. The same round also found
+that every bare noun fired in the singular and was silent in the plural —
+"Approve the deletions" demanded no evidence while "Approve the deletion" did,
+which is the gate declining on the more costly spelling of the same ask. Each
+noun now carries its plural, with a completeness test that names the pairs in
+both directions.
+
+The same round closed three narrower holes: a lone bare clock in the prose is
+no longer taken at its word when the pasted output carries a clock too (a bare
+time beside a log is usually the thing that *broke*, not the check); a
+backslash-continued command counted as two pasted lines and so satisfied the
+"show me the output" rule with no output at all; and the innocent phrases were
+lifted out as raw characters rather than as whole words, so "pays offshore
+contractors" lost "pays off" out of the middle of a word. The cue list also got
+the all-forms rule the trigger list had already been given twice — "proceeding
+with the deletion", "performing the key rotation", "this executes the
+migration", "kicking off the migration", "signing off on the invoice" were all
+silent — with a completeness test that names the cue families in both
+directions, so a lone form cannot be added without its siblings.
+
+One item is left deliberately unchanged and is the operator's to settle: a bare
+dollar figure fires with no proposal cue, so a card that asks for nothing while
+mentioning a cost ("nothing right now, the Vercel bill came to $30 last month")
+is refused. A cue rule would fix that and would also silence "$29/month for
+Business or $49 for the tier above?", which is a real ask with no verb in it.
+That is a product question about how much natural language a keyword gate
+should chase, not a correctness one.
 
 ### ClickUp deletes `> ` blockquotes — from comments AND descriptions
 
@@ -861,6 +1016,53 @@ mode from "is the token present?" would have exactly that hole.
    the gate is advisory and **not** fine once it is required. Teaching the merge
    step to re-run a stale gate before merging is the follow-up that has to land
    first.
+
+## Pausing the pipeline — the sanctioned way to go fast (2026-08-25, task 86bbmfc15)
+
+The loop lane is deliberately slow: spec, build, independent review, your
+merge — about a day end to end. That is right for ordinary work and wrong for
+the day something is urgent. Until now the only way to go faster was to step
+outside the system entirely, into the one place where none of the guards apply,
+and that is a **missing lane** rather than anyone being careless.
+
+```bash
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- pause --now               ... or don't wait, and name exactly what was left running
+npm run pipeline -- resume --operator-asked   hand the deck back — yours, never an agent's
+```
+
+The `--` is required in every one of those. npm eats any `--flag` typed without
+it, which is silent and confusing: `resume --operator-asked` gets refused for
+missing the flag you just typed, and `pause --now` waits the full half hour.
+`pipelinePause.test.js` fails if a documented form ever loses it again.
+
+**It drains, it does not kill.** A pass killed mid-build leaves its ticket in
+`Building` forever, because the loops only ever claim from `Queued` — that
+happened twice in the week this was built. So `pause` writes the flag (which
+stops every new claim that instant) and then waits for whatever was already
+running. `resume` sweeps any ticket that was stranded back into `Queued` with a
+note telling the next builder to look for an existing branch first.
+
+**Every actor asks, not just the loops.** The flag is a comment trail on one
+ClickUp ticket — the *Pipeline pause switch*, created the first time `pause`
+runs — because ClickUp is the one place every actor already looks. `loop-build`
+and `loop-review` check it before claiming, `bus-relay` checks it before
+merging, and `CLAUDE.md` carries it so a hand-driven session reads it on
+arrival. That last one is the point: the collision this was written for came
+from a session that was not a loop and would never have looked anywhere else.
+
+**It fails safe.** A switch that cannot be read counts as paused. Running while
+you have the deck collides with what you are doing on it; pausing when you do
+not costs idle machines and one loud message. Those are not symmetric.
+
+**Only you resume.** An agent may pause the line — stopping is a safety move
+anyone should be able to make — but handing the deck back is yours, because
+only the person standing on it knows whether he is finished. A pause that
+outlives two hours announces itself on the party line and keeps saying so
+hourly, because a pause nobody remembers looks exactly like a pipeline that has
+broken.
 
 ## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
 
