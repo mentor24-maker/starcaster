@@ -335,13 +335,22 @@ outside the fence, and carries the clock and nothing else (date it too if it
 was not today: `@@MEASURED 2026-08-23 8:04pm`).
 ```
 
-`@@NEEDED` renders under a banner he can find without reading:
+`@@NEEDED` renders as the LAST thing on the card, inside a banner he can find
+without reading — bold, `#CC0000`, with the ask on the label's own line
+(Dane, 2026-08-30, task 86bbq5ruz):
 
 ```
 #############################
-NEEDED FROM DANE: 
+NEEDED FROM DANE: Your word to merge PR #444.
 #############################
 ```
+
+Nothing renders after it: his words, what is going on, the evidence if any,
+then the banner. Anything a later edit adds that needs a new action from him
+goes at the bottom. The card is posted in ClickUp's structured comment shape
+(`comment: [{ text, attributes }]`), because colour exists only there and that
+shape does not parse markdown — `renderCardComment` converts the small subset
+agents write (`**bold**`, fences, `` `code` ``) into attributes.
 
 The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
 (`scripts/builder/operatorCard.test.js`), not a convention an agent has to
@@ -1239,6 +1248,23 @@ it skips is the queue position.
    their numbers, what was probed live, and what was break-tested;
    `npm run tidy` (ship already did); one line on the bus.
 
+### When the ticket is already In review
+
+"Fast track" on a ticket whose PR is already open and green is the **review
+half** of the lane, not the build half (2026-08-30, ticket 86bbjzg83, PR #445).
+Step 3's claim does not apply — there is no `Queued` to claim from and the
+ticket must not be dragged back to `Building`; the one status write is the
+closing move to Live, guarded with `--if-status "in review"` so a loop-review
+verdict that landed meanwhile is not overwritten. Everything else stands:
+step 4 (the branch exists, so it is the by-hand worktree), step 5 (merge
+`main` in first — #445 was 13 commits behind and conflicted on a line Lane A
+had since rewritten), step 6 (re-run every gate on the *merged* code and break
+one fix on purpose yourself rather than trusting the PR's table), step 7 and
+step 8. The PR body's evidence is the builder's; the reviewer's job is to
+produce its own, and to say what it could not reproduce — here, the
+per-comment verdict lines, which need a fresh operator comment that no ticket
+had at the time.
+
 ### What the first run of this lane found (2026-08-30, ticket 86bbmg2fb, PR #441)
 
 * **The Mini's runners took the change before the command existed.** The
@@ -1772,8 +1798,43 @@ npm run clickup -- bus-relay --dry-run              # says what it would do, wri
 npm run clickup -- bus-relay --only-task <task-id>  # one ticket, real writes
 ```
 
-To exercise the fallback deliberately rather than waiting for the next outage,
-point the pass at a channel id that does not exist:
+**A run on any other machine exits 0 and tests nothing.** The role guard in
+`lib/nodeRoles.js` prints "not this machine's job" and returns success — it is
+built for launchd, where a refusal must not read as a crash. So the three
+How-to-test commands in a bus-relay ticket, run on the MacBook, all "pass" while
+exercising none of the code (2026-08-30, task 86bbjzg83: the reviewer ran them,
+got three exit 0s, and only the words *did nothing* in the output gave it
+away). Read the output, not the exit code, and rehearse on the Mini. A branch
+that is not on `main` yet can be rehearsed there without touching the Mini's
+own checkout: `git worktree add /tmp/<x> origin/<branch>`, symlink
+`node_modules` from the main checkout (a script run, not a build — landmine 8
+is about build outputs), run, then `git worktree remove --force /tmp/<x>`.
+
+**To rehearse the outage fallback without writing anything** (2026-08-30,
+task 86bbjzg83, PR #445):
+
+```bash
+npm run clickup -- bus-relay --dry-run --simulate-bus-failure
+```
+
+Every party-line write reports failure without a request being sent, and
+dry-run stops short-circuiting so the real `deliverToBus()` decision runs: per
+relayed comment it prints whether the ticket receipt would carry the message
+and whether the hand-back would fire (a "needs your input" watch) or that it is
+NOT delivered with no hand-back (a notify-only watch — the deliberate asymmetry
+in `deliveryVerdict`). The receipt and its read-back are rehearsed, not sent;
+no dedup marker, no status move. The `why` says `SIMULATED` in the text so a
+log reader can never mistake it for an outage. **Without `--dry-run` it is
+refused, exit 2, before the first read** — outside dry-run it would post a real
+receipt claiming an outage that is not happening and write the permanent
+"already relayed" marker against it, dropping the real message for good. That
+guard is `simulationGuard` in `scripts/builder/busRelayPlan.js`, and test 42
+of `busRelayPlan.test.js` fails if it is loosened. The pass only shows verdict
+lines when a watched ticket actually has a fresh operator comment; on an empty
+queue it proves the banner, the path and the summary line, nothing more.
+
+To exercise the fallback **for real** — receipts written, ticket moved — rather
+than rehearsed, point the pass at a channel id that does not exist:
 
 ```bash
 npm run clickup -- bus-relay --only-task <task-id> --channel 0000-nonexistent
