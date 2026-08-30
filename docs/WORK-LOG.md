@@ -1,3 +1,33 @@
+## 2026-08-30 — The rule about who runs the commands, put where it gets read (#453)
+
+Three times now you have had to say the same thing: when there is a command to
+run, I should run it, not hand it to you to paste. The most recent was the
+Delray header evening. Early on, one of my own safety gates refused a step —
+and instead of treating that as "this one call was blocked", I treated it as
+"I am not allowed to touch production tonight", and everything after that came
+back to you as something to copy. One of those was a script with two halves: a
+practice run that shows what it *would* change, and a second command that
+actually changes it. You ran the practice half. Nothing told you the real one
+was still sitting there waiting, so the fix was written but not applied, and
+most of an evening went on it.
+
+The reason it keeps coming back is dull and fixable: the rule was only written
+down in my memory and in the vault, and neither of those gets loaded when a
+session opens this repo. `CLAUDE.md` does — every session reads it. So the rule
+now lives there, in the "Coach the operator" section, with the full story and
+the incident behind it in `docs/DOCTRINE.md`.
+
+It says four things. I run the operational commands and tell you what happened
+in plain English. There are exactly four things I hand over instead — a real
+password or key, a billing screen, a login in your browser, and a decision
+that is genuinely yours — and when I hand something over I have to say which
+of the four it is, so "I need you" never arrives unexplained. A refusal applies
+to the one command it refused, not to the rest of the session. And a fix with
+a practice run and a real run is one job, not two: I run both and tell you what
+changed.
+
+Nothing about the app changed — this is a change to the instructions I read.
+
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 
 You said you needed an emergency shutdown that clears the decks so you can run
